@@ -1,4 +1,4 @@
-// ZAMANLANMIŞ KOŞULAR — "Bilgisayar açılınca Nöbetçi arka planda başlasın" (Ayarlar > Koşu; varsayılan KAPALI; yalnız Windows).
+// ZAMANLANMIŞ KOŞULAR — "Bilgisayar açılınca Nöbetçi arka planda başlasın" (Planlı koşular; varsayılan KAPALI; yalnız Windows).
 // Windows Görev Zamanlayıcı'ya kullanıcının KENDİ hesabıyla, yönetici izni gerektirmeyen (LeastPrivilege, InteractiveToken) ve
 // yalnız bu kullanıcının oturum açılışında tetiklenen (/SC ONLOGON karşılığı: LogonTrigger + UserId) bir görev eklenir.
 // Görev tanımı XML ile verilir (schtasks /Create /XML): komut satırı seçenekleriyle ayarlanamayan iki varsayılan düzeltilir —
@@ -58,7 +58,7 @@ export function gorevXml(g) {
     '<?xml version="1.0" encoding="UTF-16"?>',
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
     '  <RegistrationInfo>',
-    `    <Description>${xmlKacis('Nöbetçi\'yi oturum açılınca arka planda (pencere açmadan) başlatır. Nöbetçi > Ayarlar > Koşu\'dan kaldırılabilir.')}</Description>`,
+    `    <Description>${xmlKacis('Nöbetçi\'yi oturum açılınca arka planda (pencere açmadan) başlatır. Nöbetçi > Planlı koşular\'dan kaldırılabilir.')}</Description>`,
     '  </RegistrationInfo>',
     '  <Triggers>',
     '    <LogonTrigger>',

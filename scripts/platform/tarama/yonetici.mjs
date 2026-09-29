@@ -470,7 +470,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       const gerekli = baglamAlanlari(tarif);
       profiller = istenen.map((ad) => {
         const degerler = havuz[ad];
-        if (!degerler) throw new TaramaHatasi('PROFIL', `"${ad}" adlı ${tur} bağlam profili bu ortamda yok (Ayarlar > Test verisi > Kişi ve kayıt verileri).`);
+        if (!degerler) throw new TaramaHatasi('PROFIL', `"${ad}" adlı ${tur} bağlam profili bu ortamda yok (Veri > Kişi ve kayıt verileri).`);
         const eksik = gerekli.filter((a) => degerler[a] === undefined || degerler[a] === null || degerler[a] === '');
         if (eksik.length) throw new TaramaHatasi('PROFIL', `"${ad}" bağlam profilinde tarifin kullandığı alan(lar) boş: ${eksik.join(', ')}.`);
         return { ad, degerler };

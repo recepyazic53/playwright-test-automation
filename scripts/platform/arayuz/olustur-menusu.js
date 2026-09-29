@@ -60,7 +60,8 @@ function gruplar(ayarBolumleri) {
     {
       grup: 'Veri ve ayarlar',
       ogeler: [
-        { baslik: 'Test verisi', aciklama: 'Ekran listesi ya da kişi / kayıt tablosu', ikonAd: 'veri', git: () => '#/ayarlar/test-verisi' },
+        { baslik: 'Test verisi', aciklama: 'Ekran listesi ya da kişi / kayıt tablosu', ikonAd: 'veri', git: () => '#/veri' },
+        { baslik: 'Planlı koşu', aciklama: 'Belirli zamanlarda kendiliğinden koşu', ikonAd: 'tarih', git: () => '#/planli-kosular' },
         { baslik: 'Ortam', aciklama: 'Test, hazırlık, canlı… adresleri', ikonAd: 'ag', git: () => '#/ayarlar/proje' },
         { baslik: 'Giriş profili / tarifi', aciklama: 'Testlerin gireceği kullanıcı ve giriş adımları', ikonAd: 'anahtar', git: () => '#/ayarlar/giris' },
         { baslik: 'Servis taban adresi', aciklama: 'Servislerin ortam adresleri (toplu düzenleme)', ikonAd: 'ag', git: () => '#/ayarlar/proje' },

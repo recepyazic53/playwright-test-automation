@@ -31,7 +31,9 @@ export function rehberAnahtari(hash) {
     else if (parca === 'e') anahtar = dorduncu === 'akis' ? 'akis-tasarimi' : dorduncu === 'bulgular' ? 'bulgular' : dorduncu === 'yukle' ? 'ekran-ekle' : 'ekran';
     else anahtar = 'ekranlar';
   } else if (bolum === 'akislar') anahtar = 'uctan-uca-akis';
-  else if (bolum === 'ayarlar') anahtar = `ayarlar-${parca || 'proje'}`;
+  else if (bolum === 'veri' || bolum === 'planli-kosular') anahtar = bolum;
+  // Ayarlar'dan taşınan sayfaların eski adresleri (uygulama yeni adrese yönlendirir) yeni sayfanın rehberini açar.
+  else if (bolum === 'ayarlar') anahtar = parca === 'test-verisi' || parca === 'baglam' ? 'veri' : parca === 'zamanlanmis-kosular' || parca === 'planli-kosular' ? 'planli-kosular' : `ayarlar-${parca || 'proje'}`;
   return anahtar && REHBERLER[anahtar] ? anahtar : null;
 }
 

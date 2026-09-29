@@ -1030,7 +1030,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         h('option', { value: '' }, v.deger ? `Bulunamadı: ${v.deger}` : '— tablo sütunu seçin —'),
         tablolar.map((x) => h('optgroup', { label: x.ad }, x.sutunlar.map((c) => h('option', { value: basvuru(x.ad, c.ad) }, `${x.ad} → ${c.ad}`)))));
       sec.addEventListener('change', () => { if (sec.value) { v.deger = sec.value; tabloCiz(); } });
-      return h('span', { class: 'tablo-degeri' }, sec, tablolar.length ? null : h('span', { class: 'soluk kucuk' }, 'Test verisinde tablo yok (Ayarlar > Test verisi > Tablolar).'));
+      return h('span', { class: 'tablo-degeri' }, sec, tablolar.length ? null : h('span', { class: 'soluk kucuk' }, 'Test verisinde tablo yok (Veri > Tablolar).'));
     }
     const secim = (tabloSecimleri[grupAnahtari(t.id, b.etiket)] ??= {});
     // Gruptaki sütunlar formdaki sırayla: bu alanın seçenekleri yalnız ÖNCEKİ alanların seçimlerine göre süzülür.
@@ -1497,9 +1497,9 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
 
   const metotKarti = h('div', { class: 'kart form-paneli' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, 'Metot alanları'), h('span', { class: 'sag' }, kayitDurumu,
-      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/ayarlar/test-verisi' }, 'Test verisi tabloları'))),
+      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     metotlar.length ? h('p', { class: 'soluk kucuk' }, 'Metodu seçin. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → Kanal). Aynı tabloya bağlı alanlar senaryoda aynı satırdan dolar ve seçtikçe birbirini süzer. Aynı tablo iki kez gerekiyorsa (başvuran / kefil) etiket verin. Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez. Değişiklikler anında kaydedilir.') : null,
-    metotlar.length && !tablolar.length ? h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/ayarlar/test-verisi' }, 'Ayarlar > Test verisi > Tablolar'), ' bölümünden ekleyin.') : null,
+    metotlar.length && !tablolar.length ? h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Veri > Tablolar'), ' bölümünden ekleyin.') : null,
     metotlar.length
       ? metotKutulari(metotlar.map((m) => ({
         ad: m.sm.ad, sema: m.sm, zorunlu: m.zorunlu, ekler: m.ekler, degisti, baglar: m.baglar, tablolar,
@@ -1559,7 +1559,7 @@ function eskiParametreKarti(proje, s, yenile) {
 
 /**
  * Eski servis giriş profili (kasadaki ayrı kayıt): servis hâlâ kullanıyorsa test verisine taşıma kartı. Taşıma önce ne
- * yapılacağını gösterir, onayla uygular (Ayarlar > Test verisi'nde "Servis girişi" türü + profil; servis o profile bağlanır).
+ * yapılacağını gösterir, onayla uygular (Veri'de "Servis girişi" türü + profil; servis o profile bağlanır).
  */
 function kimlikYonetimi(proje, s, yenile) {
   if (!s.ayarlar.kimlikProfili) return null;
@@ -1592,7 +1592,7 @@ function kimlikYonetimi(proje, s, yenile) {
     } catch (e) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); }
   });
   return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Eski giriş profili'), h('span', { class: 'sag' }, tasi)),
-    h('p', {}, `Bu servis giriş bilgilerini eski ayrı profilden ("${s.ayarlar.kimlikProfili}") alıyor. Giriş bilgileri artık Ayarlar > Test verisi'nde tutuluyor; taşıyınca kanal / kullanıcı / parola orada görünür ve senaryoda tablodan seçilebilir.`),
+    h('p', {}, `Bu servis giriş bilgilerini eski ayrı profilden ("${s.ayarlar.kimlikProfili}") alıyor. Giriş bilgileri artık Veri'de (test verisi) tutuluyor; taşıyınca kanal / kullanıcı / parola orada görünür ve senaryoda tablodan seçilebilir.`),
     sonuc);
 }
 

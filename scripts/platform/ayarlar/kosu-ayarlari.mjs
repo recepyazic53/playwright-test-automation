@@ -25,7 +25,7 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
 /**
  * Tanımlar: arayüz bu listeden formu çizer (bölüm: ayar sayfası, grup, etiket, açıklama, tür, sınırlar); sunucu doğrular.
  * env: alt sürece verilen ortam değişkeni (yoksa yalnız sunucuda kullanılır). carpan: ortam değişkenine yazılırken çarpan.
- * bolum 'zamanlama': Ayarlar > Koşu > Zamanlanmış koşular kartındaki form. altBolum 'gelismis': bölümün açılır "Gelişmiş koşu davranışı" kısmı.
+ * bolum 'zamanlama': Planlı koşular kartındaki form. altBolum 'gelismis': bölümün açılır "Gelişmiş koşu davranışı" kısmı.
  * Her ayarın varsayılanı, ayar eklenmeden önceki davranıştır.
  * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) ya da şu değerlerden birindeyken (degerler) kullanılır; arayüz aksi hâlde alanı pasif gösterir
  * (pasifAciklama). Kaydedilen değer korunur.
@@ -157,7 +157,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'secim', varsayilan: 'varsayilan', secenekler: [['varsayilan', 'Tarayıcı varsayılanı'], ...DIL_SECENEKLERI], env: 'NOBETCI_TARAYICI_DILI' },
   { anahtar: 'saatDilimi', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Saat dilimi', aciklama: 'Koşu, tarama ve akış kaydındaki tarayıcının saat dilimi.',
     tur: 'secim', varsayilan: 'bilgisayar', secenekler: SAAT_DILIMI_SECENEKLERI, env: 'NOBETCI_SAAT_DILIMI' },
-  // ---- Zamanlanmış koşular (Ayarlar > Koşu > Zamanlanmış koşular kartında; tüm kurallar için) ----
+  // ---- Zamanlanmış koşular (Planlı koşular kartında; tüm kurallar için) ----
   { anahtar: 'zamanliKacan', bolum: 'zamanlama', grup: 'Zamanlanmış koşu davranışı', etiket: 'Kaçan zaman',
     aciklama: 'Nöbetçi kapalıyken ya da kasa kilitliyken geçen zaman için. Sonra bir kez koş: Nöbetçi açılıp kasa açılınca, kaçan zamanlardan yalnız sonuncusu bir kez koşulur (8 günden eskiler sayılmaz).',
     tur: 'secim', varsayilan: 'atla', secenekler: [['atla', 'Atla'], ['sonraKos', 'Sonra bir kez koş']] },

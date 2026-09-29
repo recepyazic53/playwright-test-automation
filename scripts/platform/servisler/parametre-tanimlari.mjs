@@ -1,5 +1,5 @@
 // SERVİS PARAMETRE TANIMLARI (DEĞER LİSTELERİ) — saf yardımcılar (sunucu ve arayüz PAYLAŞIR; /arayuz/parametre-tanimlari.mjs).
-// Bir tanım (Ayarlar > Test verisi > Servis parametreleri) bir alanın alabileceği değerleri söyler; tüm servislerde seçilebilir:
+// Bir tanım (Veri > Servis parametreleri) bir alanın alabileceği değerleri söyler; tüm servislerde seçilebilir:
 //   liste       : sabit değerler (her birine açıklama) — ör. InvoiceType: 1 / 2 / 3
 //   mantiksal   : true / false
 //   test_verisi : bir test verisi türünün (açık, hassas olmayan) alanındaki profil değerleri — ör. Channel ← Servis girişi.kanal

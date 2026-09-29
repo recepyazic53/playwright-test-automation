@@ -112,7 +112,7 @@ Playwright HTML raporu üretilmez.
 
 ### Zamanlanmış koşular ve kilitli kasa
 
-**Ayarlar > Koşu > Zamanlanmış koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
+**Planlı koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
 "Kasa kilitliyken ve açılışta" bölümündeki üç seçenek **varsayılan kapalıdır** ve ayrı ayrı açılır:
 
 - **Kilitliyken çalışsın (anahtar yalnız bellekte)** — kilitlemede arayüz kilitlenir (veri uçları 423), anahtarın kopyası

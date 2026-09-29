@@ -24,7 +24,6 @@ import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, ris
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (yeniden adlandır, varsayılan yap, sil), projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
-  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: kanıt düzeyi ve ortam hızı profilleri, yeniden deneme ve süre limiti; tüm ayrıntılar (video / ekran görüntüsü / iz kaydı, bekleme süreleri, servis zaman aşımı, tarih biçimi, tarama / akış kaydı) Gelişmiş\'te. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Saklama kartı dört saklama kuralını (koşu sonuçları, medya inceltme, rapor ve video saklama) ve otomatik yedek sayısını tek zaman çizelgesinde gösterir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
@@ -33,6 +32,19 @@ export const AYAR_BOLUMLERI = [
   { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'PDF raporlarının kullandığı kararlarınız: ekip listesi ve ekran / servis → ekip eşlemesi (sahip önerisi), kritik işaretli ekran, servis ve akışlar (öncelik ve durum rozeti) ve süre eşikleri (ekran, servis, metot). Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır.' },
   { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları.' }
 ];
+
+/**
+ * Üst menüdeki günlük iş sayfaları (Ayarlar'dan taşındı): Veri (test verisi tabloları) ve Planlı koşular (zamanlanmış koşu
+ * kuralları). Eski adresler (#/ayarlar/test-verisi, #/ayarlar/baglam, #/ayarlar/zamanlanmis-kosular, #/ayarlar/planli-kosular)
+ * uygulama.js'te yeni adreslere yönlenir (ESKI_ADRESLER).
+ */
+export const UST_SAYFALAR = [
+  { ad: 'veri', menu: 'Veri', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
+  { ad: 'planli-kosular', menu: 'Planlı koşular', etiket: 'Planlı koşular', ikon: 'tarih', aciklama: 'Nöbetçi\'nin belirli zamanlarda (her gün, haftanın seçili günleri, her N saatte bir) kendiliğinden başlattığı koşular: kurallar, son çalışmalar, kaçan / çakışan zaman davranışı ve kasa kilitliyken çalışma tercihleri. Koşular yalnız Nöbetçi ve kasa açıkken çalışır (tercihlerle değiştirilebilir).' }
+];
+
+/** Eski adres → yeni adres (Ayarlar'dan taşınan sayfalar; eski yer imleri ve bağlantılar çalışmaya devam eder). */
+export const ESKI_ADRESLER = Object.freeze({ 'test-verisi': '#/veri', baglam: '#/veri', 'zamanlanmis-kosular': '#/planli-kosular', 'planli-kosular': '#/planli-kosular' });
 
 const ISLEM_ETIKETI = {
   olustur: 'Oluşturuldu', guncelle: 'Güncellendi', sil: 'Silindi',
@@ -46,7 +58,6 @@ const ISLEM_ETIKETI = {
  *   odak: bölüm içinde odaklanılacak öğe (İzinler: #/ayarlar/izinler/<izin anahtarı>).
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
-  if (bolum === 'baglam') bolum = 'test-verisi';
   const tanim = AYAR_BOLUMLERI.find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
   const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
     h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
@@ -60,10 +71,31 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
     entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
-    'test-verisi': testVerisi, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
+    kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
+    govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)));
+  });
+}
+
+/**
+ * Üst menü sayfası (Veri / Planlı koşular): Ayarlar bölümüyle aynı başlık düzeni, kırıntı "proje / sayfa".
+ * @param {HTMLElement} kapsayici @param {'veri' | 'planli-kosular'} ad
+ * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void> }} baglam
+ */
+export function ustSayfaBolumu(kapsayici, ad, baglam) {
+  const tanim = UST_SAYFALAR.find((b) => b.ad === ad) || UST_SAYFALAR[0];
+  const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
+    h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
+      h('span', { class: 'simdiki' }, tanim.etiket)),
+    h('h2', { id: 'bolum-basligi', tabindex: '-1' }, tanim.etiket),
+    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
+  const govde = h('div', {}, iskelet('sayfa'));
+  kapsayici.replaceChildren(baslik, govde);
+  const ciz = tanim.ad === 'planli-kosular' ? planliKosular : testVerisi;
+  Promise.resolve(ciz(govde, baglam)).catch((hata) => {
+    if (hata && hata.durum === 423) return;
     govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)));
   });
 }
@@ -836,19 +868,29 @@ function sonucTemizlemeKarti() {
     mesaj.kutu, alan('Kapsam', kapsam), gunAlani, h('div', { class: 'dugmeler' }, say, sil));
 }
 
-/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları + zamanlanmış koşular. */
+/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları (zamanlanmış koşular üst menüde: Planlı koşular). */
 async function kosuAyarlari(govde, baglam) {
   const proje = baglam && baglam.durum ? baglam.durum.proje : null;
-  // Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman): tüm kurallar için; kartın içinde (proje yoksa ayrı kart).
-  const zamanlamaFormu = () => ayarFormu('zamanlama', 'Zamanlanmış koşu davranışı', 'Zamanlanmış koşu davranışı kaydedildi.', { baslik: 'Tüm zamanlanmış koşular için' });
-  const [form, kurallar, zamanli] = await Promise.all([
-    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', proje ? { projeId: proje.id } : {}), siniflandirmaKarti(),
-    proje ? zamanlanmisKosularKarti(proje, { davranisFormu: zamanlamaFormu }).catch((hata) => {
-      if (hata && hata.durum === 423) throw hata;
-      return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Zamanlanmış koşular yüklenemedi: ${hata.message || hata}`);
-    }) : zamanlamaFormu().then((f) => h('section', { class: 'kart form-paneli', 'aria-label': 'Zamanlanmış koşular' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular'), f))
+  const [form, kurallar] = await Promise.all([
+    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', proje ? { projeId: proje.id } : {}), siniflandirmaKarti()
   ]);
-  yerlestir(govde, form, kurallar, zamanli);
+  const tasindi = h('p', { class: 'not-kutusu bilgi tasindi-notu', role: 'note' }, 'Zamanlanmış koşular (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma) artık üst menüde: ',
+    h('a', { href: '#/planli-kosular' }, 'Planlı koşular'), '.');
+  yerlestir(govde, form, kurallar, tasindi);
+}
+
+/**
+ * Planlı koşular (üst menü; eskiden Ayarlar > Koşu içinde kart): zamanlanmış koşu kuralları + "Zamanlanmış koşu davranışı"
+ * (kaçan / çakışan zaman; tüm kurallar için) + kasa kilitliyken ve açılışta tercihleri. Proje yoksa yalnız davranış formu.
+ */
+async function planliKosular(govde, baglam) {
+  const proje = baglam && baglam.durum ? baglam.durum.proje : null;
+  const zamanlamaFormu = () => ayarFormu('zamanlama', 'Zamanlanmış koşu davranışı', 'Zamanlanmış koşu davranışı kaydedildi.', { baslik: 'Tüm zamanlanmış koşular için' });
+  const zamanli = await (proje ? zamanlanmisKosularKarti(proje, { davranisFormu: zamanlamaFormu }).catch((hata) => {
+    if (hata && hata.durum === 423) throw hata;
+    return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Zamanlanmış koşular yüklenemedi: ${hata.message || hata}`);
+  }) : zamanlamaFormu().then((f) => h('section', { class: 'kart form-paneli', 'aria-label': 'Zamanlanmış koşular' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular'), f)));
+  yerlestir(govde, zamanli);
 }
 
 /** Hata sınıflandırma kuralları: "hata mesajında şu geçerse → kategori" (genel kurallardan önce denenir). */

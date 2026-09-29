@@ -1394,7 +1394,7 @@ if (dogrudanCalistirildi) {
   // Platform veritabanı: kasa açıkken günde bir yerel otomatik yedek (veri/yedekler/, son 30).
   platformOtomatikYedekZamanla();
 
-  // Zamanlanmış koşular (Ayarlar > Koşu): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
+  // Zamanlanmış koşular (Planlı koşular): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
   platformZamanlanmisKosulariBaslat();
 
   // Dinleme hatası (ör. port zaten kullanımda) yukarıdaki uncaughtException dinleyicisine

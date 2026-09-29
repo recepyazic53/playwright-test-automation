@@ -461,7 +461,7 @@ uctanUcaKosucusuAyarla({ kosucu: () => kosucu, secenekler: (db) => calistirmaSec
 tabloKosuDenetimiAyarla(kosuyorMu);
 
 /**
- * Zamanlanmış koşular (Ayarlar > Koşu; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
+ * Zamanlanmış koşular (Planlı koşular; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
  * "Koşuyu başlat" ile aynı yoldan (senaryoCalistir + bu koşucu) koşar. Kasa kilitliyse hiçbir şey yapılmaz — kullanıcı
  * "kilitliyken de çalışsın" / DPAPI tercihini açtıysa anahtar emanetten arka plan kipinde (arayüz kilitli) kullanılır.
  */
@@ -469,7 +469,7 @@ const zamanlayici = zamanlayiciOlustur({
   veritabani: () => (vt && kasaAcikMi(vt) ? vt : null),
   arkaPlanIsi: () => (vt ? arkaPlanIsiBaslat(vt) : null),
   mesgulMu: () => Boolean(kosucu?.mesgulMu?.()),
-  // Ayarlar > Koşu > Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman; varsayılan ikisi de "Atla").
+  // Planlı koşular > Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman; varsayılan ikisi de "Atla").
   davranis: (db) => { const a = kosuAyarlariniOku(db); return { kacan: a.zamanliKacan, cakisma: a.zamanliCakisma }; },
   yurut: (db, kural, kosuKimligi, devamMi) => zamanliKosuyuYurut(db, kural, kosuKimligi, {
     senaryolar: (d, projeId, ortamId) => senaryoListesi(d, projeId, ortamId).senaryolar,
@@ -1448,7 +1448,7 @@ for (const [yol, islem] of AKIS_SENARYO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of UCTAN_UCA_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
-// Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs).
+// Planlı koşular (zamanlama/uclar.mjs).
 for (const [yol, islem] of zamanlamaGetUclari(zamanlayici)) GET_UCLARI.set(yol, islem);
 // Zamanlanmış koşuların kilitliyken / açılışta çalışma tercihleri (A/B/C; görev durumu schtasks /Query ile).
 GET_UCLARI.set('/platform/zamanlama/tercihler', (db) => arkaPlan.durum(db));
@@ -1840,7 +1840,7 @@ for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of entegrasyonPostUclari({ medyaKlasoruYolu })) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of SQL_KULLANIM_POST_UCLARI) POST_UCLARI.set(yol, islem);
-// Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
+// Planlı koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
 for (const [yol, islem] of ZAMANLAMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 POST_UCLARI.set('/platform/zamanlama/tercih', (db, g) => arkaPlan.tercihDegistir(db, g));
 /** İzin denetimine tabi uçlar (izin-tanimlari.mjs > islemler[].uclar). */

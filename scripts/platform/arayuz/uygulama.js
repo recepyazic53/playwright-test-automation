@@ -5,10 +5,11 @@
 //   kasa var, kilitli   → Kilit ekranı (çalışma alanının adı, "Başka çalışma alanı"; yanlış parolada bekleme)
 //   kasa açık, proje yok → Yeni proje sihirbazı (tanışma sorularından; kasa adımı atlanır)
 //   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici [projeler, ⋯ Yeniden adlandır / Varsayılan yap /
-//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Ayarlar, sunucu durumu, rehber (?),
+//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Veri | Planlı koşular | Ayarlar, sunucu durumu, rehber (?),
 //                         tema, Kilitle, çalışma alanı menüsü [Kilitle · Yeniden adlandır · Çalışma alanını kapat]) +
 //                         sol panel + içerik.
-//                         (#/sonuclar[/...], #/senaryolar[/...], #/ekranlar[/...], #/ayarlar/<bölüm>)
+//                         (#/sonuclar[/...], #/senaryolar[/...], #/ekranlar[/...], #/veri, #/planli-kosular, #/ayarlar/<bölüm>;
+//                         Ayarlar'dan taşınan sayfaların eski adresleri ESKI_ADRESLER ile yeni yerlerine yönlenir)
 // Senaryolar ekranı (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve Ekranlar ekranı (ekranlar.js,
 // ekran-ortak.js, sayfa-paketi.js, bulgular.js) ayrı modüllerde ve DİNAMİK yüklenir: sunucu bu dosyaları
 // henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
@@ -23,7 +24,7 @@ import { hizliAramaDugmesi, hizliAramaKisayolu } from './hizli-arama.js';
 import { olusturMenusu } from './olustur-menusu.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { tabloSiralamaKur } from './tablo-siralama.js';
-import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
+import { ayarlarBolumu, AYAR_BOLUMLERI, ESKI_ADRESLER, UST_SAYFALAR, ustSayfaBolumu } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 import { kasayiKilitleSecimli, kilitBildirimi } from './zamanlanmis-kosular.js';
 import { adCanliyiCagristiriyorMu, riskliSecimi } from './ortam-riski.mjs';
@@ -551,7 +552,7 @@ function sihirbazTamam() {
     h('section', { class: 'kart proje-hazir', 'aria-label': 'Proje özeti' },
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('katman'), durum.proje ? durum.proje.ad : 'Proje')),
       ozet,
-      h('p', { class: 'soluk kucuk' }, 'Giriş profilleri, test verisi ve ortamlar Ayarlar\'dan; ekranlar ve servisler kendi sayfalarından eklenir. Her ekranın rehberi ilk açılışta başlar, üst çubuktaki "?" ile yeniden açılır.'),
+      h('p', { class: 'soluk kucuk' }, 'Giriş profilleri ve ortamlar Ayarlar\'dan, test verisi üst menüdeki Veri\'den; ekranlar ve servisler kendi sayfalarından eklenir. Her ekranın rehberi ilk açılışta başlar, üst çubuktaki "?" ile yeniden açılır.'),
       h('div', { class: 'dugmeler' }, anaSayfa)))));
   anaSayfa.focus({ preventScroll: true });
   if (!durum.proje) { ozet.replaceChildren(); return; }
@@ -607,7 +608,7 @@ function kilitEkrani(beklemeSaniye) {
       h('p', { class: 'soluk' }, cokluAlan ? 'Devam etmek için bu çalışma alanının kasa parolasını girin.' : 'Devam etmek için kasa parolasını girin.')),
     mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
     durum.sunucu && durum.sunucu.zamanlama && durum.sunucu.zamanlama.anahtarBellekte
-      ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Zamanlanmış koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Ayarlar > Koşu).') : null,
+      ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Zamanlanmış koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Planlı koşular).') : null,
     baska ? h('div', { class: 'kilit-alt' }, baska) : null);
   let durdur = () => {};
   const bekle = (saniye, onMetin) => {
@@ -753,6 +754,9 @@ function anaDuzen() {
   const navSonuclar = h('a', { href: '#/sonuclar' }, ikon('grafik'), 'Sonuçlar');
   const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
   const navEkranlar = h('a', { href: '#/ekranlar' }, ikon('ekran'), 'Ekranlar');
+  // Günlük iş nesneleri (Ayarlar'dan taşındı): Veri (test verisi) ve Planlı koşular.
+  const ustSayfaBaglantisi = (s) => h('a', { href: `#/${s.ad}` }, ikon(s.ikon), s.menu);
+  const [navVeri, navPlanli] = UST_SAYFALAR.map(ustSayfaBaglantisi);
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const kilitle = h('button', { type: 'button', class: 'kilitle-dugmesi', 'aria-label': 'Kilitle' }, ikon('kilit'), h('span', { class: 'dugme-metni' }, 'Kilitle'));
   const kilitleVeDon = async () => {
@@ -773,11 +777,11 @@ function anaDuzen() {
     yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
   }) : null;
   const sunucu = sunucuDurumu();
-  const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI });
+  const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, ustSayfalar: UST_SAYFALAR });
   const ust = h('header', { class: 'ust-cubuk' },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navAyarlar),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar),
     olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
     hizliAramaDugmesi(aramaBaglami), sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
@@ -787,9 +791,15 @@ function anaDuzen() {
   const ciz = () => {
     const hash = location.hash || '#/sonuclar';
     const [, bolum, alt, ...kalan] = hash.split('/');
+    // Ayarlar'dan taşınan sayfaların eski adresleri (yer imleri, eski bağlantılar): geçmişe eklemeden yeni adrese.
+    if (bolum === 'ayarlar' && alt && Object.hasOwn(ESKI_ADRESLER, alt)) {
+      history.replaceState(null, '', ESKI_ADRESLER[alt]);
+      ciz();
+      return;
+    }
     // Sayfa değişince önceki sayfanın açık pencereleri (ör. geri düğmesiyle çıkılan rapor penceresi) kapanır.
     for (const d of document.querySelectorAll('dialog[open]')) d.close();
-    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navAyarlar]) n.removeAttribute('aria-current');
+    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar]) n.removeAttribute('aria-current');
     if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
@@ -816,12 +826,17 @@ function anaDuzen() {
       sayfaBasligi('Ekranlar');
       ekranlarModulu().then((m) => m.ekranlarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
         .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Ekranlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+    } else if (bolum === 'veri' || bolum === 'planli-kosular') {
+      (bolum === 'veri' ? navVeri : navPlanli).setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      const tanim = UST_SAYFALAR.find((x) => x.ad === bolum);
+      sayfaBasligi(tanim ? tanim.etiket : 'Nöbetçi');
+      ustSayfaEkrani(main, bolum);
     } else if (bolum === 'ayarlar') {
       navAyarlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Ayarlar');
-      // Eski "Bağlam profilleri" adresi: bağlam kayıtları artık Test verisi > Kayıtlar'da.
-      ayarlarEkrani(main, alt === 'baglam' ? 'test-verisi' : AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
+      ayarlarEkrani(main, AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
     } else {
       // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
       navSonuclar.setAttribute('aria-current', 'page');
@@ -871,12 +886,24 @@ function ayarlarEkrani(main, bolum, odak = null) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
   const altNav = h('nav', { class: 'alt-nav', 'aria-label': 'Ayarlar bölümleri' },
     AYAR_BOLUMLERI.map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
+  // Ayarlar'dan üst menüye taşınan sayfalar: eski yerinden de bulunabilsin diye "taşındı" bağlantıları (Ayarlar'da yalnız ayarlar kalır).
+  const tasinan = h('nav', { class: 'alt-nav tasinan-bolumler', 'aria-label': 'Üst menüye taşınan sayfalar' },
+    h('div', { class: 'alt-nav-alt-baslik' }, 'Üst menüye taşındı'),
+    h('a', { href: '#/veri', title: 'Test verisi → üst menü: Veri' }, ikon('veri'), 'Test verisi'),
+    h('a', { href: '#/planli-kosular', title: 'Zamanlanmış koşular → üst menü: Planlı koşular' }, ikon('tarih'), 'Zamanlanmış koşular'));
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Ayarlar'),
     h('div', { class: 'kabuk-duzen' },
-      h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav,
+      h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav, tasinan,
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });
+}
+
+/** Üst menü sayfası (Veri / Planlı koşular): yan panelsiz tek sütun. @param {HTMLElement} main @param {'veri' | 'planli-kosular'} ad */
+function ustSayfaEkrani(main, ad) {
+  const icerik = h('section', { class: 'icerik-alani dar-icerik ust-sayfa', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
+  main.replaceChildren(h('h1', { class: 'gorunmez' }, ad === 'veri' ? 'Veri' : 'Planlı koşular'), icerik);
+  ustSayfaBolumu(icerik, ad, { durum, yonlendir, projeSec, projeleriYenile });
 }
 
 /** Dar ekranda yatay kayan menülerde (ana menü, Ayarlar bölümleri) etkin öğe görünür alana kaydırılır (sayfa kaymaz). */

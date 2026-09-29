@@ -4,7 +4,7 @@
 //   { tur: 'haftalik', saat: 'HH:MM', gunler: [1..7] }                haftanın seçili günleri (1 = Pazartesi … 7 = Pazar)
 //   { tur: 'aralik',   saatAraligi: 1|2|3|4|6|8|12, baslangic: 'HH:MM' }   her N saatte bir (gün içinde başlangıçtan itibaren)
 // Kaçan zamanlar (sunucu kapalı / kasa kilitli) sonradan TOPLU koşulmaz: bir zaman yalnızca geçtikten sonraki kısa pencerede
-// (TOLERANS_MS) tetiklenir; pencere kaçarsa bir sonraki zaman beklenir (varsayılan). Ayarlar > Koşu > Zamanlanmış koşu davranışı
+// (TOLERANS_MS) tetiklenir; pencere kaçarsa bir sonraki zaman beklenir (varsayılan). Planlı koşular > Zamanlanmış koşu davranışı
 // "Sonra bir kez koş" ise kaçan zamanlardan yalnız SONUNCUSU (en çok 8 gün geriye) bir kez tetiklenir.
 // NOT: import.meta KULLANILMAZ. Tipler: takvim.d.mts.
 import { DepoHatasi } from '../veritabani/depo.mjs';

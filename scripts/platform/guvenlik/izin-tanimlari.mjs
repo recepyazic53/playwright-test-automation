@@ -153,7 +153,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Servisler > Koş, Dene, Erişim kontrolü, Şemayı al (canlı ortam seçiliyken)',
       'Uçtan uca akışlar > Koş (canlı ortam seçiliyken)',
       'Ekranlar > Ekranı tara, Akışı kaydet; Ayarlar > Giriş > Girişi kaydet, Girişi dene (canlı ortam seçiliyken)',
-      'Ayarlar > Koşu > Zamanlanmış koşular (canlı ortam kuralı)'
+      'Planlı koşular (canlı ortam kuralı)'
     ],
     islemler: [
       { ad: 'Canlı ortamda ekran koşusu ve Dene', uclar: EKRAN_KOSU_UCLARI, kosul: 'ortam canlıysa' },
@@ -204,7 +204,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Ayarlar > Entegrasyonlar > Bağlantıyı dene',
       'Sonuçlar > Test ayrıntısı > Hata kaydı aç',
       'Koşu bitti bildirimi (seçtiğiniz olay)',
-      'Ayarlar > Koşu > Zamanlanmış koşular > Sonuçları bildir'
+      'Planlı koşular > Sonuçları bildir'
     ],
     islemler: [
       { ad: 'Bildirim / iş takip bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'veritabanı dışındaki bağlantı denenirken' },
@@ -223,8 +223,8 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Kasa kilitliyken zamanlanmış koşular için kasa anahtarını yalnız bellekte tutmak ("Kilitliyken de çalışsın").'
     ],
     yerler: [
-      'Ayarlar > Koşu > Zamanlanmış koşular',
-      'Ayarlar > Koşu > Zamanlanmış koşular > Kilitliyken de çalışsın'
+      'Planlı koşular',
+      'Planlı koşular > Kilitliyken de çalışsın'
     ],
     islemler: [
       { ad: 'Zamanlanmış koşuların başlatılması', uclar: [] },
@@ -242,8 +242,8 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Kasa anahtarını Windows DPAPI ile şifreleyip bilgisayara dosya olarak yazmak.'
     ],
     yerler: [
-      'Ayarlar > Koşu > Zamanlanmış koşular > Windows oturumuna bağlı otomatik açma',
-      'Ayarlar > Koşu > Zamanlanmış koşular > Bilgisayar açılınca başlasın'
+      'Planlı koşular > Windows oturumuna bağlı otomatik açma',
+      'Planlı koşular > Bilgisayar açılınca başlasın'
     ],
     islemler: [
       { ad: 'DPAPI anahtar dosyası oluşturma', uclar: ['/platform/zamanlama/tercih'], kosul: 'DPAPI tercihi açılırken' },

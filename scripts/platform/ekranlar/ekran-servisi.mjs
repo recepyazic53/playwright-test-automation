@@ -509,7 +509,7 @@ export function paketOnizle(vt, projeId, ham, secenekler = {}) {
     gerekenAyarlar.push({
       anahtar: `tur:${t}`, etiket: 'Gereken tablo', deger: t, durum: var_ ? 'tamam' : paketle ? 'bilgi' : 'eksik',
       aciklama: var_ ? 'Projede bu adla tablo var.' : paketle ? 'Paketin test verisi bölümünde; onaylarsanız yazılır.' : 'Projede bu adla test verisi tablosu yok.',
-      baglanti: '#/ayarlar/test-verisi'
+      baglanti: '#/veri'
     });
   }
   const baglamTurleri = new Set(baglamProfilAdlari(vt, projeId).map((b) => b.tur));

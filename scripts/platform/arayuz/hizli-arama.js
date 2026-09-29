@@ -14,9 +14,10 @@ const sade = (s) => String(s ?? '').toLocaleLowerCase('tr').normalize('NFD').rep
 /**
  * Proje verisinden aranabilir öğeler.
  * @param {{ id: string }} proje @param {Array<{ ad: string; etiket: string; ikon: string }>} ayarBolumleri
+ * @param {Array<{ ad: string; menu: string; etiket: string; ikon: string }>} [ustSayfalar] üst menüdeki Veri / Planlı koşular
  * @returns {Promise<Sonuc[]>}
  */
-async function ogeleriTopla(proje, ayarBolumleri) {
+async function ogeleriTopla(proje, ayarBolumleri, ustSayfalar = []) {
   const p = encodeURIComponent(proje.id);
   // Senaryolar tüm ortamlardan (birleşik liste; ortamId verilmez).
   const [ekranlar, servisler, senaryolar] = await Promise.all([
@@ -30,7 +31,8 @@ async function ogeleriTopla(proje, ayarBolumleri) {
     { tur: 'İşler', baslik: 'Senaryo ekle', alt: 'Senaryolar', ikonAd: 'arti', hedef: '#/senaryolar' },
     { tur: 'İşler', baslik: 'Ekran ekle', alt: 'Ekranlar · paket, tarama ya da akış kaydı', ikonAd: 'arti', hedef: '#/ekranlar/yeni' },
     { tur: 'İşler', baslik: 'Servis ekle', alt: 'WSDL, SoapUI, Postman ya da elle', ikonAd: 'arti', hedef: '#/servisler/yeni' },
-    { tur: 'İşler', baslik: 'Sonuçlar', alt: 'Koşu geçmişi, eğilim, hata kalıpları', ikonAd: 'grafik', hedef: '#/sonuclar' }
+    { tur: 'İşler', baslik: 'Sonuçlar', alt: 'Koşu geçmişi, eğilim, hata kalıpları', ikonAd: 'grafik', hedef: '#/sonuclar' },
+    ...ustSayfalar.map((s) => ({ tur: 'İşler', baslik: s.etiket, alt: `Üst menü · ${s.menu}`, ikonAd: s.ikon, hedef: `#/${s.ad}` }))
   ];
   for (const e of ekranlar) {
     const ortak = e.modelTuru === 'ortakAkis';
@@ -67,7 +69,7 @@ let acikDiyalog = null;
 
 /**
  * Hızlı arama penceresini açar.
- * @param {{ proje: { id: string } | null; ayarBolumleri: Array<{ ad: string; etiket: string; ikon: string }> }} baglam
+ * @param {{ proje: { id: string } | null; ayarBolumleri: Array<{ ad: string; etiket: string; ikon: string }>; ustSayfalar?: Array<{ ad: string; menu: string; etiket: string; ikon: string }> }} baglam
  */
 export async function hizliAramaAc(baglam) {
   if (acikDiyalog || !baglam.proje) return;
@@ -128,7 +130,7 @@ export async function hizliAramaAc(baglam) {
     if (onceOdak && onceOdak.isConnected && !location.hash.startsWith('#/')) onceOdak.focus();
   });
 
-  ogeler = await ogeleriTopla(baglam.proje, baglam.ayarBolumleri);
+  ogeler = await ogeleriTopla(baglam.proje, baglam.ayarBolumleri, baglam.ustSayfalar || []);
   if (diyalog.open) ciz();
 }
 

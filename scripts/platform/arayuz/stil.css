@@ -3143,7 +3143,7 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .pdf-raporlar-tablosu td { vertical-align: middle; }
 .pdf-rapor-eylemleri { display: flex; flex-wrap: wrap; gap: 4px; }
 
-/* Ayarlar > Koşu > Zamanlanmış koşular (zamanlanmis-kosular.js) */
+/* Planlı koşular > Zamanlanmış koşular (zamanlanmis-kosular.js) */
 .zamanlanmis-kosular .zamanlama-form-alani:not(:empty) { margin: 10px 0; }
 .zamanlama-kutulari { border: 1px solid var(--cizgi-2); border-radius: 8px; padding: 6px 12px 10px; margin: 8px 0; }
 .zamanlama-kutulari legend { padding: 0 4px; font-weight: 600; }
@@ -3228,6 +3228,9 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 @media (max-width: 1280px) { .hesap-menusu .hesap-adi { display: none; } }
 @media (max-width: 1360px) { .marka { min-width: 0; } .marka .marka-adi { display: none; } }
 @media (max-width: 1180px) { .olustur-dugmesi .dugme-metni { display: none; } }
+/* Üst menü 6 öğe (Veri ve Planlı koşular eklendi): orta genişlikte menü simgeleri gizlenir (metin kalır), daha dar ekranda menü
+   kendi satırına iner. */
+@media (max-width: 1500px) { .ust-nav a > svg { display: none; } .ust-nav a { padding-left: 10px; padding-right: 10px; } }
 @media (max-width: 1000px) {
   .ust-cubuk { flex-wrap: wrap; row-gap: 6px; padding-top: 8px; padding-bottom: 8px; }
   .ust-nav { order: 10; width: 100%; overflow-x: auto; margin: 0; padding-bottom: 2px; }
@@ -3671,7 +3674,7 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .ikinci-adim-notu[hidden] { display: none; }
 .ikinci-adim-notu p { margin: 0 0 4px; }
 .ikinci-adim-notu .bag-dugme { padding: 0 2px; min-height: 0; }
-/* Ayarlar > Koşu > Zamanlanmış koşular kartı: gömülü davranış formu (tek başlık, çerçevesiz) ve alt bölümler aynı düzende. */
+/* Planlı koşular > Zamanlanmış koşular kartı: gömülü davranış formu (tek başlık, çerçevesiz) ve alt bölümler aynı düzende. */
 .gomulu-ayar-formu { min-width: 0; }
 .gomulu-ayar-formu > .soluk.kucuk:first-child { margin: 0 0 var(--b2); }
 .gomulu-ayar-formu .ayar-grubu { display: grid; gap: 0; min-width: 0; }

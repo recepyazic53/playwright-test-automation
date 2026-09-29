@@ -13,7 +13,7 @@ export interface Kullanim { ekranBaglari: number; servisBaglari: number; senaryo
 export interface KirikBasvuru { tur: string; yer: string; basvuru: string; neden: string; git: string }
 export declare function tabloKullanimlari(vt: Veritabani, projeId: string): { kullanim: Record<string, Kullanim>; kirik: KirikBasvuru[] };
 export interface VeriSagligi {
-  /** Ayarlar > Test verisi > "Birleştirme önerisi eşiği" (varsayılan 50): altındaki öneriler arayüzde varsayılan gizli. */
+  /** Veri > "Birleştirme önerisi eşiği" (varsayılan 50): altındaki öneriler arayüzde varsayılan gizli. */
   benzerlikEsigi: number;
   benzer: Array<{ tablolar: string[]; adlar: string[]; grup: 'birebir' | 'cogu' | 'veriFarkli'; puan: number; tur: 'liste' | 'kayit'; eslemeGerekli: boolean }>;
   kullanilmayan: Array<{ id: string; ad: string; tur: 'liste' | 'kayit' }>;
