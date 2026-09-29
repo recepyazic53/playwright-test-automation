@@ -330,6 +330,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/giris-denemesi.js', { dosya: 'giris-denemesi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuc-ozeti.js', { dosya: 'sonuc-ozeti.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/baslarken.js', { dosya: 'baslarken.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],

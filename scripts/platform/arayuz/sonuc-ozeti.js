@@ -9,6 +9,7 @@ import { api, h, ikon, rozet } from './ortak.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
 import { farkHapi } from './sonuclar.js';
+import { baslarkenKarti } from './baslarken.js';
 
 /** Kartta ilk bakışta gösterilen madde. */
 export const KART_ILK = 5;
@@ -57,6 +58,8 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
         h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), 'Dönem ', donemMetni))),
       h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'genel' }))),
     sekmeler,
+    // Başlarken: ilk koşuya giden yol (tamamlanınca ya da gizlenince kaybolur; baslarken.js).
+    baslarkenKarti(proje),
     h('section', { class: 'kart sonuc-araligi', 'aria-label': 'Tarih aralığı süzgeci' }, tarihAraligiSecici({ degisti: () => aralikDegisti() })),
     kutuAlani,
     h('div', { class: 'farkindalik-kartlari' }, KARTLAR.map(([a]) => kartlar[a].kart)),

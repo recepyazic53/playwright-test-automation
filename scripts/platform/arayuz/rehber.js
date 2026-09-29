@@ -64,12 +64,38 @@ function otomatikIzinli() {
 
 let acik = null;
 let bekleyen = null;
+let kurulumTanitimi = false;
+let kurulumBekleyen = null;
+
+/**
+ * İlk kurulum sihirbazı bitti: ana düzen ilk çizildiğinde (hangi ekrana geçilirse) 5 adımlık genel tanıtım kendiliğinden açılır —
+ * "Rehberleri ilk girişte göster" tercihinden bağımsız, tek sefer. Kullanıcı × / Esc ile kapatabilir; Ayarlar > Arayüz > "Genel
+ * tanıtımı şimdi aç" aynen durur. Otomatik sürülen tarayıcıda ve NOBETCI_REHBER_OTOMATIK=0 ile yine açılmaz (testler açıkça ister).
+ */
+export function kurulumSonrasiTanitimIste() { kurulumTanitimi = true; }
+
+async function kurulumTanitiminiAc() {
+  kurulumTanitimi = false;
+  if (!otomatikIzinli()) return;
+  // Kasa sihirbazda oluşturuldu: önbellek (kasa yokken okunmuş olabilir) tazelenir.
+  ayarSozu = null;
+  const a = await ayarlar();
+  if (a.ortamKapali || a.gorulenler.includes('genel')) return;
+  clearTimeout(kurulumBekleyen);
+  kurulumBekleyen = setTimeout(() => {
+    kurulumBekleyen = null;
+    if (acik || document.querySelector('dialog[open]')) return;
+    rehberBaslat('genel');
+  }, 700);
+}
 
 /**
  * Ekranın rehberini ilk girişte (tercih açıksa ve daha önce görülmediyse) başlatır. Ekran çizilirken çağrılır; hedefler
  * yüklenene kadar kısa süre beklenir. @param {string | null} anahtar
  */
 export async function rehberOtomatikDene(anahtar) {
+  if (kurulumTanitimi) { await kurulumTanitiminiAc(); return; }
+  if (kurulumBekleyen) return;
   clearTimeout(bekleyen);
   if (!anahtar || acik || !otomatikIzinli()) return;
   const a = await ayarlar();
