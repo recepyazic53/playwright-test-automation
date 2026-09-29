@@ -35,6 +35,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { bagAdi, baglariUygula } from './akis-senaryo-icerigi.mjs';
 import { baslangicDegerleri, govdeCoz, govdeUret, semaBirlestir } from './servis-govdesi.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { zincirNedeni } from '../senaryolar/hazirlik.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -236,7 +237,9 @@ async function akisiKos(vt, projeId, g) {
   const gizliler = [];
   /** @type {AkisAdimSonucu[]} */
   const adimlar = [];
-  let dur = false;
+  /** Akışı durduran (başarısız / çalıştırılamayan) adım: sonraki adımlar koşmaz, gerekçeleri bu adımı adıyla söyler (hazirlik.mjs). */
+  /** @type {AkisAdimSonucu | null} */
+  let dur = null;
   const tumAdimlar = g.akis.icerik.adimlar;
   // Yetki hatasında (401 / 403) "Token'ı yenile, bir kez tekrar dene" (akışın seçimi; yoksa Ayarlar > Koşu): adımın kullandığı
   // ${akis:…} değerlerini okuyan ÖNCEKİ adımlar (token adımı) yeniden çalışır, istek bir kez tekrarlanır.
@@ -253,7 +256,7 @@ async function akisiKos(vt, projeId, g) {
       senaryo: sqlMi ? 'SQL sorgusu' : ekranMi ? (ekranKancasi?.etiket(vt, a) ?? 'Ekran senaryosu') : opMi ? String(a.operasyon) : senaryo?.baslik ?? '?', durum: 'atlandi', sureMs: 0,
       ...(sqlMi ? { tur: /** @type {const} */ ('sql') } : opMi ? { tur: /** @type {const} */ ('operasyon') } : ekranMi ? { tur: /** @type {const} */ ('ekran') } : {}) };
     adimlar.push(s);
-    if (dur) { s.neden = 'önceki adım başarısız'; continue; }
+    if (dur) { s.neden = zincirNedeni(dur.no, dur.ad, dur.durum); continue; }
     if (g.sinyal?.aborted) { s.durum = 'durduruldu'; s.neden = 'kullanıcı durdurdu'; continue; }
     g.olay?.(s, 'basladi');
     /** @type {{ okunan: Record<string, string>; gizliler: string[] }} */
@@ -346,7 +349,7 @@ async function akisiKos(vt, projeId, g) {
     Object.assign(degerler, acik.okunan);
     for (const x of acik.gizliler) if (!gizliler.includes(x)) gizliler.push(x);
     g.olay?.(s, 'bitti');
-    if (s.durum !== 'basarili' && !a.hataOlursaDevam) dur = true;
+    if (s.durum !== 'basarili' && !a.hataOlursaDevam) dur = s;
   }
   const kotu = adimlar.find((x) => x.durum === 'hata') ? 'hata' : adimlar.some((x) => x.durum !== 'basarili') ? 'basarisiz' : 'basarili';
   const ilkSorun = adimlar.find((x) => x.durum !== 'basarili' && x.durum !== 'atlandi');

@@ -125,20 +125,23 @@ async function main() {
     const bas = Date.now();
     let durumAdi = 'hata';
     let mesaj = '';
+    let calistirilamadi = false;
     try {
       const y = await api('/platform/senaryolar/calistir', {
         projeId: proje.id, ortamId: ortam.id, senaryoId: s.id, kosuId: randomUUID(),
         kosuTuru: tam ? 'tam' : 'tekil', kosuKimligi, ...(tam ? { kosuKapsami: 'Genel' } : {}), ...(riskli ? { canliOnay: true } : {})
       });
-      durumAdi = y.durum === 'passed' ? 'basarili' : y.durum === 'skipped' ? 'atlanan' : y.durum === 'iptal' ? 'durduruldu' : 'basarisiz';
-      mesaj = y.durum === 'passed' ? '' : String(y.hata || y.mesaj || '').split('\n')[0].slice(0, 300);
+      // Hazırlığı eksik (koşuya alınmadı; "Çalıştırılamadı"): atlanan gibi sayılır, gerekçe cümlesiyle.
+      calistirilamadi = y.durum === 'calistirilamadi';
+      durumAdi = y.durum === 'passed' ? 'basarili' : y.durum === 'skipped' || calistirilamadi ? 'atlanan' : y.durum === 'iptal' ? 'durduruldu' : 'basarisiz';
+      mesaj = y.durum === 'passed' ? '' : String((calistirilamadi && y.hataMesaji) || y.hata || y.mesaj || '').split('\n')[0].slice(0, 300);
     } catch (hata) {
       mesaj = hata.message;
       // Kapalı izin / eksik canlı onayı: diğer senaryolar da aynı nedenle başlamaz — koşu burada kesilir.
       if (hata.kod === 'IZIN_KAPALI' || hata.kod === 'CANLI_ONAY_GEREKLI') { console.error(mesaj); durduruldu = true; }
     }
     const sureMs = Date.now() - bas;
-    sirali[i] = { baslik: s.baslik, ekran: ekranAdi.get(s.ekranId) || '', durum: durumAdi, sureMs, mesaj };
+    sirali[i] = { baslik: s.baslik, ekran: ekranAdi.get(s.ekranId) || '', durum: durumAdi, sureMs, mesaj, ...(calistirilamadi ? { calistirilamadi: true } : {}) };
     const isaret = { basarili: '✓', basarisiz: '✗', atlanan: '−', durduruldu: '■', hata: '!' }[durumAdi];
     console.log(`${String(++biten).padStart(3)}/${secilen.length} ${isaret} ${s.baslik} (${(sureMs / 1000).toFixed(1)} sn)${mesaj ? `\n        ${mesaj}` : ''}`);
   };
@@ -147,9 +150,10 @@ async function main() {
   const sonuclar = sirali.filter(Boolean);
 
   const say = (d) => sonuclar.filter((x) => x.durum === d).length;
-  const ozet = { proje: proje.ad, ortam: ortam.ad, toplam: sonuclar.length, basarili: say('basarili'), basarisiz: say('basarisiz'), atlanan: say('atlanan'), durduruldu: say('durduruldu'), hata: say('hata') };
+  const ozet = { proje: proje.ad, ortam: ortam.ad, toplam: sonuclar.length, basarili: say('basarili'), basarisiz: say('basarisiz'), atlanan: say('atlanan'), durduruldu: say('durduruldu'), hata: say('hata'),
+    ...(sonuclar.some((x) => x.calistirilamadi) ? { calistirilamadi: sonuclar.filter((x) => x.calistirilamadi).length } : {}) };
   if (a.json) console.log(JSON.stringify({ ...ozet, sonuclar }, null, 2));
-  else console.log(`\nÖzet: ${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız, ${ozet.atlanan} atlandı${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}${ozet.durduruldu ? `, ${ozet.durduruldu} durduruldu` : ''}. Ayrıntı: Nöbetçi > Sonuçlar.`);
+  else console.log(`\nÖzet: ${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız, ${ozet.atlanan} atlandı${ozet.calistirilamadi ? ` (${ozet.calistirilamadi} tanesi hazırlığı eksik olduğu için koşuya alınmadı)` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}${ozet.durduruldu ? `, ${ozet.durduruldu} durduruldu` : ''}. Ayrıntı: Nöbetçi > Sonuçlar.`);
   if (a.junit) {
     const x = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]);
     const vakalar = sonuclar.map((r) => `  <testcase classname="${x(r.ekran || proje.ad)}" name="${x(r.baslik)}" time="${(r.sureMs / 1000).toFixed(3)}">${

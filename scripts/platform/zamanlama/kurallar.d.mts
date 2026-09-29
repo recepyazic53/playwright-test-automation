@@ -15,7 +15,7 @@ export interface Kural {
   olusturulma: string; guncellenme: string;
 }
 export type TetiklemeDurumu = 'calisiyor' | 'tamamlandi' | 'basarisiz' | 'atlandi' | 'yarida' | 'hata';
-export interface TetiklemeOzeti { toplam: number; basarili: number; basarisiz: number; atlanan: number; hata: number }
+export interface TetiklemeOzeti { toplam: number; basarili: number; basarisiz: number; atlanan: number; hata: number; /** Hazırlığı eksik olduğu için koşuya alınmayanlar (atlanan gibi; yalnız varsa). */ calistirilamadi?: number }
 export interface Tetikleme {
   id: string;
   /** Planlanan çalışma zamanı. */

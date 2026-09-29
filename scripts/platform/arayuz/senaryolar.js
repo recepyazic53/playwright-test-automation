@@ -53,6 +53,11 @@ const tanimliOrtamlar = (x, ortamlar) => ortamlar.filter((o) => ortamKaydi(x, o.
 /** Kapsam etiketi: tanımlı ortamların adları " + " ile (servis senaryolarındaki gibi). */
 const kapsamEtiketi = (liste2) => (liste2.length ? liste2.map((o) => o.ad).join(' + ') : 'Hiçbir ortam');
 const ortamdaDahil = (x, ortamId) => Boolean(ortamKaydi(x, ortamId)?.kosuyaDahil);
+/** Senaryonun bu ortamdaki hazırlığı (sunucu: senaryolar/hazirlik-servisi.mjs; { calistirilabilir, neden, eksikler }) ya da undefined. */
+const hazirligi = (x, ortamId) => ortamKaydi(x, ortamId)?.hazirlik;
+const calistirilamazMi = (x, ortamId) => hazirligi(x, ortamId)?.calistirilabilir === false;
+/** Koşu diyaloğunun "çalıştırılamaz" satırı (koşuya girmez; gerekçe + Düzelt). */
+const calistirilamazSatiri = (x, ortamId) => ({ id: x.id, baslik: x.baslik, neden: hazirligi(x, ortamId)?.neden || '', eksikler: hazirligi(x, ortamId)?.eksikler || [] });
 
 /**
  * @param {HTMLElement} main
@@ -326,10 +331,13 @@ function listeGorunumu(icerik, s) {
     temizle.hidden = !filtreliMi();
     kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));
     // Pasifken nedeni söylenir (düğmenin üstüne gelince ve ekran okuyucuda).
-    kosuDugmesi.title = !kosuDugmesi.disabled ? 'Toplu koşuya dahil senaryoları sırayla koşar (ortam sorulur)'
-      : kosuSuruyorMu() ? 'Sürmekte olan bir koşu var; bitmesini bekleyin ya da durdurun.'
-        : 'Toplu koşuya dahil senaryo yok: tablodaki "Toplu koşuya dahil" anahtarını açın ya da senaryoları seçip "Toplu koşuya ekle"yi kullanın.';
-    kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var' : ekran && ekran.durum === 'devre_disi' ? 'Ekran devre dışı: senaryoları koşulara girmez (Ekranlar > ⋯ > Etkinleştir)' : '';
+    // Tek atama: kapalıyken nedeni, açıkken ne yapacağı (+ çalıştırılamayan senaryo varsa sayısı; nedenleri koşu penceresinde).
+    const calistirilamayan = liste2.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false
+      && tanimliOrtamlar(x, ortamlar).some((o) => ortamdaDahil(x, o.id)) && tanimliOrtamlar(x, ortamlar).filter((o) => ortamdaDahil(x, o.id)).every((o) => calistirilamazMi(x, o.id))).length;
+    kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var; bitmesini bekleyin ya da durdurun.'
+      : ekran && ekran.durum === 'devre_disi' ? 'Ekran devre dışı: senaryoları koşulara girmez (Ekranlar > ⋯ > Etkinleştir)'
+        : kosuDugmesi.disabled ? 'Toplu koşuya dahil senaryo yok: tablodaki "Toplu koşuya dahil" anahtarını açın ya da senaryoları seçip "Toplu koşuya ekle"yi kullanın.'
+          : `Toplu koşuya dahil senaryoları sırayla koşar (ortam sorulur)${calistirilamayan ? `; ${calistirilamayan} senaryo çalıştırılamaz, nedenleri koşu penceresinde yazar` : ''}.`;
     topluCubukCiz(liste2);
     tabloCiz(liste2);
   }
@@ -539,6 +547,12 @@ function listeGorunumu(icerik, s) {
         title: `${x.eskiyenTarihler.map((e) => `${e.etiket}: ${e.deger} — ${e.mesaj}`).join('\n')}\nSeçip "Tarihleri bugüne göre yap…" ile düzeltin.`
       }) : null
     ].filter(Boolean);
+    // "Çalıştırılamaz" (hazırlık; sunucu hesaplar): tek cümlelik gerekçe + "Düzelt" (formdaki Hazırlık kontrolü ilgili yere götürür).
+    const engelliOrtamlar = tanimli.filter((o) => calistirilamazMi(x, o.id));
+    const nedenNotu = engelliOrtamlar.length ? h('div', { class: 'calistirilamaz-notu' },
+      rozet('Çalıştırılamaz', 'hata', { title: engelliOrtamlar.map((o) => `${o.ad}: ${hazirligi(x, o.id)?.neden || ''}`).join('\n') }),
+      h('span', { class: 'calistirilamaz-nedeni' }, `${engelliOrtamlar.length < tanimli.length ? `${engelliOrtamlar.map((o) => o.ad).join(', ')}: ` : ''}${hazirligi(x, engelliOrtamlar[0].id)?.neden || ''}`),
+      h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, 'aria-label': `Düzelt: ${x.baslik}` }, 'Düzelt')) : null;
     // Son sonuç: ORTAM BAŞINA nokta + kısa etiket ("TEST ✓ 27.09", "CANLI —"); çalışan ortamda "Çalışıyor / Sırada".
     const kosuOrtami = kosu ? kosuOrtamiId() : null;
     const sonHucre = tanimli.length ? h('div', { class: 'ortam-sonuclari' }, tanimli.map((o) => {
@@ -571,7 +585,7 @@ function listeGorunumu(icerik, s) {
       }, ikon('oynat'));
     return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', kosu ? 'calisiyor' : '', x.kosuyaDahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
       h('td', { class: 'secim' }, secim),
-      h('td', {}, h('div', { class: 'senaryo-adi' }, h('a', { class: 'senaryo-adi-baglantisi', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, title: 'Senaryoyu aç' }, h('strong', {}, x.baslik)), altBilgi.length ? h('small', {}, altBilgi) : null)),
+      h('td', {}, h('div', { class: 'senaryo-adi' }, h('a', { class: 'senaryo-adi-baglantisi', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, title: 'Senaryoyu aç' }, h('strong', {}, x.baslik)), altBilgi.length ? h('small', {}, altBilgi) : null, nedenNotu)),
       ekran ? null : h('td', { class: 'ekran-hucresi' }, x.ekranAdi ? h('span', { class: 'ekran-adi', title: x.ekranAdi }, x.ekranAdi) : '—'),
       h('td', { class: 'profil-sutunu' }, x.baglamProfili
         ? h('span', { class: `profil-hapi ${x.baglamProfili.varsayilan ? 'varsayilan' : ''}`, title: x.baglamProfili.varsayilan ? 'Varsayılan bağlam profili' : 'Bağlam profili' }, ikon('kullanici'), x.baglamProfili.ad || 'varsayılan')
@@ -629,8 +643,11 @@ function listeGorunumu(icerik, s) {
     // Tek, riskli olmayan ortamda tanımlıysa (ve SQL uyarısı yoksa, senaryo tablodan veri almıyorsa) sormadan çalışır; aksi halde
     // ortam (ve tablodan veri alan senaryoda veri koşusu biçimi, tahmini test sayısı) diyalogda seçilir.
     let veriKipi = 'senaryo';
-    if (secenek.length > 1 || riskliOrtamMi(ortam) || sqlUyarilari(ortam).length || await veriGrupluMu(x, ortam)) {
-      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hesapla: (o) => ({ senaryolar: [x], uyarilar: sqlUyarilari(o) }), tur: 'tekil', esZamanli: true, dugme: 'Çalıştır', veriKosusu: { projeId: proje.id } });
+    // Çalıştırılamıyorsa (hazırlık) diyalog gerekçeyi ve "Düzelt"i gösterir; sormadan başlatılmaz.
+    if (secenek.length > 1 || riskliOrtamMi(ortam) || calistirilamazMi(x, ortam.id) || sqlUyarilari(ortam).length || await veriGrupluMu(x, ortam)) {
+      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hazirlik: { projeId: proje.id },
+        hesapla: (o) => (calistirilamazMi(x, o.id) ? { senaryolar: [], calistirilamazlar: [calistirilamazSatiri(x, o.id)] } : { senaryolar: [x], uyarilar: sqlUyarilari(o) }),
+        tur: 'tekil', esZamanli: true, dugme: 'Çalıştır', veriKosusu: { projeId: proje.id } });
       if (!y) return;
       ortam = y.ortam;
       veriKipi = y.veriKipi;
@@ -653,10 +670,11 @@ function listeGorunumu(icerik, s) {
     if (!ilgili.length) { bildir('Seçilen senaryolar hiçbir ortamda tanımlı değil.', 'hata'); return; }
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
-      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: false, ...(await ekranKosuBicimi()), veriKosusu: { projeId: proje.id },
+      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), hazirlik: { projeId: proje.id }, tur: 'tekil', esZamanli: false, ...(await ekranKosuBicimi()), veriKosusu: { projeId: proje.id },
       hesapla: (o) => {
-        const k = calisabilir.filter((x) => ortamKaydi(x, o.id)?.tanimli);
-        return { senaryolar: k, tanimsizSayisi: calisabilir.length - k.length, uyarilar: sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, k, o) };
+        const t = calisabilir.filter((x) => ortamKaydi(x, o.id)?.tanimli);
+        const k = t.filter((x) => !calistirilamazMi(x, o.id));
+        return { senaryolar: k, calistirilamazlar: t.filter((x) => calistirilamazMi(x, o.id)).map((x) => calistirilamazSatiri(x, o.id)), tanimsizSayisi: calisabilir.length - t.length, uyarilar: sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, k, o) };
       }
     });
     if (!y) return;
@@ -672,13 +690,16 @@ function listeGorunumu(icerik, s) {
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
       baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, ...(await ekranKosuBicimi()), veriKosusu: { projeId: proje.id },
-      surumAlani: true,
+      surumAlani: true, hazirlik: { projeId: proje.id },
       // Koşuya o ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
       hesapla: (o) => {
         const tanimli = gorunen.filter((x) => ortamKaydi(x, o.id)?.tanimli);
-        const kosacak = tanimli.filter((x) => ortamdaDahil(x, o.id) && x.ekranEtkin !== false && !kosuDurumu(x.id));
+        const aday = tanimli.filter((x) => ortamdaDahil(x, o.id) && x.ekranEtkin !== false && !kosuDurumu(x.id));
+        // Çalıştırılamayanlar (hazırlık: gönderme eylemi, beklenen sonuç, test verisi…) koşuya girmez; gerekçeleriyle listelenir.
+        const kosacak = aday.filter((x) => !calistirilamazMi(x, o.id));
         return {
           senaryolar: kosacak,
+          calistirilamazlar: aday.filter((x) => calistirilamazMi(x, o.id)).map((x) => calistirilamazSatiri(x, o.id)),
           haricSayisi: tanimli.filter((x) => !ortamdaDahil(x, o.id) || x.ekranEtkin === false).length,
           tanimsizSayisi: gorunen.length - tanimli.length,
           // Veritabanı bu ortamda eşli değilse uyarı (koşu engellenmez; senaryo o SQL adımında kalır).

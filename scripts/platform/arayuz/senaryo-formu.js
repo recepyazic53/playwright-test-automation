@@ -31,6 +31,7 @@ import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 import { tarihGirdisi } from './goreli-tarih-girdisi.js';
 import { talepAlani } from './talep-alani.js';
+import { HAZIRLIK_BASLIKLARI, alanMaddesi, eylemDenetimi, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -660,6 +661,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     yerlestir(genelHatalar, ...(gonderildi ? dagit.genel : []).map((m) => h('li', {}, m)));
     genelHatalar.hidden = !(gonderildi && dagit.genel.length);
     ozetiCiz(d);
+    hazirlikCiz(d);
     satirSecimiCiz();
     tablodanBagliListeleriYenile();
     if (grupOnizlemesiEski) { grupOnizlemesiEski = false; if (tabloListesi) for (const g of kayitGruplari.values()) if (g.kip === 'hazir') for (const kap of g.kaplar) kayitGrubuCiz(g, kap); }
@@ -1468,7 +1470,178 @@ function modelFormu(icerik, s, senaryo, baglam) {
     yerlestir(dogrulamaOzeti, ikon(toplam ? 'uyari' : 'onay'),
       h('span', {}, toplam ? `${toplam} alan düzeltilmeli` : 'Tüm kurallar sağlanıyor'),
       toplam ? h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { gonderildi = true; guncelle(); ilkHatayaGit(); } }, 'Göster') : null,
-      d.uyarilar.length ? rozet(`${d.uyarilar.length} uyarı`, 'atlanan', { title: d.uyarilar.map((u) => u.mesaj).join('\n') }) : null);
+      d.uyarilar.length ? uyariDugmesi(d) : null);
+    uyariListesiCiz(d);
+  }
+
+  // --- Uyarılar ("N uyarı" rozeti tıklanınca liste; her uyarıdan ilgili alana gidilir) --------------------------
+  const uyariListesi = h('ul', { class: 'uyari-listesi', id: yeniId('uyarilar'), hidden: true, 'aria-label': 'Uyarılar' });
+  let uyarilarAcik = false;
+  /** Uyarının alanına gider (alan görünürse odaklanır); alan bulunamazsa false. @param {{ alan: string; mesaj: string }} u */
+  function uyariyaGit(u) {
+    const anahtar = Object.keys(hatalariDagit([u], sema).alanlar)[0];
+    const k = anahtar ? kontroller.get(anahtar) : null;
+    const el = k && k.girdiler[0];
+    if (!el || el.offsetParent === null) return false;
+    el.focus();
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return true;
+  }
+  function uyariDugmesi(d) {
+    return h('button', {
+      type: 'button', class: 'rozet atlanan uyari-rozeti', 'aria-expanded': uyarilarAcik ? 'true' : 'false', 'aria-controls': uyariListesi.id,
+      title: uyarilarAcik ? 'Uyarıları gizle' : 'Uyarıları göster',
+      onclick: () => {
+        uyarilarAcik = !uyarilarAcik;
+        ozetiCiz(sonDurum);
+        // Tek uyarı: doğrudan ilgili alana gidilir (liste de açık kalır).
+        if (uyarilarAcik && sonDurum.uyarilar.length === 1) uyariyaGit(sonDurum.uyarilar[0]);
+      }
+    }, ikon('uyari'), `${d.uyarilar.length} uyarı`);
+  }
+  function uyariListesiCiz(d) {
+    uyariListesi.hidden = !uyarilarAcik || !d.uyarilar.length;
+    if (uyariListesi.hidden) { yerlestir(uyariListesi); return; }
+    yerlestir(uyariListesi, ...d.uyarilar.map((u) => {
+      const anahtar = Object.keys(hatalariDagit([u], sema).alanlar)[0];
+      return h('li', {}, h('span', {}, u.mesaj),
+        anahtar && kontroller.has(anahtar) ? h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { if (!uyariyaGit(u)) bildir('Bu uyarının alanı şu an görünmüyor (adım kapsam dışında ya da diyagram sekmesi açık).', 'hata'); } }, 'Alana git') : null);
+    }));
+  }
+
+  // --- Hazırlık kontrolü ("Neden çalışmıyor?"; kurallar ve metinler: hazirlik.mjs — sunucu ve koşucuyla ortak) -------------------
+  // Alanlar · Test verisi · Gönderme eylemi · Beklenen sonuç · Ortam bağlantısı. Her ✕ satırında "Tamamla" ilgili yere götürür.
+  // Ortam bağlantısı KENDİLİĞİNDEN denetlenmez: "Denetle" seçili ortamın adresine tek istek gönderir (izin ve CANLI onayıyla).
+  const hazirlikListesi = h('ul', { class: 'hazirlik-listesi' });
+  const hazirlikNedeni = h('p', { class: 'hazirlik-nedeni', role: 'status', hidden: true });
+  const ortamMetni = h('small', { class: 'hazirlik-ayrinti' });
+  const denetleDugmesi = h('button', { type: 'button', class: 'kucuk-dugme', 'data-hazirlik': 'denetle' }, ikon('ag'), 'Denetle');
+  const ortamSatiri = h('li', { class: 'hazirlik-maddesi ortam', 'data-madde': 'ortam' },
+    h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, '⇄'),
+    h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, HAZIRLIK_BASLIKLARI.ortam), ortamMetni),
+    denetleDugmesi);
+  const hazirlikPaneli = h('section', { class: 'hazirlik-paneli', 'aria-labelledby': 'hazirlik-baslik' },
+    h('h4', { id: 'hazirlik-baslik' }, 'Hazırlık kontrolü'), hazirlikListesi, h('ul', { class: 'hazirlik-listesi' }, ortamSatiri), hazirlikNedeni);
+  /** Denetim (ve Dene) ortamı: doğrulama bağlamının ortamı senaryonun ortamlarındaysa o, değilse ilk seçili ortam. */
+  const hazirlikOrtami = () => {
+    const id = ortamSecimi.has(s.ortam.id) ? s.ortam.id : [...ortamSecimi][0] || s.ortam.id;
+    return s.ortamlar.find((o) => o.id === id) || s.ortam;
+  };
+  /** @type {Record<string, any>} ortam kimliği → son denetim (null: denetlenmedi) */
+  const ortamDenetimleri = {};
+  const ortamCiz = () => {
+    const o = hazirlikOrtami();
+    const d = ortamDenetimleri[o.id] || null;
+    ortamSatiri.classList.toggle('tamam', Boolean(d && d.erisilebilir));
+    ortamSatiri.classList.toggle('eksik', Boolean(d && !d.erisilebilir));
+    ortamMetni.textContent = `${o.ad}: ${ortamDenetimiMetni(d)}`;
+    denetleDugmesi.setAttribute('aria-label', `Ortam bağlantısını denetle (${o.ad})`);
+  };
+  async function ortamDenetiminiOku() {
+    const o = hazirlikOrtami();
+    if (o.id in ortamDenetimleri) { ortamCiz(); return; }
+    ortamDenetimleri[o.id] = null;
+    ortamCiz();
+    try {
+      // Saklanan son sonuç (10 dk; istek atılmaz).
+      const y = await api(`/platform/ortam/denetim?projeId=${encodeURIComponent(s.proje.id)}&ortamId=${encodeURIComponent(o.id)}`);
+      // "Denetle" bu arada sonuç yazdıysa o korunur.
+      ortamDenetimleri[o.id] ??= y.denetim || null;
+    } catch { /* okunamazsa denetlenmedi sayılır */ }
+    ortamCiz();
+  }
+  denetleDugmesi.addEventListener('click', async () => {
+    const o = hazirlikOrtami();
+    if (!(await canliOnayIste(o, 'Bağlantı denetimi'))) return;
+    denetleDugmesi.disabled = true;
+    ortamMetni.textContent = `${o.ad}: denetleniyor…`;
+    try {
+      const y = await api('/platform/ortam/denetle', { govde: { projeId: s.proje.id, ortamId: o.id, ...canliOnayEki(o.id) } });
+      ortamDenetimleri[o.id] = y.denetim;
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      bildir(e.message, 'hata');
+    } finally {
+      denetleDugmesi.disabled = false;
+      ortamCiz();
+    }
+  });
+  /** Formun güncel beklenen sonucu (koşucunun okuduğu biçimde). */
+  function formBeklenen() {
+    if (!bs || degerler[`${bs.anahtar}.tip`] !== bs.hataTipi || !bs.hataTipi) return { tur: 'basari' };
+    const liste = degerler[`${bs.anahtar}.mesajlar`];
+    return { tur: 'hata', adim: String(degerler[`${bs.anahtar}.adim`] || ''), mesaj: String(degerler[`${bs.anahtar}.mesaj`] || (Array.isArray(liste) ? liste[0] || '' : '')) };
+  }
+  /** Test verisi: formda kullanılan tablo grupları bu ortamda bir satıra uyuyor mu (satır adıyla; değer yok). */
+  function formVeriMaddesi() {
+    const gruplar = kullanilanGruplar();
+    if (!gruplar.length) return veriMaddesi({ kullaniliyor: false });
+    if (!tabloListesi) { tablolariOku(); return veriMaddesi({ kullaniliyor: true, bekliyor: true }); }
+    const satirlar = [];
+    for (const g of gruplar) {
+      const t = tabloBul(tabloListesi, g.tablo);
+      if (!t) return veriMaddesi({ kullaniliyor: true, sorun: `“${g.tablo}” adında tablo yok` });
+      const r = onizlemeSatiri(g, t);
+      if (!r) return veriMaddesi({ kullaniliyor: true, sorun: `“${t.ad}${g.etiket ? ` (${g.etiket})` : ''}” tablosunda ${hazirlikOrtami().ad} ortamına uyan satır yok` });
+      satirlar.push(`${t.ad}: ${r.ad || 'adsız satır'}`);
+    }
+    return veriMaddesi({ kullaniliyor: true, satirlar });
+  }
+  /** Formun hazırlık durumu (maddeler + özet). */
+  function hazirlikHesapla(d = sonDurum.gorunurluk ? sonDurum : hesapla()) {
+    const g = d.gorunurluk;
+    const dagit = hatalariDagit(d.hatalar, sema);
+    const hataliAnahtarlar = Object.keys(dagit.alanlar).filter((k) => dagit.alanlar[k].length);
+    const toplam = new Set([...tumAlanlar.filter((a) => a.zorunlu === true && g.alanlar[a.id] !== false).map((a) => a.anahtar), ...hataliAnahtarlar]).size;
+    const ilk = hataliAnahtarlar.length ? dagit.alanlar[hataliAnahtarlar[0]][0] : dagit.genel[0] || null;
+    const eylem = eylemDenetimi(baglam.model, { adimDahil: g.adimlar, beklenen: formBeklenen() });
+    const maddeler = [alanMaddesi({ toplam, hatali: hataliAnahtarlar.length + dagit.genel.length, ilkHata: ilk }), formVeriMaddesi(), eylem.gonderme, eylem.beklenen];
+    return { maddeler, engeller: eylem.engeller, ...hazirlikOzeti(maddeler, eylem.engeller) };
+  }
+  const akisTasarimiAdresi = () => {
+    const ekranId = baglam.ekran?.id || s.ekranId;
+    return ekranId ? `#/ekranlar/e/${encodeURIComponent(ekranId)}/akis${baglam.akisId ? `/${encodeURIComponent(baglam.akisId)}` : ''}` : null;
+  };
+  /** "Tamamla": eksik maddenin düzeltileceği yere götürür. */
+  function tamamlaDugmesi(m) {
+    if (m.durum !== 'eksik' || !m.hedef) return null;
+    const etiket = `${m.baslik}: tamamla`;
+    if (m.hedef.tur === 'akis') {
+      const adres = akisTasarimiAdresi();
+      return adres ? h('a', { class: 'dugme kucuk-dugme', href: adres, 'aria-label': etiket, title: 'Ekranın akış diyagramını açar (düğme / beklenen mesaj orada eklenir)' }, 'Tamamla') : null;
+    }
+    return h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': etiket, onclick: () => {
+      if (!diyagramAlani.hidden) sekmeSec('form');
+      if (m.hedef.tur === 'alan') { gonderildi = true; guncelle(); ilkHatayaGit(); return; }
+      if (m.hedef.tur === 'beklenen') {
+        beklenenKarti.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        /** @type {HTMLElement | null} */ (beklenenKarti.querySelector('.hata-ayrintisi select, .hata-ayrintisi textarea, .hata-ayrintisi input, input'))?.focus({ preventScroll: true });
+        return;
+      }
+      // Test verisi: satır seçimi kartı (görünürse), yoksa tablodan değer alan ilk alan.
+      const hedef = !satirSecimiKarti.hidden ? satirSecimiKarti
+        : tumAlanlar.map((a) => (tabloBasvurusuCoz(degerler[a.anahtar]) ? alanlar.get(a.id)?.kap : null)).find((x) => x && !x.hidden) || null;
+      if (hedef) { hedef.scrollIntoView({ block: 'center', behavior: 'smooth' }); /** @type {HTMLElement | null} */ (hedef.querySelector('select, input, button'))?.focus({ preventScroll: true }); }
+      else bildir('Tabloyu Test verisi > Tablolar sayfasında tamamlayın (bu ortama uyan satır ekleyin).', 'hata');
+    } }, 'Tamamla');
+  }
+  const DURUM_OKUNUSU = { tamam: 'Hazır: ', eksik: 'Eksik: ', yok: 'Gerekmiyor: ', bekliyor: 'Denetleniyor: ' };
+  const DURUM_SIMGESI = { tamam: '✓', eksik: '✕', yok: '–', bekliyor: '…' };
+  let hazirlikImzasi = '';
+  function hazirlikCiz(d) {
+    ortamDenetiminiOku();
+    const hz = hazirlikHesapla(d);
+    const imza = JSON.stringify([hz.maddeler, hz.neden]);
+    if (imza === hazirlikImzasi) return;
+    hazirlikImzasi = imza;
+    yerlestir(hazirlikListesi, ...hz.maddeler.map((m) => h('li', { class: `hazirlik-maddesi ${m.durum}`, 'data-madde': m.anahtar },
+      h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, DURUM_SIMGESI[m.durum] || '–'),
+      h('span', { class: 'hazirlik-govde' },
+        h('span', { class: 'hazirlik-basligi' }, h('span', { class: 'gorunmez' }, DURUM_OKUNUSU[m.durum] || ''), m.baslik, m.sayi ? h('span', { class: 'hazirlik-sayi' }, m.sayi) : null),
+        h('small', { class: 'hazirlik-ayrinti' }, m.ayrinti)),
+      tamamlaDugmesi(m))));
+    hazirlikNedeni.hidden = !hz.neden;
+    hazirlikNedeni.textContent = hz.neden || '';
   }
 
   function gorunenHatayaOdaklan() {
@@ -1567,6 +1740,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
     guncelle();
     const baslikDisi = d.hatalar.filter((x) => x.alan !== sema.baslik);
     if (baslikDisi.length) { ilkHatayaGit(); return; }
+    // "Neden çalışmıyor?": test verisi, gönderme eylemi ya da beklenen sonuç eksikse gerekçe gösterilir (hazirlik.mjs); Dene
+    // taslağı keşfetmek için de kullanıldığından kullanıcı yine de deneyebilir.
+    const hz = hazirlikHesapla(d);
+    const denemeOzeti = hazirlikOzeti(hz.maddeler.filter((m) => m.anahtar !== 'alanlar'), hz.engeller);
+    if (!denemeOzeti.calistirilabilir && !(await onayIste({ baslik: 'Senaryo şu an çalıştırılamaz', metin: ` Yine de denemek istiyor musunuz?`, dugme: 'Yine de dene', tehlikeli: false, ikonAd: 'uyari' }))) return;
     const ortamId = ortamSecimi.has(s.ortam.id) ? s.ortam.id : [...ortamSecimi][0] || s.ortam.id;
     const ortam = s.ortamlar.find((o) => o.id === ortamId) || s.ortam;
     // Riskli ortam (tek tanım: ortam-riski.mjs): açık onay; sunucu istekte canliOnay: true ister (+ canlı ortam izni).
@@ -1899,7 +2077,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
           h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', {}, 'Ortamlar')), ortamKutulari, ortamHata),
           h('label', { class: 'onay-satiri', for: kosudaKutu.id, title: '"Koşuyu başlat" ve planlı koşular bu senaryoyu koşar; kapalıysa yalnız tek başına (▷ ya da Dene) çalışır.' }, kosudaKutu, 'Toplu koşuya dahil'),
           h('div', { class: 'bolum-grubu' }, h('h4', {}, 'Akış'), akisOzeti),
-          dogrulamaOzeti, genelHatalar,
+          hazirlikPaneli, dogrulamaOzeti, uyariListesi, genelHatalar,
           h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, vazgecDugmesi)),
         denemeAlani)));
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);

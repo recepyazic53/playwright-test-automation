@@ -39,6 +39,7 @@ import { servisOnerileriAdresi, servisOnerileriSayfasi } from './servis-oneriler
 import { sonYanitliKosu, yanitKontrolPaneli } from './yanit-kontrol-paneli.js';
 import { talepAlani } from './talep-alani.js';
 import { talebeUyar, talepKosuDugmesi, talepSecenekleri } from './talep-kosusu.js';
+import { HAZIRLIK_BASLIKLARI, NEDENLER, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -1707,6 +1708,95 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik, kaynakSenaryoId: senaryo?.id }, baslik.value.trim() || 'Taslak', dene,
       (kosuId) => { sonDeneKosusu = kosuId; if (!yanitPaneli.hidden) yanitPaneliAc(kosuId); });
   });
+  // --- Hazırlık kontrolü (ekran senaryosundakiyle aynı liste ve metinler: hazirlik.mjs) ---------------------------------------
+  // Parametreler hazır · Test verisi hazır · Kontrol tanımlı · Ortam bağlantısı. Ortam bağlantısı KENDİLİĞİNDEN denetlenmez: "Denetle"
+  // Dene ortamındaki servis adresine tek istek gönderir (Servis istekleri izni; CANLI ortamda onay).
+  const hazirlikListesi = h('ul', { class: 'hazirlik-listesi' });
+  const hazirlikNedeni = h('p', { class: 'hazirlik-nedeni', role: 'status', hidden: true });
+  const ortamMetni = h('small', { class: 'hazirlik-ayrinti' });
+  const denetle = h('button', { type: 'button', class: 'kucuk-dugme', disabled: !ortamlar.length }, ikon('ag'), 'Denetle');
+  const ortamSatiri = h('li', { class: 'hazirlik-maddesi ortam', 'data-madde': 'ortam' }, h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, '⇄'),
+    h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, HAZIRLIK_BASLIKLARI.ortam), ortamMetni), denetle);
+  const hazirlikKutusu = h('section', { class: 'hazirlik-paneli servis-hazirligi', 'aria-labelledby': `${kap.id || 'servis'}-hazirlik` },
+    h('h4', { id: `${kap.id || 'servis'}-hazirlik` }, 'Hazırlık kontrolü'), hazirlikListesi, h('ul', { class: 'hazirlik-listesi' }, ortamSatiri), hazirlikNedeni);
+  /** @type {Record<string, any>} ortam kimliği → son denetim (null: denetlenmedi) */
+  const ortamDenetimleri = {};
+  const ortamCiz = () => {
+    const o = deneOrtami.secilen();
+    if (!o) { ortamMetni.textContent = 'Ortam yok.'; return; }
+    const d = ortamDenetimleri[o.id] || null;
+    ortamSatiri.classList.toggle('tamam', Boolean(d && d.erisilebilir));
+    ortamSatiri.classList.toggle('eksik', Boolean(d && !d.erisilebilir));
+    ortamMetni.textContent = `${o.ad}: ${ortamDenetimiMetni(d)}`;
+    if (o.id in ortamDenetimleri) return;
+    ortamDenetimleri[o.id] = null;
+    // Saklanan son sonuç (10 dk; istek atılmaz).
+    api(`/platform/ortam/denetim?projeId=${q(proje.id)}&ortamId=${q(o.id)}&servisId=${q(s.id)}`)
+      .then((y) => { if (y.denetim && !ortamDenetimleri[o.id]) { ortamDenetimleri[o.id] = y.denetim; ortamCiz(); } }).catch(() => {});
+  };
+  denetle.addEventListener('click', async () => {
+    const o = deneOrtami.secilen();
+    if (!o || !(await canliOnayIste(o))) return;
+    denetle.disabled = true;
+    ortamMetni.textContent = `${o.ad}: denetleniyor…`;
+    try {
+      const y = await api('/platform/ortam/denetle', { govde: { projeId: proje.id, ortamId: o.id, servisId: s.id, ...canliOnayEki(o.id) } });
+      ortamDenetimleri[o.id] = y.denetim;
+    } catch (e) { if (!e || e.durum !== 423) mesaj.goster(e.message); }
+    denetle.disabled = false;
+    ortamCiz();
+  });
+  deneOrtami.el.addEventListener('change', ortamCiz);
+  const servisMaddeleri = () => {
+    const eksik = eksikParametre();
+    const parametre = eksik
+      ? { anahtar: 'parametreler', durum: 'eksik', baslik: HAZIRLIK_BASLIKLARI.parametreler, ayrinti: eksikMetni(eksik), neden: NEDENLER.parametreEksik, hedef: { tur: 'istek' } }
+      : { anahtar: 'parametreler', durum: 'tamam', baslik: HAZIRLIK_BASLIKLARI.parametreler, ayrinti: 'İstekteki alanların değer kaynakları seçili.' };
+    const gruplar = veriGruplari();
+    let veri;
+    if (!gruplar.length) veri = veriMaddesi({ kullaniliyor: false });
+    else {
+      const o = deneOrtami.secilen() || veriOrtami;
+      const satirlar = [];
+      let sorun = null;
+      for (const g of gruplar) {
+        const r = uyanSatirlar(g.tablo, tabloSecimleri[g.anahtar] || {}, { ortamId: o ? o.id : null })[0];
+        if (!r) { sorun = `“${g.tablo.ad}${g.etiket ? ` (${g.etiket})` : ''}” tablosunda ${o ? `${o.ad} ortamına` : 'bu ortama'} uyan satır yok`; break; }
+        satirlar.push(`${g.tablo.ad}: ${r.ad || 'adsız satır'}`);
+      }
+      veri = veriMaddesi({ kullaniliyor: true, sorun, satirlar, hedef: { tur: 'veri' } });
+    }
+    let kontrolSayisi = 0;
+    try { kontrolSayisi = kontrolYapisi().length; } catch { kontrolSayisi = 0; }
+    const kontrol = kontrolSayisi
+      ? { anahtar: 'kontrol', durum: 'tamam', baslik: HAZIRLIK_BASLIKLARI.kontrol, ayrinti: `${kontrolSayisi} kontrol tanımlı.` }
+      : { anahtar: 'kontrol', durum: 'eksik', baslik: HAZIRLIK_BASLIKLARI.kontrol, ayrinti: 'Yanıtta denetlenecek en az bir kontrol ekleyin.', neden: NEDENLER.kontrolYok, hedef: { tur: 'kontrol' } };
+    return [parametre, veri, kontrol];
+  };
+  let hazirlikZamanlayici = null;
+  const hazirlikPlanla = () => { clearTimeout(hazirlikZamanlayici); hazirlikZamanlayici = setTimeout(() => { if (kap.isConnected) hazirlikCiz(); }, 150); };
+  const HEDEFLER = { istek: () => govdeAlani, veri: () => veriKutusu, kontrol: () => kontrolKutusu };
+  let hazirlikImzasi = '';
+  const hazirlikCiz = () => {
+    const maddeler = servisMaddeleri();
+    const ozet = hazirlikOzeti(maddeler);
+    const imza = JSON.stringify([maddeler, ozet.neden]);
+    ortamCiz();
+    if (imza === hazirlikImzasi) return;
+    hazirlikImzasi = imza;
+    yerlestir(hazirlikListesi, ...maddeler.map((m) => h('li', { class: `hazirlik-maddesi ${m.durum}`, 'data-madde': m.anahtar },
+      h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, { tamam: '✓', eksik: '✕', yok: '–' }[m.durum] || '–'),
+      h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, h('span', { class: 'gorunmez' }, m.durum === 'tamam' ? 'Hazır: ' : m.durum === 'eksik' ? 'Eksik: ' : 'Gerekmiyor: '), m.baslik),
+        h('small', { class: 'hazirlik-ayrinti' }, m.ayrinti)),
+      m.durum === 'eksik' && m.hedef ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${m.baslik}: tamamla`, onclick: () => {
+        const el = HEDEFLER[m.hedef.tur]?.();
+        if (!el) return;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        /** @type {HTMLElement | null} */ (el.querySelector('select, input, textarea, button'))?.focus({ preventScroll: true });
+      } }, 'Tamamla') : null)));
+    hazirlikNedeni.hidden = !ozet.neden;
+    hazirlikNedeni.textContent = ozet.neden || '';
+  };
   yerlestir(kap, h('div', { class: 'kart form-paneli' },
     h('h3', {}, senaryo ? 'Senaryoyu düzenle' : 'Yeni senaryo'), mesaj.kutu,
     taslak ? h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' }, h('b', {}, 'Öneriden açıldı (kaydedilmedi). '), taslak.not) : null,
@@ -1722,14 +1812,18 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu, h('div', { class: 'dugmeler yanittan-kontrol' }, yanittanDugmesi), yanitPaneli,
       h('div', { class: 'sozlesme-secenegi' }, h('label', { class: 'secenek', for: sozlesmeKutusu.id }, sozlesmeKutusu, 'Yanıt sözleşmeye uymalı'), sozlesmeNotu)),
     veriBolumu,
+    hazirlikKutusu,
     dogrulamaOzeti,
     h('div', { class: 'dugmeler' }, kaydet, ortamlar.length > 1 ? deneOrtami.el : null, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
   // Gövde / header / yol değişince çalıştırma biçimi grupları yeniden hesaplanır (yalnız gruplar değiştiyse çizilir).
-  kap.addEventListener('input', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); });
-  kap.addEventListener('change', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); });
+  kap.addEventListener('input', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); hazirlikPlanla(); });
+  kap.addEventListener('change', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); hazirlikPlanla(); });
+  // Kontrol ekleme / silme düğmeleri de hazırlığı değiştirir.
+  kap.addEventListener('click', () => hazirlikPlanla());
   // Doğrulama özeti her değişimde (yazma, seçim, düğmeyle görünüm / satır değişimi) yeniden sayılır.
   for (const olay of ['input', 'change', 'click']) kap.addEventListener(olay, dogrulamaPlanla);
   veriCiz(true);
+  hazirlikCiz();
   dogrulamaGuncelle();
 }
 

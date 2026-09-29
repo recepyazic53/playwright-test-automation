@@ -4412,6 +4412,40 @@ html:has(.servis-kosu-paneli.kucuk) { scroll-padding-bottom: 120px; }
 .akis-senaryolari-karti h3:focus-visible { outline: 2px solid var(--vurgu); outline-offset: 2px; }
 /* Servis sözleşmesi alan tablosu: yol girintisi (--girinti arayüzden CSS değişkeni olarak verilir; satır içi style yok). */
 code.duz.sozlesme-girinti { padding-inline-start: calc(var(--girinti, 0) * 0.9rem); }
+
+/* === Hazırlık kontrolü ve "Neden çalışmıyor?" (senaryo formu, servis senaryosu, koşu diyaloğu, senaryo listesi) === */
+.hazirlik-paneli { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--zemin-2); min-width: 0; }
+.hazirlik-paneli > h3, .hazirlik-paneli > h4 { margin: 0; font-size: 12.5px; font-weight: 650; color: var(--metin-2); text-transform: none; letter-spacing: 0; }
+.hazirlik-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.hazirlik-maddesi { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 5px 0; border-top: 1px solid var(--cizgi); font-size: 12.5px; }
+.hazirlik-listesi:first-of-type > .hazirlik-maddesi:first-child { border-top: 0; }
+.hazirlik-simge { width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 50%; font-size: 11px; font-weight: 700; line-height: 1; color: var(--metin-3); background: var(--cizgi); }
+.hazirlik-maddesi.tamam > .hazirlik-simge { color: var(--basari); background: var(--basari-zemin); }
+.hazirlik-maddesi.eksik > .hazirlik-simge { color: var(--hata); background: var(--hata-zemin); }
+.hazirlik-govde { display: grid; gap: 1px; min-width: 0; }
+.hazirlik-basligi { font-weight: 600; color: var(--metin); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.hazirlik-maddesi.eksik .hazirlik-basligi { color: var(--hata); }
+.hazirlik-sayi { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--metin-3); }
+.hazirlik-ayrinti { color: var(--metin-3); font-size: 11.5px; overflow-wrap: anywhere; }
+.hazirlik-maddesi > .kucuk-dugme, .hazirlik-maddesi > .dugme { min-height: 24px; height: 24px; padding: 0 8px; font-size: 11.5px; white-space: nowrap; align-self: center; }
+.hazirlik-nedeni { margin: 2px 0 0; padding: 7px 9px; border-radius: var(--yaricap-m); font-size: 12px; color: var(--hata); background: var(--hata-zemin); overflow-wrap: anywhere; }
+.kosu-hazirligi { margin: 10px 0; }
+.kosu-hazirligi .calistirilamazlar { margin: 4px 0 0; }
+.kosu-hazirligi .calistirilamazlar p { margin: 0 0 6px; }
+.kosu-hazirligi .calistirilamazlar li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.servis-hazirligi { margin-top: 12px; }
+/* "N uyarı" rozeti düğmedir: uyarı listesini açar, her uyarıdan ilgili alana gidilir. */
+.uyari-rozeti { cursor: pointer; border: 0; font: inherit; font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px; min-height: 22px; }
+.uyari-rozeti:hover { filter: brightness(1.08); }
+.uyari-rozeti:focus-visible { outline: 2px solid var(--vurgu); outline-offset: 2px; }
+.uyari-listesi { list-style: none; margin: 0; padding: 6px 10px; display: grid; gap: 4px; border-radius: var(--yaricap-m); background: var(--zemin-2); border: 1px solid var(--cizgi); font-size: 12px; }
+.uyari-listesi li { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.uyari-listesi li > span { min-width: 0; overflow-wrap: anywhere; }
+.uyari-listesi .kucuk-dugme { min-height: 22px; height: 22px; padding: 0 8px; font-size: 11.5px; white-space: nowrap; }
+/* Senaryo listesi: "Çalıştırılamaz" rozeti + tek cümlelik gerekçe + Düzelt. */
+.calistirilamaz-notu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; font-size: 12px; }
+.calistirilamaz-nedeni { color: var(--hata); min-width: 0; overflow-wrap: anywhere; }
+.calistirilamaz-notu .kucuk-dugme { min-height: 22px; height: 22px; padding: 0 8px; font-size: 11.5px; }
 /* ---- v1.4 kullanılabilirlik: paket, terimler ve görsel düzeltmeler (ku14) ---------------------------------------------------- */
 /* Akış diyagramı: "Başarı / Uyarı" radyoları etiketlerine binmez. */
 .mesaj-turu label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }

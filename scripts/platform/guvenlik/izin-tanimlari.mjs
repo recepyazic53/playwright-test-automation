@@ -49,6 +49,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     yerler: [
       'Senaryolar > Koşuyu başlat, ▷ Çalıştır, Seçilenleri çalıştır',
       'Senaryolar > Senaryo formu > Dene',
+      'Senaryolar > Senaryo formu > Hazırlık kontrolü > Denetle (ortam bağlantısı)',
       'Uçtan uca akışlar > Koş (ekran adımı)',
       'Sonuçlar > Başarısızları tekrar çalıştır',
       'Ekranlar > Ekranı tara, Akışı kaydet',
@@ -60,6 +61,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Ekran senaryosu denemesi (Dene)', uclar: ['/platform/senaryo/dene'] },
       { ad: 'Ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi', uclar: ['/platform/tarama/baslat'] },
       { ad: 'Giriş sayfası önerisi (Varsayılanları öner)', uclar: ['/platform/giris-tarifi/oner'] },
+      { ad: 'Ortam bağlantısı denetimi (Hazırlık kontrolü > Denetle; tek istek)', uclar: ['/platform/ortam/denetle'], kosul: 'ekran senaryosunda' },
       { ad: 'Uçtan uca akışta ekran adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta ekran adımı varsa' },
       { ad: 'Planlı koşudaki ekran senaryoları', uclar: [] }
     ],
@@ -80,6 +82,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Servisler > Servis ekle > Erişimi kontrol et',
       'Servisler > Servis > Şemayı yenile',
       'Servisler > REST sihirbazı > Dene',
+      'Servisler > Senaryo > Hazırlık kontrolü > Denetle (ortam bağlantısı)',
       'Servisler > Akışlar > Dene, Koş',
       'Uçtan uca akışlar > Koş (servis adımı)',
       'Planlı koşudaki servis akışları'
@@ -90,6 +93,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Servis senaryosu denemesi (Dene)', uclar: ['/platform/servis/senaryo/dene'] },
       { ad: 'Servis senaryolarını koşma', uclar: ['/platform/servis/is/baslat', '/platform/servis/kos'] },
       { ad: 'REST sihirbazında Dene', uclar: ['/platform/servis/rest/dene'] },
+      { ad: 'Servis senaryosunda ortam bağlantısı denetimi (Denetle; tek istek)', uclar: ['/platform/ortam/denetle'], kosul: 'servis senaryosunda' },
       { ad: 'Servis akışı Dene / Koş', uclar: ['/platform/servis-akisi/dene', '/platform/servis-akisi/kos'] },
       { ad: 'Uçtan uca akışta servis adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta servis adımı varsa' },
       { ad: 'Planlı koşudaki servis akışları', uclar: [] }
@@ -165,6 +169,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Canlı ortamda servis erişim kontrolü, şema yenileme ve REST Dene', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene'], kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamda servis ve servis akışı koşusu / Dene', uclar: SERVIS_KOSU_UCLARI, kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamda uçtan uca akış koşusu', uclar: UCTAN_UCA_UCLARI, kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamda bağlantı denetimi (Hazırlık kontrolü > Denetle)', uclar: ['/platform/ortam/denetle'], kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamın veritabanı bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'bağlantı bir canlı ortamın veritabanı eşlemesindeyse' },
       { ad: 'Canlı ortamda planlı koşu', uclar: [] }
     ],
@@ -273,7 +278,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     ],
     islemler: [
       { ad: 'TLS doğrulamasını kapatma', uclar: ['/platform/servis/kaydet', '/platform/servis/rest/kaydet'], kosul: 'TLS doğrulaması kapatılırken' },
-      { ad: 'TLS doğrulaması kapalı istek', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene', ...SERVIS_KOSU_UCLARI, ...UCTAN_UCA_UCLARI], kosul: 'servisin TLS doğrulaması kapalıysa' }
+      { ad: 'TLS doğrulaması kapalı istek', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene', ...SERVIS_KOSU_UCLARI, ...UCTAN_UCA_UCLARI, '/platform/ortam/denetle'], kosul: 'servisin TLS doğrulaması kapalıysa' }
     ],
     risk: 'Sahte sertifikalı bir sunucu araya girip istekleri ve yanıtları (kimlik bilgileri dahil) okuyabilir.',
     yuksekRisk: true,
