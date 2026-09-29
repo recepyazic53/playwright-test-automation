@@ -173,7 +173,7 @@ test('koşu: ortak akışın bağı ${Tablo.Sütun} satır seçiminde kullanıl�
   expect(uygulama.acikSiparisler.at(-1)).toMatchObject({ musteriAd: 'Ali Deneme', teslimat: 'genis' });
 });
 
-test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüşümleri yok); ekranda "Ortak akıştan" işareti, ezme ve "Ortak akışa dön"', async () => {
+test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüşümleri yok); ekranda "Ortak akıştan" bölümü, ezme ve "Ortak akışa dön"', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   // Ortak akış sayfası.
@@ -196,21 +196,134 @@ test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüş
   // Kullanan ekran: bağ ortak akıştan gelir; değiştirilince ekrana özel olur; "Ortak akışa dön" ekran bağını siler.
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}/veri`);
   const ekranKarti = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
-  const secim = ekranKarti.getByRole('combobox', { name: 'Teslimat tablo sütunu' });
+  // Ortak akışın alanları ayrı, varsayılan kapalı "Ortak akıştan: <ad>" bölümünde: önce açılır.
+  const bolum = ekranKarti.getByRole('region', { name: /^Ortak akıştan: Teslimat \(ortak\)/ });
+  await bolum.getByRole('button', { name: /^Ortak akıştan: Teslimat \(ortak\)/ }).click();
+  const secim = bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu' });
   await expect(secim.locator('option:checked')).toHaveText(`${TABLO} → Teslimat`);
-  await expect(ekranKarti.getByText('Ortak akıştan: Teslimat (ortak)')).toBeVisible();
+  await expect(bolum.getByText('ekrana özel', { exact: true })).toHaveCount(0);
   await secim.selectOption({ label: `${TABLO} → Ad` });
   await expect(ekranKarti.getByText('✓ Kaydedildi')).toBeVisible();
   await expect.poll(async () => (await baglar(ekranId)).baglar).toEqual({ teslimatSecimi: { tablo: tabloId, sutun: 'Ad' } });
-  await expect(ekranKarti.getByText('ekrana özel', { exact: true })).toBeVisible();
-  await expect(ekranKarti.getByText('Ortak akıştan: Teslimat (ortak)')).toHaveCount(0);
+  await expect(bolum.getByText('ekrana özel', { exact: true })).toBeVisible();
   // Ekrana özel bağ ortak akışınkini ezer (senaryo formunda da).
   const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`) as Nesne;
   expect((form.degerListeleri as Nesne[]).find((l) => l.hedef?.alan === 'teslimatSecimi')?.baglanti).toMatchObject({ tablo: TABLO, sutun: 'Ad' });
   await ekranKarti.getByRole('button', { name: 'Teslimat: ortak akışa dön' }).click();
   await expect.poll(async () => (await baglar(ekranId)).baglar).toEqual({});
-  await expect(ekranKarti.getByText('Ortak akıştan: Teslimat (ortak)')).toBeVisible();
+  await expect(bolum.getByText('ekrana özel', { exact: true })).toHaveCount(0);
   await expect(secim.locator('option:checked')).toHaveText(`${TABLO} → Teslimat`);
+  agKontrol(istekler);
+  await page.close();
+});
+
+/** İkinci ortak akış: tek alan (Şehir). */
+function adresPaketi(): Nesne {
+  const p = ortakPaketi();
+  delete p.testVerisi;
+  p.meta = { ...p.meta, ekran: { anahtar: 'adres-ortak', ad: 'Adres (ortak)' } };
+  p.gerekenAyarlar = { ...p.gerekenAyarlar, testVerisiTurleri: [] };
+  p.model = {
+    ...p.model, id: 'adres-ortak', ad: 'Adres (ortak)',
+    adimlar: [{
+      id: 'adres', sira: 1, baslik: 'Adres girilir',
+      bolumler: [{ id: 'adresBolumu', baslik: 'Adres', alanlar: [{ id: 'sehir', tip: 'metin', etiket: { ekran: 'Şehir' }, zorunlu: false, yapilandirma: 'senaryo', eslesme: { senaryo: 'sehir' }, konum: { secici: '#sehir', kirilganlik: 'dusuk' } }] }],
+      kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Kaydet' }], basariGostergesi: { tur: 'eleman', deger: '#sonuc' } }
+    }]
+  };
+  return p;
+}
+
+/** İki ortak akışı kullanan ekran (kendi alanı: Ad Soyad). */
+function ikiOrtakliEkranPaketi(): Nesne {
+  const p = ekranPaketi();
+  p.meta = { ...p.meta, ekran: { anahtar: 'iki-ortakli', ad: 'İki Ortaklı Sipariş', urlYolu: '/acik-siparis/' } };
+  p.model = { ...p.model, id: 'iki-ortakli', ad: 'İki Ortaklı Sipariş', specDosyasi: 'tests/scenarios/iki-ortakli/iki-ortakli.spec.ts',
+    adimlar: [...(p.model.adimlar as Nesne[]), { id: 'adresAdimi', sira: 3, baslik: 'Adres', ortakAkis: { dosya: 'adres-ortak.model.json' } }] };
+  return p;
+}
+
+/** Sayfa ya da öğe yatay taşıyor mu (kaydırma genişliği > görünen genişlik). */
+async function tasmaYok(page: Page): Promise<void> {
+  const tasma = await page.evaluate(() => {
+    const kok = document.documentElement;
+    const bolumler = [...document.querySelectorAll<HTMLElement>('.ortak-bolum')].filter((b) => b.scrollWidth > b.clientWidth + 1).length;
+    return { sayfa: kok.scrollWidth - kok.clientWidth, bolumler };
+  });
+  expect(tasma).toEqual({ sayfa: 0, bolumler: 0 });
+}
+
+test('arayüz: ortak akış alanları ekranın kendi alanlarının altında, ayrı ve kapalı bölümde; ekrana özel bağ bölümü açık getirir', async () => {
+  test.setTimeout(90_000);
+  const { page, istekler } = await sayfa();
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}/veri`);
+  const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
+  const kendiAlan = kart.getByRole('combobox', { name: 'Ad Soyad tablo sütunu' });
+  await expect(kendiAlan).toBeVisible();
+  await expect(kart.getByText(/Ortak akışlardan gelen alanlar altta/)).toBeVisible();
+  const bolum = kart.getByRole('region', { name: 'Ortak akıştan: Teslimat (ortak) (1 alan)' });
+  const dugme = bolum.getByRole('button', { name: 'Ortak akıştan: Teslimat (ortak) (1 alan)' });
+  await expect(dugme).toHaveAttribute('aria-expanded', 'false');
+  await expect(bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu' })).toBeHidden();
+  await expect(bolum.getByRole('link', { name: 'Ortak akış sayfasında düzenle →' })).toHaveAttribute('href', `#/ekranlar/e/${encodeURIComponent(ortakId)}/veri`);
+  // Ekranın kendi alanı üstte, ortak akış bölümü altta; ortak akış alanı ekranın kendi listesinde yok.
+  const [ustY, altY] = [(await kendiAlan.boundingBox())?.y ?? 0, (await bolum.boundingBox())?.y ?? 0];
+  expect(ustY).toBeLessThan(altY);
+  await expect(kart.getByRole('combobox', { name: 'Teslimat tablo sütunu', includeHidden: true })).toHaveCount(1);
+  await expect(bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu', includeHidden: true })).toHaveCount(1);
+  await dugme.click();
+  await expect(bolum.getByText(/Bu bağlar ortak akışta kurulur ve bu ekrana otomatik gelir/)).toBeVisible();
+  await expect(bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu' })).toBeVisible();
+
+  // Ekrana özel bağ varken sayfa açılınca bölüm açık gelir, alanda "ekrana özel" rozeti; "Ortak akışa dön" rozeti kaldırır.
+  await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId, baglar: { teslimatSecimi: { tablo: tabloId, sutun: 'Ad' } } });
+  await page.reload();
+  await expect(dugme).toHaveAttribute('aria-expanded', 'true');
+  await expect(bolum.getByText('ekrana özel', { exact: true })).toBeVisible();
+  await bolum.getByRole('button', { name: 'Teslimat: ortak akışa dön' }).click();
+  await expect.poll(async () => (await baglar(ekranId)).baglar).toEqual({});
+  await expect(bolum.getByText('ekrana özel', { exact: true })).toHaveCount(0);
+  await expect(dugme).toHaveAttribute('aria-expanded', 'true');
+  await page.reload();
+  await expect(dugme).toHaveAttribute('aria-expanded', 'false');
+  // Ortak akış bağı olmayan ekran: ortak akış bölümü yok.
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortakId)}/veri`);
+  await expect(page.getByRole('combobox', { name: 'Teslimat tablo sütunu' })).toBeVisible();
+  await expect(page.locator('.ortak-bolum')).toHaveCount(0);
+  agKontrol(istekler);
+  await page.close();
+});
+
+test('arayüz: iki ortak akışlı ekranda iki ayrı bölüm; 1440 ve 390 px\'te taşma yok', async () => {
+  test.setTimeout(90_000);
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: adresPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: ikiOrtakliEkranPaketi(), senaryoIndeksleri: [], ortamIdleri: [ortamId] });
+  const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Nesne[];
+  const adresId = String(ekranlar.find((e) => e.anahtar === 'adres-ortak')?.id);
+  const ikiliId = String(ekranlar.find((e) => e.anahtar === 'iki-ortakli')?.id);
+  await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId: adresId, baglar: { sehir: { tablo: tabloId, sutun: 'Ad' } } });
+  const { page, istekler } = await sayfa();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(ikiliId)}/veri`);
+  const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
+  await expect(kart.getByRole('combobox', { name: 'Ad Soyad tablo sütunu' })).toBeVisible();
+  const teslimat = kart.getByRole('region', { name: 'Ortak akıştan: Teslimat (ortak) (1 alan)' });
+  const adres = kart.getByRole('region', { name: 'Ortak akıştan: Adres (ortak) (1 alan)' });
+  await expect(teslimat).toBeVisible();
+  await expect(adres).toBeVisible();
+  await expect(kart.locator('.ortak-bolum')).toHaveCount(2);
+  await expect(adres.getByRole('link', { name: 'Ortak akış sayfasında düzenle →' })).toHaveAttribute('href', `#/ekranlar/e/${encodeURIComponent(adresId)}/veri`);
+  // Yalnız Adres'te ekrana özel bağ: o bölüm açık, diğeri kapalı.
+  await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId: ikiliId, baglar: { sehir: { tablo: tabloId, sutun: 'Teslimat' } } });
+  await page.reload();
+  await expect(adres.getByRole('button', { name: /^Ortak akıştan: Adres/ })).toHaveAttribute('aria-expanded', 'true');
+  await expect(teslimat.getByRole('button', { name: /^Ortak akıştan: Teslimat/ })).toHaveAttribute('aria-expanded', 'false');
+  await expect(adres.getByText('ekrana özel', { exact: true })).toBeVisible();
+  await teslimat.getByRole('button', { name: /^Ortak akıştan: Teslimat/ }).click();
+  await tasmaYok(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expect(adres.getByText('ekrana özel', { exact: true })).toBeVisible();
+  await tasmaYok(page);
   agKontrol(istekler);
   await page.close();
 });

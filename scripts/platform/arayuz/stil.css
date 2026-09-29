@@ -418,6 +418,26 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .secim-onerileri .secim-onerisi { padding: 7px 10px; border-radius: 6px; cursor: pointer; font: 500 13px var(--yazi-mono); color: var(--metin); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .secim-onerileri .secim-onerisi:hover, .secim-onerileri .secim-onerisi.aktif { background: var(--panel-2); }
 .secim-onerileri .secim-onerisi.secili { color: var(--vurgu); }
+/* Aranabilir seçim (aranabilir-secim.js): uzun select'in üstünde açılan arama penceresi; select yerinde kalır. */
+.aranabilir-pencere {
+  position: fixed; z-index: 60; display: grid; gap: 4px; padding: 6px; box-sizing: border-box; max-width: calc(100vw - 16px);
+  border-radius: var(--yaricap-m); background: var(--panel-kati); border: 1px solid var(--cizgi); box-shadow: var(--golge-yuksek);
+}
+.aranabilir-pencere .aranabilir-girdi { width: 100%; min-width: 0; box-sizing: border-box; }
+.aranabilir-durum { font: 500 11.5px var(--yazi-mono); color: var(--metin-3); padding: 0 4px; }
+.aranabilir-durum.bos { color: var(--metin-2); }
+.aranabilir-liste { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; position: relative; }
+.aranabilir-grup { font: 600 10.5px var(--yazi-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--metin-3); padding: 8px 10px 4px; }
+.aranabilir-secenek {
+  padding: 7px 10px; border-radius: 6px; cursor: pointer; font: 500 13px var(--yazi); color: var(--metin);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.aranabilir-secenek:hover, .aranabilir-secenek.aktif { background: var(--panel-2); }
+.aranabilir-secenek.aktif { box-shadow: inset 2px 0 0 var(--vurgu); }
+.aranabilir-secenek.secili { color: var(--vurgu); font-weight: 650; }
+.aranabilir-secenek.kapali { opacity: .5; cursor: not-allowed; }
+.aranabilir-secenek mark { background: var(--vurgu-zemin); color: inherit; font-weight: 700; border-radius: 3px; padding: 0 1px; }
+.aranabilir-not { font-size: 12px; color: var(--metin-3); padding: 4px 6px 2px; border-top: 1px solid var(--cizgi); }
 .acilir-menu .menu-baslik { font: 600 10.5px var(--yazi-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--metin-3); padding: 8px 10px 4px; }
 .acilir-menu button { justify-content: flex-start; border: 0; background: transparent; min-height: 34px; font-weight: 500; }
 .acilir-menu button:hover:not(:disabled), .acilir-menu button:focus-visible { background: var(--panel-2); border: 0; }
@@ -2289,6 +2309,16 @@ a.son-sonuc { text-decoration: none; }
 .ekran-baglari .kaynak-hucresi .deger-cipleri { max-width: 100%; }
 /* Ortak akıştan gelen (varsayılan) bağ işareti / ekrana özel bağda "Ortak akışa dön". */
 .ekran-baglari .ortak-bag-isareti { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* Ortak akıştan gelen alanlar: ekranın kendi tablosunun altında, ortak akış başına açılır-kapanır bölüm (ekran-baglari.js). */
+.ortak-bolumler { display: grid; gap: 10px; min-width: 0; }
+.ortak-bolumler:empty { display: none; }
+.ortak-bolum { border: 1px dashed var(--cizgi); border-radius: 10px; padding: 4px 12px; background: var(--panel-2); min-width: 0; }
+.ortak-bolum > .acilir-baslik { flex-wrap: wrap; gap: 4px 10px; }
+.ortak-bolum > .acilir-baslik > h4 { flex: 1 1 220px; }
+.ortak-bolum > .acilir-govde { display: grid; gap: 6px; padding: 2px 0 8px; min-width: 0; }
+.ortak-bolum > .acilir-govde[hidden] { display: none; }
+.ortak-bolum > .acilir-govde > p { margin: 0; }
+.ortak-bolum .alan-formu { background: var(--panel); }
 @media (max-width: 760px) { .ekran-baglari .alan-satiri { grid-template-columns: minmax(0, 1fr); } .ekran-baglari .kaynak-secimi select { min-width: 0; } }
 /* Sonuçlar > Hata kalıpları: kalıba tıklanınca hatanın alındığı testler. */
 .kalip-satiri { cursor: pointer; }

@@ -1,9 +1,10 @@
 // Ekran sayfası > "Test verisi" sekmesi: ekranın input'ları test verisi tablolarının sütunlarına bağlanır (anında kaydedilir).
 // Bağlı seçim alanının seçenekleri senaryo formunda tablodan gelir; aynı tabloya bağlı alanlar birbirini süzer (ör. Kapsam →
 // Alternatif → Ülke). Aynı tablo iki kez gerekiyorsa etiket verilir (aynı etiketli alanlar aynı satırdan).
-// Ortak akışın sayfasında da vardır: bağ orada bir kez kurulur, onu kullanan ekranlarda "Ortak akıştan: <ad>" diye görünür;
-// ekranda değiştirilirse ekrana özel olur (ezme), "Ortak akışa dön" ekranın bağını siler.
-import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, yerlestir } from './ortak.js';
+// Ortak akışın sayfasında da vardır: bağ orada bir kez kurulur, onu kullanan ekranlarda ekranın kendi alanlarının altında, ortak
+// akış başına ayrı bir "Ortak akıştan: <ad>" bölümünde görünür (varsayılan kapalı; ekrana özel bağ varsa açık). Ekranda
+// değiştirilirse ekrana özel olur (ezme), "Ortak akışa dön" ekranın bağını siler. Yalnız görünüm: etkin bağ sunucuda çözülür.
+import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { degerCipleri } from './parametre-tanimi-formu.js';
 import { onayIste } from './kosu-paneli.js';
 
@@ -56,8 +57,38 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
     return null;
   };
   const liste = h('div', { class: 'alan-formu ekran-baglari' });
+  // Ortak akış bölümleri (ekranın kendi alanlarının altında); açık / kapalı durumu yeniden çizimde korunur. İlk çizimde: o ortak
+  // akışın alanlarından biri bu ekranda ekrana özel bağlıysa açık, değilse kapalı.
+  const ortakKap = h('div', { class: 'ortak-bolumler' });
+  /** @type {Map<string, boolean>} */
+  const acik = new Map();
+  const basliklar = () => h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Input'), h('span', {}, 'Tablo sütunu'));
+  /** @param {{ id: string; ad: string }} o @param {HTMLElement[]} satirlar @param {number} ozelSayisi */
+  const ortakBolumu = (o, satirlar, ozelSayisi) => {
+    if (!acik.has(o.id)) acik.set(o.id, ozelSayisi > 0);
+    const acikMi = Boolean(acik.get(o.id));
+    const govde = h('div', { class: 'acilir-govde', id: yeniKimlik('ortak-bolum'), hidden: !acikMi },
+      h('p', { class: 'soluk kucuk' }, 'Bu bağlar ortak akışta kurulur ve bu ekrana otomatik gelir. Burada değiştirirseniz yalnız bu ekran için geçerli olur.'),
+      h('div', { class: 'alan-formu ekran-baglari' }, basliklar(), ...satirlar));
+    const dugme = h('button', { type: 'button', class: 'acilir-dugme', id: yeniKimlik('ortak-baslik'), 'aria-expanded': String(acikMi), 'aria-controls': govde.id },
+      h('span', { class: 'acilir-ok', 'aria-hidden': 'true' }), `Ortak akıştan: ${o.ad} `, h('span', { class: 'acilir-sayi' }, `(${satirlar.length} alan)`));
+    dugme.addEventListener('click', () => {
+      const ac = dugme.getAttribute('aria-expanded') !== 'true';
+      acik.set(o.id, ac);
+      dugme.setAttribute('aria-expanded', String(ac));
+      govde.hidden = !ac;
+    });
+    return h('section', { class: 'ortak-bolum', 'aria-labelledby': dugme.id },
+      h('div', { class: 'acilir-baslik' }, h('h4', {}, dugme),
+        h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/ekranlar/e/${q(o.id)}/veri` }, 'Ortak akış sayfasında düzenle →')),
+      govde);
+  };
   const ciz = () => {
-    const satirlar = girdiler.map((g) => {
+    /** @type {HTMLElement[]} */
+    const kendiSatirlari = [];
+    /** @type {Map<string, { o: { id: string; ad: string }; satirlar: HTMLElement[]; ozel: number }>} */
+    const gruplar = new Map();
+    girdiler.forEach((g) => {
       const kendi = baglar[g.id];
       const miras = ortakBaglar[g.id] || null;
       // Etkin bağ: ekrana özel bağ varsa o (ortak akışınkini ezer), yoksa ortak akıştan gelen.
@@ -80,16 +111,15 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         ciz();
         degisti();
       });
-      // Ortak akıştan gelen bağın işareti; ekrana özel bağ onu eziyorsa "Ortak akışa dön" (ekran bağı silinir).
-      const kaynak = miras && !kendi
-        ? h('span', { class: 'ortak-bag-isareti soluk kucuk', title: 'Bu bağ ortak akışta kuruldu; değiştirirseniz bu ekrana özel olur.' }, ikon('pusula'), ` Ortak akıştan: ${miras.ortakAkis.ad}`)
-        : miras && kendi
-          ? h('span', { class: 'ortak-bag-isareti kucuk' }, rozet('ekrana özel', 'uyari'), h('button', {
-            type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${g.etiket}: ortak akışa dön`,
-            title: `Ortak akıştaki bağ: ${(tablolar.find((t) => t.id === miras.tablo) || { ad: '?' }).ad} → ${miras.sutun} (${miras.ortakAkis.ad})`,
-            onclick: () => { delete baglar[g.id]; ciz(); degisti(); }
-          }, ikon('geri'), 'Ortak akışa dön'))
-          : null;
+      // Ortak akıştan gelen alan kendi bölümünde durur (bölüm başlığı kaynağı söyler); ekrana özel bağ ortak akışınkini eziyorsa
+      // "ekrana özel" rozeti ve "Ortak akışa dön" (ekran bağı silinir).
+      const kaynak = miras && kendi
+        ? h('span', { class: 'ortak-bag-isareti kucuk' }, rozet('ekrana özel', 'uyari'), h('button', {
+          type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${g.etiket}: ortak akışa dön`,
+          title: `Ortak akıştaki bağ: ${(tablolar.find((t) => t.id === miras.tablo) || { ad: '?' }).ad} → ${miras.sutun} (${miras.ortakAkis.ad})`,
+          onclick: () => { delete baglar[g.id]; ciz(); degisti(); }
+        }, ikon('geri'), 'Ortak akışa dön'))
+        : null;
       const etiket = kendi ? h('input', { type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${g.etiket} etiketi`,
         title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
       etiket?.addEventListener('change', () => { const e = etiket.value.trim(); if (e) kendi.etiket = e; else delete kendi.etiket; degisti(); });
@@ -101,14 +131,19 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
         alt = [alt, degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok')];
       }
-      return h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
+      const satir = h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
         h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),
         h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
+      if (!miras) { kendiSatirlari.push(satir); return; }
+      const grup = gruplar.get(miras.ortakAkis.id) || { o: miras.ortakAkis, satirlar: [], ozel: 0 };
+      grup.satirlar.push(satir);
+      if (kendi) grup.ozel += 1;
+      gruplar.set(miras.ortakAkis.id, grup);
     });
     const bagsiz = girdiler.filter((g) => !baglar[g.id] && !ortakBaglar[g.id] && oneri(g));
-    yerlestir(liste,
-      h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Input'), h('span', {}, 'Tablo sütunu')),
-      ...satirlar);
+    yerlestir(liste, basliklar(), ...kendiSatirlari,
+      kendiSatirlari.length ? null : h('p', { class: 'soluk kucuk' }, 'Bu ekranın kendi input\'u yok; alanları aşağıdaki ortak akışlardan gelir.'));
+    yerlestir(ortakKap, [...gruplar.values()].map((x) => ortakBolumu(x.o, x.satirlar, x.ozel)));
     yerlestir(oneriKap, bagsiz.length ? h('div', { class: 'not-kutusu bilgi kucuk' },
       `${bagsiz.length} input'un adı bir tablo sütunuyla aynı. `,
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { for (const g of bagsiz) baglar[g.id] = oneri(g); ciz(); degisti(); } }, 'Adı aynı sütunlara bağla')) : null);
@@ -131,10 +166,10 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
     h('div', { class: 'kart-basligi' }, h('h3', {}, 'Test verisi'), h('span', { class: 'sag' }, durum, ortakAkis ? null : donustur, ortakAkis ? null : kisi,
       h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     ortakAkis ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Bu ortak akışın alanlarını burada bir kez bağlayın: bağlar onu kullanan tüm ekranlara varsayılan olarak geçer. Bir ekran aynı alanı kendi Test verisi sekmesinde başka sütuna bağlarsa o ekranda onunki geçerli olur.')
-      : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, '“Ortak akıştan” işaretli bağlar ortak akışın sayfasında kuruldu. Değiştirirseniz bu ekrana özel olur; “Ortak akışa dön” ekranın bağını siler.') : null,
+      : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Üstteki tablo bu ekranın kendi alanlarıdır. Ortak akışlardan gelen alanlar altta, ortak akış başına ayrı “Ortak akıştan” bölümündedir; bağları ortak akışın sayfasında kurulur. Değiştirirseniz yalnız bu ekran için geçerli olur (ekrana özel); “Ortak akışa dön” ekranın bağını siler.') : null,
     h('p', { class: 'soluk kucuk' }, 'Her input\'u bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Veri > Tablolar'), ' bölümünden ekleyin.'),
-    oneriKap, liste));
+    oneriKap, liste, ortakKap));
   ciz();
 }
 
