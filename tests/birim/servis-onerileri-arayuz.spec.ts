@@ -132,8 +132,7 @@ test.describe('servis senaryo önerileri arayüzü', () => {
     await panel.locator('[data-olcu="alanlar"]').click();
     await expect(panel.getByRole('list', { name: 'Alanlar: eksikler' })).toBeVisible();
     await expect(panel.getByRole('group', { name: 'İkili kombinasyon alanları' })).toContainText('Kanal');
-    await tasmaYok(page);
-    await panel.locator('li.oneri').first().getByRole('button', { name: /: önizle$/ }).click();
+    await tasmaYok(page);    await panel.locator('li.oneri').first().getByRole('button', { name: /: önizle$/ }).click();
     await expect(page.getByText('Öneriden açıldı (kaydedilmedi).')).toBeVisible();
     await tasmaYok(page);
     expect(hatalar).toEqual([]);

@@ -3947,6 +3947,34 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .servis-oneri-araclari .filtre-secimi { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .servis-oneri-araclari select { max-width: 100%; min-width: 0; }
 .oneri.servis-oneri { grid-template-columns: minmax(0, 1fr) auto; }
+/* Son yanıttan kontrol öner (yanit-kontrol-paneli.js) ve yanıt alanı / altın yanıt kontrol satırları. */
+.yanittan-kontrol { margin-top: 8px; }
+.yanit-kontrol-paneli { margin-top: 10px; padding: 12px 14px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.yanit-kontrol-paneli .kart-basligi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.yanit-kontrol-paneli .kart-basligi h4 { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.yanit-kontrol-paneli .kart-basligi > .ikon-dugme { margin-left: auto; }
+.yanit-alanlari { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; max-height: 520px; overflow-y: auto; }
+.yanit-alani-satiri { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.yanit-alani-ust { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.yanit-alani-yolu { overflow-wrap: anywhere; min-width: 0; }
+.yanit-alani-degeri { font: 12.5px var(--yazi-mono); color: var(--metin-2); overflow-wrap: anywhere; min-width: 0; }
+.yanit-alani-kontrol, .yanit-alani-altin, .yanit-alani-kontrolu, .yanit-alani-girdileri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.yanit-alani-kontrol small { overflow-wrap: anywhere; }
+.yanit-alani-kontrol select, .yanit-alani-kontrol input, .yanit-alani-kontrolu select, .yanit-alani-kontrolu input,
+.yanit-alani-altin select, .yanit-sure input { width: auto; min-width: 0; max-width: 100%; }
+.yanit-alani-kontrol input[type="text"]:not(.sayi-girdisi) { flex: 1 1 180px; }
+.yanit-alani-kontrolu { flex: 1 1 320px; }
+.yanit-alani-kontrolu > input[type="text"] { flex: 1 1 240px; }
+.yanit-alani-girdileri { flex: 1 1 220px; }
+.yanit-alani-girdileri:empty { display: none; }
+.yanit-alani-girdileri > input[type="text"]:not(.sayi-girdisi) { flex: 1 1 160px; }
+.sayi-girdisi { width: 7em; max-width: 100%; flex: 1 1 6em; }
+.yanit-kontrol-alt { display: grid; gap: 10px; margin-top: 10px; }
+.yanit-altin, .yanit-sure { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.yanit-altin p { margin: 0; flex: 1 1 260px; min-width: 0; }
+.yanit-sure .secenek { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.altin-yanit-ozeti { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.altin-yanit-ozeti .rozet { white-space: normal; height: auto; }
 .kombinasyon-alani code { overflow-wrap: anywhere; }
 @media (max-width: 480px) {
   .oneri.servis-oneri { grid-template-columns: minmax(0, 1fr); }

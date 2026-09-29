@@ -49,6 +49,6 @@ export interface DosyaKontrolSecenekleri {
   coz?: (ifade: string) => string | undefined; gizliler?: string[]; ekGizliAdlar?: ReadonlyArray<string>; adres?: string;
   sonuc?: (r: import('../dosyalar/dosya-icerigi.mjs').DosyaKontrolSonucu, veri: Buffer) => void;
 }
-export declare function kontrolleriDegerlendir(yanit: { durumKodu: number; govde: string; ham?: Buffer; basliklar?: Record<string, string> }, kontroller: ServisKontrolu[],
+export declare function kontrolleriDegerlendir(yanit: { durumKodu: number; govde: string; ham?: Buffer; basliklar?: Record<string, string>; sureMs?: number }, kontroller: ServisKontrolu[],
   dosyaSecenekleri?: DosyaKontrolSecenekleri): KontrolSonucu[];
 export declare function yanitOzeti(govde: string): string;

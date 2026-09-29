@@ -190,7 +190,7 @@ export function servisOnerileriPaneli(proje, s, ortamlar, eylemler) {
         ortamSecimi ? h('label', { class: 'filtre-secimi' }, h('span', {}, 'Ortam'), ortamSecimi) : null),
       h('div', { class: 'not-kutusu bilgi oneri-bilgisi', role: 'note' },
         h('p', {}, h('b', {}, 'Öneriler yalnızca taslaktır. '), 'Panel hiçbir istek atmaz; "Ekle" senaryoyu "Koşuda" kapalı kaydeder, siz koşturana kadar hiçbir yere gitmez.'),
-        h('p', { class: 'kucuk' }, 'Negatif önerilerde "Hata beklenir" işaretlidir ve mesaj boştur (tahmin edilmez): mesajı siz yazın ya da ilk koşunun yanıtından "Yanıttan kontrol ekle" ile alın.')),
+        h('p', { class: 'kucuk' }, 'Negatif önerilerde "Hata beklenir" işaretlidir ve mesaj boştur (tahmin edilmez): mesajı siz yazın ya da ilk koşunun yanıtından "Son yanıttan kontrol öner" ile alın.')),
       sonuc.semaNotu ? h('p', { class: 'kucuk soluk' }, 'Kayıtlı WSDL şemasında değer kısıtı (aralık, uzunluk, desen) yok. Şema kısıtlar eklenmeden önce alındıysa İşlemler > "WSDL\'den yeniden al" ile yenileyebilirsiniz (istek atar; onayınızla).') : null,
       kapsamPaneli(),
       elenenMetni.length ? h('p', { class: 'kucuk soluk oneri-elenen' }, `${elenenMetni.join(', ')} için gösterilmedi.`) : null,
