@@ -58,7 +58,7 @@ export const REHBERLER = {
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
-      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde dört sekme vardır: Ekranlar (ekran senaryolarının koşuları), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde beş sekme vardır, bu sırayla: Özet (varsayılan; "Genel"e tıklayınca açılır — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; bu sayfa), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
         metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin kaldığını ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
@@ -106,6 +106,42 @@ export const REHBERLER = {
         baslik: 'Kalan bir testi incelemek',
         sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Kalan test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
+      }
+    ]
+  },
+  // Sonuçlar > Genel > Özet (#/sonuclar/ozet): bölümler ekrandaki sırayla — sol panel, sağlık noktası, başlık + Rapor al (PDF),
+  // sekmeler, tarih aralığı, özet kutuları, Dikkat, Bakım, Kapsam ve güvenlik.
+  'sonuclar-ozet': {
+    baslik: 'Sonuçlar özeti',
+    adimlar: [
+      {
+        baslik: 'Özet sekmesi',
+        metin: ['"Genel"in ilk sekmesi: projenin tamamına tek bakış. Üstte ekran, servis ve uçtan uca sonuçlarının seçili dönemdeki başarısı; altında şimdi ilgilenmeniz gerekenler üç kartta toplanır.',
+          'Kartlardaki her madde ilgili ekranı açar. Madde yoksa kart tek satırlık "Sorun yok" olur.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Özet kutuları', alt: 'dönem başarısı', ikon: 'grafik' }, { baslik: 'Dikkat', ikon: 'uyari' }, { baslik: 'Bakım', ikon: 'duzenle' }, { baslik: 'Kapsam ve güvenlik', ikon: 'kalkan' }] }
+      },
+      { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
+      { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
+      { baslik: 'Başlık ve "Rapor al (PDF)"', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. "Rapor al (PDF)" genel kapsamlı dönem raporunu hazırlar.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar, Raporlar. Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
+      { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Özet kutuları ve kartlar seçtiğiniz aralığın günlerine göre, önceki eşit dönemle karşılaştırılarak hesaplanır. "Tümü" seçiliyken son 30 gün kullanılır.' },
+      {
+        baslik: 'Özet kutuları', hedef: '.ozet-kutulari',
+        metin: 'Ekranlar (tam koşu testleri), Servisler (servis çağrıları) ve Uçtan uca (akış koşuları): dönemin başarı oranı, önceki eşit döneme göre fark (▲ ▼, puan) ve sayılar. Kutuya tıklayınca ilgili sekme açılır.'
+      },
+      {
+        baslik: 'Dikkat', hedef: '.farkindalik-karti.dikkat',
+        metin: 'Hemen bakılması gerekenler: kritik işaretli olup son koşusunda kalan, P1 sorunu olan ya da uzun süredir kırmızı olan ekran, servis ve akışlar; p95 süresi önceki döneme göre belirgin artan servis metotları; kaçan, atlanan ya da yarıda kalan zamanlanmış koşular ve nedeni.',
+        ipucu: '"Kaç gündür kırmızı" ve "yavaşlama yüzdesi" eşikleri Ayarlar > Arayüz > Sonuçlar özeti\'ndedir.'
+      },
+      {
+        baslik: 'Bakım', hedef: '.farkindalik-karti.bakim',
+        metin: 'Testlerin bakım işleri: sabit tarihi geçmişte kalan senaryolar, belirli gündür hiç koşmayan senaryolar, karar bekleyen ekran bulguları ve test verisi sağlığı sorunları (kırık başvuru, kullanılmayan tablo…).'
+      },
+      {
+        baslik: 'Kapsam ve güvenlik', hedef: '.farkindalik-karti.kapsam',
+        metin: 'Kapsam boşlukları ve güvenlik hatırlatmaları: senaryosu olmayan servis metotları, denenmemiş koşul dalları (ekran başına), son yedeğin yaşı, açık riskli izinler ve türü (Test / Canlı) seçilmemiş ortamlar.',
+        ipucu: 'Kartta ilk beş madde görünür; gerisi "Tümü (N)" ile açılır.'
       }
     ]
   },
@@ -579,6 +615,7 @@ export const REHBERLER = {
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
     adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
-      { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' }]
+      { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' },
+      { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' }]
   }
 };

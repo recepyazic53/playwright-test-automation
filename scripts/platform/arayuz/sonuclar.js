@@ -102,10 +102,14 @@ const kisaKategori = (k) => String(k || 'Diğer').replace(/\s*\(.*?\)\s*/g, ' ')
 /** Trend grafiğinde en çok bu kadar koşu çizilir (aralıktaki en yeniler; daha fazlası okunmaz). */
 const TREND_EN_COK = 60;
 
-/** Genel görünümün "Ekranlar | Servisler | Uçtan uca akışlar" sekmeleri (#/sonuclar, #/sonuclar/servisler, #/sonuclar/uctan-uca). */
+/**
+ * Genel görünümün "Özet | Ekranlar | Servisler | Uçtan uca akışlar | Raporlar" sekmeleri. Özet (#/sonuclar/ozet; sonuc-ozeti.js)
+ * Genel'in varsayılanıdır: sol paneldeki "Genel" onu açar. Ekranlar: #/sonuclar/ekranlar — eski #/sonuclar adresi de aynı görünümü
+ * açar (mevcut bağlantılar ve yer imleri bozulmaz).
+ */
 function genelSekmeleri(secili) {
   return h('div', { class: 'segment sekme-cubugu sonuc-sekmeleri', role: 'tablist', 'aria-label': 'Genel rapor' },
-    [['ekranlar', 'Ekranlar', '#/sonuclar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag'],
+    [['ozet', 'Özet', '#/sonuclar/ozet', 'izgara'], ['ekranlar', 'Ekranlar', '#/sonuclar/ekranlar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag'],
       ['uctan', 'Uçtan uca akışlar', '#/sonuclar/uctan-uca', 'katman'], ['raporlar', 'Raporlar', '#/sonuclar/raporlar', 'dosya']].map(([a, etiket, adres, ikonAd]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': a === secili ? 'true' : 'false',
       onclick: () => { if (a !== secili) location.hash = adres; }
@@ -132,7 +136,7 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         saglikNotu),
       icerik));
   // "servisler": Genel'in Servisler sekmesi (Genel seçili kalır).
-  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' && tur !== 'uctan-uca' && tur !== 'raporlar' ? null : '';
+  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && !GENEL_SEKMELERI.includes(tur) ? null : '';
   const hata = (e) => { if (e && e.durum === 423) return; icerik.replaceChildren(hataKutusu(e)); };
   // Tarih aralığı (ortak süzgeç; oturumda saklanır): kartlar, trend ve koşu geçmişi sunucuda aralığa göre hesaplanır.
   const sorgu = araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik());
@@ -164,6 +168,10 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       if (tur === 's' && seciliServis) {
         return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { servisId: seciliServis, gomulu: true }));
       }
+      // Genel > Özet (varsayılan sekme): özet kutuları + Dikkat / Bakım / Kapsam ve güvenlik kartları (sonuc-ozeti.js; ayrı yüklenir).
+      if (tur === 'ozet') {
+        return import('./sonuc-ozeti.js').then((m) => m.sonucOzetiEkrani(icerik, proje, genelSekmeleri('ozet'), () => sonuclarEkrani(main, parcalar, baglam)));
+      }
       // Genel > Raporlar: kaydedilmiş PDF raporları (pdf-rapor.js).
       if (tur === 'raporlar') return raporlarGorunumu(icerik, proje, genelSekmeleri('raporlar'));
       // Genel > Uçtan uca akışlar: servis + ekran + SQL akışlarının koşuları (uctan-uca.js).
@@ -183,6 +191,9 @@ export function sonuclarEkrani(main, parcalar, baglam) {
     })
     .catch(hata);
 }
+
+/** Genel'in sekme adresleri (#/sonuclar/<sekme>; sol panelde "Genel" seçili kalır). "ekranlar" = eski #/sonuclar. */
+const GENEL_SEKMELERI = ['ozet', 'ekranlar', 'servisler', 'uctan-uca', 'raporlar'];
 
 /** Sağlık noktası eşikleri (proje başına; Ayarlar > Arayüz; varsayılan yeşil ≥ 90, sarı ≥ 75 — ayarlar/saglik-esikleri.mjs ile aynı kural). */
 const VARSAYILAN_ESIKLER = { yesil: 90, sari: 75 };
@@ -208,7 +219,8 @@ function urunListesi(nav, ekranlar, secili, servisler = [], seciliServis = null)
   const baglanti = (anahtar, ad, adet, son, ikonAd, durum) => {
     const o = son ? oran(son) : null;
     return h('a', {
-      href: anahtar ? `#/sonuclar/u/${encodeURIComponent(anahtar)}` : '#/sonuclar',
+      // "Genel" varsayılan sekmesi Özet'i açar.
+      href: anahtar ? `#/sonuclar/u/${encodeURIComponent(anahtar)}` : '#/sonuclar/ozet',
       'aria-current': (secili || '') === (anahtar || '') && secili !== null ? 'page' : null,
       class: durum === 'devre_disi' || durum === 'silindi' ? 'devre-disi' : null,
       title: durum === 'devre_disi' ? `${ad} — devre dışı` : durum === 'silindi' ? `${ad} — silinmiş ekran` : null
