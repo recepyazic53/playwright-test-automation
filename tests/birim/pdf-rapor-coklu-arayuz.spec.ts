@@ -122,12 +122,11 @@ test('diyalog: çoklu seçim listeleri, "Tüm …", en az seçim uyarısı, öni
   await servisler.getByRole('checkbox', { name: 'Tüm servisler' }).check();
   await expect(servisler.getByRole('checkbox', { name: 'Kayıt Servisi' })).toBeDisabled();
   await expect(servisler).toContainText('Tümü (2)');
-  const [indirme] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), d.getByRole('button', { name: 'PDF indir' }).click()]);
+  const [indirme] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), d.getByRole('button', { name: 'PDF indir ve kaydet' }).click()]);
   expect(indirme.suggestedFilename()).toMatch(/^nobetci-rapor-karisik-secilen-2-ekran-tum-servisler-\d{4}-\d{2}-\d{2}\.pdf$/);
   expect(readFileSync(await indirme.path()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
-  await expect(d.getByRole('status')).toContainText("Raporlar'a kaydedildi");
-  await d.getByRole('button', { name: 'Vazgeç' }).click();
   await expect(d).toBeHidden();
+  await expect(page.locator('#bildirimler')).toContainText("Raporlar'a kaydedildi");
   expect(hatalar).toEqual([]);
   await kapat();
 });

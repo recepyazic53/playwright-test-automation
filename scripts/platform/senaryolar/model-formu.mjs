@@ -858,8 +858,35 @@ export function beklenenSonucEtiketi(sema, veri) {
   const dahilOlmayan = sema.adimlar.filter((a) => a.ayar && veri[a.ayar] !== true);
   return {
     tur: 'basari', metin: son ? adimAdi(son.id) : 'Başarılı',
-    aciklama: `Başarılı akış: ${son ? adimAdi(son.id) : 'son adım'} adımına kadar${dahilOlmayan.length ? ` (${dahilOlmayan.map((a) => a.baslik).join(', ')} adımı koşulmaz)` : ''}.`
+    aciklama: `Başarılı akış: ${son ? adimAdi(son.id) : 'son adım'} adımına kadar${dahilOlmayan.length ? ` (${dahilOlmayan.map((a) => a.baslik).join(', ')} adımı koşulmaz)` : ''}.`,
+    // Başarılı akışın son adımının kimliği (sonuç kaydındaki beklenen sonuç metni bu adımın başarı göstergesinden yazılır).
+    ...(son ? { adimId: String(son.id) } : {})
   };
+}
+
+/** Başarı göstergesinin okunur metinleri (metin → "…"; veya → seçeneklerin her biri). @param {any} g @returns {string[]} */
+function basariGostergesiMetinleri(g) {
+  const secenekler = !nesneMi(g) ? [] : g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
+  return secenekler.filter((s) => nesneMi(s) && typeof s.deger === 'string' && s.deger)
+    .map((s) => (s.tur === 'metin' ? `"${s.deger}"` : s.tur === 'desen' ? `${s.secici || 'sayfa'} /${s.deger}/` : s.tur === 'url' ? `adres /${s.deger}/` : `${s.deger} görünür`));
+}
+
+/**
+ * Sonuç kaydındaki "Senaryonun beklenen sonucu" metni (Sonuçlar > test ayrıntısı > Beklenen / görülen): iş kuralı hatasında
+ * beklenen adım ve mesaj; başarılı akışta adım adı DEĞİL, son adımın başarı göstergesi (ör. "İşlem tamamlandı" görünür). Gösterge
+ * yoksa akışın açıklaması. Modelde beklenen sonuç yoksa null.
+ * @param {any} model @param {any} sema formSemasiOlustur(model) @param {unknown} veri @returns {string | null}
+ */
+export function beklenenSonucMetni(model, sema, veri) {
+  const et = beklenenSonucEtiketi(sema, veri);
+  if (!et) return null;
+  if (et.tur === 'hata') return et.aciklama;
+  const adimlar = nesneMi(model) && Array.isArray(model.adimlar) ? model.adimlar.filter(nesneMi) : [];
+  const adim = et.adimId ? adimlar.find((a) => String(a.id) === et.adimId) : null;
+  let metinler = adim && nesneMi(adim.kosu) ? basariGostergesiMetinleri(adim.kosu.basariGostergesi) : [];
+  if (!metinler.length && !adim) metinler = basariGostergesiMetinleri([...adimlar].sort((a, b) => (a.sira || 0) - (b.sira || 0)).reverse()
+    .find((a) => nesneMi(a.kosu) && nesneMi(a.kosu.basariGostergesi))?.kosu.basariGostergesi);
+  return metinler.length ? `Başarı: ${metinler.join(' veya ')} (${et.metin} adımı)` : et.aciklama;
 }
 
 /**
