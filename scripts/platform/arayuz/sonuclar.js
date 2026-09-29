@@ -1313,6 +1313,13 @@ async function sonucDetayi(icerik, id, proje) {
         h('div', { class: 'beklenen' }, h('dt', {}, 'Beklenen'), h('dd', {}, h('code', {}, s2.beklenenGorulen.beklenen || '—'))),
         h('div', { class: 'gorulen' }, h('dt', {}, 'Görülen'), h('dd', {}, h('code', {}, s2.beklenenGorulen.gorulen || '—')))) : null));
   }
+  // Çalışan kurtarma kuralları (Ayarlar > Proje ve ortamlar): kurtarılan test başarılı sayılır; not burada görünür kalır.
+  if ((s2.kurtarma || []).length) {
+    sol.push(h('section', { class: 'kart', 'aria-labelledby': 'kurtarma-basligi' },
+      h('div', { class: 'kart-basligi' }, h('h3', { id: 'kurtarma-basligi' }, ikon('yenile'), 'Kurtarma kuralı'), h('span', { class: 'alt mono' }, String(s2.kurtarma.length))),
+      h('ul', { class: 'kurtarma-notlari' }, s2.kurtarma.map((k) => h('li', { class: `kurtarma-notu ${k.durum}` },
+        h('b', {}, k.kural), k.adim ? h('span', { class: 'soluk' }, ` · ${k.adim}`) : null, h('div', {}, k.not))))));
+  }
   const satirKarti = tabloSatirlariKarti(s2.veriKosusu);
   if (satirKarti) sag.push(satirKarti);
   sag.push(h('section', { class: 'kart', 'aria-labelledby': 'adim-basligi' },

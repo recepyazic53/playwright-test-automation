@@ -44,6 +44,7 @@ import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-ad
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 import { ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
 import { GORUNURSE_BEKLEME_SN } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
+import { GUVENLI_EKRAN_EYLEMLERI, ekranKapsamindaMi, type EkranKurali, type KurtarmaOlayi } from '../../scripts/platform/ayarlar/kurtarma-kurallari.mjs';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 // Kullanıcı kararları (Ayarlar > Koşu > Gelişmiş koşu davranışı; kosu-ayarlari.ts): ÇAĞRI anında okunur. Varsayılanlar önceki sabitlerdir.
@@ -758,6 +759,66 @@ const DOSYA_ICERIK_TURLERI: Record<string, string> = {
   csv: 'text/csv', metin: 'text/plain', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 };
 
+// ---- Kurtarma kuralları (Ayarlar > Proje ve ortamlar; scripts/platform/ayarlar/kurtarma-kurallari.mjs) ----
+// Adım başarısız olunca senaryonun ekranını kapsayan kurallara sırayla bakılır; koşulu tutan ilk kural eylemini yapar, sonra adımı
+// tekrar dener / yalnız sonucu yeniden denetler (devam) / senaryoyu baştan başlatır. Sayfayı yenileme, adımı tekrar deneme ve baştan
+// başlatma YALNIZ "tekrar denenebilir" işaretli adımda (kosu.tekrarDenenebilir; baştan başlatmada tamamlanan bütün adımlar da)
+// yapılır; işaretsiz adımda kural çalışmaz ve not "kayıt oluşturan adım tekrar denenmedi" olur. Notlar "kurtarma" ekiyle rapora gider.
+
+/** Senaryoyu baştan başlatma isteği (adımın içinden en dış döngüye taşınır). */
+class BastanBaslat extends Error {
+  kural: EkranKurali;
+  neden: string;
+  eylemMetni: string;
+  asil: unknown;
+  constructor(kural: EkranKurali, neden: string, eylemMetni: string, asil: unknown) {
+    super('Kurtarma kuralı senaryoyu baştan başlatıyor.');
+    this.name = 'BastanBaslat';
+    this.kural = kural;
+    this.neden = neden;
+    this.eylemMetni = eylemMetni;
+    this.asil = asil;
+  }
+}
+
+/** Kuralın koşulunun kısa metni (notta). */
+function kurtarmaKosulMetni(k: EkranKurali): string {
+  const c = k.kosul;
+  if (c.tur === 'metin') return `metin "${c.metin}"`;
+  if (c.tur === 'girisSayfasi') return 'giriş sayfasına düştü';
+  if (c.tur === 'pencere') return c.metin ? `pencere "${c.metin}"` : 'pencere açıldı';
+  return 'secici' in c ? `öğe ${c.secici}` : `öğe ${c.rol}${c.ad ? ` "${c.ad}"` : ''}`;
+}
+
+/** Ekran giriş sayfasında mı: adres giriş adresinin yolu ya da kullanıcı adı + parola alanları görünüyor. */
+async function girisSayfasindaMi(page: Page, tarif: GirisTarifi | null): Promise<boolean> {
+  if (!tarif) return false;
+  try {
+    const simdiki = new URL(page.url());
+    const giris = new URL(tarif.girisAdresi, simdiki);
+    if (giris.origin === simdiki.origin && giris.pathname.replace(/\/+$/, '') === simdiki.pathname.replace(/\/+$/, '')) return true;
+  } catch { /* adres okunamadı: alanlara bakılır */ }
+  const gorunur = async (s: string): Promise<boolean> => Boolean(s) && (await page.locator(s).filter({ visible: true }).count().catch(() => 0)) > 0;
+  return (await gorunur(tarif.kullaniciAlani)) && (await gorunur(tarif.parolaAlani));
+}
+
+/** Kuralın koşulu şu an sayfada tutuyor mu. */
+async function kurtarmaKosuluTutar(page: Page, k: EkranKurali, tarif: GirisTarifi | null): Promise<boolean> {
+  const c = k.kosul;
+  if (c.tur === 'metin') return mesajIceriyorMu(await sayfaMetni(page), c.metin);
+  if (c.tur === 'girisSayfasi') return girisSayfasindaMi(page, tarif);
+  if (c.tur === 'pencere') {
+    // Tarayıcı penceresi (alert / confirm) ya da sayfadaki görünür pencere (dialog / alertdialog).
+    const tarayici = tarayiciUyarilari.get(page) ?? [];
+    if (tarayici.some((m) => !c.metin || mesajIceriyorMu(m, c.metin))) return true;
+    const pencereler = page.locator('[role="dialog"], [role="alertdialog"], dialog[open]').filter({ visible: true });
+    const metinler = await Promise.all((await pencereler.all().catch(() => [])).map((x) => x.innerText().catch(() => '')));
+    return metinler.some((m) => !c.metin || mesajIceriyorMu(m, c.metin));
+  }
+  const l = 'secici' in c ? page.locator(c.secici) : page.getByRole(c.rol as Parameters<Page['getByRole']>[0], c.ad ? { name: c.ad } : {});
+  return (await l.filter({ visible: true }).count().catch(() => 0)) > 0;
+}
+
 export type ModelKosuOrtami = {
   veri: PlatformModelVerisi;
   tarif: () => GirisTarifi;
@@ -847,6 +908,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   }
 
   const atlanan: AtlananAlan[] = [];
+  /** Çalışan kurtarma kurallarının notları ("kurtarma" eki; raporlayıcı sonuca yazar). */
+  const kurtarmaOlaylari: KurtarmaOlayi[] = [];
   let sira = 1;
   // Adım ekran görüntüleri (Ayarlar > Koşu > Kayıt; senaryo ezebilir): her adımda (varsayılan, bugünkü davranış) · yalnız kalan
   // adımda (başarılı adımda alınmaz; kalan adımın görüntüsü aşağıdaki catch'te) · seçili adımlarda (modelde kosu.ekranGoruntusu
@@ -917,24 +980,9 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       await test.step(`Göreli tarihler — ${goreliler.join(' · ')}`, async () => undefined);
     }
 
-    let canlidaDurdu = false;
     const sqlDegerleri: SqlDegerleri = { degerler: {}, gizliler: [] };
-    for (const adim of plan.adimlar) {
-      if (!adim.dahil) continue;
-      if ((adim.yalnizTest || canlidaDurdu) && ortam.veri.canli === true) {
-        // Ortak akışın "yalnızca test ortamı" adımı (ör. ödeme): canlı ortamda koşulmaz; ondan sonraki adımlar da (ona
-        // bağlıdır). Beklenen iş kuralı hatası bu adımlardaysa test doğrulanamaz: açıkça atlanır (yeşil sayılmaz).
-        const beklenenSira = plan.beklenen.tur === 'hata' ? plan.adimlar.findIndex((x) => x.id === (plan.beklenen as { adim: string }).adim) : -1;
-        if (beklenenSira >= plan.adimlar.indexOf(adim)) {
-          test.skip(true, `Beklenen iş kuralı hatası “${adim.baslik}” ya da sonraki bir adımda; bu adım yalnızca test ortamında koşar (canlıda doğrulanamaz).`);
-        }
-        canlidaDurdu = true;
-        await test.step(`${adim.baslik} (canlı ortam: atlandı)`, async () => undefined);
-        continue;
-      }
-      await test.step(adim.baslik, async () => {
-        simdikiAdim = adim.baslik;
-        adimAdiniBildir(page, adim.baslik);
+    /** Adımın gövdesi (kurtarma kuralı adımı tekrar denerken yeniden çağrılır). */
+    const adimGovdesi = async (adim: PlanAdimi): Promise<void> => {
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
         if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
         // İndirilen dosyayı doğrulama adımı: düğmeye basılır, indirilen dosya beklentilerle doğrulanır.
@@ -1006,9 +1054,142 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
         await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik, adim);
-      });
-      simdikiAdim = null;
-      if (adim.sonAdim) break;
+    };
+
+    // Kurtarma kuralları: bu senaryonun ekranını kapsayanlar (açık ve bu ortamı kapsayanlar veri okuyucudan gelir).
+    const kurallar = (ortam.veri.kurtarmaKurallari ?? []).filter((k) => ekranKapsamindaMi(k, s.ekran.id));
+    const girisTarifi = (): GirisTarifi | null => { if (tarif) return tarif; try { return ortam.tarif(); } catch { return null; } };
+    const olayEkle = (k: EkranKurali, adimBasligi: string, durum: KurtarmaOlayi['durum'], deneme: number, not: string): void => {
+      kurtarmaOlaylari.push({ kuralId: k.id, kural: k.ad, adim: adimBasligi, durum, deneme, not });
+    };
+    /** Kuralın eylemi; notta görünen kısa metni döner. */
+    const eylemiUygula = async (k: EkranKurali): Promise<string> => {
+      const e = k.eylem;
+      if (e.tur === 'yenile') { await page.reload({ waitUntil: 'domcontentloaded' }); return 'sayfa yenilendi'; }
+      if (e.tur === 'bekle') { await page.waitForTimeout(e.sn * 1000); return `${e.sn} sn beklendi`; }
+      if (e.tur === 'tikla') {
+        const tiklandi = await page.locator(e.secici).filter({ visible: true }).first().click({ timeout: 10_000 }).then(() => true, () => false);
+        return tiklandi ? `"${e.secici}" tıklandı` : `"${e.secici}" görünmedi (tıklanamadı)`;
+      }
+      if (e.tur === 'pencereKapat') {
+        tarayiciUyarilari.get(page)?.splice(0);
+        if (e.secici) await page.locator(e.secici).filter({ visible: true }).first().click({ timeout: 10_000 }).catch(() => undefined);
+        else await page.keyboard.press('Escape').catch(() => undefined);
+        return 'pencere kapatıldı';
+      }
+      // Girişi yenile: oturum kapatılır, ortamın giriş tarifiyle (senaryonun giriş profiliyle) yeniden girilir, ekran yeniden açılır.
+      const t = girisTarifi();
+      if (!t) return 'giriş tarifi yok (giriş yenilenemedi)';
+      await oturumuKapat(page);
+      await girisYap(page, t, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
+      await baglamiUygula(t);
+      await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+      return 'giriş yenilendi';
+    };
+    /** Başarıyla tamamlanan adımlar (baştan başlatmada hepsi yeniden koşar: hepsi tekrar denenebilir olmalı). */
+    const tamamlanan: PlanAdimi[] = [];
+    /**
+     * Adımı kurtarma kurallarıyla koşar. Adım başarısızsa koşulu tutan ilk kural (tekrar denemede aynı kural) uygulanır; kural yoksa
+     * ya da tutmazsa hata olduğu gibi iletilir.
+     */
+    const kurtarmayla = async (adim: PlanAdimi): Promise<void> => {
+      if (!kurallar.length || adim.sql || adim.yenidenGiris) { await adimGovdesi(adim); return; }
+      let surdur: { kural: EkranKurali; neden: string; deneme: number; eylemMetni: string } | null = null;
+      for (;;) {
+        try {
+          await adimGovdesi(adim);
+          if (surdur) olayEkle(surdur.kural, adim.baslik, 'kurtarildi', surdur.deneme, `kurtarıldı: ${surdur.neden} → ${surdur.eylemMetni} → ${surdur.deneme}. denemede başarılı`);
+          return;
+        } catch (hata) {
+          if (hata instanceof BastanBaslat || testInfo.expectedStatus === 'skipped') throw hata;
+          let tutan: EkranKurali | null = null;
+          for (const k of surdur ? [surdur.kural] : kurallar) if (await kurtarmaKosuluTutar(page, k, girisTarifi())) { tutan = k; break; }
+          if (!tutan) {
+            if (surdur) olayEkle(surdur.kural, adim.baslik, 'kaldi', surdur.deneme, `kurtarma denendi, yine kaldı: ${surdur.neden} → ${surdur.deneme}. denemede başka bir nedenle başarısız`);
+            throw hata;
+          }
+          const neden: string = surdur?.neden ?? kurtarmaKosulMetni(tutan);
+          const deneme: number = surdur?.deneme ?? 1;
+          // Çift kayıt koruması: yenileme, tekrar deneme ve baştan başlatma yalnız "tekrar denenebilir" işaretli adımda (baştan
+          // başlatmada tamamlanan adımlar da işaretli olmalı).
+          const tekrarli = !(GUVENLI_EKRAN_EYLEMLERI as readonly string[]).includes(tutan.eylem.tur) || tutan.sonra.tur !== 'devam';
+          const isaretli = adim.kosu?.tekrarDenenebilir === true && (tutan.sonra.tur !== 'bastan' || tamamlanan.every((a) => a.kosu?.tekrarDenenebilir === true));
+          if (tekrarli && !isaretli) {
+            olayEkle(tutan, adim.baslik, 'tekrarlanmadi', deneme, `kayıt oluşturan adım tekrar denenmedi: ${neden} ("${adim.baslik}"${tutan.sonra.tur === 'bastan' ? ' ya da önceki bir adım' : ''} tekrar denenebilir işaretli değil; kural: ${tutan.ad})`);
+            throw hata;
+          }
+          if (tutan.sonra.tur === 'tekrar' && deneme - 1 >= tutan.sonra.kez) {
+            olayEkle(tutan, adim.baslik, 'kaldi', deneme, `kurtarma denendi, yine kaldı: ${neden} → ${tutan.sonra.kez} tekrar denemesinden sonra da başarısız`);
+            throw hata;
+          }
+          const eylemMetni = await eylemiUygula(tutan);
+          if (tutan.sonra.tur === 'devam') {
+            // Devam: adım tekrarlanmaz; yalnız sonucu (başarı göstergesi) yeniden denetlenir.
+            try {
+              await adimSonucunuDogrula(page, adim, plan);
+            } catch (e2) {
+              olayEkle(tutan, adim.baslik, 'kaldi', deneme, `kurtarma denendi, yine kaldı: ${neden} → ${eylemMetni} → adım yine başarısız`);
+              throw e2;
+            }
+            olayEkle(tutan, adim.baslik, 'kurtarildi', deneme, `kurtarıldı: ${neden} → ${eylemMetni} → devam edildi`);
+            await ekranGoruntusu(`${adim.baslik} (kurtarıldı)`, adim);
+            return;
+          }
+          if (tutan.sonra.tur === 'bastan') throw new BastanBaslat(tutan, neden, eylemMetni, hata);
+          surdur = { kural: tutan, neden, deneme: deneme + 1, eylemMetni };
+        }
+      }
+    };
+
+    const adimlariKos = async (): Promise<void> => {
+      let canlidaDurdu = false;
+      tamamlanan.length = 0;
+      for (const adim of plan.adimlar) {
+        if (!adim.dahil) continue;
+        if ((adim.yalnizTest || canlidaDurdu) && ortam.veri.canli === true) {
+          // Ortak akışın "yalnızca test ortamı" adımı (ör. ödeme): canlı ortamda koşulmaz; ondan sonraki adımlar da (ona
+          // bağlıdır). Beklenen iş kuralı hatası bu adımlardaysa test doğrulanamaz: açıkça atlanır (yeşil sayılmaz).
+          const beklenenSira = plan.beklenen.tur === 'hata' ? plan.adimlar.findIndex((x) => x.id === (plan.beklenen as { adim: string }).adim) : -1;
+          if (beklenenSira >= plan.adimlar.indexOf(adim)) {
+            test.skip(true, `Beklenen iş kuralı hatası “${adim.baslik}” ya da sonraki bir adımda; bu adım yalnızca test ortamında koşar (canlıda doğrulanamaz).`);
+          }
+          canlidaDurdu = true;
+          await test.step(`${adim.baslik} (canlı ortam: atlandı)`, async () => undefined);
+          continue;
+        }
+        await test.step(adim.baslik, async () => {
+          simdikiAdim = adim.baslik;
+          adimAdiniBildir(page, adim.baslik);
+          await kurtarmayla(adim);
+        });
+        tamamlanan.push(adim);
+        simdikiAdim = null;
+        if (adim.sonAdim) break;
+      }
+    };
+
+    // "Senaryoyu baştan başlat" (kurtarma kuralı): ekran yeniden açılır ve adımlar baştan koşar — en çok bir kez.
+    let bastan: BastanBaslat | null = null;
+    for (;;) {
+      try {
+        await adimlariKos();
+        if (bastan) olayEkle(bastan.kural, 'Senaryo', 'kurtarildi', 2, `kurtarıldı: ${bastan.neden} → ${bastan.eylemMetni} → senaryo baştan başlatıldı, 2. denemede başarılı`);
+        break;
+      } catch (hata) {
+        if (!(hata instanceof BastanBaslat)) {
+          if (bastan) olayEkle(bastan.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${bastan.neden} → senaryo baştan başlatıldı, yine başarısız`);
+          throw hata;
+        }
+        if (bastan) {
+          olayEkle(hata.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${hata.neden} → senaryo bir kez baştan başlatıldı, yine başarısız`);
+          throw hata.asil;
+        }
+        bastan = hata;
+        simdikiAdim = null;
+        await test.step('Senaryo baştan başlatılır (kurtarma kuralı)', async () => {
+          await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+        });
+      }
     }
   } catch (hata) {
     // "Yalnız kalan adımda": testin kaldığı adımın görüntüsü (ad: "NN - <adım> (kalan adım)"). Atlama (test.skip) kalan adım değildir.
@@ -1023,7 +1204,10 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
     }
     throw hata;
   } finally {
-    if (atlanan.length) testInfo.annotations.push({ type: 'atlananAlanlar', description: JSON.stringify(atlanan) });
+    // Kurtarma kuralı adımı tekrar denediyse aynı alan bir kez yazılır.
+    const tekilAtlanan = [...new Map(atlanan.map((a) => [`${a.alan}\u0000${a.neden}`, a])).values()];
+    if (tekilAtlanan.length) testInfo.annotations.push({ type: 'atlananAlanlar', description: JSON.stringify(tekilAtlanan) });
+    if (kurtarmaOlaylari.length) testInfo.annotations.push({ type: 'kurtarma', description: JSON.stringify(kurtarmaOlaylari) });
   }
   if (engellenen.length) throw new Error(`Yasaklı adrese istek engellendi: ${[...new Set(engellenen)].join(', ')}.`);
 }

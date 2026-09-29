@@ -447,6 +447,17 @@ export async function akisTasarimi(icerik, s) {
   }
 
   /**
+   * "Tekrar denenebilir" işareti (Ayarlar > Proje ve ortamlar > Kurtarma kuralları): kural bu adımı tekrar deneyebilir, sayfayı
+   * yenileyebilir ya da senaryoyu baştan başlatabilir. Varsayılan işaretsiz — kayıt oluşturan adım tekrar edilmez. Modelde kosu.tekrarDenenebilir.
+   */
+  function tekrarIsareti(b) {
+    const kutu = h('input', { type: 'checkbox', checked: b.tekrarDenenebilir === true });
+    kutu.addEventListener('change', () => { if (kutu.checked) b.tekrarDenenebilir = true; else delete b.tekrarDenenebilir; sakla(); });
+    return h('label', { class: 'onay-satiri kucuk tekrar-isareti', title: 'Kurtarma kuralı bu adımı tekrar deneyebilir (sayfayı yenileme, adımı tekrar deneme, baştan başlatma). Kayıt oluşturan adımı işaretlemeyin.' },
+      kutu, ikon('yenile'), 'Tekrar denenebilir (kurtarma kuralı)');
+  }
+
+  /**
    * Alanın sınırları (isteğe bağlı değer kuralları; model alan.sinirlar): sayıda en az / en çok / artış, metinde uzunluk + desen,
    * tarihte en erken / en geç (sabit tarih ya da bugün±N). Ekran modeli doğrulayıcısının kurallarıyla anında denetlenir.
    */
@@ -542,6 +553,7 @@ export async function akisTasarimi(icerik, s) {
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
         korunanParca,
         goruntuIsareti(b),
+        tekrarIsareti(b),
         b.alanlar.length ? h('ul', { class: 'tasarim-alanlari', 'aria-label': 'Doldurulacak alanlar' }, b.alanlar.map((a) => alanCipi(a, i)))
           : h('p', { class: 'soluk kucuk' }, 'Alan yok. Sağdaki listeden alanları buraya sürükleyin ya da grubu seçip “Ekle”ye basın.'),
         kosulDuzenleme && kosulDuzenleme.blok === i && b.alanlar.includes(kosulDuzenleme.alan) ? kosulDuzenleyici(b, kosulDuzenleme.alan) : null,
@@ -582,6 +594,7 @@ export async function akisTasarimi(icerik, s) {
         b.gorunurse ? h('p', { class: 'soluk kucuk' }, 'Önceki düğmeden sonra bazı ekranlarda açılan (bazılarında açılmayan) ara penceredeki düğme: kısa süre beklenir, görünürse basılır, görünmezse atlanır (raporda not). Adımın ilerleme düğmesinden sonra gelir.') : null,
         b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, sureEtiketi), sure),
         b.istegeBagli || b.gorunurse ? null : goruntuIsareti(b),
+        b.istegeBagli || b.gorunurse ? null : tekrarIsareti(b),
         b.istegeBagli ? h('p', { class: 'soluk kucuk' }, 'Hemen ardından gelen alan grubu bu düğmeyle açılan alanlardır; senaryoda “dahil” işaretliyse doldurulur.') : null
       ];
     }

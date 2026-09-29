@@ -479,6 +479,8 @@ export default class PlatformRaporlayici {
         yakalananMesajlar: yakalananMesajlariAyristir(aciklama.get('yakalananMesajlar') ?? '[]'),
         // Veri koşusu (hangi tablo satırıyla / model sürümüyle koştu; sonuc-deposu.mjs doğrular ve kırpar).
         ...(aciklama.has('veriKosusu') ? { veriKosusu: veriKosusuAyristir(aciklama.get('veriKosusu')) } : {}),
+        // Çalışan kurtarma kurallarının notları (tests/support/model-kosucu.ts; sonuc-deposu.mjs doğrular ve kırpar).
+        ...(aciklama.has('kurtarma') ? { kurtarma: kurtarmaAyristir(aciklama.get('kurtarma')) } : {}),
         baslangic: baslangic.toISOString(), bitis: new Date(baslangic.getTime() + Math.max(0, result.duration)).toISOString(), adimlar, medya
       });
     } catch (hata) {
@@ -534,5 +536,18 @@ export default class PlatformRaporlayici {
     } finally {
       await baglam.yazici.kapat();
     }
+  }
+}
+
+/**
+ * "kurtarma" annotation içeriği (JSON dizisi) → olaylar; okunamazsa boş (doğrulama ve kırpma sonuc-deposu.mjs'de).
+ * @param {unknown} metin @returns {Array<Record<string, unknown>>}
+ */
+export function kurtarmaAyristir(metin) {
+  try {
+    const v = JSON.parse(String(metin ?? '[]'));
+    return Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : [];
+  } catch {
+    return [];
   }
 }

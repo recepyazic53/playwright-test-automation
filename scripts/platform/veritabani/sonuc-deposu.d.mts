@@ -13,7 +13,12 @@ export interface SonucGirdisi {
   yakalananMesajlar?: Array<{ kaynak: string; metin: string; adim?: string | null; sayi?: number; ilk?: string; son?: string; beklenen?: boolean }>;
   /** Raporlayıcının "veriKosusu" annotation'ı (veriKosusuTemizle doğrular). */
   veriKosusu?: unknown;
+  /** Raporlayıcının "kurtarma" annotation'ı (kurtarmaNotlariTemizle doğrular). */
+  kurtarma?: unknown;
 }
+/** Ekran sonucunda çalışan kurtarma kuralının notu. */
+export interface KurtarmaNotu { kuralId: string; kural: string; adim: string | null; durum: string; deneme: number; not: string }
+export declare function kurtarmaNotlariTemizle(v: unknown): KurtarmaNotu[];
 /** Sonucun veri koşusu bilgisi: hangi tablo satırlarıyla (açık sütunlar) ve model sürümüyle koştu. */
 export interface SonucVeriKosusu {
   anahtar: string | null; ad: string | null; modelSurumu: number | null;
@@ -41,6 +46,7 @@ export interface SonucDetayi {
   medya: MedyaOgesi[];
   yakalananMesajlar: YakalananMesajOgesi[];
   veriKosusu: SonucVeriKosusu | null;
+  kurtarma: KurtarmaNotu[];
 }
 export interface KosuGecmisiSatiri extends Sayilar {
   id: string; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; urunSayisi: number;
@@ -72,7 +78,7 @@ export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
   sonuclar: Array<{
     id: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; durum: string; hamDurum: string | null; sureMs: number | null;
     hataKategorisi: string | null; hataKalibi: string | null; urun: string; urunAnahtari: string; ekranDurumu: string | null; baslangic: string | null; bitis: string | null;
-    deneme: number; ekranGoruntusuSayisi: number; videoSayisi: number; veriKosusu: SonucVeriKosusu | null;
+    deneme: number; ekranGoruntusuSayisi: number; videoSayisi: number; kurtarma: KurtarmaNotu[]; veriKosusu: SonucVeriKosusu | null;
   }>;
 } | null;
 export declare function sonucDetayi(vt: Veritabani, sonucId: string): SonucDetayi | null;

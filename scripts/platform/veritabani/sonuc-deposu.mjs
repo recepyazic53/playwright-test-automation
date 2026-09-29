@@ -18,6 +18,7 @@ import { siniflandirmaKurallari } from '../ayarlar/siniflandirma-kurallari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { YAKALAMA_KAYNAKLARI, yakalananMesajlariAyristir, yakalananMetniMaskele } from '../sonuclar/yakalanan-mesajlar.mjs';
 import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
+import { OLAY_DURUMLARI, kurtarmaSutunuYaz } from '../ayarlar/kurtarma-kurallari.mjs';
 
 /** @typedef {import('./baglanti.mjs').Veritabani} Veritabani */
 
@@ -97,6 +98,29 @@ export function veriKosusuTemizle(v) {
   return { anahtar: kisa(o.anahtar, 2000), ad: kisa(o.ad, 500), modelSurumu: surum, satirlar };
 }
 /** @param {unknown} eklerJson */
+/**
+ * Ekran sonucunun kurtarma notları (model koşucusu; kural adı, adım, durum, deneme, not): doğrulanır ve kırpılır. Geçersiz olay atlanır.
+ * @param {unknown} v @returns {Array<{ kuralId: string; kural: string; adim: string | null; durum: string; deneme: number; not: string }>}
+ */
+export function kurtarmaNotlariTemizle(v) {
+  return (Array.isArray(v) ? v : []).filter(nesneMi).slice(0, 50).map((x) => /** @type {Record<string, unknown>} */ (x))
+    .filter((x) => typeof x.kuralId === 'string' && KIMLIK.test(x.kuralId) && OLAY_DURUMLARI.includes(/** @type {any} */ (x.durum)))
+    .map((x) => ({
+      kuralId: String(x.kuralId), kural: String(x.kural ?? '').slice(0, 120), adim: typeof x.adim === 'string' && x.adim ? x.adim.slice(0, 300) : null,
+      durum: String(x.durum), deneme: Math.max(1, Math.min(100, Math.round(Number(x.deneme) || 1))), not: String(x.not ?? '').slice(0, 1000)
+    }));
+}
+
+/** ekler_json'daki kurtarma notları (yoksa boş). @param {unknown} eklerJson */
+const kurtarmaNotlariOku = (eklerJson) => {
+  try {
+    const e = JSON.parse(String(eklerJson ?? '{}'));
+    return nesneMi(e) ? kurtarmaNotlariTemizle(e.kurtarma) : [];
+  } catch {
+    return [];
+  }
+};
+
 const veriKosusuOku = (eklerJson) => {
   try {
     const e = JSON.parse(String(eklerJson ?? '{}'));
@@ -185,7 +209,7 @@ function kosuOzetiHesapla(vt, kosuId) {
  *   adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }>;
  *   medya?: Array<{ id?: string; tur: string; ad: string; icerikTuru: string; boyut: number; dosya: string; olusturulma?: string }>;
  *   yakalananMesajlar?: Array<{ kaynak: string; metin: string; adim?: string | null; sayi?: number; ilk?: string; son?: string; beklenen?: boolean }>;
- *   veriKosusu?: unknown;
+ *   veriKosusu?: unknown; kurtarma?: unknown;
  * }} SonucGirdisi
  */
 
@@ -224,18 +248,21 @@ export function sonucKaydet(vt, g) {
     const hata = metin(g.hataMesaji);
     const basarisiz = g.durum === 'basarisiz';
     const veriKosusu = veriKosusuTemizle(g.veriKosusu);
+    // Çalışan kurtarma kuralları: notlar ekler_json'da, sayaç kaydı (yalnız kimlik / durum / deneme) kurtarma_json'da.
+    const kurtarma = kurtarmaNotlariTemizle(g.kurtarma);
+    const ekler = { ...(veriKosusu ? { veriKosusu } : {}), ...(kurtarma.length ? { kurtarma } : {}) };
     const atlanan = Array.isArray(g.atlananAlanlar)
       ? g.atlananAlanlar.filter((a) => a && typeof a.alan === 'string' && a.alan).slice(0, 500)
         .map((a) => ({ alan: a.alan.slice(0, 300), ...(typeof a.neden === 'string' && a.neden ? { neden: a.neden.slice(0, 1000) } : {}) }))
       : [];
     vt.calistir(
       `INSERT INTO kosu_sonuclari (id, kosu_id, senaryo_id, senaryo_baslik, durum, sure_ms, hata_mesaji, ekler_json, baslangic, bitis,
-         test_kimligi, senaryo_anahtari, ekran_id, urun_adi, ham_durum, hata_kategorisi, hata_kalibi, beklenen_sonuc, atlanan_alanlar_json, deneme)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, kosuId, senaryoId, baslik, g.durum, tamSayi(g.sureMs), hata, veriKosusu ? JSON.stringify({ veriKosusu }) : '{}',
+         test_kimligi, senaryo_anahtari, ekran_id, urun_adi, ham_durum, hata_kategorisi, hata_kalibi, beklenen_sonuc, atlanan_alanlar_json, deneme, kurtarma_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, kosuId, senaryoId, baslik, g.durum, tamSayi(g.sureMs), hata, Object.keys(ekler).length ? JSON.stringify(ekler) : '{}',
         isoZaman(g.baslangic), isoZaman(g.bitis) ?? new Date().toISOString(),
         testKimligi, anahtar, ekranId, urunAdi, metin(g.hamDurum, 40), basarisiz ? kategoriBul(hata ?? '', siniflandirmaKurallari(vt)) : null,
-        basarisiz ? kalipCikar(hata ?? '') : null, metin(g.beklenenSonuc, 2000), JSON.stringify(atlanan), tamSayi(g.deneme) ?? 0]
+        basarisiz ? kalipCikar(hata ?? '') : null, metin(g.beklenenSonuc, 2000), JSON.stringify(atlanan), tamSayi(g.deneme) ?? 0, kurtarmaSutunuYaz(kurtarma)]
     );
     (g.adimlar ?? []).slice(0, 1000).forEach((a, sira) => {
       const ad = metin(a?.ad, 1000);
@@ -375,6 +402,8 @@ export function kosuDetayi(vt, kosuId) {
     ekranDurumu: s.ekran_durumu == null ? null : String(s.ekran_durumu),
     baslangic: s.baslangic == null ? null : String(s.baslangic), bitis: s.bitis == null ? null : String(s.bitis), deneme: Number(s.deneme ?? 0),
     ekranGoruntusuSayisi: Number(s.ekran_goruntusu_sayisi), videoSayisi: Number(s.video_sayisi),
+    // Çalışan kurtarma kurallarının notları (kurtarılan test başarılı sayılır; not görünür kalır).
+    kurtarma: kurtarmaNotlariOku(s.ekler_json),
     // Veri koşusu (tablodan çoklu satır): anahtar / ad ve kullanılan satırlar; tek satırlı koşuda anahtar null.
     veriKosusu: veriKosusuOku(s.ekler_json)
   }));
@@ -437,7 +466,8 @@ export function sonucDetayi(vt, sonucId) {
     medya: vt.tumu('SELECT * FROM medya WHERE sonuc_id = ? ORDER BY sira, rowid', [sonucId]).map(medyaGorunumu),
     yakalananMesajlar: yakalananMesajlariOku(vt, sonucId),
     // Hangi tablo satırıyla koştu (açık sütunlar; gizli sütunun yalnız adı — değeri hiç saklanmaz).
-    veriKosusu: veriKosusuOku(s.ekler_json)
+    veriKosusu: veriKosusuOku(s.ekler_json),
+    kurtarma: kurtarmaNotlariOku(s.ekler_json)
   };
 }
 
