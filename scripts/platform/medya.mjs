@@ -283,10 +283,10 @@ export function medyaDosyasiniGuvenliSil(klasor, dosya) {
 
 /**
  * KADEMELİ SAKLAMA (Ayarlar > Yedekleme > Sonuç saklama > "Eski sonuçlarda medyayı incelt"): koşu başlangıcı gun günden eski
- * (bitmiş) koşuların sonuçlarında, seçime göre başarılı / kalan testlerin EKRAN GÖRÜNTÜLERİ ve VİDEOLARI silinir. Sonucun kendisi
+ * (bitmiş) koşuların sonuçlarında, seçime göre başarılı / başarısız testlerin EKRAN GÖRÜNTÜLERİ ve VİDEOLARI silinir. Sonucun kendisi
  * (durum, süre, hata metni, adımlar), izler ve diğer ekler kalır. Medya satırı "silinme" zamanıyla kalır (arayüz "saklama süresi
  * doldu" der); önce satırlar tek işlemde işaretlenir, sonra şifreli dosyalar silinir (silinemeyen dosya sahipsiz kalır ve sahipsiz
- * dosya temizliği onu siler — satır ile dosya tutarsız kalmaz). Kalan testte koru=true ise kalan adımın görüntüsü (yoksa son adım
+ * dosya temizliği onu siler — satır ile dosya tutarsız kalmaz). Başarısız testte koru=true ise başarısız adımın görüntüsü (yoksa son adım
  * görüntüsü — hataya en yakın) ve test sonu görüntüsü korunur. Kural: ayarlar/kayit-kurallari.mjs > inceltmedeSilinsinMi.
  * Günlük temizlikte sıra: sonuç saklama (bütün sonuç) → bu inceltme → video saklama (medyaSaklamaTemizligi) → sahipsiz dosyalar.
  * @param {Veritabani} vt @param {string} klasor
@@ -316,7 +316,7 @@ export function medyaInceltme(vt, klasor, secenekler) {
   const etkilenen = new Set();
   for (const [sonucId, liste] of sonuclar) {
     const sonucBasarili = String(liste[0].durum) === 'basarili';
-    // Korunan adım görüntüsü: kalan adımın görüntüsü yoksa son adım görüntüsü (hataya en yakın an).
+    // Korunan adım görüntüsü: başarısız adımın görüntüsü yoksa son adım görüntüsü (hataya en yakın an).
     const kalanAdimVar = liste.some((m) => m.sinif === 'kalanAdim');
     const sonAdim = kalanAdimVar ? null : [...liste].reverse().find((m) => m.sinif === 'adim') ?? null;
     for (const m of liste) {

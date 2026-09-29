@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — Sonuçlar > Genel > Özet: farkındalık kartlarının toplama hesabı (sonuclar/farkindalik.mjs; veritabanı fikstürüyle, ağ YOK).
-// Fikstür PDF rapor A4'ünkidir (iki dönem sahte ekran / servis / akış koşuları, zamanlanmış kural geçmişi, kritik işaretleri); üstüne
+// Fikstür PDF rapor A4'ünkidir (iki dönem sahte ekran / servis / akış koşuları, planlı koşu kuralı geçmişi, kritik işaretleri); üstüne
 // modelli bir ekran (koşul dalları + geçmiş sabit tarihli senaryo), bekleyen bulgu, türü seçilmemiş ortam ve adında gizli değer geçen
 // servis eklenir. Denetlenenler: her sinyalin doğru maddesi ve adresi, eşik ayarlarının etkisi, özet kutularının genel raporla aynı
 // hesaptan gelmesi, maskeleme (gizli değer / gizli sütun değeri adlarda yok), boş projede "sorun yok", saf yardımcılar.
@@ -108,12 +108,12 @@ test('özet kutuları genel raporun toplamlarıyla aynı (ekran testi, servis ç
   expect(v.hesaplanamayan).toEqual([]);
 });
 
-test('Dikkat: kritik ve uzun süredir kırmızı akış tek maddede, P1 sorunlu öğeler, yavaşlayan metot, kaçan / atlanan zamanlanmış koşu', async () => {
+test('Dikkat: kritik ve uzun süredir kırmızı akış tek maddede, P1 sorunlu öğeler, yavaşlayan metot, kaçan / atlanan planlı koşu', async () => {
   const v = await hesapla();
   const k = v.kartlar.dikkat;
   expect(k.toplam).toBe(k.maddeler.length);
   // Kayıt akışı: kritik işaretli, son koşusu (23.09 15:00) kaldı → 28.09 12:00'de 4 gündür kırmızı; ilk sırada ve tek madde.
-  expect(k.maddeler[0]).toEqual({ tur: 'kritik', ad: 'Kayıt akışı', ayrinti: 'Servis akışı · kritik · son koşusunda kaldı · 4 gündür kırmızı', adres: `#/sonuclar/servisler/a/${f.akisId}` });
+  expect(k.maddeler[0]).toEqual({ tur: 'kritik', ad: 'Kayıt akışı', ayrinti: 'Servis akışı · kritik · son koşusunda başarısız oldu · 4 gündür kırmızı', adres: `#/sonuclar/servisler/a/${f.akisId}` });
   expect(hepsi(k, 'Kayıt akışı')).toHaveLength(1);
   // P1: genel raporun P1 aksiyonlarının öğeleri (aynı hesap).
   const rapor = await donemRaporuVerisi(vt, { projeId: f.projeId, kapsam: 'genel', id: '', donem: { tur: 'ozel', baslangic: '2026-09-15', bitis: '2026-09-28' }, karsilastir: true, ortamId: null,
@@ -131,7 +131,7 @@ test('Dikkat: kritik ve uzun süredir kırmızı akış tek maddede, P1 sorunlu 
   // Zamanlanmış kural: 25.09 atlandı, 26.09 yarıda, 27–28.09 kaçtı; adı maskeli (gizli sütun değeri).
   const z = k.maddeler.find((m) => m.tur === 'zamanlanmis');
   expect(z?.ad).toBe('Gece koşusu •••');
-  expect(z?.ayrinti).toBe('Zamanlanmış koşu · 2 kaçtı (Nöbetçi kapalı ya da kasa kilitliydi), 1 yarıda kaldı (kasa kilitlendi ya da çalışma alanı değişti), 1 atlandı');
+  expect(z?.ayrinti).toBe('Planlı koşu · 2 kaçtı (Nöbetçi kapalı ya da kasa kilitliydi), 1 yarıda kaldı (kasa kilitlendi ya da çalışma alanı değişti), 1 atlandı');
   expect(z?.adres).toBe('#/ayarlar/kosu');
 });
 
@@ -143,7 +143,7 @@ test('eşikler Ayarlar\'dan: kırmızı gün ve yavaşlama yüzdesi yükselince 
     expect(bul(v.kartlar.dikkat, 'gündür kırmızı')).toBeUndefined();
     expect(bul(v.kartlar.dikkat, 'Yavaşladı')).toBeUndefined();
     // Kritik madde kalır (eşikten bağımsız).
-    expect(bul(v.kartlar.dikkat, 'Kayıt akışı')?.ayrinti).toBe('Servis akışı · kritik · son koşusunda kaldı');
+    expect(bul(v.kartlar.dikkat, 'Kayıt akışı')?.ayrinti).toBe('Servis akışı · kritik · son koşusunda başarısız oldu');
   } finally {
     kosuAyarlariniKaydet(vt, { ozetKirmiziGun: 3, ozetYavaslamaYuzde: 30 });
   }

@@ -18,6 +18,7 @@ import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 import { entegrasyonlarBolumu } from './entegrasyonlar.js';
 import { kasayiKilitleSecimli, kilitBildirimi, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
 import { izinlerBolumu } from './izinler.js';
+import { TERIMLER } from './terimler.mjs';
 import { onayIste, riskBelirtinNotu } from './kosu-paneli.js';
 import { projeIslemleri } from './proje-islemleri.js';
 import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, riskliOrtamMi, riskliSecimi } from './ortam-riski.mjs';
@@ -31,16 +32,16 @@ export const AYAR_BOLUMLERI = [
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; bir izin paketiyle birkaçını tek onayla ya da tek tek açarsınız. Açtığınız izinler kasada saklanır.' },
   { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
   { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'PDF raporlarının kullandığı kararlarınız: ekip listesi ve ekran / servis → ekip eşlemesi (sahip önerisi), kritik işaretli ekran, servis ve akışlar (öncelik ve durum rozeti) ve süre eşikleri (ekran, servis, metot). Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır.' },
-  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı, listelerin sayfa boyları ve Sonuçlar > Özet kartlarının eşikleri.' }
+  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı, listelerin sayfa boyları ve Sonuçlar > Özet kartlarının eşikleri.' }
 ];
 
 /**
- * Üst menüdeki günlük iş sayfaları (Ayarlar'dan taşındı): Veri (test verisi tabloları) ve Planlı koşular (zamanlanmış koşu
+ * Üst menüdeki günlük iş sayfaları (Ayarlar'dan taşındı): Test verisi (tablolar) ve Planlı koşular (planlı koşu
  * kuralları). Eski adresler (#/ayarlar/test-verisi, #/ayarlar/baglam, #/ayarlar/zamanlanmis-kosular, #/ayarlar/planli-kosular)
  * uygulama.js'te yeni adreslere yönlenir (ESKI_ADRESLER).
  */
 export const UST_SAYFALAR = [
-  { ad: 'veri', menu: 'Veri', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
+  { ad: 'veri', menu: 'Test verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'planli-kosular', menu: 'Planlı koşular', etiket: 'Planlı koşular', ikon: 'tarih', aciklama: 'Nöbetçi\'nin belirli zamanlarda (her gün, haftanın seçili günleri, her N saatte bir) kendiliğinden başlattığı koşular: kurallar, son çalışmalar, kaçan / çakışan zaman davranışı ve kasa kilitliyken çalışma tercihleri. Koşular yalnız Nöbetçi ve kasa açıkken çalışır (tercihlerle değiştirilebilir).' }
 ];
 
@@ -776,10 +777,10 @@ async function saklamaKarti() {
     const incelt = String(d.medyaInceltme);
     const inceltGun = Number(d.medyaInceltmeGun);
     const koru = d.medyaInceltmeKoru === true;
-    const kimin = { basarili: 'başarılı testlerin', hatali: 'kalan testlerin', ikisi: 'tüm testlerin' }[incelt];
+    const kimin = { basarili: 'başarılı testlerin', hatali: 'başarısız testlerin', ikisi: 'tüm testlerin' }[incelt];
     /** @type {Array<{ gun: number; metin: string; guvenlik?: boolean }>} */
     const olaylar = [];
-    if (kimin && inceltGun > 0) olaylar.push({ gun: inceltGun, metin: `${kimin} ekran görüntüleri ve videoları silinir${koru && incelt !== 'basarili' ? ' (kalan testlerde hatanın görüldüğü 2 görüntü kalır)' : ''}` });
+    if (kimin && inceltGun > 0) olaylar.push({ gun: inceltGun, metin: `${kimin} ekran görüntüleri ve videoları silinir${koru && incelt !== 'basarili' ? ' (başarısız testlerde hatanın görüldüğü 2 görüntü kalır)' : ''}` });
     if (video > 0) olaylar.push({ gun: video, metin: 'tüm videolar silinir', guvenlik: true });
     if (rapor > 0) olaylar.push({ gun: rapor, metin: 'kaydedilen PDF raporlar silinir' });
     if (sonuc > 0) olaylar.push({ gun: sonuc, metin: 'koşu sonucunun tamamı silinir (adımlar, görüntüler, videolar, izler)' });
@@ -798,11 +799,11 @@ async function saklamaKarti() {
       const parcalar = ['durum, süre, hata metni, adımlar ve iz'];
       const inceltildi = kimin && inceltGun <= n;
       if (!inceltildi) parcalar.push('ekran görüntüleri');
-      else if (incelt === 'basarili') parcalar.push('kalan testlerin ekran görüntüleri');
-      else if (incelt === 'hatali') parcalar.push(`başarılı testlerin ekran görüntüleri${koru ? ' ve kalan testlerin 2 kanıt görüntüsü' : ''}`);
-      else if (koru) parcalar.push('kalan testlerin 2 kanıt görüntüsü');
+      else if (incelt === 'basarili') parcalar.push('başarısız testlerin ekran görüntüleri');
+      else if (incelt === 'hatali') parcalar.push(`başarılı testlerin ekran görüntüleri${koru ? ' ve başarısız testlerin 2 kanıt görüntüsü' : ''}`);
+      else if (koru) parcalar.push('başarısız testlerin 2 kanıt görüntüsü');
       const videoKalir = video > n && !(kimin && inceltGun <= n && incelt === 'ikisi');
-      if (videoKalir) parcalar.push(incelt === 'basarili' && inceltildi ? 'kalan testlerin videoları' : incelt === 'hatali' && inceltildi ? 'başarılı testlerin videoları' : 'videolar');
+      if (videoKalir) parcalar.push(incelt === 'basarili' && inceltildi ? 'başarısız testlerin videoları' : incelt === 'hatali' && inceltildi ? 'başarılı testlerin videoları' : 'videolar');
       if (!(rapor > 0 && rapor <= n)) parcalar.push('PDF raporlar');
       metin = `${n} gün sonra elinizde kalan: ${parcalar.join(', ')}.`;
     }
@@ -870,28 +871,28 @@ function sonucTemizlemeKarti() {
     mesaj.kutu, alan('Kapsam', kapsam), gunAlani, h('div', { class: 'dugmeler' }, say, sil));
 }
 
-/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları (zamanlanmış koşular üst menüde: Planlı koşular). */
+/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları (planlı koşular üst menüde: Planlı koşular). */
 async function kosuAyarlari(govde, baglam) {
   const proje = baglam && baglam.durum ? baglam.durum.proje : null;
   const [form, kurallar] = await Promise.all([
     ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', proje ? { projeId: proje.id } : {}), siniflandirmaKarti()
   ]);
-  const tasindi = h('p', { class: 'not-kutusu bilgi tasindi-notu', role: 'note' }, 'Zamanlanmış koşular (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma) artık üst menüde: ',
+  const tasindi = h('p', { class: 'not-kutusu bilgi tasindi-notu', role: 'note' }, 'Planlı koşular (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma) artık üst menüde: ',
     h('a', { href: '#/planli-kosular' }, 'Planlı koşular'), '.');
   yerlestir(govde, form, kurallar, tasindi);
 }
 
 /**
- * Planlı koşular (üst menü; eskiden Ayarlar > Koşu içinde kart): zamanlanmış koşu kuralları + "Zamanlanmış koşu davranışı"
+ * Planlı koşular (üst menü; eskiden Ayarlar > Koşu içinde kart): planlı koşu kuralları + "Planlı koşu davranışı"
  * (kaçan / çakışan zaman; tüm kurallar için) + kasa kilitliyken ve açılışta tercihleri. Proje yoksa yalnız davranış formu.
  */
 async function planliKosular(govde, baglam) {
   const proje = baglam && baglam.durum ? baglam.durum.proje : null;
-  const zamanlamaFormu = () => ayarFormu('zamanlama', 'Zamanlanmış koşu davranışı', 'Zamanlanmış koşu davranışı kaydedildi.', { baslik: 'Tüm zamanlanmış koşular için' });
+  const zamanlamaFormu = () => ayarFormu('zamanlama', 'Planlı koşu davranışı', 'Planlı koşu davranışı kaydedildi.', { baslik: 'Tüm planlı koşular için' });
   const zamanli = await (proje ? zamanlanmisKosularKarti(proje, { davranisFormu: zamanlamaFormu }).catch((hata) => {
     if (hata && hata.durum === 423) throw hata;
-    return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Zamanlanmış koşular yüklenemedi: ${hata.message || hata}`);
-  }) : zamanlamaFormu().then((f) => h('section', { class: 'kart form-paneli', 'aria-label': 'Zamanlanmış koşular' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular'), f)));
+    return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Planlı koşular yüklenemedi: ${hata.message || hata}`);
+  }) : zamanlamaFormu().then((f) => h('section', { class: 'kart form-paneli', 'aria-label': 'Planlı koşu kuralları' }, h('h3', {}, ikon('tarih'), 'Planlı koşular'), f)));
   yerlestir(govde, zamanli);
 }
 
@@ -915,7 +916,7 @@ async function siniflandirmaKarti() {
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   const form = h('form', { class: 'kart form-paneli', novalidate: true, 'aria-label': 'Hata sınıflandırma kuralları' },
     h('h3', {}, ikon('uyari'), 'Hata sınıflandırma kuralları'),
-    h('p', { class: 'soluk' }, 'Kalan testin hata mesajında bu metin geçerse Sonuçlar\'da seçtiğiniz kategoride görünür (ör. uygulamanızın iş kuralı pop-up metni → "İş Kuralı / Ekran Hatası"). Kurallar yukarıdan aşağı denenir; eşleşmezse genel kurallar uygulanır. Yeni koşulara uygulanır.'),
+    h('p', { class: 'soluk' }, 'Başarısız testin hata mesajında bu metin geçerse Sonuçlar\'da seçtiğiniz kategoride görünür (ör. uygulamanızın iş kuralı pop-up metni → "İş Kuralı / Ekran Hatası"). Kurallar yukarıdan aşağı denenir; eşleşmezse genel kurallar uygulanır. Yeni koşulara uygulanır.'),
     mesaj.kutu, liste,
     h('div', { class: 'dugmeler' },
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { is.push({ icerir: '', kategori: kategoriler[0] }); ciz(); } }, ikon('arti'), 'Kural ekle'), kaydet));
@@ -1485,7 +1486,15 @@ async function arayuzAyarlari(govde, baglam) {
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
           : 'Kapalıysa rehberler yalnızca üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
-    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), acilisKarti(acilis), listeFormu, saglik);
+    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), acilisKarti(acilis), listeFormu, saglik, terimlerKarti());
+}
+
+/** Terimler sözlüğü (terimler.mjs): arayüzdeki her kavram tek cümleyle. */
+function terimlerKarti() {
+  return h('section', { class: 'kart form-paneli terimler-karti', 'aria-labelledby': 'terimler-basligi' },
+    h('h3', { id: 'terimler-basligi' }, ikon('liste'), 'Terimler'),
+    h('p', { class: 'soluk' }, 'Nöbetçi\'de her kavram tek adla geçer. Kısa açıklamalar:'),
+    h('dl', { class: 'terimler-listesi' }, TERIMLER.flatMap((t) => [h('dt', {}, t.terim), h('dd', {}, t.aciklama)])));
 }
 
 /** Sağlık noktası eşikleri (proje başına; Sonuçlar ekranındaki noktanın rengi — ayarlar/saglik-esikleri.mjs). */

@@ -327,6 +327,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/giris-tarifi.js', { dosya: 'giris-tarifi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-ozeti.mjs', { dosya: 'giris-ozeti.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/oturum-kontrolu.mjs', { dosya: 'oturum-kontrolu.mjs', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/tema-stilleri.mjs', { dosya: 'tema-stilleri.mjs', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/terimler.mjs', { dosya: 'terimler.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-denemesi.js', { dosya: 'giris-denemesi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuc-ozeti.js', { dosya: 'sonuc-ozeti.js', tur: 'text/javascript; charset=utf-8' }],
@@ -1205,7 +1207,7 @@ async function istegiIsle(req, res) {
     return;
   }
 
-  // Arka plan kipi (kasa kilitliyken kullanıcı tercihiyle süren zamanlanmış koşu): arayüz kilitli olduğundan canlı görüntü,
+  // Arka plan kipi (kasa kilitliyken kullanıcı tercihiyle süren planlı koşu): arayüz kilitli olduğundan canlı görüntü,
   // canlı adımlar, elle kod ve durdurma uçları da 423 döner (koşu kendi başına sürer; ekranda veri görünmez).
   if (platformArayuzKilitliMi() && req.url && /^\/(canli|adim-durumu|kod-istegi|kod-gonder|durdur)(\?|$)/.test(req.url)) {
     req.resume();
@@ -1418,7 +1420,7 @@ if (dogrudanCalistirildi) {
   // Platform veritabanı: kasa açıkken günde bir yerel otomatik yedek (veri/yedekler/, son 30).
   platformOtomatikYedekZamanla();
 
-  // Zamanlanmış koşular (Planlı koşular): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
+  // Planlı koşular (Planlı koşular): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
   platformZamanlanmisKosulariBaslat();
 
   // Dinleme hatası (ör. port zaten kullanımda) yukarıdaki uncaughtException dinleyicisine

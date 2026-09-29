@@ -16,7 +16,7 @@
 // karakter toleranslıdır (metniNormallestir; koşucunun beklenen sonuç eşleştirmesiyle AYNI kural).
 // Metinlerdeki ${…} başvuruları çağıranın coz() geri çağırmasıyla çözülür (ekran: ${Tablo.Sütun}, ${akis:Ad}, ${alan};
 // servis: parametreler, ${Tablo.Sütun}, ${akis:Ad}); çözülemeyen başvuru o beklentiyi "kaldı" yapar.
-// Rapor: her beklenti için geçti / kaldı; "Görülen" dosyadan kısa bir kesittir. Bilinen gizli değerler ve adı gizli sayılan
+// Rapor: her beklenti için geçti / başarısız; "Görülen" dosyadan kısa bir kesittir. Bilinen gizli değerler ve adı gizli sayılan
 // sütunların (gizli-adlar.mjs) hücreleri maskelenir (•••).
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: dosya-icerigi.d.mts.
 import { inflateSync, constants as zlibSabitleri } from 'node:zlib';

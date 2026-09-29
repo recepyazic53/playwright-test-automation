@@ -117,7 +117,7 @@ test('koşu geçmişinde iki koşu seçilir → karşılaştırma: özet, süzge
   const satirlar = tablo.locator('tbody tr.kars-satiri');
   await expect(satirlar).toHaveCount(4);
   await expect(tablo).not.toContainText('Liste');
-  await expect(satirlar.first()).toContainText('yeni kalan');
+  await expect(satirlar.first()).toContainText('yeni başarısız');
   await page.getByLabel('Yalnız değişenler').uncheck();
   await expect(satirlar).toHaveCount(5);
   // Değişim çipi: yalnız "düzelen".
@@ -297,16 +297,16 @@ test('servis sonuçlarının tek yeri Sonuçlar > Servisler: eski adresler yönl
   await kapat();
 });
 
-test('sonuçlarda hızlı süzgeç: "Yalnız kalanlar" (koşu ayrıntısı ve koşu geçmişi); hata kalıbına tıklayınca yalnız o kalıptaki testler', async () => {
+test('sonuçlarda hızlı süzgeç: "Yalnız başarısızlar" (koşu ayrıntısı ve koşu geçmişi); hata kalıbına tıklayınca yalnız o kalıptaki testler', async () => {
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/sonuclar/kosu/kars-b');
   const tablo = page.getByRole('table', { name: 'Senaryo sonuçları' });
   const gorunen = tablo.locator('tbody tr:visible');
   await expect(gorunen).toHaveCount(4);
-  await page.getByLabel('Yalnız kalanlar (2)').check();
+  await page.getByLabel('Yalnız başarısızlar (2)').check();
   await expect(gorunen).toHaveCount(2);
   await expect(gorunen).toContainText(['Kayıt', 'Yeni']);
-  await page.getByLabel('Yalnız kalanlar (2)').uncheck();
+  await page.getByLabel('Yalnız başarısızlar (2)').uncheck();
   await expect(gorunen).toHaveCount(4);
   // Hata kalıbı: tek tıkla yalnız o kalıptaki testler; çip ile kaldırılır.
   await tablo.locator('tr', { hasText: 'Yeni' }).getByRole('button').click();
@@ -326,7 +326,7 @@ test('sonuçlarda hızlı süzgeç: "Yalnız kalanlar" (koşu ayrıntısı ve ko
   // Kullanıcı adı taşıyan rozetler kısaltılabilir: en çok genişlik + tam metin ipucu.
   await expect(gecmis.locator('.rozet-kisalt').first()).toHaveAttribute('title', 'Genel');
   expect(await gecmis.locator('.rozet-kisalt .rozet-metni').first().evaluate((e) => getComputedStyle(e).textOverflow)).toBe('ellipsis');
-  await bolum.getByLabel('Yalnız kalanlar').check();
+  await bolum.getByLabel('Yalnız başarısızlar').check();
   await expect(gecmis.locator('tbody tr')).toHaveCount(2);
   await expect(gecmis.locator('tbody')).not.toContainText('tekil');
   await page.setViewportSize({ width: 390, height: 900 });

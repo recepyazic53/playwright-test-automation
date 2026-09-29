@@ -132,7 +132,7 @@ export function pdfRaporDiyalogu(proje, on = {}) {
   const kaydet = kutu('Raporlar\'a kaydet', true, 'PDF, Sonuçlar > Raporlar\'da şifreli saklanır (saklama süresi: Ayarlar > Yedekleme).');
   const bilgi = h('p', { class: 'soluk kucuk pdf-rapor-bilgi', role: 'status', 'aria-live': 'polite' }, '');
   const genelNotu = h('p', { class: 'soluk kucuk pdf-rapor-genel-notu', hidden: true },
-    'Genel rapor projenin tamamını kapsar: tüm ekranlar ve ortak akışlar, tüm servisler, servis ve uçtan uca akışlar, zamanlanmış koşular, test verisi sağlığı ve kapsam. Öğe seçilmez; rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm öğeleri kapsar.');
+    'Genel rapor projenin tamamını kapsar: tüm ekranlar ve ortak akışlar, tüm servisler, servis ve uçtan uca akışlar, planlı koşular, test verisi sağlığı ve kapsam. Öğe seçilmez; rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm öğeleri kapsar.');
   const onizleme = h('iframe', { class: 'html-rapor-onizleme pdf-rapor-onizleme', title: 'Rapor önizlemesi', sandbox: '', referrerpolicy: 'no-referrer', hidden: true });
   const onizleDugmesi = h('button', { type: 'button' }, ikon('gorunum'), 'Önizle');
   const pdfDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('indir'), 'PDF indir');

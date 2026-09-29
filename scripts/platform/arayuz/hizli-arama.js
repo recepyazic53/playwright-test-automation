@@ -14,7 +14,7 @@ const sade = (s) => String(s ?? '').toLocaleLowerCase('tr').normalize('NFD').rep
 /**
  * Proje verisinden aranabilir öğeler.
  * @param {{ id: string }} proje @param {Array<{ ad: string; etiket: string; ikon: string }>} ayarBolumleri
- * @param {Array<{ ad: string; menu: string; etiket: string; ikon: string }>} [ustSayfalar] üst menüdeki Veri / Planlı koşular
+ * @param {Array<{ ad: string; menu: string; etiket: string; ikon: string }>} [ustSayfalar] üst menüdeki Test verisi / Planlı koşular
  * @returns {Promise<Sonuc[]>}
  */
 async function ogeleriTopla(proje, ayarBolumleri, ustSayfalar = []) {

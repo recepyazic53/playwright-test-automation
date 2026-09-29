@@ -33,8 +33,8 @@ const kayit = (ad: string): string | undefined => {
 
 /**
  * Kayıt seçimleri (her | yalnizBasari | yalnizHata | kapali). Video: Nöbetçi koşusunda varsayılan her testte (panelde izlenir),
- * diğerlerinde yalnız kalan testlerde; kasadaki ayar okunmaz (ayar Nöbetçi koşuları içindir). Test sonu görüntüsü ve iz: ortam
- * değişkeni > kasadaki kayıtlı ayar > yalnız kalan testlerde. Raporlayıcı da bu seçimleri alır (playwright.config.ts).
+ * diğerlerinde yalnız başarısız testlerde; kasadaki ayar okunmaz (ayar Nöbetçi koşuları içindir). Test sonu görüntüsü ve iz: ortam
+ * değişkeni > kasadaki kayıtlı ayar > yalnız başarısız testlerde. Raporlayıcı da bu seçimleri alır (playwright.config.ts).
  */
 export function kayitSecimleri(): KayitKurallari {
   const e = process.env.NOBETCI_VIDEO;
@@ -45,7 +45,7 @@ export function kayitSecimleri(): KayitKurallari {
   };
 }
 
-/** Video kaydının Playwright kipi ("yalnız başarılı": her testte kaydedilir, raporlayıcı kalan testlerinkini atar). */
+/** Video kaydının Playwright kipi ("yalnız başarılı": her testte kaydedilir, raporlayıcı başarısız testlerinkini atar). */
 export function videoAyari(): 'on' | 'retain-on-failure' | 'off' {
   return videoIzKipi(kayitSecimleri().video);
 }
@@ -64,12 +64,12 @@ export function videoKaydiAyari(): { mode: 'on' | 'retain-on-failure' | 'off'; s
   return videoBoyutuAyari() === 'ekran' ? { mode, size: { ...kosuTarayiciAyarlari().viewport } } : { mode };
 }
 
-/** Test sonu ekran görüntüsü (varsayılan yalnız kalan testlerde). fixtures.ts > hataYakalayici de buna uyar. */
+/** Test sonu ekran görüntüsü (varsayılan yalnız başarısız testlerde). fixtures.ts > hataYakalayici de buna uyar. */
 export function ekranGoruntusuAyari(): 'on' | 'only-on-failure' | 'off' {
   return ekranGoruntusuKipi(kayitSecimleri().ekranGoruntusu);
 }
 
-/** İz / trace (varsayılan yalnız kalan testlerde). */
+/** İz / trace (varsayılan yalnız başarısız testlerde). */
 export function izAyari(): 'on' | 'retain-on-failure' | 'off' {
   return videoIzKipi(kayitSecimleri().iz);
 }

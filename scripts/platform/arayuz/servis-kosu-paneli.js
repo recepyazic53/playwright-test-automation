@@ -33,7 +33,7 @@ export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 export async function servisKosusuBaslat(s) {
   if (servisKosusuSuruyorMu()) throw new Error('Süren bir servis koşusu var; bitmesini bekleyin ya da durdurun.');
   // Riskli ortamda açık onay: koşu diyaloğunda onaylandıysa canliOnay: true gider (kosu-paneli.js > canliOnayEki).
-  // tekrar: başarısızları tekrar çalıştırma ({ kaynakKosuId, veri }); sunucu o koşuda kalan çalıştırmaları kendi kaydından kurar.
+  // tekrar: başarısızları tekrar çalıştırma ({ kaynakKosuId, veri }); sunucu o koşuda başarısız çalıştırmaları kendi kaydından kurar.
   // uygulamaSurumu: koşu diyaloğunda girilen uygulama sürümü (boşsa sunucu ortam ayarındakini kullanır; PDF rapor A4).
   const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...canliOnayEki(s.ortamId),
     ...(s.tekrar ? { tekrar: s.tekrar } : s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }),

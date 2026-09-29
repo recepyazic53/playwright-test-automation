@@ -40,7 +40,7 @@ const DURUM = { basarili: ['Başarılı', 'basari'], basarisiz: ['Başarısız',
 /** Diyagram renkleri (senaryo-diyagrami.js ile aynı sınıflar). */
 const RENK = {
   basarili: { etiket: 'Geçti', sinif: 'basari', ikonAd: 'onay' },
-  basarisiz: { etiket: 'Kaldı', sinif: 'hata', ikonAd: 'carpi' },
+  basarisiz: { etiket: 'Başarısız', sinif: 'hata', ikonAd: 'carpi' },
   hata: { etiket: 'Hata', sinif: 'hata', ikonAd: 'uyari' },
   atlandi: { etiket: 'Atlandı', sinif: 'atlanan', ikonAd: 'eksi' },
   durduruldu: { etiket: 'Durduruldu', sinif: 'durdu', ikonAd: 'eksi' }
@@ -450,7 +450,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(is.tur === 'oturum' ? 'anahtar' : 'oynat')), h('h4', {}, 'Başlangıç')),
       h('p', { class: 'dugum-aciklamasi' }, is.tur === 'oturum'
         ? 'Oturum akışı: servis senaryosu koşmadan önce (değer yoksa ya da süresi dolduysa) koşar.'
-        : 'Adımlar sırayla koşar; kalan adımdan sonrakiler atlanır (“kalırsa devam” işaretli değilse).'))];
+        : 'Adımlar sırayla koşar; başarısız adımdan sonrakiler atlanır (“kalırsa devam” işaretli değilse).'))];
     if (oturumlar.size) {
       ogeler.push(h('li', { class: 'diyagram-baglantisi', 'aria-hidden': 'true' }, h('span', { class: 'cizgi' })),
         h('li', { class: 'diyagram-dugumu tasarim-blogu tur-oturum', 'aria-label': 'Oturum (token): servislerin oturum akışlarından gelen değerler' },

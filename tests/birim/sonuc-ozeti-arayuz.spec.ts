@@ -1,6 +1,6 @@
 // UÇTAN UCA (yerel) — Sonuçlar > Genel > Özet sekmesi (sonuc-ozeti.js + GET /platform/sonuclar/farkindalik). Geçici veritabanına
 // PDF rapor A4 fikstürü (iki dönemlik sahte ekran / servis / akış koşuları, kritik işaretleri) ve türü seçilmemiş altı ortam yazılır
-// (biri adında bilinen gizli değer taşır); gerçek koşu ya da dış istek YOK (zamanlanmış kural sunucu başlamadan kapatılır), ayrı bir
+// (biri adında bilinen gizli değer taşır); gerçek koşu ya da dış istek YOK (planlı koşu kuralı sunucu başlamadan kapatılır), ayrı bir
 // Nöbetçi (127.0.0.1) başlatılır. Denetlenenler: "Genel" Özet'i açar ve sekme sırası; özet kutuları ve tıklayınca sekme; kartlar,
 // "Tümü (N)" ile açılma, maddeye tıklayınca ilgili ekran; maskeli ad; boş projede "Sorun yok"; ekran / ürün sayfasında ve Ekranlar
 // sekmesinde kart yok (eski #/sonuclar adresi Ekranlar'ı açar); 390 px'te yatay taşma yok; Özet rehberi bölümleri ekrandaki sırayla
@@ -104,7 +104,7 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   // Kartlar: ekrandaki sıra Dikkat, Bakım, Kapsam ve güvenlik.
   expect(await page.locator('section.farkindalik-karti h3').allTextContents()).toEqual(['Dikkat', 'Bakım', 'Kapsam ve güvenlik']);
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt akışı');
-  await expect(kart(page, 'Dikkat')).toContainText('kritik · son koşusunda kaldı');
+  await expect(kart(page, 'Dikkat')).toContainText('kritik · son koşusunda başarısız oldu');
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt Servisi › POST /kayit');
   // Rapor al (PDF): genel kapsam seçili gelir.
   await page.getByRole('button', { name: 'Rapor al (PDF)' }).click();

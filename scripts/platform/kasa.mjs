@@ -12,7 +12,7 @@
 //   açılır; yanlışsa GCM etiketi tutmaz. Parolanın kendisi veya özeti SAKLANMAZ.
 // - Türetilen anahtar YALNIZCA bu sürecin belleğinde tutulur (kasaAc); kasaKilitle ile
 //   sıfırlanıp atılır. Parola unutulursa veri KURTARILAMAZ (bilinçli tasarım).
-// - Arayüz kilidi (zamanlanmış koşular, bkz. zamanlama/anahtar-emaneti.mjs): anahtar bellekte olsa da ARAYÜZ kilitli
+// - Arayüz kilidi (planlı koşular, bkz. zamanlama/anahtar-emaneti.mjs): anahtar bellekte olsa da ARAYÜZ kilitli
 //   olabilir ("arka plan kipi"). Bu kipte kasaAcikMi true (koşucu/raporlayıcı iç işleri çalışır), arayuzAcikMi false:
 //   HTTP veri uçları ve kasaDurumu().acik kasayı KİLİTLİ görür. Kullanıcı parolayla açınca (kasaAc) kilit kalkar.
 // - Gizli değerler (parola, anahtar, düz metin) hiçbir yerde loglanmaz; hata mesajları da

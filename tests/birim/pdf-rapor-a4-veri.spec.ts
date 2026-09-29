@@ -261,14 +261,14 @@ test.describe('rapor verileri dolu (A4 fikstürü)', () => {
   });
   test.afterAll(() => { vt?.kapat(); });
 
-  test('kritik işareti: öncelikte kritiklik 1, kritik akış son koşusunda kaldı → rozet Kritik, "Kritik akış" kartı', async () => {
-    // Tek servis: Kayıt Servisi %91 başarı; onu kullanan kritik "Kayıt akışı" son koşusunda kaldı → Kritik.
+  test('kritik işareti: öncelikte kritiklik 1, kritik akış son koşusunda başarısız oldu → rozet Kritik, "Kritik akış" kartı', async () => {
+    // Tek servis: Kayıt Servisi %91 başarı; onu kullanan kritik "Kayıt akışı" son koşusunda başarısız oldu → Kritik.
     const { veri: s, html: sHtml } = await hazirla(raporGirdisi(f, 'servis'));
-    expect(s.rozet).toEqual({ durum: 'kritik', gerekce: 'Kapsamdaki kritik akış son koşusunda kaldı.' });
+    expect(s.rozet).toEqual({ durum: 'kritik', gerekce: 'Kapsamdaki kritik akış son koşusunda başarısız oldu.' });
     expect(s.kritik).toEqual({ toplam: 1, kalan: 1, ogeler: [{ tur: 'Servis akışı', ad: 'Kayıt akışı', son: 'K' }] });
-    expect(s.maddeler[0]).toEqual(['kotu', 'Kritik işaretli öğe son koşusunda kaldı: Kayıt akışı.']);
+    expect(s.maddeler[0]).toEqual(['kotu', 'Kritik işaretli öğe son koşusunda başarısız oldu: Kayıt akışı.']);
     expect(s.servis!.akislar.find((a) => a.ad === 'Kayıt akışı')?.kritik).toBe(true);
-    expect(sHtml).toContain('Kritik işaretli akış son koşusunda kaldıysa durum rozeti Kritik olur');
+    expect(sHtml).toContain('Kritik işaretli akış son koşusunda başarısız olduysa durum rozeti Kritik olur');
     // Genel: Başvuru (ekran, son tam koşu geçti), Bildirim Servisi (son çağrı geçti), Kayıt akışı (kaldı).
     const { veri: v, html } = await hazirla(genelGirdi(f));
     expect(v.kritik).toMatchObject({ toplam: 3, kalan: 1 });

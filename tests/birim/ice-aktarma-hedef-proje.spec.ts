@@ -1,7 +1,7 @@
 // KORUMA TESTLERİ — yedekten içe aktarmada HEDEF PROJE ve ORTAM EŞLEMESİ (scripts/platform/ice-aktarma-esleme.mjs).
 // Yedekteki proje (A: TEST + CANLI) bu bilgisayardaki başka bir projeye (B) aktarılınca: tüm kayıtlar B'ye yazılır, A projesi
 // oluşmaz; ortam kimliğine başvuran her yer (servis taban adresleri, tablo satırının ortamı, senaryo ortamları, giriş profili,
-// zamanlanmış kural) B'nin ortamlarıyla yazılır. "Yeni ortam olarak ekle", eşlemesiz eski davranış, kimlik çakışması, aynı adlı
+// planlı koşu kuralı) B'nin ortamlarıyla yazılır. "Yeni ortam olarak ekle", eşlemesiz eski davranış, kimlik çakışması, aynı adlı
 // kayıt ve hatalı eşleme. Dış istek yok: yalnız geçici veritabanları.
 import { expect, test } from '@playwright/test';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';

@@ -11,7 +11,7 @@
 // KİMLİK YENİDEN EŞLEME (genel): eski kimlik → yeni kimlik haritası kurulur ve yedekteki TÜM satırların TÜM metin sütunlarına
 // uygulanır — yabancı anahtar sütunları (proje_id, ortam_id, ekran_id …), JSON içindeki değerler ve nesne anahtarları
 // (ör. servis ayarlarındaki tabanlar[ortamId], ekran ayarlarındaki ortamlar[ortamId], senaryo ortam seçimleri, Ayarlar'daki
-// zamanlanmış kurallar / SQL veritabanı eşlemeleri / entegrasyonlar) ve şifreli değerlerin içi (zarf çözülür, eşlenir, yerel
+// planlı koşu kuralları / SQL veritabanı eşlemeleri / entegrasyonlar) ve şifreli değerlerin içi (zarf çözülür, eşlenir, yerel
 // anahtarla yeniden şifrelenir). UUID biçimli kimlikler metin içinde her yerde; diğer kimlikler yalnız sütun değerinin tamamı ya
 // da JSON içinde tırnaklı tam değer olarak eşlenir.
 //

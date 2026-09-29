@@ -11,7 +11,7 @@
 //   Artan: n′ > 0, r ≥ 1,5 × r′ ve n − n′ ≥ 2 · Azalan: n′ > 0, r ≤ 0,67 × r′ ve n′ − n ≥ 2 · Süregelen: diğerleri
 //   (n > 0, n′ = 0, G'de görülmüş ama arada çözülmemiş sorun da süregelendir.)
 //   D içinde ≥ 3 ardışık geçişten sonra yeniden kalan imza ayrıca "tekrar eden" rozeti alır.
-// Kararlılık (senaryo): aynı senaryo + ortam + gün + model sürümü (uygulama sürümü verisi henüz yok) içindeki geçti↔kaldı değişimi;
+// Kararlılık (senaryo): aynı senaryo + ortam + gün + model sürümü (uygulama sürümü verisi henüz yok) içindeki geçti↔başarısız değişimi;
 //   oran = Σ değişim ÷ Σ (koşu − 1); "koşu" yalnız karşılaştırılabilir koşulardır (grubunda en az iki koşu olan).
 //   Kararsız: oran ≥ %20 ve koşu ≥ 5; izlenir: %5–20 ya da ek kanıt (tekrar denemesinde /
 //   "Başarısızları tekrar çalıştır" koşusunda geçmiş). Atlanan ve durdurulan sonuçlar diziye girmez.
@@ -182,7 +182,7 @@ export function kategoriKisaAdi(kategori) {
 
 /** Servis hata türleri (metot × hata türü). */
 export const SERVIS_HATA_TURLERI = Object.freeze([
-  ['kontrol', 'Kontrol kaldı (2xx)'], ['h4', 'HTTP 4xx'], ['h5', 'HTTP 5xx'], ['fault', 'SOAP Fault'], ['zaman', 'Zaman aşımı'], ['baglanti', 'Bağlantı']
+  ['kontrol', 'Kontrol başarısız (2xx)'], ['h4', 'HTTP 4xx'], ['h5', 'HTTP 5xx'], ['fault', 'SOAP Fault'], ['zaman', 'Zaman aşımı'], ['baglanti', 'Bağlantı']
 ]);
 
 /**
@@ -192,7 +192,7 @@ export const SERVIS_HATA_TURLERI = Object.freeze([
  * @returns {{ sinif: 'uygulama' | 'veri' | 'bakim' | 'ortam' | 'kararsiz'; dayanak: string }}
  */
 export function sinifTahmini(g) {
-  if (g.durum === 'kararsiz') return { sinif: 'kararsiz', dayanak: 'Aynı senaryo aynı koşullarda hem geçti hem kaldı.' };
+  if (g.durum === 'kararsiz') return { sinif: 'kararsiz', dayanak: 'Aynı senaryo aynı koşullarda hem geçti hem başarısız oldu.' };
   if (g.tur === 'servis') {
     switch (g.hataTuru) {
       case 'zaman': return { sinif: 'ortam', dayanak: 'Zaman aşımı (yanıt gelmedi).' };

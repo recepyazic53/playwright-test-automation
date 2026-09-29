@@ -15,8 +15,8 @@ import { kayitSecimleri } from './kosu-ayarlari';
 import { BASARILI_GORUNTU_ADI, HATA_GORUNTU_ADI } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 
 /**
- * Test sonu (tam sayfa) ekran görüntüsü alınsın mı? Kalan testte ve Nöbetçi'nin ▷ koşusunda (panelde gösterilir) alınır; Ayarlar >
- * Koşu > Ekran görüntüsü (test sonu) "Kapalı" ise hiç alınmaz, "Yalnız başarılı testlerde" ise kalan testte alınmaz (adım
+ * Test sonu (tam sayfa) ekran görüntüsü alınsın mı? Başarısız testte ve Nöbetçi'nin ▷ koşusunda (panelde gösterilir) alınır; Ayarlar >
+ * Koşu > Ekran görüntüsü (test sonu) "Kapalı" ise hiç alınmaz, "Yalnız başarılı testlerde" ise başarısız testte alınmaz (adım
  * görüntüleri bundan bağımsızdır). secim: her | yalnizBasari | yalnizHata | kapali (ayarlar/kayit-kurallari.mjs).
  */
 export function testSonuGoruntusuAlinsinMi(basariliMi: boolean, gorunurKosuMu: boolean, secim: string = kayitSecimleri().ekranGoruntusu): boolean {

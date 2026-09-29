@@ -219,7 +219,7 @@ export default class PlatformRaporlayici {
     this.ortamIdSecimi = secenekler.ortamId ?? null;
     const ortam = ortamKayitKurallari();
     const k = secenekler.kayit ?? {};
-    /** Kayıt seçimleri: "yalnız başarılı" seçiminde kalan testin ilgili medyası şifrelenmeden atılır. */
+    /** Kayıt seçimleri: "yalnız başarılı" seçiminde başarısız testin ilgili medyası şifrelenmeden atılır. */
     this.kayitKurallari = { video: kayitSecimi(k.video, ortam.video), ekranGoruntusu: kayitSecimi(k.ekranGoruntusu, ortam.ekranGoruntusu), iz: kayitSecimi(k.iz, ortam.iz) };
     this.projeKoku = secenekler.projeKoku ? resolve(secenekler.projeKoku) : process.cwd();
     /** @type {Promise<void>} */
@@ -444,7 +444,7 @@ export default class PlatformRaporlayici {
     const medya = [];
     /** @type {string[]} */
     const silinecekler = [];
-    // Kayıt seçimi "yalnız başarılı" olan medya (video / iz / test sonu görüntüsü) kalan testte kaydedilmez: şifrelenmeden ve sonuç
+    // Kayıt seçimi "yalnız başarılı" olan medya (video / iz / test sonu görüntüsü) başarısız testte kaydedilmez: şifrelenmeden ve sonuç
     // deposuna eklenmeden atılır, düz metin dosyası (bu koşunun çıktı klasöründeyse) silinir.
     const basarili = durum === 'basarili';
     for (const ek of result.attachments ?? []) {

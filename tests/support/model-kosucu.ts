@@ -859,7 +859,7 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
  * İndirilen dosyayı doğrulama adımı: tetikleyici düğmeye basılır, indirme (Playwright download olayı) beklenir; dosya koşunun geçici
  * klasörüne (NOBETCI_DOSYA_KLASORU; yoksa işletim sisteminin geçici klasörü) yazılır, okunup doğrulanır ve HEMEN silinir.
  * Beklentilerdeki başvurular: ${akis:Ad} → önceki SQL okumaları, ${Tablo.Sütun} → veri okuyucunun çözdüğü değerler, ${alan} → senaryo
- * değeri. Özet (her beklenti: geçti / kaldı, Beklenen / Görülen; gizliler maskeli) her zaman rapora ek olarak yazılır; dosyanın kendisi
+ * değeri. Özet (her beklenti: geçti / başarısız, Beklenen / Görülen; gizliler maskeli) her zaman rapora ek olarak yazılır; dosyanın kendisi
  * yalnız Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz). Kalan beklenti → Beklenen / Görülen hatası.
  */
 async function dosyaAdiminiUygula(page: Page, testInfo: TestInfo, adimBasligi: string, tanim: DosyaTanimi, s: PlatformModelSenaryosu, d: SqlDegerleri): Promise<void> {
@@ -1064,10 +1064,10 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   const kurtarmaOlaylari: KurtarmaOlayi[] = [];
   let sira = 1;
   // Adım ekran görüntüleri (Ayarlar > Koşu > Kayıt; senaryo ezebilir): her adımda (varsayılan, bugünkü davranış) · yalnız kalan
-  // adımda (başarılı adımda alınmaz; kalan adımın görüntüsü aşağıdaki catch'te) · seçili adımlarda (modelde kosu.ekranGoruntusu
+  // adımda (başarılı adımda alınmaz; başarısız adımın görüntüsü aşağıdaki catch'te) · seçili adımlarda (modelde kosu.ekranGoruntusu
   // işaretli akış adımı; giriş / bağlam / ekran açılışı alınmaz) · kapalı.
   const adimGoruntusu = adimGoruntusuAyari(s.adimGoruntusu ?? null);
-  /** Şu an koşan adımın başlığı (kalan adımın görüntüsü için). */
+  /** Şu an koşan adımın başlığı (başarısız adımın görüntüsü için). */
   let simdikiAdim: string | null = null;
   const ekranGoruntusu = async (ad: string, adim?: PlanAdimi): Promise<void> => {
     if (!adimGoruntusuAlinsinMi(adimGoruntusu, { isaretli: adim?.kosu?.ekranGoruntusu === true })) return;
@@ -1251,7 +1251,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           let tutan: EkranKurali | null = null;
           for (const k of surdur ? [surdur.kural] : kurallar) if (await kurtarmaKosuluTutar(page, k, girisTarifi())) { tutan = k; break; }
           if (!tutan) {
-            if (surdur) olayEkle(surdur.kural, adim.baslik, 'kaldi', surdur.deneme, `kurtarma denendi, yine kaldı: ${surdur.neden} → ${surdur.deneme}. denemede başka bir nedenle başarısız`);
+            if (surdur) olayEkle(surdur.kural, adim.baslik, 'kaldi', surdur.deneme, `kurtarma denendi, yine başarısız: ${surdur.neden} → ${surdur.deneme}. denemede başka bir nedenle başarısız`);
             throw hata;
           }
           const neden: string = surdur?.neden ?? kurtarmaKosulMetni(tutan);
@@ -1265,7 +1265,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             throw hata;
           }
           if (tutan.sonra.tur === 'tekrar' && deneme - 1 >= tutan.sonra.kez) {
-            olayEkle(tutan, adim.baslik, 'kaldi', deneme, `kurtarma denendi, yine kaldı: ${neden} → ${tutan.sonra.kez} tekrar denemesinden sonra da başarısız`);
+            olayEkle(tutan, adim.baslik, 'kaldi', deneme, `kurtarma denendi, yine başarısız: ${neden} → ${tutan.sonra.kez} tekrar denemesinden sonra da başarısız`);
             throw hata;
           }
           const eylemMetni = await eylemiUygula(tutan);
@@ -1274,7 +1274,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             try {
               await adimSonucunuDogrula(page, adim, plan);
             } catch (e2) {
-              olayEkle(tutan, adim.baslik, 'kaldi', deneme, `kurtarma denendi, yine kaldı: ${neden} → ${eylemMetni} → adım yine başarısız`);
+              olayEkle(tutan, adim.baslik, 'kaldi', deneme, `kurtarma denendi, yine başarısız: ${neden} → ${eylemMetni} → adım yine başarısız`);
               throw e2;
             }
             olayEkle(tutan, adim.baslik, 'kurtarildi', deneme, `kurtarıldı: ${neden} → ${eylemMetni} → devam edildi`);
@@ -1331,11 +1331,11 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           return bitti;
         } catch (hata) {
           if (!(hata instanceof BastanBaslat)) {
-            if (buBolumde && bastan) olayEkle(bastan.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${bastan.neden} → senaryo baştan başlatıldı, yine başarısız`);
+            if (buBolumde && bastan) olayEkle(bastan.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine başarısız: ${bastan.neden} → senaryo baştan başlatıldı, yine başarısız`);
             throw hata;
           }
           if (bastan) {
-            olayEkle(hata.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${hata.neden} → senaryo bir kez baştan başlatıldı, yine başarısız`);
+            olayEkle(hata.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine başarısız: ${hata.neden} → senaryo bir kez baştan başlatıldı, yine başarısız`);
             throw hata.asil;
           }
           bastan = hata;
@@ -1381,7 +1381,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       });
     }
   } catch (hata) {
-    // "Yalnız kalan adımda": testin kaldığı adımın görüntüsü (ad: "NN - <adım> (kalan adım)"). Atlama (test.skip) kalan adım değildir.
+    // "Yalnız başarısız adımda": testin başarısız olduğu adımın görüntüsü (ad: "NN - <adım> (başarısız adım)"). Atlama (test.skip) başarısız adım değildir.
     // Alınamazsa not düşülür, hata olduğu gibi iletilir.
     if (adimGoruntusu === 'yalnizKalan' && simdikiAdim && testInfo.expectedStatus !== 'skipped') {
       await attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${simdikiAdim}`, { kalanAdim: true }).catch(() => undefined);

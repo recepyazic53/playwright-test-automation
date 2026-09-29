@@ -211,7 +211,7 @@ test('arayüz: Ayarlar > Koşu (Kayıt) ve Yedekleme (Sonuç saklama) — seçen
   const form = page.getByRole('form', { name: 'Koşu ayarları' });
   // Kayıt ayarları "Gelişmiş" altında; "Kanıt düzeyi" profili bunları topluca seçer.
   await form.locator('details.gelismis-ayarlar > summary').click();
-  await expect(form.getByLabel('Video', { exact: true }).locator('option')).toHaveText(['Her testte', 'Yalnız başarılı testlerde', 'Yalnız kalan testlerde', 'Kapalı']);
+  await expect(form.getByLabel('Video', { exact: true }).locator('option')).toHaveText(['Her testte', 'Yalnız başarılı testlerde', 'Yalnız başarısız testlerde', 'Kapalı']);
   await expect(form.getByLabel('Adım ekran görüntüleri')).toHaveValue('her');
   await expect(form.getByLabel('Video boyutu')).toHaveValue('kucuk');
   await expect(form.getByLabel('İz (trace)')).toHaveValue('yalnizHata');
@@ -226,7 +226,7 @@ test('arayüz: Ayarlar > Koşu (Kayıt) ve Yedekleme (Sonuç saklama) — seçen
   const saklama = page.getByRole('form', { name: /Saklama|Yedekleme/ }).filter({ has: page.getByLabel('Eski sonuçlarda medyayı incelt') });
   const secim = saklama.getByLabel('Eski sonuçlarda medyayı incelt');
   const gun = saklama.getByLabel('Medyayı incelt: şu günden eski (gün)');
-  const koru = saklama.getByLabel(/kalan adımın görüntüsünü ve test sonu görüntüsünü koru/);
+  const koru = saklama.getByLabel(/başarısız adımın görüntüsünü ve test sonu görüntüsünü koru/);
   await expect(secim).toHaveValue('kapali');
   await expect(gun).toBeDisabled();
   await expect(koru).toBeDisabled();
@@ -256,7 +256,7 @@ test('arayüz: Ayarlar > Koşu (Kayıt) ve Yedekleme (Sonuç saklama) — seçen
   await page.goto(`/#/senaryolar/duzenle/${encodeURIComponent(String(senaryolar.get(BASARILI)))}`);
   const adimSecimi = page.getByLabel('Adım ekran görüntüleri');
   await expect(adimSecimi).toHaveValue('ayar');
-  await expect(adimSecimi.locator('option')).toHaveText(['Ayarlara uy (varsayılan)', 'Her adımda', 'Yalnız kalan adımda', 'Seçili adımlarda', 'Kapalı']);
+  await expect(adimSecimi.locator('option')).toHaveText(['Ayarlara uy (varsayılan)', 'Her adımda', 'Yalnız başarısız adımda', 'Seçili adımlarda', 'Kapalı']);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   expect(await tasma(page)).toBeLessThanOrEqual(0);

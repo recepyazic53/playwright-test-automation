@@ -5,7 +5,7 @@
 //   kasa var, kilitli   → Kilit ekranı (çalışma alanının adı, "Başka çalışma alanı"; yanlış parolada bekleme)
 //   kasa açık, proje yok → Yeni proje sihirbazı (tanışma sorularından; kasa adımı atlanır)
 //   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici [projeler, ⋯ Yeniden adlandır / Varsayılan yap /
-//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Veri | Planlı koşular | Ayarlar, sunucu durumu, rehber (?),
+//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Test verisi | Planlı koşular | Ayarlar, sunucu durumu, rehber (?),
 //                         tema, Kilitle, çalışma alanı menüsü [Kilitle · Yeniden adlandır · Çalışma alanını kapat]) +
 //                         sol panel + içerik.
 //                         (#/sonuclar[/...], #/senaryolar[/...], #/ekranlar[/...], #/veri, #/planli-kosular, #/ayarlar/<bölüm>;
@@ -646,7 +646,7 @@ function kilitEkrani(beklemeSaniye) {
       h('p', { class: 'soluk' }, cokluAlan ? 'Devam etmek için bu çalışma alanının kasa parolasını girin.' : 'Devam etmek için kasa parolasını girin.')),
     mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
     durum.sunucu && durum.sunucu.zamanlama && durum.sunucu.zamanlama.anahtarBellekte
-      ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Zamanlanmış koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Planlı koşular).') : null,
+      ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Planlı koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Planlı koşular).') : null,
     baska ? h('div', { class: 'kilit-alt' }, baska) : null);
   let durdur = () => {};
   const bekle = (saniye, onMetin) => {
@@ -792,7 +792,7 @@ function anaDuzen() {
   const navSonuclar = h('a', { href: '#/sonuclar/ozet' }, ikon('grafik'), 'Sonuçlar');
   const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
   const navEkranlar = h('a', { href: '#/ekranlar' }, ikon('ekran'), 'Ekranlar');
-  // Günlük iş nesneleri (Ayarlar'dan taşındı): Veri (test verisi) ve Planlı koşular.
+  // Günlük iş nesneleri (Ayarlar'dan taşındı): Test verisi ve Planlı koşular.
   const ustSayfaBaglantisi = (s) => h('a', { href: `#/${s.ad}` }, ikon(s.ikon), s.menu);
   const [navVeri, navPlanli] = UST_SAYFALAR.map(ustSayfaBaglantisi);
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
@@ -927,8 +927,8 @@ function ayarlarEkrani(main, bolum, odak = null) {
   // Ayarlar'dan üst menüye taşınan sayfalar: eski yerinden de bulunabilsin diye "taşındı" bağlantıları (Ayarlar'da yalnız ayarlar kalır).
   const tasinan = h('nav', { class: 'alt-nav tasinan-bolumler', 'aria-label': 'Üst menüye taşınan sayfalar' },
     h('div', { class: 'alt-nav-alt-baslik' }, 'Üst menüye taşındı'),
-    h('a', { href: '#/veri', title: 'Test verisi → üst menü: Veri' }, ikon('veri'), 'Test verisi'),
-    h('a', { href: '#/planli-kosular', title: 'Zamanlanmış koşular → üst menü: Planlı koşular' }, ikon('tarih'), 'Zamanlanmış koşular'));
+    h('a', { href: '#/veri', title: 'Üst menüye taşındı: Test verisi' }, ikon('veri'), 'Test verisi'),
+    h('a', { href: '#/planli-kosular', title: 'Üst menüye taşındı: Planlı koşular' }, ikon('tarih'), 'Planlı koşular'));
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Ayarlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav, tasinan,
@@ -940,7 +940,7 @@ function ayarlarEkrani(main, bolum, odak = null) {
 /** Üst menü sayfası (Veri / Planlı koşular): yan panelsiz tek sütun. @param {HTMLElement} main @param {'veri' | 'planli-kosular'} ad */
 function ustSayfaEkrani(main, ad) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik ust-sayfa', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
-  main.replaceChildren(h('h1', { class: 'gorunmez' }, ad === 'veri' ? 'Veri' : 'Planlı koşular'), icerik);
+  main.replaceChildren(h('h1', { class: 'gorunmez' }, ad === 'veri' ? 'Test verisi' : 'Planlı koşular'), icerik);
   ustSayfaBolumu(icerik, ad, { durum, yonlendir, projeSec, projeleriYenile });
 }
 

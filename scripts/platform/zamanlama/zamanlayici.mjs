@@ -2,8 +2,8 @@
 // anahtar emanetteyse: bag.arkaPlanIsi, bkz. anahtar-emaneti.mjs) dakikada bir kuralları denetler; vakti gelen
 // kural için arayüzdeki "Koşuyu başlat" ile AYNI yoldan (senaryo başına /platform/senaryolar/calistir mantığı: senaryoCalistir)
 // koşu başlatır; koşu kimliği "zamanli-<uuid>". Kurallar:
-//  - Aynı anda başka bir koşu sürüyorsa (arayüzden ya da başka bir zamanlanmış koşu) tetikleme ATLANIR: "Atlandı: koşu sürüyordu"
-//    (varsayılan). Planlı koşular > Zamanlanmış koşu davranışı "Bitince koş": tetikleme bellekte bekletilir, koşu bitince (sonraki
+//  - Aynı anda başka bir koşu sürüyorsa (arayüzden ya da başka bir planlı koşu) tetikleme ATLANIR: "Atlandı: koşu sürüyordu"
+//    (varsayılan). Planlı koşular > Planlı koşu davranışı "Bitince koş": tetikleme bellekte bekletilir, koşu bitince (sonraki
 //    denetimde) bir kez başlatılır; sunucu o arada kapanırsa unutulur.
 //  - Kasa kilitliyken / sunucu kapalıyken kaçan zamanlar sonradan toplu koşulmaz (bkz. takvim.mjs > vadesiGelenZaman); "Sonra bir
 //    kez koş" seçiliyse kaçanlardan yalnız sonuncusu bir kez koşulur.
@@ -186,7 +186,7 @@ export function zamanlayiciOlustur(bag) {
   let aralik = null;
   /** "Bitince koş": koşu sürerken vakti gelen kurallar (kural kimliği → zaman), sırayla. @type {Map<string, string>} */
   const sonraKosulacak = new Map();
-  /** Kullanıcının kararları (Planlı koşular > Zamanlanmış koşu davranışı); okunamazsa önceki davranış. @param {Veritabani} vt */
+  /** Kullanıcının kararları (Planlı koşular > Planlı koşu davranışı); okunamazsa önceki davranış. @param {Veritabani} vt */
   const davranis = (vt) => {
     try { return bag.davranis ? bag.davranis(vt) : { kacan: 'atla', cakisma: 'atla' }; } catch { return { kacan: 'atla', cakisma: 'atla' }; }
   };
@@ -301,7 +301,7 @@ export function zamanlayiciOlustur(bag) {
 
   return {
     kontrolEt,
-    /** Şu an süren zamanlanmış koşu (arayüzde gösterilir). */
+    /** Şu an süren planlı koşu (arayüzde gösterilir). */
     suren: () => (suren ? { kuralId: suren.kuralId, ad: suren.ad } : null),
     baslat() {
       if (aralik) return;

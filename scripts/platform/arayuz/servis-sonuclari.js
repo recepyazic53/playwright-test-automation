@@ -140,7 +140,7 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
       kartlar(veri.kosular),
       trendKarti(veri.kosular.slice().reverse().map((k) => ({ z: k.baslangic, kosuId: k.id, kapsam: k.baslik, ...sayilar(k) })), null, {
         altYazi: `${genel ? 'Servis ve akış koşuları' : 'Bu kaynağın koşuları'} · ${aralikMetni(aralik)}`,
-        aciklama: 'Servis ve akış koşularının durum dağılımı; kırmızı dilim kalan (başarısız + hata) senaryolardır.',
+        aciklama: 'Servis ve akış koşularının durum dağılımı; kırmızı dilim başarısız (kontrolü tutmayan ya da hata veren) senaryolardır.',
         grafikEtiketi: 'servis koşusunun', kosuAdresi: (nk) => kosuAdresi(nk.kosuId)
       }),
       kosuGecmisi(veri.kosular, genel),
@@ -167,7 +167,7 @@ function sayfaBasligi(veri, proje, secenek, ad) {
         h('span', { class: 'simdiki' }, !secenek.servisId && !secenek.akisId ? 'Servisler' : ad)),
       h('div', { class: 'baslik-satiri' },
         h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Servis sonuçları — '), ad),
-        son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} kalan`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
+        son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} başarısız`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
       // Dönem raporu (PDF): servis sayfasında kapsam ve seçim dolu gelir.
@@ -200,7 +200,7 @@ function kartlar(kosular) {
   return h('div', {},
     h('div', { class: 'sonuc-kartlari' },
       kart('basarili', 'Başarılı', String(son.basarili), `/ ${son.toplam}`, 'önceki koşuya göre', fark(son.basarili, onceki && onceki.basarili, true), seri.map((k) => k.basarili)),
-      kart('basarisiz', 'Kalan', String(kalan(son)), `/ ${son.toplam}`, `${son.basarisiz} başarısız · ${son.hata} hata`, fark(kalan(son), onceki && kalan(onceki), false), seri.map(kalan)),
+      kart('basarisiz', 'Başarısız', String(kalan(son)), `/ ${son.toplam}`, `${son.basarisiz} başarısız · ${son.hata} hata`, fark(kalan(son), onceki && kalan(onceki), false), seri.map(kalan)),
       kart('atlanan', 'Atlanan', String(son.atlanan), null, 'önceki koşuya göre', fark(son.atlanan, onceki && onceki.atlanan, false), seri.map((k) => k.atlanan)),
       kart('sure', 'Süre', sureMetni(son.sureMs), null, 'önceki koşuya göre', sureFarki(), null),
       h('div', { class: 'sonuc-karti oran' },
@@ -237,7 +237,7 @@ function kosuGecmisi(kosular, genel) {
       const o = oran(k);
       return h('tr', {}, secici.hucre(k, k.baslangic, `${kisaTarih(k.baslangic)} ${k.baslik}`, k.tur),
         h('td', {}, h('a', { class: 'kosu-baglantisi', href: kosuAdresi(k.id) }, kosuNoktasi(k), kisaTarih(k.baslangic)),
-          h('span', { class: 'gorunmez' }, kalan(k) ? ` (${kalan(k)} kalan)` : ' (hepsi geçti)')),
+          h('span', { class: 'gorunmez' }, kalan(k) ? ` (${kalan(k)} başarısız)` : ' (hepsi geçti)')),
         h('td', { class: 'servis-sonuc-kaynak' }, h('span', { class: 'etiketler' }, rozet(k.tur === 'akis' ? 'akış' : 'servis', k.tur === 'akis' ? 'vurgu' : ''),
           k.calistirma === 'dene' ? rozet('deneme') : null), ' ', h('a', { href: kaynakAdresi(k), title: k.baslik }, k.baslik)),
         h('td', {}, k.ortam),
@@ -260,7 +260,7 @@ function kosuGecmisi(kosular, genel) {
       h('div', { class: 'sag' }, filtreSegmenti, kosular.length > 1 ? secici.dugme : null)),
     h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu gecmis-tablosu' },
       h('caption', { class: 'gorunmez' }, 'Servis koşu geçmişi'),
-      h('thead', {}, h('tr', {}, secici.baslik(), ...[['Koşu'], ['Servis / akış'], ['Ortam'], ['Dağılım'], ['Top.', 1], ['Başarılı', 1], ['Kalan', 1], ['Atlanan', 1], ['Oran', 1], ['Süre', 1]]
+      h('thead', {}, h('tr', {}, secici.baslik(), ...[['Koşu'], ['Servis / akış'], ['Ortam'], ['Dağılım'], ['Top.', 1], ['Başarılı', 1], ['Başarısız', 1], ['Atlanan', 1], ['Oran', 1], ['Süre', 1]]
         .map(([b, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null }, b)))),
       govdeT)),
     sayfalama);
@@ -293,8 +293,8 @@ function kalipBolumu(veri, aralik) {
   return h('section', { class: 'kart', 'aria-labelledby': 'ss-kalip-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-kalip-basligi' }, ikon('uyari'), 'Hata kalıpları'),
       h('span', { class: 'alt' }, `${aralikMetni(aralik)} · aynı hata metni kaç senaryoda görüldü; değişken sayılar # olur`)),
-    liste.length ? h('div', { class: 'kalip-listesi', role: 'list', 'aria-label': 'Hata kalıpları' }, liste) : h('p', { class: 'bos-liste' }, 'Bu aralıkta kalan senaryo yok.'),
-    veri.kalipIncelenen >= 400 ? h('p', { class: 'soluk kucuk' }, `En yeni ${veri.kalipIncelenen} kalan senaryo incelendi.`) : null);
+    liste.length ? h('div', { class: 'kalip-listesi', role: 'list', 'aria-label': 'Hata kalıpları' }, liste) : h('p', { class: 'bos-liste' }, 'Bu aralıkta başarısız senaryo yok.'),
+    veri.kalipIncelenen >= 400 ? h('p', { class: 'soluk kucuk' }, `En yeni ${veri.kalipIncelenen} başarısız senaryo incelendi.`) : null);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -329,7 +329,7 @@ async function kosuAyrintisi(icerik, proje, id) {
         h('td', { class: 'sayi' }, x.durumKodu === null ? '—' : String(x.durumKodu)),
         h('td', { class: 'sayi' }, sureMetni(x.sureMs)), hataHucresi(x.hata)))));
   const satirSayisi = akis ? adimlar.length : senaryolar.length;
-  // Başarısızları tekrar çalıştır (servis koşusu): yalnız kalan çalıştırmalar (veri koşularında yalnız kalan satırlar), aynı ortam, o koşudaki satırlar.
+  // Başarısızları tekrar çalıştır (servis koşusu): yalnız başarısız çalıştırmalar (veri koşularında yalnız kalan satırlar), aynı ortam, o koşudaki satırlar.
   const tekrarlanabilir = akis || kosu.calistirma === 'dene' ? 0 : senaryolar.filter((x) => (x.durum === 'basarisiz' || x.durum === 'hata') && x.senaryoId).length;
   const tekrarDugmesi = tekrarlanabilir && kosu.ortamId
     ? h('button', { type: 'button', class: 'dugme', onclick: () => servisBasarisizlariniTekrarla(kosu, proje) }, ikon('yenile'), `Başarısızları tekrar çalıştır (${tekrarlanabilir})`) : null;
@@ -351,7 +351,7 @@ async function kosuAyrintisi(icerik, proje, id) {
       h('div', { class: 'eylemler' }, tekrarDugmesi, karsilastirDugmesi({ tur: 'servis', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
         h('a', { class: 'dugme hayalet', href: kaynakAdresi(kosu) }, ikon('geri'), 'Servis sonuçları'))),
     h('div', { class: 'sonuc-kartlari mini' },
-      ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Kalan', kalan(kosu), 'basarisiz'),
+      ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Başarısız', kalan(kosu), 'basarisiz'),
       ozetKarti('Atlanan', kosu.atlanan, 'atlanan'), ozetKarti('Durduruldu', kosu.durduruldu, 'durduruldu'),
       h('div', { class: 'sonuc-karti oran' }, h('span', { class: 'kart-etiket' }, 'Başarı oranı'),
         h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, o === null ? '—' : `%${o}`)), dagilimCubugu(sayilar(kosu), '100%'))),
@@ -359,12 +359,12 @@ async function kosuAyrintisi(icerik, proje, id) {
       akis && kosu.ozet ? ` · ${kosu.ozet}` : ''),
     h('section', { class: 'kart', 'aria-labelledby': 'ss-kosu-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-kosu-basligi' }, ikon('liste'), `${akis ? 'Adımlar' : 'Senaryolar'} (${satirSayisi})`),
-        h('span', { class: 'alt' }, akis ? 'Adımlar sırasıyla; ayrıntıda istek / yanıt' : 'Kalanlar önce; senaryoya tıklayınca istek / yanıt açılır')),
+        h('span', { class: 'alt' }, akis ? 'Adımlar sırasıyla; ayrıntıda istek / yanıt' : 'Başarısızlar önce; senaryoya tıklayınca istek / yanıt açılır')),
       satirSayisi ? h('div', { class: 'tablo-kaydirma' }, tablo) : h('p', { class: 'bos-liste' }, 'Bu koşuda sonuç yok.')));
 }
 
 /**
- * Servis koşusunda "Başarısızları tekrar çalıştır": plan (kalan çalıştırmalar, o koşudan bu yana değişen tablo satırları) gösterilir;
+ * Servis koşusunda "Başarısızları tekrar çalıştır": plan (başarısız çalıştırmalar, o koşudan bu yana değişen tablo satırları) gösterilir;
  * değişen satırlar için güncel / o koşudaki veri seçilir (o koşudaki değerler yalnız gizli sütunsuz tablolarda saklanır). Riskli ortamda
  * açık onay istenir; izinler sunucuda denetlenir. Yeni çalıştırmalar "Tekrar:" bağı taşır.
  */
@@ -376,7 +376,7 @@ async function servisBasarisizlariniTekrarla(kosu, proje) {
     ]);
     const ortam = ortamlar.find((o) => o.id === kosu.ortamId);
     if (!ortam) { bildir('Koşunun ortamı bulunamadı; başarısızlar yalnız o ortamda tekrar çalıştırılabilir.', 'hata'); return; }
-    if (!plan.testler.length) { bildir('Tekrar çalıştırılacak kalan senaryo yok.', 'hata'); return; }
+    if (!plan.testler.length) { bildir('Tekrar çalıştırılacak başarısız senaryo yok.', 'hata'); return; }
     let veri = 'guncel';
     const kosudakiOlur = plan.satirDegisiklikleri.length > 0 && plan.satirDegisiklikleri.every((x) => x.kosudakiVeri);
     const ad = yeniKimlik('servis-tekrar');
@@ -395,7 +395,7 @@ async function servisBasarisizlariniTekrarla(kosu, proje) {
       plan.atlananlar.length ? h('p', { class: 'soluk kucuk' }, `${plan.atlananlar.length} çalıştırma tekrar edilemez: ${plan.atlananlar.map((x) => `${x.baslik} (${x.neden})`).slice(0, 5).join(', ')}.`) : null);
     const tamam = await onayIste({
       baslik: 'Başarısızları tekrar çalıştır?', ikonAd: 'yenile', dugme: `${plan.sayi} çalıştırmayı başlat`, ek,
-      metin: `Yalnız kalan ${plan.sayi} çalıştırma ${ortam.ad} ortamında, o koşudaki tablo satırlarıyla, sırayla çalışır. Yeni çalıştırmalar "Tekrar: önceki koşu" bağıyla kaydedilir.`
+      metin: `Yalnız başarısız ${plan.sayi} çalıştırma ${ortam.ad} ortamında, o koşudaki tablo satırlarıyla, sırayla çalışır. Yeni çalıştırmalar "Tekrar: önceki koşu" bağıyla kaydedilir.`
     });
     if (!tamam) return;
     if (!(await canliOnayIste(ortam, 'Tekrar koşusu'))) return;
@@ -412,7 +412,7 @@ async function servisBasarisizlariniTekrarla(kosu, proje) {
 
 function kontrolListesi(liste) {
   return h('ul', { class: 'kontrol-listesi servis-sonuc-kontroller' }, liste.map((k) => h('li', { class: k.gecti ? 'gecti' : 'kaldi' },
-    h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), h('span', { class: 'gorunmez' }, k.gecti ? 'Geçti: ' : 'Kaldı: '),
+    h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), h('span', { class: 'gorunmez' }, k.gecti ? 'Geçti: ' : 'Başarısız: '),
       ` ${k.tur === 'veya' ? 'Şunlardan biri (VEYA)' : k.ad}`, k.aciklama ? [' — ', h('span', { class: 'soluk' }, k.aciklama)] : null),
     Array.isArray(k.alt) && k.alt.length ? kontrolListesi(k.alt) : null)));
 }

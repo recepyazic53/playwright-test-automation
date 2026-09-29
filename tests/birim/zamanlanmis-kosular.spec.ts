@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Zamanlanmış koşular (Planlı koşular; üst menü). "Vakti geldi mi" hesabı saf fonksiyondur ve SAHTE saatle doğrulanır;
+// KORUMA TESTLERİ — Planlı koşular (Planlı koşular; üst menü). "Vakti geldi mi" hesabı saf fonksiyondur ve SAHTE saatle doğrulanır;
 // tetikleme yolu SAHTE koşucu ile sınanır (gerçek Playwright koşusu, tarayıcı, ağ isteği YOK). Kurallar kasada şifreli saklanır.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -103,7 +103,7 @@ test('kurallar kasada şifreli; canlı ortam onayı; zamanlayıcı SAHTE koşucu
     expect(() => kuralKaydet(vt, projeId, { ...temel, kapsam: { senaryolar: 'ekranlar', ekranIdleri: [] } })).toThrow('En az bir ekran');
     expect(() => kuralKaydet(vt, projeId, { ...temel, kapsam: { senaryolar: 'yok' } })).toThrow('Koşulacak bir şey');
     expect(() => kuralKaydet(vt, projeId, { ...temel, bildirimBaglantiId: 'olmayan' })).toThrow('Bildirim bağlantısı');
-    expect(() => kuralKaydet(vt, projeId, { ...temel, ad: 'Canlı gece', ortamId: canliOrtam })).toThrow('Canlı ortamda zamanlanmış koşuya izin veriyorum');
+    expect(() => kuralKaydet(vt, projeId, { ...temel, ad: 'Canlı gece', ortamId: canliOrtam })).toThrow('Canlı ortamda planlı koşuya izin veriyorum');
     const canliKural = kuralKaydet(vt, projeId, { ...temel, ad: 'Canlı gece', ortamId: canliOrtam, canliOnay: true, etkin: false, zaman: { tur: 'haftalik', saat: '02:00', gunler: [6] } });
     expect(canliKural).toMatchObject({ canliOnay: true, etkin: false });
 
@@ -275,7 +275,7 @@ test('uçtan uca akışlar: kuralda seçilir (yalnız uçtan uca akış), koşud
     // Yalnız uçtan uca akış seçilebilir; boş kapsam reddedilir; riskli ortamda canlı onayı kural kaydında istenir.
     expect(() => kuralKaydet(vt, projeId, { ...temel, kapsam: { senaryolar: 'yok', uctanUcaAkisIdleri: [servisAkisi] } })).toThrow('uçtan uca akışlardan biri bulunamadı');
     expect(() => kuralKaydet(vt, projeId, { ...temel, kapsam: { senaryolar: 'yok' } })).toThrow('en az bir uçtan uca akış');
-    expect(() => kuralKaydet(vt, projeId, { ...temel, ortamId: riskliOrtam })).toThrow('Canlı ortamda zamanlanmış koşuya izin veriyorum');
+    expect(() => kuralKaydet(vt, projeId, { ...temel, ortamId: riskliOrtam })).toThrow('Canlı ortamda planlı koşuya izin veriyorum');
     expect(kuralKaydet(vt, projeId, { ...temel, ad: 'Riskli', ortamId: riskliOrtam, canliOnay: true }).canliOnay).toBe(true);
     const kural = kuralKaydet(vt, projeId, temel);
     expect(kural.kapsam).toEqual({ senaryolar: 'yok', ekranIdleri: [], servisAkisIdleri: [], uctanUcaAkisIdleri: [uctan] });
@@ -310,7 +310,7 @@ test('uçtan uca akışlar: kuralda seçilir (yalnız uçtan uca akış), koşud
   }
 });
 
-test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
+test.describe('Planlı koşular > Planlı koşular arayüzü', () => {
   const PAROLA = `Gecici-ZamanliUI-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
   let tarayici: Browser;
@@ -346,11 +346,11 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/planli-kosular');
-    const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
+    const kart = page.getByRole('region', { name: 'Planlı koşu kuralları' });
     await expect(kart.getByText('kaçan zamanlar sonradan toplu koşulmaz')).toBeVisible();
-    await expect(kart.getByText('Zamanlanmış koşu yok.')).toBeVisible();
-    await kart.getByRole('button', { name: 'Zamanlanmış koşu ekle' }).click();
-    const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
+    await expect(kart.getByText('Planlı koşu yok.')).toBeVisible();
+    await kart.getByRole('button', { name: 'Planlı koşu ekle' }).click();
+    const form = page.getByRole('form', { name: 'Yeni planlı koşu' });
     await form.getByLabel('Ad').fill('Gece tam koşu');
     await form.getByRole('combobox', { name: /^Ortam/ }).selectOption({ label: 'Ana sistem' });
     await expect(form.getByText('Seçilen ortam Canlı', { exact: false })).toBeVisible();
@@ -360,7 +360,7 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     await form.getByRole('checkbox', { name: 'Etkin', exact: true }).uncheck(); // test sunucusunda gerçek tetikleme olmasın
     await form.getByRole('button', { name: 'Kaydet' }).click();
     await expect(form.getByText('kutusunu işaretleyin', { exact: false })).toBeVisible();
-    await form.getByLabel('Canlı ortamda zamanlanmış koşuya izin veriyorum').check();
+    await form.getByLabel('Canlı ortamda planlı koşuya izin veriyorum').check();
     await form.getByRole('button', { name: 'Kaydet' }).click();
     await expect(form).toBeHidden();
     const satir = kart.getByRole('listitem').filter({ hasText: 'Gece tam koşu' });
@@ -371,7 +371,7 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     await expect(kart.getByRole('button', { name: /Şimdi koş/ })).toHaveCount(0);
     // API: sunucu da canlı onayı ister.
     const red = await nobetciApi(nobetci, '/platform/zamanlanmis-kosu/kaydet', { projeId, kural: { ad: 'X', ortamId: String(((await nobetciApi(nobetci, `/platform/ortamlar?projeId=${projeId}`)) as { ortamlar: Array<{ id: string; ad: string }> }).ortamlar.find((o) => o.ad === 'Ana sistem')?.id), zaman: { tur: 'gunluk', saat: '01:00' } } }) as { mesaj?: string };
-    expect(String(red.mesaj)).toContain('Canlı ortamda zamanlanmış koşuya izin veriyorum');
+    expect(String(red.mesaj)).toContain('Canlı ortamda planlı koşuya izin veriyorum');
     // Etkin anahtarı: etkinleştir → sonraki çalışma görünür; tekrar pasifleştir.
     await satir.getByRole('switch', { name: 'Gece tam koşu: etkin' }).check();
     await expect(satir.getByText('Sonraki çalışma:', { exact: false })).toBeVisible();
@@ -382,7 +382,7 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     // Onaylı silme.
     await satir.getByRole('button', { name: 'Gece tam koşu: sil' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Sil' }).click();
-    await expect(kart.getByText('Zamanlanmış koşu yok.')).toBeVisible();
+    await expect(kart.getByText('Planlı koşu yok.')).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -397,9 +397,9 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/planli-kosular');
-    const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
-    await kart.getByRole('button', { name: 'Zamanlanmış koşu ekle' }).click();
-    const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
+    const kart = page.getByRole('region', { name: 'Planlı koşu kuralları' });
+    await kart.getByRole('button', { name: 'Planlı koşu ekle' }).click();
+    const form = page.getByRole('form', { name: 'Yeni planlı koşu' });
     await form.getByLabel('Ad').fill('Gece uçtan uca');
     await form.getByRole('combobox', { name: 'Senaryolar' }).selectOption('yok');
     const liste = form.getByRole('group', { name: 'Uçtan uca akışlar (isteğe bağlı)' });
@@ -422,11 +422,11 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     await page.goto('/#/planli-kosular');
     const bolum = page.getByRole('region', { name: 'Kasa kilitliyken ve açılışta' });
     await expect(bolum.getByText('varsayılan olarak kapalıdır', { exact: false })).toBeVisible();
-    const a = bolum.getByRole('switch', { name: 'Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)' });
+    const a = bolum.getByRole('switch', { name: 'Kasa kilitlense de planlı koşular çalışsın (anahtar yalnız bellekte)' });
     await expect(a).not.toBeChecked();
     if (process.platform === 'win32') {
       await expect(bolum.getByRole('switch', { name: 'Windows oturumuna bağlı otomatik açma (DPAPI)' })).not.toBeChecked();
-      await expect(bolum.getByText('Risk: Windows oturumunuzu ele geçiren biri zamanlanmış koşuların kullandığı verilere erişebilir.', { exact: false })).toBeVisible();
+      await expect(bolum.getByText('Risk: Windows oturumunuzu ele geçiren biri planlı koşuların kullandığı verilere erişebilir.', { exact: false })).toBeVisible();
       // Test sunucusu Windows Görev Zamanlayıcı'yı sorgulamaz (TEST_SUNUCU_WINDOWS_GOREVI_KAPALI=1).
       await expect(bolum.getByText('Görev: sorgulanamadı', { exact: false })).toBeVisible();
     } else {
@@ -439,17 +439,17 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     await expect(diyalog.getByText('riski okuduğunuzu onaylayın', { exact: false })).toBeVisible();
     await diyalog.getByLabel('Ne yaptığını ve riskini okudum; açmak istiyorum').check();
     await diyalog.getByRole('button', { name: 'Aç' }).click();
-    await expect(bolum.getByRole('switch', { name: 'Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)' })).toBeChecked();
+    await expect(bolum.getByRole('switch', { name: 'Kasa kilitlense de planlı koşular çalışsın (anahtar yalnız bellekte)' })).toBeChecked();
 
     // Üst çubuktaki Kilitle: iki seçenek; "sürsün" → kilit ekranında not.
     await page.getByRole('button', { name: 'Kilitle', exact: true }).click();
     const secim = page.getByRole('dialog', { name: 'Kasayı kilitle' });
     await expect(secim.getByRole('button', { name: 'Tamamen kilitle (anahtarı da sil)' })).toBeVisible();
-    await secim.getByRole('button', { name: 'Kilitle (zamanlanmış koşular sürsün)' }).click();
+    await secim.getByRole('button', { name: 'Kilitle (planlı koşular sürsün)' }).click();
     // exact: bu sayfadaki "Kasa kilitliyken ve açılışta" başlığı da alt dizge olarak eşleşir; kilit ekranı başlığı beklenmeli.
     const kilitBasligi = page.getByRole('heading', { name: 'Kasa kilitli', exact: true });
     await expect(kilitBasligi).toBeVisible();
-    await expect(page.getByText('Zamanlanmış koşular arka planda sürebilir', { exact: false })).toBeVisible();
+    await expect(page.getByText('Planlı koşular arka planda sürebilir', { exact: false })).toBeVisible();
     expect((await nobetciApi(nobetci, `/platform/ortamlar?projeId=${projeId}`)).kod).toBe('KASA_KILITLI');
     await page.getByRole('textbox', { name: /^Kasa parolası/ }).fill(PAROLA);
     await page.getByRole('button', { name: 'Kilidi aç' }).click();
@@ -459,7 +459,7 @@ test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
     await page.getByRole('button', { name: 'Kilitle', exact: true }).click();
     await page.getByRole('dialog', { name: 'Kasayı kilitle' }).getByRole('button', { name: 'Tamamen kilitle (anahtarı da sil)' }).click();
     await expect(kilitBasligi).toBeVisible();
-    await expect(page.getByText('Zamanlanmış koşular arka planda sürebilir', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Planlı koşular arka planda sürebilir', { exact: false })).toHaveCount(0);
     expect(((await nobetciApi(nobetci, '/platform/durum')).zamanlama as { anahtarBellekte: boolean }).anahtarBellekte).toBe(false);
     await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });
     await nobetciApi(nobetci, '/platform/zamanlama/tercih', { ad: 'kilitliyken', acik: false });

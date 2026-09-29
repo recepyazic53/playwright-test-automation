@@ -13,13 +13,13 @@ export const KANIT_ALANLARI = Object.freeze(['video', 'videoBoyutu', 'ekranGorun
  */
 export const KANIT_PROFILLERI = Object.freeze([
   {
-    ad: 'hafif', etiket: 'Hafif', ozet: 'yalnız kalanlarda',
-    aciklama: 'Video kapalı; ekran görüntüsü, iz ve adım görüntüsü yalnız kalan testlerde (kalan adımda). Doğrulanan dosya saklanmaz.',
+    ad: 'hafif', etiket: 'Hafif', ozet: 'yalnız başarısızlarda',
+    aciklama: 'Video kapalı; ekran görüntüsü, iz ve adım görüntüsü yalnız başarısız testlerde (başarısız adımda). Doğrulanan dosya saklanmaz.',
     degerler: Object.freeze({ video: 'kapali', videoBoyutu: 'kucuk', ekranGoruntusu: 'yalnizHata', adimGoruntusu: 'yalnizKalan', iz: 'yalnizHata', indirilenDosya: 'kapali' })
   },
   {
     ad: 'dengeli', etiket: 'Dengeli', ozet: 'bugünkü varsayılan',
-    aciklama: 'Video her testte (küçük), iz ve test sonu görüntüsü yalnız kalan testlerde, adım görüntüleri her adımda. Doğrulanan dosya saklanmaz.',
+    aciklama: 'Video her testte (küçük), iz ve test sonu görüntüsü yalnız başarısız testlerde, adım görüntüleri her adımda. Doğrulanan dosya saklanmaz.',
     degerler: Object.freeze({ video: 'her', videoBoyutu: 'kucuk', ekranGoruntusu: 'yalnizHata', adimGoruntusu: 'her', iz: 'yalnizHata', indirilenDosya: 'kapali' })
   },
   {

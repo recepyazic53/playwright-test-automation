@@ -40,23 +40,23 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  */
 export const KOSU_AYAR_TANIMLARI = Object.freeze([
   // Kayıt: seçimlerin Playwright kiplerine eşlenmesi ve "yalnız başarılı" süzgeci ayarlar/kayit-kurallari.mjs'dedir.
-  { anahtar: 'video', grup: 'Kayıt', etiket: 'Video', aciklama: 'Nöbetçi\'den başlatılan koşularda video kaydı. "Yalnız başarılı testlerde": kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir.', tur: 'secim', varsayilan: 'her',
-    secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_VIDEO' },
+  { anahtar: 'video', grup: 'Kayıt', etiket: 'Video', aciklama: 'Nöbetçi\'den başlatılan koşularda video kaydı. "Yalnız başarılı testlerde": kayıt her testte alınır, başarısız testlerinki kaydedilmeden silinir.', tur: 'secim', varsayilan: 'her',
+    secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız başarısız testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_VIDEO' },
   { anahtar: 'videoBoyutu', grup: 'Kayıt', etiket: 'Video boyutu', aciklama: 'Küçük: video 800 piksele sığdırılır (Playwright varsayılanı; dosya küçük). Ekranla aynı: koşu ekran boyutunda (Gelişmiş > Tarayıcı > Koşu ekran genişliği / yüksekliği) kaydedilir; metin daha net okunur, dosya büyür.',
     tur: 'secim', varsayilan: 'kucuk', secenekler: [['kucuk', 'Küçük'], ['ekran', 'Ekranla aynı']], env: 'NOBETCI_VIDEO_BOYUTU' },
   { anahtar: 'ekranGoruntusu', grup: 'Kayıt', etiket: 'Ekran görüntüsü (test sonu)', aciklama: 'Testin sonunda alınan ekran görüntüsü. Adım görüntüleri bundan bağımsızdır (aşağıdaki "Adım ekran görüntüleri").',
-    tur: 'secim', varsayilan: 'yalnizHata', secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_EKRAN_GORUNTUSU' },
+    tur: 'secim', varsayilan: 'yalnizHata', secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız başarısız testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_EKRAN_GORUNTUSU' },
   { anahtar: 'adimGoruntusu', grup: 'Kayıt', etiket: 'Adım ekran görüntüleri',
-    aciklama: 'Akış adımlarının ekran görüntüsü. Yalnız kalan adımda: yalnız testin kaldığı adımın görüntüsü alınır. Seçili adımlarda: yalnız ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar (giriş ve ekran açılışı görüntüsü alınmaz). Senaryo formunda senaryo başına değiştirilebilir. Görüntü alınamazsa koşu sürer; raporda "görüntü alınamadı" notu kalır.',
-    tur: 'secim', varsayilan: 'her', secenekler: [['her', 'Her adımda'], ['yalnizKalan', 'Yalnız kalan adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']], env: 'NOBETCI_ADIM_GORUNTUSU' },
+    aciklama: 'Akış adımlarının ekran görüntüsü. Yalnız başarısız adımda: yalnız testin başarısız olduğu adımın görüntüsü alınır. Seçili adımlarda: yalnız ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar (giriş ve ekran açılışı görüntüsü alınmaz). Senaryo formunda senaryo başına değiştirilebilir. Görüntü alınamazsa koşu sürer; raporda "görüntü alınamadı" notu kalır.',
+    tur: 'secim', varsayilan: 'her', secenekler: [['her', 'Her adımda'], ['yalnizKalan', 'Yalnız başarısız adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']], env: 'NOBETCI_ADIM_GORUNTUSU' },
   { anahtar: 'iz', grup: 'Kayıt', etiket: 'İz (trace)',
-    aciklama: 'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı (DOM) ve ekran anları, konsol mesajları. Sonuç ayrıntısından indirilip Playwright iz görüntüleyicisiyle (npx playwright show-trace <dosya> ya da trace.playwright.dev) açılır. "Yalnız başarılı testlerde": iz her testte alınır, kalan testlerinki kaydedilmeden silinir.',
+    aciklama: 'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı (DOM) ve ekran anları, konsol mesajları. Sonuç ayrıntısından indirilip Playwright iz görüntüleyicisiyle (npx playwright show-trace <dosya> ya da trace.playwright.dev) açılır. "Yalnız başarılı testlerde": iz her testte alınır, başarısız testlerinki kaydedilmeden silinir.',
     tur: 'secim', varsayilan: 'yalnizHata',
-    secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
+    secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız başarısız testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
   { anahtar: 'indirilenDosya', grup: 'Kayıt', etiket: 'Doğrulanan dosya (ek)',
     aciklama: 'İndirilen dosyayı doğrulama adımında (ekran) ve servis yanıtının dosya kontrolünde dosyanın kendisi rapora ek olarak (şifreli) saklansın mı. Saklanırsa sonuç ekranında "Dosyayı indir" ile (onayla, ham hâliyle) indirilir. Saklanmazsa raporda yalnız özet durur: dosyanın adı, boyutu, biçimi ve her beklentinin sonucu. İndirilen dosya koşunun geçici klasörüne yazılır ve doğrulamadan sonra silinir.',
-    tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Saklanmaz (yalnız özet)'], ['yalnizHata', 'Yalnız kalan doğrulamalarda'], ['her', 'Her zaman']], env: 'NOBETCI_INDIRILEN_DOSYA' },
-  { anahtar: 'yenidenDeneme', ana: true, grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
+    tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Saklanmaz (yalnız özet)'], ['yalnizHata', 'Yalnız başarısız doğrulamalarda'], ['her', 'Her zaman']], env: 'NOBETCI_INDIRILEN_DOSYA' },
+  { anahtar: 'yenidenDeneme', ana: true, grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Başarısız test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
   { anahtar: 'kosuSureLimitiDk', ana: true, grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
     tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 120, birim: 'dk', env: 'NOBETCI_KOSU_SURE_LIMITI_MS', carpan: 60_000 },
   { anahtar: 'enCokVeriKosusu', grup: 'Koşu', etiket: 'Tek senaryoda en çok veri koşusu',
@@ -157,11 +157,11 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'secim', varsayilan: 'varsayilan', secenekler: [['varsayilan', 'Tarayıcı varsayılanı'], ...DIL_SECENEKLERI], env: 'NOBETCI_TARAYICI_DILI' },
   { anahtar: 'saatDilimi', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Saat dilimi', aciklama: 'Koşu, tarama ve akış kaydındaki tarayıcının saat dilimi.',
     tur: 'secim', varsayilan: 'bilgisayar', secenekler: SAAT_DILIMI_SECENEKLERI, env: 'NOBETCI_SAAT_DILIMI' },
-  // ---- Zamanlanmış koşular (Planlı koşular kartında; tüm kurallar için) ----
-  { anahtar: 'zamanliKacan', bolum: 'zamanlama', grup: 'Zamanlanmış koşu davranışı', etiket: 'Kaçan zaman',
+  // ---- Planlı koşular (Planlı koşular kartında; tüm kurallar için) ----
+  { anahtar: 'zamanliKacan', bolum: 'zamanlama', grup: 'Planlı koşu davranışı', etiket: 'Kaçan zaman',
     aciklama: 'Nöbetçi kapalıyken ya da kasa kilitliyken geçen zaman için. Sonra bir kez koş: Nöbetçi açılıp kasa açılınca, kaçan zamanlardan yalnız sonuncusu bir kez koşulur (8 günden eskiler sayılmaz).',
     tur: 'secim', varsayilan: 'atla', secenekler: [['atla', 'Atla'], ['sonraKos', 'Sonra bir kez koş']] },
-  { anahtar: 'zamanliCakisma', bolum: 'zamanlama', grup: 'Zamanlanmış koşu davranışı', etiket: 'Koşu sürerken gelen zaman',
+  { anahtar: 'zamanliCakisma', bolum: 'zamanlama', grup: 'Planlı koşu davranışı', etiket: 'Koşu sürerken gelen zaman',
     aciklama: 'Vakti geldiğinde başka bir koşu sürüyorsa. Bitince koş: süren koşu bitince bir kez başlatılır (Nöbetçi o arada kapanırsa bekleyen koşu unutulur).',
     tur: 'secim', varsayilan: 'atla', secenekler: [['atla', 'Atla'], ['bitinceKos', 'Bitince koş']] },
   { anahtar: 'benzerlikEsigi', bolum: 'testVerisi', grup: 'Veri sağlığı', etiket: 'Birleştirme önerisi eşiği',
@@ -177,7 +177,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 15, enAz: 5, enCok: 10000, birim: 'seçenek' },
   // Sonuçlar > Genel > Özet'in Dikkat / Bakım / Kapsam ve güvenlik kartları (sonuclar/farkindalik.mjs): eşikler kullanıcının kararıdır.
   { anahtar: 'ozetKirmiziGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Uzun süredir kırmızı',
-    aciklama: 'Ekran, servis ya da akış bu kadar gündür kırmızıysa (son koşularının başarısı sağlık noktasının sarı eşiğinin altında ya da akış kaldı) Sonuçlar > Özet > Dikkat kartında görünür.',
+    aciklama: 'Ekran, servis ya da akış bu kadar gündür kırmızıysa (son koşularının başarısı sağlık noktasının sarı eşiğinin altında ya da akış başarısız oldu) Sonuçlar > Özet > Dikkat kartında görünür.',
     tur: 'sayi', varsayilan: 3, enAz: 1, enCok: 90, birim: 'gün' },
   { anahtar: 'ozetYavaslamaYuzde', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Yavaşlama eşiği',
     aciklama: 'Servis metodunun p95 süresi önceki eşit döneme göre en az bu kadar arttıysa (bu dönemde en az 20 ölçümle) Sonuçlar > Özet > Dikkat kartında görünür.',
@@ -202,14 +202,14 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   // temizlikte sıra: 1) sonuç saklama (bütün sonuç), 2) medya inceltme, 3) video saklama (aynı Saklama kartında; güvenlik ayarı), 4) sahipsiz dosyalar.
   { anahtar: 'medyaInceltme', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Eski sonuçlarda medyayı incelt',
     aciklama: 'Aşağıdaki günden eski sonuçların ekran görüntüleri ve videoları günlük temizlikte silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Silinen medya sonuçta "saklama süresi doldu" olarak görünür. Sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra bu inceltme, en son Video saklama süresi (aynı kartta; videolar hangisi önce dolarsa o zaman silinir).',
-    tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Kapalı'], ['basarili', 'Başarılı testlerin görüntü ve videolarını sil'], ['hatali', 'Kalan testlerin görüntü ve videolarını sil'], ['ikisi', 'İkisini de sil']] },
+    tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Kapalı'], ['basarili', 'Başarılı testlerin görüntü ve videolarını sil'], ['hatali', 'Başarısız testlerin görüntü ve videolarını sil'], ['ikisi', 'İkisini de sil']] },
   { anahtar: 'medyaInceltmeGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Medyayı incelt: şu günden eski', aciklama: 'Koşu başlangıcı bu kadar günden eski sonuçlar inceltilir.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 3650, birim: 'gün',
     etkinKosul: { anahtar: 'medyaInceltme', degerler: ['basarili', 'hatali', 'ikisi'], pasifAciklama: 'Yalnız medya inceltme açıkken kullanılır.' } },
-  { anahtar: 'medyaInceltmeKoru', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Kalan testlerde kalan adımın görüntüsünü ve test sonu görüntüsünü koru',
-    aciklama: 'Kalan testlerin medyası silinirken hatanın görüldüğü iki görüntü kalır: kalan adımın görüntüsü (yoksa son adım görüntüsü) ve test sonu görüntüsü. Videolar yine silinir.',
+  { anahtar: 'medyaInceltmeKoru', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Başarısız testlerde başarısız adımın görüntüsünü ve test sonu görüntüsünü koru',
+    aciklama: 'Başarısız testlerin medyası silinirken hatanın görüldüğü iki görüntü kalır: başarısız adımın görüntüsü (yoksa son adım görüntüsü) ve test sonu görüntüsü. Videolar yine silinir.',
     tur: 'onay', varsayilan: true,
-    etkinKosul: { anahtar: 'medyaInceltme', degerler: ['hatali', 'ikisi'], pasifAciklama: 'Yalnız kalan testlerin medyası inceltilirken kullanılır.' } }
+    etkinKosul: { anahtar: 'medyaInceltme', degerler: ['hatali', 'ikisi'], pasifAciklama: 'Yalnız başarısız testlerin medyası inceltilirken kullanılır.' } }
 ]);
 
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;

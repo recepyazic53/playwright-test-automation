@@ -2992,7 +2992,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
    Tema renk ailesini ve biçimi belirler; açık / koyu seçimi (data-tema) ondan bağımsızdır, her tema ikisini de destekler.
      (yok) / komuta : "Komuta merkezi" — yukarıdaki belirteçler (koyu ızgara, camgöbeği parıltı; yazılımsal).
      kurumsal       : lacivert-gri, düz ve opak paneller, ızgara ve parıltı yok, keskin köşeler.
-     canli          : mor-pembe-turuncu geçişler, renkli zemin, yumuşak ve yuvarlak köşeler.
+     parlak         : "Parlak" (eski anahtar "canli", ortak.js eşler) — mor-pembe-turuncu geçişler, renkli zemin, yumuşak ve yuvarlak köşeler.
    ========================================================================================= */
 :root[data-stil="kurumsal"] {
   --zemin: #0c1522; --zemin-2: #101b2b;
@@ -3044,7 +3044,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 :root[data-stil="kurumsal"] .alt-nav a[aria-current="page"]::before { box-shadow: none; }
 :root[data-stil="kurumsal"] .alt-nav .saglik { box-shadow: none !important; }
 
-:root[data-stil="canli"] {
+:root[data-stil="parlak"] {
   --zemin: #130b22; --zemin-2: #1a0f2e;
   --panel: rgba(34, 20, 58, .72); --panel-kati: #221438; --panel-2: rgba(255, 255, 255, .05);
   --cizgi: rgba(196, 167, 255, .16); --cizgi-2: rgba(196, 167, 255, .28);
@@ -3058,7 +3058,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
   --odak: #f0abfc;
   --yaricap-s: 8px; --yaricap-m: 14px; --yaricap-l: 20px;
 }
-:root[data-stil="canli"][data-tema="acik"] {
+:root[data-stil="parlak"][data-tema="acik"] {
   --zemin: #fff7f2; --zemin-2: #fdeee6;
   --panel: rgba(255, 255, 255, .82); --panel-kati: #ffffff; --panel-2: rgba(124, 58, 237, .05);
   --cizgi: rgba(124, 58, 237, .13); --cizgi-2: rgba(124, 58, 237, .22);
@@ -3073,7 +3073,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
   color-scheme: light;
 }
 @media (prefers-color-scheme: light) {
-  :root[data-stil="canli"]:not([data-tema="koyu"]) {
+  :root[data-stil="parlak"]:not([data-tema="koyu"]) {
     --zemin: #fff7f2; --zemin-2: #fdeee6;
     --panel: rgba(255, 255, 255, .82); --panel-kati: #ffffff; --panel-2: rgba(124, 58, 237, .05);
     --cizgi: rgba(124, 58, 237, .13); --cizgi-2: rgba(124, 58, 237, .22);
@@ -3088,7 +3088,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
     color-scheme: light;
   }
 }
-:root[data-stil="canli"] body {
+:root[data-stil="parlak"] body {
   background:
     radial-gradient(760px 460px at 88% -6%, rgba(244, 114, 182, .22), transparent 70%),
     radial-gradient(680px 420px at 4% 8%, rgba(168, 85, 247, .24), transparent 70%),
@@ -3096,10 +3096,15 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
     var(--zemin);
   background-attachment: fixed;
 }
-:root[data-stil="canli"] button.birincil, :root[data-stil="canli"] .dugme.birincil { background: linear-gradient(120deg, var(--birincil-alt), var(--birincil-ust)); color: #fff; }
-:root[data-stil="canli"] .alt-nav a[aria-current="page"]::before { background: linear-gradient(180deg, #a855f7, #f472b6); }
+:root[data-stil="parlak"] button.birincil, :root[data-stil="parlak"] .dugme.birincil { background: linear-gradient(120deg, var(--birincil-alt), var(--birincil-ust)); color: #fff; }
+:root[data-stil="parlak"] .alt-nav a[aria-current="page"]::before { background: linear-gradient(180deg, #a855f7, #f472b6); }
 
 /* Ayarlar > Arayüz > Tema seçim kartları (önizlemeli). */
+/* Ayarlar > Arayüz > Terimler sözlüğü (terimler.mjs). */
+.terimler-listesi { display: grid; grid-template-columns: minmax(9rem, max-content) minmax(0, 1fr); gap: 6px 16px; margin: var(--b3) 0 0; }
+.terimler-listesi dt { font-weight: 650; color: var(--metin); overflow-wrap: anywhere; }
+.terimler-listesi dd { margin: 0; color: var(--metin-2); overflow-wrap: anywhere; }
+@media (max-width: 640px) { .terimler-listesi { grid-template-columns: minmax(0, 1fr); gap: 2px; } .terimler-listesi dd { margin-bottom: 8px; } }
 .tema-secimi { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: var(--b3); }
 .tema-karti { position: relative; display: grid; gap: 6px; padding: 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); cursor: pointer; }
 .tema-karti:has(input:checked) { box-shadow: inset 0 0 0 2px var(--vurgu), 0 0 0 4px var(--vurgu-zemin); }
@@ -3117,10 +3122,10 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .tema-onizleme.kurumsal { --to-vurgu: #1d4f91; --to-panel: #ffffff; background: #f4f6f9; }
 .tema-onizleme.kurumsal .to-ust { background: #13213a; }
 .tema-onizleme.kurumsal .to-sol { background: #e6eaf0; }
-.tema-onizleme.canli { --to-vurgu: linear-gradient(90deg, #a855f7, #f472b6); --to-panel: rgba(255, 255, 255, .12);
+.tema-onizleme.parlak { --to-vurgu: linear-gradient(90deg, #a855f7, #f472b6); --to-panel: rgba(255, 255, 255, .12);
   background: radial-gradient(circle at 80% 0%, rgba(244, 114, 182, .66), transparent 60%), radial-gradient(circle at 0% 100%, rgba(251, 146, 60, .53), transparent 60%), #1a0f2e; }
-.tema-onizleme.canli .to-ust { background: rgba(255, 255, 255, .06); }
-.tema-onizleme.canli .to-sol { background: rgba(255, 255, 255, .04); }
+.tema-onizleme.parlak .to-ust { background: rgba(255, 255, 255, .06); }
+.tema-onizleme.parlak .to-sol { background: rgba(255, 255, 255, .04); }
 .tema-karti b { font-size: 13.5px; }
 .tema-karti small { color: var(--metin-3); font-size: 12px; line-height: 1.4; }
 
@@ -3241,14 +3246,14 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .pdf-raporlar-tablosu td { vertical-align: middle; }
 .pdf-rapor-eylemleri { display: flex; flex-wrap: wrap; gap: 4px; }
 
-/* Planlı koşular > Zamanlanmış koşular (zamanlanmis-kosular.js) */
+/* Planlı koşular > Planlı koşular (zamanlanmis-kosular.js) */
 .zamanlanmis-kosular .zamanlama-form-alani:not(:empty) { margin: 10px 0; }
 .zamanlama-kutulari { border: 1px solid var(--cizgi-2); border-radius: 8px; padding: 6px 12px 10px; margin: 8px 0; }
 .zamanlama-kutulari legend { padding: 0 4px; font-weight: 600; }
 .zamanlama-son { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .zamanlama-gecmisi { margin-top: 6px; }
 .zamanlama-gecmisi summary { cursor: pointer; font-size: 12px; color: var(--metin-2); }
-/* Ayarlar > Koşu > Gelişmiş koşu davranışı (açılır) ve zamanlanmış koşu davranışı (kart içinde gömülü form). */
+/* Ayarlar > Koşu > Gelişmiş koşu davranışı (açılır) ve planlı koşu davranışı (kart içinde gömülü form). */
 .gelismis-ayarlar { border-top: 1px solid var(--cizgi); padding-top: var(--b2); margin-top: var(--b2); min-width: 0; }
 .gelismis-ayarlar > summary { cursor: pointer; font-weight: 600; color: var(--vurgu); list-style: none; display: flex; align-items: center; gap: 6px; margin-bottom: var(--b2); }
 .gelismis-ayarlar > summary::-webkit-details-marker { display: none; }
@@ -3797,7 +3802,7 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .ikinci-adim-notu[hidden] { display: none; }
 .ikinci-adim-notu p { margin: 0 0 4px; }
 .ikinci-adim-notu .bag-dugme { padding: 0 2px; min-height: 0; }
-/* Planlı koşular > Zamanlanmış koşular kartı: gömülü davranış formu (tek başlık, çerçevesiz) ve alt bölümler aynı düzende. */
+/* Planlı koşular > Planlı koşular kartı: gömülü davranış formu (tek başlık, çerçevesiz) ve alt bölümler aynı düzende. */
 .gomulu-ayar-formu { min-width: 0; }
 .gomulu-ayar-formu > .soluk.kucuk:first-child { margin: 0 0 var(--b2); }
 .gomulu-ayar-formu .ayar-grubu { display: grid; gap: 0; min-width: 0; }
@@ -3850,7 +3855,7 @@ dialog.taban-diyalogu { width: min(40rem, calc(100vw - 2rem)); max-height: calc(
 /* Kullanıcı adı taşıyan rozetler (rozet(..., { kisalt })): en çok genişlik + "…"; tam metin ipucunda. */
 .rozet-kisalt { max-width: min(16em, 100%); min-width: 0; overflow: hidden; }
 .rozet-kisalt .rozet-metni { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-/* Sonuçlar: hızlı süzgeçler ("Yalnız kalanlar", hata kalıbı). */
+/* Sonuçlar: hızlı süzgeçler ("Yalnız başarısızlar", hata kalıbı). */
 tr.suzuldu { display: none; }
 .hizli-suzgec { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
 .suzgec-cipi { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 12px; }

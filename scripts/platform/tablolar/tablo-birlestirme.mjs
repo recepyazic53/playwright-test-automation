@@ -273,7 +273,7 @@ export function veriSagligi(vt, projeId) {
   const oneriler = birlestirmeOnerileri(tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunlar: t.sutunlar, kaynak: t.kaynak ?? null, satirImzalari: t.satirlar.map((r) => satirImzasi(r, t.sutunlar)) })), ek);
   const ad = new Map(tablolar.map((t) => [t.id, t.ad]));
   const gecmis = gecmisOku(vt, projeId);
-  // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Veri'de.
+  // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Test verisi sayfasında.
   let benzerlikEsigi = 50;
   try { benzerlikEsigi = kosuAyarlariniOku(vt).benzerlikEsigi; } catch { /* varsayılan */ }
   return {
