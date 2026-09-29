@@ -30,7 +30,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; açtığınız izinler kasada saklanır.' },
   { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
   { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'PDF raporlarının kullandığı kararlarınız: ekip listesi ve ekran / servis → ekip eşlemesi (sahip önerisi), kritik işaretli ekran, servis ve akışlar (öncelik ve durum rozeti) ve süre eşikleri (ekran, servis, metot). Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır.' },
-  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları.' }
+  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı, listelerin sayfa boyları ve Sonuçlar > Özet kartlarının eşikleri.' }
 ];
 
 const ISLEM_ETIKETI = {
