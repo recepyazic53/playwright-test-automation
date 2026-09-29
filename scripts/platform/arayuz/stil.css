@@ -4321,3 +4321,11 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ekleme-kutulari.tekli { grid-template-columns: minmax(0, 1fr); }
 .ekleme-kutulari.tekli .ekleme-kutusu { min-height: 0; }
 @media (max-width: 900px) { .ekleme-kutulari.ikili { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- v1.4 keşif ve arama (ku14-kesif-arama): hızlı aramanın alt listesi, Koşu ayarına odak, ilişkili ayar bağlantısı ---------- */
+.hizli-arama-alt-baslik { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--cizgi); font-size: 13px; min-width: 0; flex-wrap: wrap; }
+.hizli-arama-alt-baslik .soluk { overflow-wrap: anywhere; }
+.hizli-arama-geri { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 12px; }
+.hizli-arama-ok { margin-left: auto; font-size: 18px; line-height: 1; flex: none; }
+.alan.ayar-vurgu { border-radius: 8px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--vurgu) 55%, transparent); padding: 6px; }
+.ayar-baglantisi a, .oturum-suresi-baglantisi { overflow-wrap: anywhere; }
