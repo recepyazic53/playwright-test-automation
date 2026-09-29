@@ -156,15 +156,19 @@ test('Sonuçlar: "Rapor al (PDF)" → diyalog seçimleri, önizleme, PDF indir (
   const cerceve = d.locator('iframe.pdf-rapor-onizleme');
   await expect(cerceve).toHaveAttribute('sandbox', '');
   await expect(page.frameLocator('iframe.pdf-rapor-onizleme').getByRole('heading', { name: /Servis Raporu — Kayıt Servisi/ })).toBeVisible();
-  // PDF indir: dosya adı sunucudan; Raporlar'a kaydedilir.
-  const [indirme] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), d.getByRole('button', { name: 'PDF indir' }).click()]);
+  await goruntu(page, 'diyalog');
+  // "Raporlar'a kaydet" durumu düğme metninde: kapalıyken "PDF indir", açıkken "PDF indir ve kaydet".
+  await expect(d.getByRole('button', { name: 'PDF indir ve kaydet' })).toBeVisible();
+  await d.getByLabel(/Raporlar'a kaydet/).uncheck();
+  await expect(d.getByRole('button', { name: 'PDF indir', exact: true })).toBeVisible();
+  await d.getByLabel(/Raporlar'a kaydet/).check();
+  // PDF indir ve kaydet: dosya adı sunucudan; Raporlar'a kaydedilir; pencere kapanır ve bildirim görünür.
+  const [indirme] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), d.getByRole('button', { name: 'PDF indir ve kaydet' }).click()]);
   expect(indirme.suggestedFilename()).toMatch(/^nobetci-rapor-servis-kayit-servisi-\d{4}-\d{2}-\d{2}\.pdf$/);
   const yol = await indirme.path();
   expect(readFileSync(yol).subarray(0, 5).toString('latin1')).toBe('%PDF-');
-  await expect(d.getByRole('status')).toContainText("Raporlar'a kaydedildi");
-  await goruntu(page, 'diyalog');
-  await d.getByRole('button', { name: 'Vazgeç' }).click();
   await expect(d).toBeHidden();
+  await expect(page.locator('#bildirimler')).toContainText("Raporlar'a kaydedildi");
   expect(hatalar).toEqual([]);
   await kapat();
 });

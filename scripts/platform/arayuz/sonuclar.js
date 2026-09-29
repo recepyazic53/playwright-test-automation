@@ -206,11 +206,19 @@ const VARSAYILAN_ESIKLER = { yesil: 90, sari: 75 };
 let ESIKLER = VARSAYILAN_ESIKLER;
 const esikMetni = (e) => `Son tam koşunun başarı oranı: yeşil ≥ %${e.yesil}, sarı ≥ %${e.sari}, kırmızı altı.`;
 
+/**
+ * Oranın (0–100) sağlık sınıfı — Sonuçlar'daki TEK kural (sol listedeki nokta, Özet kutuları): 'basari' | 'uyari' | 'hata';
+ * oran yoksa ''. Eşikler projenin Ayarlar > Arayüz > Sağlık noktası değerleridir (Sonuçlar açılırken yüklenir).
+ * @param {number | null | undefined} o
+ */
+export function oranSaglikSinifi(o) {
+  if (o === null || o === undefined || Number.isNaN(o)) return '';
+  const r = Math.round(o);
+  return r >= ESIKLER.yesil ? 'basari' : r >= ESIKLER.sari ? 'uyari' : 'hata';
+}
+
 function saglikSinifi(son) {
-  if (!son) return '';
-  const o = oran(son);
-  if (o === null) return '';
-  return o >= ESIKLER.yesil ? 'basari' : o >= ESIKLER.sari ? 'uyari' : 'hata';
+  return son ? oranSaglikSinifi(oran(son)) : '';
 }
 
 /** Ekranı devre dışı / silinmiş ürünün rozeti (sonuçlar görünür kalır). */
@@ -275,7 +283,7 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran, aralikDegisti) {
   const kartAlani = h('div', {});
   const ciz = () => {
     kartAlani.replaceChildren(kartlar(kart, ozet.trend, urun));
-    trendAlani.replaceChildren(trendKarti(ozet.trend, urun));
+    trendAlani.replaceChildren(trendKarti(ozet.trend, urun, { digerNoktalar: ozet.trendTumKapsamlar || [] }));
   };
   // Tarih aralığı süzgeci (ortak bileşen): seçim oturumda saklanır, ekran sunucudan aralığa göre yeniden yüklenir.
   const aralikSatiri = h('section', { class: 'kart sonuc-araligi', 'aria-label': 'Tarih aralığı süzgeci' },
@@ -410,6 +418,21 @@ export function trendKarti(tumNoktalar, urun, secenek = {}) {
       noktalar.length ? h('div', { class: 'sag' }, kipSegmenti) : null),
     h('p', { class: 'gorunmez' }, secenek.aciklama || (urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.')),
     kap);
+  // Genel'de Genel kapsamlı koşu yok ama ekran kapsamlı tam koşular varsa: neden boş olduğunu söyle, istenirse onları göster.
+  const diger = !urun && !noktalar.length && Array.isArray(secenek.digerNoktalar) ? aralikUygula(secenek.digerNoktalar) : [];
+  if (diger.length) {
+    const goster = h('button', {
+      type: 'button', class: 'dugme kucuk-dugme',
+      onclick: () => kart.replaceWith(trendKarti(secenek.digerNoktalar, urun, {
+        altYazi: `Ekran kapsamlı tam koşular · ${aralikMetni(kayitliAralik())}`,
+        aciklama: 'Ekran kapsamlı tam koşular (her çubuk o koşunun tüm sonuçları). Tekil koşular trende girmez.'
+      }))
+    }, ikon('grafik'), 'Göster');
+    kap.append(bosDurum(`Genel kapsamlı koşu yok — ekran koşuları: ${diger.length}`,
+      'Bu trend yalnız tüm ekranları kapsayan (Genel kapsamlı) tam koşuları gösterir. Tek ekran için başlatılan tam koşuları görmek için "Göster"e basın.',
+      { ikon: 'grafik', eylem: goster }));
+    return kart;
+  }
   if (!noktalar.length) { kap.append(bosDurum(secenek.bosBaslik || 'Henüz tam koşu yok.', secenek.bosAciklama || 'Tam koşular (Koşuyu başlat) burada günlük çubuklar olarak görünür.', { ikon: 'grafik' })); return kart; }
   // Genişlik kapsayıcıya göre; boyut değişince yeniden çizilir.
   requestAnimationFrame(ciz);
@@ -613,12 +636,12 @@ function kosuGecmisi(kosular, urun) {
   // Karşılaştırma: iki satır seçilip "Karşılaştır" (karsilastirma.js; seçim sayfa değişse de korunur).
   const secici = kosuSecici('ekran');
   const SIRALAMA_ALANLARI = {
-    zaman: (k) => { const t = Date.parse(k.bitis || k.baslangic); return Number.isNaN(t) ? 0 : t; },
+    zaman: (k) => { const t = Date.parse(k.baslangic || k.bitis); return Number.isNaN(t) ? 0 : t; },
     tur: (k) => `${k.tur === 'tam' ? 'tam' : 'tekil'} ${k.kapsam || ''}`,
     toplam: (k) => toplam(k), basarili: (k) => k.basarili || 0, basarisiz: (k) => k.basarisiz || 0,
     atlanan: (k) => k.atlanan || 0, durduruldu: (k) => k.durduruldu || 0, oran: (k) => oran(k) ?? -1
   };
-  const basliklar = [['Koşu', 'zaman'], ['Tür / kapsam', 'tur'], ['Dağılım', null], ['Top.', 'toplam', 1], ['Başarılı', 'basarili', 1], ['Başarısız', 'basarisiz', 1], ['Atlanan', 'atlanan', 1], ['Durd.', 'durduruldu', 1], ['Oran', 'oran', 1]]
+  const basliklar = [['Koşu (başlangıç)', 'zaman'], ['Tür / kapsam', 'tur'], ['Dağılım', null], ['Top.', 'toplam', 1], ['Başarılı', 'basarili', 1], ['Başarısız', 'basarisiz', 1], ['Atlanan', 'atlanan', 1], ['Durd.', 'durduruldu', 1], ['Oran', 'oran', 1]]
     .map(([b, anahtar, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null, ...(anahtar ? { 'data-sirala-anahtar': anahtar, 'aria-sort': 'none' } : { 'data-sirala': 'yok' }) }, b));
   basliklar.unshift(secici.baslik());
   const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
@@ -633,8 +656,16 @@ function kosuGecmisi(kosular, urun) {
     secici.sifirla();
     govde.replaceChildren(...dilim.map((k) => {
       const o = oran(k);
-      return h('tr', {}, secici.hucre(k, k.bitis || k.baslangic, kisaTarih(k.bitis || k.baslangic)),
-        h('td', {}, h('a', { class: 'kosu-baglantisi', href: `#/sonuclar/kosu/${encodeURIComponent(k.id)}` }, kosuNoktasi(k), kisaTarih(k.bitis || k.baslangic)),
+      // Saat: koşunun BAŞLANGICI (karşılaştırma ve servis sonuçlarıyla aynı). Tüm satır tıklanabilir; klavyede satıra
+      // odaklanıp Enter / Boşluk koşuyu açar (içteki bağlantı sekme sırasından çıkarılır, iki kez durulmasın).
+      const adres = `#/sonuclar/kosu/${encodeURIComponent(k.id)}`;
+      const tarih = kisaTarih(k.baslangic || k.bitis);
+      return h('tr', {
+        class: 'tiklanabilir-satir', tabindex: '0', title: 'Koşunun senaryo sonuçlarını aç',
+        onclick: (o2) => { if (!(/** @type {Element} */ (o2.target)).closest('a, button, input, label, .karsilastir-secim')) location.hash = adres; },
+        onkeydown: (o2) => { if (o2.target === o2.currentTarget && (o2.key === 'Enter' || o2.key === ' ')) { o2.preventDefault(); location.hash = adres; } }
+      }, secici.hucre(k, k.baslangic || k.bitis, tarih),
+        h('td', {}, h('a', { class: 'kosu-baglantisi', href: adres, tabindex: '-1' }, kosuNoktasi(k), tarih),
           h('span', { class: 'gorunmez' }, ` (${KOSU_DURUMU[k.durum] || k.durum})`)),
         h('td', {}, h('span', { class: 'etiketler' }, rozet(k.tur === 'tam' ? 'tam' : 'tekil', k.tur === 'tam' ? 'vurgu' : ''), ' ',
           k.kapsam ? rozet(k.kapsam, '', { kisalt: true }) : null)),

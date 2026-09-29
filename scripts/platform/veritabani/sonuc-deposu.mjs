@@ -386,6 +386,8 @@ export function sonucOzeti(vt, projeId, secim = {}) {
     ekranlar: ekranlar.filter((e) => e.ekranDurumu !== 'silindi' || tumKosular.some((k) => k.urunler[e.anahtar])),
     kart: urun ? kartlar.urunler[urun] ?? null : kartlar.genel,
     trend: trendHesapla(kosular, urun),
+    // Genel'de: kapsamı ne olursa olsun tüm tam koşular (Genel kapsamlı koşu yokken trend bunları açıklar / gösterir).
+    trendTumKapsamlar: urun ? [] : trendHesapla(kosular, null, { tumKapsamlar: true }),
     kosuGecmisi: gecmis
   };
 }

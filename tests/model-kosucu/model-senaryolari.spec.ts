@@ -14,7 +14,7 @@ import { modelSenaryosunuKos, type ModelKosuOrtami } from '../support/model-kosu
 import { modelTestSuresiMs } from '../support/kosu-ayarlari';
 import type { PlatformModelVerisi } from '../support/platform-veri';
 import { modelEtiketi, modelTestAnahtari, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
-import { beklenenSonucEtiketi, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
+import { beklenenSonucMetni, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
 import { ekrandanOku, senaryoyaUygula, uctanUcaAdimi } from '../support/uctan-uca-adimi';
 
 const modelVerisi = genelVeri().model;
@@ -27,11 +27,14 @@ const hepsi = process.env.TEST_SUNUCU_TUM_LISTE === '1' || Boolean(process.env.T
 const senaryolar = (modelVerisi?.senaryolar ?? []).filter((s) => hepsi || (s.kosuyaDahil && s.ekranEtkin !== false));
 const basliklar = modelTestBasliklari(senaryolar);
 
-/** Senaryolar tablosundaki beklenen sonuç rozeti (model yoksa annotation eklenmez). */
+/**
+ * Sonuç kaydındaki beklenen sonuç (test ayrıntısı > Beklenen / görülen): başarılı akışta son adımın başarı göstergesi, iş kuralı
+ * hatasında beklenen adım ve mesaj (model yoksa annotation eklenmez).
+ */
 function beklenenSonucRozeti(model: Record<string, unknown> | null, veri: Record<string, unknown>): string | null {
   if (!model) return null;
   try {
-    return beklenenSonucEtiketi(formSemasiOlustur(model), veri)?.metin ?? null;
+    return beklenenSonucMetni(model, formSemasiOlustur(model), veri);
   } catch {
     return null;
   }

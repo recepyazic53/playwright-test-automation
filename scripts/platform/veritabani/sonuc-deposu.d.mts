@@ -70,6 +70,8 @@ export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { ur
   ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number; ekranDurumu: string | null; ortakAkis: boolean; son: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number } | null }>;
   kart: { son: KartOzeti; onceki: KartOzeti | null; enYeniZ?: number; enEskiZ?: number; urunSayisi?: number } | null;
   trend: Array<Sayilar & { kosuId: string; z: number; kapsam: string | null }>;
+  /** Genel'de: kapsamı ne olursa olsun tüm tam koşular (ürün sayfasında boş). */
+  trendTumKapsamlar: Array<Sayilar & { kosuId: string; z: number; kapsam: string | null }>;
   kosuGecmisi: KosuGecmisiSatiri[];
 };
 export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
