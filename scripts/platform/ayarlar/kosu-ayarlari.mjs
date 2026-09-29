@@ -171,6 +171,10 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 50, enAz: 10, enCok: 500, birim: 'satır' },
   { anahtar: 'kosuGecmisiSayfaBoyu', bolum: 'arayuz', grup: 'Listeler', etiket: 'Koşu geçmişi sayfa boyu', aciklama: 'Sonuçlar > Koşu geçmişinde bir sayfada gösterilen koşu.',
     tur: 'sayi', varsayilan: 15, enAz: 5, enCok: 200, birim: 'satır' },
+  // Uzun açılır listelerde yazarak arama (arayuz/aranabilir-secim.js): bu sayıdan çok seçenekli listeler aranabilir açılır.
+  { anahtar: 'aranabilirSecimEsigi', bolum: 'arayuz', grup: 'Listeler', etiket: 'Aranabilir liste eşiği',
+    aciklama: 'Bundan çok seçeneği olan açılır listeler tıklanınca yazarak aranabilir liste olarak açılır; daha kısa listeler olağan açılır liste kalır.',
+    tur: 'sayi', varsayilan: 15, enAz: 5, enCok: 10000, birim: 'seçenek' },
   // Sonuçlar > Genel > Özet'in Dikkat / Bakım / Kapsam ve güvenlik kartları (sonuclar/farkindalik.mjs): eşikler kullanıcının kararıdır.
   { anahtar: 'ozetKirmiziGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Uzun süredir kırmızı',
     aciklama: 'Ekran, servis ya da akış bu kadar gündür kırmızıysa (son koşularının başarısı sağlık noktasının sarı eşiğinin altında ya da akış kaldı) Sonuçlar > Özet > Dikkat kartında görünür.',

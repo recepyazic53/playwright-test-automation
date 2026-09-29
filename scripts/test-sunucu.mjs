@@ -367,6 +367,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/tarama.js', { dosya: 'tarama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-tasarimi.js', { dosya: 'akis-tasarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-siralama.js', { dosya: 'tablo-siralama.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/aranabilir-secim.js', { dosya: 'aranabilir-secim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/playwright-disa-aktarma.js', { dosya: 'playwright-disa-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablolar.js', { dosya: 'tablolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-baglari.js', { dosya: 'ekran-baglari.js', tur: 'text/javascript; charset=utf-8' }],

@@ -24,6 +24,7 @@ import { hizliAramaDugmesi, hizliAramaKisayolu } from './hizli-arama.js';
 import { olusturMenusu } from './olustur-menusu.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { tabloSiralamaKur } from './tablo-siralama.js';
+import { aranabilirSecimKur } from './aranabilir-secim.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI, ESKI_ADRESLER, UST_SAYFALAR, ustSayfaBolumu } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 import { kasayiKilitleSecimli, kilitBildirimi } from './zamanlanmis-kosular.js';
@@ -947,4 +948,6 @@ function etkinGezinmeyiGoster() {
 cikisKorumasiniKur();
 // Tüm tablolarda başlığa tıklayınca sıralama (sayfalı tablolar kendi verisinde sıralar; bkz. tablo-siralama.js).
 tabloSiralamaKur();
+// Uzun açılır listelerde (seçenek sayısı Ayarlar > Arayüz eşiğinin üstünde) yazarak arama (bkz. aranabilir-secim.js).
+aranabilirSecimKur();
 yonlendir();
