@@ -649,7 +649,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       el: h('div', { class: 'alan-ust' },
         h('label', { for: id }, alan.etiket, alan.zorunlu === true ? h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*') : null,
           alan.zorunlu === true ? h('span', { class: 'gorunmez' }, ' (zorunlu)') : null),
-        h('span', { class: 'sag' }, cip, mutlakaKutu, ...ekler)),
+        h('span', { class: 'sag secenek-seridi' }, cip, mutlakaKutu, ...ekler)),
       cip
     };
   }
@@ -687,7 +687,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         kontrolKaydet(alan.anahtar, [], hata, uyari);
         kayit.gorunurlukCipi = ust.cip;
         kap.classList.remove('bilerek-bos-acik');
-        yerlestir(kap, ust.el, ozet, hata, uyari);
+        yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, ozet, hata, uyari));
         return;
       }
       kayit.ozetCiz = null;
@@ -827,7 +827,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
         if (acik) for (const el of [govde, ...govde.querySelectorAll('input, select, textarea, button')]) if ('disabled' in el) el.disabled = true;
       }
       kayit.gorunurlukCipi = ust.cip;
-      yerlestir(kap, ust.el, govde, hata, uyari);
+      // Başlık (etiket + seçenekler şeridi) ve gövde (girdi + hata / uyarı) iki ayrı parça: aynı ızgara satırındaki alanların
+      // girdileri, başlık yükseklikleri farklı olsa da aynı hizadan başlar (stil.css > .alan-izgarasi, subgrid).
+      yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, govde, hata, uyari));
     };
     kayit.ciz = () => { ciz(); planla(); };
     ciz();
