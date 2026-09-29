@@ -201,8 +201,8 @@ test.describe('alan formu uçtan uca', () => {
     await satir('Channel').getByLabel('Channel değer kaynağı').selectOption('sabit');
     const kanal = satir('Channel').getByLabel('Channel', { exact: true });
     await kanal.click();
-    await kanal.pressSequentially('30447', { delay: 20 });
-    await expect(kanal).toHaveValue('30447');
+    await kanal.pressSequentially('11111', { delay: 20 });
+    await expect(kanal).toHaveValue('11111');
     await expect(kanal).toBeFocused();
 
     // Alan arama: harf harf yazılır, kutu odakta kalır, tablo süzülür.
@@ -226,7 +226,7 @@ test.describe('alan formu uçtan uca', () => {
     const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Profil seçili senaryo');
     expect(kayit.icerik.tabloSecimleri).toEqual({ [`${turId}|`]: { tcKimlikNo: '22222222220' } });
     expect(k2).toBeTruthy();
-    expect(kayit.icerik.govde).toContain('<Channel>30447</Channel>');
+    expect(kayit.icerik.govde).toContain('<Channel>11111</Channel>');
     // Kayıtlı senaryo açılınca seçim görünür.
     await page.reload();
     await expect(satir('IdentityNumber').getByLabel('IdentityNumber', { exact: true })).toHaveValue('22222222220');

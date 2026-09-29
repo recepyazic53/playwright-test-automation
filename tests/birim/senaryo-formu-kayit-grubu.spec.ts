@@ -381,7 +381,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     await satirAdiKutusu(page).focus();
     // Öneri gizli olmayan ilk değerlerden (gizli değer öneriye girmez).
     await expect(satirAdiKutusu(page)).toHaveAttribute('placeholder', 'Boşsa: 07.08.1995 5557778899');
-    await satirAdiKutusu(page).fill('RECEP 2');
+    await satirAdiKutusu(page).fill('ÖRNEK KİŞİ 2');
     await page.setViewportSize({ width: 390, height: 900 });
     await expect(satirAdiKutusu(page)).toBeVisible();
     await tasmaYok(page);
@@ -392,18 +392,18 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.getByRole('textbox', { name: 'Başlık', exact: true }).fill('Tabloya eklenen kişi');
     await page.getByRole('button', { name: 'Senaryoyu oluştur' }).click();
-    await expect(page.locator('#bildirimler')).toContainText('“RECEP 2” Kişi tablosuna eklendi; senaryo bu satırı kullanıyor.', { timeout: 15_000 });
+    await expect(page.locator('#bildirimler')).toContainText('“ÖRNEK KİŞİ 2” Kişi tablosuna eklendi; senaryo bu satırı kullanıyor.', { timeout: 15_000 });
     await expect(page.locator('#bildirimler')).not.toContainText(YENI_KIMLIK);
     expect(hatalar).toEqual([]);
     await page.context().close();
     // Tabloda yeni satır: ortam = senaryonun tek ortamı; gizli sütun yanıtta yok, diskte düz yok.
     const t = await kisiTablosu();
     expect((t.satirlar as Nesne[]).length).toBe(satirSayisi + 1);
-    const r = (t.satirlar as Nesne[]).find((x) => x.ad === 'RECEP 2') as Nesne;
+    const r = (t.satirlar as Nesne[]).find((x) => x.ad === 'ÖRNEK KİŞİ 2') as Nesne;
     expect(r.degerler).toEqual({ 'Doğum tarihi': '07.08.1995', Telefon: '5557778899', 'Kimlik no': null });
     expect(r.doluGizli).toEqual(['Kimlik no']);
     expect(r.ortamId).toBe(ortamId);
-    satir['RECEP 2'] = String(r.id);
+    satir['ÖRNEK KİŞİ 2'] = String(r.id);
     expect(readFileSync(vtYolu).includes(Buffer.from(YENI_KIMLIK))).toBe(false);
     // Senaryo satıra başvurur.
     const id = await senaryoIdBul('Tabloya eklenen kişi');
@@ -416,7 +416,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     // Yeniden aç: Hazır, o satır seçili; gizli değer yalnız kısmi maske.
     ({ page, hatalar } = await sayfaAc(`/#/senaryolar/duzenle/${id}`));
     await expect(hazir(page)).toBeChecked();
-    await expect(ilkSatir(page)).toHaveValue(`s:${satir['RECEP 2']}`);
+    await expect(ilkSatir(page)).toHaveValue(`s:${satir['ÖRNEK KİŞİ 2']}`);
     await expect(alanKap(page, 'kimlikNo').locator('output.kayit-ozeti')).toContainText('9•••••••••9 (gizli)');
     await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('5557778899');
     expect(await page.content()).not.toContain(YENI_KIMLIK);
@@ -431,7 +431,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
       veri: { baslik: 'Aynı kişi', dogumTarihi: '07.08.1995', telefon: '5557778899', kimlikNo: YENI_KIMLIK },
       yeniTabloSatirlari: [{ ...YENI_GRUP[0], satirAdi: 'Başka ad' }]
     });
-    expect(y.tabloSatirlari).toEqual([{ tablo: 'Kişi', etiket: '', satirId: satir['RECEP 2'], satirAdi: 'RECEP 2', yeni: false }]);
+    expect(y.tabloSatirlari).toEqual([{ tablo: 'Kişi', etiket: '', satirId: satir['ÖRNEK KİŞİ 2'], satirAdi: 'ÖRNEK KİŞİ 2', yeni: false }]);
     expect(JSON.stringify(y)).not.toContain(YENI_KIMLIK);
     expect(((await kisiTablosu()).satirlar as Nesne[]).length).toBe(once);
     const s = await senaryoAl(String(y.id));
