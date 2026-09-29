@@ -15,7 +15,7 @@
 import { bilerekBosAnahtarlari, gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { formDegerleriniKur, formSemasiOlustur, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul, tumFormAlanlari } from './model-formu.mjs';
 import { VARSAYILAN_TARIH_BICIMI, goreliIfadeKanonik, goreliTarihCoz } from './goreli-tarih.mjs';
-import { NEDENLER, calistirilamazCumlesi } from './hazirlik.mjs';
+import { NEDENLER, calistirilamazCumlesi, eylemDenetimi, hazirlikOzeti } from './hazirlik.mjs';
 
 /** Model senaryolarını üreten spec dosyası (Playwright testDir'e göre göreli yol). */
 export const MODEL_SPEC_DOSYASI = 'model-kosucu/model-senaryolari.spec.ts';
@@ -146,6 +146,36 @@ export function veriHatalariMetni(baslik, hatalar) {
  */
 export function planHatasiMetni(baslik, hatalar) {
   return `"${baslik}": ${calistirilamazCumlesi(hatalar) ?? 'Bu senaryo çalıştırılamıyor.'} Tarayıcı açılmadı.`;
+}
+
+/** Sonuç kaydında hazırlığı eksik (koşuya alınmayan) testin ham durumu ve annotation türü. */
+export const CALISTIRILAMADI = 'calistirilamadi';
+
+/**
+ * KOŞUYA ALINMAMA GEREKÇESİ (planlı koşu, komut satırı ve sunucunun koşu ucu — hepsi model spec'inden geçer): senaryonun kesin
+ * engelleri (hazirlik.mjs; senaryo listesi ve Koşuyu başlat penceresiyle AYNI kurallar ve AYNI cümle): model yok, koşu planı
+ * kurulamıyor (ör. beklenen hata mesajı yok, ortak akış eksik), gönderme düğmesi yok, beklenen sonuç (başarı göstergesi) yok, test
+ * verisi çözülemedi. Engel yoksa null. Test "Çalıştırılamadı" olarak kaydedilir (atlanan gibi sayılır; başarısız ya da geçti değil).
+ * @param {{ model: any; veri: Record<string, unknown>; altModeller?: Record<string, any>; mutlakaGorunmeli?: string[];
+ *   veriHatalari?: ReadonlyArray<{ alan: string; mesaj: string }> }} s
+ * @returns {string | null}
+ */
+export function kosuEngeli(s) {
+  if (!nesneMi(s.model)) return calistirilamazCumlesi([NEDENLER.modelYok]);
+  /** @type {string[]} */
+  const nedenler = [];
+  if (s.veriHatalari?.length) nedenler.push(NEDENLER.veriEksik(s.veriHatalari[0].mesaj));
+  let plan;
+  try {
+    plan = modelKosuPlani(s.model, s.veri ?? {}, { altModeller: s.altModeller ?? {}, mutlakaGorunmeli: s.mutlakaGorunmeli ?? [] });
+  } catch {
+    return nedenler.length ? calistirilamazCumlesi(nedenler) : null;
+  }
+  const e = eylemDenetimi(s.model, {
+    adimDahil: Object.fromEntries(plan.adimlar.map((a) => [a.id, a.dahil])),
+    beklenen: plan.beklenen.tur === 'hata' ? { tur: 'hata', adim: plan.beklenen.adim, mesaj: plan.beklenen.mesaj } : { tur: 'basari' }
+  });
+  return hazirlikOzeti([e.gonderme, e.beklenen], [...nedenler, ...plan.hatalar, ...e.engeller]).neden;
 }
 
 /** Yasaklı host'a giden koşunun hata metni (host yazılır; adresin yolu/sorgusu yazılmaz). @param {string} adres @param {string} kalip */

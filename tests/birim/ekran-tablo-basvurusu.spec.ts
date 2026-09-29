@@ -258,7 +258,10 @@ test.describe('uçtan uca: ${Tablo.Sütun} ile ekran senaryosu (127.0.0.1)', () 
     const s = await kaydet('Boş tablodan plan', { plan: '${Boş tablo.Plan}' });
     expect(s.basarili, String(s.mesaj ?? '')).toBe(true);
     const d = await kos(String(s.id));
-    expect(d.durum).toBe('basarisiz');
+    // Hazırlığı eksik (test verisi yok): koşuya alınmaz, "Çalıştırılamadı" (atlanan gibi) ve liste ile aynı gerekçe cümlesi.
+    expect(d.durum).toBe('atlanan');
+    expect(d.hamDurum).toBe('calistirilamadi');
+    expect(String(d.hataMesaji)).toMatch(/^Bu senaryo çalıştırılamıyor çünkü test verisi bulunamadı \(/u);
     expect(String(d.hataMesaji)).toContain('"Boş tablo" tablosunda bu ortamda satır yok');
     expect(String(d.hataMesaji)).toContain('Tarayıcı açılmadı');
     expect(uygulama.hesaplamalar.length).toBe(once);

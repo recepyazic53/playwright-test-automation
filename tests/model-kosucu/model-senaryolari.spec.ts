@@ -13,7 +13,7 @@ import { genelGirisKimligi, genelGirisTarifi, genelOturumDosyasi, genelVeri } fr
 import { modelSenaryosunuKos, type ModelKosuOrtami } from '../support/model-kosucu';
 import { modelTestSuresiMs } from '../support/kosu-ayarlari';
 import type { PlatformModelVerisi } from '../support/platform-veri';
-import { modelEtiketi, modelTestAnahtari, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
+import { CALISTIRILAMADI, kosuEngeli, modelEtiketi, modelTestAnahtari, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { beklenenSonucMetni, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
 import { ekrandanOku, senaryoyaUygula, uctanUcaAdimi } from '../support/uctan-uca-adimi';
 
@@ -42,6 +42,12 @@ function beklenenSonucRozeti(model: Record<string, unknown> | null, veri: Record
 
 for (const senaryo of senaryolar) {
   const rozet = beklenenSonucRozeti(senaryo.model, senaryo.veri);
+  // Hazırlığı eksik senaryo (gönderme düğmesi / beklenen sonuç / test verisi yok, plan kurulamıyor …) koşuya ALINMAZ: tarayıcı açılmaz,
+  // sonuç "Çalıştırılamadı" olarak senaryo listesiyle AYNI gerekçe cümlesiyle kaydedilir (atlanan gibi sayılır). Planlı koşu, komut satırı
+  // ve Nöbetçi'nin koşu ucu bu spec'ten geçer. "Dene" (kullanıcı yine de denemeyi seçti) hariç.
+  const engel = senaryo.deneme ? null : kosuEngeli({
+    model: senaryo.model, veri: senaryo.veri, altModeller: senaryo.altModeller, mutlakaGorunmeli: senaryo.mutlakaGorunmeli, veriHatalari: senaryo.veriHatalari
+  });
   // Veri koşusu (tablodan çoklu satır): her satır / kombinasyon ayrı test, başlık "Senaryo [satır-adı]"; etiket senaryonunkiyle aynı.
   test(basliklar.get(modelTestAnahtari(senaryo)) ?? senaryo.baslik, {
     tag: modelEtiketi(senaryo.id),
@@ -50,10 +56,12 @@ for (const senaryo of senaryolar) {
       ...(senaryo.deneme ? [] : [{ type: 'senaryoId', description: senaryo.id }]),
       { type: 'kosucu', description: 'model' },
       ...(rozet ? [{ type: 'beklenenSonuc', description: rozet }] : []),
+      ...(engel ? [{ type: CALISTIRILAMADI, description: `${engel} Tarayıcı açılmadı.` }] : []),
       // Sonuç deposu: hangi satırla / hangi model sürümüyle koştu (başarısızları tekrar çalıştırma aynısını kullanır).
       ...(senaryo.deneme ? [] : [{ type: 'veriKosusu', description: JSON.stringify({ ...(senaryo.veriKosusu ?? { anahtar: null, ad: null, satirlar: [] }), modelSurumu: senaryo.modelSurumu }) }])
     ]
   }, async ({ page }, testInfo) => {
+    test.skip(Boolean(engel), `${engel} Tarayıcı açılmadı.`);
     // Test süresi: Ayarlar > Koşu > Koşu süre limiti biliniyorsa limitten 30 sn önce dolar (limiti aşmaz; limit büyükse kullanılabilir);
     // bilinmiyorsa giriş + bağlam + adım başına 30 sn (kosu-ayarlari.ts > modelTestSuresiMs).
     const adimSayisi = Array.isArray(senaryo.model?.adimlar) ? (senaryo.model?.adimlar as unknown[]).length : 1;

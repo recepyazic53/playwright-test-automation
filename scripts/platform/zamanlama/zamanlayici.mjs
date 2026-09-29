@@ -54,7 +54,9 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
     .filter((s) => s.kosuyaDahil && s.ekranEtkin !== false && (kapsam === 'tum' || (s.ekranId !== null && ekranIdleri.includes(s.ekranId))));
   if (!secilen.length && !servisAkisIdleri.length && !uctanUcaAkisIdleri.length) throw new DepoHatasi('Kapsama uyan "Koşuda" senaryo yok.');
   const tam = kapsam === 'tum';
+  // calistirilamadi: hazırlığı eksik olduğu için koşuya alınmayanlar (senaryolar/hazirlik.mjs; sonuçta "Çalıştırılamadı", atlanan gibi).
   const ozet = { toplam: 0, basarili: 0, basarisiz: 0, atlanan: 0, hata: 0 };
+  let calistirilamadi = 0;
   /** @type {YurutmeSonucu['akisKosulari']} */
   const akisKosulari = [];
   let yarida = false;
@@ -71,6 +73,8 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   // senaryolar arası beklemeyi kendi dosya yuvasında da uygular. İlk hata senaryo sırasıyla seçilir.
   /** @type {Array<string | undefined>} */
   const senaryoHatalari = [];
+  /** Hazırlığı eksik senaryoların gerekçesi (koşu kaydının mesajında ilki). @type {Array<string | undefined>} */
+  const senaryoNedenleri = [];
   const baslayan = await sinirliKos(secilen, etkinKosuHiziOku(vt, kural.ortamId).degerler.ekranEszamanli, async (s, i) => {
     ozet.toplam++;
     const eksik = kapali('/platform/senaryolar/calistir', { projeId: kural.projeId, ortamId: kural.ortamId, senaryoId: s.id });
@@ -87,6 +91,7 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
       });
       const d = y.govde.durum;
       if (y.govde.basarili === false) { ozet.hata++; senaryoHatalari[i] = `${s.baslik}: ${hataMetni(y.govde.mesaj ?? y.govde.hata ?? 'çalıştırılamadı')}`; }
+      else if (d === 'calistirilamadi') { calistirilamadi++; ozet.atlanan++; senaryoNedenleri[i] ??= `${s.baslik}: ${hataMetni(y.govde.hataMesaji ?? 'hazırlığı eksik')}`; }
       else if (d === 'passed') ozet.basarili++;
       else if (d === 'skipped' || d === 'iptal') ozet.atlanan++;
       else ozet.basarisiz++;
@@ -161,14 +166,15 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   const durum = hepsiIzinle ? 'atlandi' : yarida ? 'yarida' : ozet.basarisiz || ozet.hata || akisSorunu ? 'basarisiz' : 'tamamlandi';
   const parcalar = [
     hepsiIzinle ? 'Atlandı' : null,
-    senaryoKostu && !hepsiIzinle ? `${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız${ozet.atlanan ? `, ${ozet.atlanan} atlandı` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}` : null,
+    senaryoKostu && !hepsiIzinle ? `${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız${ozet.atlanan ? `, ${ozet.atlanan} atlandı${calistirilamadi ? ` (${calistirilamadi} tanesi hazırlığı eksik olduğu için koşuya alınmadı)` : ''}` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}` : null,
     hepsiIzinle ? null : akisParcasi(servisAkislari, 'servis akışı'),
     hepsiIzinle ? null : akisParcasi(uctanUcalar, 'uçtan uca akış'),
     izinNotlari.size ? `${[...izinNotlari].join(', ')} (Ayarlar > İzinler)` : null,
     yarida ? 'yarıda kaldı (kasa kilitlendi ya da çalışma alanı değişti)' : null,
-    ilkHata || null
+    ilkHata || null,
+    !ilkHata ? senaryoNedenleri.find(Boolean) ?? null : null
   ].filter(Boolean);
-  return { durum, mesaj: parcalar.join(' · '), kosuId: kosanSenaryo ? kosuKimligi : null, ozet: senaryoKostu && !hepsiIzinle ? ozet : null, akisKosulari };
+  return { durum, mesaj: parcalar.join(' · '), kosuId: kosanSenaryo ? kosuKimligi : null, ozet: senaryoKostu && !hepsiIzinle ? (calistirilamadi ? { ...ozet, calistirilamadi } : ozet) : null, akisKosulari };
 }
 
 /**

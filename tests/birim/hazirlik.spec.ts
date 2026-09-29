@@ -195,6 +195,26 @@ test.describe('hazırlık: sunucu ve arayüz (127.0.0.1)', () => {
     expect(sahte.istekler.length).toBe(once + 2);
   });
 
+  test('dışarıdan başlatılan koşu: çalıştırılamaz senaryo koşuya alınmaz; sonuç "Çalıştırılamadı" + aynı gerekçe; koşu kaydında sayı', async () => {
+    test.setTimeout(180_000);
+    const once = sahte.istekler.length;
+    const kosuKimligi = `kosu-${randomBytes(6).toString('hex')}`;
+    const y = await basarili('/platform/senaryolar/calistir', {
+      projeId, ortamId, senaryoId: senaryo['Düğmesiz senaryo'], kosuId: `k-${randomBytes(6).toString('hex')}`, kosuTuru: 'tekil', kosuKimligi
+    });
+    expect(y.durum).toBe('calistirilamadi');
+    const liste = await api(`/platform/senaryolar?projeId=${projeId}`);
+    const neden = ((liste.senaryolar as Json[]).find((x) => x.baslik === 'Düğmesiz senaryo')?.ortamlar as Json[]).find((o) => o.ortamId === ortamId)?.hazirlik.neden;
+    expect(y.hataMesaji).toBe(`${neden} Tarayıcı açılmadı.`);
+    const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Json;
+    // Başarısız ya da geçti sayılmaz: atlanan gibi, ham durum "calistirilamadi".
+    expect([sonuc.durum, sonuc.hamDurum]).toEqual(['atlanan', 'calistirilamadi']);
+    const kosu = (await api(`/platform/sonuclar/kosu?id=${kosuKimligi}`)).kosu as Json;
+    expect(kosu).toMatchObject({ basarili: 0, basarisiz: 0, atlanan: 1, calistirilamadi: 1 });
+    // Tarayıcı sahte uygulamaya hiç gitmedi.
+    expect(sahte.istekler.length).toBe(once);
+  });
+
   test('arayüz: formda hazırlık listesi + gerekçe; açılınca istek yok, "Denetle" tek istek; listede rozet; Koşuyu başlat sayımı', async () => {
     test.setTimeout(120_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });

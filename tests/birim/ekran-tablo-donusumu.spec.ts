@@ -294,12 +294,13 @@ test.describe('uçtan uca: değerleri tabloya bağla + satır seçimi (127.0.0.1
     const once = uygulama.hesaplamalar.length;
     const onay = await kaydet(ekran2, 'Belirsiz onay', { bilgilendirme: '${Belirsiz.Bilgi}' }, [ortamA]);
     const d1 = await kos(onay);
-    expect(d1.durum).toBe('basarisiz');
+    // Hazırlığı eksik (test verisi çözülemiyor): "Çalıştırılamadı" (atlanan gibi), gerekçe cümlesiyle.
+    expect([d1.durum, d1.hamDurum]).toEqual(['atlanan', 'calistirilamadi']);
     expect(String(d1.hataMesaji)).toContain('evet / hayır olarak anlaşılamadı');
     expect(String(d1.hataMesaji)).toContain('Tarayıcı açılmadı');
     const dosya = await kaydet(ekran1, 'Tablodan liste', { sorguTipi: 'coklu', listeDosyasi: '${Dosyalar.Dosya}' }, [ortamA]);
     const d2 = await kos(dosya);
-    expect(d2.durum).toBe('basarisiz');
+    expect([d2.durum, d2.hamDurum]).toEqual(['atlanan', 'calistirilamadi']);
     expect(String(d2.hataMesaji)).toContain('"olmayan-liste.xlsx" dosyası izinli klasörde yok');
     expect(String(d2.hataMesaji)).toContain('Tarayıcı açılmadı');
     expect(uygulama.hesaplamalar.length).toBe(once);

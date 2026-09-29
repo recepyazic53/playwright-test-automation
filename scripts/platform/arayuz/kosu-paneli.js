@@ -503,6 +503,8 @@ async function birTaneCalistir(oturum, satir, ek) {
   satir.bitis = Date.now();
   satir.sonuc = yanit;
   if (!yanit || yanit.basarili === false) satir.durum = 'hata';
+  // Hazırlığı eksik (koşuya alınmadı; senaryolar/hazirlik.mjs): "Çalıştırılamadı" + gerekçe cümlesi.
+  else if (yanit.durum === 'calistirilamadi') { satir.durum = 'hata'; satir.sonuc = { ...yanit, mesaj: yanit.hataMesaji || yanit.mesaj }; }
   else if (yanit.durum === 'passed') satir.durum = 'basarili';
   else if (yanit.durum === 'skipped') satir.durum = 'atlanan';
   else if (yanit.durum === 'iptal') satir.durum = 'durduruldu';
