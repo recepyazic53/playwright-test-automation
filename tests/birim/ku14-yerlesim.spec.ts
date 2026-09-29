@@ -292,14 +292,14 @@ test('senaryo önerileri: CSP konsol ihlali yok; kapsam çubuğu CSS değişkeni
   await page.close();
 });
 
-test('Sonuçlar sol menüsü: "Ekranlar ve akışlar"; ortak akış EKRANLAR altında değil, ayrı "Ortak akışlar" grubunda (ekran sayısına girmez)', async () => {
+test('Sonuçlar sol menüsü: "Ekranlar ve servisler"; ortak akış EKRANLAR altında değil, ayrı "Ortak akışlar" grubunda (ekran sayısına girmez)', async () => {
   const ortak = String((await basarili('/platform/ortak-akis/olustur', { projeId, ad: 'Çıkış adımları' })).ekranId);
   const ozet = await api(`/platform/sonuclar/ozet?projeId=${projeId}`);
   expect((ozet.ekranlar as Nesne[]).map((e) => [e.ad, e.ortakAkis])).toEqual(expect.arrayContaining([['Çıkış adımları', true], ['Üyelik formu', false]]));
   const { page, konsol, disari } = await sayfa();
   await page.goto('/#/sonuclar/ozet');
-  const nav = page.getByRole('navigation', { name: 'Ekranlar ve akışlar' });
-  await expect(nav.getByText('Ekranlar ve akışlar', { exact: true })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Ekranlar ve servisler' });
+  await expect(nav.getByText('Ekranlar ve servisler', { exact: true })).toBeVisible();
   const ekranlarGrubu = nav.getByRole('group', { name: 'Ekranlar' });
   await expect(ekranlarGrubu.getByRole('link')).toHaveCount(2);
   await expect(ekranlarGrubu).not.toContainText('Çıkış adımları');

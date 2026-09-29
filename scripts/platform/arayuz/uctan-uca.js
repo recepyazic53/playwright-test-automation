@@ -31,7 +31,7 @@ export function uctanUcaEkrani(main, parcalar, baglam) {
   const proje = baglam.durum.proje;
   const [kimlik] = parcalar;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve akışlar' }, iskelet('liste'));
+  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve servisler' }, iskelet('liste'));
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Uçtan uca akışlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,

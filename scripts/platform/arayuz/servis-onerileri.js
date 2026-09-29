@@ -82,7 +82,7 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
       }
       // Kabul kararı (öğrenme); kaydedilemese de senaryo eklenmiştir.
       try { await karar(o, 'kabul'); } catch { /* karar kaydı isteğe bağlı */ }
-      bildir(`"${o.baslik}" senaryo olarak eklendi ("Koşuda" kapalı; koşturana kadar istek atılmaz).`);
+      bildir(`"${o.baslik}" senaryo olarak eklendi ("Toplu koşuya dahil" kapalı; koşturana kadar istek atılmaz).`);
       eklendi = true;
     });
     // Liste yeniden okunur: eklenen artık kapsamda (öneri olarak çıkmaz).
@@ -113,7 +113,7 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
   function oneriSatiri(o) {
     const [nedenEtiketi, nedenTuru] = NEDEN_ETIKETLERI[o.neden] || [o.neden, ''];
     const neden = o.eksikler.length ? `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')} (Önizle ile doldurun)` : o.engel ? `${o.engel} (Önizle ile açın)` : '';
-    const ekleDugmesi = h('button', { type: 'button', class: 'kucuk-dugme birincil', 'aria-label': `${o.baslik}: ekle`, disabled: !o.eklenebilir || o.reddedildi, title: neden || 'Senaryo olarak ekle ("Koşuda" kapalı)' },
+    const ekleDugmesi = h('button', { type: 'button', class: 'kucuk-dugme birincil', 'aria-label': `${o.baslik}: ekle`, disabled: !o.eklenebilir || o.reddedildi, title: neden || 'Senaryo olarak ekle ("Toplu koşuya dahil" kapalı)' },
       ikon('artiYalin'), 'Ekle');
     ekleDugmesi.addEventListener('click', () => ekle(o, ekleDugmesi));
     return h('li', { class: `oneri servis-oneri${o.reddedildi ? ' reddedildi' : ''}`, 'data-oneri': o.kimlik, 'data-puan': String(o.puan), 'data-tur': o.tur },
@@ -223,7 +223,7 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: servisAdresi(s.id) }, ikon('geri'), 'Senaryolara dön'))),
     araclar,
     h('div', { class: 'not-kutusu bilgi oneri-bilgisi', role: 'note' },
-      h('p', {}, h('b', {}, 'Öneriler yalnızca taslaktır. '), 'Sayfa hiçbir istek atmaz; "Ekle" senaryoyu "Koşuda" kapalı kaydeder, siz koşturana kadar hiçbir yere gitmez.'),
+      h('p', {}, h('b', {}, 'Öneriler yalnızca taslaktır. '), 'Sayfa hiçbir istek atmaz; "Ekle" senaryoyu "Toplu koşuya dahil" kapalı kaydeder, siz koşturana kadar hiçbir yere gitmez.'),
       h('p', { class: 'kucuk' }, 'Negatif önerilerde "Hata beklenir" işaretlidir ve mesaj boştur (tahmin edilmez): mesajı siz yazın ya da ilk koşunun yanıtından "Son yanıttan kontrol öner" ile alın.')),
     govde);
   yukle();

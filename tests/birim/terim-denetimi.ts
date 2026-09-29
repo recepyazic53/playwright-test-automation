@@ -131,8 +131,14 @@ export const TERIM_KURALLARI: readonly TerimKurali[] = [
     ad: 'ortam dışı "CANLI" (canlı görüntü / tema)',
     bul: (m, satir) => /CANLI/u.test(m) && (m.trim() === 'CANLI' ? !/TEST/u.test(satir) : !ORTAM_BAGLAMI.test(m))
   },
-  // Sol menü "Ekranlar ve akışlar" (ürün kavramı tanıtılmıyor): sayaç "N ekran", başlık "Ürünler" değil.
-  { ad: '"ürün / ekran" / "Ürünler" yerine "ekran" / "Ekranlar ve akışlar"', bul: (m) => /ürün \/ ekran|^\s*(Ürünler|ÜRÜNLER)\s*$/u.test(m) },
+  // Sol menü "Ekranlar ve servisler" (ürün kavramı tanıtılmıyor): sayaç "N ekran", başlık "Ürünler" değil.
+  { ad: '"ürün / ekran" / "Ürünler" yerine "ekran" / "Ekranlar ve servisler"', bul: (m) => /ürün \/ ekran|^\s*(Ürünler|ÜRÜNLER)\s*$/u.test(m) },
+  // Senaryonun anahtarı "Toplu koşuya dahil" ("Koşuda" eski ad). "Koşuda seçilen satır", "Koşuda yakalanan mesajlar" gibi
+  // "koşu sırasında" anlamı serbesttir.
+  {
+    ad: '"Koşuda" (anahtar) yerine "Toplu koşuya dahil"',
+    bul: (m) => /"Koşuda"|^\s*Koşuda\s*$|Koşuda (?:açık|kapalı|AÇIK|KAPALI)|Koşuda \(|Koşuda:|(?<![Tt]oplu )Koşudan çıkar|(?<![Tt]oplu )[Kk]oşuya (?:dahil|ekle)(?! ed)/u.test(m)
+  },
   // Kod bilmeyen kullanıcıya "Playwright test adı" denmez; başlık raporlarda görünen test adıdır.
   { ad: '"Playwright test adı" yerine "raporlarda görünen test adı"', bul: (m) => /Playwright test adı/u.test(m) }
 ];

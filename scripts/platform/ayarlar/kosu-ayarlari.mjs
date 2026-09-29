@@ -183,7 +183,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     aciklama: 'Servis metodunun p95 süresi önceki eşit döneme göre en az bu kadar arttıysa (bu dönemde en az 20 ölçümle) Sonuçlar > Özet > Dikkat kartında görünür.',
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 500, birim: '%' },
   { anahtar: 'ozetKosmayanGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Koşmayan senaryo',
-    aciklama: 'Koşuya dahil bir ekran ya da servis senaryosu bu kadar gündür hiç koşmadıysa Sonuçlar > Özet > Bakım kartında görünür.',
+    aciklama: 'Toplu koşuya dahil bir ekran ya da servis senaryosu bu kadar gündür hiç koşmadıysa Sonuçlar > Özet > Bakım kartında görünür.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, birim: 'gün' },
   { anahtar: 'ozetYedekGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Eski yedek',
     aciklama: 'Son yedek bu kadar günden eskiyse (ya da hiç yedek yoksa) Sonuçlar > Özet > Kapsam ve güvenlik kartında görünür.',

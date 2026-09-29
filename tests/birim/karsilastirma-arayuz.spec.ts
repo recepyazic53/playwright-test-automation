@@ -213,7 +213,7 @@ for (const [genislik, yukseklik] of [[1440, 960], [390, 844]] as const) {
   test(`Sonuçlar sol paneli: servis bağlantısı Sonuçlar içinde servise süzülmüş sonuçları açar (ekranlarla aynı; ${genislik}px)`, async () => {
     const { page, hatalar, kapat } = await sayfaAc(genislik, yukseklik);
     await git(page, '#/sonuclar');
-    const nav = page.getByRole('navigation', { name: 'Ekranlar ve akışlar' });
+    const nav = page.getByRole('navigation', { name: 'Ekranlar ve servisler' });
     const baglanti = nav.getByRole('link', { name: /Kayıt Servisi/ });
     await expect(baglanti).toHaveAttribute('href', `#/sonuclar/s/${encodeURIComponent(f.servisId)}`);
     // Telefonda yan panel daraltılmış olabilir: bağlantıya adresiyle gidilir (aynı rota).
@@ -224,7 +224,7 @@ for (const [genislik, yukseklik] of [[1440, 960], [390, 844]] as const) {
     await expect(page.getByRole('heading', { name: /Kayıt Servisi/, level: 2 })).toBeVisible();
     await expect(page.locator('main .kirinti')).toContainText('Sonuçlar');
     await expect(page.getByRole('region', { name: 'Koşu geçmişi' })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Ekranlar ve akışlar' }).getByRole('link', { name: /Kayıt Servisi/ })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: 'Ekranlar ve servisler' }).getByRole('link', { name: /Kayıt Servisi/ })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('tab', { name: 'Raporlar' })).toHaveCount(0);
     const d = await denetle(page);
     expect(d.tasma, `yatay taşma: ${d.tasanlar.join(', ')}`).toBeLessThanOrEqual(2);
@@ -287,7 +287,7 @@ test('servis sonuçlarının tek yeri Sonuçlar > Servisler: eski adresler yönl
   await git(page, `#/servisler/sonuclar/kosu/${encodeURIComponent(f.servisKosuA)}`);
   await expect(page).toHaveURL(new RegExp(`#/sonuclar/servisler/kosu/${encodeURIComponent(f.servisKosuA)}$`));
   await expect(page.locator('main .kirinti')).toContainText('Sonuçlar');
-  await expect(page.getByRole('navigation', { name: 'Ekranlar ve akışlar' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Ekranlar ve servisler' })).toBeVisible();
   // Servisler ekranı: sol paneldeki "Sonuçlar" ve servisin Raporlar sekmesi (yalnız o servisin çalıştırma listesi).
   await git(page, `#/servisler/s/${id}/raporlar`);
   await expect(page.locator('.servis-sonuc-girisi').getByRole('link', { name: 'Sonuçlar' })).toHaveAttribute('href', `#/sonuclar/s/${id}`);

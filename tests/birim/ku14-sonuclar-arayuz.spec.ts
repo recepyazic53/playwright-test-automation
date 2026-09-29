@@ -181,7 +181,7 @@ test('8. Koşu onayı: 0 senaryoda "Başlat" kapalı ve nedeni yazılı; senaryo
   await expect(baslat).toBeDisabled();
   const neden = d.locator('.kosu-bos-nedeni');
   await expect(neden).toContainText('Başlatılamaz');
-  await expect(neden).toContainText('2 senaryo Koşuda kapalı');
+  await expect(neden).toContainText('2 senaryo toplu koşuya dahil değil');
   await expect(baslat).toHaveAttribute('aria-describedby', (await neden.getAttribute('id')) ?? '');
   // Başka ortam seçilince senaryo gelir: düğme açılır, neden kaybolur.
   await d.getByLabel('Ortam').selectOption('o2');

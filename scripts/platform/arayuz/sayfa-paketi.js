@@ -446,7 +446,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
       h('div', { class: 'mini-sayilar' }, [['Adım', a.adim], ['Alan', a.alan], ['Öneri', p.senaryolar.length]].map(([e, v]) => h('div', {}, h('b', {}, String(v)), h('span', {}, e)))),
       h('dl', { class: 'ozet-satirlari' },
         analiz ? null : [h('dt', {}, ortak ? 'Ortak akış' : 'Ekran'), h('dd', {}, o.hedef ? `mevcut: ${o.hedef.ad}` : `yeni: ${p.meta.ekran.ad}`),
-          ortak ? null : [h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`)],
+          ortak ? null : [h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili ("Toplu koşuya dahil" kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`)],
           h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)],
         tvOzet ? [h('dt', {}, 'Test verisi'), h('dd', {}, tvOzet)] : null));
     // Düğme kapalıyken neden hemen altında yazar; her nedende ilgili bölüme götüren "Bölüme git" (ortak.js).
@@ -547,7 +547,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         const r = await mesgulIken(kabulDugmesi, 'Değiştiriliyor…', () => api('/platform/ekran/model/degistir', {
           govde: { projeId: s.proje.id, ekranId: s.ekran.id, paket, onay: true, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi], testVerisi: tv.govde() }
         }));
-        bildir(`${s.ekran.ad}: model v${r.surum} yazıldı${r.senaryoIdleri.length ? `, ${r.senaryoIdleri.length} yeni senaryo (Koşuda kapalı)` : ''}.`);
+        bildir(`${s.ekran.ad}: model v${r.surum} yazıldı${r.senaryoIdleri.length ? `, ${r.senaryoIdleri.length} yeni senaryo ("Toplu koşuya dahil" kapalı)` : ''}.`);
         testVerisiBildir(r.testVerisi);
         s.bitti(s.ekran.id, false);
         return;
@@ -565,7 +565,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         location.hash = `#/ekranlar/e/${encodeURIComponent(r.ekranId)}/akis`;
         return;
       }
-      bildir(`${p.meta.ekran.ad} eklendi: model v${r.surum}, ${r.senaryoIdleri.length} senaryo (Koşuda kapalı)${r.kanitSayisi ? `, ${r.kanitSayisi} kanıt` : ''}.`);
+      bildir(`${p.meta.ekran.ad} eklendi: model v${r.surum}, ${r.senaryoIdleri.length} senaryo ("Toplu koşuya dahil" kapalı)${r.kanitSayisi ? `, ${r.kanitSayisi} kanıt` : ''}.`);
       testVerisiBildir(r.testVerisi);
       s.bitti(r.ekranId, false);
     } catch (e) {

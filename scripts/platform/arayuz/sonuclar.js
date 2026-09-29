@@ -127,7 +127,7 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   const proje = baglam.durum.proje;
   const [tur, kimlik] = parcalar;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
-  const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve akışlar' }, iskelet('liste'));
+  const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve servisler' }, iskelet('liste'));
   // Sağlık noktası eşikleri proje başınadır (Ayarlar > Arayüz > Sağlık noktası); not eşikler gelince güncellenir.
   const saglikMetni = h('span', {}, esikMetni(ESIKLER));
   const saglikNotu = h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}), saglikMetni, ' ',

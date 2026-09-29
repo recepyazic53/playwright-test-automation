@@ -111,7 +111,7 @@ test.describe('servis senaryo önerileri arayüzü', () => {
     await expect(page).toHaveURL(/\/senaryo\/yeni$/);
     await expect(page.getByText('Öneriden açıldı (kaydedilmedi).')).toBeVisible();
     await expect(page.locator('input[type="text"]').first()).toHaveValue(ilkBaslik);
-    await expect(page.getByLabel('Koşuya dahil')).not.toBeChecked();
+    await expect(page.getByLabel('Toplu koşuya dahil')).not.toBeChecked();
     expect((await senaryolar()).length).toBe(sayi);
     await tasmaYok(page);
     // Sayfa ve önizleme servise hiçbir istek atmadı.

@@ -256,7 +256,7 @@ function kapsamMetni(k, s) {
   const ekranAdi = (id) => (s.ekranlar.find((e) => e.id === id) || { ad: 'silinmiş ekran' }).ad;
   const akisAdi = (id) => ([...s.akislar, ...s.uctanUcalar].find((a) => a.id === id) || { baslik: 'silinmiş akış' }).baslik;
   const parcalar = [];
-  if (k.kapsam.senaryolar === 'tum') parcalar.push('Tüm "Koşuda" senaryolar');
+  if (k.kapsam.senaryolar === 'tum') parcalar.push('Toplu koşuya dahil tüm senaryolar');
   else if (k.kapsam.senaryolar === 'ekranlar') parcalar.push(`Ekranlar: ${k.kapsam.ekranIdleri.map(ekranAdi).join(', ')}`);
   if (k.kapsam.servisAkisIdleri.length) parcalar.push(`Servis akışları: ${k.kapsam.servisAkisIdleri.map(akisAdi).join(', ')}`);
   const uctan = k.kapsam.uctanUcaAkisIdleri || [];
@@ -337,8 +337,8 @@ function kuralFormu(s) {
 
   // Kapsam
   const kapsamTuru = h('select', {},
-    h('option', { value: 'tum' }, 'Tüm "Koşuda" senaryolar (tam koşu)'),
-    h('option', { value: 'ekranlar' }, 'Seçili ekranların "Koşuda" senaryoları'),
+    h('option', { value: 'tum' }, 'Toplu koşuya dahil tüm senaryolar (tam koşu)'),
+    h('option', { value: 'ekranlar' }, 'Seçili ekranların toplu koşuya dahil senaryoları'),
     h('option', { value: 'yok' }, 'Senaryo yok (yalnız akışlar)'));
   kapsamTuru.value = k ? k.kapsam.senaryolar : 'tum';
   const ekranKutulari = kutuListesi(s.ekranlar.map((e) => [e.id, e.durum === 'devre_disi' ? `${e.ad} (devre dışı)` : e.ad]), k ? k.kapsam.ekranIdleri : [], 'Ekranlar');

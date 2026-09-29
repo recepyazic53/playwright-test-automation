@@ -292,7 +292,7 @@ edilince sürüm 2'ye yükselir.
 ## Model koşucusu
 
 Tüm senaryolar `tests/model-kosucu/model-senaryolari.spec.ts` tarafından üretilen testlerle koşar. Her test `@model-<senaryo kimliği>` etiketini taşır; Nöbetçi tek senaryo koşusunu bu
-etiketle daraltır, "Koşuyu başlat" Koşuda açık model senaryolarını da dahil eder.
+etiketle daraltır, "Koşuyu başlat" toplu koşuya dahil model senaryolarını da dahil eder.
 
 Koşu: giriş tarifiyle giriş → senaryonun bağlam profiliyle (modelde `eslesme.profilHavuzu` olan alan; havuz adı
 giriş tarifinin bağlam türüdür) bağlam değiştirme → `ekranUrl` → modelin adımları sırayla. Senaryoda değeri olan her
@@ -513,9 +513,9 @@ artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarıl
 * `adimKapsami`: dahil edilen isteğe bağlı adımların kimlikleri (modelin adım kapsamı ayarlarına çevrilir).
 * `beklenenSonuc.tur`: `basari` | `hata` (iş kuralı hatası beklenir — ayrıntısı `veri`deki beklenen sonuç alanında).
 * Öneriler tek senaryo doğrulayıcısından geçirilir; modele uymayan öneri önizlemede sorunlarıyla
-  gösterilir ve seçilemez. Kabul edilen öneriler **Koşuda kapalı** eklenir: test kodu gerekmez, **model
+  gösterilir ve seçilemez. Kabul edilen öneriler **"Toplu koşuya dahil" kapalı** eklenir: test kodu gerekmez, **model
   koşucusuyla** çalışırlar (Senaryolar'da "model" rozeti; bkz. [Model koşucusu](#model-koşucusu)). Koşuya
-  almak kullanıcının kararıdır (Koşuda anahtarı).
+  almak kullanıcının kararıdır ("Toplu koşuya dahil" anahtarı).
 
 ## gerekenAyarlar
 
