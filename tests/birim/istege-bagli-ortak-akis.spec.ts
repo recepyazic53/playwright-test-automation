@@ -210,7 +210,7 @@ test.describe('sunucu, koşu ve arayüz (sahte uygulama)', () => {
   });
   /** Ekranın (varsayılan akış) "“Kargo bloğu” dahil" ayar alanı. */
   const dahilAyari = async (ekranId: string): Promise<Nesne | undefined> =>
-    ((await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`)).model.senaryoDuzeyi.alanlar as Nesne[]).find((a) => a.id === DAHIL);
+    (((await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`)) as Nesne).model as { senaryoDuzeyi: { alanlar: Nesne[] } }).senaryoDuzeyi.alanlar.find((a) => a.id === DAHIL);
   /** Sayfa yatay taşmıyor. */
   const tasmaYok = async (page: Page, yer: string): Promise<void> => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), yer).toBeLessThanOrEqual(0);
@@ -321,7 +321,8 @@ test.describe('sunucu, koşu ve arayüz (sahte uygulama)', () => {
     await page.getByRole('button', { name: 'Ekranlara ekle…' }).click();
     const diyalog = page.locator('dialog.ekran-yonetim-diyalogu');
     await diyalog.getByRole('listitem').filter({ hasText: 'Yalın Sipariş' }).getByRole('checkbox').check();
-    await expect(diyalog.getByRole('radio', { name: /^İsteğe bağlı/ })).toBeChecked();
+    await expect(diyalog.getByRole('radio', { name: /^Her senaryoda/ })).toBeChecked();   // varsayılan (kullanıcı kararı)
+    await diyalog.getByRole('radio', { name: /^İsteğe bağlı/ }).check();
     await diyalog.getByRole('radio', { name: /^Dahil$/ }).check();
     await tasmaYok(page, 'ekranlara ekle 390');
     await diyalog.getByRole('button', { name: 'Devam' }).click();
