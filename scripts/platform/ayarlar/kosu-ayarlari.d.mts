@@ -26,6 +26,8 @@ export interface KosuAyarlari {
   enCokVeriKosusu: number;
   /** Tarama ve akış kaydında koşunun ekran boyutu, dili, oturum kontrolü ve giriş alanı beklemesi kullanılsın (kayıtsızsa eşlerden türetilir). */
   taramaKosuAyarlariniKullan: boolean;
+  /** Ayarlar > Arayüz > Sonuçlar özeti (Sonuçlar > Genel > Özet kartlarının eşikleri; sonuclar/farkindalik.mjs). */
+  ozetKirmiziGun: number; ozetYavaslamaYuzde: number; ozetKosmayanGun: number; ozetYedekGun: number;
 }
 export interface TaramaEtkinAyarlari { kaynak: 'kosu' | 'ayri'; genislik: number; yukseklik: number; dil: string | null; oturumKontrolSn: number; girisAlanBeklemeSn: number }
 export declare const TARAMA_ESLERI: ReadonlyArray<[string, string]>;

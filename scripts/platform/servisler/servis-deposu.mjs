@@ -11,6 +11,7 @@ import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { ekranAdimiDogrula } from '../akislar/ekran-adimi.mjs';
 import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -178,9 +179,13 @@ export function servisSil(vt, id, yapan) {
  * - jsonEsit: JSON yanıtta "yol"daki değer (a.b[0].c; baştaki "$." isteğe bağlı) "deger"e eşit (REST)
  * - veya: alt kontrollerden EN AZ BİRİ geçerse geçer (alt: kontroller; iç içe VEYA yok). Senaryonun kontrol listesi VE'dir.
  * - dosya: yanıt gövdesi dosya olarak (CSV / XLSX / PDF / metin) "dosya" tanımındaki beklentilerle doğrulanır (dosyalar/dosya-icerigi.mjs).
- * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'jsonEsit' | 'veya' | 'dosya';
+ * - yanitAlani: yanıt alanı (kaynak xml / json, yol) işleçle: esit / icerir / var / yok / desen / aralik (enAz, enCok); gizli: değer yazılmaz.
+ * - altinYanit: onaylanan yanıtın yapısı + seçili sabit alanları; eklenen / kaldırılan / değişen alanlar yol yol (yokSay hariç).
+ * - yanitSuresi: yanıt en çok "deger" ms'de gelmeli (SLA). Üçü de yanit-kontrolleri.mjs'de değerlendirilir; eski türler aynen çalışır.
+ * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'jsonEsit' | 'veya' | 'dosya' | 'yanitAlani' | 'altinYanit' | 'yanitSuresi';
  *   deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[];
- *   dosya?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi }} ServisKontrolu
+ *   dosya?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; kaynak?: 'xml' | 'json'; islec?: string; enAz?: number; enCok?: number; gizli?: boolean;
+ *   bicim?: 'xml' | 'json'; yapi?: string[]; alanlar?: Array<{ yol: string; deger: string }>; yokSay?: string[] }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
  *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
  *   basliklar?: Record<string, string>; http?: ServisHttpTanimi; sozlesmeDogrula?: boolean }} ServisSenaryoIcerigi
@@ -191,7 +196,56 @@ export function servisSil(vt, id, yapan) {
  *   sira: number | null; icerik: ServisSenaryoIcerigi; olusturulma: string; guncellenme: string }} ServisSenaryosu
  */
 
-export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya', 'dosya']);
+export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya', 'dosya',
+  'yanitAlani', 'altinYanit', 'yanitSuresi']);
+/** Yanıt alanı kontrolünün işleçleri (yanit-kontrolleri.mjs). */
+const ALAN_ISLECLERI = ['esit', 'icerir', 'var', 'yok', 'desen', 'aralik'];
+const MASKELI = /\*{3,}|•{3,}/;
+
+/**
+ * Yanıttan üretilen kontroller (yanit-kontrolleri.mjs): yanitAlani, altinYanit, yanitSuresi. Maskeli değer kontrol değeri olamaz; altın
+ * yanıtta gizli adlı / maskeli alanın değeri saklanmaz (yalnız yapıda yolu kalır).
+ * @param {any} k @param {string} yer @param {string} tur @returns {ServisKontrolu}
+ */
+function yanitKontroluDogrula(k, yer, tur) {
+  const ad = typeof k.ad === 'string' && k.ad ? { ad: k.ad } : {};
+  const yolMu = (/** @type {unknown} */ y) => typeof y === 'string' && y.trim() !== '' && y.length <= 1000 && !/[\r\n]/.test(y);
+  if (tur === 'yanitSuresi') {
+    const n = Number(k.deger);
+    if (typeof k.deger !== 'string' || !/^\d+$/.test(k.deger) || n < 1 || n > 600_000) throw new DepoHatasi(`${yer} kontrol (yanıt süresi): en çok kaç ms (1–600000) yazın.`);
+    return /** @type {ServisKontrolu} */ ({ tur, deger: String(n), ...ad });
+  }
+  if (tur === 'yanitAlani') {
+    if (k.kaynak !== 'xml' && k.kaynak !== 'json') throw new DepoHatasi(`${yer} kontrol (yanıt alanı): kaynak xml ya da json olmalı.`);
+    if (!yolMu(k.yol)) throw new DepoHatasi(`${yer} kontrol (yanıt alanı): alan yolu gerekli.`);
+    if (!ALAN_ISLECLERI.includes(k.islec)) throw new DepoHatasi(`${yer} kontrol (yanıt alanı): işleç geçersiz.`);
+    const degerli = ['esit', 'icerir', 'desen'].includes(k.islec);
+    if (degerli && (typeof k.deger !== 'string' || !k.deger)) throw new DepoHatasi(`${yer} kontrol (yanıt alanı) için değer gerekli.`);
+    if (degerli && MASKELI.test(k.deger)) throw new DepoHatasi(`${yer} kontrol (yanıt alanı): maskelenmiş değer kontrol değeri olamaz ("var" ya da desen kullanın).`);
+    if (k.islec === 'desen') { try { new RegExp(k.deger, 'u'); } catch { throw new DepoHatasi(`${yer} kontroldeki desen geçersiz.`); } }
+    const sayi = (/** @type {unknown} */ v) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+    const enAz = k.islec === 'aralik' ? sayi(k.enAz) : undefined;
+    const enCok = k.islec === 'aralik' ? sayi(k.enCok) : undefined;
+    if (k.islec === 'aralik') {
+      if (enAz === undefined && enCok === undefined) throw new DepoHatasi(`${yer} kontrol (sayısal aralık): en az ya da en çok değerini yazın.`);
+      if ([enAz, enCok].some((x) => x !== undefined && !Number.isFinite(x))) throw new DepoHatasi(`${yer} kontrol (sayısal aralık): sınırlar sayı olmalı.`);
+      if (enAz !== undefined && enCok !== undefined && enAz > enCok) throw new DepoHatasi(`${yer} kontrol (sayısal aralık): en az, en çoktan büyük olamaz.`);
+    }
+    return /** @type {ServisKontrolu} */ ({
+      tur, kaynak: k.kaynak, yol: k.yol.trim(), islec: k.islec, ...(degerli ? { deger: k.deger } : {}), ...(enAz !== undefined ? { enAz } : {}), ...(enCok !== undefined ? { enCok } : {}),
+      ...(k.gizli === true ? { gizli: true } : {}), ...ad
+    });
+  }
+  // altinYanit
+  if (k.bicim !== 'xml' && k.bicim !== 'json') throw new DepoHatasi(`${yer} kontrol (altın yanıt): biçim xml ya da json olmalı.`);
+  const yollar = (/** @type {unknown} */ v, /** @type {number} */ sinir) => (Array.isArray(v) ? [...new Set(v.filter(yolMu))].slice(0, sinir) : []);
+  const yapi = yollar(k.yapi, 2000);
+  if (!yapi.length) throw new DepoHatasi(`${yer} kontrol (altın yanıt): yanıtın yapısı boş.`);
+  const alanlar = (Array.isArray(k.alanlar) ? k.alanlar : [])
+    .filter((/** @type {any} */ a) => a && yolMu(a.yol) && typeof a.deger === 'string' && a.deger.length <= 4000 && !MASKELI.test(a.deger) && !gizliAdMi(String(a.yol).split(/[/.]/).pop()?.replace(/\[\d+\]$/, '') ?? ''))
+    .slice(0, 500).map((/** @type {any} */ a) => ({ yol: a.yol, deger: a.deger }));
+  return /** @type {ServisKontrolu} */ ({ tur, bicim: k.bicim, yapi, alanlar, yokSay: yollar(k.yokSay, 500), ...ad });
+}
 
 /**
  * Tek kontrolü doğrular (VEYA'nın alt kontrolleri de; iç içe VEYA kabul edilmez).
@@ -213,6 +267,8 @@ function kontrolDogrula(k, yer, altMi) {
     const { tetikleyici: _t, zamanAsimiSn: _z, ...tanim } = d.tanim;
     return { tur, dosya: tanim, ...(typeof k.ad === 'string' && k.ad ? { ad: k.ad } : {}) };
   }
+  if (tur === 'altinYanit' && altMi) throw new DepoHatasi(`${yer} kontrol: altın yanıt VEYA içinde kullanılamaz.`);
+  if (tur === 'yanitAlani' || tur === 'altinYanit' || tur === 'yanitSuresi') return yanitKontroluDogrula(k, yer, tur);
   if ((tur === 'icerir' || tur === 'icermez' || tur === 'xpathEsit' || tur === 'jsonEsit' || tur === 'durumKodu') && (typeof k.deger !== 'string' || !k.deger)) {
     throw new DepoHatasi(`${yer} kontrol (${tur}) için "deger" gerekli.`);
   }

@@ -324,14 +324,17 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/giris-ozeti.mjs', { dosya: 'giris-ozeti.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-denemesi.js', { dosya: 'giris-denemesi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sonuc-ozeti.js', { dosya: 'sonuc-ozeti.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/taban-adresler.js', { dosya: 'taban-adresler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rest-sihirbazi.js', { dosya: 'rest-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/curl-aktarimi.js', { dosya: 'curl-aktarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-onerileri.js', { dosya: 'servis-onerileri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sonuclari.js', { dosya: 'servis-sonuclari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/html-rapor.js', { dosya: 'html-rapor.js', tur: 'text/javascript; charset=utf-8' }],
@@ -371,9 +374,14 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/hesap-kurallari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'hesap-kurallari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/hesap-kurali-formu.js', { dosya: 'hesap-kurali-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rest-semasi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'rest-semasi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // cURL komutu ayrıştırıcısı (Servis ekle > cURL yapıştır): saf modül, sunucuyla ORTAK; yapıştırılan metin tarayıcıda çözülür.
+  ['/arayuz/curl-ayristirici.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'curl-ayristirici.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Servis sözleşmesi: yanıt doğrulayıcı / taslak düzenleme (saf modül) sunucuyla ORTAK; sekme arayüzü.
   ['/arayuz/sozlesme-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'sozlesme-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sozlesmesi.js', { dosya: 'servis-sozlesmesi.js', tur: 'text/javascript; charset=utf-8' }],
+  // Yanıttan kontrol üretme (yanıt ağacı, işleç önerisi, altın yanıt): koşudaki değerlendirmeyle ORTAK saf modül.
+  ['/arayuz/yanit-kontrolleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'yanit-kontrolleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/yanit-kontrol-paneli.js', { dosya: 'yanit-kontrol-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],

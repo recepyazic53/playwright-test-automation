@@ -4,7 +4,8 @@ import type { Veritabani } from '../veritabani/baglanti.mjs';
 export declare const SERVIS_TURLERI: readonly ['soap', 'rest'];
 export declare const SENARYO_KAPSAMLARI: readonly ['test', 'canli', 'ikisi'];
 export declare const KOSU_DURUMLARI: readonly ['basarili', 'basarisiz', 'hata'];
-export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya', 'dosya'];
+export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya', 'dosya',
+  'yanitAlani', 'altinYanit', 'yanitSuresi'];
 
 export declare const HTTP_METOTLARI: readonly ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 export type ServisKapsami = 'test' | 'canli' | 'ikisi';
@@ -37,6 +38,10 @@ export interface ServisKontrolu {
   tur: (typeof KONTROL_TURLERI)[number]; deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[];
   /** Dosya kontrolü (tur 'dosya'): yanıt gövdesi dosya olarak beklentilerle doğrulanır (dosyalar/dosya-icerigi.mjs). */
   dosya?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
+  /** Yanıt alanı kontrolü (tur 'yanitAlani'): kaynak, işleç ve aralık; gizli: değer açıklamaya yazılmaz. */
+  kaynak?: 'xml' | 'json'; islec?: 'esit' | 'icerir' | 'var' | 'yok' | 'desen' | 'aralik'; enAz?: number; enCok?: number; gizli?: boolean;
+  /** Altın yanıt (tur 'altinYanit'): biçim, yapı yolları, sabit alanların değerleri, yok sayılan yollar. */
+  bicim?: 'xml' | 'json'; yapi?: string[]; alanlar?: Array<{ yol: string; deger: string }>; yokSay?: string[];
 }
 export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;

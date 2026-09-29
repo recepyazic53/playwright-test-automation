@@ -18,6 +18,7 @@ import { riskBelirtilmemisMi } from './ortam-riski.mjs';
 import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
+import { curlAktarimi } from './curl-aktarimi.js';
 import { aktarimEtkisiBolumu, etkiOnayi, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { benzerTabloNotu } from './veri-sagligi.js';
 import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
@@ -33,6 +34,8 @@ import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrol
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
+import { servisOnerileriPaneli } from './servis-onerileri.js';
+import { sonYanitliKosu, yanitKontrolPaneli } from './yanit-kontrol-paneli.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -40,9 +43,52 @@ const DURUM = { basarili: ['Başarılı', 'basari'], basarisiz: ['Başarısız',
 const KONTROL_TURLERI = [
   ['soapYaniti', 'Yanıt geçerli SOAP zarfı'], ['soapHatasiYok', 'SOAP hatası (Fault) yok'], ['soapHatasi', 'SOAP hatası (Fault) döner'],
   ['icerir', 'Yanıtta geçer'], ['icermez', 'Yanıtta geçmez'], ['xpathEsit', 'XPath değeri eşit'], ['jsonEsit', 'JSON değeri eşit'], ['durumKodu', 'HTTP durum kodu'],
-  ['dosya', 'Yanıttaki dosyayı doğrula'], ['veya', 'Şunlardan biri (VEYA)']
+  ['dosya', 'Yanıttaki dosyayı doğrula'], ['veya', 'Şunlardan biri (VEYA)'],
+  // Yanıttan kontrol (yanit-kontrolleri.mjs): alan + işleç, altın yanıt (yalnız "Son yanıttan kontrol öner" ile), yanıt süresi.
+  ['yanitAlani', 'Yanıt alanı (işleçli)'], ['altinYanit', 'Altın yanıtla karşılaştır'], ['yanitSuresi', 'Yanıt süresi (en çok ms)']
 ];
-const DEGERLI_KONTROLLER = new Set(['icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'durumKodu']);
+const DEGERLI_KONTROLLER = new Set(['icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'durumKodu', 'yanitSuresi']);
+
+/**
+ * "Yanıt alanı" kontrol satırının girdileri: kaynak (XML / JSON), alan yolu, işleç, değer ya da aralık. Gizli alandan gelen kontrolde
+ * değer girilemez (yalnız var / yok / desen).
+ * @param {Record<string, any>} k @param {string} no
+ */
+function yanitAlaniGirdileri(k, no) {
+  const kaynak = h('select', { 'aria-label': `${no} yanıt biçimi` }, [['xml', 'XML'], ['json', 'JSON']].map(([d, m]) => h('option', { value: d, selected: (k.kaynak || 'xml') === d }, m)));
+  kaynak.addEventListener('change', () => { k.kaynak = kaynak.value; });
+  const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: k.yol || '', placeholder: k.kaynak === 'json' ? 'veri.liste[0].no' : '/Envelope/Body/…/Alan', 'aria-label': `${no} yanıt alanı yolu` });
+  yol.addEventListener('input', () => { k.yol = yol.value; });
+  const islecler = k.gizli ? ['var', 'yok', 'desen'] : ISLEC_LISTESI;
+  const islec = h('select', { 'aria-label': `${no} işleç` }, islecler.map((x) => h('option', { value: x, selected: (k.islec || 'esit') === x }, ISLEC_ADLARI[x])));
+  const deger = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: k.deger || '', 'aria-label': `${no} kontrol değeri` });
+  deger.addEventListener('input', () => { k.deger = deger.value; });
+  const sinir = (ad, etiket) => {
+    const g = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', value: k[ad] ?? '', placeholder: etiket, class: 'sayi-girdisi', 'aria-label': `${no} ${etiket}` });
+    g.addEventListener('input', () => { const t = g.value.trim().replace(',', '.'); if (t === '') delete k[ad]; else k[ad] = Number(t); });
+    return g;
+  };
+  const alanlar = h('span', { class: 'yanit-alani-girdileri' });
+  const ciz = () => {
+    k.islec = islec.value;
+    yerlestir(alanlar, k.islec === 'aralik' ? [sinir('enAz', 'en az'), sinir('enCok', 'en çok')] : ['esit', 'icerir', 'desen'].includes(k.islec) ? deger : null);
+    deger.placeholder = k.islec === 'desen' ? 'desen (ör. \\d{8})' : 'değer';
+    if (k.islec !== 'aralik') { delete k.enAz; delete k.enCok; }
+    if (!['esit', 'icerir', 'desen'].includes(k.islec)) delete k.deger; else if (deger.value) k.deger = deger.value;
+  };
+  islec.addEventListener('change', ciz);
+  ciz();
+  return h('span', { class: 'yanit-alani-kontrolu' }, kaynak, yol, islec, alanlar, k.gizli ? rozet('gizli: değer yok', 'atlanan', { title: 'Değer gizli / maskeli bir alandan: yalnız var, yok ya da desen' }) : null);
+}
+const ISLEC_LISTESI = ['esit', 'icerir', 'var', 'yok', 'desen', 'aralik'];
+const ISLEC_ADLARI = { esit: 'eşittir', icerir: 'içerir', var: 'var (boş değil)', yok: 'yok', desen: 'desen', aralik: 'sayısal aralık' };
+
+/** Altın yanıt satırının özeti (düzenlenmez; yeniden oluşturmak için "Son yanıttan kontrol öner"). @param {Record<string, any>} k */
+function altinYanitOzeti(k) {
+  const yok = k.yokSay || [];
+  return h('span', { class: 'altin-yanit-ozeti' }, rozet(`${(k.yapi || []).length} yapı yolu · ${(k.alanlar || []).length} sabit alan · ${yok.length} yok sayılan`, 'vurgu'),
+    yok.length ? h('details', {}, h('summary', { class: 'kucuk' }, 'Yok sayılanlar'), h('ul', { class: 'kucuk' }, yok.map((x) => h('li', {}, h('code', { class: 'duz' }, x))))) : null);
+}
 const HTTP_METOTLARI = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const hataKutusu = (e) => h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message || String(e));
 const q = encodeURIComponent;
@@ -50,6 +96,13 @@ const iki = (n) => String(n).padStart(2, '0');
 const kisaTarih = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
 /** Senaryolar sekmesinin oturum boyunca korunan durumu (filtreler, seçim); servis değişince sıfırlanır. */
 const liste = { servisId: null, arama: '', kosuda: '', operasyon: '', son: '', secim: new Set() };
+/**
+ * Önerinin "Önizle"si: yeni senaryo düzenleyicisi bu taslakla (başlık + içerik) açılır; kaydedilmez. Bir kez kullanılır.
+ * @type {{ servisId: string; baslik: string; icerik: any; not: string } | null}
+ */
+let bekleyenTaslak = null;
+/** Raporlar > koşu > "Bu yanıttan kontrol öner": senaryo düzenleyici o koşunun yanıtıyla açılır (bir kez). @type {{ senaryoId: string; kosuId: string } | null} */
+let bekleyenYanitKosusu = null;
 // Ortam yalnız koşu diyaloğunda seçilir (başlıkta ortam segmenti yok). Diyalog son seçilen ortamla açılır (yalnız bu tarayıcıda
 // hatırlanır); yoksa varsayılan TEST ortamı.
 const ORTAM_ANAHTARI = 'platform.servisOrtami';
@@ -131,10 +184,11 @@ async function servisEkleSayfasi(icerik, proje) {
   const secim = h('div', { class: 'segment', role: 'tablist', 'aria-label': 'Ekleme yolu' });
   const alanKap = h('div', {});
   const ciz = (yol) => {
-    yerlestir(secim, ...[['sihirbaz', 'Adım adım'], ['soapui', 'SoapUI dosyasından'], ['postman', 'Postman koleksiyonu']].map(([d, m]) =>
+    yerlestir(secim, ...[['sihirbaz', 'Adım adım'], ['soapui', 'SoapUI dosyasından'], ['postman', 'Postman koleksiyonu'], ['curl', 'cURL yapıştır']].map(([d, m]) =>
       h('button', { type: 'button', role: 'tab', 'aria-selected': d === yol ? 'true' : 'false', onclick: () => ciz(d) }, m)));
     if (yol === 'sihirbaz') servisSihirbazi(alanKap, proje, ortamlar).catch((e) => yerlestir(alanKap, hataKutusu(e)));
     else if (yol === 'postman') postmanAktarimi(alanKap, proje, ortamlar);
+    else if (yol === 'curl') curlAktarimi(alanKap, proje, ortamlar);
     else soapuiAktarimi(alanKap, proje, ortamlar);
   };
   yerlestir(icerik,
@@ -533,13 +587,23 @@ function beklenenOzeti(kontroller) {
   const tek = (k) => k.tur === 'icerir' ? `"${kisalt(k.deger || '')}"` : k.tur === 'icermez' ? `içermez "${kisalt(k.deger || '')}"`
     : k.tur === 'xpathEsit' ? `${k.xpath} = ${kisalt(k.deger || '')}` : k.tur === 'durumKodu' ? `HTTP ${k.deger}`
       : k.tur === 'soapHatasi' ? 'SOAP hatası (Fault)' : k.tur === 'soapHatasiYok' ? 'SOAP hatası yok'
-        : k.tur === 'veya' ? `biri: ${(k.alt || []).map(tek).join(' | ')}` : k.tur === 'dosya' ? `dosya: ${dosyaOzeti(k.dosya)}` : k.tur;
+        : k.tur === 'veya' ? `biri: ${(k.alt || []).map(tek).join(' | ')}` : k.tur === 'dosya' ? `dosya: ${dosyaOzeti(k.dosya)}`
+          : k.tur === 'yanitAlani' ? `${String(k.yol || '').split(/[/.]/).pop()} ${ISLEC_ADLARI[k.islec] || ''}${k.deger && !k.gizli ? ` ${kisalt(k.deger)}` : ''}`
+            : k.tur === 'altinYanit' ? 'altın yanıt' : k.tur === 'yanitSuresi' ? `≤ ${k.deger} ms` : k.tur;
   return `${tek(anlamli[0])}${anlamli.length > 1 ? ` (+${anlamli.length - 1})` : ''}`;
 }
 
 function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortamlar = []) {
+  // Senaryo önerileri (servis-onerileri.js): kural tabanlı taslaklar; "Önizle" yeni senaryo düzenleyicisini taslakla açar (kaydetmez).
+  const oneriPaneli = servisOnerileriPaneli(proje, s, ortamlar, {
+    yenile,
+    onizle: (o) => {
+      bekleyenTaslak = { servisId: s.id, baslik: o.baslik, icerik: o.icerik, not: [o.gerekce, o.engel, o.eksikler.length ? `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')}` : ''].filter(Boolean).join(' · ') };
+      location.hash = `#/servisler/s/${q(s.id)}/senaryo/yeni`;
+    }
+  });
   if (!senaryolar.length) {
-    yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin ya da SoapUI dosyasından aktarın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }));
+    yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin, SoapUI dosyasından aktarın ya da aşağıdaki önerilerden başlayın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }), oneriPaneli);
     return;
   }
   // Servis değişince seçim ve filtreler sıfırlanır; aynı serviste yenilemeden sonra korunur.
@@ -721,7 +785,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama),
       kosudaSecimi.kap, operasyonSecimi.kap, kapsamSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
-    topluAlani, tabloAlani);
+    topluAlani, tabloAlani, oneriPaneli);
 
   function ciz() {
     const gorunen = gorunenler();
@@ -884,14 +948,16 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
  * Dene: onay sorulur (TEST ortamı + adres); kaydedilmemiş hâli canlı koşu panelinde çalışır (tablodaki ▷ ile aynı ekran:
  * adımlar, istek / yanıt, kontroller, Durdur). Senaryo kaydedilmez; sonuç raporlara "deneme" olarak yazılır.
  */
-async function deneVeGoster(proje, s, ortam, istek, baslik, dugme) {
+async function deneVeGoster(proje, s, ortam, istek, baslik, dugme, yanitGeldi = null) {
   if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
   // CANLI ortamda yalnız tek tip CANLI onayı; onay servisKosusuBaslat'ta (canliOnayEki) isteğe eklenir.
   const tamam = await istekOnayi(ortam, { baslik: 'TEST ortamına istek atılsın mı?', metin: `"${baslik}" ${ortam.ad} ortamında denenecek (${s.ayarlar.yol}).`, dugme: 'Dene', ikonAd: 'oynat' });
   if (!tamam) return;
   dugme.disabled = true;
   try {
-    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik }, bitti: () => {} });
+    // Bitince Dene'nin koşu kaydı düzenleyiciye bildirilir ("Son yanıttan kontrol öner" bu yanıtı açar; kontrolü kullanıcı ekler).
+    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik },
+      bitti: (is) => { const kosuId = is?.satirlar?.[0]?.sonuc?.kosuId; if (kosuId && yanitGeldi) yanitGeldi(kosuId); } });
   } catch (e) { bildir(e.message, 'hata'); } finally { dugme.disabled = false; }
 }
 
@@ -929,7 +995,10 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   // REST servisi: istek metodu + göreli yol senaryoda (icerik.http); yeni senaryo operasyonun tanımıyla başlar.
   const rest = s.tur === 'rest';
   const ilkOp = (s.ayarlar.operasyonlar || [])[0];
-  const i = senaryo ? senaryo.icerik : rest
+  // Öneriden "Önizle": yeni senaryo önerinin taslağıyla açılır (bir kez; kaydedilmez, Koşuda kapalı).
+  const taslak = !senaryo && bekleyenTaslak && bekleyenTaslak.servisId === s.id ? bekleyenTaslak : null;
+  bekleyenTaslak = null;
+  const i = senaryo ? senaryo.icerik : taslak ? JSON.parse(JSON.stringify(taslak.icerik)) : rest
     ? { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'durumKodu', deger: '200-299' }], http: { metot: ilkOp?.metot || 'GET', yol: restOpYolu(ilkOp), ...(ilkOp?.icerikTuru ? { icerikTuru: ilkOp.icerikTuru } : {}) } }
     : { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'soapYaniti' }] };
   const httpMetot = h('select', {}, HTTP_METOTLARI.map((m) => h('option', { value: m, selected: (i.http?.metot || 'GET') === m }, m)));
@@ -944,12 +1013,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   const semalar = s.ayarlar.operasyonSemalari || {};
   const varsayilanlar = JSON.parse(JSON.stringify(s.ayarlar.alanVarsayilanlari || {}));
-  const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : '' });
+  const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : taslak ? taslak.baslik : '' });
   const operasyonlar = (s.ayarlar.operasyonlar || []).map((o) => o.ad);
   if (i.operasyon && !operasyonlar.includes(i.operasyon)) operasyonlar.push(i.operasyon);
   const operasyon = h('select', {}, operasyonlar.map((o) => h('option', { value: o, selected: o === i.operasyon }, o)));
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k, selected: (senaryo?.kapsam || 'test') === k }, m)));
-  const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : true });
+  const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : !taslak });
 
   // --- Hesaplama kuralları (alan formundaki "Hesaplama kuralı" seçimi; değer koşuda kuraldan üretilir; tarih kuralları dahil) ---
   const parametreGruplari = [
@@ -1294,11 +1363,15 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         : h('select', { class: `baglac-secimi ${x.bag === 'VEYA' ? 'veya' : ''}`, 'aria-label': `${no} bağlaç`, title: 'VE: bu kontrol de tutmalı · VEYA: üstteki kontrolle birlikte, en az biri tutması yeter' },
           h('option', { value: 'VE', selected: x.bag === 'VE' }, 'VE'), h('option', { value: 'VEYA', selected: x.bag === 'VEYA' }, 'VEYA'));
       if (n > 0) bag.addEventListener('change', () => { x.bag = bag.value; kontrolCiz(); });
-      const tur = h('select', { 'aria-label': `${no} kontrol türü` }, KONTROL_TURLERI.filter(([d]) => d !== 'veya').map(([d, m]) => h('option', { value: d, selected: k.tur === d }, m)));
+      // Altın yanıt yalnız "Son yanıttan kontrol öner" ile (onaylanan yanıttan) oluşur: listede yalnız o satırda görünür.
+      const tur = h('select', { 'aria-label': `${no} kontrol türü` }, KONTROL_TURLERI.filter(([d]) => d !== 'veya' && (d !== 'altinYanit' || k.tur === 'altinYanit'))
+        .map(([d, m]) => h('option', { value: d, selected: k.tur === d }, m)));
       tur.addEventListener('change', () => {
         k.tur = tur.value;
         // Dosya kontrolü: yanıt gövdesi dosya olarak beklentilerle doğrulanır (tanım k.dosya); başka türe geçince tanım atılır.
         if (k.tur === 'dosya') k.dosya ||= yeniDosyaTanimi(); else delete k.dosya;
+        if (k.tur === 'yanitAlani') { k.kaynak ||= rest ? 'json' : 'xml'; k.islec ||= 'esit'; }
+        if (k.tur !== 'altinYanit') { delete k.yapi; delete k.alanlar; delete k.yokSay; delete k.bicim; }
         kontrolCiz();
       });
       const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${no} kontrolü kaldır`, onclick: () => {
@@ -1317,8 +1390,10 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       const grupta = grupBoyu[grupNo[n]] > 1;
       const bas = n === 0 || x.bag === 'VE';
       const son = n === kontrolSatirlari.length - 1 || kontrolSatirlari[n + 1].bag === 'VE';
+      if (k.tur === 'yanitSuresi') { deger.placeholder = 'en çok ms (ör. 2000)'; deger.inputMode = 'numeric'; }
       return h('div', { class: `kontrol-satiri${grupta ? ' veya-grubunda' : ''}${grupta && bas ? ' grup-basi' : ''}${grupta && son ? ' grup-sonu' : ''}` }, bag, tur,
         k.tur === 'xpathEsit' ? xpath : null, k.tur === 'jsonEsit' ? jsonYolu : null, DEGERLI_KONTROLLER.has(k.tur) ? deger : null,
+        k.tur === 'yanitAlani' ? yanitAlaniGirdileri(k, no) : null, k.tur === 'altinYanit' ? altinYanitOzeti(k) : null,
         k.tur === 'icerir' || k.tur === 'icermez' ? h('label', { class: 'secenek', for: buyuk.id }, buyuk, 'büyük/küçük duyarsız') : null,
         kaldir,
         k.tur === 'dosya' ? h('div', { class: 'kontrol-dosyasi' }, dosyaKontroluFormu(k.dosya ||= yeniDosyaTanimi(), { degisti: () => undefined, ad: `${no} kontrol` })) : null);
@@ -1329,6 +1404,39 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       h('div', { class: 'kontrol-listesi-duzen' }, ...satirlar, ekle));
   };
   kontrolCiz();
+  // --- Son yanıttan kontrol öner (yanit-kontrol-paneli.js): son Dene / koşu yanıtının alan listesinden; hiçbir şey kendiliğinden eklenmez ---
+  const yanitPaneli = h('div', { class: 'yanit-kontrol-paneli', role: 'region', 'aria-label': 'Son yanıttan kontrol öner' });
+  yanitPaneli.hidden = true;
+  /** Bu düzenleyicide son Dene'nin koşu kaydı (kaydedilmemiş taslak için de). @type {string | null} */
+  let sonDeneKosusu = null;
+  /** Kontrolü listeye ekler (altın yanıt tektir: varsa yenisiyle değişir). @param {Record<string, any>} yeni */
+  const yanittanEkle = (yeni) => {
+    if (yeni.tur === 'altinYanit') {
+      const i = kontrolSatirlari.findIndex((x) => x.k.tur === 'altinYanit');
+      if (i >= 0) { kontrolSatirlari[i].k = yeni; kontrolCiz(); return; }
+    }
+    kontrolSatirlari.push({ k: yeni, bag: 'VE' });
+    kontrolCiz();
+  };
+  const yanitPaneliAc = async (kosuId) => {
+    yanitPaneli.hidden = false;
+    yerlestir(yanitPaneli, h('p', { class: 'soluk kucuk' }, 'Yanıt yükleniyor…'));
+    try {
+      let kosu = null;
+      if (kosuId) kosu = (await api(`/platform/servis/kosu?projeId=${q(proje.id)}&id=${q(kosuId)}`)).kosu;
+      else if (senaryo) kosu = await sonYanitliKosu(proje, s.id, senaryo.id);
+      if (!kosu) {
+        yerlestir(yanitPaneli, h('div', { class: 'not-kutusu bilgi', role: 'status' }, 'Bu senaryonun kayıtlı bir yanıtı yok. Önce "Dene" ile bir yanıt alın (istek onayınızla gider); sonra buradan kontrol ekleyin.',
+          h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Paneli kapat', onclick: () => { yanitPaneli.hidden = true; } }, ikon('carpi'))));
+        return;
+      }
+      await yanitKontrolPaneli(yanitPaneli, { proje, kosu, rest, ekle: yanittanEkle, kapat: () => { yanitPaneli.hidden = true; yerlestir(yanitPaneli); } });
+    } catch (e) { yerlestir(yanitPaneli, hataKutusu(e)); }
+  };
+  const yanittanDugmesi = h('button', { type: 'button', class: 'kucuk-dugme', title: 'Son Dene ya da koşu yanıtının alanlarından kontrol ekleyin (istek atılmaz)' }, ikon('liste'), 'Son yanıttan kontrol öner');
+  yanittanDugmesi.addEventListener('click', () => { yanitPaneliAc(sonDeneKosusu); });
+  // Raporlar sekmesindeki "Bu yanıttan kontrol öner": düzenleyici o koşunun yanıtıyla açılır.
+  if (senaryo && bekleyenYanitKosusu && bekleyenYanitKosusu.senaryoId === senaryo.id) { const id = bekleyenYanitKosusu.kosuId; bekleyenYanitKosusu = null; queueMicrotask(() => yanitPaneliAc(id)); }
   // Yanıt sözleşmesi (servis > Sözleşme sekmesi): senaryo başına, varsayılan KAPALI (bugünkü davranış).
   const sozlesmeKutusu = h('input', { type: 'checkbox', id: yeniKimlik('sozlesme'), checked: i.sozlesmeDogrula === true });
   const sozlesmeNotu = h('span', { class: 'soluk kucuk sozlesme-notu' });
@@ -1415,10 +1523,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (eksik) { mesaj.goster(eksikMetni(eksik)); return; }
     let taslakIcerik;
     try { taslakIcerik = icerikAl(); } catch (e) { mesaj.goster(e.message); return; }
-    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik }, baslik.value.trim() || 'Taslak', dene);
+    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik }, baslik.value.trim() || 'Taslak', dene,
+      (kosuId) => { sonDeneKosusu = kosuId; if (!yanitPaneli.hidden) yanitPaneliAc(kosuId); });
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' },
     h('h3', {}, senaryo ? 'Senaryoyu düzenle' : 'Yeni senaryo'), mesaj.kutu,
+    taslak ? h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' }, h('b', {}, 'Öneriden açıldı (kaydedilmedi). '), taslak.not) : null,
     alan('Başlık', baslik, { zorunlu: true }),
     h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' })),
     h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),
@@ -1427,7 +1537,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       rest ? h('div', { class: 'satir-duzen' }, alan('HTTP metodu', httpMetot), alan('Yol', httpYol, { yardim: `Servis adresine (${s.ayarlar.yol || '/'}) eklenir; sorgu dahil. Değerler URL kodlanır.` })) : null,
       rest ? null : sekmeKap, uyari, govdeAlani,
       alan('HTTP header', basliklar, { yardim: 'İsteğe eklenecek header satırları, her satırda "Ad: değer". Servis akışında okunan değer ${akis:Ad} ile kullanılır (ör. Authorization: Bearer ${akis:Token}); değer servisin oturum akışından da gelebilir.' })),
-    h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu,
+    h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu, h('div', { class: 'dugmeler yanittan-kontrol' }, yanittanDugmesi), yanitPaneli,
       h('div', { class: 'sozlesme-secenegi' }, h('label', { class: 'secenek', for: sozlesmeKutusu.id }, sozlesmeKutusu, 'Yanıt sözleşmeye uymalı'), sozlesmeNotu)),
     veriBolumu,
     h('div', { class: 'dugmeler' }, kaydet, ortamlar.length > 1 ? deneOrtami.el : null, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
@@ -1616,7 +1726,14 @@ async function raporlarSekmesi(kap, proje, s, ortamlar, senaryolar, seciliKosu) 
   const goster = async (id) => {
     try {
       const { kosu } = await api(`/platform/servis/kosu?projeId=${q(proje.id)}&id=${q(id)}`);
-      yerlestir(ayrinti, h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, kosu.baslik), h('span', { class: 'alt' }, tarihMetni(kosu.baslangic))),
+      // Tek istekli senaryonun yanıtı varsa: düzenleyici bu yanıtın alan listesiyle açılır; kontrolü kullanıcı ekler.
+      const sn = kosu.senaryoId ? senaryolar.find((x) => x.id === kosu.senaryoId && x.icerik.tur !== 'akis' && !x.gecen) : null;
+      const yanittan = sn && typeof kosu.sonuc?.yanit === 'string' && kosu.sonuc.yanit && !kosu.sonuc.hata
+        ? h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
+          bekleyenYanitKosusu = { senaryoId: sn.id, kosuId: kosu.id };
+          location.hash = `#/servisler/s/${q(s.id)}/senaryo/${q(sn.id)}`;
+        } }, ikon('liste'), 'Bu yanıttan kontrol öner') : null;
+      yerlestir(ayrinti, h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, kosu.baslik), h('span', { class: 'alt' }, tarihMetni(kosu.baslangic)), yanittan),
         ...sonucGovdesi({ ...kosu.sonuc, durum: kosu.durum, sureMs: kosu.sureMs })));
     } catch (e) { yerlestir(ayrinti, hataKutusu(e)); }
   };

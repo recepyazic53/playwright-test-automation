@@ -591,7 +591,8 @@ function yakalananMesajlar(vt, sonucIdleri, kalanlar, maskele) {
 /** Kontrol türlerinin görünen adı (kalıpta DEĞER yok: yalnız tür ve yol). */
 export const KONTROL_ETIKETLERI = Object.freeze({
   durumKodu: 'HTTP durum kodu', soapYaniti: 'SOAP zarfı', soapHatasiYok: 'SOAP hatası yok', soapHatasi: 'SOAP hatası döner', icerir: 'Yanıtta geçer',
-  icermez: 'Yanıtta geçmez', xpathEsit: 'XPath eşit', jsonEsit: 'JSON eşit', veya: 'VEYA', dosya: 'Dosya', sozlesme: 'Yanıt sözleşmesi'
+  icermez: 'Yanıtta geçmez', xpathEsit: 'XPath eşit', jsonEsit: 'JSON eşit', veya: 'VEYA', dosya: 'Dosya', sozlesme: 'Yanıt sözleşmesi',
+  yanitAlani: 'Yanıt alanı', altinYanit: 'Altın yanıt', yanitSuresi: 'Yanıt süresi'
 });
 
 /**

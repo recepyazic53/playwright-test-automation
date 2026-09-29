@@ -8,14 +8,20 @@ import type { Sema } from './sozlesme-dogrulayici.mjs';
 export declare const SOZLESME_KAYNAKLARI: readonly ['wsdl', 'openapi', 'jsonSchema', 'taslak'];
 export type SozlesmeKaynagi = (typeof SOZLESME_KAYNAKLARI)[number];
 export declare const KAYNAK_ETIKETLERI: Readonly<Record<SozlesmeKaynagi, string>>;
-export interface Sozlesme { kaynak: SozlesmeKaynagi; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; guncellenme: string }
+export interface Sozlesme {
+  kaynak: SozlesmeKaynagi; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string;
+  /** Kaynaktaki istek alanları ve kısıtları (yalnız senaryo önerileri kullanır). */
+  istek?: Alan[]; guncellenme: string;
+}
 export interface SozlesmeGecmisi {
   zaman: string; islem: 'olustur' | 'degistir' | 'sil'; kaynak?: string; kaynakBilgisi?: string; alanSayisi?: number;
   fark?: { eklenen: number; kaldirilan: number; degisen: number }; yapan?: string;
 }
-export interface SozlesmeTaslagi { kaynak: SozlesmeKaynagi; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; uyarilar: string[]; ozet: { alanSayisi: number; zorunluSayisi: number } }
-export interface OpenapiOperasyonu { anahtar: string; metot: string; yol: string; operationId?: string; ozet?: string; durumKodu?: string; sema?: Sema; uyarilar: string[]; hata?: string }
+export interface SozlesmeTaslagi { kaynak: SozlesmeKaynagi; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; istek?: Alan[]; uyarilar: string[]; ozet: { alanSayisi: number; zorunluSayisi: number } }
+export interface OpenapiOperasyonu { anahtar: string; metot: string; yol: string; operationId?: string; ozet?: string; durumKodu?: string; sema?: Sema; istek?: Alan[]; uyarilar: string[]; hata?: string }
 
+export declare function openapiIstekAlanlari(belge: unknown, parametreler: unknown[], requestBody: unknown, surum2: boolean, uyarilar: string[]): Alan[];
+export declare function istekAlanlariniTemizle(v: unknown): Alan[] | undefined;
 export declare function belgeOku(metin: string): unknown;
 export declare function refCoz(belge: unknown, dugum: unknown, uyarilar?: string[]): any;
 export declare function openapiOperasyonlari(metin: string): { baslik: string; operasyonlar: OpenapiOperasyonu[] };

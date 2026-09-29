@@ -58,7 +58,7 @@ export const REHBERLER = {
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
-      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde dört sekme vardır: Ekranlar (ekran senaryolarının koşuları), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde beş sekme vardır, bu sırayla: Özet (varsayılan; "Genel"e tıklayınca açılır — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; bu sayfa), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
         metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin kaldığını ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
@@ -106,6 +106,42 @@ export const REHBERLER = {
         baslik: 'Kalan bir testi incelemek',
         sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Kalan test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
+      }
+    ]
+  },
+  // Sonuçlar > Genel > Özet (#/sonuclar/ozet): bölümler ekrandaki sırayla — sol panel, sağlık noktası, başlık + Rapor al (PDF),
+  // sekmeler, tarih aralığı, özet kutuları, Dikkat, Bakım, Kapsam ve güvenlik.
+  'sonuclar-ozet': {
+    baslik: 'Sonuçlar özeti',
+    adimlar: [
+      {
+        baslik: 'Özet sekmesi',
+        metin: ['"Genel"in ilk sekmesi: projenin tamamına tek bakış. Üstte ekran, servis ve uçtan uca sonuçlarının seçili dönemdeki başarısı; altında şimdi ilgilenmeniz gerekenler üç kartta toplanır.',
+          'Kartlardaki her madde ilgili ekranı açar. Madde yoksa kart tek satırlık "Sorun yok" olur.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Özet kutuları', alt: 'dönem başarısı', ikon: 'grafik' }, { baslik: 'Dikkat', ikon: 'uyari' }, { baslik: 'Bakım', ikon: 'duzenle' }, { baslik: 'Kapsam ve güvenlik', ikon: 'kalkan' }] }
+      },
+      { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
+      { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
+      { baslik: 'Başlık ve "Rapor al (PDF)"', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. "Rapor al (PDF)" genel kapsamlı dönem raporunu hazırlar.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar, Raporlar. Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
+      { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Özet kutuları ve kartlar seçtiğiniz aralığın günlerine göre, önceki eşit dönemle karşılaştırılarak hesaplanır. "Tümü" seçiliyken son 30 gün kullanılır.' },
+      {
+        baslik: 'Özet kutuları', hedef: '.ozet-kutulari',
+        metin: 'Ekranlar (tam koşu testleri), Servisler (servis çağrıları) ve Uçtan uca (akış koşuları): dönemin başarı oranı, önceki eşit döneme göre fark (▲ ▼, puan) ve sayılar. Kutuya tıklayınca ilgili sekme açılır.'
+      },
+      {
+        baslik: 'Dikkat', hedef: '.farkindalik-karti.dikkat',
+        metin: 'Hemen bakılması gerekenler: kritik işaretli olup son koşusunda kalan, P1 sorunu olan ya da uzun süredir kırmızı olan ekran, servis ve akışlar; p95 süresi önceki döneme göre belirgin artan servis metotları; kaçan, atlanan ya da yarıda kalan zamanlanmış koşular ve nedeni.',
+        ipucu: '"Kaç gündür kırmızı" ve "yavaşlama yüzdesi" eşikleri Ayarlar > Arayüz > Sonuçlar özeti\'ndedir.'
+      },
+      {
+        baslik: 'Bakım', hedef: '.farkindalik-karti.bakim',
+        metin: 'Testlerin bakım işleri: sabit tarihi geçmişte kalan senaryolar, belirli gündür hiç koşmayan senaryolar, karar bekleyen ekran bulguları ve test verisi sağlığı sorunları (kırık başvuru, kullanılmayan tablo…).'
+      },
+      {
+        baslik: 'Kapsam ve güvenlik', hedef: '.farkindalik-karti.kapsam',
+        metin: 'Kapsam boşlukları ve güvenlik hatırlatmaları: senaryosu olmayan servis metotları, denenmemiş koşul dalları (ekran başına), son yedeğin yaşı, açık riskli izinler ve türü (Test / Canlı) seçilmemiş ortamlar.',
+        ipucu: 'Kartta ilk beş madde görünür; gerisi "Tümü (N)" ile açılır.'
       }
     ]
   },
@@ -210,7 +246,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Çalışma sırası',
-        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
+        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu, cURL komutu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Servis', alt: 'ekle', ikon: 'ag' }, { baslik: 'Senaryo', alt: 'istek', ikon: 'duzenle' }, { baslik: 'Kontroller', ikon: 'onay' }, { baslik: 'Akış', alt: 'zincir', ikon: 'katman' }] }
       }
     ]
@@ -220,15 +256,20 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Servis ekleme yolları',
-        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
+        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan, bir cURL komutundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman / cURL', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
       },
       {
         baslik: 'Yalnız adresiniz varsa: REST',
         metin: ['"Adım adım" sekmesinde türü "REST (JSON)" seçin. Tam adresi yapıştırın (ör. xxx.com/api/v1/authenticate): sunucu kısmı taban adres olur, şema yazılmadıysa https:// varsayılır. İstekler adımında yolun devamını ve HTTP işlemini (GET / POST / PUT…) seçin; POST için örnek JSON gövde yapıştırabilirsiniz, alanları tablo sütunlarına bağlanır.'],
         cizim: { tur: 'form', alanlar: ['Taban adres', 'HTTP işlemi + yol', 'Gövde örneği'], dugme: 'Kaydet' }
       },
-      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki gizli değerler yalnızca siz onaylarsanız alınır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
+      {
+        baslik: 'cURL komutunuz varsa',
+        metin: ['"cURL yapıştır" sekmesine bir ya da daha çok curl komutu yapıştırın (bash, Windows cmd ya da PowerShell\'deki curl.exe; tarayıcıdaki "Copy as cURL" dahil); her komut bir istek olur. Önizlemede taban adres, yol, metot, başlıklar, sorgu ve gövde alanları görünür; kayıtlı bir taban adresle eşleşirse ona bağlanması önerilir. "Devam" ile adım adım sihirbaz dolu açılır: alanları tablo sütunlarına bağlayıp kaydedersiniz.', 'Metin yalnız tarayıcıda okunur; önizlemede ve kayıtta hiçbir servise istek atılmaz. -F / --form ve dosyadan veri (@dosya) desteklenmez; tanınmayan seçenekler uyarıyla gösterilir. SOAP isteği gibi görünen komutta WSDL yolu önerilir.'],
+        cizim: { tur: 'form', alanlar: ['cURL komutları', 'Önizleme', 'Gizli değer onayı'], dugme: 'Devam' }
+      },
+      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki ve cURL komutundaki (Authorization, Cookie, -u, API anahtarı) gizli değerler yalnızca siz onaylarsanız alınır; onaylamazsanız hiç kaydedilmez, sütunu boş açılır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
       { baslik: 'Ekledikten sonra', sira: ['Servisin her ortamdaki adresini kontrol edin.', 'Giriş gerekiyorsa servis giriş bilgisini ekleyin.', 'Senaryolar sekmesinden ilk senaryoyu oluşturun.'] }
     ]
   },
@@ -252,6 +293,22 @@ export const REHBERLER = {
         sira: ['Türü "Akış" seçin ve akışı seçin (bu servisten geçen akışlar listelenir).', 'Her adım ayrı bölümde sorulur ("1. Servis · Operasyon"): o metodun zorunlu ve seçili alanlarını doldurun. Aynı adlı alan her adımda ayrı sorulur.',
           'Önceki adımdan gelen alanlar kilitlidir ("1. adımdan gelir") ve sorulmaz.', 'Her adımın beklenen sonucunu kontrol edin (ör. bu adım bir hata vermeli).', 'Dene ile TEST’te deneyin, sonra kaydedin. Akış senaryosu, akışın geçtiği her serviste "akış: <ad>" rozetiyle listelenir.'],
         cizim: { tur: 'form', alanlar: ['Akış', '1. adımın alanları', '2. adımın alanları (kilitliler hariç)', 'Beklenen sonuçlar'], dugme: 'Dene' }
+      },
+      {
+        baslik: 'Senaryo önerileri',
+        hedef: '.servis-onerileri-dugmesi',
+        metin: ['Senaryolar sekmesinin altındaki "Senaryo önerileri"ni açın. Öneriler kural tabanlıdır (yapay zekâ yok), metot bazındadır ve her birinin gerekçesi yazar; mevcut senaryoların zaten denediği şey önerilmez. Varsayılan olarak en iyi 10 öneri görünür.',
+          'Türler: senaryosu olmayan metoda başarılı akış; şemadan (WSDL / XSD ya da Sözleşme sekmesinden yüklenen OpenAPI) zorunlu alan eksik, sınır (alt / üst) ve negatif (sınır dışı, uzunluk + 1, liste dışı, desene uymayan, yanlış tip — alan başına yalnız en anlamlısı); liste alanlarının (şemadaki liste, evet / hayır, tablo listesi) eksik ikilileri (pairwise) ve hiç denenmemiş değerleri; geçmişten risk (son 14 günde kalan senaryoların değerleri öne alınır, son 90 günde görülen ve beklenen olarak test edilmemiş hata mesajı).',
+          'Negatif önerilerde beklenen "Hata beklenir"dir (SOAP Fault ya da HTTP 4xx / 5xx) ve mesaj boş gelir: mesajı siz yazın ya da ilk koşudan sonra "Son yanıttan kontrol öner" ile alın. Görülen mesaj önerisinde beklenen o mesajdır; mesajda maskelenmiş parça varsa önizlemede düzeltirsiniz. Hassas alanlarda (gizli adlar, gizli sütunlar) sınır / negatif değer ve kombinasyon üretilmez.',
+          'Öneri yalnız taslaktır: panel hiçbir istek atmaz. "Ekle" senaryoyu "Koşuda" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Şema + senaryolar', alt: 'kısıtlar, kapsam', ikon: 'katman' }, { baslik: 'Öneri', alt: 'gerekçeli', ikon: 'yildiz' }, { baslik: 'Ekle', alt: 'Koşuda kapalı', ikon: 'arti' }, { baslik: 'Koşu', alt: 'siz başlatınca', ikon: 'oynat' }] }
+      },
+      {
+        baslik: 'Son yanıttan kontrol öner',
+        metin: ['Senaryo düzenleyicide Kontroller bölümündeki "Son yanıttan kontrol öner", son Dene ya da koşu yanıtını alan listesi olarak açar (istek atılmaz). Bir alanın satırında işleci seçip "Ekle" deyin: eşittir, içerir, var, yok, desen ya da sayısal aralık. Önerilen işleç değerin biçiminden gelir (tarih → tarih deseni, uzun numara → \\d{n}, sayı → aralık). Raporlar sekmesindeki bir koşudan "Bu yanıttan kontrol öner" ile de açılır.',
+          '"Altın yanıt olarak ekle": yanıtın yapısı ve "karşılaştır" seçili alanların değerleri saklanır; sonraki yanıtlarda eklenen / kaldırılan / değişen alanlar yol yol raporlanır. Tarih, numara gibi her koşuda değişen alanlar varsayılan olarak "yok say"dır; listeyi siz düzenlersiniz. "Yanıt en çok N ms" yanıt süresini denetler.',
+          'Gizli adlı ya da maskeli alanda değer gösterilmez ve saklanmaz: yalnız "var" ya da desen eklenebilir. Hiçbir kontrol kendiliğinden eklenmez; eklenenler senaryoyu kaydedince yazılır. Eski "XPath değeri eşit" / "JSON değeri eşit" kontrolleri aynen çalışır.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Son yanıt', alt: 'Dene / koşu', ikon: 'liste' }, { baslik: 'Alan', alt: 'işleç seç', ikon: 'duzenle' }, { baslik: 'Kontrol', alt: 'siz eklersiniz', ikon: 'onay' }] }
       },
       { baslik: 'Yanıt sözleşmesi', metin: 'Senaryonun Kontroller bölümündeki "Yanıt sözleşmeye uymalı" kutusu (varsayılan kapalı) işaretlenirse yanıt, metodun Sözleşme sekmesindeki yapıya göre de doğrulanır; uymayan alanlar raporda yol yol listelenir ve senaryo kalır.' },
       {
@@ -597,6 +654,7 @@ export const REHBERLER = {
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
     adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
-      { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' }]
+      { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' },
+      { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' }]
   }
 };

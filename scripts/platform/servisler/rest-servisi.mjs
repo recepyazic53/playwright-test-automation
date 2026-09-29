@@ -7,6 +7,8 @@
 //   sütununa şifreli yazılır; başlıkta yalnız başvuru (${Tablo.Sütun}; "Bearer " gibi şema korunur) kalır. Değer arayüze dönmez.
 // - Erişim denetimi (WSDL) yoktur; kayıt ağ isteği atmaz. "Dene" yalnız kullanıcı isteğiyle (CANLI ortamda ayrıca onayla), yasak adres
 //   denetiminden geçen adrese bir istek atar.
+// - cURL'den ekleme (Servis ekle > cURL yapıştır): gizli değer yalnız kullanıcı onayladıysa gelir ve şifreli sütuna yazılır; onaysız
+//   gizli değerin sütunu boş açılır (gizliBosSutun, gizliAlanDegerleri). Yeni servis adlandırılmış taban adresine bağlanabilir (tabanGrubu).
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
@@ -18,6 +20,7 @@ import { basvuru } from '../tablolar/tablo-secimi.mjs';
 import { gizlileriMaskele, ServisHatasi } from './soap-istemcisi.mjs';
 import { adresBirlestirRest, restIstegi } from './rest-istemcisi.mjs';
 import { baslangicSablonu, govdeOrnegiCoz, GOVDELI_METOTLAR, REST_METOTLARI, restSemasi } from './rest-semasi.mjs';
+import { alanSatirlari } from './servis-govdesi.mjs';
 import { servisGetir, servisKaydet, servisSenaryolariniListele, servisSenaryosuKaydet } from './servis-deposu.mjs';
 import { alanBaglariniDogrula, alanZorunluluklariniDogrula, kuralBaglariniDenetle, tabanlariDogrula, tabanlariOrtamlaraKaydet, tarihKurallariniDogrula } from './servis-islemleri.mjs';
 import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
@@ -73,12 +76,37 @@ export function restUcuDogrula(x, i) {
 }
 
 /**
+ * Gizli alan değerleri girdisi: { <uç adı>: { <alan yolu>: değer | null } } (null: kullanıcı değeri onaylamadı, sütun boş açılır).
+ * @param {unknown} v @returns {Record<string, Record<string, string | null>>}
+ */
+export function gizliAlanDegerleriniDogrula(v) {
+  if (v === undefined || v === null) return {};
+  if (typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"gizliAlanDegerleri" bir nesne olmalıdır.');
+  /** @type {Record<string, Record<string, string | null>>} */
+  const s = {};
+  for (const [uc, alanlar] of Object.entries(v)) {
+    if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${uc}" gizli değerleri bir nesne olmalıdır.`);
+    for (const [yol, d] of Object.entries(alanlar)) {
+      if (d !== null && (typeof d !== 'string' || d.length > 4000 || /[\r\n]/.test(d))) throw new DepoHatasi('Gizli değer tek satır ve en çok 4000 karakter olmalı.');
+      (s[uc] ??= {})[yol] = d;
+    }
+  }
+  return s;
+}
+
+/**
  * REST servisi ekler / günceller (uçlar, taban adresler, alan bağları, zorunluluklar) ve istenen uçlar için başlangıç senaryosu
  * oluşturur. Ağ isteği atılmaz.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ id?: string; anahtar: string; ad: string; tabanlar?: Record<string, string>; tlsDogrulama?: boolean; uclar: unknown[];
- *   alanBaglari?: unknown; alanZorunluluklari?: unknown; tarihKurallari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string }} girdi
+ *   alanBaglari?: unknown; alanZorunluluklari?: unknown; tarihKurallari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string;
+ *   tabanGrubu?: string; gizliBosSutun?: boolean; gizliAlanDegerleri?: Record<string, Record<string, string | null>> }} girdi
  *   tarihKurallari: hesaplama kuralları (verilirse mevcutların yerine; tarih kuralları dahil).
+ *   tabanGrubu: yeni servis bu adlandırılmış taban adresine bağlanır (tabanlar çağıran tarafından tabandan verilir).
+ *   gizliBosSutun (cURL'den ekleme): gizli adlı başlığın değeri boşsa ya da yalnız şemaysa ("Bearer") değer YAZILMAZ; "<servis>
+ *   başlıkları" tablosunda boş gizli sütun açılır, başlık ona başvurur (kullanıcı değeri tabloda doldurur).
+ *   gizliAlanDegerleri (cURL'den ekleme): sorgu / gövde alanlarının gizli değerleri. Kullanıcının bağlamadığı her alan için
+ *   "<servis> gizli değerleri" tablosunda gizli sütun açılır ve alan ona bağlanır; değer yalnız verildiyse (onaylıysa) şifreli yazılır.
  */
 export function restServisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -108,27 +136,75 @@ export function restServisiKaydet(vt, projeId, girdi) {
   const zorunlu = alanZorunluluklariniDogrula(girdi.alanZorunluluklari ?? tasi(mevcut?.ayarlar.alanZorunluluklari ?? {}));
   const opAdlari = new Set(uclar.map((u) => u.ad));
   const sadece = (/** @type {Record<string, any>} */ k) => Object.fromEntries(Object.entries(k).filter(([op]) => opAdlari.has(op)));
+  const gizliAlanDegerleri = gizliAlanDegerleriniDogrula(girdi.gizliAlanDegerleri);
+
+  /**
+   * Gizli sütunları bir tabloya yazar (yoksa oluşturur; var olan sütunlar korunur). Değeri verilmeyen sütun boş kalır (kayıtlı
+   * gizli değer korunur). @param {string} tabloAdi @param {string[]} sutunlar @param {Record<string, string>} degerler @returns {string} tablo kimliği
+   */
+  const gizliTabloyaYaz = (tabloAdi, sutunlar, degerler) => {
+    const t = tablolariListele(vt, projeId).find((x) => x.ad.toLocaleLowerCase('tr') === tabloAdi.toLocaleLowerCase('tr'));
+    // Yazılan sütun var olan tabloda gizli değilse gizli yapılır (değer hiçbir zaman düz yazılmaz).
+    const eski = t ? t.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli || sutunlar.includes(c.ad) })) : [];
+    const yeni = sutunlar.filter((s) => !eski.some((c) => c.ad === s)).map((s) => ({ ad: s, gizli: true }));
+    const satir = t?.satirlar.find((r) => r.ortamId === null);
+    return tabloKaydet(vt, { projeId, ...(t ? { id: t.id } : {}), ad: t?.ad ?? tabloAdi, sutunlar: [...eski, ...yeni], satirlar: [{ ...(satir ? { id: satir.id } : {}), ortamId: null, degerler }] });
+  };
 
   return vt.islem(() => {
-    // Gizli başlıklardaki düz değerler → "<servis> başlıkları" tablosunun gizli sütunları.
+    // Gizli başlıklardaki düz değerler → "<servis> başlıkları" tablosunun gizli sütunları. gizliBosSutun: boş / yalnız şema değerde
+    // sütun boş açılır (değer yazılmaz), başlık yine sütuna başvurur.
     /** @type {Record<string, string>} */
     const gizliDegerler = {};
+    /** @type {Set<string>} */
+    const gizliSutunlar = new Set();
+    /** @type {Map<string, string | null>} sütun → bu kayıtta yazılan değer (null: boş) */
+    const kullanilanSutunlar = new Map();
     const tabloAdi = temizTabloAdi(`${ad || girdi.anahtar} başlıkları`);
     for (const u of uclar) {
       u.basliklar = u.basliklar.map((b) => {
-        if (!b.deger || b.deger.includes('${') || !(gizliAdMi(b.ad, ekler) || GIZLI_BASLIK.test(b.ad))) return b;
-        const sema = /^(Bearer|Basic|Digest|Token)\s+(.+)$/i.exec(b.deger);
-        const sutun = temizTabloAdi(b.ad);
-        gizliDegerler[sutun] = sema ? sema[2] : b.deger;
-        return { ad: b.ad, deger: `${sema ? `${sema[1]} ` : ''}\${${basvuru(tabloAdi, sutun)}}` };
+        if (b.deger.includes('${') || !(gizliAdMi(b.ad, ekler) || GIZLI_BASLIK.test(b.ad))) return b;
+        const bos = girdi.gizliBosSutun === true ? /^(?:(Bearer|Basic|Digest|Token)\s*)?$/i.exec(b.deger) : null;
+        if (!b.deger && !bos) return b;
+        const sema = bos ? null : /^(Bearer|Basic|Digest|Token)\s+(.+)$/i.exec(b.deger);
+        let sutun = temizTabloAdi(b.ad);
+        if (girdi.gizliBosSutun === true) {
+          // cURL'den: aynı adlı başlık başka istekte farklı (ya da onaysız) değerle geliyorsa ayrı sütun (Authorization_2…).
+          const deger = bos ? null : sema ? sema[2] : b.deger;
+          const temel = sutun;
+          for (let n = 2; kullanilanSutunlar.has(sutun) && (deger === null || kullanilanSutunlar.get(sutun) !== deger); n++) sutun = `${temel.slice(0, 56)}_${n}`;
+          kullanilanSutunlar.set(sutun, deger);
+        }
+        gizliSutunlar.add(sutun);
+        if (!bos) gizliDegerler[sutun] = sema ? sema[2] : b.deger;
+        const on = bos ? bos[1] : sema?.[1];
+        return { ad: b.ad, deger: `${on ? `${on} ` : ''}\${${basvuru(tabloAdi, sutun)}}` };
       });
     }
-    if (Object.keys(gizliDegerler).length) {
-      const t = tablolariListele(vt, projeId).find((x) => x.ad.toLocaleLowerCase('tr') === tabloAdi.toLocaleLowerCase('tr'));
-      const eski = t ? t.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli })) : [];
-      const yeni = Object.keys(gizliDegerler).filter((s) => !eski.some((c) => c.ad === s)).map((s) => ({ ad: s, gizli: true }));
-      const satir = t?.satirlar.find((r) => r.ortamId === null);
-      tabloKaydet(vt, { projeId, ...(t ? { id: t.id } : {}), ad: t?.ad ?? tabloAdi, sutunlar: [...eski, ...yeni], satirlar: [{ ...(satir ? { id: satir.id } : {}), ortamId: null, degerler: gizliDegerler }] });
+    if (gizliSutunlar.size) gizliTabloyaYaz(tabloAdi, [...gizliSutunlar], gizliDegerler);
+    // Sorgu / gövde alanlarının gizli değerleri → "<servis> gizli değerleri" tablosu; kullanıcının bağlamadığı alan o sütuna bağlanır.
+    /** @type {Array<{ uc: string; yol: string; sutun: string }>} */
+    const alanSutunlari = [];
+    /** @type {Record<string, string>} */
+    const alanDegerleri = {};
+    const alanTablosu = temizTabloAdi(`${ad || girdi.anahtar} gizli değerleri`);
+    for (const u of uclar) {
+      const istenen = gizliAlanDegerleri[u.ad];
+      if (!istenen) continue;
+      const yapraklar = new Set(alanSatirlari(restSemasi(u).alanlar).filter((x) => !x.grup).map((x) => x.yol));
+      for (const [yol, d] of Object.entries(istenen)) {
+        if (!yapraklar.has(yol) || baglar[u.ad]?.[yol]) continue;
+        const temel = temizTabloAdi(yol.split('/').pop() ?? '') || 'deger';
+        let sutun = temel;
+        for (let n = 2; alanSutunlari.some((x) => x.sutun.toLocaleLowerCase('tr') === sutun.toLocaleLowerCase('tr')); n++) sutun = `${temel.slice(0, 56)}_${n}`;
+        alanSutunlari.push({ uc: u.ad, yol, sutun });
+        if (typeof d === 'string' && d) alanDegerleri[sutun] = d;
+        if (!u.gizliAlanlar.includes(yol)) u.gizliAlanlar.push(yol);
+      }
+    }
+    if (alanSutunlari.length) {
+      const tabloId = gizliTabloyaYaz(alanTablosu, alanSutunlari.map((x) => x.sutun), alanDegerleri);
+      for (const x of alanSutunlari) (baglar[x.uc] ??= {})[x.yol] = { tablo: tabloId, sutun: x.sutun };
     }
     tabanKarariUygula(vt, projeId, karar, girdi.yapan);
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
@@ -140,7 +216,8 @@ export function restServisiKaydet(vt, projeId, girdi) {
     const servisId = servisKaydet(vt, {
       id: mevcut?.id, projeId, anahtar: girdi.anahtar, ad, tur: 'rest', yapan: girdi.yapan,
       ayarlar: {
-        ...(mevcut?.ayarlar ?? {}), yol: '/', adresler: mevcut?.ayarlar.adresler ?? {}, tabanlar, ...(karar.ayir ? { tabanGrubu: undefined } : {}),
+        ...(mevcut?.ayarlar ?? {}), yol: '/', adresler: mevcut?.ayarlar.adresler ?? {}, tabanlar, ...(girdi.tabanGrubu ? { tabanGrubu: girdi.tabanGrubu } : {}),
+        ...(karar.ayir ? { tabanGrubu: undefined } : {}),
         ...(typeof girdi.tlsDogrulama === 'boolean' ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
         operasyonlar, operasyonSemalari: Object.fromEntries(uclar.map((u) => [u.ad, restSemasi(u)])),
         yalnizTestOperasyonlari: uclar.filter((u) => u.yalnizTest).map((u) => u.ad),

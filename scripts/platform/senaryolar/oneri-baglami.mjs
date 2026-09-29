@@ -31,11 +31,11 @@ const UYARI_KAYNAKLARI = ['hata-gostergesi', 'diyalog'];
 
 /**
  * Veri güdümlü senaryonun satır değerleri: her veri koşusu (yoksa tek satır) için başvurulu alanların çözülmüş değerleri. Gizli
- * sütunlar ve çözülemeyen başvurular atlanır. Başvurusu olmayan senaryoda null.
+ * sütunlar ve çözülemeyen başvurular atlanır. Başvurusu olmayan senaryoda null. Servis önerileri de kullanır (alan yolu → ${Tablo.Sütun}).
  * @param {Nesne} veri @param {Nesne | null} veriKosulari @param {Record<string, Record<string, string>> | null} tabloSecimleri
  * @param {any[]} tablolar @param {string} ortamId
  */
-function degerSatirlari(veri, veriKosulari, tabloSecimleri, tablolar, ortamId) {
+export function degerSatirlari(veri, veriKosulari, tabloSecimleri, tablolar, ortamId) {
   const basvurulu = Object.entries(veri).filter(([, v]) => degerBasvurusu(v));
   if (!basvurulu.length) return null;
   const gruplar = basvuruGruplari(veri, tablolar);
@@ -82,7 +82,7 @@ export function oneriBaglami(vt, projeId, ekranId, ortamId, akisId = null, simdi
     const son = senaryoSonSonucu(vt, d.id, ortamId);
     senaryolar.push({ id: d.id, baslik: d.baslik, veri: d.veri, tabloSecimleri: d.tabloSecimleri, sonDurum: son ? son.durum : null, ...ek });
   }
-  return { ...form, senaryolar, kapsamSenaryolari, gecmis: oneriGecmisi(vt, projeId, ekranId, ortamId, simdi), kararlar: oneriKararlariniOku(vt, projeId) };
+  return { ...form, senaryolar, kapsamSenaryolari, gecmis: oneriGecmisi(vt, projeId, ekranId, ortamId, simdi), kararlar: oneriKararlariniOku(vt, projeId, 'ekran') };
 }
 
 /**

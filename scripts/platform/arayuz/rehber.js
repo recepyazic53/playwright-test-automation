@@ -18,7 +18,7 @@ export function rehberAnahtari(hash) {
   // Sonuçlar > Servisler (servis sonuçlarının tek yeri): #/sonuclar/servisler[/karsilastir|kosu|senaryo|a/…].
   const servisAlti = parca === 'servisler' ? String(hash).split('/')[3] || '' : '';
   if (bolum === 'sonuclar' || !bolum) {
-    anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' || servisAlti === 'karsilastir' ? 'sonuclar-karsilastir'
+    anahtar = parca === 'ozet' ? 'sonuclar-ozet' : parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' || servisAlti === 'karsilastir' ? 'sonuclar-karsilastir'
       : parca === 's' || servisAlti ? 'servis-sonuclari' : 'sonuclar';
   }
   else if (bolum === 'senaryolar') anahtar = parca === 'yeni' || parca === 'duzenle' ? 'senaryo-formu' : 'senaryolar';

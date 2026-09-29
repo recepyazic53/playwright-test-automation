@@ -13,7 +13,8 @@ export const PROJE_BASINA_EN_COK_KARAR = 300;
 /** Tüm projelerde en çok olay. */
 export const EN_COK_KARAR = 2000;
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
-const ONERI_TURLERI = ['zorunlu', 'sinir', 'kosullu', 'kombinasyon', 'uyari'];
+// Ekran önerileri (senaryo-onerileri.mjs) + servis önerileri (servisler/servis-onerileri.mjs: basari, deger, negatif).
+const ONERI_TURLERI = ['zorunlu', 'sinir', 'kosullu', 'kombinasyon', 'uyari', 'basari', 'deger', 'negatif'];
 const NEDENLER = ['risk', 'kapsam', 'pairwise', 'sinir', 'zorunlu'];
 const RED_NEDENLERI = ['gereksiz', 'yanlis', 'sonra'];
 
@@ -32,20 +33,29 @@ function tumu(vt) {
   }
 }
 
-/** Projenin kararları (eskiden yeniye; kasa kilitli / okunamazsa boş). @param {Veritabani} vt @param {string} projeId @returns {OneriKarari[]} */
-export function oneriKararlariniOku(vt, projeId) {
-  return tumu(vt).filter((k) => k.projeId === projeId).map(({ projeId: _p, ...k }) => k);
+/**
+ * Projenin kararları (eskiden yeniye; kasa kilitli / okunamazsa boş). tur: 'ekran' → yalnız ekran önerilerinin, 'servis' → yalnız
+ * servis önerilerinin kararları (öğrenme birbirine karışmaz); verilmezse hepsi.
+ * @param {Veritabani} vt @param {string} projeId @param {'ekran' | 'servis'} [tur] @returns {OneriKarari[]}
+ */
+export function oneriKararlariniOku(vt, projeId, tur) {
+  return tumu(vt).filter((k) => k.projeId === projeId && (!tur || (tur === 'servis') === Boolean(k.servisId))).map(({ projeId: _p, ...k }) => k);
 }
 
 /**
- * Kararı doğrular ve ekler. g: { ekranId, kimlik, tur, neden?, alanlar?, karar: 'kabul' | 'red', redNedeni? }.
+ * Kararı doğrular ve ekler. g: { ekranId | (servisId + metot), kimlik, tur, neden?, alanlar?, karar: 'kabul' | 'red', redNedeni? }.
+ * Servis önerisinin kararında ekran yerine servis kimliği ve metot (operasyon) adı yazılır.
  * @param {Veritabani} vt @param {string} projeId @param {unknown} girdi @param {Date} [simdi]
  * @returns {OneriKarari}
  */
 export function oneriKarariKaydet(vt, projeId, girdi, simdi = new Date()) {
   if (!nesneMi(girdi)) throw new DepoHatasi('Öneri kararı bir nesne olmalıdır.');
   const g = /** @type {Record<string, unknown>} */ (girdi);
-  if (typeof g.ekranId !== 'string' || !KIMLIK.test(g.ekranId)) throw new DepoHatasi('"ekranId" geçersiz.');
+  const servisMi = g.servisId !== undefined && g.servisId !== null;
+  if (servisMi) {
+    if (typeof g.servisId !== 'string' || !KIMLIK.test(g.servisId)) throw new DepoHatasi('"servisId" geçersiz.');
+    if (typeof g.metot !== 'string' || !g.metot.trim() || g.metot.length > 200 || /[\u0000-\u001f]/.test(g.metot)) throw new DepoHatasi('"metot" geçersiz.');
+  } else if (typeof g.ekranId !== 'string' || !KIMLIK.test(g.ekranId)) throw new DepoHatasi('"ekranId" geçersiz.');
   if (typeof g.kimlik !== 'string' || !g.kimlik.trim() || g.kimlik.length > 400) throw new DepoHatasi('"kimlik" geçersiz.');
   if (typeof g.tur !== 'string' || !ONERI_TURLERI.includes(g.tur)) throw new DepoHatasi('"tur" geçersiz.');
   if (g.karar !== 'kabul' && g.karar !== 'red') throw new DepoHatasi('"karar" kabul ya da red olmalıdır.');
@@ -56,7 +66,8 @@ export function oneriKarariKaydet(vt, projeId, girdi, simdi = new Date()) {
   const alanlar = Array.isArray(g.alanlar) ? [...new Set(g.alanlar.filter((a) => typeof a === 'string' && a.length <= 200))].slice(0, 50) : [];
   /** @type {OneriKarari} */
   const karar = {
-    zaman: simdi.toISOString(), ekranId: g.ekranId, kimlik: g.kimlik.trim(), tur: g.tur, neden: typeof g.neden === 'string' ? g.neden : null,
+    zaman: simdi.toISOString(), ...(servisMi ? { servisId: /** @type {string} */ (g.servisId), metot: /** @type {string} */ (g.metot).trim() } : { ekranId: /** @type {string} */ (g.ekranId) }),
+    kimlik: g.kimlik.trim(), tur: g.tur, neden: typeof g.neden === 'string' ? g.neden : null,
     alanlar, karar: g.karar, redNedeni: /** @type {OneriKarari['redNedeni']} */ (redNedeni)
   };
   const liste = [...tumu(vt), { projeId, ...karar }];

@@ -316,7 +316,9 @@ test('sonuçlarda hızlı süzgeç: "Yalnız kalanlar" (koşu ayrıntısı ve ko
   await page.getByRole('button', { name: 'Hata kalıbı süzgecini kaldır' }).click();
   await expect(gorunen).toHaveCount(4);
   // Koşu geçmişi: yalnız kalan testi olan koşular.
+  // Üst menüdeki "Sonuçlar" Özet sekmesini açar; koşu geçmişi Ekranlar sekmesindedir.
   await page.getByRole('link', { name: 'Sonuçlar' }).first().click();
+  await page.getByRole('tab', { name: 'Ekranlar' }).click();
   await expect(page.getByRole('heading', { name: 'Koşu geçmişi' })).toBeVisible();
   const bolum = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Koşu geçmişi' }) });
   const gecmis = bolum.locator('table');

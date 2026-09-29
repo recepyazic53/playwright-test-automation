@@ -3307,6 +3307,16 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .deneme-yaniti { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: var(--b2); }
 .gizli-alanlar .secenek-izgarasi { display: flex; flex-wrap: wrap; gap: var(--b2) var(--b4); }
 
+/* cURL yapıştır (curl-aktarimi.js): önizleme */
+.curl-onizleme fieldset { min-width: 0; }
+.curl-istegi { display: flex; flex-direction: column; gap: var(--b2); min-width: 0; }
+.curl-istegi legend .secenek { flex-wrap: wrap; }
+.curl-onizleme dd, .curl-onizleme p code { overflow-wrap: anywhere; min-width: 0; }
+.curl-degerleri { margin: 0; padding-left: 18px; }
+.curl-maskeli { letter-spacing: .1em; color: var(--metin-3); }
+.curl-govde { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+@media (max-width: 640px) { .curl-ozeti { grid-template-columns: minmax(0, 1fr); gap: 2px; } .curl-ozeti dd { margin-bottom: var(--b2); } }
+
 /* Akış diyagramı: başlangıç (Giriş) düğümü içerik taşıdığı için hap değil kart biçiminde (içerik büyüyünce daireye dönmez). */
 .diyagram-dugumu.uc.baslangic { border-radius: var(--yaricap-l); padding: 14px 18px; text-align: left; }
 .diyagram-dugumu.uc.baslangic .dugum-aciklamasi, .diyagram-dugumu.uc.baslangic ol, .diyagram-dugumu.uc.baslangic details { text-align: left; }
@@ -3983,7 +3993,46 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .oneri-notlari-kutusu { margin-top: 12px; font-size: 12.5px; }
 .oneri-notlari-kutusu summary { cursor: pointer; color: var(--metin-2); }
 .oneri-notlari-kutusu .oneri-notlari { margin-top: 8px; }
+/* Servis senaryo önerileri (servis-onerileri.js): satırda seçim kutusu yok (Ekle / Önizle / Reddet satırda). */
+.servis-onerileri { margin-top: var(--b4); }
+.servis-onerileri .kart-basligi > .servis-onerileri-dugmesi { margin-left: auto; }
+.servis-oneri-govdesi:not(:empty) { margin-top: 10px; }
+.servis-oneri-araclari { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+.servis-oneri-araclari .filtre-secimi { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.servis-oneri-araclari select { max-width: 100%; min-width: 0; }
+.oneri.servis-oneri { grid-template-columns: minmax(0, 1fr) auto; }
+/* Son yanıttan kontrol öner (yanit-kontrol-paneli.js) ve yanıt alanı / altın yanıt kontrol satırları. */
+.yanittan-kontrol { margin-top: 8px; }
+.yanit-kontrol-paneli { margin-top: 10px; padding: 12px 14px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.yanit-kontrol-paneli .kart-basligi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.yanit-kontrol-paneli .kart-basligi h4 { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.yanit-kontrol-paneli .kart-basligi > .ikon-dugme { margin-left: auto; }
+.yanit-alanlari { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; max-height: 520px; overflow-y: auto; }
+.yanit-alani-satiri { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.yanit-alani-ust { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.yanit-alani-yolu { overflow-wrap: anywhere; min-width: 0; }
+.yanit-alani-degeri { font: 12.5px var(--yazi-mono); color: var(--metin-2); overflow-wrap: anywhere; min-width: 0; }
+.yanit-alani-kontrol, .yanit-alani-altin, .yanit-alani-kontrolu, .yanit-alani-girdileri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.yanit-alani-kontrol small { overflow-wrap: anywhere; }
+.yanit-alani-kontrol select, .yanit-alani-kontrol input, .yanit-alani-kontrolu select, .yanit-alani-kontrolu input,
+.yanit-alani-altin select, .yanit-sure input { width: auto; min-width: 0; max-width: 100%; }
+.yanit-alani-kontrol input[type="text"]:not(.sayi-girdisi) { flex: 1 1 180px; }
+.yanit-alani-kontrolu { flex: 1 1 320px; }
+.yanit-alani-kontrolu > input[type="text"] { flex: 1 1 240px; }
+.yanit-alani-girdileri { flex: 1 1 220px; }
+.yanit-alani-girdileri:empty { display: none; }
+.yanit-alani-girdileri > input[type="text"]:not(.sayi-girdisi) { flex: 1 1 160px; }
+.sayi-girdisi { width: 7em; max-width: 100%; flex: 1 1 6em; }
+.yanit-kontrol-alt { display: grid; gap: 10px; margin-top: 10px; }
+.yanit-altin, .yanit-sure { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.yanit-altin p { margin: 0; flex: 1 1 260px; min-width: 0; }
+.yanit-sure .secenek { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.altin-yanit-ozeti { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.altin-yanit-ozeti .rozet { white-space: normal; height: auto; }
+.kombinasyon-alani code { overflow-wrap: anywhere; }
 @media (max-width: 480px) {
+  .oneri.servis-oneri { grid-template-columns: minmax(0, 1fr); }
+  .oneri.servis-oneri > .oneri-eylemleri { grid-column: 1; }
   .oneri { grid-template-columns: auto minmax(0, 1fr); }
   .oneri > .oneri-eylemleri { grid-column: 2; flex-direction: row; flex-wrap: wrap; justify-self: start; }
   .oneri-eylem-cubugu > button { width: 100%; justify-content: center; }
@@ -4053,3 +4102,36 @@ dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywher
 .rapor-metot-listesi .mono { overflow-wrap: anywhere; min-width: 0; }
 .ekip-formu { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 10px; }
 .ekip-formu .alan { flex: 1 1 220px; min-width: 0; margin: 0; }
+
+/* ---- Sonuçlar > Genel > Özet (sonuc-ozeti.js): özet kutuları + Dikkat / Bakım / Kapsam ve güvenlik kartları ------------------- */
+.sonuc-kartlari.ozet-kutulari { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+.ozet-kutusu { color: inherit; text-decoration: none; min-width: 0; }
+a.ozet-kutusu:hover { box-shadow: var(--golge-yuksek); }
+a.ozet-kutusu:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px; }
+.ozet-kutusu .kart-etiket .ikon { width: 14px; height: 14px; }
+.ozet-kutusu .kart-alt > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.ozet-kutusu.yukleniyor .iskelet { margin-top: 10px; }
+.farkindalik-kartlari { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.farkindalik-karti { margin-bottom: 0; min-width: 0; }
+.farkindalik-karti .kart-basligi { margin-bottom: 8px; }
+.farkindalik-karti .kart-basligi h3 { min-width: 0; }
+.farkindalik-karti.dikkat .kart-basligi h3 svg { color: var(--hata); }
+.farkindalik-karti.bakim .kart-basligi h3 svg { color: var(--atlanan); }
+.farkindalik-karti.kapsam .kart-basligi h3 svg { color: var(--vurgu); }
+.farkindalik-sayaci { margin-left: auto; }
+.farkindalik-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.farkindalik-maddesi { display: grid; gap: 2px; padding: 7px 10px; margin: 0 -10px; border-radius: var(--yaricap-s); color: inherit; text-decoration: none; min-width: 0; }
+.farkindalik-maddesi:hover { background: var(--panel-2); }
+.farkindalik-maddesi:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; }
+.farkindalik-adi { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
+.farkindalik-ayrintisi { font-size: 12px; color: var(--metin-2); overflow-wrap: anywhere; min-width: 0; }
+.farkindalik-tumu { margin-top: 6px; }
+.farkindalik-temiz { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--metin-2); }
+.farkindalik-temiz .ikon { color: var(--basari); width: 15px; height: 15px; }
+.farkindalik-notu { display: flex; align-items: flex-start; gap: 6px; margin: 12px 2px 0; overflow-wrap: anywhere; }
+@media (max-width: 1180px) {
+  .farkindalik-kartlari { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  .sonuc-kartlari.ozet-kutulari { grid-template-columns: minmax(0, 1fr); }
+}

@@ -30,12 +30,14 @@ function veriKosulariniDenetle(db, projeId, icerik) {
 import { raporMetniniMaskele } from '../sonuclar/servis-sonuclari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { servisTabanBaglantisi, tabanAdresiIslemi, tabanKararlariniDogrula, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
-import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
+import { gizliAlanDegerleriniDogrula, restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { sozlesmeBilgisi, sozlesmeKaydet, sozlesmeOnizle, sozlesmeSil } from './servis-sozlesmesi.mjs';
+import { servisOnerileriniUret } from './servis-oneri-baglami.mjs';
+import { oneriKarariKaydet } from '../ayarlar/oneri-kararlari.mjs';
 
 /**
  * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
@@ -146,6 +148,22 @@ export const SERVIS_GET_UCLARI = [
   ['/platform/servis/sozlesme', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     return sozlesmeBilgisi(db, projeId, { servisId: servisAl(db, projeId, q.get('servisId')).id, operasyon: metin(q.get('operasyon')) });
+  }],
+  // Senaryo önerileri (servis-oneri-baglami.mjs; kural tabanlı): yalnız okuma — istek atılmaz, hiçbir şey kaydedilmez. kombinasyon: JSON dizi
+  // (pairwise alan yolları; verilmezse varsayılan seçim).
+  ['/platform/servis/oneriler', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    let kombinasyonAlanlari = null;
+    const k = q.get('kombinasyon');
+    if (k) {
+      try { kombinasyonAlanlari = JSON.parse(k); } catch { throw new DepoHatasi('"kombinasyon" geçersiz.'); }
+      if (!Array.isArray(kombinasyonAlanlari) || kombinasyonAlanlari.some((x) => typeof x !== 'string')) throw new DepoHatasi('"kombinasyon" metin dizisi olmalıdır.');
+    }
+    const ustSinir = Number(q.get('ustSinir'));
+    return servisOnerileriniUret(db, projeId, {
+      servisId: servisAl(db, projeId, q.get('servisId')).id, ortamId: secimli(q.get('ortamId')) ?? null, operasyon: q.get('operasyon') || null, kombinasyonAlanlari,
+      reddedilenleriGoster: q.get('reddedilenler') === '1', ...(Number.isInteger(ustSinir) && ustSinir > 0 && ustSinir <= 500 ? { ustSinir } : {})
+    });
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -275,6 +293,13 @@ export const SERVIS_POST_UCLARI = [
   // Koşuya dahil / hariç (toplu): senaryoların yalnız bu işareti değişir. ortamId verilirse YALNIZ o ortamda (ekran
   // senaryolarındaki gibi ortam başına; diğer ortamların o anki değeri ezme olarak yazılır, genel değer "en az bir ortamda koşuda"
   // olur); verilmezse tüm ortamlarda (ortam ezmeleri silinir). Senaryonun o ortamda koşmadığı (kapsam / tanım) durumda atlanır.
+  // Servis önerisi kararı (kabul / red + isteğe bağlı red nedeni): kural tabanlı öğrenme; karar servis + metot kimliğiyle yazılır, gizli değer yok.
+  ['/platform/servis/oneri-karari', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const s = servisAl(db, projeId, g.servisId);
+    if (typeof g.metot !== 'string' || !(s.ayarlar.operasyonlar ?? []).some((o) => o.ad === g.metot)) throw new DepoHatasi('"metot" bu serviste yok.');
+    return { karar: oneriKarariKaydet(db, projeId, { servisId: s.id, metot: g.metot, kimlik: g.kimlik, tur: g.tur, neden: g.neden, alanlar: g.alanlar, karar: g.karar, redNedeni: g.redNedeni }) };
+  }],
   ['/platform/servis/senaryo/kosuya-dahil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (!Array.isArray(g.idler) || !g.idler.length) throw new DepoHatasi('"idler" boş olamaz.');
@@ -407,9 +432,14 @@ export const SERVIS_POST_UCLARI = [
   // REST servisi (Adım adım > REST ve İşlemler): uçlarla kayıt (ağ isteği yok) ve isteğe bağlı "Dene" (kullanıcı isteğiyle; CANLI ortamda ayrıca onayla).
   ['/platform/servis/rest/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
+    // Yeni servis adlandırılmış taban adresine bağlanıyorsa (cURL'den ekleme) adresler o tabandan gelir.
+    const grup = !secimli(g.id) && typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : undefined;
+    const bagli = grup ? servisTabanBaglantisi(db, projeId, undefined, grup) : null;
     return restServisiKaydet(db, projeId, {
       id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
-      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(bagli ? { tabanlar: bagli.tabanlar, tabanGrubu: grup } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(g.gizliBosSutun === true ? { gizliBosSutun: true } : {}),
+      ...(g.gizliAlanDegerleri !== undefined ? { gizliAlanDegerleri: gizliAlanDegerleriniDogrula(g.gizliAlanDegerleri) } : {}),
       ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
       ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),

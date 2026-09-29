@@ -171,6 +171,19 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 50, enAz: 10, enCok: 500, birim: 'satır' },
   { anahtar: 'kosuGecmisiSayfaBoyu', bolum: 'arayuz', grup: 'Listeler', etiket: 'Koşu geçmişi sayfa boyu', aciklama: 'Sonuçlar > Koşu geçmişinde bir sayfada gösterilen koşu.',
     tur: 'sayi', varsayilan: 15, enAz: 5, enCok: 200, birim: 'satır' },
+  // Sonuçlar > Genel > Özet'in Dikkat / Bakım / Kapsam ve güvenlik kartları (sonuclar/farkindalik.mjs): eşikler kullanıcının kararıdır.
+  { anahtar: 'ozetKirmiziGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Uzun süredir kırmızı',
+    aciklama: 'Ekran, servis ya da akış bu kadar gündür kırmızıysa (son koşularının başarısı sağlık noktasının sarı eşiğinin altında ya da akış kaldı) Sonuçlar > Özet > Dikkat kartında görünür.',
+    tur: 'sayi', varsayilan: 3, enAz: 1, enCok: 90, birim: 'gün' },
+  { anahtar: 'ozetYavaslamaYuzde', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Yavaşlama eşiği',
+    aciklama: 'Servis metodunun p95 süresi önceki eşit döneme göre en az bu kadar arttıysa (bu dönemde en az 20 ölçümle) Sonuçlar > Özet > Dikkat kartında görünür.',
+    tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 500, birim: '%' },
+  { anahtar: 'ozetKosmayanGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Koşmayan senaryo',
+    aciklama: 'Koşuya dahil bir ekran ya da servis senaryosu bu kadar gündür hiç koşmadıysa Sonuçlar > Özet > Bakım kartında görünür.',
+    tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, birim: 'gün' },
+  { anahtar: 'ozetYedekGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Eski yedek',
+    aciklama: 'Son yedek bu kadar günden eskiyse (ya da hiç yedek yoksa) Sonuçlar > Özet > Kapsam ve güvenlik kartında görünür.',
+    tur: 'sayi', varsayilan: 7, enAz: 1, enCok: 365, birim: 'gün' },
   { anahtar: 'raporGoruntuSiniriMb', bolum: 'arayuz', grup: 'Raporlar', etiket: 'HTML rapora gömülen görüntü sınırı', aciklama: 'HTML rapora ekran görüntüsü eklenirken toplam boyut bu sınırı aşarsa kalan görüntüler eklenmez (raporda sayısı yazılır).',
     tur: 'sayi', varsayilan: 25, enAz: 1, enCok: 200, birim: 'MB' },
   // Sonuçlar > Raporlar'a kaydedilen PDF raporları (sonuclar/rapor-arsivi.mjs): günlük temizlikte bu süreden eskiler silinir.
@@ -203,7 +216,8 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
  *   saatDilimi: string; ekranEszamanli: number; ekranBeklemeMs: number; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; raporSaklamaGun: string; benzerlikEsigi: number;
- *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number; taramaKosuAyarlariniKullan: boolean }} KosuAyarlari */
+ *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number; taramaKosuAyarlariniKullan: boolean;
+ *   ozetKirmiziGun: number; ozetYavaslamaYuzde: number; ozetKosmayanGun: number; ozetYedekGun: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */
 export const varsayilanKosuAyarlari = () => /** @type {KosuAyarlari} */ (Object.fromEntries(KOSU_AYAR_TANIMLARI.map((t) => [t.anahtar, t.varsayilan])));
