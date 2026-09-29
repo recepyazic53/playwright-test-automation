@@ -33,6 +33,7 @@ import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrol
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
+import { servisOnerileriPaneli } from './servis-onerileri.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -50,6 +51,11 @@ const iki = (n) => String(n).padStart(2, '0');
 const kisaTarih = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
 /** Senaryolar sekmesinin oturum boyunca korunan durumu (filtreler, seçim); servis değişince sıfırlanır. */
 const liste = { servisId: null, arama: '', kosuda: '', operasyon: '', son: '', secim: new Set() };
+/**
+ * Önerinin "Önizle"si: yeni senaryo düzenleyicisi bu taslakla (başlık + içerik) açılır; kaydedilmez. Bir kez kullanılır.
+ * @type {{ servisId: string; baslik: string; icerik: any; not: string } | null}
+ */
+let bekleyenTaslak = null;
 // Ortam yalnız koşu diyaloğunda seçilir (başlıkta ortam segmenti yok). Diyalog son seçilen ortamla açılır (yalnız bu tarayıcıda
 // hatırlanır); yoksa varsayılan TEST ortamı.
 const ORTAM_ANAHTARI = 'platform.servisOrtami';
@@ -538,8 +544,16 @@ function beklenenOzeti(kontroller) {
 }
 
 function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortamlar = []) {
+  // Senaryo önerileri (servis-onerileri.js): kural tabanlı taslaklar; "Önizle" yeni senaryo düzenleyicisini taslakla açar (kaydetmez).
+  const oneriPaneli = servisOnerileriPaneli(proje, s, ortamlar, {
+    yenile,
+    onizle: (o) => {
+      bekleyenTaslak = { servisId: s.id, baslik: o.baslik, icerik: o.icerik, not: [o.gerekce, o.engel, o.eksikler.length ? `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')}` : ''].filter(Boolean).join(' · ') };
+      location.hash = `#/servisler/s/${q(s.id)}/senaryo/yeni`;
+    }
+  });
   if (!senaryolar.length) {
-    yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin ya da SoapUI dosyasından aktarın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }));
+    yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin, SoapUI dosyasından aktarın ya da aşağıdaki önerilerden başlayın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }), oneriPaneli);
     return;
   }
   // Servis değişince seçim ve filtreler sıfırlanır; aynı serviste yenilemeden sonra korunur.
@@ -721,7 +735,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama),
       kosudaSecimi.kap, operasyonSecimi.kap, kapsamSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
-    topluAlani, tabloAlani);
+    topluAlani, tabloAlani, oneriPaneli);
 
   function ciz() {
     const gorunen = gorunenler();
@@ -929,7 +943,10 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   // REST servisi: istek metodu + göreli yol senaryoda (icerik.http); yeni senaryo operasyonun tanımıyla başlar.
   const rest = s.tur === 'rest';
   const ilkOp = (s.ayarlar.operasyonlar || [])[0];
-  const i = senaryo ? senaryo.icerik : rest
+  // Öneriden "Önizle": yeni senaryo önerinin taslağıyla açılır (bir kez; kaydedilmez, Koşuda kapalı).
+  const taslak = !senaryo && bekleyenTaslak && bekleyenTaslak.servisId === s.id ? bekleyenTaslak : null;
+  bekleyenTaslak = null;
+  const i = senaryo ? senaryo.icerik : taslak ? JSON.parse(JSON.stringify(taslak.icerik)) : rest
     ? { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'durumKodu', deger: '200-299' }], http: { metot: ilkOp?.metot || 'GET', yol: restOpYolu(ilkOp), ...(ilkOp?.icerikTuru ? { icerikTuru: ilkOp.icerikTuru } : {}) } }
     : { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'soapYaniti' }] };
   const httpMetot = h('select', {}, HTTP_METOTLARI.map((m) => h('option', { value: m, selected: (i.http?.metot || 'GET') === m }, m)));
@@ -944,12 +961,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   const semalar = s.ayarlar.operasyonSemalari || {};
   const varsayilanlar = JSON.parse(JSON.stringify(s.ayarlar.alanVarsayilanlari || {}));
-  const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : '' });
+  const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : taslak ? taslak.baslik : '' });
   const operasyonlar = (s.ayarlar.operasyonlar || []).map((o) => o.ad);
   if (i.operasyon && !operasyonlar.includes(i.operasyon)) operasyonlar.push(i.operasyon);
   const operasyon = h('select', {}, operasyonlar.map((o) => h('option', { value: o, selected: o === i.operasyon }, o)));
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k, selected: (senaryo?.kapsam || 'test') === k }, m)));
-  const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : true });
+  const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : !taslak });
 
   // --- Hesaplama kuralları (alan formundaki "Hesaplama kuralı" seçimi; değer koşuda kuraldan üretilir; tarih kuralları dahil) ---
   const parametreGruplari = [
@@ -1419,6 +1436,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' },
     h('h3', {}, senaryo ? 'Senaryoyu düzenle' : 'Yeni senaryo'), mesaj.kutu,
+    taslak ? h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' }, h('b', {}, 'Öneriden açıldı (kaydedilmedi). '), taslak.not) : null,
     alan('Başlık', baslik, { zorunlu: true }),
     h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' })),
     h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),

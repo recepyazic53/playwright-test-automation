@@ -12,7 +12,10 @@
 
 /**
  * @typedef {'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat'} AlanTipi
- * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }} Alan
+ * @typedef {{ enAz?: number; enCok?: number; altHaric?: boolean; ustHaric?: boolean; enAzUzunluk?: number; enCokUzunluk?: number; desen?: string; bicim?: string }} AlanKisiti
+ *   şemadaki değer kısıtları (WSDL / XSD facet'leri, OpenAPI); öneriler (servis-onerileri.mjs) yalnız bunlardan sınır / negatif üretir
+ * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean;
+ *   kisit?: AlanKisiti; varsayilan?: string }} Alan
  * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[]; yanit?: { kok: string; ns: string; alanlar: Alan[] } }} OperasyonSemasi  yanit: WSDL'deki yanıt öğesi (sözleşme)
  * @typedef {{ kaynak: 'tablo' | 'akis' | 'sabit' | 'parametre' | 'hesap' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri  hesap: <A>${hesap: ifade}</A> (satır içi hesap)
  * @typedef {{ ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }} XmlOgesi

@@ -70,11 +70,31 @@ function duz(d) {
 }
 const benzersiz = (liste) => [...new Set(liste)];
 const sinirla = (n, alt, ust) => Math.min(ust, Math.max(alt, n));
-/** Mesaj karşılaştırması: Türkçe küçük harf, ı→i, tırnaklar düz, boşluklar tek. */
-function normalMetin(m) {
+/** Mesaj karşılaştırması: Türkçe küçük harf, ı→i, tırnaklar düz, boşluklar tek (servis önerileriyle ORTAK). */
+export function normalMetin(m) {
   return String(m ?? '').toLocaleLowerCase('tr').replace(/ı/g, 'i').replace(/[“”«»„″]/g, '"').replace(/[‘’‹›′]/g, "'").replace(/\s+/g, ' ').trim();
 }
-const kisalt = (m, n = 60) => { const t = String(m ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+/** Kısa gösterim (tek satır, en çok n karakter). */
+export const kisalt = (m, n = 60) => { const t = String(m ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+
+/**
+ * Önerinin sıralama puanı (ekran ve servis önerileri ORTAK): (neden tabanı + önem) × karar çarpanı.
+ * @param {string} neden @param {number} ic @param {number} carpan
+ */
+export const oneriPuani = (neden, ic, carpan) => Math.round(((NEDEN_PUANLARI[neden] ?? 0) + ic) * carpan);
+
+/**
+ * Önerinin son kararına göre durumu (ekran ve servis önerileri ORTAK): son karar red ise "reddedilen"; red nedeni "sonra" ise
+ * ERTELEME_GUNU boyunca "ertelenen", sonra yeniden görünür (null). Kabul ya da karar yoksa null.
+ * @param {ReadonlyArray<import('./senaryo-onerileri.d.mts').OneriKarari>} kararlar @param {string} kimlik @param {number} simdiMs
+ * @returns {'reddedilen' | 'ertelenen' | null}
+ */
+export function oneriRedDurumu(kararlar, kimlik, simdiMs) {
+  const son = kararlar.filter((k) => k.kimlik === kimlik).sort((a, b) => String(b.zaman).localeCompare(String(a.zaman)))[0];
+  if (!son || son.karar !== 'red') return null;
+  if (son.redNedeni === 'sonra') return simdiMs - Date.parse(son.zaman) < ERTELEME_GUNU * 86_400_000 ? 'ertelenen' : null;
+  return 'reddedilen';
+}
 
 // ---- Tarih yardımcıları (yalnız gün; yerel takvim) ------------------------------------------------
 
@@ -311,9 +331,11 @@ export function pairwiseUret(g) {
 /**
  * Kabul / red olaylarından tür ve alan çarpanı: her kabul +0,1, her red (neden "sonra" değilse) −0,15; tür çarpanı projenin tüm
  * ekranlarından, alan çarpanı bu ekranın olaylarından; öneri çarpanı = tür × alanların ortalaması, [0,5; 1,5] aralığında.
+ * alanKapsami verilirse (servis önerileri: aynı servis + metot) alan çarpanına yalnız onu sağlayan olaylar girer (ekranId yok sayılır).
  * @param {ReadonlyArray<import('./senaryo-onerileri.d.mts').OneriKarari>} kararlar @param {string | null} ekranId
+ * @param {(k: import('./senaryo-onerileri.d.mts').OneriKarari) => boolean} [alanKapsami]
  */
-export function kararAgirliklari(kararlar, ekranId) {
+export function kararAgirliklari(kararlar, ekranId, alanKapsami) {
   const tur = new Map();
   const alan = new Map();
   const ekle = (m, k, d) => m.set(k, (m.get(k) ?? 0) + d);
@@ -322,7 +344,8 @@ export function kararAgirliklari(kararlar, ekranId) {
     if (k.karar === 'red' && k.redNedeni === 'sonra') continue;
     const d = k.karar === 'kabul' ? 0.1 : -0.15;
     if (typeof k.tur === 'string') ekle(tur, k.tur, d);
-    if (!ekranId || !k.ekranId || k.ekranId === ekranId) for (const a of Array.isArray(k.alanlar) ? k.alanlar : []) if (typeof a === 'string') ekle(alan, a, d);
+    const kapsamda = alanKapsami ? alanKapsami(k) : (!ekranId || !k.ekranId || k.ekranId === ekranId);
+    if (kapsamda) for (const a of Array.isArray(k.alanlar) ? k.alanlar : []) if (typeof a === 'string') ekle(alan, a, d);
   }
   return {
     /** @param {string} t @param {string[]} alanlar */
@@ -987,18 +1010,12 @@ export function senaryoOnerileri(g) {
   const agirliklar = kararAgirliklari(g.kararlar || [], g.ekranId || null);
   const kararlar = (Array.isArray(g.kararlar) ? g.kararlar : []).filter((k) => nesneMi(k) && (!g.ekranId || !k.ekranId || k.ekranId === g.ekranId));
   const simdiMs = simdi.getTime();
-  const reddedildiMi = (kimlik) => {
-    const son = kararlar.filter((k) => k.kimlik === kimlik).sort((a, b) => String(b.zaman).localeCompare(String(a.zaman)))[0];
-    if (!son || son.karar !== 'red') return null;
-    if (son.redNedeni === 'sonra') return simdiMs - Date.parse(son.zaman) < ERTELEME_GUNU * 86_400_000 ? 'ertelenen' : null;
-    return 'reddedilen';
-  };
   /** @type {any[]} */
   let tumu = [];
   const icerikler = new Map();
   for (const o of adaylar) {
-    const puan = Math.round((NEDEN_PUANLARI[o.neden] + o.ic) * agirliklar.carpan(o.tur, o.alanlar));
-    const red = reddedildiMi(o.kimlik);
+    const puan = oneriPuani(o.neden, o.ic, agirliklar.carpan(o.tur, o.alanlar));
+    const red = oneriRedDurumu(kararlar, o.kimlik, simdiMs);
     if (red && !g.reddedilenleriGoster) { elenen[red]++; continue; }
     const veri = { [sema.baslik]: o.baslik, ...o.veri };
     if (o.beklenen.tur === 'hata' && bs) {

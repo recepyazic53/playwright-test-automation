@@ -2,6 +2,9 @@
 // Belge / literal "wrapped" SOAP servisleri (ör. .asmx) hedeflenir: binding operasyonu → portType girdisi → mesaj parçası
 // (element) → o öğenin karmaşık tipi. Desteklenen: element / complexType / sequence / all / choice / complexContent extension,
 // simpleType enumeration (seçenek listesi), minOccurs / maxOccurs / nillable. Özellikler (attribute) ve any yok sayılır.
+// Kısıtlar (restriction facet'leri: minInclusive / maxInclusive / minExclusive / maxExclusive, minLength / maxLength / length,
+// pattern) ve yerleşik tiplerin doğal aralıkları (positiveInteger, unsignedByte…) alanın "kisit"ine, öğenin default / fixed değeri
+// "varsayilan"a yazılır (servis senaryo önerileri: servis-onerileri.mjs; yalnız şemada yazanlar, tahmin yok).
 // Operasyonun YANIT öğesi de (portType çıktısı) aynı biçimde "yanit" olarak döner (servis sözleşmesi: servis-sozlesmesi.mjs).
 // Anlaşılmayan yapı hata vermez: o operasyon alansız ya da eksik alanla döner (arayüz XML görünümüne düşer).
 // İçe aktarılan belgeler (wsdl:import, xsd:import / include — ör. Java JAX-WS "?wsdl=1", "?xsd=1") erisimiDenetle tarafından
@@ -21,8 +24,46 @@ const YERLESIK = /** @type {Record<string, import('./servis-govdesi.mjs').AlanTi
   decimal: 'ondalik', double: 'ondalik', float: 'ondalik', boolean: 'mantiksal', date: 'tarih', dateTime: 'tarihSaat'
 });
 
+/** Yerleşik tam sayı tiplerinin doğal aralıkları (yalnız anlamlı olanlar: işaret sınırı ve küçük aralıklı tipler). */
+const DOGAL_ARALIK = /** @type {Record<string, { enAz?: number; enCok?: number }>} */ ({
+  positiveInteger: { enAz: 1 }, nonNegativeInteger: { enAz: 0 }, negativeInteger: { enCok: -1 }, nonPositiveInteger: { enCok: 0 },
+  byte: { enAz: -128, enCok: 127 }, unsignedByte: { enAz: 0, enCok: 255 }, unsignedShort: { enAz: 0, enCok: 65535 },
+  unsignedInt: { enAz: 0 }, unsignedLong: { enAz: 0 }
+});
+
 /** @param {string} ad */
 const yerel = (ad) => ad.slice(ad.indexOf(':') + 1);
+
+/**
+ * restriction öğesinin kısıtları (facet'ler). Sayı olmayan sınır yok sayılır; birden çok pattern varsa ilki.
+ * @param {XmlOgesi | undefined} kisit @returns {import('./servis-govdesi.mjs').AlanKisiti}
+ */
+function facetler(kisit) {
+  if (!kisit) return {};
+  /** @type {import('./servis-govdesi.mjs').AlanKisiti} */
+  const k = {};
+  /** @param {string} ad */
+  const sayi = (ad) => { const o = kisit.cocuklar.find((c) => c.yerel === ad); const n = o ? Number(o.oz.value) : NaN; return Number.isFinite(n) ? n : undefined; };
+  /** @param {string} ad */
+  const tam = (ad) => { const n = sayi(ad); return n !== undefined && Number.isInteger(n) && n >= 0 ? n : undefined; };
+  const altDahil = sayi('minInclusive');
+  const ustDahil = sayi('maxInclusive');
+  const alt = altDahil ?? sayi('minExclusive');
+  const ust = ustDahil ?? sayi('maxExclusive');
+  if (alt !== undefined) { k.enAz = alt; if (altDahil === undefined) k.altHaric = true; }
+  if (ust !== undefined) { k.enCok = ust; if (ustDahil === undefined) k.ustHaric = true; }
+  const uzunluk = tam('length');
+  if (uzunluk !== undefined) { k.enAzUzunluk = uzunluk; k.enCokUzunluk = uzunluk; }
+  const enAzU = tam('minLength');
+  const enCokU = tam('maxLength');
+  if (enAzU !== undefined) k.enAzUzunluk = enAzU;
+  if (enCokU !== undefined) k.enCokUzunluk = enCokU;
+  const desen = kisit.cocuklar.find((c) => c.yerel === 'pattern')?.oz.value;
+  if (desen) k.desen = desen;
+  return k;
+}
+/** @param {import('./servis-govdesi.mjs').AlanKisiti | undefined} k */
+const kisitEki = (k) => (k && Object.keys(k).length ? { kisit: { ...k } } : {});
 /** @param {XmlOgesi} o @param {string} ad */
 const cocuklar = (o, ad) => o.cocuklar.filter((c) => c.yerel === ad);
 
@@ -60,19 +101,25 @@ export function wsdlSemalari(wsdl) {
     }
   }
 
-  /** @param {string} tipAdi @returns {{ tip: import('./servis-govdesi.mjs').AlanTipi; secenekler?: string[] } | null} */
-  const basitTip = (tipAdi) => {
+  /** @typedef {{ tip: import('./servis-govdesi.mjs').AlanTipi; secenekler?: string[]; kisit?: import('./servis-govdesi.mjs').AlanKisiti }} BasitTip */
+  /** @param {string} tipAdi @param {number} [derinlik] @returns {BasitTip | null} */
+  const basitTip = (tipAdi, derinlik = 0) => {
     const onek = tipAdi.includes(':') ? tipAdi.slice(0, tipAdi.indexOf(':')) : '';
     const ad = yerel(tipAdi);
-    if (onekler[onek] === XSD_NS || (!onek && YERLESIK[ad])) return { tip: YERLESIK[ad] ?? 'metin' };
+    if (onekler[onek] === XSD_NS || (!onek && YERLESIK[ad])) return { tip: YERLESIK[ad] ?? 'metin', ...kisitEki(DOGAL_ARALIK[ad]) };
     const st = basit.get(ad);
-    if (st) {
-      const kisit = cocuklar(st, 'restriction')[0];
-      const secenekler = kisit ? cocuklar(kisit, 'enumeration').map((e) => e.oz.value ?? '') : [];
-      const taban = kisit?.oz.base ? basitTip(kisit.oz.base) : null;
-      return { tip: taban?.tip ?? 'metin', ...(secenekler.length ? { secenekler } : {}) };
-    }
+    if (st && derinlik < EN_DERIN) return kisitliTip(cocuklar(st, 'restriction')[0], derinlik);
     return null;
+  };
+  /**
+   * restriction: tabanın tipi + kısıtları, üzerine kendi facet'leri; seçenekler kendisinde yoksa tabandan.
+   * @param {XmlOgesi | undefined} kisit @param {number} derinlik @returns {BasitTip}
+   */
+  const kisitliTip = (kisit, derinlik) => {
+    const secenekler = kisit ? cocuklar(kisit, 'enumeration').map((e) => e.oz.value ?? '') : [];
+    const taban = kisit?.oz.base ? basitTip(kisit.oz.base, derinlik + 1) : null;
+    const liste = secenekler.length ? secenekler : taban?.secenekler ?? [];
+    return { tip: taban?.tip ?? 'metin', ...(liste.length ? { secenekler: liste } : {}), ...kisitEki({ ...(taban?.kisit ?? {}), ...facetler(kisit) }) };
   };
 
   /**
@@ -122,11 +169,7 @@ export function wsdlSemalari(wsdl) {
       if (c.length) alan.cocuklar = c;
       return alan;
     }
-    if (icBasit) {
-      const kisit = cocuklar(icBasit, 'restriction')[0];
-      const secenekler = kisit ? cocuklar(kisit, 'enumeration').map((e) => e.oz.value ?? '') : [];
-      return { ...alan, tip: (kisit?.oz.base && basitTip(kisit.oz.base)?.tip) || 'metin', ...(secenekler.length ? { secenekler } : {}) };
-    }
+    if (icBasit) return { ...alan, ...kisitliTip(cocuklar(icBasit, 'restriction')[0], 0) };
     const tipAdi = el.oz.type;
     if (!tipAdi) return { ...alan, tip: 'metin' };
     const b = basitTip(tipAdi);
@@ -141,8 +184,10 @@ export function wsdlSemalari(wsdl) {
 
   /** @param {XmlOgesi} el */
   function ozellikler(el) {
+    const varsayilan = el.oz.fixed ?? el.oz.default;
     return {
       ...(el.oz.minOccurs === '0' ? {} : { zorunlu: true }),
+      ...(varsayilan !== undefined ? { varsayilan } : {}),
       ...(el.oz.nillable === 'true' ? { nillable: true } : {}),
       ...(el.oz.maxOccurs && el.oz.maxOccurs !== '1' && el.oz.maxOccurs !== '0' ? { coklu: true } : {})
     };

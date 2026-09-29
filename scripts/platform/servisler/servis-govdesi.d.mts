@@ -1,6 +1,17 @@
 // scripts/platform/servisler/servis-govdesi.mjs için tip bildirimi.
 export type AlanTipi = 'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat';
-export interface Alan { ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }
+/** Şemadaki değer kısıtları (WSDL / XSD facet'leri ya da OpenAPI); altHaric / ustHaric: sınır dahil değil (exclusive). */
+export interface AlanKisiti {
+  enAz?: number; enCok?: number; altHaric?: boolean; ustHaric?: boolean; enAzUzunluk?: number; enCokUzunluk?: number; desen?: string;
+  /** OpenAPI "format" (date, date-time, email, uuid…). */
+  bicim?: string;
+}
+export interface Alan {
+  ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean;
+  kisit?: AlanKisiti;
+  /** Şemadaki varsayılan / sabit (default / fixed) ya da örnek değer. */
+  varsayilan?: string;
+}
 export interface OperasyonSemasi { ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[]; /** WSDL yanıt öğesi (servis sözleşmesi). */ yanit?: { kok: string; ns: string; alanlar: Alan[] } }
 export type AlanKaynagi = 'tablo' | 'akis' | 'sabit' | 'parametre' | 'hesap' | 'bos' | 'nil' | 'gonderme';
 export declare const AKIS_DEGERI: RegExp;

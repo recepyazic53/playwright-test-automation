@@ -253,6 +253,15 @@ export const REHBERLER = {
           'Önceki adımdan gelen alanlar kilitlidir ("1. adımdan gelir") ve sorulmaz.', 'Her adımın beklenen sonucunu kontrol edin (ör. bu adım bir hata vermeli).', 'Dene ile TEST’te deneyin, sonra kaydedin. Akış senaryosu, akışın geçtiği her serviste "akış: <ad>" rozetiyle listelenir.'],
         cizim: { tur: 'form', alanlar: ['Akış', '1. adımın alanları', '2. adımın alanları (kilitliler hariç)', 'Beklenen sonuçlar'], dugme: 'Dene' }
       },
+      {
+        baslik: 'Senaryo önerileri',
+        hedef: '.servis-onerileri-dugmesi',
+        metin: ['Senaryolar sekmesinin altındaki "Senaryo önerileri"ni açın. Öneriler kural tabanlıdır (yapay zekâ yok), metot bazındadır ve her birinin gerekçesi yazar; mevcut senaryoların zaten denediği şey önerilmez. Varsayılan olarak en iyi 10 öneri görünür.',
+          'Türler: senaryosu olmayan metoda başarılı akış; şemadan (WSDL / XSD ya da Sözleşme sekmesinden yüklenen OpenAPI) zorunlu alan eksik, sınır (alt / üst) ve negatif (sınır dışı, uzunluk + 1, liste dışı, desene uymayan, yanlış tip — alan başına yalnız en anlamlısı); liste alanlarının (şemadaki liste, evet / hayır, tablo listesi) eksik ikilileri (pairwise) ve hiç denenmemiş değerleri; geçmişten risk (son 14 günde kalan senaryoların değerleri öne alınır, son 90 günde görülen ve beklenen olarak test edilmemiş hata mesajı).',
+          'Negatif önerilerde beklenen "Hata beklenir"dir (SOAP Fault ya da HTTP 4xx / 5xx) ve mesaj boş gelir: mesajı siz yazın ya da ilk koşudan sonra "Yanıttan kontrol ekle" ile alın. Görülen mesaj önerisinde beklenen o mesajdır; mesajda maskelenmiş parça varsa önizlemede düzeltirsiniz. Hassas alanlarda (gizli adlar, gizli sütunlar) sınır / negatif değer ve kombinasyon üretilmez.',
+          'Öneri yalnız taslaktır: panel hiçbir istek atmaz. "Ekle" senaryoyu "Koşuda" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Şema + senaryolar', alt: 'kısıtlar, kapsam', ikon: 'katman' }, { baslik: 'Öneri', alt: 'gerekçeli', ikon: 'yildiz' }, { baslik: 'Ekle', alt: 'Koşuda kapalı', ikon: 'arti' }, { baslik: 'Koşu', alt: 'siz başlatınca', ikon: 'oynat' }] }
+      },
       { baslik: 'Yanıt sözleşmesi', metin: 'Senaryonun Kontroller bölümündeki "Yanıt sözleşmeye uymalı" kutusu (varsayılan kapalı) işaretlenirse yanıt, metodun Sözleşme sekmesindeki yapıya göre de doğrulanır; uymayan alanlar raporda yol yol listelenir ve senaryo kalır.' },
       {
         baslik: 'Yanıt bir dosyaysa',
