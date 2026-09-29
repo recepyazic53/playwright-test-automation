@@ -3263,6 +3263,16 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .deneme-yaniti { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: var(--b2); }
 .gizli-alanlar .secenek-izgarasi { display: flex; flex-wrap: wrap; gap: var(--b2) var(--b4); }
 
+/* cURL yapıştır (curl-aktarimi.js): önizleme */
+.curl-onizleme fieldset { min-width: 0; }
+.curl-istegi { display: flex; flex-direction: column; gap: var(--b2); min-width: 0; }
+.curl-istegi legend .secenek { flex-wrap: wrap; }
+.curl-onizleme dd, .curl-onizleme p code { overflow-wrap: anywhere; min-width: 0; }
+.curl-degerleri { margin: 0; padding-left: 18px; }
+.curl-maskeli { letter-spacing: .1em; color: var(--metin-3); }
+.curl-govde { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+@media (max-width: 640px) { .curl-ozeti { grid-template-columns: minmax(0, 1fr); gap: 2px; } .curl-ozeti dd { margin-bottom: var(--b2); } }
+
 /* Akış diyagramı: başlangıç (Giriş) düğümü içerik taşıdığı için hap değil kart biçiminde (içerik büyüyünce daireye dönmez). */
 .diyagram-dugumu.uc.baslangic { border-radius: var(--yaricap-l); padding: 14px 18px; text-align: left; }
 .diyagram-dugumu.uc.baslangic .dugum-aciklamasi, .diyagram-dugumu.uc.baslangic ol, .diyagram-dugumu.uc.baslangic details { text-align: left; }

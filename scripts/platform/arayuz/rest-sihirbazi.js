@@ -112,7 +112,9 @@ export function restUclariFormu(uclar, s) {
       alanHatasi(yol, u.yol && (!u.yol.startsWith('/') || /[\s?#]/.test(u.yol)) ? 'Yol "/" ile başlamalı; sorgu parametrelerini aşağıya yazın.' : '');
       degisti();
     });
-    const icerik = h('select', {}, ICERIK_TURLERI.map(([d, m]) => h('option', { value: d, selected: u.icerikTuru === d }, m)));
+    // Listede olmayan içerik türü (ör. cURL'den gelen text/xml) de seçenek olarak görünür.
+    const turler = ICERIK_TURLERI.some(([d]) => d === u.icerikTuru) ? ICERIK_TURLERI : [...ICERIK_TURLERI, [u.icerikTuru, u.icerikTuru]];
+    const icerik = h('select', {}, turler.map(([d, m]) => h('option', { value: d, selected: u.icerikTuru === d }, m)));
     icerik.addEventListener('change', () => { u.icerikTuru = icerik.value; govdeDenetle(); degisti(); });
     const govde = h('textarea', { class: 'kod-alani', rows: 8, spellcheck: 'false', autocomplete: 'off', placeholder: '{\n  "kullaniciAdi": "ornek",\n  "parola": "…"\n}' });
     govde.value = u.govdeOrnegi;
@@ -177,7 +179,7 @@ export function restUclariFormu(uclar, s) {
 /**
  * Alanlar adımı: her ucun alanları (yol / sorgu / gövde) tablo sütunlarına bağlanır; zorunlu ve gizli işaretleri.
  * @param {ReturnType<typeof yeniUc>[]} uclar @param {{ baglar: Record<string, any>; zorunlu: Record<string, Set<string>>; tablolar: any[];
- *   bagOnerisi: (alan: { ad: string }) => any; kurallar?: Record<string, string>; kuralEkle?: (ad: string, kural: string) => void }} d
+ *   bagOnerisi: (alan: { ad: string }, yer?: { uc: any; yol: string }) => any; kurallar?: Record<string, string>; kuralEkle?: (ad: string, kural: string) => void }} d
  *   baglar / zorunlu uç kimliğine göre; DEĞİŞTİRİLİR. kurallar: alanlar hesaplama kuralına da bağlanabilir.
  */
 export function restAlanlari(uclar, d) {
@@ -190,7 +192,7 @@ export function restAlanlari(uclar, d) {
     const gecerli = new Set(yapraklar.map((x) => x.yol));
     const baglar = (d.baglar[u.kimlik] ??= {});
     for (const y of Object.keys(baglar)) if (!gecerli.has(y)) delete baglar[y];
-    for (const x of yapraklar) if (!(x.yol in baglar)) { const b = d.bagOnerisi(x.alan); if (b) baglar[x.yol] = b; }
+    for (const x of yapraklar) if (!(x.yol in baglar)) { const b = d.bagOnerisi(x.alan, { uc: u, yol: x.yol }); if (b) baglar[x.yol] = b; }
     const z = (d.zorunlu[u.kimlik] ??= new Set(yapraklar.filter((x) => x.alan.zorunlu).map((x) => x.yol)));
     for (const y of [...z]) if (!gecerli.has(y)) z.delete(y);
     if (!u.gizliAlanlar) u.gizliAlanlar = yapraklar.filter((x) => gizliAdMi(x.alan.ad)).map((x) => x.yol);
