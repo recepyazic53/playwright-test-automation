@@ -10,6 +10,7 @@ import {
   girisTarifiOlmali, regexKacis, varsayilanGirisAdimlariMi, yerTutuculari, yerTutuculariDoldur, type GirisTarifi
 } from '../../scripts/platform/giris/tarif.mjs';
 import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../../scripts/platform/giris/giris-kaydi.mjs';
+import { AYNI_ADRES_UYARISI, basariAdresindenYol, oturumAdresiGirisleAyniMi, oturumAdresiOnerisi } from '../../scripts/platform/arayuz/oturum-kontrolu.mjs';
 import { KOD_DESENI, kodIstegiOku, kodIstegiYaz, kodYanitiniBekle, koduYanitla } from '../../scripts/platform/giris/elle-kod.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from '../../scripts/platform/giris/tarif-deposu.mjs';
 import { kasaOlustur, parolayiDogrula } from '../../scripts/platform/kasa.mjs';
@@ -311,6 +312,57 @@ test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanlar
     expect(kayittanTarif(kodluTaslak, roller, null, '/giris', { kodKaynagi: 'baska' }).notlar.join(' ')).toMatch(/kodun türünü/);
     expect(kayittanTarif(taslak, [], null, null).hatalar.join(' ')).toMatch(/Kullanıcı adı alanını işaretleyin/);
     expect(kayittanTarif(taslak, [{ rol: 'ek', ad: 'firma kodu' }, ...isaretler.slice(1)], null, null).hatalar.join(' ')).toMatch(/ek alan adı/);
+  });
+
+  test('"Girişi kaydet": girişten sonraki sayfa oturum kontrol adresi / başarı göstergesi olarak ÖNERİLİR; mevcut tarif onaysız değişmez', () => {
+    const taslak = {
+      ilkYol: '/giris', sonYol: '/panel', sonSayfa: { yol: '/panel?sekme=1', cikisMetni: 'Oturumu kapat' },
+      adimlar: [
+        { tur: 'alan', anahtar: 'k', etiket: 'Kullanıcı', alanTuru: 'text', secici: '#k', oneri: 'kullaniciAdi' },
+        { tur: 'alan', anahtar: 'p', etiket: 'Şifre', alanTuru: 'password', secici: '#p', oneri: 'parola' },
+        { tur: 'dugme', sira: 0, metin: 'Giriş', secici: '#g', oneri: 'gonder' }
+      ]
+    } as Parameters<typeof kayittanTarif>[0];
+    const roller = taslak.adimlar.map((a) => ({ rol: a.oneri }));
+    // Mevcut tarif: oturum kontrol adresi giriş sayfasıyla aynı ("/giris"), başarı göstergesi başka bir yazı.
+    const mevcut = girisTarifiOlmali({ ...gecerliTarif(), girisAdresi: '/giris', oturumKontrolAdresi: '/giris' });
+    const onaysiz = kayittanTarif(taslak, roller, mevcut, '/giris');
+    expect(onaysiz.tarif).toMatchObject({ oturumKontrolAdresi: '/giris', basariGostergesi: { tur: 'metin', deger: 'Çıkış' } });
+    expect(onaysiz.sayfaOnerileri).toEqual({
+      oturumKontrolAdresi: { adres: '/panel', mevcut: '/giris', kabul: false },
+      basariGostergesi: { gosterge: { tur: 'metin', deger: 'Oturumu kapat' }, mevcut: { tur: 'metin', deger: 'Çıkış' }, kabul: false }
+    });
+    // Kullanıcı reddederse de değişmez; onaylarsa yazılır (her öneri ayrı).
+    expect(kayittanTarif(taslak, roller, mevcut, '/giris', { oturumOnerisi: false, basariOnerisi: false }).tarif).toMatchObject({ oturumKontrolAdresi: '/giris' });
+    const onayli = kayittanTarif(taslak, roller, mevcut, '/giris', { oturumOnerisi: true });
+    expect(onayli.tarif).toMatchObject({ oturumKontrolAdresi: '/panel', basariGostergesi: { tur: 'metin', deger: 'Çıkış' } });
+    expect(onayli.sayfaOnerileri.oturumKontrolAdresi?.kabul).toBe(true);
+    expect(kayittanTarif(taslak, roller, mevcut, '/giris', { basariOnerisi: true }).tarif).toMatchObject({ oturumKontrolAdresi: '/giris', basariGostergesi: { tur: 'metin', deger: 'Oturumu kapat' } });
+    // Yeni tarif (değiştirilecek değer yok): öneri işaretli gelir; kullanıcı kaldırırsa giriş adresi kalır.
+    const yeni = kayittanTarif(taslak, roller, null, '/giris');
+    expect(yeni.tarif).toMatchObject({ oturumKontrolAdresi: '/panel', basariGostergesi: { tur: 'metin', deger: 'Oturumu kapat' } });
+    expect(yeni.sayfaOnerileri).toEqual({ oturumKontrolAdresi: { adres: '/panel', mevcut: null, kabul: true }, basariGostergesi: null });
+    expect(kayittanTarif(taslak, roller, null, '/giris', { oturumOnerisi: false }).tarif.oturumKontrolAdresi).toBe('/giris');
+    // Mevcut değer zaten girişten sonraki sayfaysa ya da giriş sonrası sayfa girişle aynıysa öneri yok.
+    expect(kayittanTarif(taslak, roller, girisTarifiOlmali({ ...gecerliTarif(), girisAdresi: '/giris', oturumKontrolAdresi: '/panel', basariGostergesi: { tur: 'metin', deger: 'Oturumu kapat' } }), '/giris').sayfaOnerileri)
+      .toEqual({ oturumKontrolAdresi: null, basariGostergesi: null });
+    const ayniSayfa = { ...taslak, sonYol: '/giris', sonSayfa: { yol: '/giris', cikisMetni: null } };
+    expect(kayittanTarif(ayniSayfa, roller, null, '/giris').sayfaOnerileri.oturumKontrolAdresi).toBeNull();
+  });
+
+  test('oturum kontrol adresi: giriş sayfasıyla aynı mı, giriş sonrası sayfa önerisi, adres deseninden yol', () => {
+    expect(oturumAdresiGirisleAyniMi({ girisAdresi: '/', oturumKontrolAdresi: '/' })).toBe(true);
+    expect(oturumAdresiGirisleAyniMi({ girisAdresi: '/giris', oturumKontrolAdresi: '' })).toBe(true);
+    expect(oturumAdresiGirisleAyniMi({ girisAdresi: '/giris/', oturumKontrolAdresi: 'http://127.0.0.1:1/giris#x' }, 'http://127.0.0.1:1/')).toBe(true);
+    expect(oturumAdresiGirisleAyniMi({ girisAdresi: '/giris', oturumKontrolAdresi: '/panel' })).toBe(false);
+    expect(oturumAdresiOnerisi({ girisAdresi: '/', oturumKontrolAdresi: '/' }, '/panel?sekme=2')).toBe('/panel');
+    expect(oturumAdresiOnerisi({ girisAdresi: '/', oturumKontrolAdresi: '/' }, '/')).toBeNull();
+    expect(oturumAdresiOnerisi({ girisAdresi: '/', oturumKontrolAdresi: '/panel' }, '/panel')).toBeNull();
+    expect(basariAdresindenYol({ tur: 'url', deger: '\\/panel' })).toBe('/panel');
+    expect(basariAdresindenYol({ tur: 'url', deger: '^/ana-sayfa$' })).toBe('/ana-sayfa');
+    expect(basariAdresindenYol({ tur: 'url', deger: '/(panel|ana)' })).toBeNull();
+    expect(basariAdresindenYol({ tur: 'metin', deger: '/panel' })).toBeNull();
+    expect(AYNI_ADRES_UYARISI).toBe('Bu adres giriş sayfasıyla aynı; kayıtlı oturum doğru denetlenemez, her testte giriş beklenir.');
   });
 
   test('ek alanlar: gizli olan kasada ayrı ve şifreli, listede değersiz; boş gönderilince korunur; veri okuyucu testlere verir', async () => {
