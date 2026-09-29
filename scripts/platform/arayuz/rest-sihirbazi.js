@@ -127,7 +127,9 @@ export function restUclariFormu(uclar, s) {
     const govdeAlani = h('div', { hidden: !GOVDELI_METOTLAR.includes(u.metot) },
       alan('İçerik türü', icerik),
       alan('Gövde örneği (isteğe bağlı)', govde, { yardim: 'Örnek JSON yapıştırın: alanları (iç içe nesneler, dizilerde ilk eleman) Alanlar adımında tablo sütunlarına bağlanır. Gizli adlı alanların örnek değeri senaryoya yazılmaz.' }));
-    metot.addEventListener('change', () => { u.metot = metot.value; govdeAlani.hidden = !GOVDELI_METOTLAR.includes(u.metot); degisti(); });
+    // Başlıktaki metot rozeti seçimle birlikte güncellenir (eskiden ilk çizimdeki metot — ör. varsayılan POST — kalıyordu).
+    const metotRozeti = rozet(u.metot, 'vurgu');
+    metot.addEventListener('change', () => { u.metot = metot.value; metotRozeti.textContent = u.metot; govdeAlani.hidden = !GOVDELI_METOTLAR.includes(u.metot); degisti(); });
     const yt = h('input', { type: 'checkbox', id: yeniKimlik('yt'), checked: u.yalnizTest });
     yt.addEventListener('change', () => { u.yalnizTest = yt.checked; s.degisti(); });
     const baslik = h('span', {}, u.ad || `İstek ${i + 1}`);
@@ -157,7 +159,7 @@ export function restUclariFormu(uclar, s) {
       } catch (e) { yerlestir(deneSonucu, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); } finally { dene.disabled = !testler.length; }
     });
     onizle();
-    return h('fieldset', { class: 'rest-ucu' }, h('legend', {}, baslik, ' ', rozet(u.metot, 'vurgu')),
+    return h('fieldset', { class: 'rest-ucu' }, h('legend', {}, baslik, ' ', metotRozeti),
       h('div', { class: 'satir-duzen rest-ucu-ust' }, alan('Ad', ad, { zorunlu: true }), alan('HTTP işlemi', metot), alan('Yol', yol, { yardim: 'Taban adrese eklenir. Değişen kısım için {id} yazın.' })),
       h('div', {}, h('div', { class: 'alan-etiketi' }, 'Gidilecek adresler'), onizleme),
       h('div', { class: 'rest-ucu-bolum' }, h('div', { class: 'alan-etiketi' }, 'Sorgu parametreleri'),

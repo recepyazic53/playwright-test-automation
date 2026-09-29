@@ -321,7 +321,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
           onclick: () => adimEkle(konum, { ...yeniOperasyonAdimi(menuServisId, op), operasyon: op })
         }, ikon('artiYalin'), op))))
         : h('p', { class: 'soluk kucuk' }, 'Bu serviste operasyon yok.'),
-      h('details', { class: 'kayitli-senaryo-secimi' }, h('summary', { class: 'kucuk' }, 'Kayıtlı senaryo (eski tür: değerler senaryoda sabit)'),
+      h('details', { class: 'kayitli-senaryo-secimi' }, h('summary', { class: 'kucuk' }, 'Kayıtlı tek istek senaryosu (değerleri o senaryoda sabit)'),
       (senaryolar.get(menuServisId) || []).length
         ? h('ul', { class: 'senaryo-secenekleri', 'aria-label': 'Kayıtlı senaryolar' }, (senaryolar.get(menuServisId) || []).map((sn) => h('li', {}, h('button', {
           type: 'button', 'aria-label': `Adım olarak koy: ${sn.baslik}`,
@@ -586,13 +586,13 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
   function turSecimi(n, x) {
     const sec = h('select', { 'aria-label': `${n + 1}. adım türü` },
       h('option', { value: 'operasyon', selected: x.tur === 'operasyon' }, 'Operasyon (değerler senaryoda)'),
-      h('option', { value: 'senaryo', selected: x.tur !== 'operasyon' }, 'Kayıtlı senaryo'));
+      h('option', { value: 'senaryo', selected: x.tur !== 'operasyon' }, 'Kayıtlı tek istek senaryosu'));
     sec.addEventListener('change', async () => {
       if (sec.value === 'operasyon') { const y = yeniOperasyonAdimi(x.servisId || s.id); x.tur = 'operasyon'; x.operasyon = y.operasyon; x.baglar = {}; delete x.senaryoId; if (!x.servisId) x.servisId = y.servisId; }
       else { delete x.tur; delete x.operasyon; delete x.baglar; x.senaryoId = ''; await senaryolariAl(x.servisId); }
       degisti(); ciz(); ayrintiCiz(); ayrintiKap.querySelector('select')?.focus();
     });
-    return alan('Adım türü', sec, { yardim: 'Operasyon: akış yalnız sırayı ve taşınan değerleri tutar, alan değerleri akış senaryosunda. Kayıtlı senaryo: eski tür.' });
+    return alan('Adım türü', sec, { yardim: 'Operasyon (önerilen): akış yalnız sırayı ve taşınan değerleri tutar; alan değerleri bu akışın senaryolarında girilir. Kayıtlı tek istek senaryosu: servisin var olan bir senaryosu değerleriyle aynen koşar (değerler o senaryoda sabittir).' });
   }
 
   /** Operasyon adımının ayrıntısı: servis, operasyon, akıştan gelen alanlar (bağlar), yanıttan okumalar. */
@@ -944,8 +944,13 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       ? `${n + 1}. SQL sorgusu › ${sqlHedefAdi(x.sql, sqlKaynaklari, test.id)}`
       : x.tur === 'operasyon' ? `${n + 1}. ${servisAdi(x.servisId)} · ${x.operasyon} (varsayılan değerlerle)`
         : `${n + 1}. ${servisAdi(x.servisId)} › ${senaryoBul(x)?.baslik ?? '?'}`));
+    // Operasyon adımı senaryosuz koşar: hangi değerlerin gideceği ve kendi değerlerle nasıl deneneceği onayda yazılır.
+    const operasyonVar = is.adimlar.some((x) => x.tur === 'operasyon');
+    const degerNotu = operasyonVar
+      ? ` "Varsayılan değerler": servisin alan varsayılanları (★, senaryo formundan kaydedilir), hesaplama kuralına bağlı alanlar ve akıştan gelen değerler; diğer alanlar gönderilmez${is.adimlar.some((x) => x.tur === 'operasyon' && servisler.find((sv) => sv.id === x.servisId)?.tur === 'rest') ? ' (REST isteğinde gövde boş gider)' : ''}. Kendi değerlerinizle denemek için bu sayfanın altındaki "Bu akışın senaryoları" bölümünden senaryo ekleyin ve senaryonun Dene düğmesini kullanın.`
+      : '';
     // CANLI ortamda yalnız tek tip CANLI onayı (çift onay yok).
-    if (!(riskliOrtamMi(test) ? await canliOnayIste(test) : await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
+    if (!(riskliOrtamMi(test) ? await canliOnayIste(test) : await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.${degerNotu}`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
     const canliEki = canliOnayEki(test.id);
     try {
       const { sonuc } = await mesgulIken(dene, 'Deneniyor…', () => api('/platform/servis-akisi/dene', { govde: {
@@ -1015,6 +1020,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
     h('div', { class: 'kart form-paneli' },
       h('h3', {}, uctan ? (akisId ? 'Uçtan uca akışı düzenle' : 'Yeni uçtan uca akış') : akisId ? 'Akışı düzenle' : 'Yeni akış'), mesaj.kutu,
       kayit?.hatalar?.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, h('b', {}, 'Akış şu an koşulamaz: '), kayit.hatalar.join(' ')) : null,
+      akisSenaryolariBaglantisi(),
       alan('Başlık', baslik, { zorunlu: true }),
       talep ? talep.el : null,
       h('div', { class: 'satir-duzen' }, turAlani, alan('Kapsam', kapsam, { yardim: uctan ? 'Koşuda hangi ortam türünde koşacağı. Kaydedilmemiş hâl seçilen ortamda denenir (CANLI ortamda önce onay).' : 'Koşuda hangi ortam türünde koşacağı. Dene seçilen ortamda (CANLI ortamda önce onay).' }), yenilemeAlani, omurAlani, yetkiAlani)),
@@ -1040,13 +1046,36 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
     sonucKap, kosuKap, akisSenaryolariKarti());
   void kosulariCiz(true);
 
+  /** Senaryo eklemenin adresi (akış seçili açılır; akışın ilk operasyon adımının servisinde). */
+  function akisSenaryosuEkleAdresi() {
+    const ilk = is.adimlar.find((x) => x.tur === 'operasyon')?.servisId ?? s.id;
+    return `#/servisler/s/${q(ilk)}/senaryo/yeni?akis=${q(akisId)}`;
+  }
+
+  /**
+   * Sayfanın üstünde: akışın senaryolarının yeri ve sayısı (alan değerleri akışta değil senaryoda girilir). "Senaryolara git" alttaki
+   * karta kaydırır (adres değişmez); "Senaryo ekle" akış seçili yeni senaryo formunu açar.
+   */
+  function akisSenaryolariBaglantisi() {
+    if (!akisId || is.tur !== 'akis' || uctan) return null;
+    const n = akisSenaryolari.length;
+    const git = h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => {
+      const kart = kap.querySelector('.akis-senaryolari-karti');
+      kart?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      /** @type {HTMLElement | null | undefined} */ (kart?.querySelector('h3'))?.focus({ preventScroll: true });
+    } }, ikon('liste'), n ? `Senaryolara git (${n})` : 'Senaryolar bölümüne git');
+    return h('div', { class: 'akis-senaryo-baglantisi', role: 'note' },
+      h('span', {}, h('b', {}, n ? `Bu akışın ${n} senaryosu var.` : 'Bu akışın henüz senaryosu yok.'),
+        ' Alan değerleri akışta değil, akışın senaryolarında girilir; koşu ve senaryonun Dene\'si bu değerlerle yapılır.'),
+      h('span', { class: 'dugmeler' }, git, h('a', { class: 'dugme kucuk-dugme', href: akisSenaryosuEkleAdresi() }, ikon('arti'), 'Senaryo ekle')));
+  }
+
   /** Akış sayfasının altında: bu akışı kullanan senaryolar (+ Senaryo ekle akış seçili açılır). */
   function akisSenaryolariKarti() {
     if (!akisId || is.tur !== 'akis' || uctan) return null;
-    const ilk = is.adimlar.find((x) => x.tur === 'operasyon')?.servisId ?? s.id;
-    return h('section', { class: 'kart', 'aria-label': 'Bu akışın senaryoları' },
-      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Bu akışın senaryoları'),
-        h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `#/servisler/s/${q(ilk)}/senaryo/yeni?akis=${q(akisId)}` }, ikon('arti'), 'Senaryo ekle'))),
+    return h('section', { class: 'kart akis-senaryolari-karti', 'aria-label': 'Bu akışın senaryoları' },
+      h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1' }, ikon('liste'), 'Bu akışın senaryoları'),
+        h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: akisSenaryosuEkleAdresi() }, ikon('arti'), 'Senaryo ekle'))),
       h('p', { class: 'soluk kucuk' }, 'Akış operasyonların sırasını ve taşınan değerleri tanımlar; senaryo her adımın alan değerlerini ve beklenen sonucunu tutar (ekran senaryolarındaki gibi).'),
       akisSenaryolari.length
         ? h('ul', { class: 'akis-kosulari' }, akisSenaryolari.map((x) => h('li', {}, h('a', { href: `#/servisler/s/${q(x.servisId)}/senaryo/${q(x.id)}` }, x.baslik),

@@ -29,6 +29,8 @@ function veriKosulariniDenetle(db, projeId, icerik) {
 }
 import { raporMetniniMaskele, servisKosusuGosterimi } from '../sonuclar/servis-sonuclari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { servisIceriginiMaskele } from '../ayarlar/gizli-adlar.mjs';
+import { GIZLI_SABIT_MASKESI, gizliSabitleriGeriKoy, gizliSabitiTabloyaTasi } from './gizli-sabitler.mjs';
 import { servisTabanBaglantisi, tabanAdresiIslemi, tabanKararlariniDogrula, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { gizliAlanDegerleriniDogrula, restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
@@ -88,6 +90,15 @@ function metinNesnesi(d) {
   return Object.fromEntries(Object.entries(d).filter(([, v]) => typeof v === 'string'));
 }
 
+/**
+ * Dene taslağı: arayüzde maskeli duran gizli sabitler kayıtlı senaryodan (kaynakSenaryoId, aynı proje) doldurulur; yeni yazılan
+ * değer olduğu gibi kalır. Kaynak yoksa içerik aynen. @param {Veritabani} vt @param {string} projeId @param {unknown} icerik @param {unknown} kaynakId
+ */
+function taslakIcerigi(vt, projeId, icerik, kaynakId) {
+  if (!secimli(kaynakId)) return icerik;
+  return gizliSabitleriGeriKoy(icerik, senaryoAl(vt, projeId, kaynakId).icerik, ekGizliAdlar(vt));
+}
+
 /** @param {Veritabani} vt @param {string} projeId @param {unknown} id */
 function akisAl(vt, projeId, id) {
   const a = servisAkisiGetir(vt, kimlik(id, 'akisId'));
@@ -142,7 +153,10 @@ export const SERVIS_GET_UCLARI = [
         return { ortamId: o.id, tanimli: !neden, neden, kosuyaDahil: !neden && servisOrtamdaKosuyaDahil(x, o.id), sonSonuc: g.ortamSonuclari[x.id]?.[o.id] ?? null };
       });
     }
-    return { servis: servisOzeti(db, s), senaryolar: g.senaryolar, sonSonuclar: g.sonSonuclar };
+    // Gizli sabitler (parola, token… adlı alanların sabit değeri) arayüze gönderilmez: yerlerinde maske (gizli-sabitler.mjs).
+    const ekler = ekGizliAdlar(db);
+    const senaryolar = g.senaryolar.map((x) => ({ ...x, icerik: servisIceriginiMaskele(x.icerik, ekler, GIZLI_SABIT_MASKESI) }));
+    return { servis: servisOzeti(db, s), senaryolar, sonSonuclar: g.sonSonuclar };
   }],
   // Sözleşme sekmesi (operasyon / uç başına): sözleşme, geçmiş, kayıtlı WSDL yanıt şeması var mı, taslak için başarılı yanıtlar.
   ['/platform/servis/sozlesme', (db, q) => {
@@ -287,10 +301,20 @@ export const SERVIS_POST_UCLARI = [
     if (g.id) senaryoAl(db, projeId, g.id);
     const id = servisSenaryosuKaydet(db, {
       id: secimli(g.id), projeId, servisId: s.id, baslik: metin(g.baslik), icerik: veriKosulariniDenetle(db, projeId, g.icerik),
+      ...(secimli(g.kaynakSenaryoId) ? { kaynakSenaryoId: senaryoAl(db, projeId, g.kaynakSenaryoId).id } : {}),
       ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
       ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {})
     });
     return { id };
+  }],
+  // "Tabloya gizli sütun olarak taşı" (senaryo düzenleyicisi): adı gizli alanın sabit değeri — yeni yazılan (deger) ya da kayıtlı
+  // senaryodaki — "<servis> gizli değerleri" tablosunun gizli sütununa yazılır; yanıtta yalnız tablo / sütun adı (değer dönmez).
+  ['/platform/servis/senaryo/gizli-tabloya-tasi', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const s = servisAl(db, projeId, g.servisId);
+    const senaryo = secimli(g.senaryoId) ? senaryoAl(db, projeId, g.senaryoId) : null;
+    return gizliSabitiTabloyaTasi(db, projeId, { servis: { ad: s.ad, anahtar: s.anahtar }, icerik: senaryo?.icerik, alanAdi: metin(g.alanAdi),
+      ...(typeof g.deger === 'string' ? { deger: g.deger } : {}), ekler: ekGizliAdlar(db) });
   }],
   // Koşuya dahil / hariç (toplu): senaryoların yalnız bu işareti değişir. ortamId verilirse YALNIZ o ortamda (ekran
   // senaryolarındaki gibi ortam başına; diğer ortamların o anki değeri ezme olarak yazılır, genel değer "en az bir ortamda koşuda"
@@ -343,7 +367,7 @@ export const SERVIS_POST_UCLARI = [
     const s = servisAl(db, projeId, g.servisId);
     return { sonuc: await servisSenaryosuCalistir(db, projeId, {
       servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), tur: 'dene',
-      ...(g.senaryoId ? { senaryoId: senaryoAl(db, projeId, g.senaryoId).id } : { taslak: { baslik: metin(g.baslik) || 'Taslak', icerik: g.icerik } })
+      ...(g.senaryoId ? { senaryoId: senaryoAl(db, projeId, g.senaryoId).id } : { taslak: { baslik: metin(g.baslik) || 'Taslak', icerik: taslakIcerigi(db, projeId, g.icerik, g.kaynakSenaryoId) } })
     }) };
   }],
   // Canlı panel: seçilen senaryoları arka planda koşar (hemen döner); durum /platform/servis/is ile sorulur.
@@ -351,7 +375,7 @@ export const SERVIS_POST_UCLARI = [
     const projeId = kimlik(g.projeId, 'projeId');
     const s = servisAl(db, projeId, g.servisId);
     if (g.taslak && typeof g.taslak === 'object') {
-      return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), taslak: { baslik: metin(g.taslak.baslik) || 'Taslak', icerik: g.taslak.icerik } }) };
+      return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), taslak: { baslik: metin(g.taslak.baslik) || 'Taslak', icerik: taslakIcerigi(db, projeId, g.taslak.icerik, g.taslak.kaynakSenaryoId) } }) };
     }
     // Başarısızları tekrar çalıştır: { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — başarısız çalıştırmalar sunucunun kaydından kurulur.
     if (g.tekrar !== undefined && g.tekrar !== null) {

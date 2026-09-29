@@ -94,9 +94,9 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
   const satir = bolum.locator('li[data-ortam]').filter({ hasText: 'Deneme' });
   await expect(satir).toContainText('Tanımlı değil');
   // Tarif yokken önerilen yol birincil; elle tanımlama ikincil.
-  const kaydetDugmesi = satir.getByRole('button', { name: 'Deneme: girişi kaydet' });
+  const kaydetDugmesi = satir.getByRole('button', { name: 'Girişi kaydet — Deneme girişi' });
   await expect(kaydetDugmesi).toHaveClass(/birincil/);
-  await expect(satir.getByRole('button', { name: 'Deneme: giriş tarifi ekle' })).toHaveText('Elle tanımla');
+  await expect(satir.getByRole('button', { name: 'Elle tanımla — Deneme giriş tarifi' })).toHaveText('Elle tanımla');
   await kaydetDugmesi.click();
   await page.getByRole('dialog').getByRole('button', { name: 'Tarayıcıyı aç' }).click();
 
@@ -160,7 +160,7 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
   await expect(kutu.getByText('Deneme girişi kaydedildi.')).toBeVisible();
   await expect(kutu.getByRole('listitem')).toHaveText(['Kullanıcı adı ve parola', 'Authenticator gizli anahtarı']);
   await expect(satir).toContainText('Kaydedilmiş');
-  await expect(satir.getByRole('button', { name: 'Deneme: girişi kaydet' })).toHaveText('Yeniden kaydet');
+  await expect(satir.getByRole('button', { name: 'Yeniden kaydet — Deneme girişi' })).toHaveText('Yeniden kaydet');
   await expect(page.locator('form.tarif-formu')).toHaveCount(0);
 
   const tarif = ((await api(`/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Nesne[]).find((o) => o.ortamId === ortamId)?.tarif as Nesne;
@@ -208,6 +208,8 @@ test('"Girişi dene": yalnız giriş yapılır (ekran/senaryo yok); başarı, ha
   const once = uygulama.olaylar.length;
   let sonuc = await dene();
   await expect(sonuc.getByRole('status').filter({ hasText: 'Giriş başarılı' })).toContainText('Giriş sonrası sayfa: /panel', { timeout: 60_000 });
+  // Başarı satırında tek onay işareti (kutunun kendi işareti; ayrıca simge yok).
+  await expect(sonuc.locator('.not-kutusu.basari').filter({ hasText: 'Giriş başarılı' }).locator('svg')).toHaveCount(0);
   await expect(sonuc.getByRole('img', { name: 'Giriş sonrası sayfanın görüntüsü' })).toBeVisible();
   await expect(sonuc.getByRole('listitem').filter({ hasText: 'Doğrulama kodu gönderildi.' })).toBeVisible();
   expect(uygulama.olaylar.slice(once)).toEqual(expect.arrayContaining(['POST /giris', 'POST /dogrulama']));
@@ -299,7 +301,7 @@ test('oturum kontrol adresi giriş sayfasıyla aynıysa: tarif ekranında uyarı
   await expect(satir).toContainText('Oturum kontrol adresi giriş sayfasıyla aynı');
 
   // Tarif ekranı: öneri yokken uyarı + ne yapılacağı; alan açıklaması sade.
-  await satir.getByRole('button', { name: 'Deneme: giriş tarifini düzenle' }).click();
+  await satir.getByRole('button', { name: 'Düzenle — Deneme giriş tarifi' }).click();
   const form = page.locator('form.tarif-formu');
   const uyari = form.locator('.oturum-adresi-uyarisi');
   await expect(uyari).toContainText('Bu adres giriş sayfasıyla aynı; kayıtlı oturum doğru denetlenemez, her testte giriş beklenir.');
@@ -318,7 +320,7 @@ test('oturum kontrol adresi giriş sayfasıyla aynıysa: tarif ekranında uyarı
   expect((await tarifi()).oturumKontrolAdresi).toBe('/');
 
   // Tarif ekranı: uyarıda tek tıkla önerilen adrese geçilir (alan değişir, uyarı kalkar); kaydedilmeden tarif değişmez.
-  await satir.getByRole('button', { name: 'Deneme: giriş tarifini düzenle' }).click();
+  await satir.getByRole('button', { name: 'Düzenle — Deneme giriş tarifi' }).click();
   await expect(uyari).toBeVisible();
   await uyari.getByRole('button', { name: 'Önerilen adrese geç (/panel)' }).click();
   await expect(form.getByLabel('Oturum kontrol adresi')).toHaveValue('/panel');

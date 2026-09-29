@@ -32,10 +32,20 @@ import {
   OTOMATIK_SAKLAMA_SAYISI,
   YedekHatasi,
   otomatikYedekAl,
+  yedekDosyaAdi,
   yedekIceAktar,
   yedekOlustur
 } from '../../scripts/platform/yedek.mjs';
 import { HIZLI_KDF, geciciKlasor, loglariYakala, type LogYakalayici } from './platform-ortak';
+
+test('yedek dosya adı: çalışma alanı adı (ASCII) + yerel tarih; bilgisayar adı yok; ad yoksa varsayılan', () => {
+  const t = new Date(2026, 8, 30, 14, 5);
+  expect(yedekDosyaAdi('Ekip Çalışma Alanı', t)).toBe('Ekip-Calisma-Alani-2026-09-30-1405.tayedek');
+  expect(yedekDosyaAdi('İş / Test: "ön"', t)).toBe('Is-Test-on-2026-09-30-1405.tayedek');
+  expect(yedekDosyaAdi(null, t)).toBe('nobetci-yedek-2026-09-30-1405.tayedek');
+  expect(yedekDosyaAdi('   ', t)).toBe('nobetci-yedek-2026-09-30-1405.tayedek');
+  expect(yedekDosyaAdi('x'.repeat(200), t)).toMatch(/^x{60}-2026-09-30-1405\.tayedek$/);
+});
 
 const PAROLA = 'Yedek-Kasa-Parolasi-2026';
 const BASKA_PAROLA = 'Baska-Makine-Parolasi-99';

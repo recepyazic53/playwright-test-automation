@@ -52,7 +52,7 @@ function gruplar(ayarBolumleri) {
     {
       grup: 'Servis testleri',
       ogeler: [
-        { baslik: 'Servis', aciklama: 'WSDL, SoapUI projesi, Postman koleksiyonu, cURL ya da elle', ikonAd: 'ag', git: () => '#/servisler/yeni' },
+        { baslik: 'Servis', aciklama: 'WSDL (adresinden kendiliğinden okunur), SoapUI projesi, Postman koleksiyonu, cURL ya da elle', ikonAd: 'ag', git: () => '#/servisler/yeni' },
         { baslik: 'Servis senaryosu', aciklama: 'Bir servise istek + kontroller', ikonAd: 'duzenle', git: (p) => servisSec(p, 'Hangi serviste senaryo oluşturulsun?', (id) => `#/servisler/s/${encodeURIComponent(id)}/senaryolar`) },
         { baslik: 'Servis akışı', aciklama: 'İstekleri zincirle (yanıttan değer taşı)', ikonAd: 'katman', git: (p) => servisSec(p, 'Hangi serviste akış oluşturulsun?', (id) => `#/servisler/s/${encodeURIComponent(id)}/akislar/yeni`) }
       ]

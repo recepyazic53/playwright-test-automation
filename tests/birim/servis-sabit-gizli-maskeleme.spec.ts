@@ -6,7 +6,9 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
+import { coz, kasaOlustur, sifrele, zarfMi } from '../../scripts/platform/kasa.mjs';
+import { GIZLI_SABIT_MASKESI, gizliSabitiTabloyaTasi, gizliSabitleriAyir, gizliSabitleriBirlestir, gizliSabitleriGeriKoy } from '../../scripts/platform/servisler/gizli-sabitler.mjs';
+import { tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { adaGoreMaskele, gizliAdliDegerler, maskeyiGeriKoy, servisIceriginiMaskele } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
@@ -80,8 +82,12 @@ test.describe('koşu kaydı ve gösterimleri (sahte sunucu)', () => {
     const [ilk] = servisSenaryolariniListele(vt, r.id);
     const govde = `{"kullanici":"deneme","parola":"${PAROLA}","musteriAnahtari":"${EK_DEGER}"}`;
     servisSenaryosuKaydet(vt, { id: ilk.id, projeId, servisId: r.id, baslik: ilk.baslik, icerik: { ...ilk.icerik, govde } });
-    // Saklama biçimi değişmez: senaryoda değer aynen durur.
+    // Depo okuması tam değeri verir (koşucular değişmez); diskte ise değer içerikten ayrı, gizli değer olarak durur.
     expect(servisSenaryosuGetir(vt, ilk.id)?.icerik.govde).toBe(govde);
+    const ham = JSON.parse(coz(vt, String(vt.tek('SELECT icerik_json FROM servis_senaryolari WHERE id = ?', [ilk.id])?.icerik_json)));
+    expect(JSON.stringify(ham)).not.toContain(PAROLA);
+    expect(ham.govde).toContain('"parola":"••••••"');
+    expect(zarfMi(ham.gizliSabitler)).toBe(true);
 
     const k = await servisSenaryosuCalistir(vt, projeId, { servisId: r.id, ortamId, tur: 'dene', senaryoId: ilk.id });
     expect(k.durum, String(k.hata)).toBe('basarili');
@@ -113,5 +119,79 @@ test.describe('koşu kaydı ve gösterimleri (sahte sunucu)', () => {
       expect(onizleme).toContain('"kullanici\\":\\"deneme');
       expect(onizleme).not.toContain(PAROLA);
     } finally { hedef.kapat(); }
+  });
+});
+
+test.describe('gizli sabitler kasada ayrı saklanır (geriye uyumlu)', () => {
+  test.describe.configure({ mode: 'serial' });
+  const klasor = geciciKlasor('gizli-sabitler');
+  let vt: Veritabani;
+  test.afterAll(() => { vt?.kapat(); klasor.temizle(); });
+  const hamIcerik = (id: string): Record<string, any> => JSON.parse(coz(vt, String(vt.tek('SELECT icerik_json FROM servis_senaryolari WHERE id = ?', [id])?.icerik_json)));
+
+  test('ayır → birleştir: gövde, başlık, yol ve akış adımları; maskeli gelen yer kayıtlı değerle dolar, değiştirilen yer yeni değer', async () => {
+    vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
+    await kasaOlustur(vt, KASA, { kdf: HIZLI_KDF });
+    const icerik = {
+      operasyon: 'giris', govde: `<A><Password>${PAROLA}</Password><Ad>deneme</Ad><Token>\${akis:Token}</Token></A>`,
+      basliklar: { Authorization: 'Bearer sahte-jeton-1', 'X-Iz': '1' }, http: { metot: 'GET', yol: `/giris?password=${PAROLA}&ad=x` },
+      adimlar: { a1: { govde: `{"parola":"${EK_DEGER}"}` } }
+    };
+    const ayri = gizliSabitleriAyir(vt, icerik, []) as Record<string, any>;
+    const metin = JSON.stringify({ ...ayri, gizliSabitler: undefined, adimlar: { a1: { ...ayri.adimlar.a1, gizliSabitler: undefined } } });
+    for (const sir of [PAROLA, EK_DEGER, 'sahte-jeton-1']) expect(metin).not.toContain(sir);
+    expect(ayri.govde).toContain('<Token>${akis:Token}</Token>'); // yer tutucu sır değildir
+    expect(zarfMi(ayri.gizliSabitler)).toBe(true);
+    expect(gizliSabitleriBirlestir(vt, ayri)).toEqual(icerik);
+    // Arayüzden maskeli dönen içerik: maskeli yer kayıtlı değerle, değiştirilen yer yeni değerle.
+    const arayuzden: Record<string, any> = { ...ayri, govde: ayri.govde.replace('deneme', 'yeni'), basliklar: { Authorization: 'Bearer yeni-jeton', 'X-Iz': '1' } };
+    delete arayuzden.gizliSabitler;
+    const geri = gizliSabitleriGeriKoy(arayuzden, icerik, []) as Record<string, any>;
+    expect(geri.govde).toBe(icerik.govde.replace('deneme', 'yeni'));
+    expect(geri.basliklar.Authorization).toBe('Bearer yeni-jeton');
+    expect(geri.http.yol).toBe(icerik.http.yol);
+    expect(GIZLI_SABIT_MASKESI).toBe('••••••');
+  });
+
+  test('eski düz kayıt okunur; ilk kaydedilişte gizliye çevrilir; kopya kaynağından dolar', async () => {
+    const projeId = projeKaydet(vt, { ad: 'P' });
+    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
+    const r = restServisiKaydet(vt, projeId, { anahtar: 'giris', ad: 'Giriş', tabanlar: { [ortamId]: 'http://127.0.0.1:9' },
+      uclar: [{ ad: 'giris', metot: 'POST', yol: '/giris', icerikTuru: 'application/json', govdeOrnegi: '{"kullanici":"x","parola":"x"}' }], senaryolar: ['giris'] });
+    const [ilk] = servisSenaryolariniListele(vt, r.id);
+    const govde = `{"kullanici":"deneme","parola":"${PAROLA}"}`;
+    // Eski biçim: değer içerikte düz (yalnız bütün içerik şifreli) — doğrudan yazılır.
+    vt.calistir('UPDATE servis_senaryolari SET icerik_json = ? WHERE id = ?', [sifrele(vt, JSON.stringify({ ...ilk.icerik, govde })), ilk.id]);
+    expect(hamIcerik(ilk.id).govde).toContain(PAROLA);
+    expect(servisSenaryosuGetir(vt, ilk.id)?.icerik.govde).toBe(govde); // okunur
+    // Arayüzden maskeli gelen içerikle kaydet: değer korunur ve artık gizli saklanır.
+    const maskeli = servisIceriginiMaskele(servisSenaryosuGetir(vt, ilk.id)?.icerik, [], GIZLI_SABIT_MASKESI) as Record<string, any>;
+    expect(JSON.stringify(maskeli)).not.toContain(PAROLA);
+    servisSenaryosuKaydet(vt, { id: ilk.id, projeId, servisId: r.id, baslik: ilk.baslik, icerik: maskeli });
+    expect(JSON.stringify(hamIcerik(ilk.id))).not.toContain(PAROLA);
+    expect(servisSenaryosuGetir(vt, ilk.id)?.icerik.govde).toBe(govde);
+    // Kopya (arayüzde maskeli içerik + kaynak senaryo): değer kaynaktan kopyalanır.
+    const kopyaId = servisSenaryosuKaydet(vt, { projeId, servisId: r.id, baslik: 'Kopya', icerik: maskeli, kaynakSenaryoId: ilk.id });
+    expect(servisSenaryosuGetir(vt, kopyaId)?.icerik.govde).toBe(govde);
+    // Kaynaksız yeni senaryoda maske değer sayılmaz ama sır da değildir: olduğu gibi kalır (yanlışlıkla asıl değer uydurulmaz).
+    const yalinId = servisSenaryosuKaydet(vt, { projeId, servisId: r.id, baslik: 'Kaynaksız', icerik: maskeli });
+    expect(servisSenaryosuGetir(vt, yalinId)?.icerik.govde).toContain('"parola":"••••••"');
+  });
+
+  test('"Tabloya gizli sütun olarak taşı": değer gizli sütuna yazılır, listede görünmez; aynı değer aynı sütunu kullanır', () => {
+    const projeId = projeKaydet(vt, { ad: 'Taşıma' });
+    const icerik = { govde: `<Giris><Password>${PAROLA}</Password></Giris>` };
+    const servis = { ad: 'Kimlik Servisi', anahtar: 'kimlik' };
+    const a = gizliSabitiTabloyaTasi(vt, projeId, { servis, icerik, alanAdi: 'Password', ekler: [] });
+    expect(a).toEqual({ tablo: 'Kimlik Servisi gizli değerleri', sutun: 'Password', basvuru: 'Kimlik Servisi gizli değerleri.Password', yeniSutun: true });
+    const [t] = tablolariListele(vt, projeId);
+    expect(t.sutunlar).toEqual([expect.objectContaining({ ad: 'Password', gizli: true })]);
+    expect(JSON.stringify(t)).not.toContain(PAROLA);
+    expect(tablolariListele(vt, projeId, { cozulsun: true })[0].satirlar[0].degerler.Password).toBe(PAROLA);
+    expect(gizliSabitiTabloyaTasi(vt, projeId, { servis, icerik, alanAdi: 'Password', ekler: [] }).yeniSutun).toBe(false);
+    // Farklı (yeni yazılan) değer: ayrı sütun.
+    expect(gizliSabitiTabloyaTasi(vt, projeId, { servis, alanAdi: 'Password', deger: 'Baska-Deger-1', ekler: [] }).sutun).toBe('Password_2');
+    expect(() => gizliSabitiTabloyaTasi(vt, projeId, { servis, icerik, alanAdi: 'KullaniciAdi', ekler: [] })).toThrow(/adı gizli sayılan/);
+    expect(() => gizliSabitiTabloyaTasi(vt, projeId, { servis, icerik: {}, alanAdi: 'Password', ekler: [] })).toThrow(/Taşınacak değer yok/);
   });
 });

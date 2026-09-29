@@ -62,6 +62,7 @@ export interface AcilmisYedek {
 }
 
 export declare const YEDEK_UZANTISI: string;
+export declare function yedekDosyaAdi(alanAdi: string | null | undefined, zaman?: Date): string;
 export declare const BICIM_SURUMU: number;
 export declare const ESKI_BICIM_SURUMU: number;
 export declare const OTOMATIK_SAKLAMA_SAYISI: number;

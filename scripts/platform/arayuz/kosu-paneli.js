@@ -239,7 +239,7 @@ export function kosuOnayi(s) {
       if (s.hazirlik && ortam) {
         ortamDenetiminiOku(ortam);
         const d = ortamDenetimleri[ortam.id] || null;
-        const denetle = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Ortam bağlantısını denetle (${ortam.ad})` }, ikon('ag'), 'Denetle');
+        const denetle = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Denetle — ortam bağlantısı (${ortam.ad})` }, ikon('ag'), 'Denetle');
         denetle.addEventListener('click', async () => {
           const o = ortam;
           if (!(await canliOnayIste(o))) return;

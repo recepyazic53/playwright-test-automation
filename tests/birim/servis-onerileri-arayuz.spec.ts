@@ -174,7 +174,8 @@ test.describe('servis senaryo önerileri arayüzü', () => {
     await expect(liste).not.toContainText('Başarılı akış: DurumSor');
     // Ekle: ilk eklenebilir öneri "Koşuda" kapalı kaydedilir, listeden çıkar.
     const ekleDugmesi = liste.getByRole('button', { name: /: ekle$/ }).and(page.locator(':enabled')).first();
-    const eklenenBaslik = String(await ekleDugmesi.getAttribute('aria-label')).replace(/: ekle$/, '');
+    // Erişilebilir ad görünen metinle başlar: "Ekle — <başlık>: ekle".
+    const eklenenBaslik = String(await ekleDugmesi.getAttribute('aria-label')).replace(/^Ekle — /, '').replace(/: ekle$/, '');
     await ekleDugmesi.click();
     await expect(page.getByText(/senaryo olarak eklendi/)).toBeVisible();
     expect((await senaryolar()).find((x) => x.baslik === eklenenBaslik)).toMatchObject({ kosuyaDahil: false });

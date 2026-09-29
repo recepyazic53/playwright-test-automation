@@ -397,9 +397,28 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
   throw new GirisHatasi('IKI_ASAMALI_HATALI', `doğrulama kodu gönderildikten sonra ${tarif.zamanAsimiSn} sn içinde ${basariMetni(tarif)} görünmedi (sayfa: ${yol(page)}); kod kabul edilmemiş olabilir.`);
 }
 
+/** Adresin yolu (göreli adres sayfanın adresine göre çözülür; çözülemezse null). Sondaki "/" yok sayılır. */
+function adresYolu(adres: string, taban: string): string | null {
+  try { return new URL(adres, taban).pathname.replace(/\/+$/, '') || '/'; } catch { return null; }
+}
+
+/**
+ * Oturum kontrol adresine gidilince uygulama giriş sayfasına yönlendirdi mi? Yalnız kontrol adresi giriş sayfasından
+ * FARKLIYSA anlamlıdır (aynıysa geçerli oturum da o sayfada başlar; eski davranış: göstergeyi süre boyunca bekle).
+ */
+function giriseYonlendirildiMi(page: Page, tarif: GirisTarifi): boolean {
+  const simdi = page.url();
+  if (!/^https?:/i.test(simdi)) return false;
+  const giris = adresYolu(tarif.girisAdresi, simdi);
+  const kontrol = adresYolu(tarif.oturumKontrolAdresi, simdi);
+  if (!giris || !kontrol || giris === kontrol) return false;
+  return adresYolu(simdi, simdi) === giris;
+}
+
 /**
  * Kayıtlı oturum (storageState) hâlâ geçerli mi? Form DOLDURULMAZ: oturum kontrol adresine gidilir,
- * başarı göstergesi kısa sürede görünürse geçerlidir.
+ * başarı göstergesi kısa sürede görünürse geçerlidir. Uygulama kontrol adresinden giriş sayfasına yönlendirirse
+ * (oturum düşmüş) süre dolmadan hemen "geçersiz" sayılır; her testte zaman aşımı kadar beklenmez.
  */
 export async function oturumGecerliMi(page: Page, tarif: GirisTarifi, sureMs = oturumKontrolSuresiMs()): Promise<boolean> {
   try {
@@ -411,6 +430,7 @@ export async function oturumGecerliMi(page: Page, tarif: GirisTarifi, sureMs = o
   const son = Date.now() + sureMs;
   for (;;) {
     if (await basariGorunurMu(page, tarif)) return true;
+    if (giriseYonlendirildiMi(page, tarif)) return false;
     if (Date.now() >= son) return false;
     await page.waitForTimeout(YOKLAMA_ARALIGI_MS).catch(() => undefined);
   }

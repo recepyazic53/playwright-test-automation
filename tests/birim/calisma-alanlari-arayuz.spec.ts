@@ -157,14 +157,14 @@ test('kilit ekranı çalışma alanının adını ve "Başka çalışma alanı"n
   await page.keyboard.press('Escape');
 });
 
-test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → proje hazır özeti)', async () => {
+test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → giriş sorusu → proje hazır özeti; Evet → giriş tarifine geç)', async () => {
   const menu = await projeMenusu();
   await expect(menu.getByRole('menuitem', { name: 'Proje ekle' })).toBeVisible();
   await goruntu('03-proje-secici', undefined, { x: 0, y: 0, width: 760, height: 300 });
   await menu.getByRole('menuitem', { name: 'Proje ekle' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
   // "Sizi tanıyalım" adımı yok: doğrudan proje; canlı ortam Ortamlar adımında "Ortam ekle" ile eklenir.
-  await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Ortamlar', 'Tamam']);
+  await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Ortamlar', 'Giriş', 'Tamam']);
   await page.getByLabel('Proje adı').fill('İkinci proje');
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
@@ -173,7 +173,14 @@ test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → proje hazır öz
   await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
   await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+  // Giriş sorusu: Evet → Proje hazır'da birincil eylem giriş tarifi sayfası.
+  await page.getByRole('radio', { name: /^Evet, giriş sayfası var/ }).check();
+  await page.getByRole('button', { name: 'Devam' }).click();
   await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
+  const tarifeGec = page.getByRole('link', { name: 'Giriş tarifine geç' });
+  await expect(tarifeGec).toHaveClass(/birincil/);
+  await expect(tarifeGec).toBeFocused();
+  await expect(tarifeGec).toHaveAttribute('href', /^#\/ayarlar\/giris\/tarif\/[0-9a-f-]{36}$/);
   await expect(page.locator('.ozet-ortamlar li')).toHaveCount(2);
   await expect(page.locator('.yapilacaklar-listesi')).toHaveCount(0);
   await goruntu('05-sihirbaz-tamam');
@@ -411,6 +418,8 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   // İlk kurulumda izin paketi adımı (yeni çalışma alanı): Atla → hiçbir izin açılmaz.
   await page.getByRole('button', { name: 'Atla' }).click();
+  // İsteğe bağlı giriş sorusu: varsayılanla devam.
+  await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
   await expect(page.locator('#proje-rozeti')).toHaveText('Deneme');
   await expect(page.locator('.hesap-adi')).toHaveText('İş');
@@ -428,7 +437,8 @@ test('dışa aktar ve kapat: mevcut dışa aktarma formu (medya seçimi) → ind
   const indirme = page.waitForEvent('download');
   await d.getByRole('button', { name: 'Dışa aktar ve kapat' }).click();
   const dosya = await indirme;
-  expect(dosya.suggestedFilename()).toMatch(/^platform-yedek-.*\.tayedek$/);
+  // Dosya adı: çalışma alanı adı (ASCII) + tarih; bilgisayar adı geçmez.
+  expect(dosya.suggestedFilename()).toMatch(/^Is-\d{4}-\d{2}-\d{2}-\d{4}\.tayedek$/);
   expect(await dosya.path()).toBeTruthy();
   await expect(page.getByRole('heading', { name: 'Çalışma alanları' })).toBeVisible();
   await expect(page.locator('.ca-karti .ca-adi')).toHaveText(['İş', ILK_AD]);

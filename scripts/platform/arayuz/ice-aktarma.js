@@ -18,14 +18,22 @@ const ALAN_ETIKETLERI = {
   ad: 'Ad', aciklama: 'Açıklama', ayarlar_json: 'Ayarlar', taban_url: 'Adres', varsayilan: 'Varsayılan',
   proje_id: 'Proje', ortam_id: 'Ortam', kullanici_adi: 'Kullanıcı adı', parola: 'Parola',
   iki_asamali_tur: 'İki aşamalı doğrulama', totp_gizli: 'Authenticator gizli anahtarı', sms_ayari_json: 'SMS ayarı',
-  tur: 'Tür', alanlar_json: 'Alanlar', tur_id: 'Test verisi türü', degerler_json: 'Değerler', anahtar: 'Anahtar',
-  ekran_id: 'Ekran', surum: 'Sürüm', model_json: 'Model', baslik: 'Başlık', icerik_json: 'İçerik',
-  kosuya_dahil: 'Toplu koşuya dahil', deger_json: 'Değer'
+  tur: 'Tür', alanlar_json: 'Sütunlar', tur_id: 'Test verisi tablosu', degerler_json: 'Değerler', anahtar: 'Anahtar',
+  ekran_id: 'Ekran', surum: 'Sürüm', model_json: 'Ekran tanımı', baslik: 'Başlık', icerik_json: 'İçerik',
+  kosuya_dahil: 'Toplu koşuya dahil', deger_json: 'Değer', servis_id: 'Servis', kapsam: 'Kapsam', sira: 'Sıra', durum: 'Durum'
 };
+// Koşu ve geçmiş kayıtları (her zaman eklenir): ham tablo adı kullanıcıya gösterilmez.
 const EKLEME_ETIKETLERI = {
   kosular: 'Koşular', kosu_sonuclari: 'Koşu sonuçları', degisiklik_gecmisi: 'Değişiklik geçmişi kayıtları', makineler: 'Bilgisayar kayıtları',
-  adim_sonuclari: 'Adım sonuçları', medya: 'Medya kayıtları'
+  adim_sonuclari: 'Adım sonuçları', medya: 'Medya kayıtları', yakalanan_mesajlar: 'Yakalanan mesajlar', servis_kosulari: 'Servis koşuları',
+  servis_akis_kosulari: 'Servis akışı koşuları', raporlar: 'Kayıtlı raporlar'
 };
+/** Tanımsız ham ad (ör. yeni bir tablo) yine okunur biçimde: "servis_kosulari" → "Servis kosulari". */
+const okunurAd = (ad) => {
+  const s = String(ad).replace(/_json$/, '').replace(/_/g, ' ').trim();
+  return s ? s.charAt(0).toLocaleUpperCase('tr') + s.slice(1) : String(ad);
+};
+const eklemeEtiketi = (tablo) => EKLEME_ETIKETLERI[tablo] || okunurAd(tablo);
 const MEDYA_TUR_ETIKETLERI = { ekran_goruntusu: 'Ekran görüntüleri', video: 'Videolar', iz: 'İz (trace) dosyaları', diger: 'Diğer ekler' };
 
 /** Önizlemedeki medya bölümü: tür başına eklenecek dosya sayısı/boyutu. */
@@ -55,7 +63,7 @@ const MASKE = '••••••';
 
 const alanEtiketi = (ad) => {
   const [sutun, ic] = String(ad).split(/\.(.+)/);
-  const ana = ALAN_ETIKETLERI[sutun] || sutun;
+  const ana = ALAN_ETIKETLERI[sutun] || okunurAd(sutun);
   return ic ? `${ana} › ${ic}` : ana;
 };
 const degerMetni = (d) => {
@@ -102,7 +110,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       h('h2', {}, ikon('yukle'), 'Yedek yükle'),
       h('p', { class: 'soluk' }, 'Bir .tayedek dosyası seçin. Uygulamadan önce neyin ekleneceğini ve neyin değişeceğini göreceksiniz; bu bilgisayardaki hiçbir kayıt silinmez.'),
       mesaj.kutu,
-      alan('Yedek dosyası', dosyaGirdisi, { zorunlu: true, icerik: h('div', {}, dosyaGirdisi, dosyaSecimiDurumu.not), yardim: 'Yalnızca bu platformun ürettiği .tayedek dosyaları.' }),
+      alan('Yedek dosyası', dosyaGirdisi, { zorunlu: true, icerik: h('div', {}, dosyaSecimiDurumu.kutu), yardim: 'Yalnızca bu platformun ürettiği .tayedek dosyaları.' }),
       parola.kapsayici,
       h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'Vazgeç')));
     if (onMesaj) mesaj.goster(onMesaj.metin, onMesaj.tur);
@@ -222,7 +230,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     servis_parametre_tanimlari: 'servis parametre tanımı', servis_akislari: 'servis akışı', kosular: 'koşu', servis_kosulari: 'servis koşusu',
     servis_akis_kosulari: 'servis akışı koşusu', ekipler: 'ekip', rapor_isaretleri: 'rapor işareti', kurtarma_kurallari: 'kurtarma kuralı'
   };
-  const kalintiMetni = (k) => Object.entries(k).map(([t, n]) => `${n} ${KALINTI_ETIKETLERI[t] || t}`).join(', ');
+  const kalintiMetni = (k) => Object.entries(k).map(([t, n]) => `${n} ${KALINTI_ETIKETLERI[t] || okunurAd(t).toLocaleLowerCase('tr')}`).join(', ');
   const ortamEtiketi = (o) => (o.tur ? `${o.ad} (${TUR_ETIKETI[o.tur]})` : o.ad);
 
   /** Yedekteki her proje için hedef seçimi ve (mevcut projeye aktarılırken) ortam eşlemesi; değişince önizleme yenilenir. */
@@ -478,7 +486,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     }
 
     const eklenecekSatirlari = Object.entries(onizleme.eklenecekler).filter(([, e]) => e.dosyada > 0)
-      .map(([tablo, e]) => h('li', {}, `${EKLEME_ETIKETLERI[tablo] || tablo}: ${e.yeni} eklenecek`,
+      .map(([tablo, e]) => h('li', {}, `${eklemeEtiketi(tablo)}: ${e.yeni} eklenecek`,
         h('span', { class: 'soluk' }, ` (dosyada ${e.dosyada}; bu bilgisayarda olanlar atlanır)`)));
 
     const tumunuSec = (secili) => {
@@ -546,10 +554,10 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     };
     const varlikSatirlari = Object.entries(sonuc.varliklar)
       .filter(([, s]) => s.eklenen || s.uzerineYazilan || s.atlanan)
-      .map(([tablo, s]) => h('tr', {}, h('th', { scope: 'row' }, (onizleme.varliklar[tablo] || {}).etiket || tablo),
+      .map(([tablo, s]) => h('tr', {}, h('th', { scope: 'row' }, (onizleme.varliklar[tablo] || {}).etiket || okunurAd(tablo)),
         h('td', {}, String(s.eklenen)), h('td', {}, String(s.uzerineYazilan)), h('td', {}, String(s.atlanan))));
     const eklemeSatirlari = Object.entries(sonuc.eklenenler).filter(([, s]) => s.eklenen || s.mevcut || s.atlanan)
-      .map(([tablo, s]) => h('li', {}, `${EKLEME_ETIKETLERI[tablo] || tablo}: ${s.eklenen} eklendi`,
+      .map(([tablo, s]) => h('li', {}, `${eklemeEtiketi(tablo)}: ${s.eklenen} eklendi`,
         s.mevcut ? `, ${s.mevcut} zaten vardı` : '', s.atlanan ? `, ${s.atlanan} atlandı` : ''));
     const devam = h('button', { type: 'button', class: 'birincil', onclick: () => secenekler.bitti() }, 'Devam');
     goster('ozet', h('div', { class: 'kart' },
@@ -572,11 +580,11 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       sonuc.otomatikEklenenUstKayitlar.length ? [
         h('h3', { class: 'ara-baslik' }, 'Otomatik eklenen üst kayıtlar'),
         h('p', { class: 'soluk' }, 'Seçtiğiniz kayıtların ihtiyaç duyduğu şu kayıtlar bu bilgisayarda olmadığı için otomatik eklendi:'),
-        h('ul', {}, sonuc.otomatikEklenenUstKayitlar.map((u) => h('li', {}, `${(onizleme.varliklar[u.tablo] || {}).etiket || u.tablo}: ${baslikBul(u.tablo, u.id)}`)))
+        h('ul', {}, sonuc.otomatikEklenenUstKayitlar.map((u) => h('li', {}, `${(onizleme.varliklar[u.tablo] || {}).etiket || okunurAd(u.tablo)}: ${baslikBul(u.tablo, u.id)}`)))
       ] : null,
       sonuc.atlananlar.length ? [
         h('h3', { class: 'ara-baslik' }, 'Atlanan kayıtlar'),
-        h('ul', {}, sonuc.atlananlar.map((a) => h('li', {}, `${(onizleme.varliklar[a.tablo] || {}).etiket || a.tablo}: ${baslikBul(a.tablo, a.id)} — ${a.neden}`)))
+        h('ul', {}, sonuc.atlananlar.map((a) => h('li', {}, `${(onizleme.varliklar[a.tablo] || {}).etiket || okunurAd(a.tablo)}: ${baslikBul(a.tablo, a.id)} — ${a.neden}`)))
       ] : null,
       sonuc.gecmiseYazilan ? h('p', { class: 'soluk' }, `Üzerine yazılan ${sonuc.gecmiseYazilan} yerel sürüm değişiklik geçmişinde saklandı.`) : null,
       sonuc.medya && (sonuc.medya.eklenen || sonuc.medya.dahilDegil)

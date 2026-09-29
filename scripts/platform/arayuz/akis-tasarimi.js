@@ -36,7 +36,7 @@
 // ortak akış blokları (ör. kullanıcı değiştirme) girişten sonra açılan sayfada, ekran açılmadan önce koşar; ortak akış bloğu ↑/↓ ile
 // düğümün üstüne / altına geçer ya da düğümdeki "Baştaki ortak akışlar" seçimiyle hepsi birden taşınır (kayıt: ekranAcilisSirasi).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { sqlAdimiFormu, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
 import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
@@ -922,7 +922,11 @@ export async function akisTasarimi(icerik, s) {
    */
   function elleFormu(baslik, girdiler, dugmeMetni, ekle) {
     const hata = h('p', { class: 'hata-metni kucuk', role: 'alert', hidden: true });
-    const form = h('form', { class: 'elle-oge-formu' }, ...girdiler.map(([etiket, girdi]) => h('label', { class: 'tasarim-etiketi' }, h('span', {}, etiket), girdi)), hata,
+    // Etiket alana açıkça bağlı (for / id); erişilebilir ad görünen etiketle başlar ("Etiket — Elle alan etiketi").
+    const form = h('form', { class: 'elle-oge-formu' }, ...girdiler.map(([etiket, girdi]) => {
+      if (!girdi.id) girdi.id = yeniKimlik('elle-oge');
+      return h('label', { class: 'tasarim-etiketi', for: girdi.id }, h('span', {}, etiket), girdi);
+    }), hata,
       h('button', { type: 'submit', class: 'kucuk-dugme' }, ikon('artiYalin'), dugmeMetni));
     const d = h('details', { class: 'elle-oge' }, h('summary', {}, baslik), form);
     form.addEventListener('submit', (o) => {
@@ -938,10 +942,10 @@ export async function akisTasarimi(icerik, s) {
   const seciciUyarisi = (s) => (!s ? 'Seçiciyi yazın (ör. #onayla ya da [name="not"]).' : /[\r\n]/.test(s) || s.length > 300 ? 'Seçici tek satır ve en fazla 300 karakter olmalı.' : /^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? 'Adres değil, sayfadaki öğenin seçicisini yazın.' : null);
   /** "Listede olmayan alanı elle ekle": etiket, tür, seçici → sağ listeye (etkin alan grubu varsa ona da) eklenir. */
   function elleAlanFormu() {
-    const etiket = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Açıklama', 'aria-label': 'Elle alan etiketi' });
-    const tur = h('select', { 'aria-label': 'Elle alan türü' }, [['text', 'Metin'], ['number', 'Sayı'], ['date', 'Tarih'], ['tel', 'Telefon'], ['email', 'E-posta'], ['textarea', 'Uzun metin'], ['checkbox', 'Onay kutusu']]
+    const etiket = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Açıklama', 'aria-label': 'Etiket — Elle alan etiketi' });
+    const tur = h('select', { 'aria-label': 'Tür — Elle alan türü' }, [['text', 'Metin'], ['number', 'Sayı'], ['date', 'Tarih'], ['tel', 'Telefon'], ['email', 'E-posta'], ['textarea', 'Uzun metin'], ['checkbox', 'Onay kutusu']]
       .map(([d, m]) => h('option', { value: d }, m)));
-    const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#aciklama', spellcheck: 'false', 'aria-label': 'Elle alan seçicisi' });
+    const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#aciklama', spellcheck: 'false', 'aria-label': 'Seçici (CSS) — Elle alan seçicisi' });
     return elleFormu('Listede olmayan alanı elle ekle (ileri düzey: CSS seçici)', [['Etiket', etiket], ['Tür', tur], ['Seçici (CSS)', secici]], 'Alanı ekle', () => {
       const e = etiket.value.trim();
       const sc = secici.value.trim();
@@ -1005,8 +1009,8 @@ export async function akisTasarimi(icerik, s) {
     h('small', { class: 'soluk' }, 'Listede olmayan düğmeyi ya da alanı sayfada tıklayarak seçin; seçici yazmanız gerekmez.')) : null;
   /** "Listede olmayan düğmeyi elle ekle": yazı, seçici → sağ listenin sonuna eklenir ve aksiyon bloğu olarak konur. */
   function elleDugmeFormu() {
-    const metin = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Onayla', 'aria-label': 'Elle düğme yazısı' });
-    const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#onayla', spellcheck: 'false', 'aria-label': 'Elle düğme seçicisi' });
+    const metin = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Onayla', 'aria-label': 'Düğmenin yazısı — Elle düğme yazısı' });
+    const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#onayla', spellcheck: 'false', 'aria-label': 'Seçici (CSS) — Elle düğme seçicisi' });
     return elleFormu('Listede olmayan düğmeyi elle ekle (ileri düzey: CSS seçici)', [['Düğmenin yazısı', metin], ['Seçici (CSS)', secici]], 'Düğmeyi ekle', () => {
       const m = metin.value.trim();
       const sc = secici.value.trim();

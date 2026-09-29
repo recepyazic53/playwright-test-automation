@@ -115,7 +115,7 @@ function sonucDiyalogu(o, isId, projeId, secenekler) {
       if (x.basarili) girisSonrasiSayfasiniHatirla(o.ortamId, x.yol);
       sonuc.replaceChildren(
         x.basarili
-          ? h('div', { class: 'not-kutusu basari', role: 'status' }, ikon('onay'), ` Giriş başarılı. Giriş sonrası sayfa: ${x.yol || '/'}`)
+          ? h('div', { class: 'not-kutusu basari', role: 'status' }, `Giriş başarılı. Giriş sonrası sayfa: ${x.yol || '/'}`)
           : h('div', { class: 'not-kutusu hata', role: 'alert' }, h('p', {}, h('strong', {}, 'Giriş başarısız: '), x.hata ? x.hata.mesaj : 'bilinmeyen hata'),
             x.yol ? h('p', { class: 'kucuk' }, `Takıldığı sayfa: ${x.yol}`) : null),
         x.basarili && x.yol ? oturumAdresiOneriKutusu(o, projeId, x.yol, secenekler) : null,

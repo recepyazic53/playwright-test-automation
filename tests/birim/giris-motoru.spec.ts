@@ -279,4 +279,37 @@ test.describe('Oturum yeniden kullanımı (127.0.0.1 geçici sunucu)', () => {
       klasor.temizle();
     }
   });
+
+  test('kontrol adresi giriş sayfasına yönlendirirse zaman aşımı beklenmeden hemen geçersiz; geçerli oturum ve aynı adresli tarif eskisi gibi', async () => {
+    const sunucu = await yerelSunucu(girisSayfalari());
+    const klasor = geciciKlasor('oturum-yonlendirme');
+    try {
+      const t = tarifiHazirla({
+        girisAdresi: '/klasik', oturumKontrolAdresi: '/ana', kullaniciAlani: '#eposta', parolaAlani: '#parola', gonderDugmesi: 'button[type="submit"]',
+        basariGostergesi: { tur: 'metin', deger: 'Çıkış yap' }
+      });
+      // Oturum yok: /ana → /klasik yönlendirmesi. 15 sn'lik süre beklenmez.
+      const bos = await tarayici.newContext({ baseURL: sunucu.adres });
+      const once = Date.now();
+      expect(await oturumGecerliMi(await bos.newPage(), t, 15_000)).toBe(false);
+      expect(Date.now() - once, 'yönlendirme hemen geçersiz sayılmalı').toBeLessThan(5_000);
+      await bos.close();
+      // Geçerli oturum: gösterge görünür → true (davranış değişmez).
+      const dosya = join(klasor.yol, 'auth', 'yonlendirme.json');
+      expect(await oturumuHazirla(tarayici, { baseURL: sunucu.adres, tarif: t, kimlik: KIMLIK, oturumDosyasi: dosya })).toBe('yeni');
+      const dolu = await tarayici.newContext({ baseURL: sunucu.adres, storageState: dosya });
+      expect(await oturumGecerliMi(await dolu.newPage(), t, 15_000)).toBe(true);
+      await dolu.close();
+      // Kontrol adresi giriş sayfasıyla aynıysa yönlendirme kuralı uygulanmaz: gösterge süre boyunca beklenir (eski davranış).
+      const ayni = tarifiHazirla({ ...t, oturumKontrolAdresi: '/klasik' });
+      const bos2 = await tarayici.newContext({ baseURL: sunucu.adres });
+      const once2 = Date.now();
+      expect(await oturumGecerliMi(await bos2.newPage(), ayni, 1_500)).toBe(false);
+      expect(Date.now() - once2).toBeGreaterThanOrEqual(1_400);
+      await bos2.close();
+    } finally {
+      await sunucu.kapat();
+      klasor.temizle();
+    }
+  });
 });

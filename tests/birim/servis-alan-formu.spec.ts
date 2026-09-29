@@ -489,7 +489,7 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
-  test('arayüz: adı gizli alanın sabit değeri (Password) formda ve gövde metninde maskeli; Göster ile açılır; senaryoda aynen saklanır', async () => {
+  test('arayüz: adı gizli alanın sabit değeri (Password) formda ve gövde metninde maskeli; Göster ile açılır; kasada gizli saklanır, arayüze gelmez; tabloya gizli sütun olarak taşınır', async () => {
     test.setTimeout(60_000);
     const SABIT = 'Sabit-Form-Parolasi-7';
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
@@ -520,9 +520,27 @@ test.describe('alan formu uçtan uca', () => {
     await page.getByLabel('Başlık').fill('Parolalı senaryo');
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
+    // Değer kasada gizli saklanır: arayüze giden yanıtta yalnız maske (değer tarayıcıya hiç gelmez).
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Parolalı senaryo');
-    expect(kayit.icerik.govde).toContain(`<Password>${SABIT}</Password>`);
+    expect(kayit.icerik.govde).toContain('<Password>••••••</Password>');
+    expect(JSON.stringify(d)).not.toContain(SABIT);
+    // Yeniden açılınca alan boş + "Kayıtlı (gizli)" ipucu; dokunmadan kaydedince değer korunur (Dene / koşu tam değeri kullanır).
+    await page.reload();
+    await expect(satir('Password').getByLabel('Password', { exact: true })).toHaveAttribute('placeholder', /Kayıtlı \(gizli\)/);
+    await expect(satir('Password').getByLabel('Password', { exact: true })).toHaveValue('');
+    await page.getByLabel('Başlık').fill('Parolalı senaryo 2');
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page.getByText('Senaryo kaydedildi.')).toBeVisible();
+    // "Tabloya gizli sütun olarak taşı": onayla değer tablonun gizli sütununa yazılır, alan o sütuna bağlanır.
+    await satir('Password').getByRole('button', { name: 'Tabloya gizli sütun olarak taşı' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Taşı' }).click();
+    await expect(satir('Password').getByLabel('Password değer kaynağı')).toHaveValue('tablo');
+    await expect(satir('Password')).toContainText('seçilen satırdan gelir');
+    const tablolar = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
+    const gizliTablo = tablolar.find((t) => String(t.ad).endsWith('gizli değerleri'));
+    expect(gizliTablo?.sutunlar).toEqual(expect.arrayContaining([expect.objectContaining({ ad: 'Password', gizli: true })]));
+    expect(JSON.stringify(tablolar)).not.toContain(SABIT);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

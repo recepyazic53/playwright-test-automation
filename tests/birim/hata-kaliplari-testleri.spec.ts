@@ -80,7 +80,7 @@ test.describe('hata kalıbından testlere', () => {
     await expect(testler.locator('li')).toHaveCount(3);
     await expect(testler.locator('li').first()).toContainText('Standart paket');
     await expect(testler.locator('li').first()).toContainText('"Toplam hesaplanır" adımında');
-    await expect(satir.getByRole('button', { name: /^Hatanın alındığı testler/ })).toHaveAttribute('aria-expanded', 'true');
+    await expect(satir.getByRole('button', { name: /Hatanın alındığı testler/ })).toHaveAttribute('aria-expanded', 'true');
     // Koşu bağlantısı ve ayrıntı paneli.
     await expect(testler.getByRole('link', { name: 'Koşu: Ekspres teslimat' })).toHaveAttribute('href', '#/sonuclar/kosu/kosu-2');
     await testler.getByRole('button', { name: 'Ayrıntı: Ekspres teslimat' }).click();

@@ -53,7 +53,7 @@ function ciz(kap, proje, d, secenek) {
   const baslikId = 'baslarken-baslik';
   const satir = (/** @type {Adim} */ a, i) => {
     const siradaki = a.durum === 'siradaki';
-    const git = h('a', { class: `dugme kucuk-dugme${siradaki ? ' birincil' : a.durum === 'tamam' ? ' hayalet' : ''}`, href: a.adres, 'aria-label': `${a.baslik}: ${a.eylem}` },
+    const git = h('a', { class: `dugme kucuk-dugme${siradaki ? ' birincil' : a.durum === 'tamam' ? ' hayalet' : ''}`, href: a.adres, 'aria-label': `${a.eylem} — ${a.baslik}` },
       a.eylem, siradaki ? ikon('ok') : null);
     let atla = null;
     if (a.atlanabilir) {

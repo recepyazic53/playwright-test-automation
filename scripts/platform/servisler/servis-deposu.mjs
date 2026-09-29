@@ -13,6 +13,8 @@ import { ekranAdimiDogrula } from '../akislar/ekran-adimi.mjs';
 import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
 import { kurtarmaSutunuYaz } from '../ayarlar/kurtarma-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { gizliSabitleriAyir, gizliSabitleriBirlestir, gizliSabitleriGeriKoy } from './gizli-sabitler.mjs';
 import { icerikTalepleri, talepleriAyikla } from '../senaryolar/talepler.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -366,17 +368,22 @@ function tabloSecimleriniDogrula(v) {
   return Object.keys(s).length ? s : undefined;
 }
 
-/** @param {Veritabani} vt @param {Record<string, unknown>} s @returns {ServisSenaryosu} */
+/**
+ * Okumada içerik TAM döner: kasada ayrı saklanan gizli sabitler (gizli-sabitler.mjs) yerlerine konur; koşucular değişmez.
+ * Arayüze giden uçlar içeriği ayrıca maskeler (servis-uclari.mjs).
+ * @param {Veritabani} vt @param {Record<string, unknown>} s @returns {ServisSenaryosu}
+ */
 const senaryoCevir = (vt, s) => ({
   id: String(s.id), projeId: String(s.proje_id), servisId: String(s.servis_id), baslik: String(s.baslik),
   kapsam: /** @type {'test' | 'canli' | 'ikisi'} */ (String(s.kapsam)), kosuyaDahil: s.kosuya_dahil === 1,
-  sira: s.sira == null ? null : Number(s.sira), icerik: /** @type {ServisSenaryoIcerigi} */ (sifreliJsonOku(vt, s.icerik_json)),
+  sira: s.sira == null ? null : Number(s.sira), icerik: /** @type {ServisSenaryoIcerigi} */ (gizliSabitleriBirlestir(vt, sifreliJsonOku(vt, s.icerik_json))),
   olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
 /**
  * @param {Veritabani} vt
- * @param {{ id?: string; projeId: string; servisId: string; baslik: string; kapsam?: 'test' | 'canli' | 'ikisi'; kosuyaDahil?: boolean; sira?: number | null; icerik: unknown; yapan?: string }} girdi
+ * kaynakSenaryoId: kopyada kaynak senaryo (aynı servis) — maskeli gelen gizli sabitler onun değeriyle doldurulur.
+ * @param {{ id?: string; projeId: string; servisId: string; baslik: string; kapsam?: 'test' | 'canli' | 'ikisi'; kosuyaDahil?: boolean; sira?: number | null; icerik: unknown; yapan?: string; kaynakSenaryoId?: string }} girdi
  */
 export function servisSenaryosuKaydet(vt, girdi) {
   acikAnahtar(vt);
@@ -400,7 +407,13 @@ export function servisSenaryosuKaydet(vt, girdi) {
     const ortamlar = !genel ? undefined : gelenOrtamlar !== undefined ? kosuOrtamlariDogrula(gelenOrtamlar)
       : mevcut && !genelDegisti ? kosuOrtamlariDogrula(/** @type {any} */ (sifreliJsonOku(vt, mevcut.icerik_json))?.kosuOrtamlari) : undefined;
     const talepler = talepSecimi ? talepSecimi.talepler : mevcut ? icerikTalepleri(sifreliJsonOku(vt, mevcut.icerik_json)) : [];
-    const icerik = { ...temel, ...(ortamlar ? { kosuOrtamlari: ortamlar } : {}), ...(talepler.length ? { talepler } : {}) };
+    // Gizli sabitler (parola, token… adlı alanların sabit değerleri): arayüzden maskeli gelen yer kayıtlı değerle (düzenlemede bu
+    // senaryonun, kopyada kaynağının) doldurulur; sonra değerler içerikten ayrılıp kasada gizli değer olarak saklanır. Eski düz
+    // kayıt da bu kaydedilişte gizliye çevrilir.
+    const ekler = ekGizliAdlar(vt);
+    const kaynak = mevcut ?? (girdi.kaynakSenaryoId ? vt.tek('SELECT * FROM servis_senaryolari WHERE id = ? AND servis_id = ?', [girdi.kaynakSenaryoId, girdi.servisId]) : undefined);
+    const tamTemel = kaynak ? gizliSabitleriGeriKoy(temel, gizliSabitleriBirlestir(vt, sifreliJsonOku(vt, kaynak.icerik_json)), ekler) : temel;
+    const icerik = gizliSabitleriAyir(vt, { ...tamTemel, ...(ortamlar ? { kosuOrtamlari: ortamlar } : {}), ...(talepler.length ? { talepler } : {}) }, ekler);
     return kaydet(vt, 'servis_senaryolari', {
       proje_id: girdi.projeId, servis_id: girdi.servisId, baslik: zorunluMetin(girdi.baslik, 'baslik'),
       kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),

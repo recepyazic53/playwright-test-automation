@@ -11,7 +11,7 @@
 // isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { alan, alanHatasi, api, bildir, bosDurum, dosyaSecimi, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, dosyaSecimi, gosterGizleDugmesi, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
 import { adaGoreMaskele, gizliAdMi, maskeyiGeriKoy } from './gizli-adlar.mjs';
 import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
@@ -27,7 +27,7 @@ import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
 import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
-import { servisKosusuBaslat } from './servis-kosu-paneli.js';
+import { servisKosuPaneliniKenaraAl, servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { senaryoSayfasi } from './akis-senaryo-formu.js';
@@ -199,7 +199,7 @@ async function servisEkleSayfasi(icerik, proje) {
   };
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' }, h('div', {},
-      h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Yeni servis')),
+      h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/senaryolar', title: 'Servisler, Senaryolar bölümündedir (sol panel: Ekranlar ve servisler > Servisler)' }, 'Senaryolar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Yeni servis')),
       h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Servis ekle')))),
     ortamlar.length ? null : h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Projede ortam yok. Erişim kontrolü için Ayarlar > Ortamlar bölümünden ekleyin.'),
     secim, alanKap);
@@ -242,7 +242,7 @@ function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
 }
 
 function soapuiAktarimi(kap, proje, ortamlar) {
-  const dosya = h('input', { type: 'file', accept: '.xml,*/*', 'aria-label': 'SoapUI proje dosyası' });
+  const dosya = h('input', { type: 'file', accept: '.xml,*/*' });
   const mesaj = mesajKutusu();
   const sonuc = h('div', {});
   let xml = '';
@@ -267,7 +267,7 @@ function soapuiAktarimi(kap, proje, ortamlar) {
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'SoapUI proje dosyası'), mesaj.kutu,
     h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Proje, ortam, takım ve test durumu özellikleri (${#Project#…}, ${#TestCase#…}) bir test verisi tablosunun sütunları olur ya da var olan bir sütuna bağlanır; Groovy tarih betikleri hesaplama kuralı olarak önerilir. İstekte özelliğe başvuran alanlar servisin alan bağları olur. Test durumunu seçince neyin nereye yazılacağını görür ve seçersiniz; gizli değerler yalnız siz onaylarsanız şifreli yazılır.'),
-    alan('Dosya', dosya), secim.not), sonuc);
+    alan('SoapUI proje dosyası', dosya, { icerik: secim.kutu })), sonuc);
 }
 
 /** Özellik hedeflerinin görünen adları (önizlemedeki "Nereden dolsun"). */
@@ -510,7 +510,7 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, s.ad)),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/senaryolar', title: 'Servisler, Senaryolar bölümündedir (sol panel: Ekranlar ve servisler > Servisler)' }, 'Senaryolar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, s.ad)),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, s.ad), rozet(s.tur === 'rest' ? 'REST' : `SOAP ${s.ayarlar.soapSurumu || '1.1'}`, 'vurgu'), s.durum === 'devre_disi' ? rozet('devre dışı', 'durdu') : null),
         h('div', { class: 'meta' },
           h('span', {}, ikon('isaret'), h('code', { class: 'duz' }, s.anahtar)),
@@ -538,7 +538,8 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   if (sekme === 'parametreler') { await parametrelerSekmesi(sekmeAlani, proje, s, ortamlar, yenile); return; }
   if (sekme === 'raporlar') { await raporlarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, altKimlik); return; }
   if (sekme === 'islemler') { islemlerSekmesi(sekmeAlani, proje, s, ortamlar); return; }
-  senaryolarSekmesi(sekmeAlani, proje, s, d.senaryolar, d.sonSonuclar || {}, yenile, ortamlar);
+  const ekGizliAdlar = await api('/platform/maskeleme').then((m) => m.ekAdlar || []).catch(() => []);
+  senaryolarSekmesi(sekmeAlani, proje, s, d.senaryolar, d.sonSonuclar || {}, yenile, ortamlar, ekGizliAdlar);
 }
 
 /** Satırın ortam kaydı ({ ortamId, tanimli, neden, kosuyaDahil, sonSonuc }; sunucu GET /platform/servis) ya da undefined. */
@@ -567,6 +568,8 @@ const restOpYolu = (op) => {
   const sorgu = (op.sorgu || []).filter((x) => x.ad).map((x) => `${encodeURIComponent(x.ad)}=${encodeURIComponent(x.deger || '')}`).join('&');
   return `${String(op.yol || '').replace(/{([^}]+)}/g, '${$1}')}${sorgu ? `?${sorgu}` : ''}`;
 };
+/** Uzun metnin ortası kısaltılır (baş ve son görünür; tamamı ipucunda). @param {string} m @param {number} n */
+const ortasiKisa = (m, n) => (m.length <= n ? m : `${m.slice(0, Math.ceil((n - 1) * 0.55))}…${m.slice(m.length - Math.floor((n - 1) * 0.45))}`);
 const kapsamEtiketi = (liste) => (liste.length ? liste.map((o) => o.ad).join(' + ') : 'Hiçbir ortam');
 const DURUM_SIMGESI = { basarili: '✓', basarisiz: '✗', hata: '!' };
 const gunAy = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
@@ -622,7 +625,7 @@ function beklenenOzeti(kontroller) {
   return `${tek(anlamli[0])}${anlamli.length > 1 ? ` (+${anlamli.length - 1})` : ''}`;
 }
 
-function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortamlar = []) {
+function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortamlar = [], ekGizliAdlar = []) {
   // Senaryo önerileri ayrı sayfada (başlıktaki düğme); burada yalnız kısa bağlantı (ekran sayfasındaki bağlantının karşılığı).
   const oneriBaglantisi = oneriDugmesi(s)
     ? h('p', { class: 'kucuk servis-onerileri-baglantisi' }, h('a', { href: servisOnerileriAdresi(s.id) }, 'Senaryo önerileri →'))
@@ -662,7 +665,20 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     const t = taban || o.tabanUrl || '';
     return t && a.yol ? `${t.replace(/\/+$/, '')}/${a.yol.replace(/^\/+/, '')}` : a.yol || '';
   };
-  const adresBasligi = ortamlar.map((o) => `${o.ad}: ${adresi(o) || 'tanımlı değil'}`).join('\n');
+  const rest = s.tur === 'rest';
+  /** REST: operasyonun (ucun) metodu — senaryoda http tanımı yoksa koşu da bunu kullanır. */
+  const opMetodu = (ad) => (s.ayarlar.operasyonlar || []).find((o) => o.ad === ad)?.metot || '';
+  /**
+   * Senaryonun o ortamdaki TAM istek adresi: servis adresi (taban + servis yolu) + REST'te senaryonun yolu (sorgu dahil). Adı gizli
+   * sayılan sorgu parametresinin değeri maskeli (çekirdek adlar + Ayarlar > Güvenlik > Maskeleme ekleri).
+   */
+  const istekAdresi = (x, o) => {
+    const taban = adresi(o);
+    if (!taban) return '';
+    const yol = rest ? String(x.icerik.http?.yol ?? restOpYolu((s.ayarlar.operasyonlar || []).find((op) => op.ad === x.icerik.operasyon))) : '';
+    const tam = yol ? `${taban.replace(/\/+$/, '')}${yol.startsWith('/') || yol.startsWith('?') ? '' : '/'}${yol}` : taban;
+    return adaGoreMaskele(tam, ekGizliAdlar, '••••', { bicim: 'yol' }).metin;
+  };
 
   // --- Filtreler (ekran senaryolarıyla aynı araç çubuğu) ---
   const arama = h('input', { type: 'search', placeholder: 'Senaryo ara… (Türkçe karakter duyarsız)', value: liste.arama, 'aria-label': 'Senaryo ara' });
@@ -808,7 +824,8 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     for (let i = 2; mevcut.has(baslik); i++) baslik = `${x.baslik} (kopya ${i})`;
     const { kosuOrtamlari: _ortamlar, ...icerik } = x.icerik;
     try {
-      await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik } });
+      // Gizli sabitler arayüze maskeli gelir: kaynak senaryo verilir, sunucu değerleri kasadan kopyalar.
+      await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik, kaynakSenaryoId: x.id } });
       bildir(`Kopya oluşturuldu: "${baslik}" ("Toplu koşuya dahil" kapalı).`);
     } catch (e) { bildir(e.message, 'hata'); }
     yenile();
@@ -921,9 +938,14 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     const oynat = h('button', { type: 'button', class: 'ikon-dugme oynat-dugmesi', 'aria-label': `Çalıştır: ${x.baslik}`, title: 'Çalıştır (ortam sorulur)' }, ikon('oynat'));
     oynat.addEventListener('click', () => calistir([x], true, oynat));
     const dahil = dahilMi(x);
-    // İstek adresi: senaryonun koştuğu ortamlarda tek adres varsa o; ortamlara göre değişiyorsa yol (tam adresler ipucunda).
-    const adresler = [...new Set(kosan.map(adresi).filter(Boolean))];
-    const gosterilenAdres = adresler.length === 1 ? adresler[0] : s.ayarlar.yol || '';
+    // İstek: metot (REST) + TAM adres (ortamın taban adresi + yol). Gösterilen ortam: son koşu diyaloğunda seçilen (yoksa ilk
+    // TEST) ortam senaryonun koştuğu ortamlardaysa o, değilse koştuğu ilk ortam; uzun adresin ortası kısaltılır, her ortamın tam
+    // adresi ipucunda. Gizli adlı sorgu parametrelerinin değeri maskelidir.
+    const tercih = sonOrtam(ortamlar);
+    const gosterilenOrtam = (tercih && kosan.some((o) => o.id === tercih.id) ? tercih : kosan[0]) || null;
+    const metot = rest ? String(x.icerik.http?.metot || opMetodu(x.icerik.operasyon) || '') : '';
+    const gosterilenAdres = gosterilenOrtam ? istekAdresi(x, gosterilenOrtam) : '';
+    const adresIpucu = (kosan.length ? kosan : ortamlar).map((o) => `${o.ad}: ${istekAdresi(x, o) ? `${metot ? `${metot} ` : ''}${istekAdresi(x, o)}` : 'tanımlı değil'}`).join('\n');
     const altBilgi = [
       !dahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.icerik.aciklama ? h('span', {}, x.icerik.aciklama) : null,
@@ -939,7 +961,8 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
         h('small', {}, altBilgi))),
       h('td', { class: 'istek-hucresi' },
         akisMi(x) ? rozet(`akış: ${x.akisAdi || '?'}`, 'vurgu', { kisalt: true, title: `Akış senaryosu: ${Object.keys(x.icerik.adimlar || {}).length} adımın değerleri` }) : rozet(x.icerik.operasyon, 'vurgu', { title: 'Metot (operasyon)' }),
-        !akisMi(x) && gosterilenAdres ? h('code', { class: 'duz istek-adresi', title: adresBasligi }, gosterilenAdres) : null),
+        !akisMi(x) && metot ? rozet(metot, 'http-metodu', { title: 'HTTP metodu' }) : null,
+        !akisMi(x) && gosterilenAdres ? h('code', { class: 'duz istek-adresi', title: adresIpucu, 'data-ortam': gosterilenOrtam?.ad || null }, ortasiKisa(gosterilenAdres, 42)) : null),
       h('td', { class: 'beklenen-hucresi' }, beklenen === '—' ? h('span', { class: 'cok-soluk' }, '—')
         : rozet(beklenen, '', { title: kontrolleri(x).map((k) => k.deger || k.tur).join(' · ') })),
       h('td', { class: 'kapsam-hucresi', 'data-deger': kapsamlar.get(x.id) },
@@ -994,7 +1017,7 @@ async function deneVeGoster(proje, s, ortam, istek, baslik, dugme, yanitGeldi = 
   dugme.disabled = true;
   try {
     // Bitince Dene'nin koşu kaydı düzenleyiciye bildirilir ("Son yanıttan kontrol öner" bu yanıtı açar; kontrolü kullanıcı ekler).
-    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik },
+    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik, ...(istek.kaynakSenaryoId ? { kaynakSenaryoId: istek.kaynakSenaryoId } : {}) },
       bitti: (is) => { const kosuId = is?.satirlar?.[0]?.sonuc?.kosuId; if (kosuId && yanitGeldi) yanitGeldi(kosuId); } });
   } catch (e) { bildir(e.message, 'hata'); } finally { dugme.disabled = false; }
 }
@@ -1214,7 +1237,26 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     });
     return h('span', { class: 'akis-degeri-girdisi', title: 'Akış çalışırken önceki adımın yanıtından okunan değer yazılır' }, h('code', {}, '${akis:'), g, h('code', {}, '}'), not);
   };
-  const degerKontrolu = (alanT, v, tazele) => {
+  /**
+   * Gizli sabiti tabloya taşı (onayla): sunucu değeri — yeni yazılan ya da kayıtlı senaryodaki — "<servis> gizli değerleri" tablosunun
+   * gizli sütununa yazar; alan o sütuna bağlanır (kaynak: Tablodan). Senaryo kaydedilince sabit değer senaryodan kalkar.
+   */
+  const gizliTabloyaTasi = async (alanT, v, yeni, dugme, yenidenCiz) => {
+    const tamam = await onayIste({ baslik: 'Değer tabloya gizli sütun olarak taşınsın mı?', ikonAd: 'liste', dugme: 'Taşı',
+      metin: `"${alanT.ad}" değeri "${s.ad} gizli değerleri" tablosunun gizli sütununa yazılır (kasada şifreli; listelerde görünmez) ve alan o sütuna bağlanır. Senaryoyu kaydedince sabit değer senaryodan kalkar.` });
+    if (!tamam) return;
+    try {
+      const r = await mesgulIken(dugme, 'Taşınıyor…', () => api('/platform/servis/senaryo/gizli-tabloya-tasi', { govde: {
+        projeId: proje.id, servisId: s.id, alanAdi: alanT.ad, ...(senaryo ? { senaryoId: senaryo.id } : {}), ...(yeni ? { deger: yeni } : {}) } }));
+      const { tablolar: guncel } = await api(`/platform/tablolar?projeId=${q(proje.id)}`);
+      tablolar.splice(0, tablolar.length, ...guncel);
+      v.kaynak = 'tablo';
+      v.deger = r.basvuru;
+      yenidenCiz();
+      bildir(`"${alanT.ad}" değeri "${r.tablo}" tablosunun gizli "${r.sutun}" sütununa taşındı; senaryoyu kaydedin.`);
+    } catch (e) { bildir(e.message, 'hata'); }
+  };
+  const degerKontrolu = (alanT, v, tazele, yenidenCiz = () => {}) => {
     if (v.kaynak === 'tablo') return tabloDegeri(alanT, v);
     if (v.kaynak === 'akis') return akisDegeri(alanT, v, tazele);
     if (v.kaynak === 'parametre') {
@@ -1243,19 +1285,20 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     } else if (alanT.tip === 'tarihSaat') {
       g = h('input', { type: 'datetime-local', step: '1', 'aria-label': alanT.ad, value: (v.deger || '').slice(0, 19) });
     } else if (gizliMi(alanT.ad)) {
-      // Adı maskeleme listesinde (parola, token… + Ayarlar > Güvenlik > Maskeleme eki) olan alanın sabit değeri gizli yazılır;
-      // "Göster" ile açılır. Değer senaryoda aynen saklanır (saklama biçimi değişmez).
-      g = h('input', { type: 'password', autocomplete: 'new-password', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '' });
-      const goster = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false', 'aria-label': `${alanT.ad}: göster veya gizle` }, 'Göster');
-      goster.addEventListener('click', () => {
-        const acik = g.type === 'password';
-        g.type = acik ? 'text' : 'password';
-        goster.textContent = acik ? 'Gizle' : 'Göster';
-        goster.setAttribute('aria-pressed', acik ? 'true' : 'false');
-      });
-      g.addEventListener('input', () => guncelle(g.value));
-      not.textContent = sabitDegerUyarisi(alanT, v.deger || '') || '';
-      return h('span', { class: 'sabit-deger gizli-sabit' }, h('span', { class: 'parola-kutusu' }, g, goster), not);
+      // Adı maskeleme listesinde (parola, token… + Ayarlar > Güvenlik > Maskeleme eki) olan alanın sabit değeri gizli yazılır ve
+      // kasada ayrı bir gizli değer olarak saklanır: kayıtlı değer bu tarayıcıya hiç gelmez (yerinde maske durur); boş bırakılırsa
+      // korunur, yeni yazılan değer onun yerine geçer. "Göster" yalnız yeni yazılanı açar.
+      const kayitli = v.deger === METIN_MASKESI;
+      g = h('input', { type: 'password', autocomplete: 'new-password', spellcheck: 'false', 'aria-label': alanT.ad, value: kayitli ? '' : v.deger || '',
+        placeholder: kayitli ? 'Kayıtlı (gizli) — değiştirmek için yazın' : '' });
+      const goster = gosterGizleDugmesi(g, alanT.ad);
+      g.addEventListener('input', () => guncelle(g.value || (kayitli ? METIN_MASKESI : '')));
+      not.textContent = kayitli ? '' : sabitDegerUyarisi(alanT, v.deger || '') || '';
+      // Öneri: sabit parola yerine test verisi tablosunun gizli sütunu (cURL içe aktarmadaki gizli değerle aynı yer).
+      const tasi = h('button', { type: 'button', class: 'kucuk-dugme hayalet gizli-tasi', title: 'Değer "<servis> gizli değerleri" tablosunun gizli sütununa yazılır; alan o sütuna bağlanır. Ortam başına değer tabloda tutulur.' },
+        ikon('liste'), 'Tabloya gizli sütun olarak taşı');
+      tasi.addEventListener('click', () => gizliTabloyaTasi(alanT, v, g.value, tasi, yenidenCiz));
+      return h('span', { class: 'sabit-deger gizli-sabit' }, h('span', { class: 'parola-kutusu' }, g, goster), tasi, not);
     } else {
       g = h('input', { type: 'text', inputmode: alanT.tip === 'tamsayi' || alanT.tip === 'ondalik' ? 'decimal' : null,
         autocomplete: 'off', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '', placeholder: alanT.tip === 'tamsayi' ? 'sayı' : alanT.tip === 'ondalik' ? '0.00' : '' });
@@ -1350,7 +1393,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Zorunlu alan' }, '*') : null,
             h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
           h('span', { role: 'cell' }, kaynak),
-          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele), eksikNotu, kuralNotu(sat.yol, v)),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele, () => satirCiz()), eksikNotu, kuralNotu(sat.yol, v)),
           h('span', { role: 'cell' }, pin));
         tazele();
       };
@@ -1396,7 +1439,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       h('div', { class: 'govde-duzen' }, alan(rest ? `İstek gövdesi${i.http?.icerikTuru ? ` (${i.http.icerikTuru})` : ''}` : 'İstek gövdesi (SOAP zarfı)', govde, { yardim: rest
         ? 'GET / DELETE için boş bırakılabilir. Değerler ${Tablo.Sütun}, ${akis:Ad} ya da tarih kuralıyla yazılır; JSON gövdede değerler kaçışlanır.'
         : 'Parametreler adıyla yazılır: ${MUSTERI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()),
-      h('div', { class: 'dugmeler' }, gizliGosterDugmesi, h('span', { class: 'soluk kucuk' }, 'Adı gizli sayılan alanların (parola, token… ve Ayarlar > Güvenlik > Maskeleme ekleri) değeri maskeli gösterilir; senaryoda aynen saklanır.')));
+      h('div', { class: 'dugmeler' }, gizliGosterDugmesi, h('span', { class: 'soluk kucuk' }, 'Adı gizli sayılan alanların (parola, token… ve Ayarlar > Güvenlik > Maskeleme ekleri) değeri kasada ayrı, gizli saklanır ve burada •••••• olarak kalır (dokunulmazsa korunur); "Gizli değerleri göster" yalnız yeni yazdığınızı açar.')));
   };
   const parametrePaneli = () => {
     const ekle = (ad) => { govde.setRangeText(`\${${ad}}`, govde.selectionStart, govde.selectionEnd, 'end'); govde.focus(); };
@@ -1505,6 +1548,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   const yanitPaneliAc = async (kosuId) => {
     yanitPaneli.hidden = false;
+    // Sağ alttaki koşu paneli (Dene) listenin "Ekle" düğmelerinin üstüne binmesin: koşu bittiyse kapanır, sürüyorsa küçülür.
+    servisKosuPaneliniKenaraAl();
     yerlestir(yanitPaneli, h('p', { class: 'soluk kucuk' }, 'Yanıt yükleniyor…'));
     try {
       let kosu = null;
@@ -1589,11 +1634,62 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const eksikParametre = () => mod === 'alanlar' ? Object.entries(degerler).find(([, v]) => (v.kaynak === 'parametre' || v.kaynak === 'tablo' || v.kaynak === 'akis') && !v.deger) : null;
   const eksikMetni = (e) => `"${e[0]}" alanında ${e[1].kaynak === 'tablo' ? 'tablo sütunu' : e[1].kaynak === 'akis' ? 'akış değeri adı' : 'parametre'} seçilmedi.`;
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
+  // --- Anlık doğrulama özeti (ekran senaryo formundaki "N alan düzeltilmeli" ile aynı görünüm ve davranış) ---
+  // Kaydı engelleyen sorunlar (başlık boş, kaynağı seçilmemiş alan, anlaşılmayan header satırı) her girdi / seçim değişiminde
+  // yeniden sayılır; eskiden yalnız Kaydet / Dene'ye basınca bir tanesi yazılıyor ve düzeltilse de kaydedene kadar kalıyordu.
+  // Zorunlu alanın boş gönderilmesi engellemez (olumsuz senaryo olabilir): ayrı "uyarı" rozetinde sayılır.
+  const dogrulamaOzeti = h('div', { class: 'dogrulama-ozeti servis-dogrulama-ozeti', role: 'status' });
+  /** Kaydet / Dene'nin yazdığı doğrulama mesajı (sorun giderilince kutudan kalkar). @type {string | null} */
+  let dogrulamaMesaji = null;
+  /** @returns {Array<{ mesaj: string; el?: HTMLElement; yol?: string }>} */
+  const dogrulamaSorunlari = () => {
+    /** @type {Array<{ mesaj: string; el?: HTMLElement; yol?: string }>} */
+    const l = [];
+    if (!baslik.value.trim()) l.push({ mesaj: 'Başlık boş olamaz.', el: baslik });
+    if (mod === 'alanlar' && sema()) {
+      for (const e of Object.entries(degerler)) if ((e[1].kaynak === 'parametre' || e[1].kaynak === 'tablo' || e[1].kaynak === 'akis') && !e[1].deger) l.push({ mesaj: eksikMetni(e), yol: e[0] });
+    }
+    try { basliklarAl(); } catch (e) { l.push({ mesaj: e.message, el: basliklar }); }
+    return l;
+  };
+  /** Zorunlu olup dolu gönderilmeyen alanlar (yalnız alan formunda; engellemez, uyarıdır). */
+  const zorunluBoslar = () => {
+    const sm = mod === 'alanlar' ? sema() : null;
+    if (!sm) return [];
+    return alanSatirlari(sm.alanlar).filter((x) => !x.grup && zorunluMu(x.yol, x.alan)).filter((x) => {
+      const v = degerler[x.yol] || { kaynak: 'gonderme' };
+      return ['gonderme', 'bos', 'nil'].includes(v.kaynak) || !v.deger;
+    }).map((x) => x.yol);
+  };
+  /** "Göster": ilk sorunun girdisine odaklanır (alan formundaki satır ya da başlık / header kutusu). */
+  const soruneOdaklan = (x) => {
+    if (x.el) { x.el.focus(); x.el.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    const satir = [...kap.querySelectorAll('.alan-satiri')].find((r) => r.querySelector('.alan-adi')?.getAttribute('title') === x.yol);
+    const g = satir?.querySelector('.alan-degeri select, .alan-degeri input') || satir?.querySelector('select');
+    if (g) { /** @type {HTMLElement} */ (g).focus(); satir?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  };
+  const dogrulamaGuncelle = () => {
+    const l = dogrulamaSorunlari();
+    const z = zorunluBoslar();
+    dogrulamaOzeti.className = `dogrulama-ozeti servis-dogrulama-ozeti ${l.length ? 'hatali' : 'gecerli'}`;
+    yerlestir(dogrulamaOzeti, ikon(l.length ? 'uyari' : 'onay'),
+      h('span', { title: l.map((x) => x.mesaj).join('\n') || null }, l.length ? `${l.length} alan düzeltilmeli` : 'Tüm kurallar sağlanıyor'),
+      z.length ? rozet(`${z.length} zorunlu alan boş`, 'atlanan', { title: `Olumsuz senaryo değilse doldurun: ${z.join(', ')}` }) : null,
+      l.length ? h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => soruneOdaklan(l[0]) }, 'Göster') : null);
+    if (baslik.value.trim()) alanHatasi(baslik, '');
+    if (dogrulamaMesaji && !l.some((x) => x.mesaj === dogrulamaMesaji)) { mesaj.temizle(); dogrulamaMesaji = null; }
+  };
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let dogrulamaZamani;
+  const dogrulamaPlanla = () => { clearTimeout(dogrulamaZamani); dogrulamaZamani = setTimeout(dogrulamaGuncelle, 60); };
+  /** Doğrulama mesajını kutuya yazar (sorun giderilince dogrulamaGuncelle kaldırır). @param {string} m */
+  const dogrulamaGoster = (m) => { dogrulamaMesaji = m; mesaj.goster(m); };
   kaydet.addEventListener('click', async () => {
     mesaj.temizle();
+    dogrulamaMesaji = null;
     if (!baslik.value.trim()) { alanHatasi(baslik, 'Başlık boş olamaz.'); baslik.focus(); return; }
     const eksik = eksikParametre();
-    if (eksik) { mesaj.goster(eksikMetni(eksik)); return; }
+    if (eksik) { dogrulamaGoster(eksikMetni(eksik)); return; }
     try {
       const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/senaryo/kaydet', { govde: {
         projeId: proje.id, servisId: s.id, id: senaryo?.id, baslik: baslik.value.trim(), kapsam: kapsam.value, kosuyaDahil: dahil.checked, icerik: icerikAl()
@@ -1606,10 +1702,10 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const dene = h('button', { type: 'button', disabled: !ortamlar.length, title: 'Kaydedilmemiş hâliyle seçilen ortamda dener (CANLI ortamda önce onay sorulur); senaryo kaydedilmez' }, ikon('oynat'), 'Dene');
   dene.addEventListener('click', () => {
     const eksik = eksikParametre();
-    if (eksik) { mesaj.goster(eksikMetni(eksik)); return; }
+    if (eksik) { dogrulamaGoster(eksikMetni(eksik)); return; }
     let taslakIcerik;
     try { taslakIcerik = icerikAl(); } catch (e) { mesaj.goster(e.message); return; }
-    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik }, baslik.value.trim() || 'Taslak', dene,
+    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik, kaynakSenaryoId: senaryo?.id }, baslik.value.trim() || 'Taslak', dene,
       (kosuId) => { sonDeneKosusu = kosuId; if (!yanitPaneli.hidden) yanitPaneliAc(kosuId); });
   });
   // --- Hazırlık kontrolü (ekran senaryosundakiyle aynı liste ve metinler: hazirlik.mjs) ---------------------------------------
@@ -1717,14 +1813,18 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       h('div', { class: 'sozlesme-secenegi' }, h('label', { class: 'secenek', for: sozlesmeKutusu.id }, sozlesmeKutusu, 'Yanıt sözleşmeye uymalı'), sozlesmeNotu)),
     veriBolumu,
     hazirlikKutusu,
+    dogrulamaOzeti,
     h('div', { class: 'dugmeler' }, kaydet, ortamlar.length > 1 ? deneOrtami.el : null, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
   // Gövde / header / yol değişince çalıştırma biçimi grupları yeniden hesaplanır (yalnız gruplar değiştiyse çizilir).
   kap.addEventListener('input', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); hazirlikPlanla(); });
   kap.addEventListener('change', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); hazirlikPlanla(); });
   // Kontrol ekleme / silme düğmeleri de hazırlığı değiştirir.
   kap.addEventListener('click', () => hazirlikPlanla());
+  // Doğrulama özeti her değişimde (yazma, seçim, düğmeyle görünüm / satır değişimi) yeniden sayılır.
+  for (const olay of ['input', 'change', 'click']) kap.addEventListener(olay, dogrulamaPlanla);
   veriCiz(true);
   hazirlikCiz();
+  dogrulamaGuncelle();
 }
 
 // ---------------------------------------------------------------------------------------
@@ -2061,7 +2161,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       tekrarli.length ? h('fieldset', { class: 'tekrar-denenebilir' }, h('legend', {}, 'Tekrar denenebilir metotlar'),
-        h('p', { class: 'soluk kucuk' }, 'Kurtarma kuralı (Ayarlar > Proje ve ortamlar) yalnız işaretli metodun isteğini tekrar gönderir. Kayıt oluşturan / değiştiren metotları işaretlemeyin: tekrar, çift kayıt yaratabilir.'),
+        h('p', { class: 'soluk kucuk' }, 'Kurtarma kuralı (', h('a', { href: '#/ayarlar/kurtarma' }, 'Ayarlar > Kurtarma kuralları'), ') yalnız işaretli metodun isteğini tekrar gönderir. Kayıt oluşturan / değiştiren metotları işaretlemeyin: tekrar, çift kayıt yaratabilir.'),
         ...tekrarli.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       s.tur === 'rest' ? null : kontrol, h('div', { class: 'dugmeler' }, kaydet)),
     s.tur === 'rest' ? restUclariKarti(proje, s, ortamlar) : semaKarti(proje, s, ortamlar),

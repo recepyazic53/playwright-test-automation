@@ -3,7 +3,7 @@
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
-  adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
+  ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
   kisaAciklama, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
@@ -247,7 +247,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
   const formAlani = h('div', {});
   const ortamFormu = (ortam) => {
     const oAd = h('input', { type: 'text', autocomplete: 'off', value: ortam ? ortam.ad : '' });
-    const oAdres = h('input', { type: 'url', autocomplete: 'off', inputmode: 'url', placeholder: 'https://', value: ortam ? ortam.tabanUrl : '' });
+    const oAdres = h('input', { type: 'url', autocomplete: 'off', inputmode: 'url', placeholder: 'https://test.uygulamaniz.example/', value: ortam ? ortam.tabanUrl : '' });
     const oVarsayilan = h('input', { type: 'checkbox', id: yeniKimlik('vars'), checked: ortam ? ortam.varsayilan : false });
     // "Ortam türü: Test / Canlı" — kullanıcı seçimi, ZORUNLU (saklama: riskli true = Canlı, false = Test). Seçilmemiş eski ortamda
     // ikisi de seçili gelmez (Canlı sayılır) ve "türünü seçin" uyarısı gösterilir; seçmeden kaydedilmez.
@@ -271,7 +271,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     // Uygulama sürümü (isteğe bağlı; PDF rapor A4): bu ortamdaki koşulara etiket olarak yazılır. Nöbetçi sürümü hiçbir adrese sormaz.
     const oSurum = h('input', { type: 'text', autocomplete: 'off', maxlength: '60', placeholder: 'Ör. 2.4.1', value: ortam && ortam.uygulamaSurumu ? ortam.uygulamaSurumu : '' });
     const form = formPaneli(ortam ? `Ortamı düzenle: ${ortam.ad}` : 'Yeni ortam', mesaj.kutu,
-      alan('Ortam adı', oAd, { zorunlu: true }), alan('Adres (link)', oAdres, { zorunlu: true }),
+      alan('Ortam adı', oAd, { zorunlu: true }), alan('Adres (link)', oAdres, { zorunlu: true, yardim: ADRES_YARDIMI }),
       h('label', { class: 'secenek', for: oVarsayilan.id }, oVarsayilan, 'Varsayılan ortam (koşular bu ortamda başlar)'),
       riskAlani,
       alan('Uygulama sürümü (isteğe bağlı)', oSurum, { yardim: 'Test edilen uygulamanın bu ortamdaki sürümü. Koşulara etiket olarak yazılır; raporlar sürüme göre başarıyı ve sorunun hangi sürümde başladığını gösterir. Koşu başlatılırken değiştirilebilir. Nöbetçi sürümü kendiliğinden sormaz.' }),

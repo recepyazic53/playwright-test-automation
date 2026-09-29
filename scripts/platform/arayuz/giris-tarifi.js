@@ -169,6 +169,23 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
   ];
   const formAlani = h('div', {});
   const liste = h('ul', { class: 'kayit-listesi' });
+  /**
+   * Açık form (tarif formu / giriş kaydı) hangi ortamın? Kartlar formun ALTINDA durduğu için düzenlenen ortamın kartı da
+   * işaretlenir: çerçeve + "Yukarıda düzenleniyor" rozeti (aria-current). Form kapanınca işaret kalkar.
+   */
+  const duzenleneniIsaretle = () => {
+    const acik = /** @type {HTMLElement | null} */ (formAlani.querySelector('[data-ortam]'));
+    const id = acik ? acik.getAttribute('data-ortam') : null;
+    for (const li of liste.querySelectorAll(':scope > li[data-ortam]')) {
+      const bu = li.getAttribute('data-ortam') === id;
+      li.classList.toggle('duzenleniyor', bu);
+      if (bu) li.setAttribute('aria-current', 'true'); else li.removeAttribute('aria-current');
+      const eski = li.querySelector('.duzenleniyor-rozeti');
+      if (bu && !eski) li.querySelector('.kayit-ana > strong')?.append(' ', h('span', { class: 'rozet vurgu duzenleniyor-rozeti' }, ikon('asagi', 'yukari'), 'Yukarıda düzenleniyor'));
+      if (!bu && eski) eski.remove();
+    }
+  };
+  new MutationObserver(() => duzenleneniIsaretle()).observe(formAlani, { childList: true });
   const ciz = () => {
     liste.replaceChildren(...veri.ortamlar.map((o) => {
       const [rozetMetni, rozetTuru] = KAYNAK_ROZETI[o.kaynak] || KAYNAK_ROZETI.yok;
@@ -182,12 +199,14 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
             ? h('div', { class: 'kayit-meta oturum-adresi-uyarisi' }, ikon('uyari'), ' Oturum kontrol adresi giriş sayfasıyla aynı: her testte giriş beklenir (Düzenle’de düzeltin).') : null),
         h('div', { class: 'kayit-eylemleri' },
           // Önerilen yol "Girişi kaydet" (tarif yoksa birincil); elle tanımlama gelişmiş seçenek olarak yanında durur.
-          h('button', { type: 'button', class: o.tarif ? 'kucuk-dugme hayalet' : 'kucuk-dugme birincil', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) },
+          // Erişilebilir ad görünen metinle başlar (sesli komut / ekran okuyucu): "Elle tanımla — TEST giriş tarifi".
+          h('button', { type: 'button', class: o.tarif ? 'kucuk-dugme hayalet' : 'kucuk-dugme birincil', 'aria-label': `${o.tarif ? 'Yeniden kaydet' : 'Girişi kaydet'} — ${o.ortamAd} girişi`, onclick: () => girisiKaydet(o) },
             ikon('oynat'), o.tarif ? 'Yeniden kaydet' : 'Girişi kaydet'),
           o.tarif ? girisiDeneDugmesi(o, proje.id, { tarifGuncellendi: guncelle }) : null,
-          (o.tarif ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), 'Düzenle')
-            : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: giriş tarifi ekle`, onclick: () => tarifFormu(o) }, 'Elle tanımla'))));
+          (o.tarif ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Düzenle — ${o.ortamAd} giriş tarifi`, onclick: () => tarifFormu(o) }, ikon('duzenle'), 'Düzenle')
+            : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Elle tanımla — ${o.ortamAd} giriş tarifi`, onclick: () => tarifFormu(o) }, 'Elle tanımla'))));
     }));
+    duzenleneniIsaretle();
   };
   const guncelle = (yeni) => {
     const i = veri.ortamlar.findIndex((x) => x.ortamId === yeni.ortamId);
@@ -664,7 +683,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       kaydet.disabled = eksikler.length > 0;
       gelismis.disabled = r.hatalar.length > 0;
       yerlestir(ozetAlani,
-        b.deger ? h('div', { class: 'not-kutusu basari' }, ikon('onay'), ` Giriş başarılı sayılacak: ${basariMetni(b)}.`) : null,
+        b.deger ? h('div', { class: 'not-kutusu basari' }, `Giriş başarılı sayılacak: ${basariMetni(b)}.`) : null,
         eksikler.length ? h('div', { class: 'not-kutusu uyari', role: 'alert' }, h('p', {}, 'Kaydetmeden önce:'), h('ul', {}, eksikler.map((x) => h('li', {}, x)))) : null,
         r.ekAlanlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Değerini giriş profilinde gireceğiniz ek bilgiler:'),
           h('ul', {}, r.ekAlanlar.map((e) => h('li', {}, e.etiket, ' ', h('code', {}, `{${e.ad}}`), e.gizli ? ' (gizli)' : '')))) : null,
@@ -696,7 +715,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         ...(kod === 'totp' ? ['Authenticator gizli anahtarı'] : kod === 'sabit' ? ['SMS sabit test kodu'] : [])];
       formAlani.replaceChildren(h('div', { class: 'kart form-paneli giris-kaydi', 'data-ortam': o.ortamId, role: 'region', 'aria-label': `Giriş kaydı: ${o.ortamAd}` },
         h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
-        h('div', { class: 'not-kutusu basari', role: 'status' }, ikon('onay'), ` ${o.ortamAd} girişi kaydedildi.`),
+        h('div', { class: 'not-kutusu basari', role: 'status' }, `${o.ortamAd} girişi kaydedildi.`),
         h('p', {}, 'Sıradaki adım: bu ortamın giriş profilinde şunlar olmalı:'),
         h('ul', {}, gerekenler.map((x) => h('li', {}, x))),
         h('div', { class: 'dugmeler' },

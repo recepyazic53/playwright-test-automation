@@ -167,14 +167,14 @@ test.describe('tüm ekranlar taşmasız', () => {
     const page = await baglam.newPage();
     await page.goto('/#/ayarlar/proje');
     await bekle(page);
-    const olcu = async (ad: string) => page.getByRole('button', { name: ad, exact: true }).evaluate((b) => {
+    const olcu = async (ad: string) => page.getByRole('button', { name: ad }).evaluate((b) => {
       const r = b.getBoundingClientRect();
       return { g: Math.round(r.width), y: Math.round(r.height), sinif: b.className, ikon: Boolean(b.querySelector('svg, .ikon')) };
     });
-    const testSil = page.getByRole('button', { name: 'TEST: sil', exact: true });
+    const testSil = page.getByRole('button', { name: 'Sil — TEST: sil', exact: true });
     await expect(testSil).toBeDisabled();
     await expect(testSil).toHaveAttribute('title', /Varsayılan ortam silinemez/);
-    await expect(page.getByRole('button', { name: 'CANLI: sil', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Sil — CANLI: sil', exact: true })).toBeEnabled();
     for (const tur of ['düzenle', 'sil']) expect(await olcu(`TEST: ${tur}`), tur).toEqual(await olcu(`CANLI: ${tur}`));
     expect(await olcu('TEST ortam türü: değişiklik geçmişi')).toEqual(await olcu('CANLI ortam türü: değişiklik geçmişi'));
     await baglam.close();

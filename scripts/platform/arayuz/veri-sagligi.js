@@ -344,7 +344,7 @@ export function birlestirmePenceresi(proje, tabloIdleri, kullanim, tablolar) {
         o.senaryolar.length ? h('details', {}, h('summary', { class: 'kucuk' }, `${o.senaryolar.length} senaryo güncellenir`), h('ul', { class: 'etki-ozeti' }, o.senaryolar.map((x) => h('li', {}, `${x.tur === 'ekran' ? 'Ekran' : 'Servis'}: ${x.ad}`)))) : null);
       sonuc.push(h('h3', { class: 'kucuk-baslik' }, 'Kuru doğrulama'));
       if (o.engeller.length) sonuc.push(h('p', { class: 'soluk kucuk' }, 'Engeller giderilince yapılır.'));
-      else if (o.dogrulandi) sonuc.push(h('div', { class: 'not-kutusu basari kucuk' }, ikon('onay'), ' Etkilenen senaryolar ve servis istekleri, hiçbir şey çalıştırılmadan her ortamda çözüldü: birleştirmeden sonra aynı değerleri üretiyorlar.'));
+      else if (o.dogrulandi) sonuc.push(h('div', { class: 'not-kutusu basari kucuk' }, 'Etkilenen senaryolar ve servis istekleri, hiçbir şey çalıştırılmadan her ortamda çözüldü: birleştirmeden sonra aynı değerleri üretiyorlar.'));
       else {
         sonuc.push(h('div', { class: 'not-kutusu uyari kucuk' }, h('b', {}, 'Birleştirme yapılamaz: '), 'aşağıdaki senaryolarda koşuda giden değer değişirdi. Seçimleri (satır / karşılık / eşleme) değiştirin ya da senaryoları düzenleyin.'),
           h('div', { class: 'donusum-tablosu-kap' }, h('table', { class: 'donusum-tablosu', 'aria-label': 'Kuru doğrulama farkları' },

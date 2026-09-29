@@ -26,6 +26,19 @@ const acikKutular = new Set();
 export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 
 /**
+ * Paneli sayfadaki bir listenin önünden çeker (ör. "Son yanıttan kontrol öner": panel sağ altta sabit olduğu için "Ekle"
+ * düğmelerinin üstüne biniyordu). Koşu BİTTİYSE panel kapanır (sonuç Raporlar'da ve açılan listenin başlığında); sürüyorsa
+ * küçülür (yalnız başlık kalır; "Aç" ile geri gelir).
+ */
+export function servisKosuPaneliniKenaraAl() {
+  if (!durum) return;
+  if (durum.is.bitti) { durum = null; ciz(); return; }
+  if (durum.kucuk) return;
+  durum.kucuk = true;
+  ciz();
+}
+
+/**
  * Koşuyu başlatır ve paneli açar. bitti(is): koşu bitince (tabloyu yenilemek için; iş durumu verilir) çağrılır.
  * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string }; bitti?: (is?: any) => void;
  *   uygulamaSurumu?: string }} s

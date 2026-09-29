@@ -216,7 +216,7 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/senaryolar', title: 'Servisler, Senaryolar bölümündedir (sol panel: Ekranlar ve servisler > Servisler)' }, 'Senaryolar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'),
           h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: servisAdresi(s.id) }, s.ad),
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Senaryo önerileri')),
         h('h2', { tabindex: '-1' }, 'Senaryo önerileri')),

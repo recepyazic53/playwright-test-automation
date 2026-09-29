@@ -113,7 +113,7 @@ export async function sozlesmeSekmesi(kap, proje, s, altKimlik) {
           ? 'Servisin kayıtlı WSDL\'indeki yanıt öğesi kullanılır (minOccurs → zorunlu, nillable → null izinli, maxOccurs → dizi).'
           : 'Kayıtlı WSDL\'de bu operasyonun yanıt şeması yok: İşlemler > "WSDL\'den yeniden al" (TEST\'e istek, onayla) ya da WSDL / XSD dosyasını yükleyin.'),
         h('div', { class: 'dugmeler' }, kayitli),
-        alan('WSDL / XSD dosyaları (yerel; birden çok seçilebilir)', dosya, { icerik: h('div', {}, dosya, secim.not), yardim: 'Dosyalar yalnız okunur; içe aktarılan adresler indirilmez. Şema ayrı XSD\'deyse onu da seçin.' }),
+        alan('WSDL / XSD dosyaları (yerel; birden çok seçilebilir)', dosya, { icerik: h('div', {}, secim.kutu), yardim: 'Dosyalar yalnız okunur; içe aktarılan adresler indirilmez. Şema ayrı XSD\'deyse onu da seçin.' }),
         h('div', { class: 'dugmeler' }, yukle));
     } else if (k === 'openapi') {
       const dosya = h('input', { type: 'file', accept: '.json,.yaml,.yml', id: yeniKimlik('openapi') });
@@ -138,7 +138,7 @@ export async function sozlesmeSekmesi(kap, proje, s, altKimlik) {
       });
       yerlestir(kaynakPanel,
         h('p', { class: 'soluk kucuk' }, 'OpenAPI 3 ya da Swagger 2 (JSON / YAML). Yalnız başarılı (2xx) yanıt şeması alınır; belge içi $ref çözülür, dış $ref (başka dosya / adres) indirilmez.'),
-        alan('OpenAPI / Swagger dosyası', dosya, { icerik: h('div', {}, dosya, secim.not) }), h('div', { class: 'dugmeler' }, oku), secimKap);
+        alan('OpenAPI / Swagger dosyası', dosya, { icerik: h('div', {}, secim.kutu) }), h('div', { class: 'dugmeler' }, oku), secimKap);
     } else if (k === 'jsonSchema') {
       const dosya = h('input', { type: 'file', accept: '.json,.yaml,.yml', id: yeniKimlik('sema') });
       const secim = dosyaSecimi(dosya);
@@ -152,7 +152,7 @@ export async function sozlesmeSekmesi(kap, proje, s, altKimlik) {
       });
       yerlestir(kaynakPanel,
         h('p', { class: 'soluk kucuk' }, 'Desteklenen: type, required, properties, items, enum, nullable / "null" türü, format (date, date-time, email). Belge içi $ref (#/definitions, #/$defs) çözülür.'),
-        alan('JSON Schema dosyası', dosya, { icerik: h('div', {}, dosya, secim.not) }), alan('ya da yapıştırın', yapistir), h('div', { class: 'dugmeler' }, al));
+        alan('JSON Schema dosyası', dosya, { icerik: h('div', {}, secim.kutu) }), alan('ya da yapıştırın', yapistir), h('div', { class: 'dugmeler' }, al));
     } else {
       if (!bilgi.ornekler.length) {
         yerlestir(kaynakPanel, bosDurum('Başarılı yanıt yok.', `Bu ${rest ? 'ucun' : 'operasyonun'} senaryolarını Dene ya da Koşu ile çalıştırın; başarılı yanıtlar burada listelenir.`, { ikon: 'grafik' }));
@@ -225,9 +225,10 @@ function alanTablosu(sema, bicim, xmlKok, duzenle) {
     const yol = yolGoster(a.parcalar, bicim, xmlKok);
     const kok = !a.parcalar.length;
     const oge = a.parcalar.at(-1) === '[]';
-    const girinti = { style: `padding-inline-start: ${Math.min(a.parcalar.length, 8) * 0.9}rem` };
+    // Girinti CSS değişkeniyle (CSSOM setProperty; CSP 'style-src self' satır içi style özniteliğini engeller).
+    const girinti = { style: { '--girinti': String(Math.min(a.parcalar.length, 8)) } };
     if (!duzenle) {
-      return h('tr', {}, h('td', {}, h('code', { class: 'duz', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tipAdi(a.tip), a.format ? h('span', { class: 'soluk' }, ` · ${a.format}`) : null,
+      return h('tr', {}, h('td', {}, h('code', { class: 'duz sozlesme-girinti', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tipAdi(a.tip), a.format ? h('span', { class: 'soluk' }, ` · ${a.format}`) : null,
         a.enum ? h('span', { class: 'soluk' }, ` · ${a.enum.length} değer`) : null),
       h('td', {}, kok || oge ? '—' : a.zorunlu ? 'evet' : 'hayır'), h('td', {}, a.nullIzinli ? 'evet' : 'hayır'));
     }
@@ -241,7 +242,7 @@ function alanTablosu(sema, bicim, xmlKok, duzenle) {
     nul.addEventListener('change', () => { alanNullAyarla(sema, a.parcalar, nul.checked); duzenle.degisti(); });
     const kaldir = kok || oge ? null : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${yol} alanını kaldır`, title: 'Alanı kaldır' }, ikon('cop'));
     kaldir?.addEventListener('click', () => { alanKaldir(sema, a.parcalar); duzenle.degisti(); });
-    return h('tr', {}, h('td', {}, h('code', { class: 'duz', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tip), h('td', {}, zorunlu), h('td', {}, nul), h('td', {}, kaldir));
+    return h('tr', {}, h('td', {}, h('code', { class: 'duz sozlesme-girinti', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tip), h('td', {}, zorunlu), h('td', {}, nul), h('td', {}, kaldir));
   });
   return h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu sozlesme-alanlari', 'aria-label': duzenle ? 'Sözleşme alanları (düzenlenebilir)' : 'Sözleşme alanları' },
     h('thead', {}, h('tr', {}, ['Alan', 'Tür', 'Zorunlu', 'Null izinli', ...(duzenle ? [''] : [])].map((x) => h('th', {}, x)))),

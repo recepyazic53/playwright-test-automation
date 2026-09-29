@@ -234,7 +234,7 @@ test.describe('hazırlık: sunucu ve arayüz (127.0.0.1)', () => {
     await expect(panel.locator('[data-madde="ortam"]')).toContainText('Erişildi (200');
     await page.waitForTimeout(800);
     expect(sahte.istekler.length).toBe(once);
-    await panel.getByRole('button', { name: /Ortam bağlantısını denetle/ }).click();
+    await panel.getByRole('button', { name: /Denetle — ortam bağlantısı/ }).click();
     await expect.poll(() => sahte.istekler.length).toBe(once + 1);
     await expect(panel.locator('[data-madde="ortam"]')).toContainText('az önce');
     await page.screenshot({ path: test.info().outputPath('hazirlik-formu.png'), fullPage: false });
