@@ -225,9 +225,10 @@ function alanTablosu(sema, bicim, xmlKok, duzenle) {
     const yol = yolGoster(a.parcalar, bicim, xmlKok);
     const kok = !a.parcalar.length;
     const oge = a.parcalar.at(-1) === '[]';
-    const girinti = { style: `padding-inline-start: ${Math.min(a.parcalar.length, 8) * 0.9}rem` };
+    // Girinti CSS değişkeniyle (CSSOM setProperty; CSP 'style-src self' satır içi style özniteliğini engeller).
+    const girinti = { style: { '--girinti': String(Math.min(a.parcalar.length, 8)) } };
     if (!duzenle) {
-      return h('tr', {}, h('td', {}, h('code', { class: 'duz', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tipAdi(a.tip), a.format ? h('span', { class: 'soluk' }, ` · ${a.format}`) : null,
+      return h('tr', {}, h('td', {}, h('code', { class: 'duz sozlesme-girinti', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tipAdi(a.tip), a.format ? h('span', { class: 'soluk' }, ` · ${a.format}`) : null,
         a.enum ? h('span', { class: 'soluk' }, ` · ${a.enum.length} değer`) : null),
       h('td', {}, kok || oge ? '—' : a.zorunlu ? 'evet' : 'hayır'), h('td', {}, a.nullIzinli ? 'evet' : 'hayır'));
     }
@@ -241,7 +242,7 @@ function alanTablosu(sema, bicim, xmlKok, duzenle) {
     nul.addEventListener('change', () => { alanNullAyarla(sema, a.parcalar, nul.checked); duzenle.degisti(); });
     const kaldir = kok || oge ? null : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${yol} alanını kaldır`, title: 'Alanı kaldır' }, ikon('cop'));
     kaldir?.addEventListener('click', () => { alanKaldir(sema, a.parcalar); duzenle.degisti(); });
-    return h('tr', {}, h('td', {}, h('code', { class: 'duz', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tip), h('td', {}, zorunlu), h('td', {}, nul), h('td', {}, kaldir));
+    return h('tr', {}, h('td', {}, h('code', { class: 'duz sozlesme-girinti', ...girinti }, kok ? `${yol} (kök)` : yol)), h('td', {}, tip), h('td', {}, zorunlu), h('td', {}, nul), h('td', {}, kaldir));
   });
   return h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu sozlesme-alanlari', 'aria-label': duzenle ? 'Sözleşme alanları (düzenlenebilir)' : 'Sözleşme alanları' },
     h('thead', {}, h('tr', {}, ['Alan', 'Tür', 'Zorunlu', 'Null izinli', ...(duzenle ? [''] : [])].map((x) => h('th', {}, x)))),

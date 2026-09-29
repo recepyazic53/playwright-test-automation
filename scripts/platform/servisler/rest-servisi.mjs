@@ -224,12 +224,23 @@ export function restServisiKaydet(vt, projeId, girdi) {
         alanBaglari: sadece(baglar), alanZorunluluklari: sadece(zorunlu), tarihKurallari: kurallar
       }
     });
-    // Adı değişen uçların senaryoları yeni ada geçer.
+    // Adı değişen uçların senaryoları yeni ada geçer. Metodu değişen ucun senaryolarından metodu ucun ESKİ metoduyla aynı olanlar
+    // (ucu izleyenler) yeni metoda geçer; bilerek başka metotla yazılmış senaryo (ör. aynı uca DELETE) dokunulmaz. Eskiden senaryo
+    // eski metotta kalıyordu: uç GET'e çevrilse de listede, formda ve Dene'de POST görünüyor ve POST gidiyordu.
     const mevcutSenaryolar = servisSenaryolariniListele(vt, servisId);
+    const eskiOplar = new Map((mevcut?.ayarlar.operasyonlar ?? []).map((o) => [o.ad, o]));
     for (const u of uclar) {
-      if (!u.eskiAd || u.eskiAd === u.ad) continue;
-      for (const x of mevcutSenaryolar.filter((y) => y.icerik.operasyon === u.eskiAd)) {
-        servisSenaryosuKaydet(vt, { id: x.id, projeId, servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: x.kosuyaDahil, icerik: { ...x.icerik, operasyon: u.ad } });
+      const eskiAd = u.eskiAd || u.ad;
+      const eskiMetot = eskiOplar.get(eskiAd)?.metot;
+      const adDegisti = eskiAd !== u.ad;
+      const metotDegisti = typeof eskiMetot === 'string' && eskiMetot !== u.metot;
+      if (!adDegisti && !metotDegisti) continue;
+      for (const x of mevcutSenaryolar.filter((y) => y.icerik.operasyon === eskiAd)) {
+        const http = x.icerik.http;
+        const izler = metotDegisti && Boolean(http) && http?.metot === eskiMetot;
+        if (!adDegisti && !izler) continue;
+        servisSenaryosuKaydet(vt, { id: x.id, projeId, servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: x.kosuyaDahil,
+          icerik: { ...x.icerik, operasyon: u.ad, ...(izler ? { http: { ...http, metot: u.metot } } : {}) } });
       }
     }
     // Başlangıç senaryoları: alanlar tablo sütunlarına bağlıysa şablonda başvuru; gizli alanın örnek değeri yazılmaz.

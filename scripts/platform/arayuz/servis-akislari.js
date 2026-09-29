@@ -62,7 +62,7 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
     h('div', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, 'Servis akışları'), h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `${adres}/yeni` }, ikon('arti'), 'Akış ekle'))),
       h('p', { class: 'soluk kucuk' }, 'Akış, kayıtlı senaryoları sırayla koşar (başka servislerin senaryoları da olabilir). Bir adımın yanıtından okunan değer sonraki adımlarda ',
-        h('code', {}, '${akis:Ad}'), ' ile gövdede, başlıkta ve kontrollerde kullanılır.'),
+        h('code', {}, '${akis:Ad}'), ' ile gövdede, başlıkta ve kontrollerde kullanılır. Operasyon adımlarının alan değerleri akışın senaryolarında girilir: akışı açın, üstteki "Senaryolara git" ya da "Senaryo ekle".'),
       akislar.length
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'veri-tablosu', 'aria-label': 'Servis akışları' },
           h('thead', {}, h('tr', {}, ...['Akış', 'Tür', 'Adım', 'Son koşu', ''].map((x) => h('th', { scope: 'col' }, x)))), h('tbody', {}, satirlar)))

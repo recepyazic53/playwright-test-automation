@@ -135,7 +135,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
         onclick: () => { if (d.tur === t) return; d.tur = t; ciz(); }
       }, m)));
     return h('div', { class: 'alan' }, h('div', { class: 'alan-etiketi' }, 'Servis türü'), secim,
-      rest() ? h('p', { class: 'soluk kucuk' }, 'Yalnız adresiniz varsa buradan ilerleyin: taban adres kaydedilir, sonraki adımda yolun devamı ve HTTP işlemi (GET / POST / PUT…) sorulur. Postman koleksiyonunuz varsa "Postman koleksiyonu" sekmesini kullanın.') : null);
+      rest() ? h('p', { class: 'soluk kucuk' }, 'Yalnız adresiniz varsa buradan ilerleyin: taban adres kaydedilir, sonraki adımda yolun devamı ve HTTP işlemi (GET / POST / PUT…) sorulur. Postman koleksiyonunuz varsa "Postman koleksiyonu" sekmesini kullanın.')
+        : h('p', { class: 'soluk kucuk wsdl-notu' }, 'WSDL dosyası yapıştırmanız ya da yüklemeniz gerekmez: burada taban adresi, sonraki adımda servisin yolunu yazıp "Denetle"ye basınca WSDL, servis adresinin sonuna "?wsdl" eklenerek (onayınızla) kendiliğinden istenir; metotlar ve alanlar ondan okunur.'));
   };
   /** REST tam adres: köken TEST ortamının taban adresi, kalan yol / sorgu ilk (boşsa) ya da yeni isteğe gider. */
   const restYapistir = (deger) => {
@@ -199,7 +200,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     onizle();
     const kontrolSec = h('select', { 'aria-label': 'Denetleme ortamı' }, ortamlar.map((o) => h('option', { value: o.id, selected: d.kontrolOrtami === o.id }, ortamSecenekMetni(o))));
     kontrolSec.addEventListener('change', () => { d.kontrolOrtami = kontrolSec.value; d.erisim = null; metotAlani(); durumGuncelle(); });
-    const denetle = h('button', { type: 'button' }, ikon('ag'), 'Denetle');
+    const denetle = h('button', { type: 'button', title: 'WSDL\'i seçilen ortamdan ister (servis adresi + ?wsdl; önce onay sorulur)' }, ikon('ag'), 'Denetle');
     const sonuc = h('div', { 'aria-live': 'polite' });
     const metotAlani = () => {
       if (!d.erisim) { yerlestir(sonuc); return; }
@@ -247,7 +248,9 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     });
     metotAlani();
     return [
-      alan('Yol', yol, { zorunlu: true, yardim: 'Taban adresin arkasına eklenir; tüm ortamlarda aynıdır.' }),
+      h('div', { class: 'not-kutusu bilgi wsdl-notu', role: 'note' }, h('b', {}, 'WSDL nereden gelir? '),
+        'Yolu yazıp "Denetle"ye basın: WSDL, seçilen ortamdaki servis adresinin sonuna "?wsdl" eklenerek istenir (istekten önce onay sorulur). Ayrıca WSDL dosyası yapıştırmanız ya da yüklemeniz gerekmez; SoapUI projeniz varsa "SoapUI dosyasından" sekmesini kullanın.'),
+      alan('Yol', yol, { zorunlu: true, yardim: 'Taban adresin arkasına eklenir; tüm ortamlarda aynıdır. WSDL bu adresin sonuna "?wsdl" eklenerek istenir.' }),
       h('div', {}, h('div', { class: 'alan-etiketi' }, 'Gidilecek adresler'), onizleme),
       h('div', { class: 'satir-duzen' }, alan('Denetleme ortamı', kontrolSec, { yardim: 'Varsayılan TEST ortamı; CANLI ortamda istekten önce onay sorulur.' }), denetle),
       sonuc
