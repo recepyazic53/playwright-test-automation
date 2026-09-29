@@ -25,19 +25,20 @@ import { sahteSoapSunucusu } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
 
-/** Sahte REST sunucusu (127.0.0.1): her isteğe aynı JSON yanıtı; gelen yöntemler kaydedilir. */
-async function sahteRestSunucusu(): Promise<{ adres: string; yontemler: string[]; kapat: () => Promise<void> }> {
+/** Sahte REST sunucusu (127.0.0.1): her isteğe aynı JSON yanıtı; gelen yöntemler kaydedilir. ayar.gecikmeMs: yanıt gecikmesi. */
+async function sahteRestSunucusu(): Promise<{ adres: string; yontemler: string[]; ayar: { gecikmeMs: number }; kapat: () => Promise<void> }> {
   const yontemler: string[] = [];
+  const ayar = { gecikmeMs: 0 };
   const sunucu: Server = createServer((q, y) => {
     yontemler.push(String(q.method));
     q.resume();
-    q.on('end', () => {
+    q.on('end', () => setTimeout(() => {
       y.writeHead(200, { 'Content-Type': 'application/json' });
       y.end(JSON.stringify({ siparis: { no: 42, durum: 'ACIK', tutar: 125.5, musteri: 'Deneme', kalem: 3 }, toplam: 3, sayfa: 1, sonraki: false }));
-    });
+    }, ayar.gecikmeMs));
   });
   await new Promise<void>((coz) => sunucu.listen(0, '127.0.0.1', () => coz()));
-  return { adres: `http://127.0.0.1:${(sunucu.address() as AddressInfo).port}`, yontemler, kapat: () => new Promise((coz) => sunucu.close(() => coz())) };
+  return { adres: `http://127.0.0.1:${(sunucu.address() as AddressInfo).port}`, yontemler, ayar, kapat: () => new Promise((coz) => sunucu.close(() => coz())) };
 }
 
 test.describe('servis sayfaları: kullanılabilirlik', () => {
@@ -182,45 +183,65 @@ test.describe('servis sayfaları: kullanılabilirlik', () => {
     await kapat();
   });
 
-  test('Dene → "Son yanıttan kontrol öner": koşu paneli küçülür, "Ekle" düğmeleri panelin altında kalmaz', async () => {
-    test.setTimeout(90_000);
+  test('Dene → "Son yanıttan kontrol öner": koşu bittiyse panel kapanır, sürüyorsa küçülür; "Ekle" düğmeleri panelin altında kalmaz', async () => {
+    test.setTimeout(120_000);
     const { page, hatalar, disari, kapat } = await sayfaAc(1280, 800);
     const d = await api(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const sn = d.senaryolar.find((x: Nesne) => x.baslik === 'siparisSorgula');
     await page.goto(`/#/servisler/s/${servisId}/senaryo/${sn.id}`);
+    const deneOnayla = async () => {
+      await page.getByRole('button', { name: 'Dene', exact: true }).click();
+      await page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' }).getByRole('button', { name: 'Dene' }).click();
+    };
     const once = rest.yontemler.length;
-    await page.getByRole('button', { name: 'Dene', exact: true }).click();
-    const onay = page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' });
-    await onay.getByRole('button', { name: 'Dene' }).click();
+    await deneOnayla();
     const panel = page.locator('.servis-kosu-paneli');
     await expect(panel).toContainText('Servis koşusu bitti');
     // İstek GET ile gitti (uç GET'e çevrilmişti).
     expect(rest.yontemler.slice(once)).toEqual(['GET']);
-    await page.getByRole('button', { name: 'Son yanıttan kontrol öner' }).click();
+    const oner = page.getByRole('button', { name: 'Son yanıttan kontrol öner' });
     const liste = page.locator('.yanit-kontrol-paneli');
     const ekleler = liste.getByRole('button', { name: /: kontrol ekle$/ });
+    /** Klavyeyle sırayla gezilen (ve kaydırılarak getirilen) her "Ekle"nin üstünde başka öğe yok (scroll-padding). */
+    const ekleDugmeleriAcik = async () => {
+      const n = await ekleler.count();
+      expect(n).toBeGreaterThan(2);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      for (let k = 0; k < n; k++) {
+        const ustte = await ekleler.nth(k).evaluate((el) => {
+          el.scrollIntoView({ block: 'nearest' });
+          const r = el.getBoundingClientRect();
+          const x = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return Boolean(x && (x === el || el.contains(x))) || `${x?.tagName}.${x?.className} ${Math.round(r.top)}/${innerHeight}`;
+        });
+        expect(ustte, `${k + 1}. "Ekle" düğmesinin üstünde başka öğe var`).toBe(true);
+      }
+      return n;
+    };
+
+    // 1) Koşu bitmişken liste açılınca panel tamamen kapanır.
+    await oner.click();
     await expect(ekleler.first()).toBeVisible();
-    await expect(panel).toHaveClass(/kucuk/);
-    // Klavyeyle sırayla gezilen (ve kaydırılarak getirilen) her "Ekle" koşu panelinin altında kalmaz: sayfa panelin yüksekliği kadar
-    // alttan boşluk bırakarak kaydırır (scroll-padding).
-    const n = await ekleler.count();
-    expect(n).toBeGreaterThan(2);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    for (let k = 0; k < n; k++) {
-      const ustte = await ekleler.nth(k).evaluate((el) => {
-        el.scrollIntoView({ block: 'nearest' });
-        const r = el.getBoundingClientRect();
-        const x = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return Boolean(x && (x === el || el.contains(x))) || `${x?.tagName}.${x?.className} ${Math.round(r.top)}/${innerHeight}`;
-      });
-      expect(ustte, `${k + 1}. "Ekle" düğmesinin üstünde başka öğe var`).toBe(true);
-    }
-    // Panelin son "Ekle"si de koşu panelinin üstüne kaydırılabilir (sayfanın sonu panelin altında kalmaz).
-    const son = ekleler.nth(n - 1);
-    await son.evaluate((el) => el.scrollIntoView({ block: 'end' }));
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    const [sonKutu, panelKutu] = await Promise.all([son.boundingBox(), panel.boundingBox()]);
-    expect(sonKutu && panelKutu && sonKutu.y + sonKutu.height <= panelKutu.y + 1).toBe(true);
+    await expect(panel).toHaveCount(0);
+    await ekleDugmeleriAcik();
+
+    // 2) Koşu sürerken: panel kapanmaz, küçülür; düğmeler yine altında kalmaz, sayfanın sonu panelin üstüne kaydırılabilir.
+    await liste.getByRole('button', { name: 'Paneli kapat' }).click();
+    rest.ayar.gecikmeMs = 15_000;
+    try {
+      await deneOnayla();
+      await expect(panel).toContainText('Servis koşusu sürüyor');
+      await oner.click();
+      await expect(ekleler.first()).toBeVisible();
+      await expect(panel).toHaveClass(/kucuk/);
+      await expect(panel).toContainText('Servis koşusu sürüyor');
+      const n = await ekleDugmeleriAcik();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      const [sonKutu, panelKutu] = await Promise.all([ekleler.nth(n - 1).boundingBox(), panel.boundingBox()]);
+      expect(sonKutu && panelKutu && sonKutu.y + sonKutu.height <= panelKutu.y + 1).toBe(true);
+    } finally { rest.ayar.gecikmeMs = 0; }
+    // Koşu, liste açıkken bitince panel kapanır.
+    await expect(panel).toHaveCount(0, { timeout: 40_000 });
     expect(hatalar).toEqual([]);
     expect(disari).toEqual([]);
     await kapat();
@@ -338,5 +359,30 @@ test.describe('servis sayfaları: kullanılabilirlik', () => {
     expect(hatalar).toEqual([]);
     expect(disari).toEqual([]);
     await kapat();
+  });
+
+  test('uç yolu değişince ucu izleyen senaryoların yolu güncellenir (sorgu ve yer tutucu değeri korunur); farklı yazılmış yol korunur', async () => {
+    // Bilerek farklı yollu senaryo (aynı uç) ve yer tutucusu senaryoda doldurulmuş senaryo.
+    await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Farklı yol', kapsam: 'test', kosuyaDahil: false,
+      icerik: { operasyon: 'siparisSil', govde: '', kontroller: [{ tur: 'durumKodu', deger: '200-299' }], http: { metot: 'DELETE', yol: '/baska/yol' } } });
+    const s0 = (await api(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
+    const uclar: Nesne[] = (s0.ayarlar.operasyonlar as Nesne[]).map((o) => ({ ...o, eskiAd: o.ad }));
+    const sil = uclar.find((u) => u.ad === 'siparisSil') as Nesne;
+    const sorgula = uclar.find((u) => u.ad === 'siparisSorgula') as Nesne;
+    sil.yol = '/siparis/{no}';
+    await basarili('/platform/servis/rest/kaydet', { projeId, id: servisId, anahtar: s0.anahtar, ad: s0.ad, uclar });
+    await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Numaralı silme', kapsam: 'test', kosuyaDahil: false,
+      icerik: { operasyon: 'siparisSil', govde: '', kontroller: [{ tur: 'durumKodu', deger: '200-299' }], http: { metot: 'DELETE', yol: '/siparis/${Siparis.no}?onay=1' } } });
+    // İkinci değişiklik: yer tutucunun yeri değişir; sorgula ucunun yolu da değişir.
+    sil.yol = '/v2/siparis/{no}/iptal';
+    sorgula.yol = '/v2/siparis';
+    await basarili('/platform/servis/rest/kaydet', { projeId, id: servisId, anahtar: s0.anahtar, ad: s0.ad, uclar });
+    const d = await api(`/platform/servis?projeId=${projeId}&id=${servisId}`);
+    const yol = (baslik: string) => d.senaryolar.find((x: Nesne) => x.baslik === baslik).icerik.http;
+    expect(yol('siparisSil')).toMatchObject({ metot: 'DELETE', yol: '/v2/siparis/${no}/iptal' });
+    expect(yol('Numaralı silme').yol).toBe('/v2/siparis/${Siparis.no}/iptal?onay=1');
+    expect(yol('Farklı yol').yol).toBe('/baska/yol');
+    expect(yol('siparisSorgula')).toMatchObject({ metot: 'GET' });
+    expect(yol('siparisSorgula').yol).toMatch(/^\/v2\/siparis\?no=42&token=/);
   });
 });

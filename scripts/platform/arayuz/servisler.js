@@ -27,7 +27,7 @@ import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
 import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
-import { servisKosuPaneliniKucult, servisKosusuBaslat } from './servis-kosu-paneli.js';
+import { servisKosuPaneliniKenaraAl, servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { senaryoSayfasi } from './akis-senaryo-formu.js';
@@ -1526,8 +1526,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   const yanitPaneliAc = async (kosuId) => {
     yanitPaneli.hidden = false;
-    // Sağ alttaki koşu paneli (Dene) listenin "Ekle" düğmelerinin üstüne binmesin: küçültülür (başlığı kalır, "Aç" ile geri gelir).
-    servisKosuPaneliniKucult();
+    // Sağ alttaki koşu paneli (Dene) listenin "Ekle" düğmelerinin üstüne binmesin: koşu bittiyse kapanır, sürüyorsa küçülür.
+    servisKosuPaneliniKenaraAl();
     yerlestir(yanitPaneli, h('p', { class: 'soluk kucuk' }, 'Yanıt yükleniyor…'));
     try {
       let kosu = null;

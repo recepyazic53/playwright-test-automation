@@ -26,11 +26,14 @@ const acikKutular = new Set();
 export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 
 /**
- * Panel açıksa küçültür (yalnız başlık kalır; "Aç" ile geri gelir). Sayfada panelin altında kalacak bir liste açılırken çağrılır
- * (ör. "Son yanıttan kontrol öner": panel sağ altta sabit olduğu için "Ekle" düğmelerinin üstüne biniyordu).
+ * Paneli sayfadaki bir listenin önünden çeker (ör. "Son yanıttan kontrol öner": panel sağ altta sabit olduğu için "Ekle"
+ * düğmelerinin üstüne biniyordu). Koşu BİTTİYSE panel kapanır (sonuç Raporlar'da ve açılan listenin başlığında); sürüyorsa
+ * küçülür (yalnız başlık kalır; "Aç" ile geri gelir).
  */
-export function servisKosuPaneliniKucult() {
-  if (!durum || durum.kucuk) return;
+export function servisKosuPaneliniKenaraAl() {
+  if (!durum) return;
+  if (durum.is.bitti) { durum = null; ciz(); return; }
+  if (durum.kucuk) return;
   durum.kucuk = true;
   ciz();
 }
