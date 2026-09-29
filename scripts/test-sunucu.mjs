@@ -365,6 +365,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/bulgular.js', { dosya: 'bulgular.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/dosya-yukleme.js', { dosya: 'dosya-yukleme.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarama.js', { dosya: 'tarama.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/oge-secme.js', { dosya: 'oge-secme.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-tasarimi.js', { dosya: 'akis-tasarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-siralama.js', { dosya: 'tablo-siralama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/aranabilir-secim.js', { dosya: 'aranabilir-secim.js', tur: 'text/javascript; charset=utf-8' }],

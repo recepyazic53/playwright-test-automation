@@ -333,9 +333,18 @@ Ekran paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ek
 3. **Tarama:** giriş tarifiyle giriş (CAPTCHA, hatalı kimlik, zaman aşımı açık hata verir) → her bağlam profili için
    tarifin bağlam adımları → hedef sayfa → görünür alanların envanteri (etiket, tür, name/id, seçici önerisi,
    zorunluluk, seçenekler, radyo/onay kutusu grupları, dosya `accept`, tarih, devre dışı/salt okunur, fieldset/legend ve
-   başlıklara göre bölümler) → profil başına ekran görüntüsü → isteğe bağlı **seçim keşfi**: en fazla 8 seçenekli her
-   açılır listede seçenekler tek tek seçilir, beliren/kaybolan alanlar kaydedilir, ilk değer geri yüklenir; seçim sayfayı
-   başka adrese götürürse bilinmeyenlere yazılır ve hedefe dönülür.
+   başlıklara göre bölümler) → profil başına ekran görüntüsü → **seçim keşfi** (varsayılan açık; CANLI ortamda kapalı
+   başlar, açılırsa ayrıca onay — sunucuda `kesifCanliOnay: true`, yoksa 409 `KESIF_CANLI_ONAY`): açılır listelerde (en
+   fazla 8 seçenek; daha uzun listelerde yalnız ilk 8 seçenek, yalnız bağımlı liste için), radyo gruplarında ve onay
+   kutularında diğer seçenekler tek tek denenir; beliren / kaybolan / etkinleşen alanlar ve seçenekleri değişen listeler
+   kaydedilir, ilk değer geri yüklenir; seçim sayfayı başka adrese götürürse bilinmeyenlere yazılır ve hedefe dönülür.
+   **Güvenli düğme kuralı (keşif):** keşif yalnız seçimleri değiştirir, hiçbir düğmeye / bağlantıya basmaz; etiketi,
+   adı ya da seçenekleri kayıt oluşturmayı / göndermeyi / onaylamayı / silmeyi / ödemeyi çağrıştıran seçim ("Kaydı
+   onaylıyorum", "Otomatik gönder"…) denenmez (`koruma.mjs > kesifGuvenligi`; raporda "keşfedilemedi" nedeniyle); sayfanın
+   kendi betiği keşif sırasında bir düğmeye basmaya çalışırsa tıklama sayfa içinde yutulur (`dugmeTiklamaKorumasi`).
+   Keşfin sonucu modelde: radyo / onay kutusu / açılır listeye bağlı görünen alan → adlandırılmış koşul + `gorunurluk`
+   (onay kutusunda `esit: true|false`); üst seçime göre seçenekleri değişen açılır liste → `bagimlilik { alan, secenekHaritasi }`
+   (ör. İl → İlçe); taramada devre dışı olup keşifte etkinleşen alan senaryoda doldurulur.
 4. **Güvenlik:** düğmelere/bağlantılara tıklanmaz, form gönderilmez, alanlara yazılmaz, Enter'a basılmaz. Tarama
    aşamasında GET/HEAD dışındaki **her istek** (form gönderimi, otomatik kaydetme XHR'ı, `sendBeacon`, WebSocket)
    ağ katmanında iptal edilir ve raporlanır; sayfada ayrıca `submit`/`requestSubmit` etkisizleştirilir. Yalnızca giriş
@@ -345,6 +354,19 @@ Ekran paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ek
 5. **Sonuç:** ekran paketi (sürüm 1, model `semaSurumu: 1`), yüklenen paketle **aynı** önizleme → kabul (yeni ekran)
    ya da bulgular (mevcut ekran) akışına girer. İşler ~1 saat sonra sunucu belleğinden silinir; ekran görüntüleri
    kabul edilene kadar yalnızca bellekte durur.
+6. **Düğmeyi ve sonucu işaretle** (önizlemeden önce; yeni ortak akış taramasında yok): (1) keşfin buldukları (koşullu alanlar,
+   bağımlı listeler) onay kutularıyla onaylanır — reddedilen modele yazılmaz; (2) **Sayfada seç**: "Akışı kaydet"teki gibi
+   görünür bir tarayıcı açılır (`kip: "ogeSecme"`; aynı giriş yolu — tarif + kayıtlı oturum; CANLI ortamda CANLI onayı).
+   Kullanıcı "Öğe seç" açıkken sayfadaki öğeye tıklar: tıklama **yakalanır ve sayfaya iletilmez** (düğmeye basılmaz, form
+   gönderilmez), öğenin türü sorulur — düğme (aksiyon) / sonuç (çıktı) / alan / başarı göstergesi / hata göstergesi.
+   Seçiciyi Nöbetçi üretir: önce rol + erişilebilir ad ve görünen metin, sonra kimlik ve ad / etiket, son çare CSS yolu
+   (her aday sayfada tek eşleşme ve tıklanan öğe olarak denetlenir; sonuç ve göstergelerde rakamlı — değişken — metinli
+   seçici kullanılmaz). "Öğe seç" kapalıyken sayfa kullanılabilir (ör. sonucu görmek için hesaplamak); seçme aşamasında
+   GET/HEAD dışındaki istekler engellenir. (3) **Önizlemeye geç** (`POST /platform/tarama/isaretle`): düğme → "İşlemler"
+   bölümünde aksiyon + adımın `kosu.aksiyonlar` tıklaması, sonuç → çıktı + `kosu.basariGostergesi` (metnin sabit kısmı;
+   yoksa boş olmayan metin), başarı / hata göstergesi → `kosu.basariGostergesi` / `kosu.hataGostergesi`, alan →
+   "Sayfada seçilen alanlar" bölümü; koşu tanımı eklenince model `semaSurumu: 2` olur. Akış diyagramında da "Listede
+   olmayan alanı / düğmeyi elle ekle"nin (ileri düzey: CSS seçici) yanında aynı **Sayfada seç** vardır.
 
 Üretilen paket:
 
