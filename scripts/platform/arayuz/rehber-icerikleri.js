@@ -103,6 +103,13 @@ export const REHBERLER = {
         ipucu: 'Gizli değerler, istek / yanıt gövdeleri ve test verisi değerleri rapora girmez; ortam adresi ve ekran görüntüleri yalnız siz seçerseniz eklenir.'
       },
       {
+        baslik: 'Kapsam matrisi',
+        metin: ['Raporlar sekmesindeki "Kapsam matrisi", senaryolara yazdığınız talep numaralarını senaryolarla ve son sonuçlarıyla eşler: her talep için hangi ekran senaryosu, servis senaryosu ya da uçtan uca akışın onu sınadığı ve son koşunun başarılı mı, başarısız mı olduğu ya da hiç koşmadığı (tarih ve ortamla).',
+          'Ortam ve dönem süzülebilir; tablo PDF ya da CSV olarak indirilir. Yalnız senaryosu olan talepler listelenir: talep no senaryo formunda başlığın yanındaki "Talep no" alanından eklenir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Talep', alt: 'serbest metin', ikon: 'isaret' }, { baslik: 'Senaryolar', alt: 'ekran / servis / uçtan uca', ikon: 'liste' }, { baslik: 'Son sonuç', alt: 'ortam, dönem', ikon: 'grafik' }] },
+        ipucu: 'Talep no yalnız metindir; Nöbetçi hiçbir talep sistemine bağlanmaz.'
+      },
+      {
         baslik: 'Kalan bir testi incelemek',
         sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Kalan test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
@@ -204,6 +211,13 @@ export const REHBERLER = {
         baslik: 'Önerilen çalışma sırası',
         sira: ['Ekranlar\'dan ekranı ekleyin (ekran paketi, tarama ya da akış kaydı).', 'Bu ekranda "Senaryo ekle" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
         cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Senaryo ekle" ve "Koşuyu başlat" sağ üstte' }
+      },
+      {
+        baslik: 'Talebe göre süzmek ve koşmak',
+        hedef: '.senaryo-arac-cubugu',
+        metin: ['Senaryolarda talep no varsa araç çubuğunda "Talep" süzgeci çıkar; bir talep seçince yalnız o talebin senaryoları listelenir (servis senaryoları ve uçtan uca akış listelerinde de aynı süzgeç vardır).',
+          'Talep seçiliyken "Bu talebin senaryolarını koş" o talebe bağlı ekran senaryolarını, servis senaryolarını ve uçtan uca akışları birlikte koşar: ortam koşu penceresinde seçilir, o ortamda koşamayanlar nedeniyle listelenir; önce ekran, sonra servis, sonra uçtan uca senaryoları sırayla koşar. Canlı ortamda her işlemden önce onay sorulur.'],
+        ipucu: 'Sonuçlar > Raporlar > Kapsam matrisi her talebin son sonucunu gösterir.'
       }
     ]
   },
@@ -231,6 +245,11 @@ export const REHBERLER = {
         metin: 'Çoklu çalıştırma her tablo grubu için ayrıdır. Kayıt grubunda satır listesine eklediğiniz her satır ya da "Koşula uyan tüm satırlar", tek tablo alanında "Uyan her satır ayrı test" kutusu seçimlerle uyan tüm satırları ayrı test olarak koşar. İki ya da daha çok tablo çoklu ise satırları "Eşleştirerek" (çift çift) ya da "Tüm kombinasyonlar" olarak birleştirirsiniz. Tahmini test sayısı kartın altında görünür; tek senaryodaki üst sınır Ayarlar > Koşu\'dadır. Ortama özel satır yalnız kendi ortamında koşar.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Tablo', alt: 'satırlar', ikon: 'veri' }, { baslik: 'Çoklu çalıştırma', alt: 'seçili / tümü', ikon: 'liste' }, { baslik: 'Her satır', alt: 'ayrı test', ikon: 'oynat' }] },
         ipucu: 'Koşu diyaloğunda "Veri koşusu" ile bu biçimi o koşu için değiştirebilirsiniz (ör. hepsi tek satırla). Dene her zaman tek satırla koşar.'
+      },
+      {
+        baslik: 'Talep no',
+        metin: 'Başlığın yanındaki "Talep no" isteğe bağlıdır: senaryonun karşıladığı talep numaralarını yazın (birden çok olabilir; Enter ya da virgülle eklenir, × ile kaldırılır). Yazarken projede daha önce girilen talepler önerilir; aynı talep farklı yazılırsa (ör. büyük / küçük harf, boşluk ya da tire farkı) Nöbetçi projedeki yazımı önerir. Servis senaryosu, akış senaryosu ve uçtan uca akış formlarında da aynı alan vardır.',
+        ipucu: 'Talep no serbest metindir, belirli bir biçim gerekmez; hiçbir dış sisteme bağlanmaz.'
       },
       { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır; zorunlu bir alanı "Bilerek boş bırak" ile işaretlerseniz (olumsuz senaryo) koşucu o alana değer yazmaz. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız kalan adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
@@ -398,6 +417,10 @@ export const REHBERLER = {
         baslik: 'Sonuç',
         metin: 'Koşu tek kayıttır (Sonuçlar > Uçtan uca akışlar): her adımın durumu ve süresi, ekran adımının ekran görüntüleri, servis adımının istek / yanıtı, SQL adımının sonuç tablosu ve taşınan değerler — gizliler maskeli.',
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Adım adım sonuç' }
+      },
+      {
+        baslik: 'Talep no',
+        metin: 'Akışın başlığının yanındaki "Talep no" ile akışı bir ya da birden çok talebe bağlayın. Listede "Talep" süzgeci ve "Bu talebin senaryolarını koş" çıkar; Sonuçlar > Raporlar > Kapsam matrisi akışın son koşusunu talebiyle birlikte gösterir.'
       }
     ]
   },

@@ -9,6 +9,7 @@ import { TOKEN, alan, api, bildir, bosDurum, h, ikon, iskelet, rozet, tarihMetni
 import { canliOnayIste, onayIste, onerilenOrtam, ortamSecenekMetni } from './kosu-paneli.js';
 import { servisAkisTasarimi } from './servis-akis-diyagrami.js';
 import { urunlerPaneli } from './senaryolar.js';
+import { talebeUyar, talepKosuDugmesi, talepSecenekleri } from './talep-kosusu.js';
 
 const q = encodeURIComponent;
 const ADRES = '#/akislar';
@@ -58,14 +59,29 @@ export function uctanUcaEkrani(main, parcalar, baglam) {
   })().catch(hata);
 }
 
+/** Liste süzgeci (oturum boyunca): talep. */
+const liste = { talep: '' };
+
 /** Liste sayfası. */
 async function listeSayfasi(icerik, proje, ortamlar) {
-  const { akislar } = await api(`/platform/uctan-uca/akislar?projeId=${q(proje.id)}`);
+  const { akislar: tumu } = await api(`/platform/uctan-uca/akislar?projeId=${q(proje.id)}`);
   const yenile = () => listeSayfasi(icerik, proje, ortamlar).catch((e) => yerlestir(icerik, hataKutusu(e)));
+  // Talep süzgeci (akışlarda talep varsa; ekran / servis senaryo listeleriyle aynı kural) ve "Bu talebin senaryolarını koş".
+  const talepler = talepSecenekleri(tumu);
+  if (liste.talep && !talepler.some((t) => talebeUyar({ talepler: [t] }, liste.talep))) liste.talep = '';
+  const akislar = tumu.filter((a) => talebeUyar(a, liste.talep));
+  const talepSec = h('select', { 'aria-label': 'Talep' }, [['', 'Tümü'], ...talepler.map((t) => [t, t])].map(([d, m]) => h('option', { value: d, selected: liste.talep === d }, m)));
+  talepSec.addEventListener('change', () => { liste.talep = talepSec.value; yenile(); });
+  const talepKosusu = talepKosuDugmesi(proje, () => liste.talep);
+  talepKosusu.hidden = !liste.talep;
+  const aracCubugu = talepler.length ? h('div', { class: 'senaryo-arac-cubugu' },
+    h('div', { class: `filtre-secimi talep-suzgeci ${liste.talep ? 'etkin' : ''}` }, h('label', {}, 'Talep'), talepSec), talepKosusu,
+    liste.talep ? h('span', { class: 'liste-ozeti' }, h('b', {}, String(akislar.length)), ` / ${tumu.length} gösteriliyor`) : null) : null;
   const turSayilari = (turler) => Object.entries(turler.reduce((a, t) => ({ ...a, [t]: (a[t] ?? 0) + 1 }), {}))
     .map(([t, n]) => h('span', { class: 'tur-sayisi' }, turRozeti(t), h('span', { class: 'mono kucuk' }, `×${n}`)));
   const satirlar = akislar.map((a) => h('tr', {},
-    h('td', {}, h('a', { class: 'satir-baglantisi', href: `${ADRES}/${q(a.id)}` }, a.baslik)),
+    h('td', {}, h('a', { class: 'satir-baglantisi', href: `${ADRES}/${q(a.id)}` }, a.baslik),
+      a.talepler?.length ? h('div', { class: 'kucuk' }, rozet([ikon('isaret'), a.talepler.join(', ')], 'talep-rozeti', { kisalt: true, title: `Talep: ${a.talepler.join(', ')}` })) : null),
     h('td', {}, h('span', { class: 'etiketler' }, turSayilari(a.adimTurleri))),
     h('td', {}, rozet(a.kapsam === 'ikisi' ? 'TEST + CANLI' : a.kapsam === 'canli' ? 'CANLI' : 'TEST')),
     h('td', {}, a.sonKosu ? h('span', { class: 'akis-son-kosu', title: tarihMetni(a.sonKosu.baslangic) }, durumRozeti(a.sonKosu.durum),
@@ -87,10 +103,11 @@ async function listeSayfasi(icerik, proje, ortamlar) {
     h('div', { class: 'eylemler' },
       h('a', { class: 'dugme hayalet', href: '#/sonuclar/uctan-uca' }, ikon('grafik'), 'Sonuçlar'),
       h('a', { class: 'dugme birincil', href: `${ADRES}/yeni` }, ikon('arti'), 'Uçtan uca akış ekle'))),
+    aracCubugu,
     h('div', { class: 'kart' },
       h('p', { class: 'soluk' }, 'Bir iş akışını baştan sona sınar: örneğin servisle sipariş oluşturulur, sipariş numarası ekranda aranır ve veritabanında durumu denetlenir. ',
         'Bir adımda okunan değer (servis yanıtı, ekran, sorgu sonucu) sonraki adımlarda ', h('code', {}, '${akis:Ad}'), ' ile kullanılır; gizli değerler raporda maskelenir.'),
-      akislar.length
+      !akislar.length && tumu.length ? bosDurum('Süzgeçle eşleşen akış yok.', 'Talep süzgecini değiştirin.', { ikon: 'ara' }) : akislar.length
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'veri-tablosu', 'aria-label': 'Uçtan uca akışlar' },
           h('thead', {}, h('tr', {}, ...['Akış', 'Adımlar', 'Kapsam', 'Son koşu', ''].map((x) => h('th', { scope: 'col' }, x)))), h('tbody', {}, satirlar)))
         : bosDurum('Henüz uçtan uca akış yok.', 'Örnek: 1. adım servis (yanıttan SiparisNo okunur), 2. adım ekran (arama alanı ← ${akis:SiparisNo}), 3. adım SQL (durum denetlenir).',

@@ -29,6 +29,7 @@ import { bagAdi } from './akis-senaryo-icerigi.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { ekranAdimiAkisDegerleri, ekranAdimiDogrula } from './ekran-adimi.mjs';
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
+import { talepAlani } from './talep-alani.js';
 
 const q = encodeURIComponent;
 const KAYNAK = { xml: 'XML (XPath)', json: 'JSON yolu', baslik: 'Yanıt başlığı' };
@@ -198,6 +199,8 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
 
   // ---- Genel ayarlar ----------------------------------------------------------------------------------------------------------
   const baslik = h('input', { type: 'text', value: is.baslik, maxlength: '200', autocomplete: 'off', placeholder: 'ör. Giriş → Sorgu' });
+  // Talep no (yalnız uçtan uca akışta; isteğe bağlı, birden çok): başlığın yanında; içerikte kaydedilir.
+  const talep = uctan ? talepAlani({ projeId: proje.id, degerler: Array.isArray(a.icerik.talepler) ? a.icerik.talepler : [], degisti: () => degisti() }) : null;
   baslik.addEventListener('input', () => { is.baslik = baslik.value; degisti(); });
   const tur = h('select', {}, h('option', { value: 'akis', selected: is.tur === 'akis' }, 'Akış'), h('option', { value: 'oturum', selected: is.tur === 'oturum' }, 'Oturum (servise atanır; token sağlar)'));
   const omur = h('input', { type: 'number', min: '30', max: '86400', step: '1', value: String(is.omur), 'aria-label': 'Oturum ömrü (saniye)' });
@@ -774,7 +777,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
   // ---- Kaydet / Dene --------------------------------------------------------------------------------------------------------
   const icerikAl = () => ({
     adimlar: is.adimlar.map((x) => ({ ...x, okumalar: x.okumalar.filter((o) => o.ad || o.yol) })),
-    ...(uctan ? { uctanUca: true } : {}),
+    ...(uctan ? { uctanUca: true, talepler: talep ? talep.degerler() : [] } : {}),
     ...(is.tur === 'oturum' ? { omurSaniye: is.omur, tokenYenileme: is.yenileme } : {}),
     yetkiHatasinda: is.yetki
   });
@@ -925,6 +928,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       h('h3', {}, uctan ? (akisId ? 'Uçtan uca akışı düzenle' : 'Yeni uçtan uca akış') : akisId ? 'Akışı düzenle' : 'Yeni akış'), mesaj.kutu,
       kayit?.hatalar?.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, h('b', {}, 'Akış şu an koşulamaz: '), kayit.hatalar.join(' ')) : null,
       alan('Başlık', baslik, { zorunlu: true }),
+      talep ? talep.el : null,
       h('div', { class: 'satir-duzen' }, turAlani, alan('Kapsam', kapsam, { yardim: uctan ? 'Koşuda hangi ortam türünde koşacağı. Kaydedilmemiş hâl seçilen ortamda denenir (CANLI ortamda önce onay).' : 'Koşuda hangi ortam türünde koşacağı. Dene seçilen ortamda (CANLI ortamda önce onay).' }), yenilemeAlani, omurAlani, yetkiAlani)),
     h('div', { class: 'form-duzeni tasarim-duzeni servis-akis-duzeni' },
       h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' },
