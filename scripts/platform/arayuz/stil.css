@@ -3177,7 +3177,7 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .saklama-cizelgesi li::before { content: ""; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--vurgu); }
 .saklama-cizelgesi li.suresiz::before { background: var(--panel); box-shadow: inset 0 0 0 2px var(--cizgi-2); }
 .saklama-cizelgesi .gun { font: 600 12px var(--yazi-mono); min-width: 5.5em; }
-.saklama-cizelgesi .olay { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.saklama-cizelgesi .olay { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .kalkan-simge { display: inline-flex; align-items: center; color: var(--vurgu); }
 .kalkan-simge svg { width: 14px; height: 14px; }
 .alan.guvenlik-kurali label .kalkan-simge { margin-right: 4px; vertical-align: -2px; }

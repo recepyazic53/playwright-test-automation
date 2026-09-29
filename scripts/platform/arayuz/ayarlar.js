@@ -787,7 +787,7 @@ async function saklamaKarti() {
       ...olaylar.map((o) => h('li', { class: o.guvenlik ? 'guvenlik-kurali' : null },
         h('span', { class: 'gun' }, `${o.gun} gün`), h('span', { class: 'olay' }, o.metin),
         o.guvenlik ? h('span', { class: 'kalkan-simge', title: 'Güvenlik amaçlı kural' }, ikon('kalkan'), h('span', { class: 'gorunmez' }, ' (güvenlik amaçlı)')) : null)),
-      suresiz.length ? h('li', { class: 'suresiz' }, h('span', { class: 'gun' }, 'süresiz'), h('span', { class: 'olay' }, `${suresiz.join(' ve ')} kalır`)) : null);
+      ...(suresiz.length ? [h('li', { class: 'suresiz' }, h('span', { class: 'gun' }, 'süresiz'), h('span', { class: 'olay' }, `${suresiz.join(' ve ')} kalır`))] : []));
     // "N gün sonra elinizde kalan" (N: en uzun süreli kural, yoksa 90).
     const n = olaylar.length ? olaylar[olaylar.length - 1].gun : 90;
     let metin;

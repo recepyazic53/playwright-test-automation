@@ -64,6 +64,7 @@ test.describe('Ayarlar > Yedekleme > Saklama', () => {
     // Zaman çizelgesi: gün sırasıyla; video saklama güvenlik amaçlı (kalkan).
     const cizelge = kart.getByRole('list', { name: 'Saklama zaman çizelgesi' });
     await expect(cizelge.locator('li .gun')).toHaveText(['12 gün', '45 gün', '180 gün', '200 gün']);
+    await expect(cizelge).not.toContainText('null');
     await expect(cizelge.locator('li').nth(0)).toContainText('tüm videolar silinir');
     await expect(cizelge.locator('li.guvenlik-kurali')).toHaveCount(1);
     await expect(cizelge.locator('li').nth(1)).toContainText('kalan testlerin ekran görüntüleri ve videoları');
