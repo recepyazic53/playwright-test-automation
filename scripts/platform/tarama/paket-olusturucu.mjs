@@ -877,14 +877,18 @@ export function kayitPaketiOlustur(meta, envanter) {
   const yeniKosullar = {};
   /** @type {Array<Record<string, unknown>>} */
   const ayarAlanlari = [];
+  /** Mevcut modelde yeniden kullanılan "dahil" ayarlarının yeni "Yeni senaryolarda dahil" seçimi (ayar kimliği → dahil mi). @type {Map<string, boolean>} */
+  const ayarVarsayilanlari = new Map();
   /** @type {AltAdim[]} */
   const altAdimlar = [];
   /**
    * "“<ad>” dahil" senaryo ayarı ve koşulu (isteğe bağlı düğme / ortak akış). Mevcut modelde aynı etiketli ayar ve koşulu
    * varsa yeniden kullanılır (akış kopyası / yeniden kayıt: senaryoların ayar değeri korunur, formda iki kez görünmez).
-   * @param {string} etiket @param {string} temel kimlik öneki @returns {string} koşul adı
+   * varsayilanDahil (verilirse; ortak akış bloğunun "Yeni senaryolarda" seçimi): ayar alanının varsayilan.deger'i — true ise
+   * yazılır, false ise kaldırılır (yalnız yeni senaryo formunu başlatır; kayıtlı senaryoların değeri değişmez).
+   * @param {string} etiket @param {string} temel kimlik öneki @param {boolean} [varsayilanDahil] @returns {string} koşul adı
    */
-  const dahilKosulu = (etiket, temel) => {
+  const dahilKosulu = (etiket, temel, varsayilanDahil) => {
     const form = `“${etiket}” dahil`;
     const sdMevcut = mevcut && nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar) ? mevcut.senaryoDuzeyi.alanlar : [];
     const eskiAyar = sdMevcut.find((/** @type {Record<string, any>} */ x) => nesneMi(x) && x.tip === 'onayKutusu' && nesneMi(x.etiket) && x.etiket.form === form);
@@ -893,19 +897,20 @@ export function kayitPaketiOlustur(meta, envanter) {
       : undefined;
     if (eskiAyar && eskiKosul) {
       yeniKosullar[eskiKosul] = mevcut.kosullar[eskiKosul];
+      if (varsayilanDahil !== undefined) ayarVarsayilanlari.set(String(eskiAyar.id), varsayilanDahil);
       return eskiKosul;
     }
     const ayar = benzersiz(`${kimlikUret(etiket, temel)}Dahil`, kullanilanIdler);
     const kosul = benzersiz(`${ayar}Kosulu`, kosulAdlari);
     yeniKosullar[kosul] = { aciklama: `“${etiket}” senaryoda seçildiyse (akış kaydı).`, ifade: { senaryoAyari: ayar, esit: true } };
-    ayarAlanlari.push({ id: ayar, tip: 'onayKutusu', etiket: { ekran: null, form }, zorunlu: false, yapilandirma: 'senaryo', eslesme: { senaryo: ayar } });
+    ayarAlanlari.push({ id: ayar, tip: 'onayKutusu', etiket: { ekran: null, form }, zorunlu: false, yapilandirma: 'senaryo', eslesme: { senaryo: ayar }, ...(varsayilanDahil === true ? { varsayilan: { deger: true } } : {}) });
     return kosul;
   };
   for (const [i, k] of kayitlar.entries()) {
     const ad = temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`;
     if (k.ortakAkis) {
       // Ortak akış adımı: alanı yok; koşuda ortak akışın adımlarıyla açılır.
-      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: k.ortakAkis.istegeBagli ? dahilKosulu(ad, 'ortakAkis') : null, ortakAkis: k.ortakAkis.dosya });
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: k.ortakAkis.istegeBagli ? dahilKosulu(ad, 'ortakAkis', k.ortakAkis.dahilVarsayilan === true) : null, ortakAkis: k.ortakAkis.dosya });
       continue;
     }
     if (k.sqlKontrolu) {
@@ -1263,6 +1268,17 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (ekAlanlar.length) {
       const sd = nesneMi(model.senaryoDuzeyi) ? model.senaryoDuzeyi : { alanlar: [] };
       model.senaryoDuzeyi = { ...sd, alanlar: [...(Array.isArray(sd.alanlar) ? sd.alanlar : []), ...ekAlanlar] };
+    }
+    // Yeniden kullanılan "dahil" ayarlarının varsayılanı (mevcut model değiştirilmez: alan kopyalanır).
+    if (ayarVarsayilanlari.size && nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar)) {
+      model.senaryoDuzeyi = {
+        ...model.senaryoDuzeyi,
+        alanlar: model.senaryoDuzeyi.alanlar.map((/** @type {unknown} */ a) => {
+          if (!nesneMi(a) || !ayarVarsayilanlari.has(String(a.id))) return a;
+          const { varsayilan: _eski, ...kalan } = a;
+          return ayarVarsayilanlari.get(String(a.id)) ? { ...kalan, varsayilan: { deger: true } } : kalan;
+        })
+      };
     }
     // Artık var olmayan alan/adımlara başvuran koşullar, görünürlükler ve iş kuralları çıkarılır.
     const alanIdleri = new Set(adimlar.flatMap((a) => /** @type {Array<{ alanlar: Array<Record<string, unknown>> }>} */ (a.bolumler ?? []).flatMap((b) => b.alanlar.map((x) => String(x.id)))));

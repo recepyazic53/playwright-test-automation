@@ -450,7 +450,8 @@ test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar k
     const diyalog = page.locator('dialog.ekran-yonetim-diyalogu');
     const satir = diyalog.getByRole('listitem').filter({ hasText: 'zaten var' });
     await expect(satir.getByRole('checkbox')).toBeDisabled();
-    await expect(diyalog.getByRole('checkbox', { name: /İsteğe bağlı/ })).toBeChecked();
+    await expect(diyalog.getByRole('radio', { name: /^İsteğe bağlı/ })).toBeChecked();
+    await expect(diyalog.getByRole('radio', { name: /^Dahil değil/ })).toBeChecked();
     await diyalog.getByRole('button', { name: 'Vazgeç' }).click();
     await page.getByRole('button', { name: 'Düzenle' }).click();
     await expect(page.getByRole('heading', { name: 'Akışı düzenle: Ana akış' })).toBeVisible();

@@ -86,13 +86,19 @@ export function gorunurlukMetni(gorunurluk, model, harita = alanHaritasi(model))
   return ifadeMetni(gorunurluk.ifade, model, harita);
 }
 
-/** Adımı isteğe bağlı yapan senaryo ayarı ({ senaryoAyari, esit: true }) varsa ayarın kimliği. */
+/**
+ * Adımı isteğe bağlı yapan senaryo ayarı ({ senaryoAyari, esit: true }) varsa ayarın kimliği. Açılmış ortak akış adımında
+ * bloğun ayarı adımın kendi koşuluyla "ve" içindedir (model-formu.mjs > ayarKosulu ile AYNI kural).
+ */
 function kapsamAyari(model, gorunurluk) {
   if (!nesneMi(gorunurluk)) return null;
   const ifade = typeof gorunurluk.kosul === 'string'
     ? nesneMi(model.kosullar) && nesneMi(model.kosullar[gorunurluk.kosul]) ? model.kosullar[gorunurluk.kosul].ifade : null
     : gorunurluk.ifade;
-  return nesneMi(ifade) && typeof ifade.senaryoAyari === 'string' && ifade.esit === true ? ifade.senaryoAyari : null;
+  const ayarMi = (x) => nesneMi(x) && typeof x.senaryoAyari === 'string' && x.esit === true;
+  if (ayarMi(ifade)) return ifade.senaryoAyari;
+  const ilk = nesneMi(ifade) && Array.isArray(ifade.ve) ? ifade.ve.find(ayarMi) : undefined;
+  return ilk ? ilk.senaryoAyari : null;
 }
 
 /** Aksiyonun okunuşu. */
@@ -159,6 +165,9 @@ export function akisDiyagrami(model, s = {}) {
       id: adim.id, no: i + 1, baslik: String(adim.baslik || adim.id),
       istegeBagli: Boolean(ayar),
       kapsamEtiketi,
+      // Ortak akış adımıysa ortak akışın adı (açılmış modelde ortakAkisAdi; ekranın Akışlar sekmesinde başvuru adımının başlığı):
+      // isteğe bağlı değilse diyagramda "her senaryoda" rozetiyle gösterilir.
+      ortakAkis: typeof adim.ortakAkisAdi === 'string' ? adim.ortakAkisAdi : nesneMi(adim.ortakAkis) ? String(adim.baslik || adim.id) : null,
       // Bu senaryoda koşulur mu? false: kapsam dışı ya da beklenen hata adımından sonra; null: bilinmiyor.
       kosulur,
       // Koşulmuyorsa nedeni (diyagramda soluk kutunun altında yazılır).

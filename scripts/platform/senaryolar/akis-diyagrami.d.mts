@@ -13,6 +13,8 @@ export interface DiyagramAdimi {
   baslik: string;
   istegeBagli: boolean;
   kapsamEtiketi: string | null;
+  /** Ortak akış adımıysa ortak akışın adı; değilse null. */
+  ortakAkis: string | null;
   kosulur: boolean | null;
   /** Koşulmuyorsa (kosulur false) nedeni; değilse null. */
   neden: string | null;

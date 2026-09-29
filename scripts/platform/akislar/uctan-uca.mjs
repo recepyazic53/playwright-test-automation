@@ -90,6 +90,37 @@ function ezilebilirAlanlar(mb) {
   }
 }
 
+/**
+ * Senaryonun ortak akış blokları ve bu senaryodaki durumları (uçtan uca akışın ekran adımı senaryonun KENDİ "dahil" seçimleriyle
+ * koşar; ezmeler bu seçimleri değiştirmez). dahil: her senaryoda çalışan blokta true; isteğe bağlıda senaryonun ortamlarındaki
+ * değer (hepsinde aynıysa), ortamlara göre değişiyorsa null. Değer yoksa dahil değildir (koşucu gibi).
+ * @param {any} mb modelBaglami sonucu @param {any} icerik
+ * @returns {Array<{ ad: string; etiket: string | null; istegeBagli: boolean; dahil: boolean | null }>}
+ */
+function ortakBloklari(mb, icerik) {
+  try {
+    const sema = formSemasiOlustur(mb.model, mb.altModeller);
+    const ortamlar = icerik && typeof icerik.ortamlar === 'object' && icerik.ortamlar ? Object.values(icerik.ortamlar) : [];
+    const veriler = ortamlar.map((o) => (o && typeof o === 'object' && o.veri && typeof o.veri === 'object' ? o.veri : {}));
+    /** @type {Array<{ ad: string; etiket: string | null; istegeBagli: boolean; dahil: boolean | null }>} */
+    const liste = [];
+    const gorulen = new Set();
+    for (const a of sema.adimlar) {
+      if (typeof a.ortakAkis !== 'string') continue;
+      const grup = a.ayar ? sema.adimKapsami.find((k) => k.ayar === a.ayar) : undefined;
+      const anahtar = grup ? `ayar:${grup.ayar}` : `ortak:${a.ortakAkis}`;
+      if (gorulen.has(anahtar)) continue;
+      gorulen.add(anahtar);
+      if (!grup) { liste.push({ ad: a.ortakAkis, etiket: null, istegeBagli: false, dahil: true }); continue; }
+      const degerler = [...new Set(veriler.map((v) => v[grup.ayar] === true))];
+      liste.push({ ad: a.ortakAkis, etiket: grup.etiket, istegeBagli: true, dahil: degerler.length === 1 ? degerler[0] : degerler.length ? null : false });
+    }
+    return liste;
+  } catch {
+    return [];
+  }
+}
+
 /** @param {any} icerik @returns {string[]} */
 const senaryoOrtamlari = (icerik) => (icerik && typeof icerik.ortamlar === 'object' && icerik.ortamlar ? Object.keys(icerik.ortamlar) : []);
 
@@ -332,15 +363,22 @@ export const UCTAN_UCA_GET_UCLARI = [
     const ekranlar = new Map(ekranlariListele(db, projeId).map((e) => [e.id, e]));
     /** @type {Map<string, ReturnType<typeof ezilebilirAlanlar>>} */
     const alanOnbellegi = new Map();
+    /** @type {Map<string, any>} */
+    const modelOnbellegi = new Map();
     const senaryolar = db.tumu('SELECT id FROM senaryolar WHERE proje_id = ? ORDER BY baslik', [projeId])
       .map((x) => senaryoGetir(db, String(x.id)))
       .filter((s) => s && s.ekranId && ekranlar.has(s.ekranId) && modelSenaryosuMu(s.icerik))
       .map((s0) => {
         const s = /** @type {NonNullable<ReturnType<typeof senaryoGetir>>} */ (s0);
         const anahtar = `${s.ekranId}\u0000${senaryoAkisi(s.icerik) ?? ''}`;
-        if (!alanOnbellegi.has(anahtar)) { const mb = senaryoModeli(db, s); alanOnbellegi.set(anahtar, mb ? ezilebilirAlanlar(mb) : []); }
+        if (!alanOnbellegi.has(anahtar)) { const mb = senaryoModeli(db, s); modelOnbellegi.set(anahtar, mb); alanOnbellegi.set(anahtar, mb ? ezilebilirAlanlar(mb) : []); }
         const e = ekranlar.get(String(s.ekranId));
-        return { id: s.id, baslik: s.baslik, ekranId: s.ekranId, ekranAd: e?.ad ?? '', ekranEtkin: e?.durum === 'etkin', ortamIdleri: senaryoOrtamlari(s.icerik), alanlar: alanOnbellegi.get(anahtar) };
+        const mb = modelOnbellegi.get(anahtar);
+        // ortakBloklar: ekran adımı bu senaryonun "dahil" seçimleriyle koşar (tasarımda bilgi olarak gösterilir).
+        return {
+          id: s.id, baslik: s.baslik, ekranId: s.ekranId, ekranAd: e?.ad ?? '', ekranEtkin: e?.durum === 'etkin', ortamIdleri: senaryoOrtamlari(s.icerik), alanlar: alanOnbellegi.get(anahtar),
+          ortakBloklar: mb ? ortakBloklari(mb, s.icerik) : []
+        };
       });
     return { senaryolar };
   }],

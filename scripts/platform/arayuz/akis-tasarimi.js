@@ -88,6 +88,50 @@ function korunanSilinen(etki) {
 const MESAJ_GRUBU_EN_COK = 5;
 
 /**
+ * Ortak akış bloğunun çalışma seçiminin okunuşu (blok rozeti ve onay pencereleri): "her senaryoda çalışır" ya da
+ * "isteğe bağlı, yeni senaryolarda dahil (değil)".
+ * @param {{ istegeBagli?: boolean; dahilVarsayilan?: boolean }} b
+ */
+export function ortakSecimMetni(b) {
+  return b.istegeBagli ? `isteğe bağlı, yeni senaryolarda ${b.dahilVarsayilan ? 'dahil' : 'dahil değil'}` : 'her senaryoda çalışır';
+}
+
+/** Onay penceresi satırları: bloklardaki her ortak akışın seçimi ("“Ad”: isteğe bağlı, yeni senaryolarda dahil değil"). */
+export function ortakSecimSatirlari(bloklar) {
+  return (Array.isArray(bloklar) ? bloklar : []).filter((b) => b && b.tur === 'ortak').map((b) => `“${b.ad || 'Ortak akış'}”: ${ortakSecimMetni(b)}`);
+}
+
+let ortakSecimSayaci = 0;
+/**
+ * Ortak akışın çalışma seçimi (akış diyagramında blok ve "Ekranlara ekle" penceresi): "Her senaryoda çalışır" / "İsteğe bağlı
+ * (senaryoda seçilir)"; isteğe bağlıysa "Yeni senaryolarda: dahil değil / dahil". durum yerinde değişir, sonra degisti() çağrılır.
+ * @param {{ istegeBagli?: boolean; dahilVarsayilan?: boolean }} durum @param {() => void} degisti @param {string} [ad] erişilebilir ad
+ */
+export function ortakCalismaSecimi(durum, degisti, ad = 'Ortak akış') {
+  const no = ++ortakSecimSayaci;
+  const radyo = (grup, deger, secili, metin, aciklama) => {
+    const girdi = h('input', { type: 'radio', name: `ortak-${grup}-${no}`, value: deger, checked: secili });
+    return { girdi, el: h('label', { class: 'ortak-secenek' }, girdi, h('span', {}, h('b', {}, metin), aciklama ? h('small', { class: 'soluk' }, aciklama) : null)) };
+  };
+  const her = radyo('kip', 'her', !durum.istegeBagli, 'Her senaryoda çalışır', 'Bu akışı kullanan bütün senaryolarda koşar.');
+  const secmeli = radyo('kip', 'istege', Boolean(durum.istegeBagli), 'İsteğe bağlı (senaryoda seçilir)', 'Yalnız senaryoda “… dahil” anahtarı açıksa koşar.');
+  const hayir = radyo('dahil', 'hayir', !durum.dahilVarsayilan, 'Dahil değil', null);
+  const evet = radyo('dahil', 'evet', Boolean(durum.dahilVarsayilan), 'Dahil', null);
+  const varsayilanAlani = h('fieldset', { class: 'ortak-varsayilan', hidden: !durum.istegeBagli },
+    h('legend', {}, 'Yeni senaryolarda'), h('div', { class: 'ortak-secenekler yatay' }, hayir.el, evet.el),
+    h('small', { class: 'soluk' }, 'Kayıtlı senaryolar değişmez; seçimleri senaryo formundaki anahtarda durur.'));
+  const guncelle = () => {
+    durum.istegeBagli = secmeli.girdi.checked;
+    if (durum.istegeBagli && evet.girdi.checked) durum.dahilVarsayilan = true; else delete durum.dahilVarsayilan;
+    varsayilanAlani.hidden = !durum.istegeBagli;
+    degisti();
+  };
+  for (const x of [her, secmeli, hayir, evet]) x.girdi.addEventListener('change', guncelle);
+  return h('fieldset', { class: 'ortak-calisma-secimi', 'aria-label': `${ad}: ne zaman çalışır` },
+    h('legend', {}, 'Ne zaman çalışır?'), h('div', { class: 'ortak-secenekler' }, her.el, secmeli.el), varsayilanAlani);
+}
+
+/**
  * @param {HTMLElement} icerik
  * @param {{ kaynak?: 'kayit' | 'ekran'; isId?: string; proje: { id: string; ad: string }; ust: HTMLElement | null; onizle?: () => Promise<void>;
  *   ekranId?: string; akisId?: string | null; kopya?: string | null; ad?: string; bitti?: (akisId: string) => void; vazgec?: () => void }} s
@@ -176,6 +220,8 @@ export async function akisTasarimi(icerik, s) {
     }, 600);
   };
   const degisti = () => { hatalar = new Map(); ciz(); sakla(); };
+  /** Onay penceresinde ortak akış bloklarının çalışma seçimi (ör. "Ortak akış: “Çıkış”: isteğe bağlı, yeni senaryolarda dahil değil. "). */
+  const ortakOzeti = () => { const l = ortakSecimSatirlari(bloklar); return l.length ? `Ortak akış${l.length > 1 ? 'lar' : ''}: ${l.join('; ')}. ` : ''; };
 
   // ---- Blok işlemleri -------------------------------------------------------------------------
   const alanGrubu = (anahtar) => bloklar.findIndex((b) => b.tur === 'alanlar' && b.alanlar.includes(anahtar));
@@ -718,12 +764,17 @@ export async function akisTasarimi(icerik, s) {
         b.dosya = secim.value;
         degisti();
       });
-      const kutu = h('input', { type: 'checkbox', checked: b.istegeBagli });
-      kutu.addEventListener('change', () => { b.istegeBagli = kutu.checked; degisti(); });
+      // Çalışma seçimi: her senaryoda / isteğe bağlı (+ yeni senaryolarda dahil mi). Yeniden çizimde odak seçili düğmede kalır.
+      const calisma = ortakCalismaSecimi(b, () => {
+        const deger = document.activeElement instanceof HTMLInputElement ? document.activeElement.value : '';
+        degisti();
+        const x = deger ? akis.querySelector(`[data-blok="${i}"] .ortak-calisma-secimi input[value="${deger}"]`) : null;
+        if (x) x.focus();
+      }, b.ad || 'Ortak akış');
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Ortak akış'), secim),
         o ? h('ol', { class: 'ortak-akis-adimlari soluk kucuk' }, o.adimlar.map((a) => h('li', {}, a))) : h('p', { class: 'hata-metni kucuk' }, 'Bu ortak akış projede bulunamadı.'),
-        h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda koşulmaz (senaryoda seçilir)'),
+        calisma,
         h('p', { class: 'soluk kucuk' }, `Adımları ortak akışın kendi yerinde tanımlıdır; koşuda buraya açılır (hep son sürümü).${o && o.yalnizTest ? ' Yalnızca test ortamında koşar; canlı ortamda atlanır.' : ''}`)
       ];
     }
@@ -790,7 +841,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
       b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,
-      b.tur === 'ortak' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
+      b.tur === 'ortak' ? rozet(b.istegeBagli ? 'isteğe bağlı' : 'her zaman', b.istegeBagli ? 'uyari' : 'basari', { title: ortakSecimMetni(b), 'data-ortak-durumu': b.istegeBagli ? 'istege-bagli' : 'her-zaman' }) : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.yalnizTest ? rozet('yalnızca test', 'uyari') : null,
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,
       b.tur === 'mesaj' && !b.uyari && mesajGrubu(i)[2].length > 1 ? rozet(`veya ${mesajGrubu(i)[2].indexOf(i) + 1}/${mesajGrubu(i)[2].length}`, 'vurgu') : null,
@@ -980,7 +1031,7 @@ export async function akisTasarimi(icerik, s) {
         const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: ortakKayit ? `“${veri.ekran.ad}” ortak akışı bu kayıtla güncellensin mi?` : on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
-          metin: silinen.metin + (ekr
+          metin: silinen.metin + ortakOzeti() + (ekr
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
           liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))], dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari',
@@ -1008,7 +1059,7 @@ export async function akisTasarimi(icerik, s) {
         const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: on.etki.yeni ? `“${ad}” akışı oluşturulsun mu?` : `“${ad}” akışı kaydedilsin mi?`,
-          metin: silinen.metin + (ekr
+          metin: silinen.metin + ortakOzeti() + (ekr
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
           liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))],

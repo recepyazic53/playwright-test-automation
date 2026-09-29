@@ -364,7 +364,10 @@ export function bloklariAyikla(ham) {
       }
       bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(Object.keys(tuslar).length ? { tuslar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...(b.tekrarDenenebilir === true ? { tekrarDenenebilir: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
-    else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
+    else if (b.tur === 'ortak') {
+      // dahilVarsayilan (yalnız isteğe bağlıyken): yeni senaryolarda "“ad” dahil" işaretli başlar.
+      bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true, ...(b.istegeBagli === true && b.dahilVarsayilan === true ? { dahilVarsayilan: true } : {}) });
+    }
     else if (b.tur === 'aksiyon') {
       bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.gorunurse === true ? { gorunurse: true } : {}), ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...(b.tekrarDenenebilir === true ? { tekrarDenenebilir: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'korunan') {
@@ -542,7 +545,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       adlar.add(ad);
       sureyiBirak();
       // Ortak akış kendi adımıdır: önceki adım kapanır, sonraki alan grubu / aksiyon yeni adım başlatır.
-      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], ortakAkis: { dosya: b.dosya, istegeBagli: b.istegeBagli } });
+      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], ortakAkis: { dosya: b.dosya, istegeBagli: b.istegeBagli, ...(b.dahilVarsayilan === true ? { dahilVarsayilan: true } : {}) } });
       cur = null;
       kapali = false;
       bekleyen = false;

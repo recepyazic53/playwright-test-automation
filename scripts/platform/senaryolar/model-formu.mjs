@@ -265,14 +265,19 @@ export function aramaEslesiyorMu(arama, ...metinler) {
 
 /**
  * Adlandırılmış koşul "senaryo ayarı X true" mu? (ör. { senaryoAyari: "odemeAdimiDahil", esit: true })
- * Öyleyse ayarın alan kimliğini döner: o koşula bağlı adımlar isteğe bağlıdır ("adım kapsamı").
+ * Öyleyse ayarın alan kimliğini döner: o koşula bağlı adımlar isteğe bağlıdır ("adım kapsamı"). Açılmış ortak akış adımında
+ * bloğun "dahil" ayarı adımın kendi koşuluyla "ve" içinde gelir ({ ve: [{ senaryoAyari, esit: true }, <kendi koşulu>] }); ayar
+ * kapalıysa adım yine koşulmaz, bu yüzden o adım da aynı ayarın kapsamındadır ("“<blok>” dahil" anahtarı her adımda görünür).
  */
 function ayarKosulu(model, gorunurluk) {
   if (!gorunurluk) return null;
   const ifade = typeof gorunurluk.kosul === 'string'
     ? model.kosullar && model.kosullar[gorunurluk.kosul] && model.kosullar[gorunurluk.kosul].ifade
     : gorunurluk.ifade;
-  return nesneMi(ifade) && typeof ifade.senaryoAyari === 'string' && ifade.esit === true ? ifade.senaryoAyari : null;
+  const ayarMi = (x) => nesneMi(x) && typeof x.senaryoAyari === 'string' && x.esit === true;
+  if (ayarMi(ifade)) return ifade.senaryoAyari;
+  const ilk = nesneMi(ifade) && Array.isArray(ifade.ve) ? ifade.ve.find(ayarMi) : undefined;
+  return ilk ? ilk.senaryoAyari : null;
 }
 
 /** Görünürlüğün ifadesi (adlandırılmış koşul çözülür). @param {any} model @param {any} gorunurluk */
@@ -436,7 +441,12 @@ export function formSemasiOlustur(model, altModeller = {}) {
     // kosul: adımın çözülmüş görünürlük ifadesi (ör. ortak akış adımı: "ödeme dahil" ve "ödeme şekli = kart"); beklenen
     // sonuç rozeti, senaryoda sağlanmayan koşullu adımı saymaz.
     const kosul = gorunurlukIfadesi(model, adim.gorunurluk);
-    return { id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, ayar: ayar && kapsamAyarlari.has(ayar) ? ayar : null, ...(nesneMi(kosul) ? { kosul: kopya(kosul) } : {}), bolumler };
+    // ortakAkis: ortak akış adımının ortak akış adı (formda "her senaryoda çalışır" / "“…” dahil" bilgisi için).
+    return {
+      id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, ayar: ayar && kapsamAyarlari.has(ayar) ? ayar : null,
+      ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkis: adim.ortakAkisAdi } : nesneMi(adim.ortakAkis) ? { ortakAkis: String(adim.baslik || adim.id) } : {}),
+      ...(nesneMi(kosul) ? { kosul: kopya(kosul) } : {}), bolumler
+    };
   });
 
   // Koşullardaki model alan kimliği → senaryo anahtarı (+ varsayılan değer): adım koşullarını senaryo verisiyle değerlendirmek için.
@@ -497,7 +507,12 @@ export function formSemasiOlustur(model, altModeller = {}) {
     .map((a) => alanCevir(a, { adimId: null, bolumId: null }, altModeller)).filter(Boolean);
   const adimKapsami = [...kapsam].map(([ayar, liste]) => {
     const a = sdAlani(ayar);
-    return { ayar: senaryoAnahtarlari(a)[0] || ayar, alanId: ayar, etiket: etiketi(a), adimlar: liste, zorunlu: a.zorunlu === true };
+    // varsayilanDahil: yeni senaryoda anahtarın başlangıç değeri (ayar alanının varsayilan.deger; akış diyagramında "Yeni
+    // senaryolarda"). Kayıtlı senaryoda değer yoksa koşuda dahil DEĞİLDİR (varsayılan yalnız yeni senaryo formunu başlatır).
+    return {
+      ayar: senaryoAnahtarlari(a)[0] || ayar, alanId: ayar, etiket: etiketi(a), adimlar: liste, zorunlu: a.zorunlu === true,
+      varsayilanDahil: nesneMi(a.varsayilan) && a.varsayilan.deger === true
+    };
   });
   return {
     modelId: model.id || null, modelAdi: model.ad || null,
@@ -537,7 +552,12 @@ function adimKosuluSaglaniyorMu(ifade, veri, alanAnahtarlari) {
     if (Array.isArray(ifade.icinde)) return ifade.icinde.includes(d);
     return d === ifade.esit;
   }
-  if (typeof ifade.senaryoAyari === 'string') return (deger(ifade.senaryoAyari) === true) === (ifade.esit === true);
+  // Senaryo ayarı (ör. "“…” dahil"): kayıttaki değer; yoksa işaretsiz (koşucu gibi — ayarın varsayılanı yalnız yeni senaryo
+  // formunu başlatır).
+  if (typeof ifade.senaryoAyari === 'string') {
+    const t = alanAnahtarlari[ifade.senaryoAyari];
+    return (veri[t ? t.anahtar : ifade.senaryoAyari] === true) === (ifade.esit === true);
+  }
   return null;
 }
 
@@ -606,8 +626,10 @@ const secimMetni = (d) => (nesneMi(d) ? (d.deger === undefined || d.deger === nu
  *  - alt model ezme: "<anahtar>#ozel" (boolean), "<anahtar>.<alt anahtar>"
  *  - adım kapsamı: ayar anahtarı → boolean; beklenen sonuç: "<anahtar>.tip|adim|mesaj"; başlık
  */
-export function formDegerleriniKur(sema, veri = {}) {
+export function formDegerleriniKur(sema, veri = {}, secenekler = {}) {
   const v = nesneMi(veri) ? veri : {};
+  // Yeni senaryo (secenekler.yeni): isteğe bağlı blokların anahtarı modeldeki "Yeni senaryolarda" seçimiyle başlar.
+  const yeni = nesneMi(secenekler) && secenekler.yeni === true;
   /** @type {Record<string, unknown>} */
   const d = { [sema.baslik]: typeof v[sema.baslik] === 'string' ? v[sema.baslik] : '' };
   for (const alan of tumFormAlanlari(sema)) {
@@ -637,7 +659,7 @@ export function formDegerleriniKur(sema, veri = {}) {
       d[alan.anahtar] = typeof v[alan.anahtar] === 'string' ? v[alan.anahtar] : secimMetni(v[alan.anahtar]);
     }
   }
-  for (const k of sema.adimKapsami) d[k.ayar] = v[k.ayar] === true;
+  for (const k of sema.adimKapsami) d[k.ayar] = v[k.ayar] === undefined && yeni ? k.varsayilanDahil === true : v[k.ayar] === true;
   if (sema.beklenenSonuc) {
     const bs = sema.beklenenSonuc;
     const kayit = nesneMi(v[bs.anahtar]) ? v[bs.anahtar] : {};
