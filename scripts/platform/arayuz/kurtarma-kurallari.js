@@ -1,4 +1,4 @@
-// Ayarlar > Proje ve ortamlar > "Kurtarma kuralları" (proje düzeyinde; sunucu: ayarlar/kurtarma-kurallari.mjs). Koşu sırasında bilinen
+// Ayarlar > "Kurtarma kuralları" (#/ayarlar/kurtarma; eskiden Proje ve ortamlar sayfasının dibindeydi) (proje düzeyinde; sunucu: ayarlar/kurtarma-kurallari.mjs). Koşu sırasında bilinen
 // geçici bir sorun görülünce ne yapılacağını kullanıcı tanımlar: Tür (Ekran / Servis) → koşul → yapılacak → (ekranda) sonra; kapsam
 // (ekranlar / servis ve metotlar, ortamlar: tümü ya da seçili). Kodda hazır kural yoktur; yalnız bugünkü "Yetki hatasında (401 / 403)
 // token'ı yenile, bir kez tekrar dene" davranışı silinemeyen ama kapatılabilen satır olarak görünür. Her satırda "son 7 günde N kez".
@@ -43,27 +43,33 @@ function ozet(k, secenekler) {
   return { metin: `${kosul} → ${yap}`, kapsam: kapsam.join(' · '), suzgec: k.suzgec ? `yalnız ${k.suzgec.parametre} = ${k.suzgec.deger} iken` : '' };
 }
 
-/** @param {{ id: string; ad: string }} proje @returns {HTMLElement} */
-export function kurtarmaKurallariBolumu(proje) {
+/**
+ * @param {{ id: string; ad: string }} proje
+ * @param {{ sayfa?: boolean; yeniKural?: boolean }} [secenek] sayfa: kendi Ayarlar bölümünde (sayfa başlığı "Kurtarma kuralları"
+ *   olduğundan liste başlığı "Kurallar" olur); yeniKural: yüklenince "Kural ekle" penceresi açılır.
+ * @returns {HTMLElement}
+ */
+export function kurtarmaKurallariBolumu(proje, secenek = {}) {
   const kap = h('section', { class: 'kurtarma-kurallari', 'aria-labelledby': 'kurtarma-kurallari-basligi' }, iskelet('liste'));
-  yukle(kap, proje).catch((e) => { if (!e || e.durum !== 423) yerlestir(kap, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message || String(e))); });
+  yukle(kap, proje, secenek).catch((e) => { if (!e || e.durum !== 423) yerlestir(kap, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message || String(e))); });
   return kap;
 }
 
-async function yukle(kap, proje) {
+async function yukle(kap, proje, secenek = {}) {
   const v = await api(`/platform/kurtarma-kurallari?projeId=${encodeURIComponent(proje.id)}`);
-  const yenile = () => yukle(kap, proje).catch((e) => bildir(e.message, 'hata'));
+  const yenile = () => yukle(kap, proje, { sayfa: secenek.sayfa }).catch((e) => bildir(e.message, 'hata'));
   const kullanici = v.kurallar.filter((k) => !k.hazir);
   const ekle = h('button', { type: 'button', class: 'birincil' }, ikon('arti'), 'Kural ekle');
   ekle.addEventListener('click', () => kuralFormu(proje, v.secenekler, null, yenile));
   const satirlar = v.kurallar.map((k) => kuralSatiri(proje, v, k, yenile));
   yerlestir(kap,
-    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'kurtarma-kurallari-basligi' }, 'Kurtarma kuralları', rozet(String(kullanici.length))), ekle),
+    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'kurtarma-kurallari-basligi' }, secenek.sayfa ? 'Kurallar' : 'Kurtarma kuralları', rozet(String(kullanici.length))), ekle),
     h('p', { class: 'soluk kucuk kurtarma-aciklama' },
       'Koşuda bilinen geçici bir sorun görülünce ne yapılacağını siz tanımlarsınız (ör. oturum bitti metni → girişi yenile, HTTP 503 → bekleyip tekrar gönder). ',
       'Kural sorunu gizlemez: kurtarılan test başarılı sayılır ama sonuçta notu ve burada sayısı görünür. Tekrar gönderme / tekrar deneme yalnız "tekrar denenebilir" işaretli servis metodunda (servis ayarları) ve ekran adımında (akış tasarımı) yapılır; kayıt oluşturan adımları işaretlemeyin.'),
     h('ul', { class: 'kayit-listesi kurtarma-listesi', 'aria-label': 'Kurtarma kuralları' }, satirlar),
     kullanici.length ? null : h('p', { class: 'soluk kucuk', role: 'status' }, 'Henüz sizin tanımladığınız kural yok.'));
+  if (secenek.yeniKural) ekle.click();
 }
 
 function kuralSatiri(proje, v, k, yenile) {

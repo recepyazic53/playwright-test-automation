@@ -335,14 +335,14 @@ async function hesapla(vt, projeId, x) {
     }
   }, undefined);
 
-  // 5) Çalışan kurtarma kuralları (Ayarlar > Proje ve ortamlar > Kurtarma kuralları): kurtarılan sonuç başarılı sayılır ama kuralın
+  // 5) Çalışan kurtarma kuralları (Ayarlar > Kurtarma kuralları): kurtarılan sonuç başarılı sayılır ama kuralın
   //    ne kadar çalıştığı burada görünür kalır (sorun gizlenmez). Yalnız kural adı ve sayılar.
   dene('Kurtarma kuralları', () => {
     if (!donemBilgisi) return;
     for (const k of calisanKurallar(vt, projeId, { bas: donemBilgisi.bas, bit: donemBilgisi.bit })) {
       const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine başarısız oldu` : '',
         k.tekrarlanmadi ? `${k.tekrarlanmadi} tekrar denenmedi` : ''].filter(Boolean);
-      dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/proje' });
+      dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/kurtarma' });
     }
   }, undefined);
 
