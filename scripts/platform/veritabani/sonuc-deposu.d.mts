@@ -50,7 +50,10 @@ export interface KartOzeti extends Sayilar { kosuId?: string; z?: number; kapsam
 export declare const SONUC_DURUMLARI: readonly SonucDurumu[];
 export declare const KOSU_DURUMLARI: readonly string[];
 export declare const MEDYA_TURLERI: readonly string[];
-export declare function kosuKaydet(vt: Veritabani, girdi: { id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null }): string;
+export declare function kosuKaydet(vt: Veritabani, girdi: { id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null;
+  uygulamaSurumu?: string | null }): string;
+/** Koşu özetindeki uygulama sürümü etiketi (ozet_json.uygulamaSurumu; yoksa null). */
+export declare function uygulamaSurumuOku(ozetJson: unknown): string | null;
 export declare function kosuyuBitir(vt: Veritabani, id: string, girdi: { durum: string; bitis?: string }): void;
 export declare function sonucKaydet(vt: Veritabani, g: SonucGirdisi): { id: string; silinecekMedyaDosyalari: string[] };
 export declare function kosulariHesapIcinOku(vt: Veritabani, projeId: string): Array<{

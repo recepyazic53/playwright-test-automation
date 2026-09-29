@@ -11,7 +11,7 @@ export declare function birlesikOzet(simdi: ReadonlyArray<KismiSayilar>, onceki:
   adet: number; oncekiAdet: number | null; fark: number | null;
 };
 export declare const ROZET_SIRASI: Readonly<{ kritik: number; dikkat: number; saglikli: number }>;
-export declare function saglikSiralamasi<T extends { ad: string; basari: number | null; p1: number; kotulesen: number; acikSorun: number }>(
+export declare function saglikSiralamasi<T extends { ad: string; basari: number | null; p1: number; kotulesen: number; acikSorun: number; kritikKaldi?: boolean }>(
   ogeler: ReadonlyArray<T>, esikler: { yesil: number; sari: number }
 ): Array<T & { rozet: Rozet; sira: number }>;
 export declare const KOTULESEN_DURUMLAR: ReadonlyArray<string>;

@@ -29,6 +29,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; açtığınız izinler kasada saklanır.' },
   { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
+  { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'PDF raporlarının kullandığı kararlarınız: ekip listesi ve ekran / servis → ekip eşlemesi (sahip önerisi), kritik işaretli ekran, servis ve akışlar (öncelik ve durum rozeti) ve süre eşikleri (ekran, servis, metot). Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır.' },
   { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları.' }
 ];
 
@@ -58,7 +59,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
     entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
-    'test-verisi': testVerisi, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari
+    'test-verisi': testVerisi, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -229,10 +230,13 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
     const hiz = kosuHiziAlanlari(ortam, genelAyarlar);
+    // Uygulama sürümü (isteğe bağlı; PDF rapor A4): bu ortamdaki koşulara etiket olarak yazılır. Nöbetçi sürümü hiçbir adrese sormaz.
+    const oSurum = h('input', { type: 'text', autocomplete: 'off', maxlength: '60', placeholder: 'Ör. 2.4.1', value: ortam && ortam.uygulamaSurumu ? ortam.uygulamaSurumu : '' });
     const form = formPaneli(ortam ? `Ortamı düzenle: ${ortam.ad}` : 'Yeni ortam', mesaj.kutu,
       alan('Ortam adı', oAd, { zorunlu: true }), alan('Adres (link)', oAdres, { zorunlu: true }),
       h('label', { class: 'secenek', for: oVarsayilan.id }, oVarsayilan, 'Varsayılan ortam (koşular bu ortamda başlar)'),
       riskAlani,
+      alan('Uygulama sürümü (isteğe bağlı)', oSurum, { yardim: 'Test edilen uygulamanın bu ortamdaki sürümü. Koşulara etiket olarak yazılır; raporlar sürüme göre başarıyı ve sorunun hangi sürümde başladığını gösterir. Koşu başlatılırken değiştirilebilir. Nöbetçi sürümü kendiliğinden sormaz.' }),
       hiz.bolum,
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
@@ -257,7 +261,8 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
       }
       try {
         await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ortam/kaydet', {
-          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked, riskli, kosuHizi: hiz.deger(), ...(onay ? { onay: true } : {}) }
+          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked, riskli, kosuHizi: hiz.deger(),
+            uygulamaSurumu: oSurum.value.trim(), ...(onay ? { onay: true } : {}) }
         }));
         bildir('Ortam kaydedildi.');
         yenile();
@@ -1063,6 +1068,130 @@ async function guvenlik(govde, baglam) {
     yasakForm,
     maskeleme,
     form);
+}
+
+// ---------------------------------------------------------------------------------------
+// Ayarlar > Raporlar (PDF rapor A4): ekip listesi, ekran / servis → ekip eşlemesi, kritik işareti (ekran, servis, akış) ve süre
+// eşikleri (ekran, servis, servis metodu). Hepsi isteğe bağlıdır ve proje başınadır; her değişiklik hemen kaydedilir (kasada).
+// Uygulama sürümü burada değil: ortam ayarında (Proje ve ortamlar) ya da koşu başlatılırken girilir.
+// ---------------------------------------------------------------------------------------
+
+async function raporVerileriBolumu(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const v = await api(`/platform/rapor-verileri?projeId=${encodeURIComponent(proje.id)}`);
+  const kaydet = async (ogeTuru, ogeId, degisiklik, durumAlani) => {
+    durumAlani.textContent = 'Kaydediliyor…';
+    try {
+      await api('/platform/rapor-verileri/oge/kaydet', { govde: { projeId: proje.id, ogeTuru, ogeId, ...degisiklik } });
+      durumAlani.textContent = 'Kaydedildi';
+      return true;
+    } catch (hata) {
+      durumAlani.textContent = '';
+      bildir(hata.message, 'hata');
+      return false;
+    }
+  };
+  /** Eşik girdisi (ms; boş = eşik yok). */
+  const esikGirdisi = (deger, etiket) => h('input', {
+    type: 'number', min: '1', max: '3600000', step: '1', inputmode: 'numeric', placeholder: 'yok', value: deger === null || deger === undefined ? '' : String(deger),
+    'aria-label': etiket, class: 'esik-girdisi'
+  });
+  const esikDegeri = (girdi) => (girdi.value.trim() === '' ? null : Number(girdi.value));
+  const esikGecerli = (girdi) => {
+    const d = esikDegeri(girdi);
+    const tamam = d === null || (Number.isInteger(d) && d >= 1 && d <= 3600000);
+    girdi.setAttribute('aria-invalid', tamam ? 'false' : 'true');
+    if (!tamam) bildir('Süre eşiği 1–3.600.000 ms arasında tam sayı olmalı (boş = eşik yok).', 'hata');
+    return tamam;
+  };
+  const ekipSecimi = (secili, etiket) => h('select', { 'aria-label': etiket, class: 'ekip-secimi' },
+    h('option', { value: '' }, 'Ekip yok (sınıfın varsayılanı)'),
+    v.ekipler.map((e) => h('option', { value: e.id, selected: e.id === secili }, e.ad)));
+
+  /** Tek öğe satırı: kritik anahtarı, (ekran / servis) ekip ve süre eşiği, (servis) metot eşikleri. */
+  const ogeSatiri = (tur, x, ek = {}) => {
+    const durumAlani = h('span', { class: 'soluk kucuk rapor-ogesi-durumu', role: 'status' });
+    const kritik = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', id: yeniKimlik('kritik'), checked: x.kritik, 'aria-label': `${x.ad}: kritik` });
+    kritik.addEventListener('change', async () => { if (!(await kaydet(tur, x.id, { kritik: kritik.checked }, durumAlani))) kritik.checked = !kritik.checked; });
+    const parcalar = [h('label', { class: 'onay-satiri rapor-kritik', for: kritik.id }, kritik, h('span', {}, 'Kritik'))];
+    if (tur !== 'akis') {
+      const ekip = ekipSecimi(x.ekipId, `${x.ad}: ekip`);
+      ekip.addEventListener('change', () => kaydet(tur, x.id, { ekipId: ekip.value || null }, durumAlani));
+      const esik = esikGirdisi(x.sureEsigiMs, `${x.ad}: süre eşiği (ms)`);
+      esik.addEventListener('change', () => { if (esikGecerli(esik)) kaydet(tur, x.id, { sureEsigiMs: esikDegeri(esik) }, durumAlani); });
+      parcalar.push(h('label', { class: 'rapor-alan' }, h('span', { class: 'soluk kucuk' }, 'Ekip'), ekip),
+        h('label', { class: 'rapor-alan' }, h('span', { class: 'soluk kucuk' }, tur === 'ekran' ? 'Test süresi eşiği (ms)' : 'Çağrı süresi eşiği (ms)'), esik));
+    }
+    let metotlar = null;
+    if (tur === 'servis' && x.metotlar.length) {
+      const girdiler = x.metotlar.map((m) => ({ m, g: esikGirdisi(x.metotEsikleri[m] ?? null, `${x.ad} › ${m}: süre eşiği (ms)`) }));
+      const tanimli = girdiler.filter((y) => y.g.value !== '').length;
+      for (const y of girdiler) {
+        y.g.addEventListener('change', () => {
+          if (!girdiler.every((z) => esikGecerli(z.g))) return;
+          kaydet('servis', x.id, { metotEsikleri: Object.fromEntries(girdiler.filter((z) => z.g.value.trim() !== '').map((z) => [z.m, Number(z.g.value)])) }, durumAlani);
+        });
+      }
+      metotlar = h('details', { class: 'rapor-metotlari' },
+        h('summary', {}, `Metot eşikleri (${tanimli} / ${x.metotlar.length})`),
+        h('p', { class: 'soluk kucuk' }, 'Metodun eşiği yoksa servisin eşiği kullanılır.'),
+        h('ul', { class: 'rapor-metot-listesi' }, girdiler.map((y) => h('li', {}, h('span', { class: 'mono' }, y.m), y.g))));
+    }
+    return h('li', { class: 'rapor-ogesi', 'data-oge': `${tur}:${x.id}` },
+      h('div', { class: 'rapor-ogesi-adi' }, h('strong', {}, x.ad), ek.rozet ? [' ', h('span', { class: 'rozet' }, ek.rozet)] : null, durumAlani),
+      h('div', { class: 'rapor-ogesi-alanlari' }, parcalar), metotlar);
+  };
+
+  // Ekipler
+  const ekipAdi = h('input', { type: 'text', maxlength: '80', autocomplete: 'off', placeholder: 'Ör. ekip adı' });
+  const ekipEkle = h('button', { type: 'submit', class: 'birincil' }, ikon('arti'), 'Ekip ekle');
+  const ekipMesaj = mesajKutusu();
+  const ekipFormu = h('form', { class: 'satir-formu ekip-formu', novalidate: true, 'aria-label': 'Ekip ekle' }, alan('Ekip adı', ekipAdi), ekipEkle);
+  ekipFormu.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    alanHatasi(ekipAdi, '');
+    if (!ekipAdi.value.trim()) { alanHatasi(ekipAdi, 'Ekip adı boş olamaz.'); ekipAdi.focus(); return; }
+    try {
+      await mesgulIken(ekipEkle, 'Ekleniyor…', () => api('/platform/rapor-verileri/ekip/kaydet', { govde: { projeId: proje.id, ad: ekipAdi.value } }));
+      bildir('Ekip eklendi.');
+      yenile();
+    } catch (hata) { ekipMesaj.goster(hata.message); }
+  });
+  const ekipFormAlani = h('div', {});
+  const ekipAdlandir = (e) => {
+    const ad = h('input', { type: 'text', maxlength: '80', autocomplete: 'off', value: e.ad });
+    const mesaj = mesajKutusu();
+    const kaydetDugmesi = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(`Ekibi yeniden adlandır: ${e.ad}`, mesaj.kutu, alan('Ekip adı', ad, { zorunlu: true }),
+      h('div', { class: 'dugmeler' }, kaydetDugmesi, h('button', { type: 'button', onclick: () => ekipFormAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      alanHatasi(ad, '');
+      if (!ad.value.trim()) { alanHatasi(ad, 'Ekip adı boş olamaz.'); ad.focus(); return; }
+      try {
+        await mesgulIken(kaydetDugmesi, 'Kaydediliyor…', () => api('/platform/rapor-verileri/ekip/kaydet', { govde: { projeId: proje.id, id: e.id, ad: ad.value } }));
+        bildir('Ekip yeniden adlandırıldı.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(ekipFormAlani, form);
+  };
+  const ekipSatirlari = v.ekipler.map((e) => kayitSatiri(e.ad, null, [
+    duzenleDugmesi(e.ad, () => ekipAdlandir(e)),
+    silDugmesi(e.ad, async () => { await api('/platform/rapor-verileri/ekip/sil', { govde: { projeId: proje.id, id: e.id } }); bildir('Ekip silindi; atandığı öğeler sahipsiz kaldı.'); yenile(); })
+  ], 'kullanici'));
+
+  const liste = (baslik, tur, ogeler, bos, rozetFn = () => null) => [
+    bolumBasligi(baslik, ogeler.length),
+    ogeler.length ? h('ul', { class: 'rapor-ogeleri', 'aria-label': baslik }, ogeler.map((x) => ogeSatiri(tur, x, { rozet: rozetFn(x) }))) : h('p', { class: 'soluk' }, bos)
+  ];
+  yerlestir(govde,
+    h('div', { class: 'not-kutusu bilgi kucuk', role: 'note' },
+      'Bu kararlar yalnız PDF raporlarını etkiler ve hepsi isteğe bağlıdır. Kritik işaretli öğe öncelik puanını artırır; son koşusunda kalırsa raporun durum rozeti Kritik olur. Ekip, aksiyonların "Sahip önerisi"dir (yoksa sınıfın varsayılan ekibi). Süre eşiği aşılırsa (p95 > eşik) raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür. Uygulama sürümü: Proje ve ortamlar > ortam > "Uygulama sürümü" ya da koşu başlatılırken.'),
+    bolumBasligi('Ekipler', v.ekipler.length), ekipMesaj.kutu, ekipFormu, ekipFormAlani, kayitListesi(ekipSatirlari, 'Henüz ekip yok.', 'kullanici'),
+    ...liste('Ekranlar ve ortak akışlar', 'ekran', v.ekranlar, 'Projede ekran yok.', (x) => (x.ortakAkis ? 'Ortak akış' : x.devreDisi ? 'Devre dışı' : null)),
+    ...liste('Servisler', 'servis', v.servisler, 'Projede servis yok.', (x) => String(x.tur || '').toUpperCase() || null),
+    ...liste('Servis akışları ve uçtan uca akışlar', 'akis', v.akislar, 'Projede akış yok.', (x) => x.tur));
 }
 
 // ---------------------------------------------------------------------------------------

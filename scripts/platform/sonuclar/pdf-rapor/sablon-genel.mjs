@@ -2,11 +2,14 @@
 // İskelet tasarımdaki genel rapordur: Tek bakışta → Ele alınması gerekenler → (bağlantılı sorunlar, varsa) → Sorunlar ve
 // eğilimleri (tür sütunlu) → Eğilim (ekran + servis ayrı) → Ekranlar ve ortak akışlar → Servisler → Servis akışları ve uçtan
 // uca akışlar → Zamanlanmış koşular → Kararsız testler + Test verisi sağlığı → Kapsam ve açıklar → Ortamlara göre (birden çok
-// ortam varsa) → Yöntem + gizlilik. Tablolar çoklu raporla aynı bileşenlerdir (sablon-coklu.mjs).
+// ortam varsa) → Yöntem + gizlilik. Tablolar çoklu raporla aynı bileşenlerdir (sablon-coklu.mjs). A4 (rapor verileri; tanımlıysa):
+// "Kritik akış" kartı, Eğilim'den sonra "Uygulama sürümlerine göre", Servisler'in sonunda "Süre eşiği aşımları".
 // Yazım kuralları sablon.mjs ile aynı: e(x) = ad alanları (bilinen gizli değerler maskeli + kaçış), m(x) = serbest metin (tam
 // maskeleme + kaçış). Sayfa JS'siz, dış kaynaksız.
 import { kacis } from '../html-rapor.mjs';
-import { aksiyonTablosu, fark, kart, ortakMeta, renkOran, sorunTablosu, sure, sy, tekBakista, trendGrafigi, yontemKutusu, yz } from './bilesenler.mjs';
+import {
+  aksiyonTablosu, esikTablosu, fark, kart, kritikKarti, ortakMeta, renkOran, sorunTablosu, sure, surumBolumu, sy, tekBakista, trendGrafigi, yontemKutusu, yz
+} from './bilesenler.mjs';
 import { akisTablosu, baglantiliTablo, ekranKiyasTablosu, servisKiyasTablosu } from './sablon-coklu.mjs';
 
 /** @typedef {(x: unknown) => string} Yazici */
@@ -54,6 +57,8 @@ export function genelRapor(v, y) {
       ? `<span class="${tv.kirik ? 'kotu' : 'notr'} fk">${tv.kirik} kırık başvuru</span> <span class="notr">${tv.kaynakliSonuc} test verisi kaynaklı sonuç</span>`
       : '<span class="notr">hesaplanamadı</span>', tv.kirik ? 'orta' : '')
   ];
+  // A4: kritik işaretli öğe / akış varsa "Kritik akış" kartı.
+  if (v.kritik) kartlar.push(kritikKarti(v.kritik, e));
   let govde = tekBakista({ no: ++no, rozet: v.rozet, kartlar, maddeler: v.maddeler, m });
   if (!v.kosuVar) govde += `<p class="not">Bu dönemde projede ekran ya da servis koşusu yok${v.ortam ? ` (ortam: ${e(v.ortam.ad)})` : ''}. Sayılar boştur; dönemi genişletin ya da koşuyu başlatın.</p>`;
 
@@ -74,6 +79,9 @@ export function genelRapor(v, y) {
       baslik: `Servis çağrıları — ${kirilim} başarı (tüm servisler)` });
   }
 
+  // ---- A4: uygulama sürümüne göre başarı (koşular sürüm etiketliyse).
+  govde += surumBolumu(v.surumler, { e, esik, h2 });
+
   // ---- Ekranlar ve ortak akışlar · Servisler.
   govde += h2('Ekranlar ve ortak akışlar');
   govde += et ? ekranKiyasTablosu(et.ogeler, { e, k, esik }) : '<p class="bos">Projede ekran yok.</p>';
@@ -86,6 +94,8 @@ export function genelRapor(v, y) {
       : 'Yavaşlayan metot yok.'}${st.ozet.enYavas ? ` En yüksek p95: ${e(st.ozet.enYavas.metot)} ${kacis(sure(st.ozet.enYavas.p95))}.` : ''} Metot ayrıntısı: servis raporu.</p>`;
     govde += '<div class="lejant"><span>Sıra: önce durum (✗ Kritik → ◆ Dikkat → ✓ Sağlıklı), sonra düşük başarı, P1, kötüleşen sorun. Dönemde koşusu olmayan öğe sondadır.</span></div>';
   } else govde += '<p class="bos">Projede servis yok.</p>';
+  // A4: ekran / servis / metot süre eşiği aşımları (yavaşlayanların yanında).
+  govde += esikTablosu(v.esikAsimlari, { e, k });
 
   // ---- Akışlar.
   govde += `${h2('Servis akışları ve uçtan uca akışlar')}${akisTablosu(c.akislar, { e, k, esik, bos: 'Projede servis akışı ya da uçtan uca akış yok.' })}`;
@@ -107,11 +117,12 @@ export function genelRapor(v, y) {
   govde += yontemKutusu([
     ['Genel rapor', 'Rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm ekranları, ortak akışları, servisleri, servis akışlarını, uçtan uca akışları ve zamanlanmış kuralları kapsar. Ekran ve servis oranları ayrı gösterilir, birbirine eklenmez; durum rozeti daha düşük oranlı tarafa göre verilir. “Akışlar” kartı servis, oturum ve uçtan uca akış koşularından.'],
     ['Zamanlanmış güvenilirlik', 'Tamamlanan tetikleme ÷ takvime göre beklenen tetikleme (sonucun başarısından bağımsız). Beklenen = kuralın takviminden dönem içinde üretilen zamanlar (kural kaydından önceki zamanlar ve devre dışı kurallar hariç). Tamamlanan = “tamamlandı” ya da “başarısız sonuçlu”. Tetikleme geçmişi kural başına son 20 kayıtla sınırlıdır; dönem bu kayıtlardan eskiye uzanıyorsa hesap en eski kayıttan başlar (“kısıtlı”).'],
-    ['Kararsız testler', 'Kararsızlık = geçti↔kaldı değişimi ÷ (koşu − 1); aynı senaryo, aynı ortam, aynı gün ve model sürümündeki koşular. ≥ %20 ve ≥ 5 koşu: kararsız; %5–20 ya da tekrar denemesinde geçen: izlenir.'],
+    ['Kararsız testler', 'Kararsızlık = geçti↔kaldı değişimi ÷ (koşu − 1); aynı senaryo, aynı ortam, aynı model sürümü ve aynı uygulama sürümündeki (sürüm kayıtlı değilse aynı gündeki) koşular. ≥ %20 ve ≥ 5 koşu: kararsız; %5–20 ya da tekrar denemesinde geçen: izlenir.'],
     ['Test verisi sağlığı', 'Test verisi ekranındaki “Veri sağlığı” ile aynı denetimler (kırık başvuru, hiç kullanılmayan tablo, birleştirilebilecek benzer tablo, boş sütun); değer içermez, yalnız tablo / sütun adları. “Test verisi kaynaklı sonuç” = sınıfı test verisi tahmin edilen sorunların başarısız sonuçları.'],
-    ['Sonraki aşama', 'Kritik akış işareti, uygulama sürümü, ekip eşlemesi, metot süre eşiği ve kalıcı tetikleme kaydı henüz yok; bu verilere bağlı bölümler (kritik akış rozeti, sürüm karşılaştırması, ekip bazında aksiyon, eşik aşımı) raporda yer almaz. Model alan kapsamı da sonraki sürümde eklenecek.'],
+    ['Kritik akış, sürüm, ekip, eşik', 'Kritik akış işareti, ekip eşlemesi ve süre eşikleri Ayarlar > Raporlar\'da; uygulama sürümü ortam ayarında ya da koşu başlatılırken girilir ve koşu kaydına yazılır. Tanımlı olanlar raporda kullanılır (kritik akış kartı ve rozet kuralı, sahip önerisi, eşik aşımları, sürüme göre başarı); tanımlı olmayanlarda önceki davranış sürer (ayrıntı: “Rapor verileri”).'],
+    ['Sonraki aşama', 'Kalıcı tetikleme kaydı (zamanlanmış güvenilirlik 20 kayıtla sınırlı kalır), “iki uygulama sürümü arası” karşılaştırma, sorun kararları (bilinen / birleştir / bağlı değil) ve model alan kapsamı henüz yok.'],
     ['Tekil koşular', 'Tek ▷ ve “Seçilenleri çalıştır” koşuları sorunlara girer, başarı oranına girmez.']
-  ]);
+  ], v.raporVerileri);
   return { baslik, alt, meta, govde };
 }
 

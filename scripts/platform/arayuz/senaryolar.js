@@ -653,6 +653,7 @@ function listeGorunumu(icerik, s) {
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
       baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, ...(await ekranKosuBicimi()), veriKosusu: { projeId: proje.id },
+      surumAlani: true,
       // Koşuya o ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
       hesapla: (o) => {
         const tanimli = gorunen.filter((x) => ortamKaydi(x, o.id)?.tanimli);
@@ -672,7 +673,8 @@ function listeGorunumu(icerik, s) {
         : 'Arama ya da filtre etkin: yalnızca listelenenler koşar. Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez.'
     });
     if (!y) return;
-    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, baslik: tam ? `${kapsam} koşusu` : `${kapsam} (kısmi)`, veriKipi: y.veriKipi });
+    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, baslik: tam ? `${kapsam} koşusu` : `${kapsam} (kısmi)`, veriKipi: y.veriKipi,
+      uygulamaSurumu: y.uygulamaSurumu });
   }
 
   /** Toplu Koşuya ekle / çıkar: birden çok ortam varsa hangi ortamda (ya da tüm tanımlı ortamlarda) olduğu sorulur. */

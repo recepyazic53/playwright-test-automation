@@ -17,6 +17,7 @@ import { kartlariHesapla, sayilariTopla, trendHesapla } from '../sonuclar/hesapl
 import { siniflandirmaKurallari } from '../ayarlar/siniflandirma-kurallari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { YAKALAMA_KAYNAKLARI, yakalananMesajlariAyristir, yakalananMetniMaskele } from '../sonuclar/yakalanan-mesajlar.mjs';
+import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
 
 /** @typedef {import('./baglanti.mjs').Veritabani} Veritabani */
 
@@ -52,6 +53,24 @@ const tekrarKaynagiOku = (ozetJson) => {
   } catch {
     return null;
   }
+};
+/**
+ * Koşunun özetindeki uygulama sürümü etiketi (ozet_json.uygulamaSurumu; PDF rapor A4 — koşu başlatılırken girilen ya da ortam ayarındaki
+ * sürüm; şema göçü yok). @param {unknown} ozetJson @returns {string | null}
+ */
+export const uygulamaSurumuOku = (ozetJson) => {
+  try {
+    const o = JSON.parse(String(ozetJson ?? '{}'));
+    return nesneMi(o) ? uygulamaSurumuTemizle(o.uygulamaSurumu) : null;
+  } catch {
+    return null;
+  }
+};
+/** Özet JSON'unun kalıcı ekleri (tekrar bağı, uygulama sürümü). @param {unknown} ozetJson */
+const ozetEkleri = (ozetJson) => {
+  const tekrarKaynagi = tekrarKaynagiOku(ozetJson);
+  const uygulamaSurumu = uygulamaSurumuOku(ozetJson);
+  return { ...(tekrarKaynagi ? { tekrarKaynagi } : {}), ...(uygulamaSurumu ? { uygulamaSurumu } : {}) };
 };
 
 /**
@@ -91,22 +110,27 @@ const veriKosusuOku = (eklerJson) => {
  * Koşuyu oluşturur ya da (aynı kimlikle; ör. platformun her senaryoyu ayrı süreçte koştuğu tam
  * koşu) günceller: tür 'tam' baskındır, başlangıç en erken, kapsam ilk verilen.
  * tekrarKaynagi: başarısızları tekrar çalıştırmada önceki koşunun kimliği ("Tekrar: <önceki koşu>" bağı; özet JSON'unda saklanır).
+ * uygulamaSurumu: test edilen uygulamanın sürümü (koşu başlatılırken girilen ya da ortam ayarındaki; özet JSON'unda saklanır; ilk
+ * verilen kalır).
  * @param {Veritabani} vt
- * @param {{ id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null }} girdi
+ * @param {{ id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null;
+ *   uygulamaSurumu?: string | null }} girdi
  */
 export function kosuKaydet(vt, girdi) {
   const id = kimlik(girdi.id, 'kosuId');
   const tur = girdi.tur === 'tam' ? 'tam' : 'tekil';
   const baslangic = isoZaman(girdi.baslangic) ?? new Date().toISOString();
   const tekrarKaynagi = typeof girdi.tekrarKaynagi === 'string' && KIMLIK.test(girdi.tekrarKaynagi) && girdi.tekrarKaynagi !== id ? girdi.tekrarKaynagi : null;
+  const uygulamaSurumu = uygulamaSurumuTemizle(girdi.uygulamaSurumu);
   return vt.islem(() => {
-    const mevcut = vt.tek('SELECT id, tur, baslangic, kapsam FROM kosular WHERE id = ?', [id]);
+    const mevcut = vt.tek('SELECT id, tur, baslangic, kapsam, ozet_json FROM kosular WHERE id = ?', [id]);
     if (!mevcut) {
       const makine = yerelMakine(vt);
+      const ek = { ...(tekrarKaynagi ? { tekrarKaynagi } : {}), ...(uygulamaSurumu ? { uygulamaSurumu } : {}) };
       vt.calistir(
         `INSERT INTO kosular (id, proje_id, ortam_id, makine_id, tur, durum, baslangic, ozet_json, kapsam, kaynak)
          VALUES (?, ?, ?, ?, ?, 'calisiyor', ?, ?, ?, ?)`,
-        [id, kimlik(girdi.projeId, 'projeId'), girdi.ortamId ?? null, makine.id, tur, baslangic, tekrarKaynagi ? JSON.stringify({ tekrarKaynagi }) : '{}',
+        [id, kimlik(girdi.projeId, 'projeId'), girdi.ortamId ?? null, makine.id, tur, baslangic, Object.keys(ek).length ? JSON.stringify(ek) : '{}',
           tur === 'tam' ? metin(girdi.kapsam, 200) ?? 'Genel' : null, girdi.kaynak ?? 'raporlayici']
       );
       return id;
@@ -116,6 +140,12 @@ export function kosuKaydet(vt, girdi) {
       yeniTur, String(mevcut.baslangic) < baslangic ? mevcut.baslangic : baslangic,
       yeniTur === 'tam' ? (mevcut.kapsam ?? metin(girdi.kapsam, 200) ?? 'Genel') : null, 'calisiyor', id
     ]);
+    // Aynı kimlikle sonradan gelen parça (her senaryo ayrı süreçte): sürüm yalnız henüz yoksa eklenir.
+    if (uygulamaSurumu && !uygulamaSurumuOku(mevcut.ozet_json)) {
+      let o = {};
+      try { const x = JSON.parse(String(mevcut.ozet_json ?? '{}')); o = nesneMi(x) ? x : {}; } catch { o = {}; }
+      vt.calistir('UPDATE kosular SET ozet_json = ? WHERE id = ?', [JSON.stringify({ ...o, uygulamaSurumu }), id]);
+    }
     return id;
   });
 }
@@ -131,9 +161,8 @@ export function kosuyuBitir(vt, id, girdi) {
     const mevcut = vt.tek('SELECT bitis, ozet_json FROM kosular WHERE id = ?', [id]);
     if (!mevcut) return;
     const yeniBitis = mevcut.bitis && String(mevcut.bitis) > bitis ? mevcut.bitis : bitis;
-    const tekrarKaynagi = tekrarKaynagiOku(mevcut.ozet_json);
     vt.calistir('UPDATE kosular SET durum = ?, bitis = ?, ozet_json = ? WHERE id = ?', [
-      girdi.durum, yeniBitis, JSON.stringify({ ...kosuOzetiHesapla(vt, id), ...(tekrarKaynagi ? { tekrarKaynagi } : {}) }), id
+      girdi.durum, yeniBitis, JSON.stringify({ ...kosuOzetiHesapla(vt, id), ...ozetEkleri(mevcut.ozet_json) }), id
     ]);
   });
 }

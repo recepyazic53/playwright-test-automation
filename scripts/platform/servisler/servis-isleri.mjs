@@ -57,7 +57,10 @@ export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
  * TEKRAR: tekrar = { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — yalnız o koşuda kalan çalıştırmalar, o koşudaki satırlarla
  * (senaryoIdleri yok sayılır); kayıtlar "Tekrar:" bağı taşır. Servis ve ortam o koşununkiyle aynı olmalı.
  * @param {Veritabani} vt @param {string} projeId
- * @param {{ servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string } }} girdi
+ * UYGULAMA SÜRÜMÜ: uygulamaSurumu (koşu başlatılırken girilen; isteğe bağlı) her koşu kaydına etiket olarak yazılır; boşsa ortam
+ * ayarındaki sürüm kullanılır (servis-islemleri.mjs; PDF rapor A4).
+ * @param {{ servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string };
+ *   uygulamaSurumu?: string | null }} girdi
  */
 export function servisIsiBaslat(vt, projeId, girdi) {
   temizle();
@@ -129,6 +132,7 @@ export function servisIsiBaslat(vt, projeId, girdi) {
           servisId: servis.id, ortamId: ortam.id, sinyal: kontrol.signal,
           ...(taslak ? { tur: 'dene', taslak: { baslik: taslak.baslik || 'Taslak', icerik: taslak.icerik } } : { tur: 'kosu', senaryoId: satir.senaryoId }),
           ...(satir.veriKosusu ? { veriKosusu: satir.veriKosusu } : {}), ...(tekrar ? { tekrarKaynagi: String(tekrar.kaynakKosuId) } : {}),
+          ...(typeof girdi.uygulamaSurumu === 'string' ? { uygulamaSurumu: girdi.uygulamaSurumu } : {}),
           olay: (adim, durum, bilgi) => {
             const kisa = bilgi ? Object.fromEntries(Object.entries(bilgi).filter(([a]) => a !== 'istek' && a !== 'yanit')) : null;
             satir.olaylar.push({ adim, durum, zaman: Date.now(), ...(kisa && Object.keys(kisa).length ? { bilgi: kisa } : {}) });

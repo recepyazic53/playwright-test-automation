@@ -17,11 +17,21 @@ export type RaporSorunu = {
   sinif: string; dayanak: string; durum: string; n: number; nOnceki: number; maruz: number; maruzOnceki: number; oran: number; oranOnceki: number;
   senaryo: number; seri: number[]; oncekiSeri: number[]; ilk: string | null; son: string | null; acikGun: number; tekrarRozeti: boolean;
   puan: number; bant: 'P1' | 'P2' | 'P3'; aksiyon: string; sahip: string; neden: string;
+  /** A4: öğe kritik işaretli (kritiklik 1), sahip ekip eşlemesinden, sorunun ilk görüldüğü uygulama sürümü. */
+  kritik: boolean; ekipEslemesi: boolean; ilkSurum: string | null;
 };
 export type AksiyonSatiri = {
   baslik: string; nerede: string; sinif: string; durum: string; puan: number; bant: string; aksiyon: string; sahip: string; neden: string; tur?: string;
-  imza?: string; baglanti?: string;
+  imza?: string; baglanti?: string; kritik?: boolean; ilkSurum?: string | null; esikAsimi?: boolean; dayanak?: string;
 };
+/** A4: süre eşiği bilgisi (p95 > eşik = aştı). */
+export type EsikBilgisi = { esik: number; olculen: number; asan: number; oncekiAsan: number; p95: number | null; asti: boolean };
+/** A4: rapor verileri ekleri (tüm rapor türleri; veri yoksa null). */
+export type KritikOzeti = { toplam: number; kalan: number; ogeler: Array<{ tur: string; ad: string; son: string | null }> };
+export type SurumSatiri = {
+  surum: string; ekranTest: number; ekranBasari: number | null; cagri: number; servisBasari: number | null; ilk: string | null; son: string | null; baslayanSorun: number;
+};
+export type EsikAsimi = EsikBilgisi & { tur: 'ekran' | 'servis'; oge: string; metot: string | null; kaynak?: 'metot' | 'servis' };
 export type EgilimKovasi = { etiket: string; adet: number; kalan: number; oran: number | null };
 export type Rozet = { durum: 'saglikli' | 'dikkat' | 'kritik'; gerekce: string };
 export type SorunKisa = { imza: string; baslik: string; nerede: string; durum: string; n: number; puan: number; bant: string };
@@ -30,12 +40,16 @@ export type SirayaGirenOge = { rozet: Rozet; sira: number; basari: number | null
 export type EkranKiyasi = SirayaGirenOge & {
   /** Genel raporda: modeli ortak akış olan ekran. */
   ortakAkis?: boolean;
+  /** A4: kritik işaretli ekran (son tam koşusunda kaldıysa kritikKaldi) ve süre eşiği. */
+  kritik?: boolean; kritikKaldi?: boolean; esik?: EsikBilgisi;
   id: string; ad: string; senaryo: number; test: number; oncekiTest: number | null; basarisiz: number; oncekiBasarisiz: number | null; atlanan: number; tamKosu: number;
   kapsam: { senaryo: number; kosuyaDahil: number; hicKosmayan: number; hepAtlanan: number; modelSurumu: { surum: number; tarih: string } | null };
 };
 export type ServisKiyasi = SirayaGirenOge & {
   id: string; ad: string; tur: string; metot: number; senaryo: number; cagri: number; oncekiCagri: number | null; kalan: number; oncekiKalan: number | null;
   p95: number | null; oncekiP95: number | null; yavaslayan: number;
+  /** A4: kritik işaretli servis; eşiği tanımlı metotlardan aşanların sayısı. */
+  kritik?: boolean; kritikKaldi?: boolean; esikAsan?: number;
 };
 export type EkranTarafiOzeti = {
   basari: number | null; oncekiBasari: number | null; test: number; oncekiTest: number | null; basarisiz: number; oncekiBasarisiz: number | null; atlanan: number;
@@ -47,9 +61,13 @@ export type ServisTarafiOzeti = {
   enYavas: { metot: string; p95: number | null; oncekiP95: number | null } | null; yavaslayan: number; acikSorun: number; kararsizSenaryo: number;
   ogeSayisi: number; metotSayisi: number; senaryoSayisi: number; hatasizOge: number; akisKosu: number; akisBasari: number | null;
 };
-export type AkisSatiri = { id: string; ad: string; tur: string; adim: number; kosu: number; basarili: number; oncekiKosu: number; oncekiBasarili: number; basari: number | null; oncekiBasari: number | null; ortSure: number | null; son: string | null };
+export type AkisSatiri = { id: string; ad: string; tur: string; adim: number; kosu: number; basarili: number; oncekiKosu: number; oncekiBasarili: number; basari: number | null; oncekiBasari: number | null; ortSure: number | null; son: string | null;
+  /** A4: kritik işaretli akış. */
+  kritik?: boolean };
 export type MetotSatiri = { ad: string; senaryo: number; cagri: number; basari: number | null; oncekiBasari: number | null; p50: number | null; p95: number | null;
-  p99: number | null; n: number; oncekiP95: number | null; yavas: boolean; son: string | null; kalan: number };
+  p99: number | null; n: number; oncekiP95: number | null; yavas: boolean; son: string | null; kalan: number;
+  /** A4: metodun süre eşiği (metodun kendi eşiği ya da servisin). */
+  esik?: EsikBilgisi & { kaynak: 'metot' | 'servis' } };
 export type CokluBolumler = {
   ekranTarafi: { ozet: EkranTarafiOzeti; egilim: { kovalar: EgilimKovasi[]; oncekiOrt: number | null }; ogeler: EkranKiyasi[] } | null;
   servisTarafi: {
@@ -57,7 +75,7 @@ export type CokluBolumler = {
     metotlar: Array<MetotSatiri & { servis: string; servisId: string }>;
     yavaslayanlar: Array<{ servis: string; metot: string; oncekiP95: number | null; p95: number | null; n: number }>;
     hataMatrisi: Array<{ servis: string; metot: string; sayilar: Record<string, number>; toplam: number; onceki: number }>;
-    sureEgilimi: { p50: Array<number | null>; p95: Array<number | null>; oncekiP95: number | null };
+    sureEgilimi: { p50: Array<number | null>; p95: Array<number | null>; oncekiP95: number | null; esik?: number };
   } | null;
   akislar: AkisSatiri[];
   sinifDagilimi: Array<{ id: string; ad: string; tur: 'ekran' | 'servis'; sayilar: Record<string, number>; toplam: number }>;
@@ -100,9 +118,16 @@ export type DonemRaporuVerisi = {
   secilenler?: { ekranlar: Array<{ id: string; ad: string }>; servisler: Array<{ id: string; ad: string; tur: string }>; tumEkranlar: boolean; tumServisler: boolean; eksik: number };
   coklu?: CokluBolumler;
   genel?: GenelBolumler;
+  /** A4 (tüm türler): kritik akış kartı, sürüme göre başarı, süre eşiği aşımları (veri yoksa null) ve yöntem notu sayıları. */
+  kritik: KritikOzeti | null;
+  surumler: { liste: SurumSatiri[]; toplam: number } | null;
+  esikAsimlari: EsikAsimi[] | null;
+  raporVerileri: { kritik: number; ekip: number; esik: number; surumluSonuc: number };
   ekran?: {
     senaryolar: Array<{ anahtar: string; ad: string; kosu: number; basari: number | null; oncekiBasari: number | null; hepAtlandi: boolean; hicKosmadi: boolean;
-      ortSure: number | null; p95: number | null; kararlilik: { durum: string; oran: number; kosu: number; degisim: number } | null }>;
+      ortSure: number | null; p95: number | null; kararlilik: { durum: string; oran: number; kosu: number; degisim: number } | null; esikAsti?: boolean }>;
+    /** A4: ekranın süre eşiği (tanımlıysa). */
+    esik?: EsikBilgisi;
     matris: { etiketler: string[]; satirlar: Array<{ ad: string; dizi: string; not: string }> };
     isiHaritasi: Array<{ ad: string; seri: number[] }>;
     sonHata: { senaryo: string; adim: string; zaman: string | null; ortam: string | null; beklenen: string | null; gorulen: string | null; metin: string;
@@ -111,10 +136,9 @@ export type DonemRaporuVerisi = {
     kapsam: { senaryo: number; kosuyaDahil: number; hicKosmayan: number; hepAtlanan: number; modelSurumu: { surum: number; tarih: string } | null };
   };
   servis?: {
-    metotlar: Array<{ ad: string; senaryo: number; cagri: number; basari: number | null; oncekiBasari: number | null; p50: number | null; p95: number | null;
-      p99: number | null; n: number; oncekiP95: number | null; yavas: boolean; son: string | null; kalan: number }>;
+    metotlar: MetotSatiri[];
     hataMatrisi: Array<{ metot: string; sayilar: Record<string, number>; toplam: number; onceki: number }>;
-    sureEgilimi: { p50: Array<number | null>; p95: Array<number | null>; oncekiP95: number | null };
+    sureEgilimi: { p50: Array<number | null>; p95: Array<number | null>; oncekiP95: number | null; esik?: number };
     kontrolTurleri: Array<{ tur: string; etiket: string; toplam: number; gecen: number }>;
     kalanKontroller: Array<{ etiket: string; sayi: number }>;
     akislar: AkisSatiri[];

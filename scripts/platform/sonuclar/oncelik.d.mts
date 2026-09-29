@@ -8,6 +8,7 @@ export declare const ETKI_SENARYO: number;
 export declare const SIKLIK_ORANI: number;
 export declare const SUREKLILIK_GUN: number;
 export declare const EK_AKSIYON_PUANI: number;
+export declare const ESIK_AKSIYON_PUANI: number;
 export declare function oncelikPuani(s: { sinif: string; durum: string; senaryo: number; oran: number; kritiklik?: number; acikGun?: number }): number;
 export declare function bant(puan: number): 'P1' | 'P2' | 'P3';
 export declare function sahipOnerisi(sinif: string): string;

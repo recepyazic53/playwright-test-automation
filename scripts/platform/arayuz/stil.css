@@ -3992,3 +3992,20 @@ dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywher
 /* Ekran paketi yükleme: "Paket ne yapsın?" (Tekrar analiz / Modeli değiştir) yükleme alanından ayrı dursun. */
 .paket-modu { border: 0; margin: 0 0 16px; padding: 0; min-width: 0; }
 .paket-modu > legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+
+/* Ayarlar > Raporlar (PDF rapor A4): öğe başına kritik anahtarı, ekip, süre eşiği; servis için metot eşikleri. Dar ekranda alt alta. */
+.rapor-ogeleri { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 8px; }
+.rapor-ogesi { padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.rapor-ogesi-adi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; overflow-wrap: anywhere; min-width: 0; }
+.rapor-ogesi-durumu { margin-left: auto; }
+.rapor-ogesi-alanlari { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; min-width: 0; }
+.rapor-ogesi-alanlari .rapor-kritik { min-height: 32px; }
+.rapor-alan { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
+.rapor-alan select, .rapor-alan input { max-width: 100%; }
+.rapor-ogesi .esik-girdisi { width: 12ch; }
+.rapor-metotlari { margin-top: 8px; }
+.rapor-metot-listesi { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.rapor-metot-listesi li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.rapor-metot-listesi .mono { overflow-wrap: anywhere; min-width: 0; }
+.ekip-formu { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 10px; }
+.ekip-formu .alan { flex: 1 1 220px; min-width: 0; margin: 0; }

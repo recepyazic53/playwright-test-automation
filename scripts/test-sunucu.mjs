@@ -39,6 +39,7 @@ import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } fro
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
 import { akisOrtamDegiskenleri } from './platform/akislar/uctan-uca-cikti.mjs';
 import { TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from './platform/tablolar/veri-kosulari.mjs';
+import { UYGULAMA_SURUMU_DEGISKENI, uygulamaSurumuTemizle } from './platform/ayarlar/rapor-verileri.mjs';
 import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
 import {
@@ -987,6 +988,14 @@ function veriKosusuOrtamDegiskenleri(ek) {
   }
   return sonuc;
 }
+// - uygulama sürümü (platform/senaryolar/calistirma.mjs; PDF rapor A4): NOBETCI_UYGULAMA_SURUMU — koşu kaydına etiket olarak yazılır
+//   (test listesini değiştirmez; bu yüzden liste paylaşımlı alınır).
+/** @param {unknown} ek @returns {Record<string, string>} */
+function surumOrtamDegiskeni(ek) {
+  if (!ek || typeof ek !== 'object' || Array.isArray(ek)) return {};
+  const surum = uygulamaSurumuTemizle(/** @type {Record<string, unknown>} */ (ek)[UYGULAMA_SURUMU_DEGISKENI]);
+  return surum ? { [UYGULAMA_SURUMU_DEGISKENI]: surum } : {};
+}
 async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null, ekOrtam = null }) {
   const veriOrtami = veriKosusuOrtamDegiskenleri(ekOrtam);
   let tumSenaryolar;
@@ -1024,7 +1033,8 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
           ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
           : {}),
         ...veriOrtami,
-        ...akisOrtamDegiskenleri(ekOrtam)
+        ...akisOrtamDegiskenleri(ekOrtam),
+        ...surumOrtamDegiskeni(ekOrtam)
       },
       grepDeseni,
       genel,

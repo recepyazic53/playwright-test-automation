@@ -33,6 +33,7 @@ import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, grupAnahtari, satirSecimiOlustur, servisDegeri, tabloBul } from '../tablolar/tablo-secimi.mjs';
 import { satirOzeti, veriKosulariniAc } from '../tablolar/veri-kosulari.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { kosuUygulamaSurumu } from '../ayarlar/rapor-verileri.mjs';
 import { kesilebilirBekle, servisEszamanliOku, servisIstekBeklemeOku, sinirliKos } from './eszamanli.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
@@ -985,9 +986,11 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
  *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean; oturumSurumu?: number;
  *   yetkiTekrari?: { ilkDurumKodu: number; not: string };
  *   yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
- *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }; tekrarKaynagi?: string }} girdi
+ *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }; tekrarKaynagi?: string;
+ *   uygulamaSurumu?: string | null }} girdi
  *   veriKosusu: tablodan çoklu satırla koşuda bu çalıştırmanın satırları (başlık "Senaryo [ad]"); tekrarKaynagi: başarısızları tekrar
- *   çalıştırmada önceki koşu (kayda "Tekrar:" bağı olarak yazılır).
+ *   çalıştırmada önceki koşu (kayda "Tekrar:" bağı olarak yazılır). uygulamaSurumu: koşu başlatılırken girilen uygulama sürümü (boşsa
+ *   ortam ayarındaki kullanılır; PDF rapor A4).
  *   oturumYenile: oturum akışı önbelleği yok sayılıp yeniden koşulur (401 / 403 sonrası iç kullanım).
  *   yetkiTekrari: bu çalıştırma 401 / 403 sonrası tekrardır (iç kullanım; raporda not). yetkiYenile: akıştaki token adımını yeniden
  *   çalıştırıp yeni akış değerlerini veren geri çağırma (akış motoru, yalnız kullanıcı "Token'ı yenile, bir kez tekrar dene" seçtiyse verir).
@@ -1195,7 +1198,9 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const sureMs = Date.now() - bas;
   const kosuId = servisKosusuKaydet(vt, {
     projeId, servisId: servis.id, senaryoId: kayitli?.id ?? null, ortamId: ortam.id, tur: girdi.tur, durum,
-    baslangic: baslangic.toISOString(), sureMs, baslik, sonuc
+    baslangic: baslangic.toISOString(), sureMs, baslik, sonuc,
+    // Test edilen uygulamanın sürümü (yalnız koşularda; "Dene" etiketlenmez): koşu başlatılırken girilen, yoksa ortam ayarındaki.
+    ...(girdi.tur === 'kosu' ? { uygulamaSurumu: kosuUygulamaSurumu(girdi.uygulamaSurumu, ortam) } : {})
   });
   // Açık değerler yalnız çağıran akış motoruna (geri çağırma); dönüş / API yanıtı / kayıt maskeli kalır.
   girdi.acikDegerler?.({ okunan, gizliler });

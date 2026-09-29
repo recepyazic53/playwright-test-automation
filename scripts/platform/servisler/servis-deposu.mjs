@@ -10,6 +10,7 @@ import { kosuAyarlariniOku, sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.m
 import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { ekranAdimiDogrula } from '../akislar/ekran-adimi.mjs';
+import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -486,16 +487,17 @@ export function servisKimliginiCoz(vt, projeId, ad, ortamId) {
 /**
  * @param {Veritabani} vt
  * @param {{ projeId: string; servisId: string; senaryoId?: string | null; ortamId?: string | null; tur: 'dene' | 'kosu';
- *   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown> }} girdi
+ *   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown>; uygulamaSurumu?: string | null }} girdi
+ *   uygulamaSurumu: test edilen uygulamanın sürümü (PDF rapor A4; koşu başlatılırken girilen ya da ortam ayarındaki; düz metin).
  */
 export function servisKosusuKaydet(vt, girdi) {
   acikAnahtar(vt);
   const id = randomUUID();
-  vt.calistir(`INSERT INTO servis_kosulari (id, proje_id, servis_id, senaryo_id, ortam_id, tur, durum, baslangic, sure_ms, baslik, sonuc_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+  vt.calistir(`INSERT INTO servis_kosulari (id, proje_id, servis_id, senaryo_id, ortam_id, tur, durum, baslangic, sure_ms, baslik, sonuc_json, uygulama_surumu)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
     id, kimlik(girdi.projeId, 'projeId'), kimlik(girdi.servisId, 'servisId'), girdi.senaryoId ?? null, girdi.ortamId ?? null,
     secenek(girdi.tur, ['dene', 'kosu'], 'tur'), secenek(girdi.durum, KOSU_DURUMLARI, 'durum'), girdi.baslangic,
-    Math.max(0, Math.round(girdi.sureMs)), girdi.baslik ?? '', sifreliJson(vt, girdi.sonuc, 'sonuc')
+    Math.max(0, Math.round(girdi.sureMs)), girdi.baslik ?? '', sifreliJson(vt, girdi.sonuc, 'sonuc'), uygulamaSurumuTemizle(girdi.uygulamaSurumu)
   ]);
   return id;
 }

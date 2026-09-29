@@ -144,6 +144,8 @@ export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) ||
  *  - veriKosusu: { projeId } — ekran senaryolarında VERİ KOŞULARI (tablodan çoklu satır): senaryolardan biri tablo kullanıyorsa
  *    "Veri koşusu" seçimi (senaryodaki biçim / hepsi tek satır / uyan tüm satırlar; koşu anı ezmesi) ve TAHMİNİ TEST SAYISI
  *    gösterilir; üst sınırı (Ayarlar > Koşu) aşan senaryo varsa Başlat kapalıdır. Sonuç { ortam, senaryolar, veriKipi }.
+ *  - surumAlani: true (ortam seçimli diyalogda) — isteğe bağlı "Uygulama sürümü" alanı (ön değer: ortam ayarındaki sürüm); sonuçta
+ *    uygulamaSurumu (boş = ortamınki; PDF rapor A4).
  * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; kosuBicimi?: string | ((ortam: any) => string); hizOzeti?: (ortam: any) => string; not?: string; haricSayisi?: number; dugme?: string; uyarilar?: Array<{ baslik: string; neden: string }>;
  *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string; veriKosusu?: { projeId: string };
  *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> } }} s
@@ -170,6 +172,15 @@ export function kosuOnayi(s) {
       h('option', { value: 'tek' }, 'Hepsi tek satırla'),
       h('option', { value: 'tumu' }, 'Uyan tüm satırlarla (her satır ayrı test)')) : null;
     const veriBolumu = h('div', { class: 'veri-kosusu-bolumu', hidden: true });
+    // --- Uygulama sürümü (isteğe bağlı; PDF rapor A4): koşu kaydına etiket. Ön değer ortam ayarındaki sürüm; boş bırakılırsa ortamınki. ---
+    const surumGirdisi = s.surumAlani && secimli ? h('input', {
+      type: 'text', id: `kosu-surumu-${kimlikUret()}`, maxlength: '60', autocomplete: 'off', placeholder: 'Ör. 2.4.1', value: (ortam && ortam.uygulamaSurumu) || ''
+    }) : null;
+    let surumDegisti = false;
+    surumGirdisi?.addEventListener('input', () => { surumDegisti = true; });
+    const surumBolumu = surumGirdisi ? h('div', { class: 'alan kosu-surum-alani' },
+      h('label', { for: surumGirdisi.id }, 'Uygulama sürümü (isteğe bağlı)'), surumGirdisi,
+      h('div', { class: 'yardim' }, 'Test edilen uygulamanın sürümü; koşuya etiket olarak yazılır (raporlarda sürüme göre başarı). Boşsa ortam ayarındaki sürüm kullanılır.')) : null;
     const veriCiz = () => {
       if (!veriKipiSecimi) return;
       veriBolumu.hidden = !tahmin || !tahmin.gruplu;
@@ -236,9 +247,14 @@ export function kosuOnayi(s) {
         h('h2', { id: 'kosu-onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('oynat')), s.baslik),
         ortamSecimi ? h('div', { class: 'alan kosu-ortam-secimi' }, h('label', { for: ortamSecimi.id }, 'Ortam'), ortamSecimi) : null,
         veriKipiSecimi ? veriBolumu : null,
+        surumBolumu,
         degisken),
       h('div', { class: 'diyalog-alt' }, vazgec, baslat));
-    ortamSecimi?.addEventListener('change', () => { ortam = s.ortamlar.find((o) => o.id === ortamSecimi.value) || ortam; tahmin = null; ciz(); veriCiz(); tahminAl(); });
+    ortamSecimi?.addEventListener('change', () => {
+      ortam = s.ortamlar.find((o) => o.id === ortamSecimi.value) || ortam; tahmin = null; ciz(); veriCiz(); tahminAl();
+      // Kullanıcı sürümü elle değiştirmediyse seçilen ortamın sürümü ön değer olur.
+      if (surumGirdisi && !surumDegisti) surumGirdisi.value = ortam.uygulamaSurumu || '';
+    });
     ciz();
     tahminAl();
     let sonuc = false;
@@ -248,7 +264,7 @@ export function kosuOnayi(s) {
       diyalog.remove();
       // CANLI ortamda "Başlat"tan sonra TEK TİP CANLI onay penceresi (onaylanırsa sunucuya bir kez canliOnay: true gider).
       if (sonuc && ortam) sonuc = await canliOnayIste(ortam);
-      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar, veriKipi } : null) : sonuc);
+      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar, veriKipi, ...(surumGirdisi ? { uygulamaSurumu: surumGirdisi.value.trim() } : {}) } : null) : sonuc);
     });
     document.body.append(diyalog);
     diyalog.showModal();
@@ -336,13 +352,16 @@ export function secenekIste(s) {
  * veriKipi: koşu anı ezmesi ('tek' | 'tumu'; 'senaryo' / yok = senaryodaki çalıştırma biçimi). tekrar: başarısızları tekrar
  * çalıştırma ({ kaynakKosuId, model: 'kosudaki' | 'guncel', veri: 'guncel' | 'kosudaki' }; sunucu o koşudaki satırları kurar).
  * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string; tekBasina?: boolean;
- *   veriKipi?: string; tekrar?: { kaynakKosuId: string; model?: string; veri?: string } }} s
+ *   veriKipi?: string; tekrar?: { kaynakKosuId: string; model?: string; veri?: string }; uygulamaSurumu?: string }} s
+ *   uygulamaSurumu: koşu diyaloğunda girilen uygulama sürümü (her senaryo isteğine eklenir; boşsa ortamınki).
  */
 export function kosuBaslat(s) {
   const yeniler = s.senaryolar.filter((x) => !kosuDurumu(x.id));
   if (!yeniler.length) { bildir('Seçilen senaryolar zaten çalışıyor.', 'hata'); return false; }
   const tekMi = yeniler.length === 1 && s.esZamanli && s.tur === 'tekil';
-  const veriEki = { ...(s.veriKipi && s.veriKipi !== 'senaryo' ? { veriKipi: s.veriKipi } : {}), ...(s.tekrar ? { tekrar: s.tekrar } : {}) };
+  const veriEki = { ...(s.veriKipi && s.veriKipi !== 'senaryo' ? { veriKipi: s.veriKipi } : {}), ...(s.tekrar ? { tekrar: s.tekrar } : {}),
+    // Koşu diyaloğunda girilen uygulama sürümü (boşsa sunucu ortam ayarındakini kullanır; PDF rapor A4).
+    ...(s.uygulamaSurumu ? { uygulamaSurumu: s.uygulamaSurumu } : {}) };
   if (kosuSuruyorMu()) {
     if (!tekMi || durum.oturum.ortam.id !== s.ortam.id) { bildir('Önce sürmekte olan koşunun bitmesini bekleyin (ya da durdurun).', 'hata'); return false; }
     const satir = satirOlustur(yeniler[0]);

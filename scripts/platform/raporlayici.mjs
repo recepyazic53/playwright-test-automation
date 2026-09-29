@@ -35,6 +35,7 @@ import { adimGurultuMu, ansiTemizle, playwrightDurumuEsle } from './sonuclar/sin
 import { yakalananMesajlariAyristir } from './sonuclar/yakalanan-mesajlar.mjs';
 import { ekAtilsinMi, kayitSecimi, ortamKayitKurallari } from './ayarlar/kayit-kurallari.mjs';
 import { TEKRAR_KAYNAGI_DEGISKENI } from './tablolar/veri-kosulari.mjs';
+import { UYGULAMA_SURUMU_DEGISKENI } from './ayarlar/rapor-verileri.mjs';
 
 /** "veriKosusu" annotation'ı (JSON) → nesne; bozuksa undefined. @param {string | undefined} metin @returns {Record<string, unknown> | undefined} */
 function veriKosusuAyristir(metin) {
@@ -404,7 +405,9 @@ export default class PlatformRaporlayici {
       id: kosuId, projeId: baglam.projeId, ortamId: baglam.ortamId, tur: tur === 'tekil' ? 'tekil' : 'tam', kapsam,
       baslangic: new Date(this.baslangicMs).toISOString(),
       // Başarısızları tekrar çalıştırma: "Tekrar: <önceki koşu>" bağı.
-      ...(process.env[TEKRAR_KAYNAGI_DEGISKENI] ? { tekrarKaynagi: process.env[TEKRAR_KAYNAGI_DEGISKENI] } : {})
+      ...(process.env[TEKRAR_KAYNAGI_DEGISKENI] ? { tekrarKaynagi: process.env[TEKRAR_KAYNAGI_DEGISKENI] } : {}),
+      // Test edilen uygulamanın sürümü (koşu başlatılırken girilen ya da ortam ayarındaki; sunucu koyar — PDF rapor A4).
+      ...(process.env[UYGULAMA_SURUMU_DEGISKENI] ? { uygulamaSurumu: process.env[UYGULAMA_SURUMU_DEGISKENI] } : {})
     });
     return kosuId;
   }

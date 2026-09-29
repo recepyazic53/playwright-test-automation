@@ -8,7 +8,7 @@ export declare const SORUN_DURUMLARI: ReadonlyArray<string>;
 export declare const SORUN_DURUM_ETIKETLERI: Readonly<Record<string, string>>;
 export declare const SERVIS_HATA_TURLERI: ReadonlyArray<readonly [string, string]>;
 export type Gozlem = {
-  zaman: number; durum: string; senaryo: string; maruz: string; ortam: string | null; surum?: string | number | null;
+  zaman: number; durum: string; senaryo: string; maruz: string; ortam: string | null; surum?: string | number | null; uygulamaSurumu?: string | null;
   deneme?: number; tekrarKosusu?: boolean; imza?: { parcalar: string[]; bilgi: Record<string, unknown> };
 };
 export type Kararlilik = { kosu: number; degisim: number; oran: number; ekKanit: boolean; durum: 'kararsiz' | 'izlenir' | 'kararli' };
@@ -16,6 +16,8 @@ export type Sorun = {
   imza: string; bilgi: Record<string, unknown>; durum: string; n: number; nOnceki: number; maruz: number; maruzOnceki: number;
   oran: number; oranOnceki: number; senaryolar: string[]; ilk: number; son: number; seri: number[]; oncekiSeri: number[]; acikGun: number;
   tekrarRozeti: boolean; kararsizPay: number; gecis: number;
+  /** Sorunun ilk görüldüğü sonucun uygulama sürümü (yoksa null). */
+  ilkSurum: string | null;
 };
 export declare function imzaKimligi(parcalar: ReadonlyArray<string>): string;
 export declare function kararlilikHesapla(gozlemler: ReadonlyArray<Gozlem>, e?: typeof ESIKLER): Map<string, Kararlilik>;

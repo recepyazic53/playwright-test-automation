@@ -610,6 +610,45 @@ export const GOCLER = [
       );
       CREATE INDEX ix_raporlar_proje ON raporlar(proje_id, olusturulma);
     `
+  },
+  {
+    // Sürüm 17 — RAPOR VERİLERİ (PDF rapor A4; bkz. ayarlar/rapor-verileri.mjs). Hepsi kullanıcı kararıdır ve varsayılan olarak boştur
+    // (boşken raporlar önceki gibi çalışır). Proje kapsamlıdır (proje silinince CASCADE; proje silme ayrıca açıkça siler).
+    // - ekipler: Ayarlar > Raporlar'daki ekip listesi (ad düz metin; ekran / servis adları gibi).
+    // - rapor_isaretleri: öğe başına (oge_turu 'ekran' — ortak akış dahil — | 'servis' | 'akis' — servis / oturum / uçtan uca akış)
+    //   kritik işareti, sahip ekip (ekip silinince NULL), süre eşiği (ms; ekran: test süresi, servis: çağrı süresi) ve metot eşikleri
+    //   (metot_esikleri_json, şifreli 'ozel': { "metot adı": ms } — metot adları senaryo içeriğinden gelir). oge_id yabancı anahtar
+    //   değildir (öğe türüne göre farklı tablo): silinen öğenin satırı raporda yok sayılır.
+    // - servis_kosulari.uygulama_surumu: test edilen uygulamanın sürümü (koşu başlatılırken girilen ya da ortam ayarındaki; düz metin,
+    //   isteğe bağlı). Ekran koşularında aynı bilgi kosular.ozet_json.uygulamaSurumu'dadır (şema değişikliği gerekmez).
+    surum: 17,
+    ad: 'rapor_verileri',
+    sql: `
+      CREATE TABLE ekipler (
+        id           TEXT PRIMARY KEY,
+        proje_id     TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        ad           TEXT NOT NULL,
+        olusturulma  TEXT NOT NULL,
+        guncellenme  TEXT NOT NULL
+      );
+      CREATE INDEX ix_ekipler_proje ON ekipler(proje_id);
+
+      CREATE TABLE rapor_isaretleri (
+        id                   TEXT PRIMARY KEY,
+        proje_id             TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        oge_turu             TEXT NOT NULL CHECK (oge_turu IN ('ekran', 'servis', 'akis')),
+        oge_id               TEXT NOT NULL,
+        kritik               INTEGER NOT NULL DEFAULT 0 CHECK (kritik IN (0, 1)),
+        ekip_id              TEXT REFERENCES ekipler(id) ON DELETE SET NULL,
+        sure_esigi_ms        INTEGER,
+        metot_esikleri_json  TEXT NOT NULL DEFAULT '{}',
+        olusturulma          TEXT NOT NULL,
+        guncellenme          TEXT NOT NULL,
+        UNIQUE (proje_id, oge_turu, oge_id)
+      );
+
+      ALTER TABLE servis_kosulari ADD COLUMN uygulama_surumu TEXT;
+    `
   }
 ];
 
@@ -644,7 +683,8 @@ export const SIFRELI_ALANLAR = Object.freeze({
   servis_kosulari: Object.freeze({ sonuc_json: 'ozel' }),
   servis_akislari: Object.freeze({ icerik_json: 'ozel' }),
   servis_akis_kosulari: Object.freeze({ sonuc_json: 'ozel' }),
-  raporlar: Object.freeze({ meta_json: 'ozel' })
+  raporlar: Object.freeze({ meta_json: 'ozel' }),
+  rapor_isaretleri: Object.freeze({ metot_esikleri_json: 'ozel' })
 });
 
 /** @param {string} tablo @returns {string[]} */
@@ -678,6 +718,9 @@ export const TABLOLAR = [
   { ad: 'servis_kimlikleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'servis_parametre_tanimlari', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'servis_akislari', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'servis_akisi', baslikAlani: 'baslik' },
+  // Rapor verileri (Ayarlar > Raporlar): ekip listesi ve öğe başına kritik işareti / ekip / süre eşiği.
+  { ad: 'ekipler', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'ad' },
+  { ad: 'rapor_isaretleri', birincilAnahtar: 'id', json: ['metot_esikleri_json'], guncellenme: true, baslikAlani: 'oge_turu' },
   { ad: 'degisiklik_gecmisi', birincilAnahtar: 'id', json: ['onceki_json', 'sonraki_json'], guncellenme: false },
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
   { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },

@@ -116,6 +116,8 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> };
   /** Başarısızları tekrar çalıştırmada önceki koşu ("Tekrar:" bağı). */
   tekrarKaynagi?: string;
+  /** Koşu başlatılırken girilen uygulama sürümü (boşsa ortam ayarındaki; PDF rapor A4). */
+  uygulamaSurumu?: string | null;
 }): Promise<CalistirmaSonucu>;
 export declare function servisVeriKosulari(vt: Veritabani, projeId: string, s: { icerik: unknown }, ortamId: string, kip?: string | null): {
   kosular: Array<{ anahtar: string; ad: string; satirlar: Record<string, string> }>; hatalar: string[]; cokluGruplar: string[];

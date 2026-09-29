@@ -23,4 +23,11 @@ export declare function raporSecenekleri(vt: Veritabani, q: URLSearchParams): {
   ekranlar: Array<{ id: string; ad: string; devreDisi: boolean }>; servisler: Array<{ id: string; ad: string; tur: string }>;
   ortamlar: Array<{ id: string; ad: string }>; kapsamlar: ReadonlyArray<string>;
 };
+/** GET /platform/rapor-verileri (Ayarlar > Raporlar; PDF rapor A4). */
+export declare function raporVerileriEkrani(vt: Veritabani, projeId: string): {
+  ekipler: Array<{ id: string; ad: string }>;
+  ekranlar: Array<{ id: string; ad: string; ortakAkis: boolean; devreDisi: boolean; kritik: boolean; ekipId: string | null; sureEsigiMs: number | null }>;
+  servisler: Array<{ id: string; ad: string; tur: string; metotlar: string[]; kritik: boolean; ekipId: string | null; sureEsigiMs: number | null; metotEsikleri: Record<string, number> }>;
+  akislar: Array<{ id: string; ad: string; tur: string; kritik: boolean }>;
+};
 export declare function raporSaklamaTemizligi(vt: Veritabani, s: { medyaKlasoru: string; simdi?: number }): { rapor: number; sahipsiz: number };
