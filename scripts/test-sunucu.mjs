@@ -42,12 +42,16 @@ import { TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI }
 import { UYGULAMA_SURUMU_DEGISKENI, uygulamaSurumuTemizle } from './platform/ayarlar/rapor-verileri.mjs';
 import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
+import { veriKoku } from './platform/calisma-alanlari.mjs';
+import { kurulumKimligi } from './platform/kurulum-kimligi.mjs';
 import {
   DOSYA_KLASORU_DEGISKENI, artikKlasorleriTemizle, geciciDosyaKoku, kosuKlasoruOlustur, kosuKlasorunuSil, sahipYaz
 } from './platform/dosyalar/gecici-dosyalar.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
+// Başlatıcı (baslat.mjs) portta çalışan sunucunun kendi kurulumu olup olmadığını /saglik'taki bu kimlikle anlar.
+const KURULUM_KIMLIGI = kurulumKimligi(veriKoku(projeKoku));
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
 // Nöbetçi'den başlatılan tek bir koşunun (süreç başladıktan sonra) en fazla ne kadar sürebileceği: kullanıcının kararı
 // (Ayarlar > Koşu > Koşu süre limiti; varsayılan 10 dk). Koşu başlarken okunur.
@@ -1188,7 +1192,7 @@ async function istegiIsle(req, res) {
   if (req.method === 'GET' && req.url && arayuzIsteginiIsle(req, res)) return;
 
   if (req.method === 'GET' && req.url === '/saglik') {
-    jsonGonder(res, 200, { basarili: true, mesaj: 'Test sunucusu çalışıyor.' });
+    jsonGonder(res, 200, { basarili: true, mesaj: 'Test sunucusu çalışıyor.', uygulama: 'nobetci', kurulum: KURULUM_KIMLIGI });
     return;
   }
 
