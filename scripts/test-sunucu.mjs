@@ -424,6 +424,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/veritabanlari.js', { dosya: 'veritabanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Hazırlık kontrolü ve "Neden çalışmıyor?" metinleri: sunucu ve koşucuyla ORTAK saf modül (tek kaynak).
+  ['/arayuz/hazirlik.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'hazirlik.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Talep no (serbest metin; kırpma, harf duyarsız eşleşme, benzer yazım): sunucuyla ORTAK saf modül; alan, talep koşusu ve kapsam matrisi.
   ['/arayuz/talepler.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'talepler.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/talep-alani.js', { dosya: 'talep-alani.js', tur: 'text/javascript; charset=utf-8' }],

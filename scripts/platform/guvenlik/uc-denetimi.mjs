@@ -208,6 +208,11 @@ export function gerekenIzinler(vt, yol, g) {
     }
   }
 
+  // Ortam bağlantısı denetimi (Hazırlık kontrolü > Denetle; senaryolar/ortam-denetimi.mjs): servis senaryosunda servis istekleri,
+  // ekran senaryosunda web erişimi. Canlı ortam izni ve açık onay yukarıda (ortam canlıysa).
+  // (TLS doğrulaması kapalı servis: aşağıdaki güvenlik gevşetme denetimi.)
+  if (yol === '/platform/ortam/denetle') izinler.add(metin(g.servisId) ? 'servis-istekleri' : 'web-erisimi');
+
   // Tarama / akış kaydı: giriş tarifi varsa ve "Giriş yapmadan aç" değilse (giriş kaydında kullanıcı kendisi girer).
   // Tarama / akış kaydı: giriş tarifi varsa giriş bilgisi izni — "Koşunun saklanan oturumunu kullan" seçiliyken de (oturumla
   // girişi atlamak da giriş sayılır; oturum geçersizse zaten form doldurulur).

@@ -8,7 +8,7 @@
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { zarfMi } from '../kasa.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
-import { modelKosuPlani, modelSenaryosuMu, veriHatalariMetni } from './model-kosusu.mjs';
+import { modelKosuPlani, modelSenaryosuMu, planHatasiMetni, veriHatalariMetni } from './model-kosusu.mjs';
 import { etkinSenaryoGirisi } from './senaryo-girisi.mjs';
 import { playwrightKoduUret } from './playwright-disa-aktarma.mjs';
 import { bilerekBosAnahtarlari } from '../../dogrulama/senaryo-dogrulayici.mjs';
@@ -68,7 +68,7 @@ export async function senaryoyuPlaywrightKodunaAktar(db, istek, s) {
   if (Array.isArray(sen.veriHatalari) && sen.veriHatalari.length) throw new DepoHatasi(veriHatalariMetni(sen.baslik, sen.veriHatalari).replace(/ Tarayıcı açılmadı\.$/, ''));
   // Koşucuyla (tests/support/model-kosucu.ts) AYNI plan.
   const plan = modelKosuPlani(sen.model, sen.veri, { altModeller: sen.altModeller, mutlakaGorunmeli: sen.mutlakaGorunmeli, kimlikProfilleri: d.model.kimlikProfilleri ?? {} });
-  if (plan.hatalar.length) throw new DepoHatasi(`"${sen.baslik}" koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
+  if (plan.hatalar.length) throw new DepoHatasi(planHatasiMetni(sen.baslik, plan.hatalar).replace(/ Tarayıcı açılmadı\.$/, ''));
 
   const giris = etkinSenaryoGirisi(sen.giris ?? null, sen.model);
   const tarif = nesneMi(d.girisTarifi) && nesneMi(d.girisTarifi.tarif) ? d.girisTarifi.tarif : null;

@@ -13,6 +13,7 @@
 import { api, canliOnayPenceresi, kapaliDugmeNedenleri, kullaniciAyarlari, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
 import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
 import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
+import { HAZIRLIK_BASLIKLARI, kosuSayimMetni, ortamDenetimiMetni } from './hazirlik.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -148,6 +149,9 @@ export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) ||
  *    gösterilir; üst sınırı (Ayarlar > Koşu) aşan senaryo varsa Başlat kapalıdır. Sonuç { ortam, senaryolar, veriKipi }.
  *  - surumAlani: true (ortam seçimli diyalogda) — isteğe bağlı "Uygulama sürümü" alanı (ön değer: ortam ayarındaki sürüm); sonuçta
  *    uygulamaSurumu (boş = ortamınki; PDF rapor A4).
+ *  - hazirlik: { projeId } — "Hazırlık kontrolü" bölümü (madde özeti + ortam bağlantısı "Denetle"). hesapla(ortam) ayrıca
+ *    calistirilamazlar: [{ id, baslik, neden, eksikler }] verebilir: bunlar koşuya girmez, "12 senaryodan 2'si çalıştırılamaz —
+ *    10'u başlatılsın mı?" ve nedenleriyle listelenir (senaryolar/hazirlik.mjs).
  * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; kosuBicimi?: string | ((ortam: any) => string); hizOzeti?: (ortam: any) => string; not?: string; haricSayisi?: number; dugme?: string; uyarilar?: Array<{ baslik: string; neden: string }>;
  *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string; veriKosusu?: { projeId: string };
  *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> } }} s
@@ -208,6 +212,59 @@ export function kosuOnayi(s) {
         .catch(() => { if (sira === tahminSirasi) { tahmin = null; veriCiz(); } });
     };
     veriKipiSecimi?.addEventListener('change', () => { veriKipi = veriKipiSecimi.value; tahminAl(); });
+    // --- Hazırlık (senaryolar/hazirlik.mjs; sunucu listede ortam başına hesaplar): çalıştırılamayan senaryolar tek cümlelik
+    // gerekçeleriyle koşuya girmez; madde özeti ve ortam bağlantısı. Ortam bağlantısı KENDİLİĞİNDEN denetlenmez: yalnız "Denetle"
+    // seçili ortamın adresine tek istek gönderir (izin ve CANLI onayı sunucuda); saklanan son sonuç (10 dk) istek atmadan okunur.
+    /** @type {Record<string, any>} ortam kimliği → son denetim (null: denetlenmedi) */
+    const ortamDenetimleri = {};
+    const ortamDenetiminiOku = (o) => {
+      if (!s.hazirlik || !o || o.id in ortamDenetimleri) return;
+      ortamDenetimleri[o.id] = null;
+      api(`/platform/ortam/denetim?projeId=${encodeURIComponent(s.hazirlik.projeId)}&ortamId=${encodeURIComponent(o.id)}`)
+        .then((y) => { if (y.denetim && !ortamDenetimleri[o.id]) { ortamDenetimleri[o.id] = y.denetim; if (diyalog.isConnected) ciz(); } }).catch(() => {});
+    };
+    const hazirlikBolumu = () => {
+      const liste = hesap.calistirilamazlar || [];
+      if (!s.hazirlik && !liste.length) return null;
+      const toplam = hesap.senaryolar.length + liste.length;
+      const madde = (anahtar) => {
+        const n = liste.filter((x) => (x.eksikler || []).includes(anahtar)).length;
+        return h('li', { class: `hazirlik-maddesi ${n ? 'eksik' : 'tamam'}`, 'data-madde': anahtar },
+          h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, n ? '✕' : '✓'),
+          h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, h('span', { class: 'gorunmez' }, n ? 'Eksik: ' : 'Hazır: '), HAZIRLIK_BASLIKLARI[anahtar]),
+            h('small', { class: 'hazirlik-ayrinti' }, n ? `${n} senaryoda eksik` : 'Koşulacak senaryolarda hazır')));
+      };
+      let ortamSatiri = null;
+      if (s.hazirlik && ortam) {
+        ortamDenetiminiOku(ortam);
+        const d = ortamDenetimleri[ortam.id] || null;
+        const denetle = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Ortam bağlantısını denetle (${ortam.ad})` }, ikon('ag'), 'Denetle');
+        denetle.addEventListener('click', async () => {
+          const o = ortam;
+          if (!(await canliOnayIste(o))) return;
+          denetle.disabled = true;
+          try {
+            const y = await api('/platform/ortam/denetle', { govde: { projeId: s.hazirlik.projeId, ortamId: o.id, ...canliOnayEki(o.id) } });
+            ortamDenetimleri[o.id] = y.denetim;
+          } catch (e) { if (!e || e.durum !== 423) bildir(e.message, 'hata'); }
+          if (diyalog.isConnected) ciz();
+        });
+        ortamSatiri = h('li', { class: `hazirlik-maddesi ortam ${d ? (d.erisilebilir ? 'tamam' : 'eksik') : ''}`.trim(), 'data-madde': 'ortam' },
+          h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, '⇄'),
+          h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, HAZIRLIK_BASLIKLARI.ortam), h('small', { class: 'hazirlik-ayrinti' }, ortamDenetimiMetni(d))),
+          denetle);
+      }
+      const sayim = kosuSayimMetni(toplam, liste.length);
+      return h('section', { class: 'hazirlik-paneli kosu-hazirligi', 'aria-label': 'Hazırlık kontrolü' },
+        h('h3', {}, 'Hazırlık kontrolü'),
+        h('ul', { class: 'hazirlik-listesi' }, ['veri', 'gonderme', 'beklenen'].map(madde), ortamSatiri),
+        sayim ? h('div', { class: 'not-kutusu uyari calistirilamazlar', role: 'status' },
+          h('p', {}, h('strong', {}, sayim)),
+          h('ul', { class: 'onay-listesi' }, liste.slice(0, 20).map((x) => h('li', {},
+            h('span', { class: 'atlanan-adi' }, x.baslik), h('small', { class: 'soluk' }, x.neden || ''),
+            x.id ? h('a', { class: 'kucuk-dugme dugme hayalet', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, onclick: () => diyalog.close() }, 'Düzelt') : null)),
+          liste.length > 20 ? h('li', {}, `… ve ${liste.length - 20} senaryo daha`) : null)) : null);
+    };
     const ciz = () => {
       if (secimli) hesap = s.hesapla(ortam);
       const riskli = riskliOrtamMi(ortam);
@@ -227,6 +284,7 @@ export function kosuOnayi(s) {
         adet ? h('ul', { class: 'onay-listesi', 'aria-label': 'Çalıştırılacak senaryolar' },
           hesap.senaryolar.slice(0, 40).map((x) => h('li', {}, x.baslik)),
           adet > 40 ? h('li', {}, `… ve ${adet - 40} senaryo daha`) : null) : null,
+        hazirlikBolumu(),
         hesap.haricSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.haricSayisi} senaryo ${secimli ? `${ortam.ad} ortamında ` : ''}koşu listesinde olmadığı (Koşuda kapalı) için dahil edilmedi.`) : null,
         hesap.tanimsizSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.tanimsizSayisi} senaryo ${ortam.ad} ortamında tanımlı olmadığı için dahil edilmedi.`) : null,
         hesap.atlananlar && hesap.atlananlar.length ? h('details', { class: 'atlananlar-listesi' },

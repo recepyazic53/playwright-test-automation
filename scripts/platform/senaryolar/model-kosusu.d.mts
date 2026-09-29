@@ -129,3 +129,4 @@ export declare function yuklemeDosyasiYolu(
 export declare function gizliDegerleriMaskele(metin: string, gizliler: ReadonlyArray<unknown>): string;
 /** Çözülemeyen tablo başvuruları → koşuyu durduran hata metni. */
 export declare function veriHatalariMetni(baslik: string, hatalar: ReadonlyArray<{ alan: string; mesaj: string }>): string;
+export declare function planHatasiMetni(baslik: string, hatalar: ReadonlyArray<string>): string;

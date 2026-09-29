@@ -253,7 +253,9 @@ test.describe('uçtan uca akış motoru', () => {
       const r1 = await uctanUcaCalistir(vt, projeId, { akisId, ortamId: TEST });
       expect(r1.durum).toBe('basarisiz');
       expect(r1.adimlar.map((x) => x.durum)).toEqual(['basarili', 'basarisiz', 'atlandi', 'atlandi']);
-      expect(r1.adimlar[2].neden).toBe('önceki adım başarısız');
+      // Zincirleme gerekçe sade ve adlı: hangi adım yüzünden koşmadığı (senaryolar/hazirlik.mjs > zincirNedeni).
+      expect(r1.adimlar[2].neden).toBe(`2. adım (“${r1.adimlar[1].ad}”) başarısız olduğu için bu adım çalıştırılmadı.`);
+      expect(r1.adimlar[3].neden).toBe(r1.adimlar[2].neden);
       // Kalan adımın hata metni gizli değeri içermez (maskeli).
       expect(r1.adimlar[1].neden).toMatch(/^Kalınan adım: Kişi oturum-\d+ •••$/);
       // Taslak (kaydedilmemiş hâl) "Dene" olarak koşar: ekran adımı "kalırsa devam" → SQL adımı OnayNo'suz hata, son servis adımı ${akis:OnayNo}'suz hata.
