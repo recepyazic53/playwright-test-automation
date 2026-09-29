@@ -4,7 +4,8 @@
 // başarısız / Tekrar eden / Düzeldi"), koşu geçmişi, hata kalıpları ve sağda başarısız test paneli
 // (ekran görüntüsü, video, hata, adımlar, atlanan alanlar). Koşu detayı ve test detayı aynı
 // ekranda açılır.
-// Adresler: #/sonuclar (Genel > Ekranlar), #/sonuclar/servisler (Genel > Servisler: servis-sonuclari.js),
+// Adresler: #/sonuclar/ozet (Genel > Özet, varsayılan sekme: sonuc-ozeti.js), #/sonuclar/ekranlar ve eski #/sonuclar (Genel > Ekranlar),
+// #/sonuclar/servisler (Genel > Servisler: servis-sonuclari.js),
 // #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>, #/sonuclar/karsilastir/<A>/<B> (yan yana koşu
 // karşılaştırması: karsilastirma.js), #/sonuclar/raporlar (kaydedilmiş PDF raporları: pdf-rapor.js). Tarih aralığı: ortak süzgeç
 // (tarih-araligi.js; oturumda).
