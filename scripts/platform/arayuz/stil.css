@@ -4356,3 +4356,10 @@ fieldset.giris-sorusu { border: 0; padding: 0; margin: 0 0 var(--b3); display: g
 /* Servis senaryosu: gizli sabit + "Tabloya gizli sütun olarak taşı". */
 .sabit-deger.gizli-sabit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .gizli-tasi { white-space: normal; text-align: left; }
+
+/* v1.4 Sonuçlar (ku14-sonuclar): tıklanabilir koşu geçmişi satırı, özet kutusunda sarı eşik, dönem notu, boş koşu onayının nedeni. */
+.gecmis-tablosu tr.tiklanabilir-satir { cursor: pointer; }
+.gecmis-tablosu tr.tiklanabilir-satir:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; background: var(--panel-2); }
+.sonuc-karti.uyari { --k: var(--atlanan-dolgu); }
+.ozet-donem-notu { display: block; margin-top: 2px; }
+.kosu-bos-nedeni { margin: 0 0 10px; }

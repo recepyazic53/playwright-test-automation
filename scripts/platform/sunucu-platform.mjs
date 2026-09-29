@@ -2304,7 +2304,9 @@ export async function platformIsteginiIsle(req, res, baglam) {
       return true;
     }
 
-    const govde = await jsonGovde(PAKET_UCLARI.has(yol) ? PAKET_BOYUT_SINIRI : JSON_GOVDE_SINIRI);
+    // Yedek uygulama: seçim listesi binlerce kimlik taşıyabilir (ör. 3.700 kayıt ≈ 170 KB) — geniş sınır.
+    const yedekUygulama = Boolean(isEslesme && isEslesme[2] === 'uygula');
+    const govde = await jsonGovde(PAKET_UCLARI.has(yol) ? PAKET_BOYUT_SINIRI : yedekUygulama ? SONUC_GOVDE_SINIRI : JSON_GOVDE_SINIRI);
     if (!govde) return true;
     if (govde.token !== baglam.token && !disTokenGecerli) { tokenYok(); return true; }
     platformEtkinligiBildir();
