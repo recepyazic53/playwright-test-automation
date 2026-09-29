@@ -236,6 +236,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
       ...(g.veriProfilleri !== undefined ? { veriProfilleri: metinNesnesi(g.veriProfilleri) } : {}),
       ...(Array.isArray(g.yalnizTestOperasyonlari) ? { yalnizTestOperasyonlari: g.yalnizTestOperasyonlari } : {}),
+      ...(Array.isArray(g.tekrarDenenebilirOperasyonlar) ? { tekrarDenenebilirOperasyonlar: g.tekrarDenenebilirOperasyonlar } : {}),
       ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
       ...(g.durum === 'etkin' || g.durum === 'devre_disi' ? { durum: g.durum } : {}),
       ...(g.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: g.alanVarsayilanlari } : {}),

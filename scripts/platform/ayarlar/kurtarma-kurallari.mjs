@@ -459,7 +459,7 @@ export function kurtarmaSutunuYaz(olaylar) {
  */
 export function kurtarmaSayaclari(vt, projeId, aralik) {
   const bas = aralik.bas.toISOString();
-  const bit = (aralik.bit ?? new Date(8.64e15)).toISOString();
+  const bit = aralik.bit ? aralik.bit.toISOString() : '9999-12-31T23:59:59.999Z';
   /** @type {Record<string, { toplam: number; kurtarildi: number; kaldi: number; tekrarlanmadi: number; denendi: number }>} */
   const sayac = {};
   const ekle = (/** @type {unknown} */ d) => {

@@ -326,10 +326,13 @@ async function akisiKos(vt, projeId, g) {
         akisDegerleri: { ...degerler }, ekGizliler: [...gizliler], okumalar: a.okumalar,
         akis: { akisId: g.akis.id ?? null, akisBaslik: g.akis.baslik, adimNo: n + 1, adimAd: a.ad, ...(g.oturumIcinde ? { oturum: true } : {}) },
         acikDegerler: (d) => { acik = d; },
-        ...(yetkiAcik ? { yetkiYenile: yetkiYenileyici([ic?.govde ?? '', ...Object.values(ic?.basliklar ?? {}), JSON.stringify(ic?.kontroller ?? []), ic?.http?.yol ?? ''].join('\n')) } : {})
+        ...(yetkiAcik ? { yetkiYenile: yetkiYenileyici([ic?.govde ?? '', ...Object.values(ic?.basliklar ?? {}), JSON.stringify(ic?.kontroller ?? []), ic?.http?.yol ?? ''].join('\n')) } : {}),
+        // Kurtarma kuralının "token'ı yenile" seçimi: akıştaki token adımları yeniden çalışır (Yetki hatasında ayarından bağımsız).
+        tokenYenile: yetkiYenileyici([ic?.govde ?? '', ...Object.values(ic?.basliklar ?? {}), JSON.stringify(ic?.kontroller ?? []), ic?.http?.yol ?? ''].join('\n'))
       });
       s.durum = r.durum; s.sureMs = r.sureMs; s.kosuId = r.kosuId;
       if (r.yetkiTekrari) s.not = String(/** @type {any} */ (r.yetkiTekrari).not);
+      if (r.kurtarma) s.not = [s.not, String(r.kurtarma.not)].filter(Boolean).join('; ');
       if (r.okunanlar) s.okunanlar = /** @type {Record<string, string>} */ (r.okunanlar);
       if (r.hata) s.neden = String(r.hata);
       else if (r.durum !== 'basarili') s.neden = (r.kontroller ?? []).filter((k) => !k.gecti).map((k) => k.ad).join('; ');

@@ -340,8 +340,8 @@ async function hesapla(vt, projeId, x) {
   dene('Kurtarma kuralları', () => {
     if (!donemBilgisi) return;
     for (const k of calisanKurallar(vt, projeId, { bas: donemBilgisi.bas, bit: donemBilgisi.bit })) {
-      const parca = [` kez çalıştı`, k.kurtarildi ? ` kurtarıldı` : '', k.kaldi ? ` yine kaldı` : '',
-        k.tekrarlanmadi ? ` tekrar denenmedi` : ''].filter(Boolean);
+      const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine kaldı` : '',
+        k.tekrarlanmadi ? `${k.tekrarlanmadi} tekrar denenmedi` : ''].filter(Boolean);
       dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/proje' });
     }
   }, undefined);
