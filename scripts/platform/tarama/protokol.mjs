@@ -49,6 +49,13 @@ export const KAYIT_CDP_PORTU_DEGISKENI = 'NOBETCI_KAYIT_CDP_PORTU';
 export const KAYIT_KOPRUSU = '__nobetciKayit';
 /** Sayfadaki panelin kök öğesinin kimliği (taramaya ve ekran görüntülerine girmez). */
 export const KAYIT_PANELI_KIMLIGI = 'nobetci-kayit-paneli';
+// ---- ÖĞE SEÇME ("Sayfada seç"; aynı iş altyapısı, girdi.kip = 'ogeSecme') ----
+// Görünür tarayıcıda kullanıcı "Öğe seç" modunda sayfadaki bir öğeye tıklar: tıklama YAKALANIR ve sayfaya İLETİLMEZ; öğenin türü
+// sorulur, seçiciyi Nöbetçi üretir. Seçme aşamasında GET/HEAD dışındaki istekler engellenir (form gönderilmez, kayıt oluşmaz).
+/** Sayfaya açılan köprü (öğe seçme paneli → motor). */
+export const SECIM_KOPRUSU = '__nobetciSecim';
+/** Öğe seçme panelinin kök öğesinin kimliği. */
+export const SECIM_PANELI_KIMLIGI = 'nobetci-secim-paneli';
 /** Sonuç gövdesi sınırı (envanter + en fazla 12 × 4 MB ekran görüntüsünün base64'ü). */
 export const SONUC_GOVDE_SINIRI = 72 * 1024 * 1024;
 /** Olay gövdesi sınırı. */

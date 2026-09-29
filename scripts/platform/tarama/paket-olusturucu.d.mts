@@ -73,8 +73,17 @@ export type KesifDegeri = {
   hata?: string | null;
   /** Bu seçenekte seçenekleri DEĞİŞEN (bağımlı) diğer seçim alanları: anahtar → yeni seçenekler. */
   secenekler?: Record<string, HamSecenek[]>;
+  /** Temel envanterde devre dışı olup bu seçenekte ETKİNLEŞEN alanların anahtarları (ör. il seçilince açılan ilçe listesi). */
+  etkinlesenler?: string[];
 };
-export type Kesif = { secim: string; ilkDeger: string | null; degerler: KesifDegeri[]; geriAlindi: boolean; atlandi?: string | null };
+/**
+ * Seçim keşfi. tur: 'secim' (açılır liste; değer = seçenek değeri), 'radyo' (değer = radyo değeri), 'onay' (onay kutusu; değer
+ * "true" / "false"). kismi: uzun listede yalnız ilk seçenekler denendi (yalnız bağımlı liste çıkarılır, görünürlük koşulu yazılmaz).
+ */
+export type Kesif = {
+  secim: string; ilkDeger: string | null; degerler: KesifDegeri[]; geriAlindi: boolean; atlandi?: string | null;
+  tur?: 'secim' | 'radyo' | 'onay'; kismi?: boolean;
+};
 
 export type ProfilEnvanteri = {
   /** Bağlam profili adı (profil seçilmediyse null). */
@@ -207,6 +216,8 @@ export type PaketOzeti = {
   kanitSayisi: number;
   /** Yalnızca akış kaydında: adım sayısı. */
   adimSayisi?: number;
+  /** Yalnızca otomatik taramada: keşfin bulduğu bağımlı liste sayısı. */
+  bagimlilikSayisi?: number;
 };
 export type PaketSonucu = { paket: Record<string, unknown>; ozet: PaketOzeti };
 
@@ -224,3 +235,9 @@ export declare function kimlikUret(metin: string, yedek?: string): string;
 export declare function ekranAnahtariOner(metin: string): string;
 export declare function modelTipi(a: HamAlan): { tip: string; not: string | null };
 export declare function taramaPaketiOlustur(meta: PaketMetasi, envanter: TaramaEnvanteri): PaketSonucu;
+/** Sayfadan gelen metni temizler (gizli veri kalıbında null; sayac.gizlenen artar). */
+export declare function temizMetin(m: unknown, sayac: { gizlenen: number }, uzunluk?: number): string | null;
+/** Ham alan → model alanı dönüştürücüsü (tarama, akış kaydı ve "Sayfada seç" ortak). */
+export declare function alanDonusturucu(sayac: { gizlenen: number }): {
+  taslakAlan: (a: HamAlan, id: string) => Record<string, unknown>; etiketsizler: string[]; cokluDegerliler: string[];
+};

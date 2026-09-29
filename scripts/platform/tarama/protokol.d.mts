@@ -3,6 +3,7 @@ import type { GirisTarifi } from '../giris/tarif.mjs';
 import type { KayitEnvanteri, TaramaEnvanteri } from './paket-olusturucu.mjs';
 import type { AkisEnvanteri } from './akis-tasarimi.mjs';
 import type { OturumDurumu } from '../giris/oturum-dosyasi.mjs';
+import type { OgeSecmeSonucu, SecilenOge, SecilenOgeTuru } from './oge-isaretleri.mjs';
 
 export declare const TARAMA_ADRES_DEGISKENI: string;
 export declare const TARAMA_TOKEN_DEGISKENI: string;
@@ -24,6 +25,8 @@ export declare const KAYIT_BASSIZ_DEGISKENI: string;
 export declare const KAYIT_CDP_PORTU_DEGISKENI: string;
 export declare const KAYIT_KOPRUSU: string;
 export declare const KAYIT_PANELI_KIMLIGI: string;
+export declare const SECIM_KOPRUSU: string;
+export declare const SECIM_PANELI_KIMLIGI: string;
 
 /** Giriş kimliği (şifresi çözülmüş; YALNIZCA bellekte — giris-motoru.ts > GirisKimligi ile aynı biçim). */
 export type TaramaKimligi = {
@@ -40,8 +43,13 @@ export type TaramaKimligi = {
 
 /** Alt sürecin sunucudan BİR KEZ aldığı girdi (gizli değer içerir; diske yazılmaz). */
 export type TaramaGirdisi = {
-  /** 'tarama' (salt okuma, otomatik) ya da 'kayit' (kullanıcı akışı görünür tarayıcıda yürütür; en fazla bir profil). */
-  kip?: 'tarama' | 'kayit' | 'girisDenemesi';
+  /**
+   * 'tarama' (salt okuma, otomatik), 'kayit' (kullanıcı akışı görünür tarayıcıda yürütür; en fazla bir profil) ya da 'ogeSecme'
+   * ("Sayfada seç": görünür tarayıcıda kullanıcı öğe seçer; seçim modunda tıklama sayfaya iletilmez, yazma istekleri engellenir).
+   */
+  kip?: 'tarama' | 'kayit' | 'girisDenemesi' | 'ogeSecme';
+  /** Öğe seçmede seçilebilecek türler (verilmezse hepsi). */
+  ogeTurleri?: SecilenOgeTuru[];
   /** Kayıt, giriş kaydı ("Girişi kaydet"): panel metinleri diyagram yerine giriş onay ekranını anlatır. */
   girisKaydi?: boolean;
   tabanUrl: string;
@@ -77,7 +85,7 @@ export declare function taramaTarayiciAyarlari(g: { tarayici?: TaramaGirdisi['ta
   girisAlanBeklemeMs: number;
 };
 
-export type TaramaAdimi = 'hazirlik' | 'giris' | 'profiller' | 'kayit' | 'paket';
+export type TaramaAdimi = 'hazirlik' | 'giris' | 'profiller' | 'kayit' | 'paket' | 'secim';
 export type AdimDurumu = 'bekliyor' | 'suruyor' | 'tamam' | 'hata' | 'atlandi';
 export type ProfilAdimi = 'baglam' | 'tarama' | 'kesif';
 
@@ -87,7 +95,9 @@ export type TaramaOlayi =
   | { tur: 'engellendi'; yontem: string; adres: string; asama: string; neden: string }
   | { tur: 'bilgi'; mesaj: string }
   /** Girişin nasıl yapıldığı (iş durumunda / raporda görünür). */
-  | { tur: 'giris'; yontem: TaramaGirisYontemi };
+  | { tur: 'giris'; yontem: TaramaGirisYontemi }
+  /** "Sayfada seç": o ana kadar seçilen öğelerin tamamı (her değişiklikte; iş ekranında canlı görünür). */
+  | { tur: 'ogeler'; ogeler: SecilenOge[] };
 
 /** saklananOturum: saklanan oturum geçerliydi, giriş atlandı; bastanGiris: giriş formu dolduruldu. */
 export type TaramaGirisYontemi = 'saklananOturum' | 'bastanGiris';
@@ -110,5 +120,5 @@ export type GirisDenemesiSonucu = {
 };
 
 export type TaramaSonucu =
-  | { basarili: true; envanter: TaramaEnvanteri | KayitEnvanteri | AkisEnvanteri | GirisDenemesiSonucu }
+  | { basarili: true; envanter: TaramaEnvanteri | KayitEnvanteri | AkisEnvanteri | GirisDenemesiSonucu | OgeSecmeSonucu }
   | { basarili: false; hata: { kod: TaramaHataKodu; mesaj: string } };

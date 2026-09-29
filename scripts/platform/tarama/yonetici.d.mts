@@ -48,6 +48,11 @@ export type IsGorunumu = {
    * saklanan oturum bulundu mu (yalnız saklananOturum kipinde), oturum dosyası güncellendi mi.
    */
   giris: { kip: 'bastan' | 'saklananOturum'; yontem: 'saklananOturum' | 'bastanGiris' | null; oturumSaklandi: boolean | null; oturumGuncellendi: boolean } | null;
+  /** Öğe seçme ("Sayfada seç"): seçilen öğeler (sürerken canlı, bitince doğrulanmış) ve seçilebilecek türler. */
+  ogeler?: Array<Partial<import('./oge-isaretleri.mjs').SecilenOge>>;
+  ogeTurleri?: import('./oge-isaretleri.mjs').SecilenOgeTuru[];
+  /** Tarama: "Düğmeyi ve sonucu işaretle" uygulandıysa özeti. */
+  isaretOzeti?: import('./oge-isaretleri.mjs').IsaretOzeti;
 };
 
 export type OrtakAkisKaydi = { baslangicEkrani: { id: string; ad: string; urlYolu: string } };
@@ -70,6 +75,14 @@ export type TaramaYoneticisi = {
   girisTarifiOnizle(vt: Veritabani, id: string, isaretler: unknown, secimler?: unknown): import('../giris/giris-kaydi.mjs').KayittanTarifSonucu & {
     dogrulamaHatalari: string[]; ortam: IsGorunumu['ortam'];
   };
+  /** "Düğmeyi ve sonucu işaretle": keşif bulguları, işaretlenenler, öğe seçme için ortam / sayfa. */
+  isaretler(id: string): {
+    bulgular: import('./oge-isaretleri.mjs').KesifBulgusu[]; kosuVar: boolean; ogeler: import('./oge-isaretleri.mjs').SecilenOge[]; reddedilenler: string[];
+    ortam: IsGorunumu['ortam'] & { canli?: boolean }; hedefYol: string; girissiz: boolean; ekran: IsGorunumu['ekran']; projeId: string; mod: 'yeni' | 'analiz';
+    baglamProfili: string | null; ozet: IsGorunumu['ozet'];
+  };
+  /** İşaretlenenleri ve reddedilen bulguları taramanın paketine uygular (paket doğrulanır). */
+  isaretle(id: string, govde: Record<string, unknown>): { isaretOzeti: import('./oge-isaretleri.mjs').IsaretOzeti; ozet: IsGorunumu['ozet'] };
   aktif(): { id: string; ekran: IsGorunumu['ekran']; projeId: string } | null;
   iptal(id: string): { iptal: true };
   kodGonder(id: string, kod: unknown): { iletildi: true };

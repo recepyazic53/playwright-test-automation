@@ -26,7 +26,8 @@
 // adım / Korunan aksiyonlar" blokları, alan grubunda / aksiyonda kilitli not ve alanın yanında kilitli koşul olarak görünür;
 // kaydederken sunucu bunları modeldeki hâliyle aynen yazar. Korunan parçalı blok silinirken ve kaydetme onayında (artık
 // diyagramda olmayan korunan parçalar) ne kaybolacağı gösterilir.
-// Ekranın / ortak akışın akışını düzenlerken sağ listede "Listede olmayan alanı / düğmeyi elle ekle" (etiket + tür / yazı + seçici):
+// Ekranın / ortak akışın akışını düzenlerken sağ listede "Sayfada seç" (oge-secme.js: görünür tarayıcıda tıklayarak; seçiciyi Nöbetçi
+// üretir) ve "ileri düzey" olarak "Listede olmayan alanı / düğmeyi elle ekle" (etiket + tür / yazı + seçici):
 // kayıtta ya da modelde olmayan öğe (ör. boş başlayan ortak akışa sıfırdan adım) sağ listeye eklenir, kaydederken "elleOgeler"
 // olarak gider ve modele yazılır.
 // Ekranın akışında Giriş ile bloklar arasında salt görünüm "Ekran açılır" düğümü vardır (blok değildir; taşınmaz, silinmez): üstündeki
@@ -40,6 +41,7 @@ import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrol
 import { girisAyrintisi } from './senaryo-diyagrami.js';
 import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
 import { sinirHatalari } from './ekran-modeli-dogrulayici.mjs';
+import { sayfadaSecDiyalogu } from './oge-secme.js';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -903,7 +905,7 @@ export async function akisTasarimi(icerik, s) {
     const tur = h('select', { 'aria-label': 'Elle alan türü' }, [['text', 'Metin'], ['number', 'Sayı'], ['date', 'Tarih'], ['tel', 'Telefon'], ['email', 'E-posta'], ['textarea', 'Uzun metin'], ['checkbox', 'Onay kutusu']]
       .map(([d, m]) => h('option', { value: d }, m)));
     const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#aciklama', spellcheck: 'false', 'aria-label': 'Elle alan seçicisi' });
-    return elleFormu('Listede olmayan alanı elle ekle', [['Etiket', etiket], ['Tür', tur], ['Seçici (CSS)', secici]], 'Alanı ekle', () => {
+    return elleFormu('Listede olmayan alanı elle ekle (ileri düzey: CSS seçici)', [['Etiket', etiket], ['Tür', tur], ['Seçici (CSS)', secici]], 'Alanı ekle', () => {
       const e = etiket.value.trim();
       const sc = secici.value.trim();
       if (!e) return 'Alanın etiketini yazın.';
@@ -920,11 +922,55 @@ export async function akisTasarimi(icerik, s) {
       return null;
     });
   }
+  /**
+   * "Sayfada seç" (oge-secme.js): seçici yazmadan, sayfada tıklayarak. Düğme → sağ listeye + aksiyon bloğu, alan → sağ listeye
+   * (etkin gruba), başarı göstergesi → beklenen mesaj bloğu (metnin sabit kısmı). Elle eklenenlerle aynı yoldan kaydedilir.
+   */
+  function sayfadanEkle(ogeler) {
+    const ELLE = ['text', 'number', 'date', 'tel', 'email', 'textarea', 'checkbox'];
+    const alanTuru = (o) => (o.alan ? (ELLE.includes(o.alan.tur) ? o.alan.tur : ['search', 'url'].includes(o.alan.tur) ? 'text' : null) : ELLE.includes(o.alanTuru) ? o.alanTuru : 'text');
+    const uygunsuz = ogeler.filter((o) => o.tur === 'alan' && !alanTuru(o));
+    if (uygunsuz.length) return `${uygunsuz.map((o) => `“${o.metin || o.secici}”`).join(', ')}: açılır liste, radyo ve dosya alanları burada eklenemez; bunlar için ekranı tarayın.`;
+    for (const o of ogeler) {
+      if (o.tur === 'dugme') {
+        const m = o.metin || 'Düğme';
+        elle.dugmeler.push({ metin: m, secici: o.secici });
+        const sira = palet.dugmeler.length;
+        palet.dugmeler.push({ sira, metin: m, blok: null });
+        blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: sira, istegeBagli: false });
+      } else if (o.tur === 'alan') {
+        let n = elle.alanlar.length + 1;
+        while (alanBilgisi.has(`elle-${n}`)) n++;
+        const anahtar = `elle-${n}`;
+        const etiket = (o.metin || (o.alan && o.alan.etiket) || 'Alan').slice(0, 80);
+        elle.alanlar.push({ anahtar, etiket, tur: alanTuru(o), secici: o.secici });
+        const oge = { anahtar, etiket, tur: alanTuru(o), bolum: null, secili: true, zorunlu: false, not: 'sayfada seçildi', secenekSayisi: 0, blok: null, secenekler: null };
+        palet.alanlar.push(oge);
+        alanBilgisi.set(anahtar, oge);
+        if (bloklar[etkin] && bloklar[etkin].tur === 'alanlar') alanEkle(anahtar, etkin); else degisti();
+      } else {
+        // Beklenen mesaj: metnin sabit kısmı (rakamlı değişken kısım — numara, tutar — atılır).
+        const m = String(o.metin || '');
+        const i = m.search(/[^\s:;,()]*\d/);
+        const sabit = (i >= 0 ? m.slice(0, i) : m).replace(/[\s:;,.#(\-–—]+$/u, '').trim();
+        blokEkle(eklemeKonumu(), { tur: 'mesaj', mesaj: null, metin: (sabit.length >= 3 ? sabit : m).slice(0, 200) });
+      }
+    }
+    return null;
+  }
+  /** "Sayfada seç" düğmesi (bir kez kurulur). */
+  const sayfadaSecDugumu = ekranKipi ? h('div', { class: 'sayfada-sec' },
+    h('button', {
+      type: 'button', class: 'kucuk-dugme', onclick: () => {
+        void sayfadaSecDiyalogu({ proje: s.proje, ekranId: s.ekranId || '', turler: ['dugme', 'alan', 'basari'], ekle: sayfadanEkle });
+      }
+    }, ikon('hedef'), 'Sayfada seç'),
+    h('small', { class: 'soluk' }, 'Listede olmayan düğmeyi ya da alanı sayfada tıklayarak seçin; seçici yazmanız gerekmez.')) : null;
   /** "Listede olmayan düğmeyi elle ekle": yazı, seçici → sağ listenin sonuna eklenir ve aksiyon bloğu olarak konur. */
   function elleDugmeFormu() {
     const metin = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Onayla', 'aria-label': 'Elle düğme yazısı' });
     const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#onayla', spellcheck: 'false', 'aria-label': 'Elle düğme seçicisi' });
-    return elleFormu('Listede olmayan düğmeyi elle ekle', [['Düğmenin yazısı', metin], ['Seçici (CSS)', secici]], 'Düğmeyi ekle', () => {
+    return elleFormu('Listede olmayan düğmeyi elle ekle (ileri düzey: CSS seçici)', [['Düğmenin yazısı', metin], ['Seçici (CSS)', secici]], 'Düğmeyi ekle', () => {
       const m = metin.value.trim();
       const sc = secici.value.trim();
       if (!m) return 'Düğmenin yazısını girin.';
@@ -964,7 +1010,7 @@ export async function akisTasarimi(icerik, s) {
           return oge;
         })),
         palet.alanlar.some((a) => !a.secili) ? h('label', { class: 'onay-satiri kucuk' }, goster, `Kayıtta listeye alınmamış alanları da göster${gizli ? ` (${gizli})` : ''}`) : null,
-        !palet.alanlar.length && ekranKipi ? h('p', { class: 'soluk kucuk' }, 'Modelde alan yok. Aşağıdan seçicisiyle elle ekleyin.') : null
+        !palet.alanlar.length && ekranKipi ? h('p', { class: 'soluk kucuk' }, 'Modelde alan yok. Aşağıdaki “Sayfada seç” ile ekleyin.') : null
       ];
     } else if (paletSekmesi === 'dugmeler') {
       icerikEl = [palet.dugmeler.length ? h('ul', { class: 'palet-listesi' }, palet.dugmeler.map((d) => {
@@ -972,7 +1018,7 @@ export async function akisTasarimi(icerik, s) {
         return h('li', { class: `palet-ogesi${blok >= 0 ? ' kullanildi' : ''}` },
           h('div', { class: 'palet-metni' }, h('span', { class: 'ad' }, `“${d.metin}”`)), kullanim(blok),
           h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `“${d.metin}”: aksiyon ekle`, onclick: () => blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: d.sira, istegeBagli: false }) }, ikon('artiYalin'), 'Aksiyon ekle'));
-      })) : h('p', { class: 'soluk kucuk' }, ekranKipi ? 'Modelde düğme yok. Aşağıdan seçicisiyle elle ekleyin.' : 'Kayıtta düğmeye basılmadı.')];
+      })) : h('p', { class: 'soluk kucuk' }, ekranKipi ? 'Modelde düğme yok. Aşağıdaki “Sayfada seç” ile ekleyin.' : 'Kayıtta düğmeye basılmadı.')];
     } else {
       icerikEl = palet.mesajlar.length ? h('ul', { class: 'palet-listesi' }, palet.mesajlar.map((m) => {
         const blok = bloklar.findIndex((b) => b.tur === 'mesaj' && b.mesaj === m.sira);
@@ -990,7 +1036,8 @@ export async function akisTasarimi(icerik, s) {
       icerikEl);
     if (ekranKipi) {
       const d = paletSekmesi === 'alanlar' ? (elleDugumleri.alan ??= elleAlanFormu()) : paletSekmesi === 'dugmeler' ? (elleDugumleri.dugme ??= elleDugmeFormu()) : null;
-      if (elleKap.firstChild !== d) yerlestir(elleKap, d);
+      // "Sayfada seç" her sekmede; CSS seçicili elle ekleme formu "ileri düzey" olarak altında.
+      if (elleKap.firstChild !== sayfadaSecDugumu || (elleKap.childNodes[1] ?? null) !== d) yerlestir(elleKap, sayfadaSecDugumu, d);
     }
   }
 
@@ -1146,7 +1193,7 @@ export async function akisTasarimi(icerik, s) {
     s.ust,
     h('div', { class: 'not-kutusu bilgi' },
       ekranKipi
-        ? h('p', {}, `Akış bu ${veri.ortakAkis ? 'ortak akışın' : 'ekranın'} alanlarıyla kurulur (başka ekranın alanı gelmez). Listede olmayan bir alanı ya da düğmeyi sağdaki listeden seçicisiyle elle ekleyin${veri.ortakAkis ? ' ya da “Akışı kaydet” ile bir başlangıç ekranından kaydedin.' : ' ya da önce “Akışı kaydet” / “Ekranı tara” ile ekranı tanıtın.'}`)
+        ? h('p', {}, `Akış bu ${veri.ortakAkis ? 'ortak akışın' : 'ekranın'} alanlarıyla kurulur (başka ekranın alanı gelmez). Listede olmayan bir alanı ya da düğmeyi sağdaki “Sayfada seç” ile sayfada tıklayarak (ileri düzey: seçicisiyle elle) ekleyin${veri.ortakAkis ? ' ya da “Akışı kaydet” ile bir başlangıç ekranından kaydedin.' : ' ya da önce “Akışı kaydet” / “Ekranı tara” ile ekranı tanıtın.'}`)
         : h('p', {}, 'Kayıttan hazırlanan taslak: her düğme basışı bir aksiyon, aradaki alanlar bir alan grubu. Adımları adlandırın, gereksiz blokları silin, eksikleri “+” ile ekleyin.'),
       ortakKayit
         ? h('p', { class: 'ortak-akis-kaydi-notu' }, h('b', {}, `Kayıt “${ortakKayit.baslangicEkrani.ad}” ekranından başladı. `),

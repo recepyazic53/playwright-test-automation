@@ -8,7 +8,14 @@
 //                         (form gönderimi, XHR POST, sendBeacon…) → iptal. Giriş ve bağlam değiştirme aşamaları
 //                         tarif güdümlüdür (izinli). KAYIT aşamasında ("Akışı kaydet") akışı kullanıcı yürütür:
 //                         yazma istekleri izinlidir (kullanıcı bunu başlatırken onaylar); yasaklı host ve izinli köken
-//                         engeli bu aşamada da geçerlidir.
+//                         engeli bu aşamada da geçerlidir. SEÇME aşamasında ("Sayfada seç"; öğe seçme) tarama gibi
+//                         yalnız GET/HEAD geçer: kullanıcının açtığı pencereden de kayıt oluşturan / gönderen istek gitmez.
+//   kesifGuvenligi        GÜVENLİ DÜĞME KURALININ keşif için genişletilmiş hâli: keşif YALNIZ seçim değiştirir (açılır liste,
+//                         radyo, onay kutusu); düğmeye / bağlantıya hiç dokunmaz. Etiketi, adı ya da seçenekleri kayıt
+//                         oluşturmayı / göndermeyi / onaylamayı / silmeyi / ödemeyi çağrıştıran seçim de DENENMEZ (ör. "Kaydı
+//                         onaylıyorum", "Otomatik gönder"). Sayfanın kendi betiği keşif sırasında bir düğmeye basmaya çalışırsa
+//                         tıklama sayfa içinde yutulur (sayfa-envanteri.ts > formGonderimKorumasi) ve yazma istekleri ağ
+//                         katmanında iptal edilir.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: koruma.d.mts.
 
 import { adresYasakliMi } from '../senaryolar/model-kosusu.mjs';
@@ -127,6 +134,30 @@ export function istekKarari(i) {
     try { koken = new URL(adres).origin; } catch { koken = ''; }
     if (!i.izinliKokenler.includes(koken)) return { izin: false, neden: 'izinsiz-koken' };
   }
-  if (i.asama === 'tarama' && !OKUMA_YONTEMLERI.includes(String(i.yontem).toUpperCase())) return { izin: false, neden: 'yazma' };
+  if ((i.asama === 'tarama' || i.asama === 'secme') && !OKUMA_YONTEMLERI.includes(String(i.yontem).toUpperCase())) return { izin: false, neden: 'yazma' };
   return { izin: true };
+}
+
+/** Keşfin dokunabileceği alan türleri (seçimler). Düğmeler, bağlantılar ve metin alanları hiçbir zaman değiştirilmez. */
+export const KESIF_TURLERI = Object.freeze(['select', 'radio', 'checkbox']);
+/**
+ * Kayıt oluşturmayı / göndermeyi / onaylamayı / silmeyi / ödemeyi çağrıştıran sözcükler (etiket, ad, kimlik, seçenek metni).
+ * Böyle bir seçim keşifte denenmez (değiştirilmesi sayfanın bir işlemi başlatmasına yol açabilir).
+ */
+export const KESIF_RISKLI_DESENI = /(kaydet|kayd[ıi] ?(oluştur|tamamla)|gönder|onay|kabul|sil\b|silin|iptal|öde\b|ödemeyi (yap|tamamla)|satın|imzala|tamamla|bitir|sipariş ver|submit|save|send|delete|remove|confirm|accept|agree|approve|pay\b|purchase|checkout)/iu;
+
+/**
+ * Keşif bu alanı değiştirebilir mi? (güvenli düğme kuralının keşif hâli). Yalnız etkin, salt okunur olmayan seçimler; kayıt /
+ * gönderim çağrıştıran etiketli olanlar atlanır (neden raporda görünür).
+ * @param {{ tur: string; etiket?: string | null; ad?: string | null; kimlik?: string | null; devreDisi?: boolean; saltOkunur?: boolean;
+ *   radyolar?: Array<{ metin?: string | null; deger?: string }> }} a
+ * @returns {{ guvenli: true } | { guvenli: false; neden: string }}
+ */
+export function kesifGuvenligi(a) {
+  if (!KESIF_TURLERI.includes(String(a.tur))) return { guvenli: false, neden: 'yalnız açılır liste, radyo ve onay kutusu denenir' };
+  if (a.devreDisi || a.saltOkunur) return { guvenli: false, neden: 'devre dışı ya da salt okunur' };
+  const metinler = [a.etiket, a.ad, a.kimlik, ...(a.radyolar ?? []).map((r) => r.metin)].filter((m) => typeof m === 'string' && m);
+  const riskli = metinler.find((m) => KESIF_RISKLI_DESENI.test(String(m)));
+  if (riskli) return { guvenli: false, neden: `güvenlik: "${String(riskli).slice(0, 60)}" kayıt / gönderim çağrıştırıyor, denenmedi` };
+  return { guvenli: true };
 }

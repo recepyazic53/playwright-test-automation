@@ -3,13 +3,15 @@
 //
 // Akış: yasaklı adres denetimi (tarayıcı açılmadan) → giriş (tarif + giriş profili; CAPTCHA/kimlik/zaman aşımı açık
 // hatalar) → her bağlam profili için: bağlam değiştirme (tarif adımları) → YENİ sekmede hedef sayfa (form gönderimi
-// etkisiz) → sakinleşme → görünür alan envanteri → ekran görüntüsü → isteğe bağlı seçim keşfi (≤ 8 seçenekli her
-// açılır listede her seçenek denenir, beliren/kaybolan alanlar kaydedilir, ilk değer geri yüklenir).
+// etkisiz) → sakinleşme → görünür alan envanteri → ekran görüntüsü → seçim keşfi (varsayılan açık; açılır listelerde, radyo
+// gruplarında ve onay kutularında diğer seçenekler denenir; beliren/kaybolan/etkinleşen alanlar ve seçenekleri değişen bağımlı
+// listeler kaydedilir, ilk değer geri yüklenir; kayıt / gönderim çağrıştıran seçimler denenmez — koruma.mjs > kesifGuvenligi).
 //
 // Çerçeveler (iframe): aynı kökenli çerçevelerin alanları da okunur (sayfa-envanteri.ts; en çok 2 düzey, alanın "cerceve"si);
 // başka kökenli çerçeveler notlara "okunamadı" diye yazılır. Gizli <select>'e bağlı özel açılır listeler alan olarak okunur.
 //
-// GÜVENLİK: düğme/bağlantıya TIKLANMAZ, form GÖNDERİLMEZ, alanlara YAZILMAZ, Enter'a basılmaz. Tarama aşamasında GET/HEAD
+// GÜVENLİK: düğme/bağlantıya TIKLANMAZ (sayfanın kendi betiğinin düğme tıklamaları da yutulur — dugmeTiklamaKorumasi), form
+// GÖNDERİLMEZ, metin alanlarına YAZILMAZ, Enter'a basılmaz. Tarama aşamasında GET/HEAD
 // dışındaki HER istek ağ katmanında iptal edilir ve kaydedilir (giriş ve bağlam değiştirme tarif güdümlüdür). Engel bağlam (context)
 // düzeyindedir: çerçevelerin (iframe) istekleri de aynı kurala tabidir; form gönderim koruması (init betiği) çerçevelerde de çalışır.
 // Yasaklı host'a giden her istek her aşamada iptal edilir. Oturum alt süreçte diske yazılmaz ("Koşunun saklanan oturumunu
@@ -19,11 +21,11 @@ import { GirisHatasi, baglamiDegistir } from '../../../tests/support/giris-motor
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
-import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
+import { KESIF_TURLERI, adresOzeti, istekKarari, kesifGuvenligi, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
 import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
-import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
+import { dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 
 /** Sayfa envanteri okuyucusunu her belgeye (çerçeveler dahil) veren init betiği: çerçevelerin içi kendi penceresinde okunur. */
 export const ENVANTER_BETIGI = `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
@@ -186,6 +188,7 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
       const sayfa = await baglam.newPage();
       const notlar: string[] = [];
       await sayfa.addInitScript(formGonderimKorumasi);
+      await sayfa.addInitScript(dugmeTiklamaKorumasi);
       await sayfa.addInitScript({ content: ENVANTER_BETIGI });
       sayfa.on('dialog', (d) => { notlar.push(`Sayfa bir iletişim kutusu açtı (${d.type()}); kapatıldı.`); void d.dismiss().catch(() => undefined); });
       sayfa.on('popup', (y) => { notlar.push('Sayfa yeni bir pencere açmaya çalıştı; kapatıldı.'); void y.close().catch(() => undefined); });
@@ -260,43 +263,103 @@ async function profilTara(
   return { profil, yol: acilan, baslik: envanter.baslik, alanlar: envanter.alanlar, kesifler, ekranGoruntusu, notlar };
 }
 
+/** Keşif adayı: seçim alanı + denenecek değerler (tur: açılır liste / radyo grubu / onay kutusu). */
+type KesifAdayi = { alan: HamAlan; tur: 'secim' | 'radyo' | 'onay'; degerler: HamSecenek[]; kismi: boolean };
+
 /**
- * Seçim keşfi: ≤ sinir (Ayarlar > Koşu > Açılır liste keşif sınırı; varsayılan 8) seçenekli, etkin, tekli her açılır listede diğer seçenekler sırayla seçilir; beliren/kaybolan
- * alanlar ve seçenekleri DEĞİŞEN diğer seçim alanları (bağımlı listeler; yalnız seçenek etiketi/değeri) kaydedilir; sonunda
- * ilk değer geri yüklenir. Seçim sayfayı başka adrese götürürse not düşülür ve hedefe
- * dönülür. (selectOption yalnızca sayfa içi durumu değiştirir; buna bağlı yazma istekleri ağ katmanında iptal edilir.)
+ * Keşfin adayları (sayfa sırasıyla). Açılır liste: etkin, tekli, ≥ 2 seçenekli; ≤ sinir seçenekliyse hepsi, daha uzunsa yalnız ilk
+ * "sinir" seçenek denenir (kismi: yalnız bağımlı liste çıkarılır). Radyo grubu: 2…sinir seçenek. Onay kutusu: işaretli / işaretsiz.
+ * Güvenli düğme kuralı (koruma.mjs > kesifGuvenligi): kayıt / gönderim çağrıştıran seçim atlanır ve raporlanır.
+ */
+function kesifAdaylari(temel: SayfaEnvanteri, sinir: number, atlananlar: Kesif[]): KesifAdayi[] {
+  const adaylar: KesifAdayi[] = [];
+  for (const a of temel.alanlar) {
+    if (!KESIF_TURLERI.includes(a.tur) || a.devreDisi || a.saltOkunur) continue;
+    let aday: KesifAdayi | null = null;
+    if (a.tur === 'select' && !a.coklu && (a.secenekler?.length ?? 0) >= 2) {
+      const liste = a.secenekler ?? [];
+      aday = { alan: a, tur: 'secim', degerler: liste.length <= sinir ? liste : liste.filter((s) => s.deger !== '').slice(0, sinir), kismi: liste.length > sinir };
+    } else if (a.tur === 'radio' && (a.radyolar?.length ?? 0) >= 2 && (a.radyolar?.length ?? 0) <= sinir && a.radyolar?.every((r) => r.deger !== '')) {
+      aday = { alan: a, tur: 'radyo', degerler: (a.radyolar ?? []).map((r) => ({ deger: r.deger, metin: r.metin ?? r.deger })), kismi: false };
+    } else if (a.tur === 'checkbox') {
+      aday = { alan: a, tur: 'onay', degerler: [{ deger: 'true', metin: 'işaretli' }, { deger: 'false', metin: 'işaretsiz' }], kismi: false };
+    }
+    if (!aday) continue;
+    const g = kesifGuvenligi(a);
+    if (!g.guvenli) { atlananlar.push({ secim: a.anahtar, ilkDeger: null, degerler: [], geriAlindi: true, atlandi: g.neden, tur: aday.tur }); continue; }
+    adaylar.push(aday);
+  }
+  return adaylar;
+}
+
+/**
+ * Sayfa içi: radyo / onay kutusuna TIKLAR (yalnız bu öğeye; öğe bir düğmenin / bağlantının içindeyse hiç dokunmaz). Tıklama
+ * tarayıcının kendi olaylarını (click → input → change) üretir; çerçeveler arası diye sınıf yerine etiket adıyla denetlenir.
+ */
+function secimeTikla(el: Element): boolean {
+  const t = el as HTMLInputElement;
+  if (el.tagName !== 'INPUT' || !['radio', 'checkbox'].includes(t.type) || t.disabled) return false;
+  if (el.closest('a[href], button, [role="button"], [role="link"]')) return false;
+  t.click();
+  return true;
+}
+
+/**
+ * Seçim keşfi: açılır listelerde diğer seçenekler, radyo gruplarında diğer seçenekler, onay kutularında ters durum sırayla denenir
+ * (Ayarlar > Koşu > Açılır liste keşif sınırı; varsayılan 8). Beliren / kaybolan alanlar, seçenekleri DEĞİŞEN diğer seçim alanları
+ * (bağımlı listeler; yalnız seçenek etiketi / değeri) ve etkinleşen alanlar kaydedilir; sonunda ilk değer geri yüklenir. Seçim sayfayı
+ * başka adrese götürürse not düşülür ve hedefe dönülür. Keşif HİÇBİR düğmeye / bağlantıya basmaz; sayfanın betiği bassa da
+ * tıklama yutulur (dugmeTiklamaKorumasi) ve yazma istekleri ağ katmanında iptal edilir.
  */
 async function secimleriKesfet(
   sayfa: Page, temel: SayfaEnvanteri, notlar: string[], git: () => Promise<void>,
   sakinles: (page: Page, ms: number) => Promise<void>, sinir: number
 ): Promise<Kesif[]> {
   const kesifler: Kesif[] = [];
-  const adaylar = temel.alanlar.filter((a) => a.tur === 'select' && !a.coklu && !a.devreDisi && !a.saltOkunur
-    && (a.secenekler?.length ?? 0) >= 2 && (a.secenekler?.length ?? 0) <= sinir);
+  const adaylar = kesifAdaylari(temel, sinir, kesifler);
   const anahtarlar = async (): Promise<SayfaEnvanteri> => envanterOku(sayfa);
   const adresAyni = (a: string, b: string): boolean => kokVeYol(a) === kokVeYol(b);
-  for (const s of adaylar) {
-    const l = alanKapsami(sayfa, s.cerceve).locator(s.secici).first();
+  for (const { alan: s, tur, degerler: denenecek, kismi } of adaylar) {
+    const kapsam = alanKapsami(sayfa, s.cerceve);
+    const l = kapsam.locator(s.secici).first();
     // Özel açılır listenin gerçek <select>'i gizlidir: seçim görünürlük beklenmeden yapılır (olaylar yine gönderilir).
     const zorla = s.ozelBilesen === true;
-    let ilk: string;
+    /** Radyonun seçeneği: grubun seçicisi + değer (adsız grupta seçeneğin kendi seçicisi). */
+    const radyo = (deger: string) => {
+      const r = s.radyolar?.find((x) => x.deger === deger);
+      return s.ad ? kapsam.locator(`${s.secici}[value="${deger.replace(/["\\]/g, '\\$&')}"]`).first() : r?.secici ? kapsam.locator(r.secici).first() : null;
+    };
+    const oku = async (): Promise<string | null> => {
+      if (tur === 'secim') return l.inputValue({ timeout: 3_000 });
+      if (tur === 'onay') return String(await l.isChecked({ timeout: 3_000 }));
+      return kapsam.locator(s.secici).evaluateAll((els) => (els.find((e) => (e as HTMLInputElement).checked) as HTMLInputElement | undefined)?.value ?? null);
+    };
+    const uygula = async (deger: string): Promise<void> => {
+      if (tur === 'secim') { await l.selectOption({ value: deger }, { timeout: 3_000, force: zorla }); return; }
+      const hedef = tur === 'onay' ? l : radyo(deger);
+      if (!hedef) throw new Error('seçenek bulunamadı');
+      if (tur === 'onay' && String(await hedef.isChecked({ timeout: 3_000 })) === deger) return;
+      if (!(await hedef.evaluate(secimeTikla, undefined, { timeout: 3_000 }))) throw new Error('güvenlik: öğe bir düğmenin/bağlantının içinde ya da devre dışı; dokunulmadı');
+    };
+    let ilk: string | null;
     try {
-      ilk = await l.inputValue({ timeout: 3_000 });
+      ilk = await oku();
     } catch {
-      kesifler.push({ secim: s.anahtar, ilkDeger: null, degerler: [], geriAlindi: false, atlandi: 'liste ekranda bulunamadı' });
+      kesifler.push({ secim: s.anahtar, ilkDeger: null, degerler: [], geriAlindi: false, atlandi: 'alan ekranda bulunamadı', tur });
       continue;
     }
     const baslangic = await anahtarlar();
     const temelAnahtarlar = new Set(baslangic.alanlar.map((a) => a.anahtar));
+    const devreDisiAnahtarlar = new Set(baslangic.alanlar.filter((a) => a.devreDisi).map((a) => a.anahtar));
     // Bağımlı listeler: bu seçim değişince seçenekleri değişen diğer seçim alanları (ilk değerdeki listelere göre).
     const secenekImzasi = (a: HamAlan): string => JSON.stringify((a.secenekler ?? a.radyolar ?? []).map((x) => x.deger));
     const temelSecenekler = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar && (a.secenekler || a.radyolar)).map((a) => [a.anahtar, secenekImzasi(a)]));
     const degerler: KesifDegeri[] = [];
-    for (const o of s.secenekler ?? []) {
+    for (const o of denenecek) {
       if (o.deger === ilk) continue;
       const onceki = sayfa.url();
       try {
-        await l.selectOption({ value: o.deger }, { timeout: 3_000, force: zorla });
+        await uygula(o.deger);
       } catch (hata) {
         degerler.push({ deger: o.deger, metin: o.metin, gorunenler: [], kaybolanlar: [], gezinme: null, hata: `seçilemedi: ${adreslerGizli(ilkSatir(hata)).slice(0, 120)}` });
         continue;
@@ -324,18 +387,31 @@ async function secimleriKesfet(
         if (temel === undefined || temel === secenekImzasi(a)) continue;
         secenekler[a.anahtar] = a.secenekler ?? (a.radyolar ?? []).map((x) => ({ deger: x.deger, metin: x.metin ?? x.deger }));
       }
+      const etkinlesenler = simdi.alanlar.filter((a) => devreDisiAnahtarlar.has(a.anahtar) && !a.devreDisi).map((a) => a.anahtar);
       degerler.push({
         deger: o.deger, metin: o.metin, gorunenler, kaybolanlar: [...temelAnahtarlar].filter((k) => !simdiAnahtarlar.has(k)), gezinme: null,
-        ...(Object.keys(secenekler).length ? { secenekler } : {})
+        ...(Object.keys(secenekler).length ? { secenekler } : {}), ...(etkinlesenler.length ? { etkinlesenler } : {})
       });
     }
     let geriAlindi = false;
     try {
-      if ((await l.inputValue({ timeout: 2_000 })) !== ilk) {
-        await l.selectOption({ value: ilk }, { timeout: 3_000, force: zorla });
+      if ((await oku()) !== ilk) {
+        if (ilk !== null) await uygula(ilk);
+        else {
+          // Başta hiçbir radyo seçili değildi: seçim kaldırılır (tıklamadan; olaylar gönderilir).
+          await kapsam.locator(s.secici).evaluateAll((els) => {
+            for (const e of els) {
+              const r = e as HTMLInputElement;
+              if (!r.checked) continue;
+              r.checked = false;
+              r.dispatchEvent(new Event('input', { bubbles: true }));
+              r.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          });
+        }
         await sakinles(sayfa, SECIM_BEKLEME_MS);
       }
-      geriAlindi = (await l.inputValue({ timeout: 2_000 })) === ilk;
+      geriAlindi = (await oku()) === ilk;
     } catch {
       geriAlindi = false;
     }
@@ -343,7 +419,7 @@ async function secimleriKesfet(
       notlar.push(`"${s.etiket ?? s.anahtar}" ilk değerine geri alınamadı; sayfa yeniden açıldı.`);
       await git();
     }
-    kesifler.push({ secim: s.anahtar, ilkDeger: ilk, degerler, geriAlindi });
+    kesifler.push({ secim: s.anahtar, ilkDeger: ilk, degerler, geriAlindi, tur, ...(kismi ? { kismi: true } : {}) });
   }
   return kesifler;
 }

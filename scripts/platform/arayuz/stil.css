@@ -1956,6 +1956,33 @@ dialog.claude-diyalogu:has(.tarama-diyalogu) { width: min(46rem, calc(100vw - 2r
 .tarama-ozeti > span { flex: 1; min-width: 0; }
 @media (max-width: 860px) { .tarama-ikili { grid-template-columns: minmax(0, 1fr); } }
 
+/* "Sayfada seç" ve "Düğmeyi ve sonucu işaretle" (oge-secme.js) */
+.oge-secme-karti { display: grid; gap: 10px; min-width: 0; }
+.oge-secme-ust { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; min-width: 0; }
+.oge-secme-durumu { flex: 1 1 16rem; min-width: 0; }
+.oge-secme-durumu p, .oge-secme-durumu .not-kutusu { margin: 0; }
+.oge-secme-canli { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.oge-secme-canli > span:nth-child(2) { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.secilen-oge-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.secilen-oge { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 11rem) auto; gap: 8px; align-items: center; padding: 8px 10px;
+  border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.secilen-oge-metni { display: grid; gap: 2px; min-width: 0; }
+.secilen-oge-metni .ad, .secilen-oge-metni code { overflow-wrap: anywhere; word-break: break-word; }
+.secilen-oge select { width: 100%; min-width: 0; }
+.kesif-bulgulari { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.kesif-bulgusu .onay-satiri { align-items: flex-start; overflow-wrap: anywhere; }
+.isaret-ozeti ul { display: grid; gap: 4px; margin: 0 0 8px; }
+.isaret-ozeti li { display: flex; gap: 6px; align-items: center; }
+.isaret-ozeti .ikon { width: 14px; height: 14px; flex: none; color: var(--metin-3); }
+.uyari-metni { color: var(--durdu); display: flex; gap: 6px; align-items: flex-start; }
+.uyari-metni .ikon { flex: none; }
+.isaretleme-duzeni .kart + .kart { margin-top: 14px; }
+.sayfada-sec { margin-top: 10px; display: grid; gap: 4px; }
+@media (max-width: 860px) {
+  .secilen-oge { grid-template-columns: minmax(0, 1fr) auto; }
+  .secilen-oge select { grid-column: 1 / -1; }
+}
+
 /* Ekran yönetimi (⋯ menüsü, devre dışı / silinmiş ekranlar, silme onayı) */
 .ekran-karti-rozetler { position: relative; z-index: 2; display: flex; align-items: center; gap: 6px; flex: none; }
 .ekran-karti-ad code { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

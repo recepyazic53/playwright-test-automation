@@ -1,13 +1,15 @@
 // "Ekranı otomatik tara" arayüzü (genel; Ekranlar bölümü):
 //   taramaDiyalogu  başlatma diyaloğu — ortam, bağlam profilleri (tekrar analiz diyaloğuyla ortak seçim; ekran için son
-//                   seçim işaretli gelir ama HER SEFERİNDE onay istenir), hedef yol, seçim keşfi, yeni ekranın adı/anahtarı
+//                   seçim işaretli gelir ama HER SEFERİNDE onay istenir), hedef yol, seçim keşfi (varsayılan AÇIK; açılır liste,
+//                   radyo ve onay kutusu; CANLI ortamda kapalı başlar, açılırsa ayrıca onay), yeni ekranın adı/anahtarı
 //                   ve açık uyarı ("Bu işlem seçilen ortama bağlanır; hiçbir şey kaydedilmez/gönderilmez") + onay kutusu.
 //   kayitDiyalogu   "Akışı kaydet" başlatma diyaloğu — ortam (CANLI ortamda başlatırken ayrıca onay), EN FAZLA BİR bağlam profili (her
 //                   seferinde sorulur), başlangıç sayfası, yeni ekranın adı/anahtarı ve açık uyarı ("bastığınız düğmeler siteye
 //                   gerçek istek gönderir; değerler kaydedilmez") + onay kutusu. Kayıt aynı iş ekranında izlenir.
 //   taramaEkrani    #/ekranlar/tarama/<iş kimliği>: adımlar (güvenlik kontrolü, giriş, bağlam profilleri, paket), profil
 //                   başına durum (bekliyor/sürüyor/tamam/hata + alan sayısı), engellenen istekler, SMS kodu istemi, İptal,
-//                   açık hata mesajları. Tarama bitince paket, yüklenen paketle AYNI önizleme → kabul (yeni ekran) ya da
+//                   açık hata mesajları. Tarama bitince önce "Düğmeyi ve sonucu işaretle" (oge-secme.js: keşif bulgularının
+//                   onayı + "Sayfada seç" ile düğme / sonuç), sonra paket, yüklenen paketle AYNI önizleme → kabul (yeni ekran) ya da
 //                   "Bulguları hesapla" (mevcut ekran) adımına girer (sayfa-paketi.js > taranmisPaketAkisi).
 //                   Akış kaydı bitince önce "Akış diyagramı" (akis-tasarimi.js; kayıttan hazırlanan taslak) açılır; "Kaydet ve
 //                   önizle" ile paket oluşur, önizlemede "Diyagrama dön" ile düzenlemeye geri dönülebilir.
@@ -18,7 +20,9 @@ import { alan, api, bildir, h, ikon, mesgulIken, rozet, tarihMetni, yerlestir } 
 import { baglamProfiliSecimi, baslangicEkraniSecimi, diyalogAc } from './ekran-ortak.js';
 import { taranmisPaketAkisi } from './sayfa-paketi.js';
 import { akisTasarimi } from './akis-tasarimi.js';
-import { canliOnayEki, canliOnayIste, ortamSecenekMetni } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, onayIste, ortamSecenekMetni } from './kosu-paneli.js';
+import { taramaIsaretlemeAdimi } from './oge-secme.js';
+import { riskliOrtamMi } from './ortam-riski.mjs';
 
 const YOKLAMA_MS = 1000;
 const sonSecimAnahtari = (projeId) => `nobetci-tarama-son-${projeId}`;
@@ -82,7 +86,11 @@ export async function taramaDiyalogu(s) {
 
   const ortamSecimi = h('select', {}, v.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ilkOrtam.id }, o.ad)));
   const hedef = h('input', { type: 'text', value: son.hedef || (v.ekran && v.ekran.urlYolu) || '', placeholder: '/satis/odeme/', spellcheck: 'false', autocomplete: 'off' });
-  const kesif = h('input', { type: 'checkbox', checked: son.kesif !== false });
+  // Seçim keşfi varsayılan AÇIK (koşullu alanlar ve bağımlı listeler için); CANLI ortamda kapalı başlar, açılırsa ayrıca onay istenir.
+  const kesif = h('input', { type: 'checkbox', checked: son.kesif !== false && !riskliOrtamMi(ilkOrtam) });
+  /** Keşfi açmak için onay verilen CANLI ortam (ortam değişince geçersiz). */
+  let kesifOnayliOrtam = null;
+  let oncekiOrtamCanli = riskliOrtamMi(ilkOrtam);
   const girissiz = h('input', { type: 'checkbox', id: 'tarama-girissiz' });
   const onay = h('input', { type: 'checkbox', id: 'tarama-onayi' });
   const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Ödeme formu', autocomplete: 'off' });
@@ -131,10 +139,27 @@ export async function taramaDiyalogu(s) {
       : h('div', { class: 'bos-liste' }, t ? 'Bu ortamın giriş tarifinde bağlam değiştirme yok; sayfa giriş sonrası bağlamla tek kez taranır.' : 'Giriş tarifi olmadığı için bağlam profilleri uygulanamaz.'));
     guncelle();
   }
-  ortamSecimi.addEventListener('change', ortamCiz);
+  ortamSecimi.addEventListener('change', () => {
+    // CANLI ortama geçince keşif kapanır; Test ortamına dönünce varsayılan (açık) gelir.
+    const canli = riskliOrtamMi(secilenOrtam());
+    if (canli !== oncekiOrtamCanli) kesif.checked = !canli && son.kesif !== false;
+    oncekiOrtamCanli = canli;
+    kesifOnayliOrtam = null;
+    ortamCiz();
+  });
   girissiz.addEventListener('change', ortamCiz);
   hedef.addEventListener('input', guncelle);
   onay.addEventListener('change', guncelle);
+  kesif.addEventListener('change', async () => {
+    const o = secilenOrtam();
+    if (!kesif.checked || !riskliOrtamMi(o)) return;
+    const tamam = await onayIste({
+      baslik: 'CANLI ortamda seçim keşfi açılsın mı?', ikonAd: 'uyari', dugme: 'Keşfi aç', tehlikeli: false,
+      metin: `“${o.ad}” CANLI bir ortam. Keşif sayfadaki açılır listeleri, radyoları ve onay kutularını tek tek değiştirip geri alır. Hiçbir düğmeye basmaz, form göndermez, yazma istekleri engellenir; yine de sayfa seçim değişikliğinde kendi işlemini başlatabilir.`
+    });
+    if (tamam) kesifOnayliOrtam = o.id;
+    else kesif.checked = false;
+  });
 
   const calisan = v.calisanIs ? h('div', { class: 'not-kutusu bilgi' }, `Şu anda "${v.calisanIs.ekran.ad}" taranıyor; aynı anda tek tarama çalışır. `,
     h('a', { href: taramaAdresi(v.calisanIs.id), onclick: () => diyalog.close() }, 'İlerlemeyi göster')) : null;
@@ -153,8 +178,8 @@ export async function taramaDiyalogu(s) {
     girissizSatiri(girissiz, 'tarama-girissiz'),
     h('div', { class: 'ara-baslik' }, 'Bağlam profilleri'),
     profilAlani,
-    h('label', { class: 'onay-satiri' }, kesif, h('span', {}, h('b', {}, 'Açılır listeleri keşfet'),
-      h('small', { class: 'soluk' }, ' — en fazla 8 seçenekli her listede seçenekler tek tek denenir; beliren/kaybolan alanlar görünürlük koşulu olur, sonra ilk değer geri yüklenir.'))),
+    h('label', { class: 'onay-satiri' }, kesif, h('span', {}, h('b', {}, 'Açılır listeleri keşfet (radyo ve onay kutuları dahil)'),
+      h('small', { class: 'soluk' }, ' — seçimler tek tek denenir: beliren alanlar görünürlük koşulu, seçenekleri değişen listeler (ör. İl → İlçe) bağımlı liste olur; sonra ilk değerler geri yüklenir. Keşif yalnız seçimleri değiştirir, hiçbir düğmeye basmaz. CANLI ortamda kapalı başlar.'))),
     h('div', { class: 'not-kutusu uyari tarama-uyarisi', role: 'note' },
       h('b', {}, 'Bu işlem seçilen ortama bağlanır; hiçbir şey kaydedilmez/gönderilmez.'),
       h('ul', {},
@@ -175,6 +200,7 @@ export async function taramaDiyalogu(s) {
       projeId: s.proje.id, ekranId: s.ekran ? s.ekran.id : null, ekranAdi: s.ekran ? undefined : ad.value.trim(),
       ekranAnahtari: s.ekran ? undefined : anahtar.value.trim() || anahtarOner(ad.value), ortamId: ortamSecimi.value,
       baglamProfilleri: [...secili], hedef: hedef.value.trim(), kesif: kesif.checked, onay: onay.checked, girissiz: girissiz.checked,
+      ...(kesif.checked && kesifOnayliOrtam === ortamSecimi.value ? { kesifCanliOnay: true } : {}),
       ...(yeniOrtak(s) ? { olusturulacak: 'ortakAkis' } : {})
     };
     // CANLI ortam: başlamadan önce tek tip onay (sunucu canliOnay: true ister; canlı ortam izni de gerekir).
@@ -480,17 +506,32 @@ export function taramaEkrani(icerik, s) {
         d.ekran.id ? h('a', { class: 'dugme hayalet', href: `#/ekranlar/e/${encodeURIComponent(d.ekran.id)}/yukle` }, ikon('yukle'), 'Paket yükle') : null)) : null);
   };
 
+  // Otomatik tarama: önizlemeden önce "Düğmeyi ve sonucu işaretle" (keşif bulgularının onayı + sayfada seçilen düğme / sonuç).
+  let isaretlemeGecildi = false;
   const pakete = async (d) => {
+    // Yeni ortak akış taramasında adım yok (ortak akışın diyagramında "Sayfada seç" vardır).
+    if (d.kip === 'tarama' && d.olusturulacak !== 'ortakAkis' && !isaretlemeGecildi) {
+      await taramaIsaretlemeAdimi(icerik, {
+        proje: s.proje, isId: s.isId,
+        devam: async () => { isaretlemeGecildi = true; await pakete((await api(`/platform/tarama/durum?id=${encodeURIComponent(s.isId)}`)).is); }
+      });
+      return;
+    }
     const p = await api(`/platform/tarama/paket?id=${encodeURIComponent(s.isId)}`);
     const o = d.ozet || {};
+    const io = d.isaretOzeti;
     const ust = h('div', { class: 'bilgi-seridi tarama-ozeti' }, ikon('onay'),
       d.kip === 'kayit'
         ? h('span', {}, `Kayıt tamamlandı: ${o.adimSayisi ?? '?'} adım, ${o.alanSayisi ?? '?'} alan`,
           d.mod === 'analiz' ? `, mevcut modelle ${o.eslesenSayisi ?? 0} alan eşleşti, ${o.yeniAlanSayisi ?? 0} yeni` : '',
           '. Girilen değerler ve ekran görüntüleri kaydedilmedi. Paket henüz kaydedilmedi — önizleyip kabul edin.')
-        : h('span', {}, `Tarama tamamlandı: ${o.alanSayisi ?? '?'} alan, ${o.kosulSayisi ?? 0} görünürlük koşulu`,
+        : h('span', {}, `Tarama tamamlandı: ${o.alanSayisi ?? '?'} alan, ${o.kosulSayisi ?? 0} görünürlük koşulu, ${o.bagimlilikSayisi ?? 0} bağımlı liste`,
           d.mod === 'analiz' ? `, mevcut modelle ${o.eslesenSayisi ?? 0} alan eşleşti, ${o.yeniAlanSayisi ?? 0} yeni` : '',
+          io ? `; işaretlenen: ${io.dugme} düğme, ${io.sonuc + io.basari} sonuç / başarı göstergesi${io.alan ? `, ${io.alan} alan` : ''}${io.reddedilen ? `; ${io.reddedilen} keşif bulgusu yazılmadı` : ''}` : '',
           `; ${d.engellenenSayisi} istek engellendi. Paket henüz kaydedilmedi — önizleyip kabul edin.`));
+    if (d.kip === 'tarama' && d.olusturulacak !== 'ortakAkis') {
+      ust.append(h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { isaretlemeGecildi = false; void pakete(d).catch((e) => bildir(e.message, 'hata')); } }, ikon('geri'), 'İşaretlemeye dön'));
+    }
     if (d.tasarim) {
       ust.append(h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { void tasarima(d).catch((e) => bildir(e.message, 'hata')); } }, ikon('geri'), 'Diyagrama dön'));
     }
