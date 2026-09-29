@@ -161,13 +161,13 @@ test('girdi doğrulama (çoklu), seçenekler ve dosya adı', () => {
   expect(() => raporGirdisiDogrula({ ...cokluGirdi(f, 'karisik'), ekranIdleri: ['../x'] })).toThrow('geçersiz');
   expect(() => raporGirdisiDogrula({ ...cokluGirdi(f, 'coklu-ekran'), ekranIdleri: 'x' })).toThrow('liste olmalı');
   expect(() => raporGirdisiDogrula({ ...cokluGirdi(f, 'coklu-ekran'), ekranIdleri: Array.from({ length: 101 }, (_, i) => `e${i}`) })).toThrow('en çok 100');
-  expect(() => raporGirdisiDogrula({ ...cokluGirdi(f, 'coklu-ekran'), kapsam: 'genel' })).toThrow('"Genel" sonraki aşamada');
+  expect(() => raporGirdisiDogrula({ ...cokluGirdi(f, 'coklu-ekran'), kapsam: 'hepsi' })).toThrow('Kapsam yalnız');
   // Yinelenen kimlik atılır; kapsam dışı liste yok sayılır; "tümü" varken liste boş olabilir.
   expect(raporGirdisiDogrula({ ...cokluGirdi(f, 'coklu-ekran'), ekranIdleri: [f.ekranId, f.ekranId, f.ekran2Id] })).toMatchObject({
     id: '', ekranIdleri: [f.ekranId, f.ekran2Id], servisIdleri: [], tumEkranlar: false, tumServisler: false
   });
   expect(raporGirdisiDogrula({ projeId: f.projeId, kapsam: 'karisik', tumEkranlar: true, tumServisler: true })).toMatchObject({ tumEkranlar: true, tumServisler: true });
-  expect(raporSecenekleri(vt, new URLSearchParams({ projeId: f.projeId })).kapsamlar).toEqual(['ekran', 'servis', 'coklu-ekran', 'coklu-servis', 'karisik']);
+  expect(raporSecenekleri(vt, new URLSearchParams({ projeId: f.projeId })).kapsamlar).toEqual(['ekran', 'servis', 'coklu-ekran', 'coklu-servis', 'karisik', 'genel']);
   expect(pdfDosyaAdi('karisik', 'Tüm ekranlar + tüm servisler', RAPOR_SIMDI)).toBe('nobetci-rapor-karisik-tum-ekranlar-tum-servisler-2026-09-28.pdf');
 });
 

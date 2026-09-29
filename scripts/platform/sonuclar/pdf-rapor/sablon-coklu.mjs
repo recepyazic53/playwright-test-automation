@@ -174,16 +174,16 @@ ${st.yavaslayanlar.map((/** @type {any} */ x) => `<tr><td><span class="kucuk">${
   return { baslik, alt, meta, govde };
 }
 
-/** @param {any[]} ogeler @param {{ e: Yazici; k: boolean; esik: { yesil: number; sari: number } }} y */
-function ekranKiyasTablosu(ogeler, y) {
+/** Ekran karşılaştırma tablosu (sağlık sırasıyla; genel raporda ortak akışlar işaretli). @param {any[]} ogeler @param {{ e: Yazici; k: boolean; esik: { yesil: number; sari: number } }} y */
+export function ekranKiyasTablosu(ogeler, y) {
   const { e, k, esik } = y;
   return `<table><thead><tr><th scope="col" class="c">Sıra</th><th scope="col">Ekran</th><th scope="col">Durum</th><th scope="col" class="s">Senaryo</th><th scope="col" class="s">Test</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col" class="s">Önceki</th><th scope="col">Fark</th>'}<th scope="col">Eğilim</th><th scope="col" class="s">Açık sorun</th><th scope="col">Son koşu</th></tr></thead><tbody>
-${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b></td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.senaryo}</td><td class="s">${sy(o.test)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td class="s notr">${yz(o.oncekiBasari)}</td><td>${o.test ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
+${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b>${o.ortakAkis ? ' <span class="kucuk">(ortak akış)</span>' : ''}</td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.senaryo}</td><td class="s">${sy(o.test)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td class="s notr">${yz(o.oncekiBasari)}</td><td>${o.test ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
 </tbody></table>`;
 }
 
-/** @param {any[]} ogeler @param {{ e: Yazici; k: boolean; esik: { yesil: number; sari: number } }} y */
-function servisKiyasTablosu(ogeler, y) {
+/** Servis karşılaştırma tablosu (sağlık sırasıyla). @param {any[]} ogeler @param {{ e: Yazici; k: boolean; esik: { yesil: number; sari: number } }} y */
+export function servisKiyasTablosu(ogeler, y) {
   const { e, k, esik } = y;
   return `<table><thead><tr><th scope="col" class="c">Sıra</th><th scope="col">Servis</th><th scope="col">Durum</th><th scope="col" class="s">Metot</th><th scope="col" class="s">Çağrı</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">En yüksek p95</th>${k ? '' : '<th scope="col">p95 farkı</th>'}<th scope="col">Eğilim</th><th scope="col" class="s">Açık sorun</th><th scope="col">Son</th></tr></thead><tbody>
 ${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b>${o.tur ? ` <span class="kucuk">(${kacis(String(o.tur).toUpperCase())})</span>` : ''}</td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.metot}</td><td class="s">${sy(o.cagri)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td>${o.cagri ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${o.yavaslayan ? '<b class="kotu">' : ''}${kacis(sure(o.p95))}${o.yavaslayan ? '</b>' : ''}</td>${k ? '' : `<td>${o.cagri ? fark(o.p95, o.oncekiP95, { yon: 'asagi-iyi', birim: 'ms' }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
@@ -222,10 +222,13 @@ ${satirlar.map((r) => `<tr><td><span class="mono" style="color:#1c2430">${e(r.me
 </tbody></table><div class="lejant"><span>“Kontrol kaldı” = yanıt geldi (2xx) ama senaryodaki bir kontrol tutmadı. Zaman aşımı / bağlantı: yanıt gelmedi.</span></div>`;
 }
 
-/** @param {any[]} akislar @param {{ e: Yazici; k: boolean; esik: { yesil: number; sari: number } }} y */
-function akisTablosu(akislar, y) {
+/**
+ * Akış tablosu (servis / oturum / uçtan uca akışları). bos: akış yoksa yazılan metin.
+ * @param {any[]} akislar @param {{ e: Yazici; k: boolean; esik: { yesil: number; sari: number }; bos?: string }} y
+ */
+export function akisTablosu(akislar, y) {
   const { e, k, esik } = y;
-  if (!akislar.length) return '<p class="bos">Seçilen servisleri kullanan servis akışı yok.</p>';
+  if (!akislar.length) return `<p class="bos">${kacis(y.bos ?? 'Seçilen servisleri kullanan servis akışı yok.')}</p>`;
   return `<table><thead><tr><th scope="col">Akış</th><th scope="col">Tür</th><th scope="col" class="s">Koşu</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">Ort. süre</th><th scope="col">Son</th></tr></thead><tbody>
 ${akislar.map((a) => `<tr><td><b>${e(a.ad)}</b><br><span class="kucuk">${a.adim} adım</span></td><td class="kucuk">${kacis(a.tur)}</td><td class="s">${a.kosu}</td><td class="s ${renkOran(a.basari, esik)}"><b>${yz(a.basari)}</b></td>${k ? '' : `<td>${a.kosu ? fark(a.basari, a.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(a.ortSure))}</td><td>${sonHap(a.son)}</td></tr>`).join('')}
 </tbody></table><p class="kucuk">Akışlar yalnız gösterilir; durum rozetini etkilemez (kritik akış işareti henüz yok).</p>`;
@@ -235,7 +238,7 @@ ${akislar.map((a) => `<tr><td><b>${e(a.ad)}</b><br><span class="kucuk">${a.adim}
  * Bağlantılı sorunlar (ekran ↔ servis).
  * @param {any[]} ciftler @param {(metin: string, ek?: string) => string} h2 @param {Yazici} m
  */
-function baglantiliTablo(ciftler, h2, m) {
+export function baglantiliTablo(ciftler, h2, m) {
   const bas = h2('Bağlantılı sorunlar (ekran ↔ servis)');
   if (!ciftler.length) return `${bas}<p class="bos">Eşik üstünde örtüşen ekran ve servis sorunu yok.</p>`;
   const hucre = (/** @type {any} */ s) => `<b>${m(s.baslik)}</b><br><span class="kucuk">${m(s.nerede)}</span><br>${durumEtiketi(s.durum)} ${puanEtiketi(s.bant, s.puan)}`;

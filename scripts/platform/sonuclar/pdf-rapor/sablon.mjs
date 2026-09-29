@@ -1,5 +1,6 @@
 // PDF RAPORU — HTML şablonu (saf): rapor verisinden (sonuclar/donem-raporu.mjs) tek ekran ve tek servis raporunun HTML'i; çoklu
-// ekran / çoklu servis / ekran + servis gövdesi sablon-coklu.mjs'dedir (aynı bileşenler, aynı maskeleme).
+// ekran / çoklu servis / ekran + servis gövdesi sablon-coklu.mjs'de, genel raporunki sablon-genel.mjs'dedir (aynı bileşenler, aynı
+// maskeleme).
 // İskelet: Tek bakışta → Ele alınması gerekenler → Sorunlar ve eğilimleri → Eğilim → Kapsamdaki öğeler → türe özgü bölümler →
 // Yöntem + gizlilik. Sayfa JS'siz ve dış kaynaksızdır (satır içi CSS + SVG; CSP default-src 'none'); PDF'e pdf.mjs basar.
 // Tüm kullanıcı verisi kaçışlanır; ad alanları bilinen gizli değerlerle, serbest metinler tam maskeleyiciyle (html-rapor.mjs >
@@ -11,6 +12,7 @@ import {
 } from './bilesenler.mjs';
 import { SERVIS_HATA_TURLERI } from '../sorun-modeli.mjs';
 import { cokluRapor } from './sablon-coklu.mjs';
+import { genelRapor } from './sablon-genel.mjs';
 
 /** @typedef {import('../donem-raporu.mjs').DonemRaporuVerisi} Veri */
 
@@ -23,7 +25,7 @@ export function pdfRaporHtml(v, s) {
   const e = (/** @type {unknown} */ x) => kacis(s.adMaskele(x));
   const m = (/** @type {unknown} */ x) => kacis(s.maskele(x));
   if (v.tur !== 'ekran' && v.tur !== 'servis') {
-    const c = cokluRapor(v, { e, m });
+    const c = v.tur === 'genel' ? genelRapor(v, { e, m }) : cokluRapor(v, { e, m });
     return { html: sayfaHtml({ baslik: e(c.baslik), alt: c.alt, meta: c.meta, govde: c.govde }), baslik: c.baslik };
   }
   const servis = v.tur === 'servis';

@@ -98,7 +98,7 @@ export const REHBERLER = {
       {
         baslik: 'Dönem raporu (PDF)',
         metin: ['"Rapor al (PDF)" seçtiğiniz dönemin raporunu bu bilgisayarda üretir: durum rozeti (Sağlıklı / Dikkat / Kritik), önceki eşit döneme göre ▲▼ farklar, öncelikli aksiyonlar (P1 / P2 / P3), sorunların eğilimi ve kapsam.',
-          'Kapsam: tek ekran, tek servis, birden çok ekran, birden çok servis ya da ekran + servis. Çoklu kapsamda listeden birden çok öğe seçin ya da "Tüm ekranlar" / "Tüm servisler"i işaretleyin (tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar). Çoklu raporda öğeler sağlık sırasıyla karşılaştırılır; ekran + servis raporunda iki taraf ayrı özetlenir, aynı günlerde görülen ekran ve servis sorunları tek aksiyonda birleşir.',
+          'Kapsam: tek ekran, tek servis, birden çok ekran, birden çok servis, ekran + servis ya da genel (projenin tamamı; öğe seçilmez, akışlar, zamanlanmış koşular ve test verisi sağlığı da eklenir). Çoklu kapsamda listeden birden çok öğe seçin ya da "Tüm ekranlar" / "Tüm servisler"i işaretleyin (tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar). Çoklu raporda öğeler sağlık sırasıyla karşılaştırılır; ekran + servis raporunda iki taraf ayrı özetlenir, aynı günlerde görülen ekran ve servis sorunları tek aksiyonda birleşir.',
           '"Raporlar\'a kaydet" açıksa PDF şifreli saklanır; Raporlar sekmesinde indirilir, aynı seçimlerle (dönem bugüne kaydırılarak) yeniden oluşturulur ya da silinir.'],
         ipucu: 'Gizli değerler, istek / yanıt gövdeleri ve test verisi değerleri rapora girmez; ortam adresi ve ekran görüntüleri yalnız siz seçerseniz eklenir.'
       },

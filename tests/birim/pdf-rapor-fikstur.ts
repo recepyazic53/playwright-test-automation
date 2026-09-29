@@ -14,7 +14,9 @@
 // Gizli değerler (giriş parolası, e-posta, kart numarası, ortam adresi + sorgu dizesi, adım adındaki parola) hata metinlerine
 // bilerek konur: rapor HTML'inde ve PDF'te görünmemelidir.
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
-import { ekranKaydet, girisProfiliKaydet, ortamKaydet, projeKaydet, senaryoKaydet } from '../../scripts/platform/veritabani/depo.mjs';
+import { ekranKaydet, ekranModeliEkle, girisProfiliKaydet, ortamKaydet, projeKaydet, senaryoKaydet } from '../../scripts/platform/veritabani/depo.mjs';
+import { kuralKaydet, tetiklemeYaz } from '../../scripts/platform/zamanlama/kurallar.mjs';
+import { tabloKaydet } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
 import { servisAkisKosusuKaydet, servisAkisiKaydet, servisKaydet, servisKosusuKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
 
@@ -215,4 +217,93 @@ export const cokluGirdi = (f: CokluFikstur, kapsam: 'coklu-ekran' | 'coklu-servi
 export const raporGirdisi = (f: RaporFiksturu, kapsam: 'ekran' | 'servis', ek: Record<string, unknown> = {}): Record<string, unknown> => ({
   projeId: f.projeId, kapsam, id: kapsam === 'ekran' ? f.ekranId : f.servisId, donem: { tur: 'son14' }, karsilastir: true, ortamId: null,
   secenekler: { hatalar: true, adres: false, goruntuler: false }, ...ek
+});
+
+/** Gizli test verisi sütununun değeri (genel rapor): rapora hiç girmemelidir. */
+export const KUPON_GIZLISI = 'KUPON-GIZLI-55';
+
+export type GenelFikstur = CokluFikstur & {
+  ortam2Id: string; ortakAkisId: string; arsivEkranId: string; arsivServisId: string; uctanUcaId: string; kuralId: string; kural2Id: string;
+};
+
+/**
+ * A3 (genel rapor) eki: A2 fikstürünün üstüne projenin geri kalanını yazar (gerçek koşu / dış istek YOK).
+ *   - "Ortak Adım": modeli ortak akış olan ekran (senaryosuz; açık sayılmaz). "Arşiv": senaryosuz ekran (açık).
+ *   - "Arşiv Servisi" (REST): sözleşmede 2 operasyon, yalnız birinin senaryosu var (metot kapsamı 1 / 2); koşusu yok.
+ *   - İkinci ortam "HAZIRLIK" (riskli işaretli): bu dönemin 5. günü Talep'te 2 başarılı test, Bildirim Servisi'nde 2 başarılı çağrı.
+ *   - Uçtan uca akış "Uçtan uca kayıt": bu dönem 2 başarılı koşu, önceki dönem 1 hata.
+ *   - Zamanlanmış kural "Gece koşusu" (her gün 02:00, 01.08'de kaydedildi; Başvuru + Kayıt akışı): önceki dönemde 07–14.09 (8 tamamlandı),
+ *     bu dönemde 15–26.09 (10 tamamlandı — biri başarısız sonuçlu —, 1 atlandı, 1 yarıda); 27–28.09 kayıt yok (kaçan). Geçmiş 20
+ *     kayıtla dolu: önceki dönem hesabı en eski kayıttan (07.09) başlar. İkinci kural devre dışı (beklenen yok).
+ *   - Test verisi: "Kuponlar" tablosu hiç kullanılmıyor (gizli sütun değeri rapora girmemeli); Talep'te koşuya dahil olmayan bir
+ *     senaryo silinmiş tabloya başvuruyor (kırık başvuru).
+ * Beklenen toplamlar (bu dönem): ekran testi 120 (86 geçti), servis çağrısı 87 (82 başarılı), akış koşusu 4 (3 başarılı).
+ */
+export function genelVeriKur(vt: Veritabani, f: CokluFikstur): GenelFikstur {
+  const { projeId, ortamId } = f;
+  const ortam2Id = ortamKaydet(vt, { projeId, ad: 'HAZIRLIK', tabanUrl: 'https://hazirlik.ornek.invalid/', varsayilan: false, ayarlar: { riskli: true } });
+  const ortakAkisId = ekranKaydet(vt, { projeId, anahtar: 'ortak-adim', ad: 'Ortak Adım' });
+  ekranModeliEkle(vt, { ekranId: ortakAkisId, model: { tur: 'ortakAkis', adimlar: [] } });
+  const arsivEkranId = ekranKaydet(vt, { projeId, anahtar: 'arsiv', ad: 'Arşiv' });
+  // Talep: koşuya dahil olmayan, silinmiş tabloya başvuran senaryo (kırık başvuru).
+  senaryoKaydet(vt, { projeId, ekranId: f.ekran2Id, baslik: 'Talep (eski veri)', kosuyaDahil: false, icerik: { ortamlar: { [ortamId]: { veri: { kod: '${Silinmis.Kod}' } } } } });
+  tabloKaydet(vt, { projeId, ad: 'Kuponlar', sutunlar: [{ ad: 'Kod', gizli: true }, { ad: 'Tur' }], satirlar: [{ degerler: { Kod: KUPON_GIZLISI, Tur: 'indirim' } }] });
+
+  // HAZIRLIK ortamında bir tam koşu (Talep) ve iki servis çağrısı (Bildirim Servisi).
+  const talepSenaryolari = vt.tumu('SELECT id, baslik FROM senaryolar WHERE ekran_id = ? AND kosuya_dahil = 1 ORDER BY baslik', [f.ekran2Id]);
+  const zaman = gunZamani(5, 16);
+  kosuKaydet(vt, { id: 'hazirlik-1', projeId, ortamId: ortam2Id, tur: 'tam', baslangic: iso(zaman) });
+  talepSenaryolari.forEach((s, i) => sonucKaydet(vt, {
+    kosuId: 'hazirlik-1', projeId, senaryoId: String(s.id), senaryoBaslik: String(s.baslik), durum: 'basarili', testKimligi: `hz-${i}`,
+    bitis: iso(new Date(zaman.getTime() + (i + 1) * 10_000)), sureMs: 900
+  }));
+  kosuyuBitir(vt, 'hazirlik-1', { durum: 'tamamlandi', bitis: iso(new Date(zaman.getTime() + 60_000)) });
+  const bildirimSenaryosu = String(vt.tek('SELECT id FROM servis_senaryolari WHERE servis_id = ?', [f.servis2Id])?.id);
+  for (const dk of [0, 30]) {
+    servisKosusuKaydet(vt, {
+      projeId, servisId: f.servis2Id, senaryoId: bildirimSenaryosu, ortamId: ortam2Id, tur: 'kosu', durum: 'basarili', baslangic: iso(gunZamani(5, 17, dk)), sureMs: 120,
+      baslik: 'Bildirim gönder', sonuc: { durumKodu: 200, kontroller: [{ tur: 'soapHatasiYok', ad: 'SOAP hatası yok', gecti: true, aciklama: 'Fault yok' }] }
+    });
+  }
+
+  // Sözleşmesi olan, bir operasyonu senaryosuz servis (koşusu yok).
+  const arsivServisId = servisKaydet(vt, { projeId, anahtar: 'arsiv-servisi', ad: 'Arşiv Servisi', tur: 'rest', ayarlar: {
+    operasyonlar: [{ ad: 'arsivle', metot: 'POST', yol: '/arsiv' }, { ad: 'arsivSil', metot: 'DELETE', yol: '/arsiv/{id}' }] } });
+  servisSenaryosuKaydet(vt, { projeId, servisId: arsivServisId, baslik: 'Arşivle', icerik: {
+    operasyon: 'arsivle', govde: '{}', kontroller: [{ tur: 'durumKodu', deger: '200' }], http: { metot: 'POST', yol: '/arsiv' } } });
+
+  // Uçtan uca akış ve koşuları.
+  const uctanUcaId = servisAkisiKaydet(vt, { projeId, baslik: 'Uçtan uca kayıt', icerik: {
+    uctanUca: true, adimlar: [{ ad: 'Oluştur', servisId: f.servisId, senaryoId: f.servisSenaryolari.olustur }] } });
+  const uuKosusu = (z: Date, durum: 'basarili' | 'hata'): void => {
+    servisAkisKosusuKaydet(vt, { projeId, akisId: uctanUcaId, ortamId, tur: 'kosu', durum, baslangic: iso(z), sureMs: 8000, baslik: 'Uçtan uca kayıt', sonuc: {
+      ortam: 'TEST', ozet: '', uctanUca: true, adimlar: [{ no: 1, ad: 'Oluştur', durum: durum === 'basarili' ? 'basarili' : 'hata', sureMs: 8000 }]
+    } });
+  };
+  uuKosusu(gunZamani(-2, 18), 'hata');
+  uuKosusu(gunZamani(4, 18), 'basarili');
+  uuKosusu(gunZamani(9, 18), 'basarili');
+
+  // Zamanlanmış kurallar ve tetikleme geçmişi (kural başına en çok 20 kayıt tutulur).
+  const kural = kuralKaydet(vt, projeId, {
+    ad: `Gece koşusu ${KUPON_GIZLISI}`, ortamId, kapsam: { senaryolar: 'ekranlar', ekranIdleri: [f.ekranId], servisAkisIdleri: [f.akisId] },
+    zaman: { tur: 'gunluk', saat: '02:00' }
+  }, { simdi: new Date(2026, 7, 1, 9) });
+  const kural2 = kuralKaydet(vt, projeId, {
+    ad: 'Hafta sonu uçtan uca', ortamId, kapsam: { senaryolar: 'yok', uctanUcaAkisIdleri: [uctanUcaId] }, zaman: { tur: 'haftalik', saat: '03:00', gunler: [6] }, etkin: false
+  }, { simdi: new Date(2026, 7, 1, 9) });
+  const durumlar: Record<number, 'basarisiz' | 'atlandi' | 'yarida'> = { 20: 'basarisiz', 25: 'atlandi', 26: 'yarida' };
+  for (let gun = 7; gun <= 26; gun++) {
+    const z = new Date(2026, 8, gun, 2, 0);
+    tetiklemeYaz(vt, kural.id, {
+      id: `t-${gun}`, zaman: iso(z), baslangic: iso(z), bitis: iso(new Date(z.getTime() + 600_000)), durum: durumlar[gun] ?? 'tamamlandi', mesaj: '',
+      kosuId: null, ozet: null, akisKosulari: []
+    });
+  }
+  return { ...f, ortam2Id, ortakAkisId, arsivEkranId, arsivServisId, uctanUcaId, kuralId: kural.id, kural2Id: kural2.id };
+}
+
+/** Genel rapor isteği gövdesi (son 14 gün, karşılaştırmalı, tüm ortamlar; seçim yok). */
+export const genelGirdi = (f: RaporFiksturu, ek: Record<string, unknown> = {}): Record<string, unknown> => ({
+  projeId: f.projeId, kapsam: 'genel', donem: { tur: 'son14' }, karsilastir: true, ortamId: null, secenekler: { hatalar: true, adres: false, goruntuler: false }, ...ek
 });
