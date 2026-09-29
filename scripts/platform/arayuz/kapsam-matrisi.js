@@ -50,7 +50,7 @@ export async function kapsamMatrisiGorunumu(icerik, proje, ust = null) {
         h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar' }, 'Sonuçlar'),
           h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar/raporlar' }, 'Raporlar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Kapsam matrisi')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Kapsam matrisi')),
-        h('p', { class: 'soluk' }, 'Talep × senaryo × son sonuç. Talep no senaryo formlarında başlığın yanında girilir; yalnız senaryosu olan talepler listelenir.')),
+        h('p', { class: 'soluk' }, 'Talep × senaryo × son sonuç. Talep no senaryo formlarında başlığın altındaki "Talep no" alanına girilir; yalnız senaryosu olan talepler listelenir.')),
       h('div', { class: 'eylemler' }, csvDugmesi, pdfDugmesi)),
     ust,
     h('div', { class: 'kart kapsam-suzgecleri' }, h('div', { class: 'senaryo-arac-cubugu' }, ortamKutusu), aralikSecici),
@@ -72,7 +72,7 @@ export async function kapsamMatrisiGorunumu(icerik, proje, ust = null) {
     csvDugmesi.disabled = !m.satirlar.length;
     if (!m.talepler.length) {
       yerlestir(govde, h('section', { class: 'kart' }, bosDurum('Talep numarası girilmiş senaryo yok.',
-        'Ekran senaryosu, servis senaryosu ya da uçtan uca akış formunda başlığın yanındaki "Talep no" alanından ekleyin.', { ikon: 'isaret' })));
+        'Ekran senaryosu, servis senaryosu ya da uçtan uca akış formunda başlığın altındaki "Talep no" alanından ekleyin.', { ikon: 'isaret' })));
       return;
     }
     const say = (d) => m.satirlar.filter((r) => r.sonuc === d).length;
