@@ -93,15 +93,16 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       const etiket = kendi ? h('input', { type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${g.etiket} etiketi`,
         title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
       etiket?.addEventListener('change', () => { const e = etiket.value.trim(); if (e) kendi.etiket = e; else delete kendi.etiket; degisti(); });
-      let alt = null;
+      // Senaryo ayarı rozeti (bağlı değilken de): sütun seçiminin altında, değer çiplerinin üstünde.
+      let alt = g.senaryoAyari ? ayarRozeti() : null;
       if (sutun && sutun.gizli) {
         alt = h('span', { class: 'soluk kucuk' }, ikon('kilit'), ' gizli sütun: değer şifreli, koşuda kullanılır, gösterilmez');
       } else if (sutun) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
-        alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
+        alt = [alt, degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok')];
       }
       return h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
-        h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip), g.senaryoAyari ? ayarRozeti() : null),
+        h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),
         h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
     });
     const bagsiz = girdiler.filter((g) => !baglar[g.id] && !ortakBaglar[g.id] && oneri(g));

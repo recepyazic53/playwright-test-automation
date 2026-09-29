@@ -2110,9 +2110,8 @@ tr.tiklanir:hover, tr.tiklanir:focus-visible { background: var(--panel-2); }
 .alan-satiri.gonderilmez .alan-adi { color: var(--metin-3); }
 .alan-adi { font: 12.5px var(--yazi-mono); display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .alan-tipi { font: 10.5px var(--yazi-mono); color: var(--metin-3); }
-/* Test verisi sekmesi: senaryo ayarı rozeti (ekranda alan değil; ekran-baglari.js). Dar ekranda alt satıra geçer. */
-.alan-adi:has(> .ayar-rozeti) { flex-wrap: wrap; }
-.alan-adi > .ayar-rozeti { font: 500 11px/1.3 var(--yazi); max-width: 100%; white-space: normal; height: auto; min-height: 21px; padding: 2px 8px; }
+/* Test verisi sekmesi: senaryo ayarı rozeti (ekranda alan değil; ekran-baglari.js), sütun seçiminin altında; dar ekranda kaydırır. */
+.rozet.ayar-rozeti { justify-self: start; font: 500 11px/1.3 var(--yazi); max-width: 100%; white-space: normal; height: auto; min-height: 21px; padding: 2px 8px; }
 .zorunlu-isaret { color: var(--hata); }
 .alan-degeri select, .alan-degeri input { width: 100%; }
 .sabit-deger { display: grid; gap: 2px; }
