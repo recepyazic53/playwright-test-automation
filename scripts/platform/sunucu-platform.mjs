@@ -46,6 +46,9 @@
 //   PDF raporu (dönem raporu; sonuclar/rapor-uclari.mjs): GET /platform/rapor/secenekler?projeId= · POST /platform/rapor/onizle (HTML) ·
 //        POST /platform/rapor/pdf (application/pdf; kaydet: true → Sonuçlar > Raporlar) · GET /platform/raporlar?projeId= ·
 //        GET /platform/rapor/indir?projeId=&id= (kaydedilen PDF'in aynısı) · POST /platform/rapor/yeniden | /platform/rapor/sil (onay)
+//   Kapsam matrisi (talep × senaryo × son sonuç; sonuclar/kapsam-matrisi.mjs): GET /platform/kapsam-matrisi?projeId=&ortamId=&baslangic=&bitis= ·
+//        POST /platform/kapsam-matrisi/csv (JSON: { dosyaAdi, csv }) · POST /platform/kapsam-matrisi/pdf (application/pdf; kaydedilmez)
+//   Talep no (senaryolar/talep-servisi.mjs): GET /platform/talepler?projeId= (öneriler) · POST /platform/talepler/kosu-plani { projeId, talep }
 //   GET  /platform/servis-sonuclari?projeId=&servisId=&akisId=&ortamId=&denemeler=1   servis / akış koşuları, kalıplar
 //   GET  /platform/servis-sonuclari/kosu?projeId=&id=   koşu ayrıntısı · /senaryo?projeId=&id=   istek / yanıt (maskeli)
 //   GET  /platform/medya/<id>[?indir=1]               şifreli medyayı ÇÖZEREK akıtır (Range destekli;
@@ -233,6 +236,8 @@ import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
 import { SQL_KULLANIM_GET_UCLARI, SQL_KULLANIM_POST_UCLARI } from './sql/sql-kullanimi.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
 import { UCTAN_UCA_GET_UCLARI, UCTAN_UCA_POST_UCLARI, uctanUcaCalistir, uctanUcaKosucusuAyarla } from './akislar/uctan-uca.mjs';
+import { TALEP_GET_UCLARI, TALEP_POST_UCLARI } from './senaryolar/talep-servisi.mjs';
+import { KAPSAM_MATRISI_GET_UCLARI, KAPSAM_MATRISI_POST_UCLARI, kapsamMatrisiPdf } from './sonuclar/kapsam-matrisi.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
 import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
 import { servisAkisiCalistir } from './servisler/servis-akislari.mjs';
@@ -1464,6 +1469,8 @@ for (const [yol, islem] of SQL_KULLANIM_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of AKIS_SENARYO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Uçtan uca akışlar (servis + ekran + SQL; akislar/uctan-uca.mjs).
 for (const [yol, islem] of UCTAN_UCA_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// Talep no (öneriler) ve kapsam matrisi (talep × senaryo × son sonuç).
+for (const [yol, islem] of [...TALEP_GET_UCLARI, ...KAPSAM_MATRISI_GET_UCLARI]) GET_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs).
@@ -1568,7 +1575,9 @@ const POST_UCLARI = new Map([
       // Çalıştırma biçimi (tablodan çoklu satır; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null / {} kaldırır.
       ...(g.veriKosulari !== undefined ? { veriKosulari: g.veriKosulari } : {}),
       // Kayıt grubu "Yeni" + "tabloya da ekle": grubun değerleri tabloya yeni satır (senaryoyla tek işlemde; yanıtta değer yok).
-      ...(g.yeniTabloSatirlari !== undefined ? { yeniTabloSatirlari: g.yeniTabloSatirlari } : {})
+      ...(g.yeniTabloSatirlari !== undefined ? { yeniTabloSatirlari: g.yeniTabloSatirlari } : {}),
+      // Talep numaraları (senaryolar/talepler.mjs): verilmezse mevcut korunur, [] kaldırır.
+      ...(g.talepler !== undefined ? { talepler: g.talepler } : {})
     }, { kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
@@ -1853,6 +1862,8 @@ const POST_UCLARI = new Map([
 for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of AKIS_SENARYO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of UCTAN_UCA_POST_UCLARI) POST_UCLARI.set(yol, islem);
+// "Bu talebin senaryolarını koş" planı (istek atmaz) ve kapsam matrisi CSV'si.
+for (const [yol, islem] of [...TALEP_POST_UCLARI, ...KAPSAM_MATRISI_POST_UCLARI]) POST_UCLARI.set(yol, islem);
 // Test verisi tabloları (tablolar/tablo-uclari.mjs).
 for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
@@ -2322,6 +2333,13 @@ export async function platformIsteginiIsle(req, res, baglam) {
       const db = await acikVeritabani();
       const r = await raporPdf(db, govde, { medyaKlasoru: medyaKlasoruYolu() });
       pdfGonder(res, r.pdf, r.dosyaAdi, { 'X-Rapor-Id': r.raporId ?? '', 'X-Rapor-Sayfa': String(r.sayfa) });
+      return true;
+    }
+    // --- POST /platform/kapsam-matrisi/pdf — kapsam matrisi PDF'i (yerel Chromium; ağ istekleri engelli; kaydedilmez) ---
+    if (yol === '/platform/kapsam-matrisi/pdf') {
+      const db = await acikVeritabani();
+      const r = await kapsamMatrisiPdf(db, govde);
+      pdfGonder(res, r.pdf, r.dosyaAdi, { 'X-Rapor-Sayfa': String(r.sayfa) });
       return true;
     }
 

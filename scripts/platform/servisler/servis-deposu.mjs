@@ -12,6 +12,7 @@ import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { ekranAdimiDogrula } from '../akislar/ekran-adimi.mjs';
 import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { icerikTalepleri, talepleriAyikla } from '../senaryolar/talepler.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -382,7 +383,11 @@ export function servisSenaryosuKaydet(vt, girdi) {
   //  - verilirse (nesne) o yazılır; null verilirse silinir (tüm ortamlarda genel değer geçerli olur);
   //  - verilmezse mevcut korunur; ama genel "Koşuda" değeri açıkça DEĞİŞTİRİLDİYSE (düzenleyicideki anahtar) ortam ezmeleri silinir.
   const ham = girdi.icerik && typeof girdi.icerik === 'object' && !Array.isArray(girdi.icerik) ? /** @type {Record<string, unknown>} */ (girdi.icerik) : null;
-  const { kosuOrtamlari: gelenOrtamlar, ...hamKalan } = ham ?? {};
+  // Talep numaraları (senaryolar/talepler.mjs) da içerik doğrulamasından ayrı: verilirse (liste) o yazılır, [] / null kaldırır; verilmezse
+  // mevcut korunur (akış senaryosunun içeriği formda baştan kurulur).
+  const { kosuOrtamlari: gelenOrtamlar, talepler: gelenTalepler, ...hamKalan } = ham ?? {};
+  const talepSecimi = gelenTalepler === undefined ? null : talepleriAyikla(gelenTalepler);
+  if (talepSecimi?.hata) throw new DepoHatasi(talepSecimi.hata);
   const temel = senaryoIceriginiDogrula(ham ? hamKalan : girdi.icerik);
   return vt.islem(() => {
     const servis = vt.tek('SELECT proje_id FROM servisler WHERE id = ?', [kimlik(girdi.servisId, 'servisId')]);
@@ -393,7 +398,8 @@ export function servisSenaryosuKaydet(vt, girdi) {
     // Genel değer "en az bir ortamda koşuda"dır; genel kapalıysa ezme tutulmaz (hiçbir ortamda koşmaz).
     const ortamlar = !genel ? undefined : gelenOrtamlar !== undefined ? kosuOrtamlariDogrula(gelenOrtamlar)
       : mevcut && !genelDegisti ? kosuOrtamlariDogrula(/** @type {any} */ (sifreliJsonOku(vt, mevcut.icerik_json))?.kosuOrtamlari) : undefined;
-    const icerik = { ...temel, ...(ortamlar ? { kosuOrtamlari: ortamlar } : {}) };
+    const talepler = talepSecimi ? talepSecimi.talepler : mevcut ? icerikTalepleri(sifreliJsonOku(vt, mevcut.icerik_json)) : [];
+    const icerik = { ...temel, ...(ortamlar ? { kosuOrtamlari: ortamlar } : {}), ...(talepler.length ? { talepler } : {}) };
     return kaydet(vt, 'servis_senaryolari', {
       proje_id: girdi.projeId, servis_id: girdi.servisId, baslik: zorunluMetin(girdi.baslik, 'baslik'),
       kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),
@@ -693,8 +699,11 @@ export function akisIceriginiDogrula(icerik, tur, s = {}) {
   if (omur !== undefined && (!Number.isInteger(omur) || omur < 30 || omur > 86_400)) throw new DepoHatasi('"omurSaniye" 30 ile 86400 arasında tam sayı olmalıdır.');
   if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length || a.sql?.okumalar?.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
   const yetki = secenek(i.yetkiHatasinda ?? 'genel', YETKI_HATASI_SECENEKLERI, 'yetkiHatasinda');
+  // Talep numaraları (senaryolar/talepler.mjs): yalnız uçtan uca akışta.
+  const talepler = uctanUca ? talepleriAyikla(i.talepler) : { talepler: [], hata: null };
+  if (talepler.hata) throw new DepoHatasi(talepler.hata);
   return {
-    adimlar, ...(uctanUca ? { uctanUca: true } : {}), ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
+    adimlar, ...(uctanUca ? { uctanUca: true } : {}), ...(talepler.talepler.length ? { talepler: talepler.talepler } : {}), ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
     // Oturum akışında her zaman yazılır (alanı olmayan eski kayıt = eski davranış; bkz. yetkiHatasiSecimi); akışta yalnız "genel" değilse.
     ...(tur === 'oturum' || yetki !== 'genel' ? { yetkiHatasinda: yetki } : {}),
     ...(typeof i.aciklama === 'string' && i.aciklama.trim() ? { aciklama: i.aciklama.trim().slice(0, 2000) } : {})
@@ -721,8 +730,11 @@ export function servisAkisiKaydet(vt, girdi) {
     const tur = secenek(girdi.tur ?? mevcut?.tur ?? 'akis', AKIS_TURLERI, 'tur');
     // Yetki hatası seçimi verilmediyse kayıtlıdaki (eski oturum kaydında o zamanki davranış) korunur.
     const ham = girdi.icerik && typeof girdi.icerik === 'object' && !Array.isArray(girdi.icerik) ? /** @type {Record<string, unknown>} */ (girdi.icerik) : null;
-    const icerik = ham && ham.yetkiHatasinda === undefined && mevcut
+    const icerik0 = ham && ham.yetkiHatasinda === undefined && mevcut
       ? { ...ham, yetkiHatasinda: yetkiHatasiSecimi(akisCevir(vt, mevcut)) } : girdi.icerik;
+    // Uçtan uca akışın talep numaraları verilmezse mevcut korunur.
+    const icerik = ham && ham.talepler === undefined && mevcut && icerik0 && typeof icerik0 === 'object'
+      ? { ...icerik0, talepler: icerikTalepleri(akisCevir(vt, mevcut).icerik) } : icerik0;
     return kaydet(vt, 'servis_akislari', {
       proje_id: kimlik(girdi.projeId, 'projeId'), baslik: zorunluMetin(girdi.baslik, 'baslik').slice(0, 200), tur,
       kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),

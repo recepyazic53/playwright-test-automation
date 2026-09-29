@@ -49,6 +49,8 @@ export interface ServisSenaryoIcerigi {
   http?: ServisHttpTanimi; kosuOrtamlari?: Record<string, boolean>;
   /** "Yanıt sözleşmeye uymalı" (varsayılan kapalı). */
   sozlesmeDogrula?: boolean;
+  /** Talep numaraları (senaryolar/talepler.mjs; yoksa alan yok). */
+  talepler?: string[];
 }
 export interface ServisSenaryosu {
   id: string; projeId: string; servisId: string; baslik: string; kapsam: ServisKapsami; kosuyaDahil: boolean;
@@ -102,7 +104,9 @@ export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId
 export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
 export declare const YETKI_HATASI_SECENEKLERI: readonly ['genel', 'tekrarYok', 'yenileVeTekrar'];
 export type YetkiHatasiSecimi = (typeof YETKI_HATASI_SECENEKLERI)[number];
-export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string; yetkiHatasinda?: YetkiHatasiSecimi; uctanUca?: boolean }
+export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string; yetkiHatasinda?: YetkiHatasiSecimi; uctanUca?: boolean;
+  /** Talep numaraları (yalnız uçtan uca akışta). */
+  talepler?: string[] }
 export declare function yetkiHatasiSecimi(akis: { tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null): YetkiHatasiSecimi;
 export declare function yetkiTekrariAcik(vt: Veritabani, akis: { tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null): boolean;
 export interface ServisAkisi {

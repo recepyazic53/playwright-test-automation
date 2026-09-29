@@ -48,6 +48,8 @@ export interface SenaryoSatiri {
   /** Ekranı devre dışıysa false: senaryo hiçbir koşuya girmez. */
   ekranEtkin: boolean;
   guncellenme: string;
+  /** Talep numaraları (icerik.talepler; yoksa boş). */
+  talepler: string[];
   /** Yalnız birleşik listede (ortamId verilmeden): projedeki her ortam için tanım, Koşuda ve son sonuç. */
   ortamlar?: Array<{ ortamId: string; tanimli: boolean; kosuyaDahil: boolean; sonSonuc: { durum: string; zaman: string; sonucId: string; kosuId: string } | null }>;
 }
@@ -69,6 +71,8 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   tabloSecimleri: Record<string, Record<string, string>> | null;
   /** Çalıştırma biçimi (tablodan çoklu satır; yoksa null = her grup tek satır). */
   veriKosulari: import('../tablolar/veri-kosulari.mjs').VeriKosulari | null;
+  /** Talep numaraları (yoksa boş liste). */
+  talepler: string[];
 };
 export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
@@ -94,6 +98,8 @@ export declare function senaryoKaydet(
     kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yapan?: string;
     /** Kayıt grubu "Yeni" + "tabloya da ekle": gruptaki alanların değerleri tabloya yeni satır (senaryoyla TEK işlemde). */
     yeniTabloSatirlari?: unknown;
+    /** Talep numaraları (verilmezse mevcut korunur; null / [] kaldırır). */
+    talepler?: unknown;
   },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[]; tabloSatirlari?: TabloSatiriEklemesi[] };

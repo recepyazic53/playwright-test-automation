@@ -12,6 +12,7 @@ import { modelKosuPlani, modelSenaryosuMu, veriHatalariMetni } from './model-kos
 import { etkinSenaryoGirisi } from './senaryo-girisi.mjs';
 import { playwrightKoduUret } from './playwright-disa-aktarma.mjs';
 import { bilerekBosAnahtarlari } from '../../dogrulama/senaryo-dogrulayici.mjs';
+import { icerikTalepleri } from './talepler.mjs';
 
 /** @param {unknown} d @returns {d is Record<string, any>} */
 const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
@@ -75,7 +76,9 @@ export async function senaryoyuPlaywrightKodunaAktar(db, istek, s) {
   const profil = plan.baglamProfili;
   const sonuc = playwrightKoduUret({
     plan,
-    kaynak: { ekran: sen.ekran?.ad || 'Ekran', senaryo: sen.baslik, modelSurumu: sen.modelSurumu ?? null, ortam: ortam.ad, uretim: (s.simdi ?? new Date()).toISOString() },
+    kaynak: { ekran: sen.ekran?.ad || 'Ekran', senaryo: sen.baslik, modelSurumu: sen.modelSurumu ?? null, ortam: ortam.ad, uretim: (s.simdi ?? new Date()).toISOString(),
+      // Talep numaraları (varsa) dosya başında yorum olarak (yalnız metin).
+      talepler: icerikTalepleri(icerik) },
     tabanUrl: String(d.model.tabanUrl ?? ortam.tabanUrl ?? ''),
     girisGerekli: giris.kip !== 'girissiz',
     girisProfili: giris.profil,
