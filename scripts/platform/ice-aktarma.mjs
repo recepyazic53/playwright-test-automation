@@ -49,6 +49,8 @@ import { IZIN_AYAR_ANAHTARI } from './guvenlik/izinler.mjs';
 import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
 import { eslemeyiUygula, projeEslemesiBilgisi } from './ice-aktarma-esleme.mjs';
 import { projeKalintilari } from './proje-yonetimi.mjs';
+import { servisIceriginiMaskele } from './ayarlar/gizli-adlar.mjs';
+import { ekGizliAdlar } from './ayarlar/maskeleme.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -132,8 +134,11 @@ function sutunDegeri(tablo, sutun, deger, anahtar) {
   return { gorunum: deger, karsilastirma: deger, maskeli: false };
 }
 
-/** @param {string} tablo @param {Satir} satir @param {Buffer} anahtar */
-function satirGorunumu(tablo, satir, anahtar) {
+/**
+ * @param {string} tablo @param {Satir} satir @param {Buffer} anahtar
+ * @param {ReadonlyArray<string>} [ekler] maskeleme ek adları: servis senaryosu içeriğinde adı gizli alanların değeri görünümde maskelenir
+ */
+function satirGorunumu(tablo, satir, anahtar, ekler = []) {
   /** @type {Satir} */
   const gorunum = {};
   /** @type {Satir} */
@@ -146,6 +151,8 @@ function satirGorunumu(tablo, satir, anahtar) {
     karsilastirma[sutun] = d.karsilastirma;
     if (d.maskeli) maskeli.add(sutun);
   }
+  // Servis senaryosunun sabit değerleri (ör. parola): adı gizli alanlar önizlemede maskeli (karşılaştırma tam değerle).
+  if (tablo === 'servis_senaryolari' && gorunum.icerik_json && typeof gorunum.icerik_json === 'object') gorunum.icerik_json = servisIceriginiMaskele(gorunum.icerik_json, ekler, MASKE);
   return { gorunum, karsilastirma, maskeli };
 }
 
@@ -299,9 +306,12 @@ function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek, medy
   const varliklar = {};
   const toplam = { yeni: 0, degisen: 0, yalnizBurada: 0, ayni: 0 };
   // Yerelde okunamayan zarf (başka anahtar) olursa önizleme yine üretilsin: çözülemeyen değer maskelenir.
+  /** @type {string[]} */
+  let ekler = [];
+  try { ekler = ekGizliAdlar(vt); } catch { /* çekirdek adlar yeter */ }
   const guvenliGorunum = (/** @type {string} */ tablo, /** @type {Satir} */ satir) => {
     try {
-      return satirGorunumu(tablo, satir, anahtar);
+      return satirGorunumu(tablo, satir, anahtar, ekler);
     } catch {
       const maskeliSatir = Object.fromEntries(Object.entries(satir).map(([k, d]) => [k, typeof d === 'string' && d.includes('kasa:v1:') ? MASKE : d]));
       return { gorunum: maskeliSatir, karsilastirma: maskeliSatir, maskeli: new Set(Object.keys(satir)) };

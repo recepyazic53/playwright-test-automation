@@ -121,7 +121,7 @@ test('saf: ekran paketi ortak akış paketine çevrilir (adres / spec / senaryo 
   expect(h.envanter).toBe(env);
 });
 
-test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; üç kutu; paket yeni EKRAN olur (senaryo önerileri ve ortamlar — bugünkü davranış)', async () => {
+test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; önde tara / kaydet, yapay zekâ İleri düzeyde; paket yeni EKRAN olur (senaryo önerileri ve ortamlar — bugünkü davranış)', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
@@ -129,7 +129,9 @@ test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; üç kutu;
   await expect(secim.getByRole('radio', { name: 'Ekran' })).toBeChecked();
   await expect(secim.getByRole('radio', { name: 'Ortak akış' })).not.toBeChecked();
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ekran ekle');
-  await expect(page.locator('.ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
+  // Önde tara / kaydet; yapay zekâ kutusu (ve paket yükleme) kapalı "İleri düzey"de.
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet']);
+  await expect(page.locator('details.ileri-duzey .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
   // Sunucu varsayılanı da ekran: seçim gönderilmezse paket ekran olarak önizlenir.
   const o = await basarili('/platform/sayfa-paketi/onizle', { projeId, paket: paket('ornek-basvuru', 'Örnek Başvuru') });
   expect((o.onizleme as Nesne).modelTuru).toBe('ekran');
@@ -146,14 +148,15 @@ test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; üç kutu;
   await page.close();
 });
 
-test('paket yükle → Ortak akış: seçim adresi ve başlığı değiştirir, dördüncü kutu "Boş başla"; önizlemede senaryo / ortam yok, "Ortak akışı oluştur" Ortak akışlar altına yazar', async () => {
+test('paket yükle → Ortak akış: seçim adresi ve başlığı değiştirir, önde üçüncü kutu "Boş başla"; önizlemede senaryo / ortam yok, "Ortak akışı oluştur" Ortak akışlar altına yazar', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
   await page.getByRole('radiogroup', { name: 'Ne oluşturulsun?' }).getByText('Ortak akış', { exact: true }).click();
   await expect(page).toHaveURL(/#\/ekranlar\/yeni\/ortak-akis$/);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ortak akış ekle');
-  await expect(page.locator('.ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet', 'Yapay zekâ ile oluştur', 'Boş başla']);
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet', 'Boş başla']);
+  await expect(page.locator('details.ileri-duzey .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
   // Aynı adres (sol menü "Ortak akış ekle") yeniden açılınca seçim korunur.
   await page.reload();
   await expect(page.getByRole('radiogroup', { name: 'Ne oluşturulsun?' }).getByRole('radio', { name: 'Ortak akış' })).toBeChecked();

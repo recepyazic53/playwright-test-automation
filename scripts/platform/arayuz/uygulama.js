@@ -18,7 +18,7 @@ import {
   degisiklikleriBirak, parolaAlani, rozet, s, temaDugmesi, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
-import { rehberAnahtari, rehberDugmesi, rehberOtomatikDene } from './rehber.js';
+import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberDugmesi, rehberOtomatikDene } from './rehber.js';
 import { yedekUyarisiniGoster } from './yedek-uyarisi.js';
 import { hizliAramaDugmesi, hizliAramaKisayolu } from './hizli-arama.js';
 import { olusturMenusu } from './olustur-menusu.js';
@@ -562,11 +562,22 @@ async function sihirbazIzinler() {
   }
 }
 
-/** PROJE HAZIR: kısa özet (proje + kaydedilen ortamlar, sunucudan okunur) ve ana sayfaya geçiş. */
+/**
+ * PROJE HAZIR: kısa özet (proje + kaydedilen ortamlar, sunucudan okunur), "Sıradaki: giriş tarifini kaydet" yönlendirmesi (sihirbazda
+ * giriş sorulmaz; zorunlu adım değildir) ve ana sayfaya geçiş. İlk kurulumda ana düzen ilk açıldığında genel tanıtım kendiliğinden
+ * başlar (rehber.js > kurulumSonrasiTanitimIste); ana sayfa Sonuçlar > Genel > Özet'tir (Başlarken listesi orada).
+ */
 function sihirbazTamam() {
   sayfaBasligi('Proje hazır');
+  if (sihirbazModu === 'ilk') kurulumSonrasiTanitimIste();
   const ozet = h('div', { class: 'proje-ozeti' }, iskelet('liste'));
-  const anaSayfa = h('button', { type: 'button', class: 'birincil', onclick: () => { location.hash = '#/sonuclar'; yonlendir(); } }, 'Ana sayfaya geç', ikon('ok'));
+  const anaSayfa = h('button', { type: 'button', class: 'birincil', onclick: () => { location.hash = '#/sonuclar/ozet'; yonlendir(); } }, 'Ana sayfaya geç', ikon('ok'));
+  const girisBaglantisi = h('a', { class: 'dugme', href: '#/ayarlar/giris', onclick: (o) => { o.preventDefault(); location.hash = girisBaglantisi.getAttribute('href'); yonlendir(); } },
+    ikon('anahtar'), 'Girişi kaydet');
+  const siradaki = h('div', { class: 'not-kutusu bilgi siradaki-adim', role: 'note' },
+    h('p', {}, h('strong', {}, 'Sıradaki: giriş tarifini kaydet. '),
+      'Testlerin uygulamanıza nasıl giriş yapacağını bir kez gösterin: "Girişi kaydet" giriş sayfasını açar, girişi siz yaparsınız, yazdığınız değerler kaydedilmez. Uygulamanız giriş istemiyorsa bu adımı atlayın.'),
+    h('div', { class: 'dugmeler' }, girisBaglantisi));
   ekran(odakSayfa({ ustMetin: sihirbazUstMetni() }, anaAlan('ortali sihirbaz-alani',
     h('div', { class: 'sihirbaz-baslik' }, h('div', { class: 'kirinti' }, h('span', {}, 'Kurulum tamamlandı')),
       h('h1', {}, 'Proje hazır'), h('p', { class: 'soluk' }, sihirbazModu === 'ek'
@@ -576,11 +587,14 @@ function sihirbazTamam() {
     h('section', { class: 'kart proje-hazir', 'aria-label': 'Proje özeti' },
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('katman'), durum.proje ? durum.proje.ad : 'Proje')),
       ozet,
-      h('p', { class: 'soluk kucuk' }, 'Giriş profilleri ve ortamlar Ayarlar\'dan, test verisi üst menüdeki Veri\'den; ekranlar ve servisler kendi sayfalarından eklenir. Her ekranın rehberi ilk açılışta başlar, üst çubuktaki "?" ile yeniden açılır.'),
+      siradaki,
+      h('p', { class: 'soluk kucuk' }, 'Ana sayfadaki "Başlarken" listesi ilk koşuya kadar sıradaki adımı gösterir: giriş, ilk ekran (Tara / Akışı kaydet), ilk senaryo, Dene, Koşuyu başlat. Her ekranın rehberi ilk açılışta başlar, üst çubuktaki "?" ile yeniden açılır.'),
       h('div', { class: 'dugmeler' }, anaSayfa)))));
   anaSayfa.focus({ preventScroll: true });
   if (!durum.proje) { ozet.replaceChildren(); return; }
   api(`/platform/ortamlar?projeId=${encodeURIComponent(durum.proje.id)}`).then(({ ortamlar }) => {
+    const varsayilan = ortamlar.find((o) => o.varsayilan) || ortamlar[0];
+    if (varsayilan) girisBaglantisi.setAttribute('href', `#/ayarlar/giris/tarif/${encodeURIComponent(varsayilan.id)}`);
     ozet.replaceChildren(h('h3', { class: 'ozet-basligi' }, 'Ortamlar ', rozet(String(ortamlar.length))),
       h('ul', { class: 'ozet-ortamlar' }, ortamlar.map((o) => h('li', {},
         h('strong', {}, o.ad),

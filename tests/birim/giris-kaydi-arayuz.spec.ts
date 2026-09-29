@@ -145,6 +145,9 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
   await expect(kodSorusu.getByLabel(/Authenticator uygulaması/)).toBeChecked();
   await expect(kutu.getByText('Giriş başarılı sayılacak: ekranda “Çıkış” yazısı görününce.')).toBeVisible();
   await expect(kutu.getByLabel('Girişten sonra ekranda görünen bir yazı')).toBeHidden();
+  // Girişten sonra açılan sayfa oturum kontrol adresi olarak önerilir (yeni tarifte değiştirilecek değer yok: işaretli gelir).
+  const oturumOnerisi = kutu.getByRole('group', { name: 'Girişten sonra açılan sayfadan öneriler' }).getByLabel('Oturum kontrol adresi olarak /panel kullanılsın');
+  await expect(oturumOnerisi).toBeChecked();
   // Rol değişince önizleme yenilenir: kod "tarife alma" yapılırsa soru kaybolur; geri alınınca döner.
   await kutu.getByRole('combobox', { name: 'Kayıt adımı 4: ne?' }).selectOption('yoksay');
   await expect(kodSorusu).toBeHidden();
@@ -276,5 +279,61 @@ test('CANLI ortamda "Girişi dene": kesin yasak yok — onaysız 409 (siteye ist
   expect(JSON.parse(baslatmalar[0])).toMatchObject({ kip: 'girisDenemesi', ortamId: canliId, canliOnay: true });
   expect(uygulama.olaylar.slice(once)).toEqual(expect.arrayContaining(['POST /giris', 'POST /dogrulama']));
   await sonuc.getByRole('button', { name: 'Kapat' }).click();
+  await baglam.close();
+});
+
+test('oturum kontrol adresi giriş sayfasıyla aynıysa: tarif ekranında uyarı; "Girişi dene" giriş sonrası sayfayı önerir, onaysız değişmez', async () => {
+  test.setTimeout(180_000);
+  const tarifi = async (): Promise<Nesne> => ((await api(`/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Nesne[]).find((o) => o.ortamId === ortamId)?.tarif as Nesne;
+  // Doğru parola (önceki test yanlışını yazmıştı) ve oturum kontrol adresi giriş sayfasıyla aynı ("/").
+  const profil = ((await api(`/platform/giris-profilleri?projeId=${projeId}`)).profiller as Nesne[]).find((p) => p.ad === 'Deneme kullanıcısı') as Nesne;
+  await basarili('/platform/giris-profili/kaydet', { id: profil.id, projeId, ortamId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI });
+  const onceki = await tarifi();
+  await basarili('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: { ...onceki, oturumKontrolAdresi: '/', basariGostergesi: { tur: 'metin', deger: 'Hoş geldiniz' }, hataGostergeleri: [], zamanAsimiSn: 20 } });
+  expect(await tarifi()).toMatchObject({ girisAdresi: '/', oturumKontrolAdresi: '/' });
+
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1360, height: 1000 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/giris');
+  const satir = page.locator('.giris-tarifi-bolumu li[data-ortam]').filter({ hasText: 'Deneme' });
+  await expect(satir).toContainText('Oturum kontrol adresi giriş sayfasıyla aynı');
+
+  // Tarif ekranı: öneri yokken uyarı + ne yapılacağı; alan açıklaması sade.
+  await satir.getByRole('button', { name: 'Deneme: giriş tarifini düzenle' }).click();
+  const form = page.locator('form.tarif-formu');
+  const uyari = form.locator('.oturum-adresi-uyarisi');
+  await expect(uyari).toContainText('Bu adres giriş sayfasıyla aynı; kayıtlı oturum doğru denetlenemez, her testte giriş beklenir.');
+  await expect(uyari).toContainText('“Girişi dene” ile deneyin');
+  await expect(form).toContainText('Girişten sonra açılan bir sayfa (ör. /panel)');
+  await form.getByRole('button', { name: 'Vazgeç' }).click();
+
+  // "Girişi dene": giriş sonrası sayfa (/panel) önerilir; kapatılırsa tarif DEĞİŞMEZ.
+  await satir.getByRole('button', { name: 'Deneme: girişi dene' }).click();
+  await page.getByRole('dialog', { name: 'Deneme: giriş denensin mi?' }).getByRole('button', { name: 'Girişi dene' }).click();
+  let sonuc = page.getByRole('dialog', { name: 'Giriş denemesi: Deneme' });
+  const oneri = sonuc.getByRole('region', { name: 'Oturum kontrol adresi önerisi' });
+  await expect(oneri).toContainText('Girişten sonra açılan sayfa: /panel.', { timeout: 60_000 });
+  await expect(oneri).toContainText('giriş sayfasıyla aynı');
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
+  expect((await tarifi()).oturumKontrolAdresi).toBe('/');
+
+  // Tarif ekranı: uyarıda tek tıkla önerilen adrese geçilir (alan değişir, uyarı kalkar); kaydedilmeden tarif değişmez.
+  await satir.getByRole('button', { name: 'Deneme: giriş tarifini düzenle' }).click();
+  await expect(uyari).toBeVisible();
+  await uyari.getByRole('button', { name: 'Önerilen adrese geç (/panel)' }).click();
+  await expect(form.getByLabel('Oturum kontrol adresi')).toHaveValue('/panel');
+  await expect(uyari).toBeHidden();
+  await form.getByRole('button', { name: 'Vazgeç' }).click();
+  expect((await tarifi()).oturumKontrolAdresi).toBe('/');
+
+  // Onay: "Oturum kontrol adresi yap" tarifi kaydeder; satırdaki uyarı kalkar.
+  await satir.getByRole('button', { name: 'Deneme: girişi dene' }).click();
+  await page.getByRole('dialog', { name: 'Deneme: giriş denensin mi?' }).getByRole('button', { name: 'Girişi dene' }).click();
+  sonuc = page.getByRole('dialog', { name: 'Giriş denemesi: Deneme' });
+  await sonuc.getByRole('button', { name: 'Oturum kontrol adresi yap' }).click({ timeout: 60_000 });
+  await expect(sonuc.getByText('Oturum kontrol adresi /panel olarak kaydedildi.')).toBeVisible();
+  expect(await tarifi()).toMatchObject({ girisAdresi: '/', oturumKontrolAdresi: '/panel', basariGostergesi: { tur: 'metin', deger: 'Hoş geldiniz' } });
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
+  await expect(satir).not.toContainText('Oturum kontrol adresi giriş sayfasıyla aynı');
   await baglam.close();
 });

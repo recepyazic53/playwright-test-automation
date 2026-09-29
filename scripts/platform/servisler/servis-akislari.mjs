@@ -335,7 +335,8 @@ async function akisiKos(vt, projeId, g) {
       if (r.kurtarma) s.not = [s.not, String(r.kurtarma.not)].filter(Boolean).join('; ');
       if (r.okunanlar) s.okunanlar = /** @type {Record<string, string>} */ (r.okunanlar);
       if (r.hata) s.neden = String(r.hata);
-      else if (r.durum !== 'basarili') s.neden = (r.kontroller ?? []).filter((k) => !k.gecti).map((k) => k.ad).join('; ');
+      // Okunamayan değerde neden ve öneri de (benzer adlar; değer yok) — kullanıcı nasıl düzelteceğini görür.
+      else if (r.durum !== 'basarili') s.neden = (r.kontroller ?? []).filter((k) => !k.gecti).map((k) => (k.tur === 'okuma' && k.aciklama ? `${k.ad} — ${k.aciklama}` : k.ad)).join('; ');
       if (r.durduruldu) s.durum = 'durduruldu';
       }
     } catch (e) {

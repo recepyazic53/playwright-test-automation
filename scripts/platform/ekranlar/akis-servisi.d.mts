@@ -40,8 +40,8 @@ export declare function akisTasarimi(vt: Veritabani, projeId: string, ekranId: s
  * üstündeyse "once" (varsayılan), hiçbiri değilse "sonra" yazılır; verilmezse akışın mevcut ayarı korunur.
  */
 export declare function akisKaydet(vt: Veritabani, projeId: string, ekranId: string, g: { akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown; ekranAcilisSirasi?: unknown }):
-  { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; korunanSilinen?: string[]; ekranlar?: OrtakAkisKullanani[] }; akisId: string; testVerisi?: PaketTestVerisiOnizlemesi }
-  | { akisId: string; surum: number; testVerisi?: { tablolar: Array<{ ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number }>; baglanan: number } };
+  { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; korunanSilinen?: string[]; ekranlar?: OrtakAkisKullanani[]; semaYukseltme?: true }; akisId: string; testVerisi?: PaketTestVerisiOnizlemesi }
+  | { akisId: string; surum: number; semaYukseltme?: true; testVerisi?: { tablolar: Array<{ ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number }>; baglanan: number } };
 export declare function akisVarsayilanYap(vt: Veritabani, projeId: string, ekranId: string, akisId: string, yapan?: string): { surum: number | null; tasinan: number };
 export declare function akisSil(vt: Veritabani, projeId: string, ekranId: string, akisId: string): { surum: number };
 /** "Boş başla": adımı olmayan ortak akış (model v1) oluşturur; adımları Akışlar sekmesinde diyagramdan eklenir. */

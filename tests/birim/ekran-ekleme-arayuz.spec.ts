@@ -108,7 +108,7 @@ async function kutular(l: Locator): Promise<Array<{ x: number; y: number; width:
   return sonuc;
 }
 
-test('Ekran ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez, kopyalanan metin tek kaynaktan; 390px taşma yok', async () => {
+test('Ekran ekle: önde Ekranı tara / Akışı kaydet (yan yana eşit, tek eylem); paket yükleme ve yapay zekâ kapalı "İleri düzey"de; istek metni tek kaynaktan; 390px taşma yok', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   // Ekranlar sayfasının düğmesi "Ekran ekle" (sayfanın adıyla aynı); eski "Sayfa ekle" adı hiçbir yerde kalmaz.
@@ -116,34 +116,54 @@ test('Ekran ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez,
   await expect(page.locator('.sayfa-basligi .eylemler').getByRole('link', { name: 'Ekran ekle' })).toBeVisible();
   await expect(page.getByText('Sayfa ekle')).toHaveCount(0);
   await page.goto('/#/ekranlar/yeni');
-  const kutu = page.locator('.ekleme-kutusu');
-  await expect(kutu).toHaveCount(3);
-  await expect(kutu.locator('h3')).toHaveText(['Ekranı tara', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
-  await expect(kutu.nth(0)).toContainText('Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.');
-  await expect(kutu.nth(1)).toContainText('Siz ekranda işlemi yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).');
-  await expect(kutu.nth(2).locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın', 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
-  // Yükleme alanı ("Dosya seç") üstte olduğu gibi durur; yapay zekâ kutusunda yükleme düğmesi YOK, tek ana eylem kopyalamadır.
-  await expect(page.locator('label.yukleme-alani')).toContainText('Dosya seç');
-  await expect(kutu.nth(2).getByRole('button', { name: /yükle/i })).toHaveCount(0);
-  await expect(kutu.nth(2).getByRole('button')).toHaveText(['İstek metnini kopyala']);
-  for (const i of [0, 1]) await expect(kutu.nth(i).getByRole('button')).toHaveCount(1);
-  for (const i of [0, 1, 2]) await expect(kutu.nth(i).locator('.ekleme-notu')).toBeVisible();
+  // Sıra: "Ne oluşturulsun?" → ana yollar (Ekranı tara, Akışı kaydet) → kapalı "İleri düzey" (paket yükle + yapay zekâ).
+  const ana = page.locator('section.ekleme-secenekleri .ekleme-kutusu');
+  const ileri = page.locator('details.ileri-duzey');
+  await expect(page.getByRole('heading', { name: 'Nasıl eklensin?' })).toBeVisible();
+  await expect(ana.locator('h3')).toHaveText(['Ekranı tara', 'Akışı kaydet']);
+  await expect(ileri).toHaveCount(1);
+  await expect(ileri).not.toHaveAttribute('open', '');
+  await expect(ileri.locator(':scope > summary')).toContainText('İleri düzey: paket yükle ya da yapay zekâ ile oluştur');
+  await expect(page.locator('label.yukleme-alani')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Yapay zekâ ile oluştur' })).toBeHidden();
+  await expect(page.getByText('Paketiniz yoksa')).toHaveCount(0);
+  const secimY = (await page.locator('.olusturma-secimi').boundingBox())!.y;
+  const anaY = (await ana.first().boundingBox())!.y;
+  const ileriY = (await ileri.locator(':scope > summary').boundingBox())!.y;
+  expect(secimY).toBeLessThan(anaY);
+  expect(anaY).toBeLessThan(ileriY);
+  await expect(ana.nth(0)).toContainText('Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.');
+  await expect(ana.nth(1)).toContainText('Siz ekranda işlemi yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).');
+  for (const i of [0, 1]) await expect(ana.nth(i).getByRole('button')).toHaveCount(1);
+  for (const i of [0, 1]) await expect(ana.nth(i).locator('.ekleme-notu')).toBeVisible();
   // Eşit boyutlu, yan yana (aynı üst kenar).
-  const b = await kutular(kutu);
+  const b = await kutular(ana);
   expect(Math.max(...b.map((x) => x.height)) - Math.min(...b.map((x) => x.height))).toBeLessThanOrEqual(1);
   expect(Math.max(...b.map((x) => x.width)) - Math.min(...b.map((x) => x.width))).toBeLessThanOrEqual(1);
   expect(new Set(b.map((x) => Math.round(x.y))).size).toBe(1);
+  // İleri düzey açılınca: kısa "Paket nedir?", yükleme alanı ("Dosya seç") ve yapay zekâ kutusu (yükleme düğmesi YOK, tek eylem kopyalama).
+  await ileri.locator(':scope > summary').click();
+  await expect(ileri).toHaveAttribute('open', '');
+  await expect(ileri.locator('.paket-nedir')).toContainText('Paket nedir?');
+  await expect(ileri.locator('label.yukleme-alani')).toContainText('Dosya seç');
+  const yz = ileri.locator('.ekleme-kutusu');
+  await expect(yz.locator('h3')).toHaveText(['Yapay zekâ ile oluştur']);
+  await expect(yz.locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın', 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
+  await expect(yz.getByRole('button', { name: /yükle/i })).toHaveCount(0);
+  await expect(yz.getByRole('button')).toHaveText(['İstek metnini kopyala']);
+  await expect(yz.locator('.ekleme-notu')).toBeVisible();
   // Uzun istek metni ekranda görünmez; "Metni göster" varsayılan kapalı.
   const metin = paketIstekCumlesi();
   await expect(page.getByText('Sayfayı benimle birlikte, adım adım incele', { exact: false })).toBeHidden();
   await expect(page.locator('details.istek-metni-acilir')).not.toHaveAttribute('open', '');
-  await kutu.nth(2).getByRole('button', { name: 'İstek metnini kopyala' }).click();
+  await yz.getByRole('button', { name: 'İstek metnini kopyala' }).click();
   await expect(page.getByText('İstek metni kopyalandı.')).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(metin);
-  await kutu.nth(2).getByText('Metni göster').click();
-  await expect(kutu.nth(2).locator('pre.istek-metni')).toHaveText(metin);
+  await yz.getByText('Metni göster').click();
+  await expect(yz.locator('pre.istek-metni')).toHaveText(metin);
+  const kutu = page.locator('.ekleme-kutusu');
   // "Paket biçimini indir": yerel uç, tek dosya, içerik sunucunun birleştirdiği belgeyle aynı.
-  const indir = kutu.nth(2).getByRole('link', { name: 'Paket biçimini indir' });
+  const indir = yz.getByRole('link', { name: 'Paket biçimini indir' });
   await expect(indir).toHaveAttribute('href', BICIM_ADRESI);
   await expect(indir).toHaveAttribute('download', BICIM_DOSYASI_ADI);
   const yanit = await page.request.get(BICIM_ADRESI);
@@ -158,7 +178,8 @@ test('Ekran ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez,
   // 390px: alt alta, taşma yok.
   await page.setViewportSize({ width: 390, height: 900 });
   await page.waitForTimeout(200);
-  const d = await kutular(kutu);
+  const d = await kutular(ana);
+  expect(d).toHaveLength(2);
   expect(new Set(d.map((x) => Math.round(x.x))).size).toBe(1);
   expect(d[1].y).toBeGreaterThan(d[0].y + d[0].height - 1);
   await tasmaYok(page);
@@ -170,10 +191,15 @@ test('Ekranlar: istek metni tam gösterilmez (kopyala düğmesi); ortak akış k
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
+  // Şerit tara / kaydet yolunu anlatır; yapay zekâ istek metni kapalı "İleri düzey" içinde.
   const serit = page.locator('.kesif-seridi');
-  await expect(serit.getByRole('button', { name: 'İstek metnini kopyala' })).toHaveCount(1);
+  await expect(serit.locator('.kesif-adimlari li b')).toHaveText(['Ekranı tarayın ya da akışı kaydedin', 'Düğmeyi ve sonucu kontrol edin', 'Senaryo yazın']);
+  await expect(serit.getByRole('link', { name: 'Ekranı tara' })).toHaveAttribute('href', '#/ekranlar/yeni/tara');
+  await expect(serit.locator('button', { hasText: 'İstek metnini kopyala' })).toHaveCount(1);
+  await expect(serit.locator('button', { hasText: 'İstek metnini kopyala' })).toBeHidden();
   await expect(serit.locator('code')).toHaveCount(0);
   await expect(serit.locator('pre.istek-metni')).toBeHidden();
+  await serit.locator('details.kesif-ileri > summary').click();
   await serit.getByRole('button', { name: 'İstek metnini kopyala' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(paketIstekCumlesi(''));
 

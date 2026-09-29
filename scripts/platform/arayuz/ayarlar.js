@@ -1465,6 +1465,16 @@ async function arayuzAyarlari(govde, baglam) {
     } catch (hata) { mesaj.goster(hata.message); }
   });
   tanitim.addEventListener('click', () => rehberBaslat('genel'));
+  // Başlarken listesi (Sonuçlar > Genel > Özet) gizlendiyse proje için yeniden gösterilir (karar kasada; baslarken.js).
+  const baslarken = proje ? h('button', { type: 'button', class: 'hayalet' }, ikon('liste'), 'Başlarken listesini yeniden göster') : null;
+  baslarken?.addEventListener('click', async () => {
+    mesaj.temizle();
+    try {
+      const { baslarkeniYenidenGoster } = await import('./baslarken.js');
+      const d = await mesgulIken(baslarken, 'Kaydediliyor…', () => baslarkeniYenidenGoster(proje));
+      mesaj.goster(d.tamam ? 'Başlarken listesi yeniden açıldı; tüm adımlar tamam olduğu için Özet\'te görünmez.' : 'Başlarken listesi Sonuçlar > Genel > Özet\'te yeniden görünecek.', 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
   yerlestir(govde, h('div', { class: 'kart form-paneli', role: 'group', 'aria-label': 'Rehberler' },
     h('h3', {}, ikon('soru'), 'Rehberler'),
     h('p', { class: 'soluk' }, 'Her ekranın, o ekranda işlerin hangi sırayla ve nasıl yapılacağını anlatan bir rehberi vardır. Rehber bitince ya da kapatılınca "görüldü" sayılır.'),
@@ -1475,7 +1485,7 @@ async function arayuzAyarlari(govde, baglam) {
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
           : 'Kapalıysa rehberler yalnızca üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
-    h('div', { class: 'dugmeler' }, sifirla, tanitim)), temaKarti(), acilisKarti(acilis), listeFormu, saglik);
+    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), acilisKarti(acilis), listeFormu, saglik);
 }
 
 /** Sağlık noktası eşikleri (proje başına; Sonuçlar ekranındaki noktanın rengi — ayarlar/saglik-esikleri.mjs). */

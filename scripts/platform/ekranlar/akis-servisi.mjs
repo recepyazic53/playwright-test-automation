@@ -1170,6 +1170,8 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const korunmayan = korunanDenetimi(tam, yeni, akisAdimlari, ayik.bloklar, korunan, oncekiAdimlar);
   if (korunmayan.length) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${korunmayan.length} sorun var.`, korunmayan);
   modeliDogrula(vt, projeId, yeni, `${ekran.anahtar}.model.json`);
+  // Eski biçimli (sürüm 1; ör. otomatik tarama) modele diyagram koşu tanımı yazdıysa model sürüm 2'ye yükseltildi (modeliDogrula).
+  const semaYukseltme = Number(yeni.semaSurumu) > Number(tam.semaSurumu || 1);
 
   const varsayilan = liste[0]?.id ?? ANA_AKIS_ID;
   const etkilenen = mevcutAkis ? akisSenaryolari(vt, ekranId, akisId, varsayilan) : [];
@@ -1181,12 +1183,12 @@ export function akisKaydet(vt, projeId, ekranId, g) {
     const testVerisi = onizleme ? { ...onizleme, baglantilar: onizleme.baglantilar.map((b) => ({ ...b, modeldeVar: true })) } : null;
     // Güncellenen akışın korunan parçalarından diyagramda artık olmayanlar (kullanıcı sildi / kayıt yerine geçti): onayda gösterilir.
     const korunanSilinen = mevcutAkis ? silinenKorunanlar(tam, mevcutAkis.id, ayik.bloklar, korunan) : [];
-    return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(korunanSilinen.length ? { korunanSilinen } : {}), ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}) }, akisId, ...(testVerisi ? { testVerisi } : {}) };
+    return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(korunanSilinen.length ? { korunanSilinen } : {}), ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}), ...(semaYukseltme ? { semaYukseltme } : {}) }, akisId, ...(testVerisi ? { testVerisi } : {}) };
   }
   return vt.islem(() => {
-    const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Akış ${mevcutAkis ? 'düzenlendi' : 'eklendi'}: ${ad}` });
+    const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Akış ${mevcutAkis ? 'düzenlendi' : 'eklendi'}: ${ad}${semaYukseltme ? ' (model yeni biçime güncellendi)' : ''}` });
     const tv = tvPaketi ? paketTestVerisiniYaz(vt, projeId, ekranId, tvPaketi, g.testVerisi) : null;
-    return { akisId, surum, ...(tv ? { testVerisi: { tablolar: tv.tablolar, baglanan: tv.baglanan } } : {}) };
+    return { akisId, surum, ...(semaYukseltme ? { semaYukseltme } : {}), ...(tv ? { testVerisi: { tablolar: tv.tablolar, baglanan: tv.baglanan } } : {}) };
   });
 }
 

@@ -151,6 +151,7 @@ import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } f
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
 import { ekipKaydet, ekipSil, ortamUygulamaSurumu, raporIsaretiKaydet, uygulamaSurumuTemizle } from './ayarlar/rapor-verileri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
+import { baslarkenDurumu, baslarkenIsaretle } from './ayarlar/baslarken.mjs';
 import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
@@ -1385,6 +1386,8 @@ const GET_UCLARI = new Map([
   ['/platform/rapor-verileri', (db, q) => raporVerileriEkrani(db, kimlikAl(q.get('projeId'), 'projeId'))],
   // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
   ['/platform/rehber', (db) => ({ rehber: rehberAyarlariniOku(db) })],
+  // Sonuçlar > Genel > Özet: "Başlarken" kontrol listesi (adım durumları projenin verisinden; gizle ve işaretler kasada — ayarlar/baslarken.mjs).
+  ['/platform/baslarken', (db, q) => ({ baslarken: baslarkenDurumu(db, kimlikAl(q.get('projeId'), 'projeId')) })],
   // Ayarlar > Arayüz > Nöbetçi nasıl açılsın (kendi penceresi / varsayılan tarayıcı; başlatıcı okur, bkz. ayarlar/acilis-tercihi.mjs).
   ['/platform/acilis', () => ({ acilis: acilisTercihiniOku(VERI_KOKU) })],
   // Ayarlar > Güvenlik > Maskeleme: çekirdek gizli ad listesi (değiştirilemez) + kullanıcının ek adları.
@@ -1608,6 +1611,12 @@ const POST_UCLARI = new Map([
   ['/platform/yedek-uyarisi/kapat', (db) => ({ kapatildi: yedekUyarisiniKapat(db) })],
   ['/platform/acilis/kaydet', (db, g) => ({ acilis: acilisTercihiniKaydet(VERI_KOKU, g.bicim) })],
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
+  // Başlarken: gizle / girişe gerek yok / incelendi işaretleri (yalnız kasaya yazılır; dış istek yok).
+  ['/platform/baslarken/kaydet', (db, g) => {
+    const projeId = kimlikAl(g.projeId, 'projeId');
+    baslarkenIsaretle(db, projeId, { gizli: g.gizli, girisGerekmez: g.girisGerekmez, incelendi: g.incelendi });
+    return { baslarken: baslarkenDurumu(db, projeId) };
+  }],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
   ['/platform/saglik-esikleri/kaydet', (db, g) => ({ esikler: saglikEsikleriniKaydet(db, kimlikAl(g.projeId, 'projeId'), g.esikler) })],
@@ -2404,6 +2413,8 @@ export async function platformIsteginiIsle(req, res, baglam) {
       case '/platform/senaryo/dene': {
         const db = await acikVeritabani();
         const sonuc = await senaryoDene(db, govde, kosucu);
+        // Başlarken listesinin "Dene" adımı: deneme koşucuya verildiyse işaretlenir (yazılamazsa deneme yanıtı yine döner).
+        if ((sonuc.httpDurum ?? 200) < 400) { try { baslarkenIsaretle(db, kimlikAl(govde.projeId, 'projeId'), { denendi: true }); } catch { /* yok sayılır */ } }
         jsonGonder(res, sonuc.httpDurum, sonuc.govde);
         return true;
       }

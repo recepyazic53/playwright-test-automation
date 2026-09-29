@@ -18,7 +18,17 @@ export type GirisTaslagi = {
 
 export type KodKaynagi = 'totp' | 'sabit' | 'elle';
 /** Onay ekranındaki seçimler. */
-export type KayitSecimleri = { kodKaynagi?: KodKaynagi; basariMetni?: string };
+export type KayitSecimleri = {
+  kodKaynagi?: KodKaynagi; basariMetni?: string;
+  /** Girişten sonraki sayfadan gelen önerileri kullanıcı onayladı mı (gönderilmezse yalnız yeni tarifte kullanılır). */
+  oturumOnerisi?: boolean; basariOnerisi?: boolean;
+};
+
+/** Girişten sonra açılan sayfadan öneriler (yalnız mevcut değerden farklıysa; kabul: tarife yazıldı mı). */
+export type SayfaOnerileri = {
+  oturumKontrolAdresi: { adres: string; mevcut: string | null; kabul: boolean } | null;
+  basariGostergesi: { gosterge: { tur: 'metin'; deger: string }; mevcut: GirisTarifi['basariGostergesi'] | null; kabul: boolean } | null;
+};
 
 /** isaretler[i]: rol (alan/düğme rolü), ek alanda ad + gizli. */
 export type TaslakIsareti = { rol: AlanRolu | DugmeRolu; ad?: string; gizli?: boolean };
@@ -30,6 +40,7 @@ export type KayittanTarifSonucu = {
   ekAlanlar: Array<{ ad: string; gizli: boolean; etiket: string }>;
   hatalar: string[];
   notlar: string[];
+  sayfaOnerileri: SayfaOnerileri;
 };
 
 export declare const ALAN_ROLLERI: readonly AlanRolu[];

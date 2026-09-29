@@ -13,6 +13,13 @@ import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIk
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';
 import { girisiDeneDugmesi } from './giris-denemesi.js';
+import {
+  AYNI_ADRES_UYARISI, basariAdresindenYol, girisSonrasiSayfasiniHatirla, hatirlananGirisSonrasiSayfasi, oturumAdresiGirisleAyniMi, oturumAdresiOnerisi
+} from './oturum-kontrolu.mjs';
+
+const OTURUM_ADRESI_YARDIMI = 'Girişten sonra açılan bir sayfa (ör. /panel). Nöbetçi her testten önce bu sayfayı açar: başarı göstergesi '
+  + 'görünürse önceki giriş hâlâ geçerlidir ve yeniden giriş yapılmaz. Giriş sayfasını yazmayın; orada gösterge görünmediği için '
+  + 'her testte giriş beklenir. Boş bırakılırsa giriş adresi kullanılır.';
 
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
 const KAYNAK_ROZETI = {
@@ -163,12 +170,14 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         h('div', { class: 'kayit-ana' }, h('strong', {}, o.ortamAd, ' ', rozet(rozetMetni, rozetTuru)),
           h('div', { class: 'kayit-meta' }, ozet(o.tarif)),
           o.tarif ? h('div', { class: 'kayit-meta giris-ozet-satiri' }, girisAdimlariOzeti(o.tarif).map((x, i) => `${i + 1}. ${x.metin}`).join(' · ')) : null,
-          o.hatalar && o.hatalar.length ? h('div', { class: 'kayit-meta hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null),
+          o.hatalar && o.hatalar.length ? h('div', { class: 'kayit-meta hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null,
+          o.tarif && oturumAdresiGirisleAyniMi(o.tarif, o.tabanUrl)
+            ? h('div', { class: 'kayit-meta oturum-adresi-uyarisi' }, ikon('uyari'), ' Oturum kontrol adresi giriş sayfasıyla aynı: her testte giriş beklenir (Düzenle’de düzeltin).') : null),
         h('div', { class: 'kayit-eylemleri' },
           // Önerilen yol "Girişi kaydet" (tarif yoksa birincil); elle tanımlama gelişmiş seçenek olarak yanında durur.
           h('button', { type: 'button', class: o.tarif ? 'kucuk-dugme hayalet' : 'kucuk-dugme birincil', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) },
             ikon('oynat'), o.tarif ? 'Yeniden kaydet' : 'Girişi kaydet'),
-          o.tarif ? girisiDeneDugmesi(o, proje.id) : null,
+          o.tarif ? girisiDeneDugmesi(o, proje.id, { tarifGuncellendi: guncelle }) : null,
           (o.tarif ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), 'Düzenle')
             : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: giriş tarifi ekle`, onclick: () => tarifFormu(o) }, 'Elle tanımla'))));
     }));
@@ -188,12 +197,16 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     if (dugme) { dugme.scrollIntoView({ block: 'center' }); dugme.click(); }
   };
 
-  /** @param {any} o ortam satırı @param {{ tarif?: any; not?: string }} [on] kayıttan gelen öneri (kaydedilmemiş) */
+  /** @param {any} o ortam satırı @param {{ tarif?: any; not?: string; oturumOnerisi?: string | null }} [on] kayıttan gelen öneri (kaydedilmemiş) */
   const tarifFormu = (o, on = {}) => {
     const t = JSON.parse(JSON.stringify(on.tarif || o.tarif || bosTarif()));
     const mesaj = mesajKutusu();
     const girisAdresi = monoGirdi(t.girisAdresi);
     const oturumAdresi = monoGirdi(t.oturumKontrolAdresi);
+    // Oturum kontrol adresi giriş sayfasıyla aynıysa açık uyarı; önerilen adres (girişten sonra görülen sayfa) varsa tek tıkla geçilir.
+    // Öneri kaynağı: kayıttan gelen öneri > bu oturumda "Girişi dene"/"Girişi kaydet"te görülen sayfa > adres deseni başarı göstergesi.
+    const oturumUyarisi = h('div', { class: 'not-kutusu uyari oturum-adresi-uyarisi', role: 'status', hidden: true });
+    let oturumUyarisiniGuncelle = () => {};
     const kullanici = monoGirdi(t.kullaniciAlani);
     const parola = monoGirdi(t.parolaAlani);
     const gonder = monoGirdi(t.gonderDugmesi);
@@ -269,6 +282,25 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     };
     (t.hataGostergeleri || []).forEach(hataEkle);
     const zamanAsimi = h('input', { type: 'number', min: '5', max: '600', step: '1', value: String(t.zamanAsimiSn ?? 45) });
+
+    let sonUyariDurumu = '';
+    oturumUyarisiniGuncelle = () => {
+      const adresler = { girisAdresi: girisAdresi.value.trim() || '/', oturumKontrolAdresi: oturumAdresi.value.trim() };
+      const ayni = oturumAdresiGirisleAyniMi(adresler, o.tabanUrl);
+      const oneri = ayni ? [on.oturumOnerisi, hatirlananGirisSonrasiSayfasi(o.ortamId), basariAdresindenYol({ tur: basariTur.value, deger: basariDeger.value })]
+        .map((y) => oturumAdresiOnerisi(adresler, y, o.tabanUrl)).find(Boolean) || null : null;
+      const durum = ayni ? `ayni:${oneri ?? ''}` : '';
+      if (durum === sonUyariDurumu) return;
+      sonUyariDurumu = durum;
+      oturumUyarisi.hidden = !ayni;
+      if (!ayni) { oturumUyarisi.replaceChildren(); return; }
+      oturumUyarisi.replaceChildren(
+        h('p', {}, h('strong', {}, AYNI_ADRES_UYARISI)),
+        oneri
+          ? h('p', {}, `Girişten sonra açılan sayfa: `, h('code', {}, oneri), ' ',
+            h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { oturumAdresi.value = oneri; oturumUyarisiniGuncelle(); oturumAdresi.focus(); } }, `Önerilen adrese geç (${oneri})`))
+          : h('p', { class: 'kucuk' }, 'Girişten sonra açılan sayfanın yolunu yazın (ör. /panel). Bilmiyorsanız “Girişi dene” ile deneyin: giriş sonrası sayfa önerilir.'));
+    };
 
     // --- İkinci adım ----------------------------------------------------------------------
     const ikinci = t.ikinciAdim || { tur: 'yok' };
@@ -397,7 +429,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       h('fieldset', {}, h('legend', {}, 'Giriş sayfası'),
         h('div', { class: 'iki-sutun' },
           alan('Giriş adresi', girisAdresi, { yardim: 'Taban adrese göre yol (ör. / ya da /giris) veya tam http(s) adresi.' }),
-          alan('Oturum kontrol adresi', oturumAdresi, { yardim: 'Kayıtlı oturumun geçerliliğine bakılan sayfa (boşsa giriş adresi).' })),
+          alan('Oturum kontrol adresi', oturumAdresi, { yardim: OTURUM_ADRESI_YARDIMI })),
+        oturumUyarisi,
         h('div', { class: 'oneri-satiri' }, oner,
           h('span', { class: 'soluk kucuk' }, ikon('uyari'), ' Ortamın adresini bu bilgisayarda açar; yalnızca siz basınca çalışır.')),
         oneriNotu,
@@ -425,8 +458,10 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     ikinciGorunum();
     baglamGorunum();
     adimOzetMetni.textContent = `Adımlar (${adimlar.length})`;
-    form.addEventListener('input', () => ozetiCiz());
+    form.addEventListener('input', () => { ozetiCiz(); oturumUyarisiniGuncelle(); });
+    form.addEventListener('change', () => oturumUyarisiniGuncelle());
     ozetiCiz();
+    oturumUyarisiniGuncelle();
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       mesaj.temizle();
@@ -555,6 +590,37 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const basariGirdi = h('input', { type: 'text', autocomplete: 'off', placeholder: 'ör. Ana sayfa, Hoş geldiniz' });
     const basariKutusu = alan('Girişten sonra ekranda görünen bir yazı', basariGirdi, { yardim: 'Kayıtta çıkış bağlantısı ya da adres değişikliği görülmedi. Nöbetçi girişin başarılı olduğunu bu yazının görünmesinden anlar (tam eşleşme).' });
     basariKutusu.hidden = true;
+    // --- Girişten sonra açılan sayfadan öneriler: yalnız kullanıcı işaretlerse tarife yazılır (mevcut değer kendiliğinden değişmez) ---
+    const oturumOneriKutusu = h('input', { type: 'checkbox', id: yeniKimlik('oturum-onerisi') });
+    const oturumOneriEtiketi = h('span', {});
+    const basariOneriKutusu = h('input', { type: 'checkbox', id: yeniKimlik('basari-onerisi') });
+    const basariOneriEtiketi = h('span', {});
+    const oturumOneriSatiri = h('div', { hidden: true }, h('label', { class: 'secenek', for: oturumOneriKutusu.id }, oturumOneriKutusu, oturumOneriEtiketi));
+    const basariOneriSatiri = h('div', { hidden: true }, h('label', { class: 'secenek', for: basariOneriKutusu.id }, basariOneriKutusu, basariOneriEtiketi));
+    const sayfaOneriKutusu = h('fieldset', { class: 'giris-kaydi-soru', hidden: true },
+      h('legend', {}, 'Girişten sonra açılan sayfadan öneriler'),
+      h('p', { class: 'soluk kucuk' }, 'Oturum kontrol adresi: Nöbetçi her testten önce bu sayfayı açıp girişin hâlâ geçerli olup olmadığına bakar; giriş sayfası olursa her testte giriş beklenir.'),
+      oturumOneriSatiri, basariOneriSatiri);
+    /** Kullanıcının dokunduğu öneri kutuları (dokunulmadıysa sunucunun varsayılanı: yalnız yeni tarifte işaretli gelir). */
+    const dokunulan = { oturum: false, basari: false };
+    oturumOneriKutusu.addEventListener('change', () => { dokunulan.oturum = true; });
+    basariOneriKutusu.addEventListener('change', () => { dokunulan.basari = true; });
+    const onerileriCiz = (/** @type {any} */ so) => {
+      const ot = so && so.oturumKontrolAdresi;
+      const ba = so && so.basariGostergesi;
+      oturumOneriSatiri.hidden = !ot;
+      basariOneriSatiri.hidden = !ba;
+      sayfaOneriKutusu.hidden = !ot && !ba;
+      if (ot) {
+        girisSonrasiSayfasiniHatirla(o.ortamId, ot.adres);
+        oturumOneriEtiketi.textContent = `Oturum kontrol adresi olarak ${ot.adres} kullanılsın${ot.mevcut ? ` (şu an: ${ot.mevcut})` : ''}`;
+        if (!dokunulan.oturum) oturumOneriKutusu.checked = Boolean(ot.kabul);
+      }
+      if (ba) {
+        basariOneriEtiketi.textContent = `Başarı göstergesi olarak “${ba.gosterge.deger}” yazısı kullanılsın${ba.mevcut && ba.mevcut.deger ? ` (şu an: ${ba.mevcut.deger})` : ''}`;
+        if (!dokunulan.basari) basariOneriKutusu.checked = Boolean(ba.kabul);
+      }
+    };
     const ozetAlani = h('div', { 'aria-live': 'polite' });
     const kaydet = h('button', { type: 'button', class: 'birincil', disabled: true }, ikon('onay'), 'Doğru, kaydet');
     const gelismis = h('button', { type: 'button', class: 'hayalet', disabled: true }, 'Ayrıntıları düzenle (gelişmiş)');
@@ -563,7 +629,9 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     let zaman = null;
     const secimler = () => ({
       ...(kodVar() ? { kodKaynagi: kodKaynagi() } : {}),
-      ...(!basariKutusu.hidden && basariGirdi.value.trim() ? { basariMetni: basariGirdi.value.trim() } : {})
+      ...(!basariKutusu.hidden && basariGirdi.value.trim() ? { basariMetni: basariGirdi.value.trim() } : {}),
+      ...(dokunulan.oturum ? { oturumOnerisi: oturumOneriKutusu.checked } : {}),
+      ...(dokunulan.basari ? { basariOnerisi: basariOneriKutusu.checked } : {})
     });
     const basariMetni = (b) => (b.tur === 'metin' ? `ekranda “${b.deger}” yazısı görününce` : b.tur === 'url' ? `adres ${b.deger.replace(/\\/g, '')} olunca` : 'belirlenen öğe görününce');
     // Önizleme (kaydetmez): her değişiklikte sunucuda tarif yeniden üretilir; eski yanıtlar yok sayılır.
@@ -582,6 +650,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       }
       if (no !== sayac) return;
       son = r;
+      onerileriCiz(r.sayfaOnerileri);
       const b = r.tarif.basariGostergesi || { tur: 'metin', deger: '' };
       if (!b.deger && basariKutusu.hidden) basariKutusu.hidden = false;
       const eksikler = r.hatalar.length ? r.hatalar : r.dogrulamaHatalari;
@@ -600,7 +669,10 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
 
     gelismis.addEventListener('click', () => {
       if (!son) return;
-      tarifFormu(o, { tarif: son.tarif, not: 'Bu tarif girişi kaydından hazırlandı ve henüz KAYDEDİLMEDİ: kontrol edip “Tarifi kaydet”e basın.' });
+      tarifFormu(o, {
+        tarif: son.tarif, not: 'Bu tarif girişi kaydından hazırlandı ve henüz KAYDEDİLMEDİ: kontrol edip “Tarifi kaydet”e basın.',
+        oturumOnerisi: son.sayfaOnerileri && son.sayfaOnerileri.oturumKontrolAdresi ? son.sayfaOnerileri.oturumKontrolAdresi.adres : null
+      });
     });
     kaydet.addEventListener('click', async () => {
       if (!son) return;
@@ -628,7 +700,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
       h('p', { class: 'soluk kucuk' }, 'Nöbetçi girişi böyle anladı. Yanlış tanınan bir adım varsa yanındaki seçimi değiştirin. Kayıtta değer yok; yalnızca dokunduğunuz alanlar ve bastığınız düğmeler var.'),
       h('ol', { class: 'giris-kaydi-listesi' }, satirlar.map((s) => s.el)),
-      kodKutusu, basariKutusu, ozetAlani,
+      kodKutusu, basariKutusu, sayfaOneriKutusu, ozetAlani,
       h('div', { class: 'dugmeler' }, kaydet, gelismis, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     kodKutusu.hidden = !kodVar();
     onizle();

@@ -9,3 +9,5 @@ export declare function servisSonucSenaryosu(vt: Veritabani, q: URLSearchParams)
 /** Saklanan doğrulanan dosya (ham; tarayıcı indirir, sunucu diske yazmaz). */
 export declare function servisSonucDosyasi(vt: Veritabani, q: URLSearchParams): { dosya: { ad: string; icerikTuru: string; icerikBase64: string } };
 export declare const SERVIS_SONUC_UCLARI: Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>;
+/** Servis koşu kaydının gösterimi: istekte adı gizli alanların değeri maskeli (kayıt değişmez). */
+export declare function servisKosusuGosterimi<K extends { sonuc?: unknown }>(kosu: K, ekler: ReadonlyArray<string>): K;

@@ -955,3 +955,84 @@ export function dogrulamaMaddeleri(hata) {
   const maddeler = mesaj.split('\n').filter((s) => s.startsWith(' - ')).map((s) => s.slice(3));
   return maddeler.length ? maddeler : [mesaj];
 }
+
+// ---- Şema sürümü yükseltme ----
+
+/** Modelin (varsayılan ve diğer akışlarının) adımlarından biri koşu tanımı ("kosu", sürüm 2 özelliği) taşıyor mu? */
+function kosuTanimiVarMi(model) {
+  const adimlar = [
+    ...(Array.isArray(model.adimlar) ? model.adimlar : []),
+    ...(Array.isArray(model.akislar) ? model.akislar.flatMap((a) => (nesneMi(a) && Array.isArray(a.adimlar) ? a.adimlar : [])) : [])
+  ];
+  return adimlar.some((a) => nesneMi(a) && a.kosu !== undefined);
+}
+
+/**
+ * Kaydederken gereken şema yükseltmesi: sürüm 1 EKRAN modeline koşu tanımı yazıldıysa (akış diyagramı / akış kaydı adımlara
+ * aksiyon ve başarı göstergesi ekler) model sürüm 2'ye çıkarılır. Sürüm 2, sürüm 1'in üst kümesidir (sürüm 1 modeller aynen
+ * geçerlidir); başka hiçbir şey değişmez. Koşu tanımı yoksa model sürüm 1 kalır. Modeli yerinde değiştirir.
+ * @param {unknown} model @returns {boolean} yükseltildi mi
+ */
+export function semaSurumunuYukselt(model) {
+  if (!nesneMi(model) || model.tur !== 'ekran' || model.semaSurumu !== 1 || !kosuTanimiVarMi(model)) return false;
+  model.semaSurumu = 2;
+  return true;
+}
+
+/** Doğrulama iletilerindeki teknik anahtarların kullanıcıya gösterilen adları. */
+const ANAHTAR_ADLARI = Object.freeze({
+  kosu: 'koşu tanımı', semaSurumu: 'model biçimi', aksiyonlar: 'aksiyonlar', secici: 'seçici', basariGostergesi: 'başarı göstergesi',
+  hataGostergesi: 'hata göstergesi', zamanAsimiSn: 'bekleme süresi', sureSn: 'bekleme süresi', bolumler: 'bölümler', alanlar: 'alanlar',
+  adimlar: 'adımlar', baslik: 'başlık', id: 'kimlik', sira: 'sıra', gorunurluk: 'görünürlük', kosul: 'koşul', kosullar: 'koşullar',
+  ifade: 'koşul ifadesi', eslesme: 'senaryo eşleşmesi', 'eslesme.senaryo': 'senaryo eşleşmesi', konum: 'konum', secenekler: 'seçenekler',
+  tip: 'tip', tur: 'tür', ad: 'ad', aciklama: 'açıklama', deger: 'değer', metin: 'metin', altModel: 'alt model', ortakAkis: 'ortak akış',
+  akislar: 'akışlar', varsayilan: 'varsayılan', senaryoDuzeyi: 'senaryo ayarları', yapilandirma: 'yapılandırma', doldurucu: 'doldurucu',
+  ekranUrl: 'ekran adresi', girisGerekmez: 'girişsiz', bastakiOrtakAkislar: 'baştaki ortak akışlar', sinirlar: 'sınırlar', cerceve: 'çerçeve',
+  uyarilar: 'uyarılar', durum: 'durum', not: 'not', sqlKontrolu: 'SQL kontrolü', dosyaKontrolu: 'dosya kontrolü', yenidenGiris: 'yeniden giriş'
+});
+
+/**
+ * Doğrulayıcının iç iletisini (ör. `adimlar[0](form): adımın koşu tanımı ("kosu") "semaSurumu": 2 gerektirir`) kullanıcının
+ * anlayacağı Türkçeye çevirir: yol ("adimlar[0](form)", "akislar[1](x)") adım / akış / alan / koşul adına, bilinen anahtarlar
+ * Türkçe adlarına döner. Teknik ileti arayüzde "Ayrıntı" altında kalır (bu işlev yalnızca gösterilecek metni üretir).
+ * @param {string} madde dogrulamaMaddeleri'nin bir maddesi @param {unknown} [model] yol adlarını çözmek için (isteğe bağlı)
+ * @returns {string}
+ */
+export function anlasilirDogrulamaIletisi(madde, model) {
+  const parcalar = String(madde).split(': ');
+  /** @type {string[]} */
+  const yollar = [];
+  while (parcalar.length > 1 && /^[^\s"“”]+$/.test(parcalar[0])) yollar.push(/** @type {string} */ (parcalar.shift()));
+  let govde = parcalar.join(': ');
+  const m = nesneMi(model) ? model : {};
+  /** @type {Array<Record<string, unknown>>} */
+  let adimlar = Array.isArray(m.adimlar) ? m.adimlar.filter(nesneMi) : [];
+  /** @type {string[]} */
+  const konum = [];
+  for (const yol of yollar) {
+    const akis = /^akislar\[\d+\]\(([^)]*)\)/.exec(yol);
+    if (akis) {
+      const a = Array.isArray(m.akislar) ? m.akislar.find((x) => nesneMi(x) && x.id === akis[1]) : null;
+      if (nesneMi(a) && Array.isArray(a.adimlar)) adimlar = a.adimlar.filter(nesneMi);
+      konum.push(`“${nesneMi(a) && metinMi(a.ad) ? a.ad : akis[1]}” akışı`);
+      continue;
+    }
+    const adim = /^adimlar\[\d+\]\(([^)]*)\)/.exec(yol);
+    if (adim) {
+      const a = adimlar.find((x) => x.id === adim[1]);
+      konum.push(`“${a && metinMi(a.baslik) ? a.baslik : adim[1]}” adımı`);
+    }
+    const alan = [...yol.matchAll(/alanlar\[\d+\]\(([^)]*)\)/g)].pop();
+    if (alan) konum.push(`“${alan[1]}” alanı`);
+    const kosul = /^kosullar\.([^.]+)/.exec(yol);
+    if (kosul) konum.push(`“${kosul[1]}” koşulu`);
+    if (/^senaryoDuzeyi/.test(yol)) konum.push('Senaryo ayarları');
+  }
+  if (/"semaSurumu": 2 gerektirir/.test(govde)) {
+    govde = 'bu adımdaki düğme / beklenen sonuç tanımı modelin yeni biçimini gerektiriyor; ekranın modeli eski biçimde (kaydedince kendiliğinden güncellenir, mevcut senaryolar etkilenmez)';
+  } else {
+    govde = govde.replace(/bilinmeyen anahtar "([^"]+)"/g, 'tanınmayan özellik “$1”')
+      .replace(/"([A-Za-z.]+)"/g, (tam, k) => (Object.prototype.hasOwnProperty.call(ANAHTAR_ADLARI, k) ? `“${ANAHTAR_ADLARI[k]}”` : tam));
+  }
+  return `${konum.length ? konum.join(' › ') : 'Ekran modeli'}: ${govde}`;
+}

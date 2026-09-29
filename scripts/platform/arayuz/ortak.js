@@ -590,6 +590,28 @@ export function alanHatasi(girdi, mesaj) {
 }
 
 /**
+ * Dosya seçme girdisi: her seçimden sonra girdi SIFIRLANIR (value = ''), böylece aynı adlı dosya yeniden seçilince "change" yeniden
+ * gelir ve dosya yeniden okunur (düzeltilmiş dosya eski sonucun yerine geçer). Seçilen dosyalar saklanır; "not" öğesi girdinin
+ * yanında son seçilen dosyanın adını ve seçim saatini gösterir. secildi: her seçimde (dosyalarla) çağrılır.
+ * @param {HTMLInputElement} girdi @param {(dosyalar: File[]) => void} [secildi]
+ * @returns {{ dosyalar: () => File[]; not: HTMLElement; temizle: () => void }}
+ */
+export function dosyaSecimi(girdi, secildi) {
+  /** @type {File[]} */
+  let secilen = [];
+  const not = h('span', { class: 'dosya-secimi-notu kucuk soluk', 'aria-live': 'polite' });
+  girdi.addEventListener('change', () => {
+    const yeni = [...(girdi.files || [])];
+    girdi.value = '';
+    if (!yeni.length) return;
+    secilen = yeni;
+    not.textContent = `Seçilen: ${yeni.map((f) => f.name).join(', ')} · ${new Date().toLocaleTimeString('tr-TR')}`;
+    if (secildi) secildi(yeni);
+  });
+  return { dosyalar: () => secilen, not, temizle: () => { secilen = []; not.textContent = ''; } };
+}
+
+/**
  * Parola/gizli değer alanı: type=password + "Göster" anahtarı. kayitli.dolu ise alan boş
  * bırakılırsa mevcut değer korunur; "Kayıtlı değeri göster" (gosterFn) açıkça istenince
  * sunucudan tek değeri alır.

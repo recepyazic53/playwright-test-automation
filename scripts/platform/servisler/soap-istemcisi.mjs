@@ -7,7 +7,7 @@ import { AD_KALIBI, BICIM_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi
 import * as hesap from './hesap-kurallari.mjs';
 import { dosyayiDogrula, sonucOzeti, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
 import { tarihBicimle, VARSAYILAN_TARIH_BICIMI } from './hesap-kurallari.mjs';
-import { altinYanitKarsilastir, yanitAlaniAdi, yanitAlaniDegerlendir, yanitSuresiDegerlendir } from './yanit-kontrolleri.mjs';
+import { altinYanitKarsilastir, arananAd, benzerAlanlar, yanitAlaniAdi, yanitAlaniDegerlendir, yanitSuresiDegerlendir } from './yanit-kontrolleri.mjs';
 
 export { tarihBicimle, VARSAYILAN_TARIH_BICIMI };
 
@@ -161,8 +161,8 @@ export function kullanilanAkisDegerleri(metin) {
 }
 
 /**
- * Yanıttan değer okuma: xml (basit XPath: /A/B, //B, //A/B), json (a.b[0].c; baştaki "$." isteğe bağlı), baslik (yanıt başlığı).
- * Bulunamazsa undefined.
+ * Yanıttan değer okuma: xml (basit XPath: /A/B, //B, //A/B, B[2]; ad alanından bağımsız — bkz. xpathMetni), json (a.b[0].c; baştaki
+ * "$." isteğe bağlı), baslik (yanıt başlığı). Bulunamazsa undefined (nedeni ve öneri: okumaHatasi).
  * @param {{ govde: string; basliklar?: Record<string, string> }} yanit @param {{ kaynak?: 'xml' | 'json' | 'baslik'; yol: string }} okuma
  * @returns {string | undefined}
  */
@@ -183,6 +183,35 @@ export function degerOku(yanit, okuma) {
   }
   const kok = xmlAgaci(yanit.govde);
   return kok ? xpathMetni(kok, yol) : undefined;
+}
+
+const KAYNAK_ADI = { xml: 'XML yolu', json: 'JSON yolu', baslik: 'başlık' };
+
+/**
+ * Okunamayan değerin nedeni ve nasıl düzeltileceği (kullanıcıya gösterilir). Yanıttaki benzer adları ad + yol olarak önerir; hiçbir
+ * alanın ya da başlığın DEĞERİ yazılmaz (gizli / maskeli alanlar dahil). Kaynak yanıtın biçimine uymuyorsa doğru kaynağı söyler.
+ * @param {{ govde: string; basliklar?: Record<string, string> }} yanit @param {{ kaynak?: 'xml' | 'json' | 'baslik'; yol: string }} okuma
+ * @returns {string}
+ */
+export function okumaHatasi(yanit, okuma) {
+  const kaynak = okuma.kaynak ?? 'xml';
+  const yol = okuma.yol.trim();
+  const tanim = `${KAYNAK_ADI[kaynak] ?? kaynak} "${yol}"`;
+  if (kaynak === 'baslik') {
+    const adlar = Object.keys(yanit.basliklar ?? {});
+    const b = adlar.find((a) => a.toLowerCase() === yol.toLowerCase());
+    if (b) return `“${yol}” başlığı yanıtta var ama boş`;
+    return `“${yol}” başlığı yanıtta yok${adlar.length ? `; yanıttaki başlıklar: ${adlar.slice(0, 12).join(', ')}` : ''}`;
+  }
+  if (!String(yanit.govde ?? '').trim()) return `yanıt boş; ${tanim} okunamadı`;
+  if (degerOku(yanit, okuma) === '') return `“${arananAd(yol) || yol}” yanıtta var ama boş (${tanim})`;
+  const b = benzerAlanlar(yanit.govde, yol);
+  if (!b.bicim) return `yanıt XML ya da JSON olarak okunamadı; ${tanim} aranamadı`;
+  const ad = b.ad || yol;
+  const onek = `“${ad}” bulunamadı (${tanim})`;
+  const oneri = b.alanlar.length ? `; yanıtta şunlar var: ${b.alanlar.map((a) => `${a.ad} (${a.yol})`).join(', ')}` : '; yanıtta bu ada benzeyen alan yok';
+  const kaynakUyari = b.bicim !== kaynak ? `; yanıt ${b.bicim === 'json' ? 'JSON' : 'XML'}, okuma kaynağını “${b.bicim === 'json' ? 'JSON yolu' : 'XML (XPath)'}” seçin` : '';
+  return `${onek}${kaynakUyari}${oneri}. Alanı “Yanıttan seç” ile tıklayarak da seçebilirsiniz.`;
 }
 
 /** @param {string} s */
@@ -383,7 +412,10 @@ export async function erisimiDenetle(girdi) {
 // Yanıt değerlendirme
 // ---------------------------------------------------------------------------------------
 
-/** Basit XML ağacı (ad = yerel ad, önek atılır). @typedef {{ ad: string; cocuklar: XmlDugumu[]; metin: string }} XmlDugumu */
+/**
+ * Basit XML ağacı (ad = yerel ad, önek atılır; tam = belgedeki adı, önekiyle — yol okumada önce tam ada bakılır).
+ * @typedef {{ ad: string; tam?: string; cocuklar: XmlDugumu[]; metin: string }} XmlDugumu
+ */
 
 /** @param {string} xml @returns {XmlDugumu | null} */
 export function xmlAgaci(xml) {
@@ -391,7 +423,8 @@ export function xmlAgaci(xml) {
   const kok = { ad: '#kok', cocuklar: [], metin: '' };
   /** @type {XmlDugumu[]} */
   const yigin = [kok];
-  const temiz = xml.replace(/<\?[\s\S]*?\?>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+  // Bayt sırası işareti ve DOCTYPE de atılır ("Son yanıttan kontrol öner"deki ağaçla aynı yanıtları okur).
+  const temiz = xml.replace(/^﻿/, '').replace(/<\?[\s\S]*?\?>/g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE[^>[]*(\[[\s\S]*?\])?\s*>/gi, '');
   const belirtec = /<!\[CDATA\[([\s\S]*?)\]\]>|<\/([^\s>]+)\s*>|<([^\s/>]+)((?:\s+[^\s=>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|([^<]+)/g;
   for (const m of temiz.matchAll(belirtec)) {
     const ust = yigin[yigin.length - 1];
@@ -401,7 +434,7 @@ export function xmlAgaci(xml) {
       yigin.pop();
     } else if (m[3] !== undefined) {
       /** @type {XmlDugumu} */
-      const d = { ad: yerelAd(m[3]), cocuklar: [], metin: '' };
+      const d = { ad: yerelAd(m[3]), tam: m[3], cocuklar: [], metin: '' };
       ust.cocuklar.push(d);
       if (!m[5]) yigin.push(d);
     } else if (m[6] !== undefined) ust.metin += xmlKacisCoz(m[6]);
@@ -416,29 +449,61 @@ const yerelAd = (ad) => ad.slice(ad.indexOf(':') + 1);
 const tumMetin = (d) => d.metin + d.cocuklar.map(tumMetin).join('');
 
 /**
- * Basit XPath: "/Envelope/Body/X/Y" (önekler yok sayılır; "//Y" her derinlikte arar; "//X/Y" her derinlikteki X'in altındaki Y).
- * İlk eşleşen düğümün metni.
- * @param {XmlDugumu} kok @param {string} yol @returns {string | undefined}
+ * Yol adımı: "ad", "önek:ad", "ad[2]" (aynı adlı kardeşlerde 1'den başlayan sıra; "Son yanıttan kontrol öner"in yol biçimi).
+ * @param {string} p @returns {{ tam: string; yerel: string; sira: number; siraVar: boolean }}
  */
-export function xpathMetni(kok, yol) {
+function yolAdimi(p) {
+  const m = /^(.+?)\[(\d+)\]$/.exec(p);
+  const tam = m ? m[1] : p;
+  return { tam, yerel: yerelAd(tam), sira: m ? Math.max(1, Number(m[2])) : 1, siraVar: Boolean(m) };
+}
+
+/**
+ * Yolu tek eşleme kuralıyla arar. tam: adım adı öğenin belgedeki adıyla (önekiyle) birebir; değilse yerel adla (ad alanı / önek yok sayılır).
+ * @param {XmlDugumu} kok @param {string} yol @param {boolean} tamMi @returns {XmlDugumu | undefined}
+ */
+function yolDugumu(kok, yol, tamMi) {
+  /** @param {XmlDugumu} d @param {{ tam: string; yerel: string }} a */
+  const uyar = (d, a) => (tamMi ? (d.tam ?? d.ad) === a.tam : d.ad === a.yerel);
+  /** Adımın ebeveyn altındaki eşleşmesi (sıra dahil). @param {XmlDugumu} ust @param {{ tam: string; yerel: string; sira: number }} a */
+  const cocuk = (ust, a) => ust.cocuklar.filter((c) => uyar(c, a))[a.sira - 1];
   if (yol.startsWith('//')) {
-    const [ilk, ...alt] = yol.slice(2).split('/').filter(Boolean).map(yerelAd);
+    const [ilk, ...alt] = yol.slice(2).split('/').filter(Boolean).map(yolAdimi);
+    if (!ilk) return undefined;
     /** @param {XmlDugumu} d @returns {XmlDugumu | undefined} */
-    const altina = (d) => alt.reduce((/** @type {XmlDugumu | undefined} */ x, p) => x?.cocuklar.find((c) => c.ad === p), d);
-    /** @param {XmlDugumu} d @returns {XmlDugumu | undefined} */
-    const ara = (d) => (d.ad === ilk && altina(d) ? altina(d) : d.cocuklar.map(ara).find(Boolean));
-    const b = ara(kok);
-    return b ? tumMetin(b).trim() : undefined;
+    const altina = (d) => alt.reduce((/** @type {XmlDugumu | undefined} */ x, p) => (x ? cocuk(x, p) : undefined), d);
+    // Belge sırasıyla (önce düğümün kendisi, sonra çocukları) ilk eşleşen; sıra verilmişse aynı adlı kardeşler arasındaki yeri.
+    /** @param {XmlDugumu} d @param {XmlDugumu | null} ust @returns {XmlDugumu | undefined} */
+    const ara = (d, ust) => {
+      if (uyar(d, ilk) && (!ilk.siraVar || (ust ? cocuk(ust, ilk) === d : ilk.sira === 1))) {
+        const b = altina(d);
+        if (b) return b;
+      }
+      for (const c of d.cocuklar) { const b = ara(c, d); if (b) return b; }
+      return undefined;
+    };
+    return ara(kok, null);
   }
-  const parcalar = yol.split('/').filter(Boolean).map(yerelAd);
-  if (!parcalar.length || parcalar[0] !== kok.ad) return undefined;
+  const parcalar = yol.split('/').filter(Boolean).map(yolAdimi);
+  if (!parcalar.length || !uyar(kok, parcalar[0]) || parcalar[0].sira !== 1) return undefined;
   /** @type {XmlDugumu | undefined} */
   let d = kok;
   for (const p of parcalar.slice(1)) {
-    d = d?.cocuklar.find((c) => c.ad === p);
+    d = d ? cocuk(d, p) : undefined;
     if (!d) return undefined;
   }
-  return tumMetin(d).trim();
+  return d;
+}
+
+/**
+ * Basit XPath: "/Envelope/Body/X/Y" ("//Y" her derinlikte arar; "//X/Y" her derinlikteki X'in altındaki Y; "Y[2]" aynı adlı ikinci
+ * kardeş). Ad alanından bağımsızdır: önce adlar belgedeki gibi (önekiyle) birebir aranır, bulunamazsa yerel adla (önek / ad alanı
+ * yok sayılır — "//Token", "<ns2:Token>" ya da varsayılan ad alanındaki "<Token>" öğesini bulur). İlk eşleşen düğümün metni.
+ * @param {XmlDugumu} kok @param {string} yol @returns {string | undefined}
+ */
+export function xpathMetni(kok, yol) {
+  const d = yolDugumu(kok, yol, true) ?? yolDugumu(kok, yol, false);
+  return d ? tumMetin(d).trim() : undefined;
 }
 
 /**

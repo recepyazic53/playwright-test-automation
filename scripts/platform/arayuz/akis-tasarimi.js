@@ -84,6 +84,10 @@ function korunanSilinen(etki) {
     liste: l.map((x) => `Çıkarılacak: ${x}`)
   };
 }
+/** Kaydetme onayında: eski biçimli (sürüm 1; ör. otomatik tarama) model kaydederken yeni biçime güncellenecekse not. */
+const semaNotu = (etki) => (etki && etki.semaYukseltme ? 'Bu ekranın modeli eski biçimde; kaydederken yeni biçime güncellenecek (mevcut senaryolar etkilenmez). ' : '');
+/** Kayıttan sonra: model yeni biçime güncellendiyse bildirimin eki. */
+const semaBildirimi = (y) => (y && y.semaYukseltme ? ' Bu ekranın modeli eski biçimdeydi; kaydederken güncellendi.' : '');
 /** Art arda beklenen mesajlardan (VEYA) en çok (sunucudaki MESAJ_GRUBU_EN_COK ile aynı). */
 const MESAJ_GRUBU_EN_COK = 5;
 
@@ -181,6 +185,8 @@ export async function akisTasarimi(icerik, s) {
   let etkin = bloklar.findIndex((b) => b.tur === 'alanlar');
   /** @type {Map<number | null, string[]>} */
   let hatalar = new Map();
+  /** Model doğrulamasının teknik iletileri (sunucu hatalar[].ayrinti): hata kutusunda yalnız "Ayrıntı" altında. @type {string[]} */
+  let teknikAyrinti = [];
   let paletSekmesi = 'alanlar';
   let tumunuGoster = false;
   let acikMenu = -1;
@@ -219,7 +225,7 @@ export async function akisTasarimi(icerik, s) {
       }
     }, 600);
   };
-  const degisti = () => { hatalar = new Map(); ciz(); sakla(); };
+  const degisti = () => { hatalar = new Map(); teknikAyrinti = []; ciz(); sakla(); };
   /** Onay penceresinde ortak akış bloklarının çalışma seçimi (ör. "Ortak akış: “Çıkış”: isteğe bağlı, yeni senaryolarda dahil değil. "). */
   const ortakOzeti = () => { const l = ortakSecimSatirlari(bloklar); return l.length ? `Ortak akış${l.length > 1 ? 'lar' : ''}: ${l.join('; ')}. ` : ''; };
 
@@ -1007,7 +1013,9 @@ export async function akisTasarimi(icerik, s) {
     const toplam = [...hatalar.values()].reduce((t, x) => t + x.length, 0);
     yerlestir(hataKutusu, toplam ? h('div', { class: 'not-kutusu hata', role: 'alert' },
       h('p', {}, `Diyagramda düzeltilmesi gereken ${toplam} sorun var${genel.length ? ':' : ' (blokların altında).'}`),
-      genel.length ? h('ul', {}, genel.map((m) => h('li', {}, m))) : null) : null);
+      genel.length ? h('ul', {}, genel.map((m) => h('li', {}, m))) : null,
+      // Doğrulayıcının teknik iletileri (anahtar adları, adım yolları) yalnız "Ayrıntı" altında.
+      teknikAyrinti.length ? h('details', { class: 'hata-ayrintisi' }, h('summary', {}, 'Ayrıntı'), h('ul', {}, teknikAyrinti.map((m) => h('li', {}, h('code', {}, m))))) : null) : null);
     paletCiz();
   }
 
@@ -1018,9 +1026,10 @@ export async function akisTasarimi(icerik, s) {
         // Kaydı mevcut ekranın bir akışına yaz (yeni ya da seçilen; ortak akışta tek akışı — sunucu seçer): önce etki, onayla yeni model sürümü.
         const secilen = !ortakKayit && hedefTuru === 'guncelle' ? ekranAkislari.find((a) => a.id === hedefAkis.value) : null;
         const hedef = ortakKayit ? { tur: 'akis', akisId: null, ad: veri.ekran.ad } : { tur: 'akis', akisId: secilen ? secilen.id : null, ad: secilen ? secilen.ad : hedefAdi.value.trim() };
-        if (!hedef.ad) { hatalar = new Map([[null, ['Yeni akışın adını yazın.']]]); ciz(); return; }
+        if (!hedef.ad) { hatalar = new Map([[null, ['Yeni akışın adını yazın.']]]); teknikAyrinti = []; ciz(); return; }
         const on = await mesgulIken(kaydet, 'Denetleniyor…', () => api('/platform/tarama/akis', { govde: { id: s.isId, bloklar, hedef } }));
         hatalar = new Map();
+        teknikAyrinti = [];
         ciz();
         const sen = on.etki.senaryolar;
         // Ortak akış: onu kullanan ekranlar etkilenir.
@@ -1031,7 +1040,7 @@ export async function akisTasarimi(icerik, s) {
         const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: ortakKayit ? `“${veri.ekran.ad}” ortak akışı bu kayıtla güncellensin mi?` : on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
-          metin: silinen.metin + ortakOzeti() + (ekr
+          metin: silinen.metin + semaNotu(on.etki) + ortakOzeti() + (ekr
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
           liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))], dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari',
@@ -1040,7 +1049,7 @@ export async function akisTasarimi(icerik, s) {
         });
         if (!onay) return;
         const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/tarama/akis', { govde: { id: s.isId, bloklar, hedef, onay: true, ...(tv ? { testVerisi: tv.govde() } : {}) } }));
-        bildir(`Akış kaydedildi (model v${y.surum}).`);
+        bildir(`Akış kaydedildi (model v${y.surum}).${semaBildirimi(y)}`);
         testVerisiBildir(y.testVerisi);
         location.hash = `#/ekranlar/e/${encodeURIComponent(veri.ekran.id)}/akis/${encodeURIComponent(y.akisId)}`;
         return;
@@ -1051,6 +1060,7 @@ export async function akisTasarimi(icerik, s) {
           ...(ekranAcilis !== null ? { ekranAcilisSirasi: ekranAcilis } : {}) };
         const on = await mesgulIken(kaydet, 'Denetleniyor…', () => api('/platform/ekran/akis/kaydet', { govde }));
         hatalar = new Map();
+        teknikAyrinti = [];
         ciz();
         const sen = on.etki.senaryolar;
         const ad = akisAdi.value.trim();
@@ -1059,7 +1069,7 @@ export async function akisTasarimi(icerik, s) {
         const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: on.etki.yeni ? `“${ad}” akışı oluşturulsun mu?` : `“${ad}” akışı kaydedilsin mi?`,
-          metin: silinen.metin + ortakOzeti() + (ekr
+          metin: silinen.metin + semaNotu(on.etki) + ortakOzeti() + (ekr
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
           liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))],
@@ -1069,7 +1079,7 @@ export async function akisTasarimi(icerik, s) {
         const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ekran/akis/kaydet', { govde: { ...govde, onay: true } }));
         degisiklik = false;
         cikisKorumasiniKaldir();
-        bildir(`Akış kaydedildi (model v${y.surum}).`);
+        bildir(`Akış kaydedildi (model v${y.surum}).${semaBildirimi(y)}`);
         s.bitti?.(y.akisId);
         return;
       }
@@ -1080,6 +1090,7 @@ export async function akisTasarimi(icerik, s) {
       if (Array.isArray(e.govde?.hatalar)) {
         hatalar = new Map();
         for (const x of e.govde.hatalar) hatalar.set(x.blok ?? null, [...(hatalar.get(x.blok ?? null) || []), x.mesaj]);
+        teknikAyrinti = e.govde.hatalar.map((x) => x.ayrinti).filter((x) => typeof x === 'string' && x);
         ciz();
         const ilk = akis.querySelector('.durum-hata') || hataKutusu;
         ilk.scrollIntoView({ block: 'center', behavior: 'smooth' });

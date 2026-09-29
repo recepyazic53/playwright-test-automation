@@ -47,5 +47,11 @@ export declare function sinirHatalari(tip: unknown, sinirlar: unknown): string[]
 /** Doğrulama hatasının maddeleri (" - " satırları). */
 export declare function dogrulamaMaddeleri(hata: unknown): string[];
 
+/** Sürüm 1 ekran modeline koşu tanımı yazıldıysa modeli yerinde sürüm 2'ye çıkarır; yükseltildiyse true. */
+export declare function semaSurumunuYukselt(model: unknown): boolean;
+
+/** Doğrulayıcının iç iletisini kullanıcının anlayacağı Türkçeye çevirir (yol → adım / akış / alan adı, anahtar → Türkçe ad). */
+export declare function anlasilirDogrulamaIletisi(madde: string, model?: unknown): string;
+
 /** "kosullar"da tanımlı olup hiçbir yerde adıyla kullanılmayan koşulların uyarıları (modeli değiştirmez). */
 export declare function bagsizKosulUyarilari(model: unknown): Array<{ yer: string; mesaj: string }>;
