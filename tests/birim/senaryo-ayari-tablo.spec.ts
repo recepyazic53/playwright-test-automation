@@ -438,7 +438,7 @@ test.describe('senaryo ayarı tablo bağı (uçtan uca)', () => {
       await expect(secim.locator('option[value="magaza"]')).toHaveText('Mağazadan teslim');
       await expect(page.locator('.satir-secimi-karti')).toBeVisible();
       await expect(page.locator('.satir-secimi-karti')).toContainText(TABLO);
-      await expect(page.locator('.satir-secimi-karti').getByRole('checkbox', { name: 'Uyan her satır ayrı test' })).toBeChecked();
+      await expect(page.locator('.satir-secimi-karti').getByRole('checkbox', { name: 'Ayrı test: koşullara uyan her satır' })).toBeChecked();
       await tasmaYok(page);
 
       // Yeni senaryo: sabit seçimden "Tablodan"a geçince satır seçimi / çalıştırma biçimi kartı açılır.
@@ -448,7 +448,7 @@ test.describe('senaryo ayarı tablo bağı (uçtan uca)', () => {
       await expect(page.locator('.satir-secimi-karti')).toBeHidden();
       await yeniSecim.selectOption({ label: `Tablodan: ${TABLO} › ${SUTUN}` });
       await expect(page.locator('.satir-secimi-karti')).toBeVisible();
-      await expect(page.locator('.satir-secimi-karti').getByRole('checkbox', { name: 'Uyan her satır ayrı test' })).not.toBeChecked();
+      await expect(page.locator('.satir-secimi-karti').getByRole('checkbox', { name: 'Ayrı test: koşullara uyan her satır' })).not.toBeChecked();
       await tasmaYok(page);
       expect(istekler.filter((u) => SIRKET_DESENI.test(u))).toEqual([]);
       expect(istekler.filter((u) => !u.startsWith(nobetci.adres) && !u.startsWith('data:'))).toEqual([]);

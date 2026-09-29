@@ -78,10 +78,11 @@ export function cokluCalistirmaSecimi(t, anahtar, secim, d) {
   if (kip === 'secili') ek = satirIsaretleri(t, anahtar, d);
   else if (kip === 'tumu') {
     const n = uyanSatirlar(t, secim, { ortamId: d.ortam.id }).length;
-    ek = h('div', { class: 'alan-notu' }, `Seçimlerle uyan her satır ayrı test olarak koşar (${d.ortam.ad} ortamında ${n}). Ortama özel satır yalnız kendi ortamında koşar.`);
+    ek = h('div', { class: 'alan-notu' }, `Koşullara uyan her satır ayrı test olarak koşar (${d.ortam.ad} ortamında ${n}). Ortama özel satır yalnız kendi ortamında koşar.`);
   }
+  // Satır seçimi dili kayıt grubundakiyle aynı: "Ayrı test: koşullara uyan her satır" / "Ayrı test: işaretli her satır".
   return h('div', { class: 'calistirma-bicimi' },
-    h('label', { class: 'onay-satiri', for: id }, kutu, h('span', {}, kip === 'secili' ? 'İşaretli satırların her biri ayrı test' : 'Uyan her satır ayrı test')), ek);
+    h('label', { class: 'onay-satiri', for: id }, kutu, h('span', {}, kip === 'secili' ? 'Ayrı test: işaretli her satır' : 'Ayrı test: koşullara uyan her satır')), ek);
 }
 
 /**

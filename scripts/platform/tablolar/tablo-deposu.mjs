@@ -172,8 +172,9 @@ const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
  *   kayıtlı değer korunur; '' siler. ad boşsa mevcut ad korunur (yeni satırda değerlerden üretilir).
  * - silinenSatirlar: satır kimlikleri.
  * - kaynak: ekran paketinden içe aktarımda tablonun kaynağı (verilmezse mevcut kaynak korunur).
+ * - tur: 'kayit' (kişi / kayıt verisi) | 'liste' (ekran listesi); kaynak.tabloTuru olarak saklanır (verilmezse değişmez).
  * @param {Veritabani} vt
- * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi }} girdi
+ * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; tur?: unknown }} girdi
  * @returns {string} tablo kimliği
  */
 export function tabloKaydet(vt, girdi) {
@@ -235,7 +236,11 @@ export function tabloKaydet(vt, girdi) {
         }
       }
     }
-    const tabloId = testVerisiTuruKaydet(vt, { id: mevcut?.id, projeId: girdi.projeId, ad, alanlar, ...(girdi.kaynak ? { kaynak: /** @type {Record<string, string>} */ (girdi.kaynak) } : {}) });
+    // Tablo türü (arayüzde "Tablo ekle"de sorulur / düzenleyicide değiştirilir): kaynak.tabloTuru'na yazılır, kaynağın diğer
+    // bilgileri korunur. Verilmezse (eski istemciler) kaynak ve tür olduğu gibi kalır.
+    const tur = girdi.tur === 'kayit' || girdi.tur === 'liste' ? girdi.tur : null;
+    const kaynak = tur ? { ...(mevcut?.kaynak ?? {}), ...(girdi.kaynak ?? {}), tabloTuru: tur } : girdi.kaynak;
+    const tabloId = testVerisiTuruKaydet(vt, { id: mevcut?.id, projeId: girdi.projeId, ad, alanlar, ...(kaynak ? { kaynak: /** @type {Record<string, string>} */ (kaynak) } : {}) });
     // Mevcut satırın adı korunur: ekran senaryoları eski kayıtları adıyla (ör. tc1) seçiyor olabilir.
     const satirAdlari = new Map(vt.tumu('SELECT id, ad FROM test_verisi_profilleri WHERE tur_id = ?', [tabloId]).map((x) => [String(x.id), String(x.ad)]));
     const mevcutSatirlar = new Set(satirAdlari.keys());
