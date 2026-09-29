@@ -750,7 +750,7 @@ new MutationObserver(() => { if (document.querySelector('.kabuk-duzen:not([data-
 
 function anaDuzen() {
   const main = anaAlan('ana-icerik');
-  const navSonuclar = h('a', { href: '#/sonuclar' }, ikon('grafik'), 'Sonuçlar');
+  const navSonuclar = h('a', { href: '#/sonuclar/ozet' }, ikon('grafik'), 'Sonuçlar');
   const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
   const navEkranlar = h('a', { href: '#/ekranlar' }, ikon('ekran'), 'Ekranlar');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
