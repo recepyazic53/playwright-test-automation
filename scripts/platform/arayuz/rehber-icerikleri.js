@@ -520,8 +520,8 @@ export const REHBERLER = {
       {
         baslik: 'Medyayı incelt (kademeli saklama)',
         metin: ['N günden eski sonuçlarda başarılı, kalan ya da tüm testlerin ekran görüntüleri ve videoları silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Kalan testlerde "kalan adımın görüntüsünü ve test sonu görüntüsünü koru" işaretliyse (varsayılan) hatanın görüldüğü iki görüntü kalır. Silinen medya sonuçta "saklama süresi doldu" diye görünür.',
-          'Günlük temizlikte sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra inceltme, en son Güvenlik > Video saklama süresi. Video hangi süre önce dolarsa o zaman silinir.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Sonuç saklama', alt: 'bütün sonuç', ikon: 'cop' }, { baslik: 'İnceltme', alt: 'görüntü + video', ikon: 'ekran' }, { baslik: 'Video saklama', alt: 'Güvenlik', ikon: 'video' }] }
+          'Günlük temizlikte sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra inceltme, en son Video saklama süresi. Video hangi süre önce dolarsa o zaman silinir. Dört kural ve otomatik yedek sayısı tek "Saklama" kartında, "Ne zaman ne silinir?" zaman çizelgesiyle görünür; video saklama güvenlik amaçlı olduğu için kalkan simgesiyle işaretlidir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Sonuç saklama', alt: 'bütün sonuç', ikon: 'cop' }, { baslik: 'İnceltme', alt: 'görüntü + video', ikon: 'ekran' }, { baslik: 'Video saklama', alt: 'güvenlik amaçlı', ikon: 'video' }] }
       }
     ]
   },

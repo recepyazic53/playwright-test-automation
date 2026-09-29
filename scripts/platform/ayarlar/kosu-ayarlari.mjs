@@ -182,9 +182,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'sonucSaklamaGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Koşu sonuçlarını sakla', aciklama: 'Bu süreden eski ekran ve servis koşu sonuçları (adımlar, ekran görüntüleri, videolar dahil) günlük temizlikte silinir. 0: süresiz (hiç silinmez).',
     tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3650, birim: 'gün' },
   // Kademeli saklama: sonucun kendisi (durum, süre, hata, adımlar) kalır; yalnız ekran görüntüleri ve videolar silinir. Günlük
-  // temizlikte sıra: 1) sonuç saklama (bütün sonuç), 2) medya inceltme, 3) video saklama (Güvenlik), 4) sahipsiz dosyalar.
+  // temizlikte sıra: 1) sonuç saklama (bütün sonuç), 2) medya inceltme, 3) video saklama (aynı Saklama kartında; güvenlik ayarı), 4) sahipsiz dosyalar.
   { anahtar: 'medyaInceltme', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Eski sonuçlarda medyayı incelt',
-    aciklama: 'Aşağıdaki günden eski sonuçların ekran görüntüleri ve videoları günlük temizlikte silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Silinen medya sonuçta "saklama süresi doldu" olarak görünür. Sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra bu inceltme, en son Güvenlik > Video saklama süresi (videolar hangisi önce dolarsa o zaman silinir).',
+    aciklama: 'Aşağıdaki günden eski sonuçların ekran görüntüleri ve videoları günlük temizlikte silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Silinen medya sonuçta "saklama süresi doldu" olarak görünür. Sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra bu inceltme, en son Video saklama süresi (aynı kartta; videolar hangisi önce dolarsa o zaman silinir).',
     tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Kapalı'], ['basarili', 'Başarılı testlerin görüntü ve videolarını sil'], ['hatali', 'Kalan testlerin görüntü ve videolarını sil'], ['ikisi', 'İkisini de sil']] },
   { anahtar: 'medyaInceltmeGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Medyayı incelt: şu günden eski', aciklama: 'Koşu başlangıcı bu kadar günden eski sonuçlar inceltilir.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 3650, birim: 'gün',
