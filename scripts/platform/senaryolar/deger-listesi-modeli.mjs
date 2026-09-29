@@ -6,6 +6,7 @@
 //    - diğer koşullu listeler (birden çok koşul, başka alan) → değerleri geçerli seçeneklere eklenir (daraltmayı form yapar).
 //    Liste değeri: { deger (senaryoya yazılan), aciklama (formda görünen), ekranDegeri?, ekranMetni? (sayfadaki value / metin;
 //    yoksa modeldeki aynı değerli seçenekten, o da yoksa deger / aciklama) }.
+//    SENARYO AYARI alanlarına (senaryoAyariAlanlari) liste uygulanmaz: seçenekleri modelin kodlarıdır.
 // Saf modül (vt yok).
 
 /** @typedef {Record<string, any>} Nesne */
@@ -31,7 +32,36 @@ export function modelSecimAlanlari(model) {
   return sonuc;
 }
 
-const senaryoDegeri = (/** @type {Nesne} */ s) => String(s.senaryoDegeri !== undefined ? s.senaryoDegeri : s.deger);
+/**
+ * SENARYO AYARI alanları: ekranda karşılığı olmayan, akışın dallanmasını seçen seçim alanları (ör. "Teslim şekli: kargo / mağaza";
+ * adımların görünürlüğü { senaryoAyari: <alan>, esit: <seçenek kodu> } koşuluna bağlı). Senaryoda ayarlanan (yapilandirma
+ * 'senaryo'), seçenek listesi dolu, hazır profil seçimi olmayan; ekrandaAlanDegil işaretli ya da bir senaryoAyari koşulunda
+ * başvurulan seçim alanı. Değeri her zaman bir SEÇENEK KODUDUR (koşullar kodla karşılaştırır): test verisi tablosuna bağlansa da
+ * seçenekleri tablodan değişmez; tablodaki okunur değer (ör. "Kargo ile") koşuda koda çevrilir (tablolar/ekran-basvurulari.mjs).
+ * @param {unknown} model @returns {Map<string, Nesne>} alan kimliği → alan (nesneler yerinde)
+ */
+export function senaryoAyariAlanlari(model) {
+  /** @type {Set<string>} */
+  const basvurulan = new Set();
+  const tara = (/** @type {unknown} */ d) => {
+    if (Array.isArray(d)) { d.forEach(tara); return; }
+    if (!nesneMi(d)) return;
+    for (const [k, v] of Object.entries(/** @type {Nesne} */ (d))) {
+      if (k === 'senaryoAyari' && typeof v === 'string') basvurulan.add(v);
+      else if (v && typeof v === 'object') tara(v);
+    }
+  };
+  tara(model);
+  /** @type {Map<string, Nesne>} */
+  const sonuc = new Map();
+  for (const a of modelSecimAlanlari(model)) {
+    if (!Array.isArray(a.secenekler) || !a.secenekler.some(nesneMi)) continue;
+    if (a.ekrandaAlanDegil === true || basvurulan.has(a.id)) sonuc.set(a.id, a);
+  }
+  return sonuc;
+}
+
+const senaryoDegeri =(/** @type {Nesne} */ s) => String(s.senaryoDegeri !== undefined ? s.senaryoDegeri : s.deger);
 const formMetni = (/** @type {Nesne} */ s) => String(s.formMetni || s.metin || senaryoDegeri(s));
 
 /** Model seçeneği → liste değeri (sayfa değeri / metni farklıysa korunur). @param {Nesne} s @returns {ListeDegeri} */
@@ -67,7 +97,10 @@ function modelSecenegi(x, havuz) {
 export function modeleListeleriUygula(model, listeler) {
   if (!listeler.length) return model;
   const yeni = JSON.parse(JSON.stringify(model));
+  // Senaryo ayarının seçenekleri modelin kodlarıdır (koşullar onlarla karşılaştırır): tablo bağı seçenekleri değiştirmez.
+  const ayarlar = senaryoAyariAlanlari(yeni);
   for (const alan of modelSecimAlanlari(yeni)) {
+    if (ayarlar.has(alan.id)) continue;
     const bu = listeler.filter((l) => l.hedef?.alan === alan.id && Array.isArray(l.degerler) && l.degerler.length);
     if (!bu.length) continue;
     const bag = nesneMi(alan.bagimlilik) && nesneMi(alan.bagimlilik.secenekHaritasi) ? alan.bagimlilik : null;

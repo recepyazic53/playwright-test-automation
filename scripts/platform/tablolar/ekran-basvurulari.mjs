@@ -8,12 +8,16 @@
 //     değerin SAYFA karşılığı (tablonun karşılıkları; tanımsızsa tablodaki değer).
 //   · Çözülemeyen başvuru (tablo / sütun yok, bu ortamda satır yok, seçilen satırda boş) koşuyu anlaşılır bir hatayla durdurur.
 //   · Gizli sütunun değeri "gizliDegerler"e girer: koşucu yakalanan mesajlarda ve hata metinlerinde maskeler.
+//   · SENARYO AYARI (ekranda karşılığı olmayan, akışı dallandıran seçim alanı; deger-listesi-modeli.mjs senaryoAyariAlanlari): değer
+//     seçeneğin KODUNA çevrilir (koşullar kodla karşılaştırır): sütunun karşılığı ("sayfa" = kod), karşılık yoksa tablodaki değer; kod
+//     ya da seçenek metniyle eşleşmezse anlaşılır hata (ayarKoduCoz).
 //   · Onay kutusu: tablodaki değer (ya da sayfa karşılığı) evet/hayır olarak okunur (true/false, evet/hayır, 1/0, E/H …; mantiksalDeger);
 //     tanınmazsa anlaşılır hata. Dosya: değer (sayfa karşılığı) dosya ADIDIR; alanın uzantı kuralı (kabul) ve verilirse dosyaDenetle
 //     (izinli klasör / varlık; veri-oku.mjs) uygulanır; gizli sütundan dosya alınmaz.
 // Düz metin değerler aynen kalır (geriye uyum; senaryolar göç ettirilmez). Saf modül (vt yok).
-import { basvuruCoz, basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul } from './tablo-secimi.mjs';
+import { basvuruCoz, basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { modelAlanlari } from './paket-tablolari.mjs';
+import { senaryoAyariAlanlari } from '../senaryolar/deger-listesi-modeli.mjs';
 
 /** @typedef {import('./tablo-secimi.mjs').Tablo} Tablo */
 /** @typedef {Record<string, { tablo: string; sutun: string; etiket?: string }>} EkranBaglari alan kimliği → { tablo KİMLİĞİ, sütun, etiket? } */
@@ -33,6 +37,9 @@ export function modelAlanBilgisi(model) {
   const alanTipleri = {};
   /** @type {Record<string, string>} senaryo anahtarı → dosya alanının kabul ettiği uzantı */
   const kabuller = {};
+  /** @type {Record<string, AyarBilgisi>} senaryo anahtarı → senaryo ayarının etiketi ve seçenekleri (kod + metinler) */
+  const ayarSecenekleri = {};
+  const ayarlar = senaryoAyariAlanlari(model);
   for (const [id, a] of modelAlanlari(model)) {
     const s = nesneMi(a.eslesme) ? a.eslesme.senaryo : undefined;
     const anahtar = typeof s === 'string' ? s : Array.isArray(s) && s.length === 1 && typeof s[0] === 'string' ? s[0] : null;
@@ -44,8 +51,41 @@ export function modelAlanBilgisi(model) {
       ...(nesneMi(a.bagimlilik) && nesneMi(a.bagimlilik.secenekHaritasi) ? Object.values(a.bagimlilik.secenekHaritasi).flat() : [])];
     const degerler = havuz.filter(nesneMi).map((x) => String(x.senaryoDegeri !== undefined ? x.senaryoDegeri : x.deger));
     if (degerler.length) secenekDegerleri[anahtar] = [...new Set(degerler)];
+    if (ayarlar.has(id)) {
+      const etiket = nesneMi(a.etiket) ? String(a.etiket.form || a.etiket.ekran || '') : '';
+      ayarSecenekleri[anahtar] = {
+        etiket: etiket || (nesneMi(a.form) && typeof a.form.etiket === 'string' ? a.form.etiket : '') || id,
+        secenekler: /** @type {Record<string, unknown>[]} */ (a.secenekler).filter(nesneMi).map((x) => {
+          const kod = String(x.senaryoDegeri !== undefined ? x.senaryoDegeri : x.deger);
+          const metinler = [x.formMetni, x.metin, x.deger].filter((m) => typeof m === 'string' && m.trim()).map(String);
+          return { kod, metinler: [...new Set(metinler)] };
+        })
+      };
+    }
   }
-  return { alanAnahtarlari, secenekDegerleri, alanTipleri, kabuller };
+  return { alanAnahtarlari, secenekDegerleri, alanTipleri, kabuller, ayarSecenekleri };
+}
+
+/** @typedef {{ etiket: string; secenekler: Array<{ kod: string; metinler: string[] }> }} AyarBilgisi */
+
+/**
+ * Tablodaki değerin senaryo ayarı KODU: sütunun karşılığı ("sayfa" değeri; tanımsızsa tablodaki değer) seçeneğin koduyla (önce tam,
+ * sonra büyük / küçük harf duyarsız) ya da metniyle eşleşirse o seçeneğin kodu. Eşleşmezse okunur hata (doğrulama ve koşu aynı
+ * kuralı kullanır). @param {import('./tablo-secimi.mjs').Sutun} sutun @param {string} deger @param {AyarBilgisi} ayar
+ * @returns {{ deger: string } | { hata: string }}
+ */
+export function ayarKoduCoz(sutun, deger, ayar) {
+  const karsilik = sutun.karsiliklar?.[deger]?.sayfa;
+  const aday = karsilik || deger;
+  const k = kucuk(aday);
+  const s = ayar.secenekler.find((x) => x.kod === aday) ?? ayar.secenekler.find((x) => kucuk(x.kod) === k)
+    ?? ayar.secenekler.find((x) => x.metinler.some((m) => kucuk(m) === k));
+  if (s) return { deger: s.kod };
+  const liste = ayar.secenekler.map((x) => (x.metinler[0] && x.metinler[0] !== x.kod ? `${x.metinler[0]} (${x.kod})` : x.kod)).join(', ');
+  return {
+    hata: `tablodaki "${deger}" değeri${karsilik ? ` (karşılığı "${karsilik}")` : ''} "${ayar.etiket}" seçeneklerinden hiçbirine karşılık gelmiyor`
+      + ` (seçenekler: ${liste}; sütunun karşılıklarında "sayfa değeri" olarak seçeneğin kodunu yazın)`
+  };
 }
 
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
@@ -95,7 +135,7 @@ export function ekrandakiDeger(c, s = {}) {
  * Senaryo verisindeki tablo başvurularını çözer (yeni veri döner; girdi değişmez).
  * @param {Record<string, unknown>} veri senaryonun bu ortamdaki verisi (çözülmüş)
  * @param {{ tablolar: Tablo[]; baglar?: EkranBaglari; alanAnahtarlari?: Record<string, string>; secenekDegerleri?: Record<string, string[]>;
- *   alanTipleri?: Record<string, string>; kabuller?: Record<string, string>; dosyaDenetle?: (ad: string) => string | null;
+ *   alanTipleri?: Record<string, string>; kabuller?: Record<string, string>; ayarSecenekleri?: Record<string, AyarBilgisi>; dosyaDenetle?: (ad: string) => string | null;
  *   ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>>; satirSecimi?: import('./tablo-secimi.mjs').SatirSecimi }} s
  *   satirSecimi: birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş; verilmezse ilk uyan satır)
  * @returns {{ veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number }}
@@ -117,6 +157,18 @@ export function ekranBasvurulariniCoz(veri, s) {
       hatalar.push({ alan: anahtar, mesaj: `"${anahtar}" alanının değeri (${String(ham).trim()}) test verisinden alınamadı: ${c.hata}.` });
       continue;
     }
+    // Senaryo ayarı: seçeneğin koduna çevrilir (koşullar kodla karşılaştırır).
+    const ayar = s.ayarSecenekleri?.[anahtar];
+    if (ayar) {
+      const k = ayarKoduCoz(c.sutun, c.deger, ayar);
+      if (!('deger' in k)) {
+        hatalar.push({ alan: anahtar, mesaj: `"${anahtar}" alanının değeri (${String(ham).trim()}) test verisinden alınamadı: ${k.hata}.` });
+        continue;
+      }
+      sonuc[anahtar] = k.deger;
+      cozulen++;
+      continue;
+    }
     // Seçim alanı tablodaki değeri senaryo değeri olarak tanıyorsa o yazılır (seçenek sayfa değeriyle seçilir); yoksa sayfa karşılığı.
     // Onay kutusu evet / hayır, dosya alanı dosya adı olur (ekrandakiDeger).
     const e = ekrandakiDeger(c, {
@@ -131,6 +183,38 @@ export function ekranBasvurulariniCoz(veri, s) {
     if (c.sutun.gizli) gizliDegerler.push(...new Set([c.deger, ...(typeof e.deger === 'string' ? [e.deger] : [])]));
   }
   return { veri: sonuc, gizliDegerler, hatalar, cozulen };
+}
+
+/**
+ * Senaryo KAYDINDA denetim: tablodan (${Tablo.Sütun}) gelen senaryo ayarlarında koşuya girebilecek HER satırın değeri seçenek koduna
+ * çevrilebilmeli (ayarKoduCoz). Satırlar: satirSecimi.sabit verilirse (veri koşusu) o satır; yoksa senaryonun seçimleriyle ve ortamla
+ * uyan tüm satırlar (satır seçimi "rastgele" olabilir). Tablo / sütun / satır bulunamaması burada denetlenmez (koşuda anlaşılır
+ * hatayla durur). Alan başına ilk eşleşmeyen değer hata olur.
+ * @param {Record<string, unknown>} veri @param {Parameters<typeof ekranBasvurulariniCoz>[1]} s
+ * @returns {Array<{ alan: string; mesaj: string }>}
+ */
+export function ayarBasvurulariniDenetle(veri, s) {
+  /** @type {Array<{ alan: string; mesaj: string }>} */
+  const hatalar = [];
+  const ayarlar = Object.entries(s.ayarSecenekleri ?? {}).filter(([k]) => degerBasvurusu(veri[k]));
+  if (!ayarlar.length) return hatalar;
+  const secimler = senaryoSecimleri(veri, s);
+  for (const [anahtar, ayar] of ayarlar) {
+    const b = /** @type {import('./tablo-secimi.mjs').Basvuru} */ (degerBasvurusu(veri[anahtar]));
+    const t = tabloBul(s.tablolar, b.tablo);
+    const sutun = t ? sutunBul(t, b.sutun) : undefined;
+    if (!t || !sutun) continue;
+    const gk = grupAnahtari(t.id, b.etiket);
+    const sabitId = s.satirSecimi?.sabit?.[gk];
+    const satirlar = sabitId ? t.satirlar.filter((r) => r.id === sabitId) : uyanSatirlar(t, secimler[gk] ?? {}, { ortamId: s.ortamId });
+    for (const r of satirlar) {
+      const d = r.degerler[sutun.ad];
+      if (d === null || d === undefined || d === '') continue;
+      const k = ayarKoduCoz(sutun, String(d), ayar);
+      if ('hata' in k) { hatalar.push({ alan: anahtar, mesaj: `${ayar.etiket} (${t.ad} › ${sutun.ad}): ${k.hata}.` }); break; }
+    }
+  }
+  return hatalar;
 }
 
 /**
@@ -178,8 +262,18 @@ function senaryoSecimleri(veri, s) {
     const t = s.tablolar.find((x) => x.id === b.tablo);
     const sutun = t ? sutunBul(t, b.sutun) : undefined;
     if (!t || !sutun || sutun.gizli) continue;
+    // Senaryo ayarının düz değeri seçenek KODUDUR (ör. "kargo"); tabloda okunur değeri ("Kargo ile") durur: koda çevrilen TEK tablo
+    // değeri varsa satır onunla süzülür, yoksa (belirsiz / hiç) süzülmez.
+    const ayar = anahtar ? s.ayarSecenekleri?.[anahtar] : undefined;
+    let secim = v;
+    if (ayar) {
+      const adaylar = [...new Set(t.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== '').map(String))]
+        .filter((x) => { const k = ayarKoduCoz(sutun, x, ayar); return 'deger' in k && k.deger === v; });
+      if (adaylar.length !== 1) continue;
+      secim = adaylar[0];
+    }
     const g = (secimler[grupAnahtari(t.id, b.etiket || '')] ??= {});
-    if (g[sutun.ad] === undefined) g[sutun.ad] = v;
+    if (g[sutun.ad] === undefined) g[sutun.ad] = secim;
   }
   return secimler;
 }

@@ -2,12 +2,16 @@
 // (seçenek value'su) senaryo değerinden farklıysa sütunun karşılıklarına "sayfa" olarak yazılır. Böylece seçenek listesi
 // modelden kalksa da koşu doğru seçeneği seçer. Yalnız eksik olanlar eklenir; kullanıcının girdiği karşılık değişmez.
 // Gizli sütun ve tabloda olmayan değer atlanır.
+// SENARYO AYARI (ekranda karşılığı olmayan, akışı dallandıran seçim; senaryo-servisi.mjs ekranGirdileri senaryoAyari): tablodaki okunur
+// değer seçeneğin metniyle eşleşiyorsa "sayfa" = seçeneğin KODU yazılır (koşu tablodaki değeri koda çevirir; ekran-basvurulari.mjs).
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { etkinAlanBaglari } from './ekran-baglari.mjs';
 import { tabloKaydet, tablolariListele } from './tablo-deposu.mjs';
 import { sutunBul } from './tablo-secimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
+
+const kucuk = (/** @type {string} */ x) => x.trim().toLocaleLowerCase('tr');
 
 /**
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
@@ -30,10 +34,21 @@ export function karsiliklariEkrandanAl(vt, projeId, ekranId) {
     const sutunlar = degisen.get(t.id) ?? new Map();
     const k = sutunlar.get(s.ad) ?? { ...(s.karsiliklar || {}) };
     let sayi = 0;
-    for (const x of g.secenekler) {
-      if (!x.ekranDegeri || x.ekranDegeri === x.deger || !tabloda.has(x.deger) || k[x.deger]?.sayfa) continue;
-      k[x.deger] = { ...k[x.deger], sayfa: x.ekranDegeri };
-      sayi++;
+    if (g.senaryoAyari) {
+      // Senaryo ayarı: tablodaki okunur değer (seçenek metni, ör. "Kargo ile") → seçeneğin KODU (ör. "kargo"). Değer zaten kodsa gerekmez.
+      for (const v of tabloda) {
+        if (k[v]?.sayfa || g.secenekler.some((x) => x.deger === v)) continue;
+        const x = g.secenekler.find((y) => [y.metin, y.deger, y.ekranMetni].some((m) => m && kucuk(m) === kucuk(v)));
+        if (!x) continue;
+        k[v] = { ...k[v], sayfa: x.deger };
+        sayi++;
+      }
+    } else {
+      for (const x of g.secenekler) {
+        if (!x.ekranDegeri || x.ekranDegeri === x.deger || !tabloda.has(x.deger) || k[x.deger]?.sayfa) continue;
+        k[x.deger] = { ...k[x.deger], sayfa: x.ekranDegeri };
+        sayi++;
+      }
     }
     if (!sayi) continue;
     eklenen += sayi;

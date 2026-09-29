@@ -21,14 +21,14 @@ import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryo-girisi.mjs';
 import { senaryoAdimGoruntusuAyikla } from '../ayarlar/kayit-kurallari.mjs';
 import { acikAnahtar, adliAlanlariDonustur, sifrele, zarflariCoz } from '../kasa.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
-import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
+import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula, senaryoAyariAlanlari } from './deger-listesi-modeli.mjs';
 import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
 import { BAGLAM_ONEKI, tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { basvuru, grupAnahtari, sutunBul, tabloBul, tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari.mjs';
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
-import { tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
-import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
+import { ayarBasvurulariniDenetle, modelAlanBilgisi, tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
+import { basvuruGruplari, veriKosulariniAc, veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 import { icerikTalepleri, talepleriAyikla } from './talepler.mjs';
 
 /**
@@ -42,6 +42,16 @@ function ekranListeleri(vt, projeId, ekranId, ortamId = null, sira = undefined) 
   if (!Object.keys(baglar).length) return [];
   const tablolar = tablolariListele(vt, projeId).map((t) => (ortamId ? { ...t, satirlar: t.satirlar.filter((r) => !r.ortamId || r.ortamId === ortamId) } : t));
   return tabloDegerListeleri(baglar, tablolar, ekranId, sira);
+}
+/**
+ * Senaryo ayarı alanlarının (deger-listesi-modeli.mjs senaryoAyariAlanlari) tablo listelerini işaretler (senaryoAyari: true): form
+ * bu listeleri seçenek olarak kullanmaz (seçenekler modelin kodlarıdır), yalnız "Tablodan" başvurusu için okur.
+ * @template {{ hedef?: { alan?: string } | null }} T @param {T[]} listeler @param {unknown} model @returns {Array<T & { senaryoAyari?: true }>}
+ */
+function senaryoAyariListeleri(listeler, model) {
+  const ayarlar = senaryoAyariAlanlari(model);
+  if (!ayarlar.size) return listeler;
+  return listeler.map((l) => (l.hedef?.alan && ayarlar.has(l.hedef.alan) ? { ...l, senaryoAyari: /** @type {const} */ (true) } : l));
 }
 import { kartiNormallestir, krediKartlariAyniMi, senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import {
@@ -479,8 +489,9 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
     olusturulabilir: Boolean(veriKaynagi),
     // Senaryonun "Giriş" seçimi için giriş profillerinin ADLARI (değer yok; ortamId null = tüm ortamlar).
     girisProfilleri: girisProfilleriniListele(vt, projeId).map((p) => ({ ad: p.ad, ortamId: p.ortamId })),
-    // Bu ekranın seçim listeleri (tablo bağlantıları + değer listeleri): seçim alanlarının seçeneklerini süzer.
-    degerListeleri: ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id))),
+    // Bu ekranın seçim listeleri (tablo bağlantıları + değer listeleri): seçim alanlarının seçeneklerini süzer. Senaryo ayarının
+    // listesi (senaryoAyari: true) seçenekleri değiştirmez (kodlar modelden); yalnız "Tablodan" başvurusu için kullanılır.
+    degerListeleri: senaryoAyariListeleri(ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id))), mb.model),
     // Gizli sütuna (ör. CVV, parola) bağlı alanlar: değer listesine girmez; formun "Tablodan" başvurusu için yalnız tablo ve sütun ADI.
     // Kayıt tablosuna (tür 'kayit') bağlı alanlar ve kayıt tablolarının adları: form aynı tablo + etiketteki alanları tek KAYIT GRUBU
     // ("Hazır kayıt / Yeni") olarak gösterir (değer yok; satırlar formda /platform/tablolar'dan okunur).
@@ -531,12 +542,15 @@ export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
   const hamSecenekler = new Map(modelSecimAlanlari(mb.model).map((a) => [a.id, [...(Array.isArray(a.secenekler) ? a.secenekler : []),
     ...Object.values(a.bagimlilik?.secenekHaritasi || {}).flat()].filter((s) => s && typeof s === 'object').map(listeDegeri)]));
   const tipler = ['secim', 'metin', 'sayi', 'tarih', 'telefon', ...(secenekler.tumTipler ? ['onayKutusu', 'dosya'] : [])];
+  // Senaryo ayarı (ekranda karşılığı olmayan, akışı dallandıran seçim; ör. ekrandaAlanDegil): senaryoAyari işaretiyle (Test verisi
+  // sekmesinde rozet; karşılıklar seçenek metni → kod olarak dolar, tablolar/karsiliklar.mjs).
+  const ayarlar = senaryoAyariAlanlari(mb.model);
   const girdiler = tumFormAlanlari(sema).filter((a) => a.anahtar && tipler.includes(a.tip)).map((a) => {
     /** @type {Map<string, { deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }>} */
     const s = new Map();
     for (const x of hamSecenekler.get(a.id) || []) if (!s.has(x.deger)) s.set(x.deger, { deger: x.deger, metin: x.aciklama || x.deger, ...(x.ekranDegeri ? { ekranDegeri: x.ekranDegeri } : {}), ...(x.ekranMetni ? { ekranMetni: x.ekranMetni } : {}) });
     for (const x of [...(a.secenekler || []), ...Object.values(a.bagimlilik?.harita || {}).flat()]) if (!s.has(x.deger)) s.set(x.deger, { deger: x.deger, metin: x.metin });
-    return { id: a.id, etiket: a.etiket, tip: a.tip, secenekler: [...s.values()] };
+    return { id: a.id, etiket: a.etiket, tip: a.tip, secenekler: [...s.values()], ...(ayarlar.has(String(a.id)) ? { senaryoAyari: true } : {}) };
   });
   return { girdiler };
 }
@@ -589,6 +603,37 @@ function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ proje
   }
   sonuc = kopya(sonuc);
   return { veri: sonuc, uyarilar };
+}
+
+/**
+ * Tablodan gelen SENARYO AYARLARI (deger-listesi-modeli.mjs senaryoAyariAlanlari; değeri ${Tablo.Sütun}): koşuya girecek satırların
+ * (veri koşusunda her koşunun satırı; tek satırda seçimlerle uyan tüm satırlar) değeri seçenek koduna çevrilebilmeli
+ * (ekran-basvurulari.mjs ayarKoduCoz). Çevrilemeyen değer SenaryoDogrulamaHatasi (alan: ayarın senaryo anahtarı).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {Nesne} model
+ * @param {Record<string, Nesne>} ortamVerileri ortamId → çözülmüş veri @param {Nesne} icerik tabloSecimleri / veriKosulari için
+ * @param {Map<string, string>} ortamAdlari
+ */
+function ayarTablolariniDenetle(vt, projeId, ekranId, model, ortamVerileri, icerik, ortamAdlari) {
+  const bilgi = modelAlanBilgisi(model);
+  if (!Object.keys(bilgi.ayarSecenekleri).length || !Object.values(ortamVerileri).some((v) => tabloBasvurusuVarMi(v))) return;
+  const tablolar = tablolariListele(vt, projeId);
+  const baglar = etkinAlanBaglari(vt, ekranId);
+  const tabloSecimleri = nesneMi(icerik.tabloSecimleri) ? /** @type {Record<string, Record<string, string>>} */ (icerik.tabloSecimleri) : undefined;
+  const birden = Object.keys(ortamVerileri).length > 1;
+  /** @type {Array<{ alan: string; mesaj: string }>} */
+  const hatalar = [];
+  for (const [ortamId, veri] of Object.entries(ortamVerileri)) {
+    const acilim = veriKosulariniAc(/** @type {import('../tablolar/veri-kosulari.mjs').VeriKosulari | undefined} */ (icerik.veriKosulari), { tablolar, gruplar: basvuruGruplari(veri, tablolar), ortamId, tabloSecimleri: tabloSecimleri ?? null });
+    const sabitler = acilim.kosular.length ? acilim.kosular.map((k) => k.satirlar) : [undefined];
+    for (const sabit of sabitler) {
+      const s = { tablolar, baglar, ...bilgi, ortamId, ...(tabloSecimleri ? { tabloSecimleri } : {}), ...(sabit ? { satirSecimi: { sabit } } : {}) };
+      for (const h of ayarBasvurulariniDenetle(veri, s)) {
+        const mesaj = `${birden ? `[${ortamAdlari.get(ortamId) ?? ortamId}] ` : ''}${h.mesaj}`;
+        if (!hatalar.some((x) => x.alan === h.alan)) hatalar.push({ alan: h.alan, mesaj });
+      }
+    }
+  }
+  if (hatalar.length) throw new SenaryoDogrulamaHatasi(hatalar.length === 1 ? hatalar[0].mesaj : `${hatalar.length} alan düzeltilmeli.`, hatalar);
 }
 
 /**
@@ -928,6 +973,7 @@ function senaryoKaydetIslem(vt, girdi, secenekler = {}) {
       if (!Object.keys(vk).length) delete icerik.veriKosulari;
     }
   }
+  if (mb) ayarTablolariniDenetle(vt, girdi.projeId, ekranId, mb.model, ortamVerileri, icerik, ortamAdlari);
   const id = depoSenaryoKaydet(vt, {
     ...(mevcut ? { id: mevcut.id } : {}), projeId: girdi.projeId, ekranId, baslik, icerik, kosuyaDahil: genelDahil, yapan: girdi.yapan
   });
