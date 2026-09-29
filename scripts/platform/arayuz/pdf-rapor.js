@@ -135,7 +135,9 @@ export function pdfRaporDiyalogu(proje, on = {}) {
     'Genel rapor projenin tamamını kapsar: tüm ekranlar ve ortak akışlar, tüm servisler, servis ve uçtan uca akışlar, planlı koşular, test verisi sağlığı ve kapsam. Öğe seçilmez; rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm öğeleri kapsar.');
   const onizleme = h('iframe', { class: 'html-rapor-onizleme pdf-rapor-onizleme', title: 'Rapor önizlemesi', sandbox: '', referrerpolicy: 'no-referrer', hidden: true });
   const onizleDugmesi = h('button', { type: 'button' }, ikon('gorunum'), 'Önizle');
-  const pdfDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('indir'), 'PDF indir');
+  const pdfDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('indir'), 'PDF indir ve kaydet');
+  // "Raporlar'a kaydet" durumu düğme metninde görünür: açıkken "PDF indir ve kaydet", kapalıyken "PDF indir".
+  kaydet.girdi.addEventListener('change', () => yerlestir(pdfDugmesi, ikon('indir'), kaydet.girdi.checked ? 'PDF indir ve kaydet' : 'PDF indir'));
   const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Kapat' }, ikon('carpi'));
   const diyalog = h('dialog', { class: 'onay-diyalogu html-rapor-diyalogu pdf-rapor-diyalogu', 'aria-labelledby': 'pdf-rapor-basligi' },
     h('div', { class: 'diyalog-govde' },
@@ -239,8 +241,12 @@ export function pdfRaporDiyalogu(proje, on = {}) {
       if (benim !== sira) return;
       indir(r.blob, r.ad);
       bilgi.textContent = `İndirildi: ${r.ad} (${boyutMetni(r.blob.size)})${r.raporId ? ' · Raporlar\'a kaydedildi' : ''}`;
-      bildir(r.raporId ? 'Rapor indirildi ve Raporlar\'a kaydedildi.' : 'Rapor indirildi.');
       if (r.raporId) window.dispatchEvent(new CustomEvent(RAPOR_OLAYI));
+      // İş bitti: pencere kapanır, bildirim görünür (bildirim alanı modal pencerenin arkasında kaldığından açıkken görünmüyordu).
+      diyalog.close();
+      bildir(r.raporId
+        ? `Rapor indirildi (${r.ad}) ve Sonuçlar > Raporlar'a kaydedildi.`
+        : `Rapor indirildi (${r.ad}). "Raporlar'a kaydet" kapalı olduğundan Raporlar'a kaydedilmedi.`);
     } catch (e) {
       if (benim === sira) bilgi.textContent = `PDF hazırlanamadı: ${e.message || e}`;
     } finally { if (benim === sira) mesgul(false); }

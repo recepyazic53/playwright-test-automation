@@ -159,6 +159,7 @@ export function kosuOnayi(s) {
     /** @type {{ senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> }} */
     let hesap = { senaryolar: s.senaryolar || [], haricSayisi: s.haricSayisi, uyarilar: s.uyarilar };
     const baslat = h('button', { type: 'button', class: 'birincil' });
+    const bosNedenId = `kosu-bos-nedeni-${kimlikUret()}`;
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const turMetni = s.tur === 'tam' ? `Tam koşu · ${s.kapsam || 'Genel'}` : 'Kısmi (tekil)';
     const ortamSecimi = secimli ? h('select', { id: `kosu-ortami-${kimlikUret()}` },
@@ -212,12 +213,25 @@ export function kosuOnayi(s) {
       if (secimli) hesap = s.hesapla(ortam);
       const riskli = riskliOrtamMi(ortam);
       const adet = hesap.senaryolar.length;
-      yerlestir(baslat, ikon('oynat'), s.dugme || `${adet} senaryoyu başlat`);
+      // Senaryo yoksa düğme "0 senaryoyu başlat" demez: kapalıdır ve nedeni hemen altında yazar (aria-describedby).
+      yerlestir(baslat, ikon('oynat'), adet ? s.dugme || `${adet} senaryoyu başlat` : 'Başlat');
       baslat.disabled = adet === 0 || Boolean(tahmin && tahmin.asanlar.length);
+      const nedenler = [
+        hesap.haricSayisi ? `${hesap.haricSayisi} senaryo Koşuda kapalı` : '',
+        hesap.tanimsizSayisi ? `${hesap.tanimsizSayisi} senaryo bu ortamda tanımlı değil` : '',
+        hesap.atlananlar && hesap.atlananlar.length ? `${hesap.atlananlar.length} senaryo bu ortamda atlanıyor` : ''
+      ].filter(Boolean);
+      if (adet) { baslat.removeAttribute('aria-describedby'); baslat.removeAttribute('title'); } else {
+        baslat.setAttribute('aria-describedby', bosNedenId);
+        baslat.title = 'Çalıştırılacak senaryo yok';
+      }
       yerlestir(degisken,
-        h('p', { class: 'soluk' }, adet
-          ? `${adet} senaryo ${ortam.ad} ortamında ${(typeof s.kosuBicimi === 'function' ? s.kosuBicimi(ortam) : s.kosuBicimi) || (s.esZamanli ? 'aynı anda' : 'sırayla')} çalıştırılacak.`
-          : `${ortam.ad} ortamında çalıştırılacak senaryo yok.`),
+        adet
+          ? h('p', { class: 'soluk' }, `${adet} senaryo ${ortam.ad} ortamında ${(typeof s.kosuBicimi === 'function' ? s.kosuBicimi(ortam) : s.kosuBicimi) || (s.esZamanli ? 'aynı anda' : 'sırayla')} çalıştırılacak.`)
+          : h('div', { class: 'not-kutusu kosu-bos-nedeni', id: bosNedenId, role: 'status' },
+            h('strong', {}, 'Başlatılamaz: '), `${ortam.ad} ortamında çalıştırılacak senaryo yok`,
+            nedenler.length ? ` (${nedenler.join(', ')}).` : '.',
+            ' Önce senaryo ekleyin ya da Senaryolar tablosundaki "Koşuda" anahtarını açın; başka bir ortam da seçebilirsiniz.'),
         // Etkin koşu hızı ve kaynağı ("TEST ortamı: en çok 2 senaryo aynı anda, 500 ms bekleme (ortam ayarı)").
         adet && typeof s.hizOzeti === 'function' ? h('p', { class: 'soluk kucuk kosu-hizi-ozeti' }, s.hizOzeti(ortam)) : null,
         h('dl', { class: 'onay-ozeti' },

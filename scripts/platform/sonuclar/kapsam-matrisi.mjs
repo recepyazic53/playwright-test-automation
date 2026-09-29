@@ -188,7 +188,7 @@ export function kapsamMatrisiHtml(m, s) {
     m.talepler.map((x) => `<tr class="grup"><td colspan="6">${t(x.talep)}</td></tr>${m.satirlar.filter((r) => r.talep === x.talep).map((r) => `<tr><td>${kacis(r.turAdi)}</td><td>${e(r.baslik)}</td>`
       + `<td>${r.oge ? e(r.oge) : '<span class="notr">—</span>'}</td><td>${hap(r.sonuc, r.sonucAdi)}</td><td class="mono">${kacis(tarihMetni(r.zaman)) || '<span class="notr">—</span>'}</td>`
       + `<td>${r.ortamAdi ? e(r.ortamAdi) : '<span class="notr">—</span>'}</td></tr>`).join('')}`).join('')}</tbody></table>`
-    : '<p class="bos">Talep numarası girilmiş senaryo yok. Talep no, senaryo formlarında başlığın yanındaki "Talep no" alanından eklenir.</p>';
+    : '<p class="bos">Talep numarası girilmiş senaryo yok. Talep no, senaryo formlarında başlığın altındaki "Talep no" alanından eklenir.</p>';
   const govde = `<style>${MATRIS_CSS}</style>${ozet}<h2><span class="no">1</span>Talepler</h2>${talepTablosu || '<p class="bos">—</p>'}<h2><span class="no">2</span>Talep × senaryo</h2>${matris}`
     + `<div class="yontem"><h3>Yöntem</h3><dl><dt>Son sonuç</dt><dd>${kacis('Seçilen ortam ve dönemdeki en yeni koşu. Ekran senaryosu: koşu sonuçları (atlanan / durdurulan sayılmaz; ortamı bilinmeyen eski koşular her ortamda sayılır). Servis senaryosu ve uçtan uca akış: "koşu" kayıtları ("Dene" sayılmaz; hata = başarısız). Dönemde koşu yoksa "Koşmadı".')}</dd>`
     + `<dt>Kapsam</dt><dd>${kacis('Yalnız senaryosu olan talepler listelenir; talep no senaryonun içeriğinde durur ve yalnız metindir (dış sisteme bağlanmaz).')}</dd></dl></div>`

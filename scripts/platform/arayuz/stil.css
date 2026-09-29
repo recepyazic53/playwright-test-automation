@@ -4346,3 +4346,10 @@ html:has(.servis-kosu-paneli.kucuk) { scroll-padding-bottom: 120px; }
 .akis-senaryolari-karti h3:focus-visible { outline: 2px solid var(--vurgu); outline-offset: 2px; }
 /* Servis sözleşmesi alan tablosu: yol girintisi (--girinti arayüzden CSS değişkeni olarak verilir; satır içi style yok). */
 code.duz.sozlesme-girinti { padding-inline-start: calc(var(--girinti, 0) * 0.9rem); }
+
+/* v1.4 Sonuçlar (ku14-sonuclar): tıklanabilir koşu geçmişi satırı, özet kutusunda sarı eşik, dönem notu, boş koşu onayının nedeni. */
+.gecmis-tablosu tr.tiklanabilir-satir { cursor: pointer; }
+.gecmis-tablosu tr.tiklanabilir-satir:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; background: var(--panel-2); }
+.sonuc-karti.uyari { --k: var(--atlanan-dolgu); }
+.ozet-donem-notu { display: block; margin-top: 2px; }
+.kosu-bos-nedeni { margin: 0 0 10px; }

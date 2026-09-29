@@ -429,6 +429,11 @@ test.describe('Sunucu: çalışma alanı aç / kapat / değiştir', () => {
       if (durum === 'hata') throw new Error('içe aktarma hazırlığı başarısız');
       if (durum !== 'hazir') await new Promise((c) => setTimeout(c, 100));
     }
+    // Binlerce kimlikli seçim (≈ 3.700 kayıt) 64 KB genel sınıra takılmaz: gövde okunur, seçim doğrulanır.
+    const buyukSecim = { secimler: { projeler: Array.from({ length: 4000 }, (_, i) => `olmayan-kimlik-${String(i).padStart(30, '0')}`) } };
+    expect(JSON.stringify(buyukSecim).length).toBeGreaterThan(64 * 1024);
+    const buyuk = await istek(y, `/platform/yedek/ice-aktar/${isId}/uygula`, buyukSecim);
+    expect(JSON.stringify(buyuk.govde)).toContain('dosyada olmayan kimlik');
     expect((await istek(y, `/platform/yedek/ice-aktar/${isId}/uygula`, { tumu: true })).durum).toBe(200);
     expect(existsSync(join(k.yol, 'calisma-alanlari', ucId, 'platform.db'))).toBe(true);
     expect(((await istek(y, '/platform/projeler')).govde.projeler as Array<{ ad: string }>).map((p) => p.ad)).toEqual(['B projesi']);
