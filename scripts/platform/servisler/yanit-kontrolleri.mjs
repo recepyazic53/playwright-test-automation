@@ -10,6 +10,7 @@
 // - Kontrol "yanitSuresi" { deger: ms }: yanıt en çok N ms'de gelmeli.
 // - kontrolOnerisi: alanın değer biçiminden işleç önerisi (tarih → tarih deseni, 6+ haneli numara → \d{n}, sayı → aralık, diğer → eşittir);
 //   gizli adlı ya da maskeli alanda DEĞER ÖNERİLMEZ (yalnız "var" ya da biçim deseni).
+// - benzerAlanlar: bulunamayan okuma yolu için yanıttaki benzer adlar (ad + yol; değer yok) — akıştaki "Değer okunamadı" iletisi.
 // Hiçbir şey kendiliğinden eklenmez: bu modül yalnız önerir / değerlendirir; kontrolü kullanıcı ekler.
 import { xmlAgaciOku } from './sozlesme-dogrulayici.mjs';
 
@@ -115,6 +116,52 @@ export function yanitAlanlari(govde) {
 
 /** Yolun son adı ("…/Kalem[2]/Kod" → "Kod"; "a.b[0]" → "b"). @param {string} yol */
 export const alanAdi = (yol) => String(yol).split(/[/.]/).filter(Boolean).pop()?.replace(/\[\d+\]$/, '') ?? '';
+
+/** İki ad arasındaki düzenleme uzaklığı (harf ekleme / silme / değiştirme sayısı). @param {string} a @param {string} b */
+function uzaklik(a, b) {
+  let onceki = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const satir = [i];
+    for (let j = 1; j <= b.length; j++) satir[j] = Math.min(onceki[j] + 1, satir[j - 1] + 1, onceki[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    onceki = satir;
+  }
+  return onceki[b.length];
+}
+
+/**
+ * Okuma yolunun aradığı ad: son adımın yerel adı (önek, sıra, "$." atılır). "//ns:Token" → "Token"; "veri.liste[0].no" → "no".
+ * @param {string} yol
+ */
+export function arananAd(yol) {
+  const son = String(yol).trim().replace(/^\$\.?/, '').split(/[/.]/).filter(Boolean).pop() ?? '';
+  return son.replace(/(\[\d+\])+$/, '').replace(/^[^:]*:/, '').replace(/^@/, '');
+}
+
+/**
+ * Bulunamayan okuma yolu için yanıttaki BENZER alanlar: yalnız ad ve yol (DEĞER YOK — gizli / maskeli alanın değeri de hiç taşınmaz).
+ * Sıra: aynı ad (büyük / küçük harf farkı) → biri ötekini içeriyor → yazım yakınlığı. Aynı yapıdaki tekrarlar (Kalem[1], Kalem[2]) bir kez.
+ * @param {string} govde @param {string} yol @param {number} [enCok]
+ * @returns {{ bicim: 'xml' | 'json' | null; ad: string; alanlar: Array<{ ad: string; yol: string }>; toplam: number }}
+ */
+export function benzerAlanlar(govde, yol, enCok = 5) {
+  const y = yanitAlanlari(govde);
+  const ad = arananAd(yol);
+  const hedef = ad.toLowerCase();
+  if (!y.bicim || !hedef) return { bicim: y.bicim, ad, alanlar: [], toplam: y.alanlar.length };
+  /** @type {Map<string, { ad: string; yol: string; puan: number }>} */
+  const adaylar = new Map();
+  for (const a of y.alanlar) {
+    const k = a.ad.toLowerCase();
+    if (!k) continue;
+    const puan = k === hedef ? 0 : k.includes(hedef) || (k.length >= 3 && hedef.includes(k)) ? 1 : uzaklik(k, hedef) <= Math.max(1, Math.floor(hedef.length / 4)) ? 2 : -1;
+    if (puan < 0) continue;
+    const anahtar = yapiYolu(a.yol);
+    const onceki = adaylar.get(anahtar);
+    if (!onceki || puan < onceki.puan) adaylar.set(anahtar, { ad: a.ad, yol: a.yol, puan });
+  }
+  const alanlar = [...adaylar.values()].sort((a, b) => a.puan - b.puan || a.yol.length - b.yol.length).slice(0, enCok).map(({ ad: x, yol: p }) => ({ ad: x, yol: p }));
+  return { bicim: y.bicim, ad, alanlar, toplam: y.alanlar.length };
+}
 /**
  * Dizi sıralarını atan yol (yapı karşılaştırması). XML'de tek ya da çok tekrar aynı yapıdır: "…/Kalem[2]/Kod" → "…/Kalem/Kod";
  * JSON'da dizi işareti kalır: "a[0].b" → "a[].b".

@@ -385,7 +385,7 @@ export const REHBERLER = {
       { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz. "Yetki hatasında (401 / 403)": Tekrar deneme ya da Token\'ı yenile, bir kez tekrar dene (oturum / token adımı yeniden çalışır, istek bir kez daha gönderilir; raporda not olarak görünür). "Genel ayarı kullan" seçiliyse Ayarlar > Koşu\'daki genel değer (varsayılan: Token\'ı yenile, bir kez tekrar dene) kullanılır.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
       {
         baslik: 'Akış kurma sırası',
-        sira: ['"Akış ekle"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" ile değeri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).',
+        sira: ['"Akış ekle"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" > "Değer oku" deyin. Yolu yazmanız gerekmez: akışı bir kez "Dene"yin, sonra "Yanıttan seç" ile yanıttaki alanı tıklayın; yol ve ad dolar (gizli alanın değeri gösterilmez, okunan değer maskeli kalır). Elle yazarsanız ad alanı öneki gerekmez: "//Token" yeter. Bulunamazsa hata, yanıttaki benzer adları yollarıyla önerir.',
           'Sonraki adımda "Alan bağla" ile o değeri operasyonun alanına bağlayın; diyagramdaki oklar taşınan değerleri gösterir.', 'Kaydedin; sayfanın altındaki "Bu akışın senaryoları"ndan "Senaryo ekle" ile verileri girin.'],
         cizim: { tur: 'akis', kutular: [{ baslik: '+ Operasyon', ikon: 'artiYalin' }, { baslik: 'Yanıttan oku', ikon: 'hedef' }, { baslik: 'Alan bağla', ikon: 'ok' }, { baslik: 'Senaryo ekle', ikon: 'liste' }] }
       }
@@ -404,7 +404,7 @@ export const REHBERLER = {
       {
         baslik: 'Akış kurma sırası',
         sira: ['"Uçtan uca akış ekle"ta "+" ile adım koyun: ekran senaryosu, bir servisin operasyonu (ya da kayıtlı senaryosu) veya SQL sorgusu.',
-          'Değer üreten adımda okumayı tanımlayın: serviste "Yanıttan oku", ekranda "Değer oku" (seçici + ad), SQL\'de sonuç sütunu. Gizli değerleri işaretleyin.',
+          'Değer üreten adımda okumayı tanımlayın: serviste "Yanıttan oku" (Dene sonrası "Yanıttan seç" ile alanı tıklayarak), ekranda "Değer oku" (seçici + ad), SQL\'de sonuç sütunu. Gizli değerleri işaretleyin.',
           'Sonraki adımda değeri kullanın: ekranda "Alan doldur" ile senaryonun bir alanına, serviste "Alan bağla" ile, SQL\'de sorgunun içinde ${akis:Ad}.',
           'Kaydedin ve "Koş…" ile ortam seçip çalıştırın.'],
         cizim: { tur: 'akis', kutular: [{ baslik: '+ Adım', ikon: 'artiYalin' }, { baslik: 'Değer oku', ikon: 'hedef' }, { baslik: 'Alan doldur', ikon: 'ok' }, { baslik: 'Koş…', ikon: 'oynat' }] }
