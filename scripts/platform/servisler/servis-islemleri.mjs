@@ -23,7 +23,7 @@ import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import {
-  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, ServisHatasi, soapIstegi,
+  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, okumaHatasi, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
@@ -1163,7 +1163,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     for (const o of girdi.okumalar ?? []) {
       const v = degerOku(yanit, o);
       if (v === undefined || v === '') {
-        okumaSonuclari.push({ tur: 'okuma', ad: `Değer okunamadı: ${o.ad}`, gecti: false, aciklama: `${o.kaynak ?? 'xml'} yolu "${o.yol}" yanıtta bulunamadı` });
+        // Neden + öneri (yanıttaki benzer adlar yalnız ad ve yolla; değer yazılmaz); yine de bilinen gizliler maskelenir.
+        okumaSonuclari.push({ tur: 'okuma', ad: `Değer okunamadı: ${o.ad}`, gecti: false, aciklama: gizlileriMaskele(okumaHatasi(yanit, o), gizliler) });
         continue;
       }
       okunan[o.ad] = v;

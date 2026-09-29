@@ -2706,7 +2706,15 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .okuma-karti .okuma-ust { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
 .okuma-karti input, .okuma-karti select { min-width: 0; width: 100%; }
 .okuma-karti .kod-girdisi { font-family: var(--yazi-mono); }
-.okuma-karti .okuma-alt { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.okuma-karti .okuma-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.okuma-karti .okuma-dugmeleri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+/* "Yanıttan seç": okuma kartında yanıt alanları listesi (Son yanıttan kontrol öner ile aynı satırlar). */
+.yanit-secici { display: grid; gap: 6px; min-width: 0; }
+.yanit-secici:empty { display: none; }
+.yanit-secici .kart-basligi { flex-wrap: wrap; min-width: 0; }
+.yanit-secici .kart-basligi .alt { overflow-wrap: anywhere; min-width: 0; }
+.yanit-secici .yanit-alanlari { max-height: 360px; margin-top: 0; }
+.yanit-secici .yanit-alani-arama { width: 100%; }
 .okuma-karti .okuma-alt .secenek { margin: 0; }
 @media (max-width: 600px) {
   .servis-akis-diyagrami .diyagram-dugumu { padding: 10px 12px 10px 14px; }

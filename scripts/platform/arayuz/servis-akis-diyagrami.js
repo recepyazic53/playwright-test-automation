@@ -6,6 +6,8 @@
 //     ${akis:Ad} adlarıdır. Kutular arasındaki okta o noktadan sonraki adımlara taşınan değerler yazar. Girdi önceki adımdan,
 //     yoksa adımın servisinin oturum akışından gelir (sunucudaki servisAkisiDenetle ile aynı kural). Değer yalnız SONRAKİ bir
 //     adımda okunuyorsa ya da hiç okunmuyorsa kutu, girdisi ve oku kırmızıdır; kaydetme engellenir (sunucu da reddeder).
+//   · "Yanıttan seç" (okuma kartı): adımın son Dene / koşu yanıtı alan listesi olarak açılır (yanit-kontrol-paneli.js); tıklanan alanın
+//     yolu ve adı okumaya yazılır. Yanıt yoksa önce "Dene" istenir. İstek atmaz; yanıt kayıtlı koşudan (maskeli) okunur.
 //   · Oturum akışının değerleri ayrı bir "Oturum (token)" kutusunda görünür; akışın kendisi oturumsa Bitiş kutusu sağladığı
 //     değerleri ve ömrünü gösterir.
 //   · Renkler: gösterilen koşunun (son koşu, Dene ya da "Son koşular"dan seçilen) adım sonuçları; adım sırası / adı o koşudan
@@ -30,6 +32,7 @@ import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { ekranAdimiAkisDegerleri, ekranAdimiDogrula } from './ekran-adimi.mjs';
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
 import { talepAlani } from './talep-alani.js';
+import { sonYanitliKosu, yanitAlanSecici } from './yanit-kontrol-paneli.js';
 
 const q = encodeURIComponent;
 const KAYNAK = { xml: 'XML (XPath)', json: 'JSON yolu', baslik: 'Yanıt başlığı' };
@@ -50,6 +53,11 @@ const AKIS_KALIBI = /\$\{\s*akis:([A-Za-z_][A-Za-z0-9_-]{0,59})\s*\}/g;
 const durumRozeti = (d) => rozet(DURUM[d]?.[0] ?? d, DURUM[d]?.[1] ?? '');
 const saniye = (ms) => `${(ms / 1000).toFixed(1).replace('.', ',')} sn`;
 const yeniAdimKimligi = () => `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+/** Yanıt alanı adından akış değeri adı (${akis:Ad} kuralı: harf / _ ile başlar; harf, rakam, _ ve -; en çok 60). @param {string} ad */
+export const akisDegeriAdi = (ad) => {
+  const s = String(ad).replace(/ı/g, 'i').replace(/İ/g, 'I').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+  return (/^[A-Za-z_]/.test(s) ? s : `_${s}`).slice(0, 60);
+};
 
 /**
  * Senaryonun kullandığı akış değeri adları (gövde, başlık değerleri, kontroller — sunucudaki servisAkisiDenetle ile aynı kaynaklar — ve REST yolu).
@@ -484,6 +492,70 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
         h('span', { class: 'lejant akis-lejanti' }, 'Taşınan değer')));
   }
 
+  // ---- Yanıttan seç (okuma yolu tıklayarak) -------------------------------------------------------------------------------------
+  /**
+   * Adımın son yanıtı (maskeli koşu kaydı; istek ATILMAZ): önce diyagramda gösterilen koşu (son Dene ya da seçilen koşu), sonra akışın
+   * kayıtlı son koşuları; kayıtlı senaryo adımında senaryonun kendi son yanıtı. Adım sıra + adla, sıra değiştiyse adla eşlenir; yanıt
+   * aynı servisten olmalı. Yoksa null.
+   */
+  async function adimYaniti(n, x) {
+    const eslesen = (adimlar) => (adimlar ?? []).find((y) => y.no === n + 1 && y.ad === x.ad && y.kosuId) ?? (adimlar ?? []).find((y) => y.ad === x.ad && y.kosuId);
+    const kosuAl = async (kosuId) => {
+      try {
+        const { kosu } = await api(`/platform/servis/kosu?projeId=${q(proje.id)}&id=${q(kosuId)}`);
+        return kosu && kosu.servisId === x.servisId && typeof kosu.sonuc?.yanit === 'string' && kosu.sonuc.yanit && !kosu.sonuc.hata ? kosu : null;
+      } catch { return null; }
+    };
+    const ilk = eslesen(gosterilen?.adimlar);
+    if (ilk) { const k = await kosuAl(ilk.kosuId); if (k) return k; }
+    if (akisId) {
+      try {
+        const { kosular } = await api(`/platform/servis-akisi/kosular?projeId=${q(proje.id)}&akisId=${q(akisId)}&sinir=5`);
+        for (const ko of kosular) {
+          const { kosu } = await api(`/platform/servis-akisi/kosu?projeId=${q(proje.id)}&id=${q(ko.id)}`);
+          const a = eslesen(kosu?.sonuc?.adimlar);
+          if (a) { const k = await kosuAl(a.kosuId); if (k) return k; }
+        }
+      } catch { /* koşu listesi alınamazsa sonraki kaynağa geçilir */ }
+    }
+    if (x.tur !== 'operasyon' && x.servisId && x.senaryoId) { try { return await sonYanitliKosu(proje, x.servisId, x.senaryoId); } catch { return null; } }
+    return null;
+  }
+
+  /**
+   * Okuma kartındaki "Yanıttan seç": adımın son yanıtının alanları ("Son yanıttan kontrol öner"deki liste) açılır; tıklanan alanın yolu,
+   * kaynağı (XML / JSON) ve — ad boşsa — adı okumaya yazılır; gizli / maskeli alan seçilirse okuma gizli işaretlenir (değer maskeli kalır).
+   * @param {number} n @param {any} x adım @param {any} o okuma @param {number} k okuma sırası @param {() => void} yenile kartları yeniden çizer
+   */
+  function yanittanSec(n, x, o, k, yenile) {
+    const kap = h('div', { class: 'yanit-secici' });
+    const dugme = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-expanded': 'false', 'aria-label': `Yanıttan seç (${n + 1}. adım ${k + 1}. okuma)`,
+      title: 'Son Dene yanıtında alanı tıklayarak yolu doldurun' }, ikon('liste'), 'Yanıttan seç');
+    const kapat = () => { yerlestir(kap); dugme.setAttribute('aria-expanded', 'false'); dugme.focus(); };
+    dugme.addEventListener('click', async () => {
+      if (dugme.getAttribute('aria-expanded') === 'true') { kapat(); return; }
+      dugme.setAttribute('aria-expanded', 'true');
+      yerlestir(kap, h('p', { class: 'soluk kucuk', role: 'status' }, 'Son yanıt aranıyor…'));
+      const kosu = await adimYaniti(n, x);
+      if (dugme.getAttribute('aria-expanded') !== 'true') return;
+      if (!kosu) {
+        yerlestir(kap, h('p', { class: 'not-kutusu', role: 'status' }, 'Bu adımın yanıtı henüz yok. Önce “Dene” ile akışı deneyin; yanıt gelince alanı buradan tıklayarak seçersiniz.'));
+        return;
+      }
+      yanitAlanSecici(kap, { kosu, gizliMi, etiket: `${n + 1}. adım`, kapat, sec: (a) => {
+        o.yol = a.yol;
+        o.kaynak = a.bicim;
+        if (!o.ad) o.ad = akisDegeriAdi(a.ad);
+        if (a.gizli) o.gizli = true;
+        degisti(); ciz(); yenile();
+        duyuru.textContent = `${o.ad || 'Okuma'}: ${a.yol} seçildi.`;
+        const g = ayrintiKap.querySelector(`[aria-label="${n + 1}. adım ${k + 1}. okuma yolu"]`);
+        if (g instanceof HTMLElement) g.focus();
+      } });
+    });
+    return { dugme, kap };
+  }
+
   // ---- Ayrıntı paneli (seçili adım) -------------------------------------------------------------------------------------------
   /** SQL sorgusu adımının ayrıntısı: ad, ortak SQL formu (bağlantı, sorgu, beklenen, yeniden deneme, okumalar), girdiler. */
   function sqlAyrintisi(n, x) {
@@ -577,9 +649,12 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
         kaynak.addEventListener('change', () => { o.kaynak = kaynak.value; ciz(); });
         yol.addEventListener('input', () => { o.yol = yol.value; });
         gizli.addEventListener('change', () => { o.gizli = gizli.checked; ciz(); });
+        const secim = yanittanSec(n, x, o, k, okumalariCiz);
         return h('div', { class: 'okuma-karti' }, h('div', { class: 'okuma-ust' }, oad, kaynak), yol,
           h('div', { class: 'okuma-alt' }, h('label', { class: 'secenek' }, gizli, 'gizli'),
-            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. adım ${k + 1}. okumayı sil`, onclick: () => { x.okumalar.splice(k, 1); degisti(); ciz(); okumalariCiz(); } }, ikon('carpi'))));
+            h('span', { class: 'okuma-dugmeleri' }, secim.dugme,
+              h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. adım ${k + 1}. okumayı sil`, onclick: () => { x.okumalar.splice(k, 1); degisti(); ciz(); okumalariCiz(); } }, ikon('carpi')))),
+          secim.kap);
       }));
     };
     okumalariCiz();
@@ -594,7 +669,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
           ikon('arti'), 'Alan bağla'),
         once().length ? null : h('p', { class: 'soluk kucuk' }, 'Önceki adımlarda okunan değer yok; önce bir adımda “Yanıttan oku” ekleyin.')),
       h('fieldset', {}, h('legend', {}, 'Yanıttan oku (çıktılar)'),
-        h('p', { class: 'soluk kucuk' }, 'Okunan değer sonraki adımlarda alanlara bağlanır ya da ', h('code', {}, '${akis:Ad}'), ' ile kullanılır.'),
+        h('p', { class: 'soluk kucuk' }, 'Okunan değer sonraki adımlarda alanlara bağlanır ya da ', h('code', {}, '${akis:Ad}'), ' ile kullanılır. Yolu bilmiyorsanız “Yanıttan seç”: son Dene yanıtında alanı tıklayın.'),
         okumaKap,
         h('button', { type: 'button', class: 'kucuk-dugme okuma-ekle', onclick: () => { x.okumalar.push({ ad: '', kaynak: 'xml', yol: '' }); degisti(); okumalariCiz(); okumaKap.querySelector('.okuma-karti:last-child input')?.focus(); } },
           ikon('arti'), 'Değer oku')),
@@ -748,13 +823,16 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
         kaynak.addEventListener('change', () => { o.kaynak = kaynak.value; yol.placeholder = o.kaynak === 'json' ? 'veri.token' : o.kaynak === 'baslik' ? 'x-auth-token' : '//Sonuc/Token'; ciz(); });
         yol.addEventListener('input', () => { o.yol = yol.value; });
         gizli.addEventListener('change', () => { o.gizli = gizli.checked; ciz(); });
+        const secim = yanittanSec(n, x, o, k, okumalariCiz);
         return h('div', { class: 'okuma-karti' },
           h('div', { class: 'okuma-ust' }, oad, kaynak),
           yol,
           h('div', { class: 'okuma-alt' }, h('label', { class: 'secenek' }, gizli, 'gizli'),
-            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. adım ${k + 1}. okumayı sil`, onclick: () => {
-              x.okumalar.splice(k, 1); degisti(); ciz(); okumalariCiz(); ayrintiKap.querySelector('.okuma-ekle')?.focus();
-            } }, ikon('carpi'))));
+            h('span', { class: 'okuma-dugmeleri' }, secim.dugme,
+              h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. adım ${k + 1}. okumayı sil`, onclick: () => {
+                x.okumalar.splice(k, 1); degisti(); ciz(); okumalariCiz(); ayrintiKap.querySelector('.okuma-ekle')?.focus();
+              } }, ikon('carpi')))),
+          secim.kap);
       }));
     };
     okumalariCiz();
@@ -765,7 +843,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       alan('Servis', servisSec), alan('Senaryo', senaryoSec),
       girdiKap,
       h('fieldset', {}, h('legend', {}, 'Yanıttan oku (çıktılar)'),
-        h('p', { class: 'soluk kucuk' }, 'Okunan değer sonraki adımlarda ', h('code', {}, '${akis:Ad}'), ' ile kullanılır.'),
+        h('p', { class: 'soluk kucuk' }, 'Okunan değer sonraki adımlarda ', h('code', {}, '${akis:Ad}'), ' ile kullanılır. Yolu bilmiyorsanız “Yanıttan seç”: son Dene yanıtında alanı tıklayın.'),
         okumaKap,
         h('button', { type: 'button', class: 'kucuk-dugme okuma-ekle', onclick: () => {
           x.okumalar.push({ ad: '', kaynak: 'xml', yol: '' }); degisti(); okumalariCiz();

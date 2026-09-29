@@ -20,6 +20,7 @@ export declare function kullanilanParametreler(govde: string): string[];
 export declare function kullanilanAkisDegerleri(metin: string): string[];
 export declare const AKIS_DEGERI_ADI: RegExp;
 export declare function degerOku(yanit: { govde: string; basliklar?: Record<string, string> }, okuma: { kaynak?: 'xml' | 'json' | 'baslik'; yol: string }): string | undefined;
+export declare function okumaHatasi(yanit: { govde: string; basliklar?: Record<string, string> }, okuma: { kaynak?: 'xml' | 'json' | 'baslik'; yol: string }): string;
 export declare function xmlKacis(s: string): string;
 export declare function xmlKacisCoz(s: string): string;
 export declare function gizlileriMaskele(metin: string, gizliler: string[]): string;
@@ -40,7 +41,7 @@ export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: nu
 }>;
 export declare function iceAktarmaAdresleri(metin: string, taban: string): string[];
 
-export interface XmlDugumu { ad: string; cocuklar: XmlDugumu[]; metin: string }
+export interface XmlDugumu { ad: string; tam?: string; cocuklar: XmlDugumu[]; metin: string }
 export declare function xmlAgaci(xml: string): XmlDugumu | null;
 export declare function xpathMetni(kok: XmlDugumu, yol: string): string | undefined;
 export interface KontrolSonucu { tur: string; ad: string; gecti: boolean; aciklama: string; alt?: KontrolSonucu[] }

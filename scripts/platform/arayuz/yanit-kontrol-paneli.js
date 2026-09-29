@@ -3,6 +3,7 @@
 // (yanit-kontrolleri.mjs > kontrolOnerisi). Gizli adlı ya da maskeli alanda DEĞER GÖSTERİLMEZ ve yazılmaz: yalnız "var" ya da desen.
 // "Altın yanıt": alanlar karşılaştırılır / yok sayılır (tarih, kimlik gibi her koşuda değişenler varsayılan olarak yok sayılır; gizli alanın
 // yalnız yolu yapıda kalır). "Yanıt süresi": yanıt en çok N ms. Hiçbir şey kendiliğinden eklenmez; eklenen kontrol senaryo kaydedilince yazılır.
+// Aynı alan listesi servis akışındaki "Yanıttan seç"te de kullanılır (yanitAlanSecici: alan tıklanınca okuma yolu ve adı dolar).
 // Panel istek atmaz: yanıt kayıtlı koşudan (maskeli) okunur. Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, h, ikon, iskelet, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
@@ -25,6 +26,71 @@ export async function sonYanitliKosu(proje, servisId, senaryoId) {
 }
 
 /**
+ * Yanıt ağacının ortak parçaları ("Son yanıttan kontrol öner" ve servis akışındaki "Yanıttan seç" AYNI listeyi gösterir): başlık
+ * (koşu bilgisi + kapat), yanıtın alanları (kırpılmış kayıtta boş) ve bir alanın üst satırı (yol + değer; gizli / maskeli alanda değer yok).
+ * @param {any} k koşu kaydı @param {string} baslik @param {() => void} kapatFn
+ */
+function yanitBasligi(k, baslik, kapatFn) {
+  const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Paneli kapat', title: 'Kapat', onclick: () => kapatFn() }, ikon('carpi'));
+  return h('div', { class: 'kart-basligi' }, h('h4', {}, ikon('liste'), baslik),
+    h('span', { class: 'alt' }, [k.tur === 'dene' ? 'Dene' : 'Koşu', k.sonuc?.ortam, tarihMetni(k.baslangic), `${k.sonuc?.yanitSureMs ?? k.sureMs} ms`, k.sonuc?.durumKodu ? `HTTP ${k.sonuc.durumKodu}` : ''].filter(Boolean).join(' · ')), kapat);
+}
+
+/** @param {any} k koşu kaydı */
+function kosuYaniti(k) {
+  const yanit = String(k.sonuc?.yanit ?? '');
+  const kirpik = yanit.endsWith('…(kırpıldı)');
+  return { yanit, kirpik, y: yanitAlanlari(kirpik ? '' : yanit) };
+}
+
+/** @param {boolean} kirpik @param {string} ek */
+const okunamadiNotu = (kirpik, ek) => h('p', { class: 'not-kutusu uyari', role: 'status' }, kirpik ? 'Yanıt kaydı kırpılmış; alan listesi çıkarılamıyor.' : `Yanıt XML ya da JSON olarak okunamadı; alan listesi yok. ${ek}`);
+
+/**
+ * Alanın üst satırı: yol ve değer (gizli / maskeli alanda değer yerine "gizli: değer yok" rozeti).
+ * @param {{ yol: string; deger: string | null }} a @param {boolean} gizli @param {string} [neden]
+ */
+function alanUstu(a, gizli, neden) {
+  return h('div', { class: 'yanit-alani-ust' }, h('code', { class: 'duz yanit-alani-yolu' }, a.yol),
+    gizli ? rozet('gizli: değer yok', 'atlanan', neden ? { title: neden } : {}) : h('span', { class: 'yanit-alani-degeri' }, a.deger === null ? '(boş / nil)' : a.deger === '' ? '(boş)' : a.deger));
+}
+
+/**
+ * "Yanıttan seç" (servis akışı > Yanıttan oku): kayıtlı yanıtın alanları listelenir, kullanıcı birine "Seç" der; alanın yolu, adı ve
+ * yanıt biçimi (xml / json) geri çağırmayla verilir. Gizli adlı ya da maskeli alanda değer gösterilmez (seçilebilir; okuma gizli olur).
+ * İstek atmaz: yanıt kayıtlı koşudan (maskeli) okunur.
+ * @param {HTMLElement} kap
+ * @param {{ kosu: any; gizliMi: (ad: string) => boolean; sec: (a: { yol: string; ad: string; bicim: 'xml' | 'json'; gizli: boolean }) => void; kapat: () => void; etiket?: string }} s
+ */
+export function yanitAlanSecici(kap, s) {
+  const k = s.kosu;
+  const { kirpik, y } = kosuYaniti(k);
+  const ust = yanitBasligi(k, 'Yanıttan seç', s.kapat);
+  if (!y.bicim) { yerlestir(kap, ust, okunamadiNotu(kirpik, 'Yolu elle yazın.')); return; }
+  const bicim = /** @type {'xml' | 'json'} */ (y.bicim);
+  const liste = h('ul', { class: 'yanit-alanlari', 'aria-label': `${s.etiket ? `${s.etiket}: ` : ''}yanıt alanları` });
+  const satirlar = y.alanlar.map((a) => {
+    const gizli = Boolean(a.maskeli || s.gizliMi(a.ad));
+    const sec = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${a.yol}: seç` }, ikon('onay'), 'Seç');
+    sec.addEventListener('click', () => s.sec({ yol: a.yol, ad: a.ad, bicim, gizli }));
+    return { a, el: h('li', { class: 'yanit-alani-satiri', 'data-yol': a.yol }, alanUstu(a, gizli, gizli ? 'gizli alan: değer gösterilmez; okunan değer maskelenir' : ''),
+      h('div', { class: 'yanit-alani-kontrol' }, sec, gizli ? h('small', { class: 'cok-soluk' }, 'okunan değer raporlarda maskelenir') : null)) };
+  });
+  // Uzun yanıtta ada / yola göre süzme.
+  const ara = h('input', { type: 'search', autocomplete: 'off', spellcheck: 'false', placeholder: 'Alan ara (ör. Token)', 'aria-label': 'Yanıt alanı ara', class: 'yanit-alani-arama' });
+  const suz = () => {
+    const t = ara.value.trim().toLowerCase();
+    yerlestir(liste, satirlar.filter((x) => !t || x.a.yol.toLowerCase().includes(t)).map((x) => x.el));
+  };
+  ara.addEventListener('input', suz);
+  suz();
+  yerlestir(kap, ust,
+    h('p', { class: 'kucuk soluk' }, `Değeri okunacak alanın satırında "Seç" deyin: yolu (${bicim === 'json' ? 'JSON yolu' : 'XPath'}) ve adı doldurulur. Gizli alanın değeri gösterilmez.`),
+    y.kirpildi ? h('p', { class: 'kucuk soluk' }, `Yanıtın ilk ${y.alanlar.length} alanı listelendi.`) : null,
+    y.alanlar.length > 8 ? ara : null, liste);
+}
+
+/**
  * Paneli çizer.
  * @param {HTMLElement} kap
  * @param {{ proje: { id: string }; kosu: any; rest: boolean; ekle: (k: Record<string, any>) => void; kapat: () => void }} s
@@ -35,14 +101,10 @@ export async function yanitKontrolPaneli(kap, s) {
   try { ekAdlar = (await api('/platform/maskeleme')).ekAdlar || []; } catch { ekAdlar = []; }
   const gizliMi = (/** @type {string} */ ad) => gizliAdMi(ad, ekAdlar);
   const k = s.kosu;
-  const yanit = String(k.sonuc?.yanit ?? '');
-  const kirpik = yanit.endsWith('…(kırpıldı)');
-  const y = yanitAlanlari(kirpik ? '' : yanit);
-  const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Paneli kapat', title: 'Kapat', onclick: () => s.kapat() }, ikon('carpi'));
-  const ust = h('div', { class: 'kart-basligi' }, h('h4', {}, ikon('liste'), 'Son yanıttan kontrol öner'),
-    h('span', { class: 'alt' }, [k.tur === 'dene' ? 'Dene' : 'Koşu', k.sonuc?.ortam, tarihMetni(k.baslangic), `${k.sonuc?.yanitSureMs ?? k.sureMs} ms`, k.sonuc?.durumKodu ? `HTTP ${k.sonuc.durumKodu}` : ''].filter(Boolean).join(' · ')), kapat);
+  const { yanit, kirpik, y } = kosuYaniti(k);
+  const ust = yanitBasligi(k, 'Son yanıttan kontrol öner', s.kapat);
   if (!y.bicim) {
-    yerlestir(kap, ust, h('p', { class: 'not-kutusu uyari', role: 'status' }, kirpik ? 'Yanıt kaydı kırpılmış; alan listesi çıkarılamıyor.' : 'Yanıt XML ya da JSON olarak okunamadı; alan listesi yok. Kontrolleri elle ekleyin.'));
+    yerlestir(kap, ust, okunamadiNotu(kirpik, 'Kontrolleri elle ekleyin.'));
     return;
   }
   const kaynak = y.bicim;
@@ -98,8 +160,7 @@ export async function yanitKontrolPaneli(kap, s) {
         : [h('option', { value: 'karsilastir', selected: !degiskenMi(a) }, 'karşılaştır'), h('option', { value: 'yoksay', selected: degiskenMi(a) }, 'yok say (her koşuda değişir)')]);
     altinSecimleri.set(a.yol, altin);
     return h('li', { class: 'yanit-alani-satiri', 'data-yol': a.yol },
-      h('div', { class: 'yanit-alani-ust' }, h('code', { class: 'duz yanit-alani-yolu' }, a.yol),
-        gizli ? rozet('gizli: değer yok', 'atlanan', { title: oneri.neden }) : h('span', { class: 'yanit-alani-degeri' }, a.deger === null ? '(boş / nil)' : a.deger === '' ? '(boş)' : a.deger)),
+      alanUstu(a, gizli, oneri.neden),
       h('div', { class: 'yanit-alani-kontrol' }, islec, girdiler, ekle, h('small', { class: 'cok-soluk' }, oneri.neden)),
       h('div', { class: 'yanit-alani-altin' }, h('span', { class: 'kucuk soluk' }, 'Altın yanıtta:'), altin));
   });
