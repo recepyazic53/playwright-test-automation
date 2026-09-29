@@ -87,12 +87,14 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
 function ozetKutusu(k, etiket, ikonAd, adres) {
   const fark = k && k.basari !== null && k.oncekiBasari !== null ? Math.round(k.basari - k.oncekiBasari) : null;
   const sinif = !k || k.basari === null ? '' : k.kalan ? 'basarisiz' : 'basarili';
-  return h('a', { class: `sonuc-karti ozet-kutusu ${sinif}`, href: adres, 'aria-label': `${etiket}: ${k && k.basari !== null ? `başarı ${yuzde(k.basari)}` : 'bu dönemde koşu yok'} — sekmeyi aç` },
+  // Erişilebilir ad kartın görünen içeriğidir (aria-label yok: ad görünen metinle başlasın); sonda yalnız ekran okuyucu için eylem.
+  return h('a', { class: `sonuc-karti ozet-kutusu ${sinif}`, href: adres },
     h('span', { class: 'kart-etiket' }, ikon(ikonAd), etiket),
     h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, k ? yuzde(k.basari) : '—'), h('small', {}, 'başarı')),
     h('div', { class: 'kart-alt' },
       fark === null ? h('span', { class: 'fark notr' }, k && k.oncekiAdet ? '—' : 'önceki yok') : farkHapi(fark, fark > 0, ' puan'),
-      h('span', {}, k && k.adet ? `${k.adet.toLocaleString('tr-TR')} ${k.birim} · ${k.kalan.toLocaleString('tr-TR')} başarısız` : 'Bu dönemde koşu yok')));
+      h('span', {}, k && k.adet ? `${k.adet.toLocaleString('tr-TR')} ${k.birim} · ${k.kalan.toLocaleString('tr-TR')} başarısız` : 'Bu dönemde koşu yok')),
+    h('span', { class: 'gorunmez' }, ' — sekmeyi aç'));
 }
 
 /** Kart gövdesi: madde listesi (ilk KART_ILK; "Tümü (N)" açar) ya da "Sorun yok". */

@@ -169,10 +169,10 @@ test.describe('Başlarken listesi (arayüz)', () => {
     await expect(kart(page).locator('.baslarken-sayac')).toHaveText('1 / 7');
     await expect(kart(page).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
     // Sıradaki adımın düğmesi birincil ve giriş tarifi formuna götürür.
-    const girisDugmesi = adim(page, 'giris').getByRole('link', { name: 'Giriş tarifi: Girişi kaydet' });
+    const girisDugmesi = adim(page, 'giris').getByRole('link', { name: 'Girişi kaydet — Giriş tarifi' });
     await expect(girisDugmesi).toHaveClass(/birincil/);
     await expect(girisDugmesi).toHaveAttribute('href', `#/ayarlar/giris/tarif/${ortamId}`);
-    await expect(adim(page, 'ekran').getByRole('link', { name: 'İlk ekranı ekle: Ekran ekle' })).toHaveAttribute('href', '#/ekranlar/yeni');
+    await expect(adim(page, 'ekran').getByRole('link', { name: 'Ekran ekle — İlk ekranı ekle' })).toHaveAttribute('href', '#/ekranlar/yeni');
     if (EKRAN_KLASORU) { mkdirSync(EKRAN_KLASORU, { recursive: true }); await page.screenshot({ path: join(EKRAN_KLASORU, 'baslarken-ozet-1440.png'), fullPage: true }); }
     // "Girişe gerek yok": giriş ✓ (atlandı), sıradaki ilk ekran; sunucuda saklanır; "Geri al" döndürür.
     await adim(page, 'giris').getByRole('button', { name: 'Girişe gerek yok' }).click();
@@ -183,7 +183,7 @@ test.describe('Başlarken listesi (arayüz)', () => {
     await adim(page, 'giris').getByRole('button', { name: 'Geri al' }).click();
     await expect(adim(page, 'giris')).toHaveAttribute('data-durum', 'siradaki');
     // Tek tıkla ilgili ekran: İlk ekranı ekle → Ekran ekle sayfası.
-    await adim(page, 'ekran').getByRole('link', { name: 'İlk ekranı ekle: Ekran ekle' }).click();
+    await adim(page, 'ekran').getByRole('link', { name: 'Ekran ekle — İlk ekranı ekle' }).click();
     await expect(page).toHaveURL(/#\/ekranlar\/yeni$/);
     await expect(page.getByRole('heading', { level: 2, name: 'Ekran ekle' })).toBeVisible();
     // Ekran ekle: önde tara / kaydet, "İleri düzey" kapalı.
@@ -279,7 +279,7 @@ test('tamamlanınca kaybolur: tarif + ekran + senaryo + tam koşu verisiyle 6 / 
     await page.waitForTimeout(300);
     await expect(kart).toHaveCount(0);
     await page.goto('/#/sonuclar/ozet');
-    await kart.locator('li[data-adim="sonuc"]').getByRole('link', { name: 'Sonuçları incele: Son koşuyu aç' }).click();
+    await kart.locator('li[data-adim="sonuc"]').getByRole('link', { name: 'Son koşuyu aç — Sonuçları incele' }).click();
     await expect(page).toHaveURL(/#\/sonuclar\/kosu\//);
     await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/baslarken?projeId=${projeId}`)).baslarken as { tamam: boolean }).tamam).toBe(true);
     await page.goto('/#/sonuclar/ozet');
@@ -311,8 +311,8 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     const parola = `Gecici-Kurulum-${randomBytes(6).toString('hex')}`;
     await page.goto('/');
     await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
-    // Sihirbaza yeni adım eklenmedi: giriş profili sorulmaz.
-    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Tamam']);
+    // Giriş profilinin ayrıntısı sorulmaz; yalnız isteğe bağlı "giriş istiyor mu?" sorusu (kendi adımı).
+    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Giriş', 'Tamam']);
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(parola);
     await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(parola);
     await page.getByText('Parolayı unutursam').click();
@@ -322,6 +322,8 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     await page.getByLabel('Adres (link)').first().fill('http://127.0.0.1:9/');
     await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
     await page.getByRole('button', { name: 'Atla' }).click();
+    // Giriş sorusu: varsayılan "sonra karar vereceğim" → bugünkü davranış.
+    await page.getByRole('button', { name: 'Devam' }).click();
     await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
     // Sıradaki: giriş tarifini kaydet (zorunlu adım değil) — varsayılan ortamın tarif formuna götürür.
     const siradaki = page.locator('.siradaki-adim');

@@ -8,7 +8,10 @@
 //   Adres: #/servisler/s/<id>/senaryo/yeni?akis=<akisId> (akış sayfasındaki "Senaryo ekle") akış seçili açılır.
 // Kayıt: POST /platform/servis/akis-senaryosu/kaydet (içerik: { tur: 'akis', akisId, adimlar: { <adımId>: tek istekli içerik } }).
 // Dene: kaydedilmemiş hâli TEST ortamında (onayla; canlı koşu paneli). Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
-import { alan, alanHatasi, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, gosterGizleDugmesi, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
+
+/** Sunucunun gizli sabit maskesi (servisler/gizli-sabitler.mjs GIZLI_SABIT_MASKESI): kayıtlı gizli değerin yerinde durur. */
+const GIZLI_MASKE = '••••••';
 import { canliOnayIste, onayIste, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
@@ -203,15 +206,14 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
           if (v.kaynak === 'sabit') {
             girdi = sat.alan.secenekler && sat.alan.secenekler.length
               ? h('select', { 'aria-label': `${a.no}. adım ${sat.alan.ad}` }, h('option', { value: '' }, '—'), sat.alan.secenekler.map((x) => h('option', { value: x, selected: v.deger === x }, x)))
-              : h('input', { type: gizliAdMi(sat.alan.ad, ekGizliAdlar) ? 'password' : 'text', value: v.deger || '', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${a.no}. adım ${sat.alan.ad}` });
+              : h('input', { type: gizliAdMi(sat.alan.ad, ekGizliAdlar) ? 'password' : 'text', value: v.deger === GIZLI_MASKE ? '' : v.deger || '', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${a.no}. adım ${sat.alan.ad}` });
             const kutu = girdi;
-            kutu.addEventListener(kutu.tagName === 'SELECT' ? 'change' : 'input', () => { v.deger = kutu.value; not.textContent = sabitDegerUyarisi(sat.alan, v.deger) || ''; });
+            // Kasada gizli saklanan kayıtlı değer bu tarayıcıya gelmez (maske): boş bırakılırsa korunur.
+            const kayitli = v.deger === GIZLI_MASKE;
+            if (kayitli) kutu.placeholder = 'Kayıtlı (gizli) — değiştirmek için yazın';
+            kutu.addEventListener(kutu.tagName === 'SELECT' ? 'change' : 'input', () => { v.deger = kutu.value || (kayitli ? GIZLI_MASKE : ''); not.textContent = sabitDegerUyarisi(sat.alan, v.deger) || ''; });
             // Adı gizli alanın sabit değeri (ör. parola) maskeli; "Göster" ile açılır.
-            if (kutu.type === 'password') {
-              const goster = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false', 'aria-label': `${sat.alan.ad}: göster veya gizle` }, 'Göster');
-              goster.addEventListener('click', () => { const acik = kutu.type === 'password'; kutu.type = acik ? 'text' : 'password'; goster.textContent = acik ? 'Gizle' : 'Göster'; goster.setAttribute('aria-pressed', acik ? 'true' : 'false'); });
-              girdi = h('span', { class: 'parola-kutusu' }, kutu, goster);
-            }
+            if (kutu.type === 'password') girdi = h('span', { class: 'parola-kutusu' }, kutu, gosterGizleDugmesi(kutu, sat.alan.ad));
           } else if (v.kaynak === 'tablo') {
             girdi = h('select', { 'aria-label': `${a.no}. adım ${sat.alan.ad} tablo sütunu` }, h('option', { value: '' }, '— tablo sütunu —'),
               tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', { value: basvuru(t.ad, c.ad), selected: v.deger === basvuru(t.ad, c.ad) }, `${t.ad} → ${c.ad}`)))),
@@ -321,7 +323,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     if (!(riskliOrtamMi(test) ? await canliOnayIste(test) : await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
     dene.disabled = true;
     try {
-      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: test.id, taslak: { baslik: baslik.value.trim() || 'Taslak akış senaryosu', icerik }, bitti: () => {} });
+      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: test.id, taslak: { baslik: baslik.value.trim() || 'Taslak akış senaryosu', icerik, ...(senaryo ? { kaynakSenaryoId: senaryo.id } : {}) }, bitti: () => {} });
     } catch (e) { bildir(e.message, 'hata'); } finally { dene.disabled = false; }
   });
 

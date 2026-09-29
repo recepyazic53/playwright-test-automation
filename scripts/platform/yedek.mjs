@@ -74,6 +74,21 @@ import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
  */
 
 export const YEDEK_UZANTISI = '.tayedek';
+
+/**
+ * Dışa aktarılan yedeğin önerilen dosya adı: çalışma alanı adı + yerel tarih/saat (ör. "Ekip-Calisma-2026-09-30-1415.tayedek").
+ * Bilgisayar adı dosya adında GEÇMEZ (yalnız dosyanın içinde, manifestte). Ad HTTP başlığına yazıldığı için ASCII'ye
+ * çevrilir (Türkçe harfler karşılığına, diğerleri "-"); ad boşsa ya da çalışma alanı yoksa "nobetci-yedek".
+ * @param {string | null | undefined} alanAdi @param {Date} [zaman]
+ */
+export function yedekDosyaAdi(alanAdi, zaman = new Date()) {
+  const tr = { ç: 'c', Ç: 'C', ğ: 'g', Ğ: 'G', ı: 'i', İ: 'I', ö: 'o', Ö: 'O', ş: 's', Ş: 'S', ü: 'u', Ü: 'U' };
+  const ad = String(alanAdi ?? '').replace(/[çÇğĞıİöÖşŞüÜ]/g, (h) => tr[/** @type {keyof typeof tr} */ (h)])
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
+  const tarih = `${zaman.getFullYear()}-${iki(zaman.getMonth() + 1)}-${iki(zaman.getDate())}-${iki(zaman.getHours())}${iki(zaman.getMinutes())}`;
+  return `${ad || 'nobetci-yedek'}-${tarih}${YEDEK_UZANTISI}`;
+}
 export const BICIM_SURUMU = 2;
 export const ESKI_BICIM_SURUMU = 1;
 export const OTOMATIK_SAKLAMA_SAYISI = 30;

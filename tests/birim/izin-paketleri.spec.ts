@@ -183,6 +183,9 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
       await expect(page.getByRole('list', { name: 'Açılacak izinler' }).locator('li[data-izin]')).toHaveCount(3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       await page.getByRole('button', { name: 'Bu 3 izni aç ve devam et' }).click();
+      await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('Giriş');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+      await page.getByRole('button', { name: 'Devam' }).click();
       await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
       const durum = (await nobetciApi(n, '/platform/izinler')) as { izinler?: Record<string, boolean>; degisiklikler?: unknown[] };
       expect(acikOlanlar(durum.izinler ?? {})).toEqual(['giris-bilgisi', 'servis-istekleri', 'web-erisimi']);

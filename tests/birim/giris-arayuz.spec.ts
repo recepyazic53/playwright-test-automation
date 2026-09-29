@@ -196,12 +196,18 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   await ekranGoruntusu(page, '01-giris-profilleri-tarif-listesi');
 
   const onceki = (await api(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`) as { ortamlar: Array<{ ortamAd: string; tarif: Record<string, unknown> }> }).ortamlar.find((o) => o.ortamAd === 'TEST')?.tarif;
-  await bolum.getByRole('button', { name: 'TEST: giriş tarifini düzenle' }).click();
+  await bolum.getByRole('button', { name: 'Düzenle — TEST giriş tarifi' }).click();
   const form = page.locator('form.tarif-formu');
   await expect(form.getByRole('heading', { name: 'Giriş tarifi: TEST' })).toBeVisible();
   await expect(form.getByLabel('Kullanıcı adı alanı')).toHaveValue('#eski-kullanici');
   await expect(form.getByRole('button', { name: /Proje varsayılanına dön/ })).toHaveCount(0);
   await expect(form.getByRole('button', { name: 'Kayıtlı tarifi sil' })).toBeVisible();
+  // Form kartların üstünde açılır: düzenlenen ortamın kartı da işaretli (diğeri değil).
+  const testKarti = bolum.locator('li[data-ortam]').filter({ hasText: 'TEST' });
+  await expect(testKarti).toHaveClass(/duzenleniyor/);
+  await expect(testKarti).toHaveAttribute('aria-current', 'true');
+  await expect(testKarti.locator('.duzenleniyor-rozeti')).toHaveText('Yukarıda düzenleniyor');
+  await expect(bolum.locator('li[data-ortam]').filter({ hasText: 'CANLI' }).locator('.duzenleniyor-rozeti')).toHaveCount(0);
 
   // Vazgeç → hiçbir istek gitmez.
   await form.getByRole('button', { name: 'Varsayılanları öner' }).click();
@@ -267,7 +273,7 @@ test('Giriş Ekranlar\'da listelenmez (ne sol menüde ne Ortak akışlar\'da); y
   await page.goto('/#/ayarlar/giris');
   const bolum = page.locator('.giris-tarifi-bolumu');
   await expect(bolum.locator('li[data-ortam]').filter({ hasText: 'TEST' })).toContainText('Kaydedilmiş');
-  await bolum.getByRole('button', { name: 'TEST: giriş tarifini düzenle' }).click();
+  await bolum.getByRole('button', { name: 'Düzenle — TEST giriş tarifi' }).click();
   const form = page.locator('form.tarif-formu');
   await expect(form.getByRole('heading', { name: 'Giriş tarifi: TEST' })).toBeVisible();
   await expect(form.locator('.giris-ozet li')).toContainText(['Kullanıcı adını yaz', 'Parolayı yaz']);

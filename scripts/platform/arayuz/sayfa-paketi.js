@@ -14,7 +14,7 @@
 // diyagramdan eklenir. Ortak akışın senaryosu yoktur (önizlemede senaryo / ortam seçimi yok); ekranlara ekleme otomatik yapılmaz.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
-import { api, bildir, dosyaSecimi, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { api, bildir, dosyaSecimi, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { bicimIndirBaglantisi, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz } from './ekran-ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
@@ -244,10 +244,11 @@ function eklemeKutulari(s, secenek) {
  * @param {AkisSecenekleri} s @param {(sinif: string, ikonAd: string, baslik: string, aciklama: Node, eylem: Node, not: string) => HTMLElement} kutu
  */
 function bosBaslaKutusu(s, kutu) {
-  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Ödeme adımları', 'aria-label': 'Ortak akışın adı', autocomplete: 'off' });
+  // Ad kutusunun görünür etiketi var (yalnız yer tutucu değil) ve alana bağlı.
+  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Ödeme adımları', autocomplete: 'off', id: yeniKimlik('ortak-akis-adi') });
   const hata = h('p', { class: 'hata-metni kucuk', role: 'alert', hidden: true });
   const olustur = h('button', { type: 'submit', class: 'birincil' }, ikon('arti'), 'Boş ortak akış oluştur');
-  const form = h('form', { class: 'bos-baslat-formu', 'aria-label': 'Boş ortak akış' }, ad, hata, olustur);
+  const form = h('form', { class: 'bos-baslat-formu', 'aria-label': 'Boş ortak akış' }, h('label', { for: ad.id }, 'Ortak akışın adı'), ad, hata, olustur);
   form.addEventListener('submit', async (o) => {
     o.preventDefault();
     hata.hidden = true;

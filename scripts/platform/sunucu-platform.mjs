@@ -156,7 +156,7 @@ import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { homedir, hostname } from 'node:os';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEGISIKLIK_SAYACI_META } from './veritabani/baglanti.mjs';
@@ -185,7 +185,7 @@ import {
 import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaInceltme, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
 import {
   YEDEK_KLASORU_AYARI, YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, seciliYedekKlasoru, varsayilanYedekKlasoru, veriKlasoruYedekYolu,
-  yedekBoyutTahmini, yedekDosyasiYaz
+  yedekBoyutTahmini, yedekDosyaAdi, yedekDosyasiYaz
 } from './yedek.mjs';
 import {
   KlasorHatasi, YENIDEN_BASLATMA_DEGISKENI, ayarDosyasiYolu, klasorYoluDogrula, veriAyariniOku, veriAyariniYaz, veriKlasoruDurumu,
@@ -1041,11 +1041,6 @@ function govdeyiDosyayaYaz(req, yol, sinir) {
     cikis.on('finish', () => { if (!bitti) { bitti = true; coz(toplam); } });
     req.pipe(cikis);
   });
-}
-
-/** @param {Date} t */
-function dosyaZamani(t) {
-  return t.toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');
 }
 
 // ---------------------------------------------------------------------------------------
@@ -2501,13 +2496,14 @@ export async function platformIsteginiIsle(req, res, baglam) {
           return a;
         });
         anahtar.fill(0);
-        const makineAdi = hostname().replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40) || 'makine';
+        // Önerilen dosya adı: çalışma alanı adı + tarih (bilgisayar adı yalnız dosyanın içinde, manifestte).
+        const alanAdi = aktifAlan && !aktifAlan.sabit ? aktifAlan.ad : null;
         const id = randomBytes(8).toString('hex');
         /** @type {DisaAktarmaIsi} */
         const is = {
           id, durum: 'hazirlaniyor', asama: 'başlıyor', yuzde: 0, bayt: null, mesaj: null,
           dosya: join(varsayilanYedekKlasoru(db), '.disa-aktarma', `${id}${YEDEK_UZANTISI}`),
-          dosyaAdi: `platform-yedek-${makineAdi}-${dosyaZamani(new Date())}${YEDEK_UZANTISI}`,
+          dosyaAdi: yedekDosyaAdi(alanAdi),
           boyut: null, medya: null, sonKullanma: Date.now() + DISA_AKTARMA_SAKLAMA_MS
         };
         disaAktarmaIsleri.set(id, is);

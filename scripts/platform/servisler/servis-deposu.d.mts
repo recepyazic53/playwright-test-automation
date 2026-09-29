@@ -73,6 +73,8 @@ export declare function servisSil(vt: Veritabani, id: string, yapan?: string): b
 export declare function senaryoIceriginiDogrula(icerik: unknown): ServisSenaryoIcerigi;
 export declare function servisSenaryosuKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; servisId: string; baslik: string; kapsam?: ServisKapsami; kosuyaDahil?: boolean; sira?: number | null; icerik: unknown; yapan?: string;
+  /** Kopyada kaynak senaryo (aynı servis): maskeli gelen gizli sabitler onun değeriyle doldurulur. */
+  kaynakSenaryoId?: string;
 }): string;
 export declare function servisSenaryosuGetir(vt: Veritabani, id: string): ServisSenaryosu | undefined;
 export declare function kosuOrtamlariDogrula(v: unknown): Record<string, boolean> | undefined;

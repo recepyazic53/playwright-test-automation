@@ -4321,3 +4321,38 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ekleme-kutulari.tekli { grid-template-columns: minmax(0, 1fr); }
 .ekleme-kutulari.tekli .ekleme-kutusu { min-height: 0; }
 @media (max-width: 900px) { .ekleme-kutulari.ikili { grid-template-columns: minmax(0, 1fr); } }
+
+/* ============================================================================================================================
+   v1.4 KULLANILABILIRLIK — GIRIS VE GUVENLIK (ku14-giris-guvenlik): kurulum sihirbazi giris sorusu, karsilama kavram semasi,
+   ortam satiri, veri klasoru yolu, Turkce dosya secme dugmesi, giris tarifi kartinda "duzenleniyor" isareti, gizli sabit.
+   ============================================================================================================================ */
+/* Karşılama: "Çalışma alanı (kasa) › Proje › Ortam" şeması. */
+.kavram-semasi { max-width: 560px; margin: 14px auto 0; text-align: center; min-width: 0; }
+.kavram-semasi > p { margin: 0; }
+.kavram-listesi { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; padding: 0; margin: 8px 0 0; }
+.kavram-kutusu { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: var(--yaricap-m); background: var(--panel-2);
+  box-shadow: 0 0 0 1px var(--cizgi); font-size: 13px; }
+.kavram-kutusu .ikon { width: 15px; height: 15px; color: var(--vurgu); }
+.kavram-oku { color: var(--metin-2); font-weight: 600; }
+/* Karşılama > Ayrıntılar: uzun veri klasörü yolu ortalanır, kutudan taşmaz (satır kırılır). */
+.veri-klasoru-ayrintilari { max-width: min(640px, 100%); text-align: center; }
+.veri-klasoru-satiri { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 8px; min-width: 0; }
+.veri-klasoru-satiri code { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-all; text-align: left; }
+/* Ortamlar: "Ortam türü" etiketi diğer alan etiketleriyle aynı (büyük harf / eşaralıklı değil); TEST satırında × yerine kilit. */
+.ortam-turu-secimi > legend { font: inherit; font-size: 13px; font-weight: 560; letter-spacing: normal; text-transform: none; color: var(--metin); }
+.ortam-satiri-bos { display: grid; place-items: center; margin-top: 25px; width: 38px; height: 40px; color: var(--metin-2); }
+.ortam-satiri-bos .ikon { width: 16px; height: 16px; margin: 0; }
+/* Sihirbaz: isteğe bağlı giriş sorusu. */
+fieldset.giris-sorusu { border: 0; padding: 0; margin: 0 0 var(--b3); display: grid; gap: 8px; min-width: 0; background: none; }
+.giris-sorusu-secenegi { margin: 0; }
+/* Dosya seçme: tarayıcının kendi (İngilizce) düğmesi yerine Türkçe düğme; girdi görünmez ama klavyeyle odaklanır. */
+.dosya-secimi { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; max-width: 100%; }
+.dosya-secimi .dosya-secimi-notu { min-width: 0; overflow-wrap: anywhere; }
+.gorunmez-dosya:focus-visible + .dosya-sec-dugmesi { outline: 2px solid var(--vurgu); outline-offset: 2px; }
+/* Giriş tarifi: formun altındaki kartta hangi ortamın düzenlendiği. */
+.kayit-listesi > li.duzenleniyor { box-shadow: inset 3px 0 0 var(--vurgu), 0 0 0 1px color-mix(in srgb, var(--vurgu) 45%, transparent); }
+.duzenleniyor-rozeti { display: inline-flex; align-items: center; gap: 4px; }
+.duzenleniyor-rozeti .ikon { width: 12px; height: 12px; margin: 0; }
+/* Servis senaryosu: gizli sabit + "Tabloya gizli sütun olarak taşı". */
+.sabit-deger.gizli-sabit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.gizli-tasi { white-space: normal; text-align: left; }

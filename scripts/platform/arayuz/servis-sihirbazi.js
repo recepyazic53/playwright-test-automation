@@ -461,8 +461,8 @@ export function postmanAktarimi(kap, proje, ortamlar) {
   };
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Postman koleksiyonu (REST)'), mesaj.kutu,
     h('p', { class: 'soluk kucuk' }, 'Postman\'den "Collection v2.1" (ya da v2.0) olarak dışa aktarılan JSON. Koleksiyonunuz yoksa, yalnız adresiniz varsa "Adım adım" sekmesinde "REST (JSON)" türünü seçin. Dosyalar yalnızca okunur; hiçbir servise istek atılmaz. Her klasör ayrı bir servis, klasördeki istekler o servisin senaryoları olur; klasörsüz istekler koleksiyon adıyla tek serviste toplanır. {{değişken}} değerleri bir test verisi tablosuna gider; gizli değerler yalnız siz onaylarsanız şifreli sütuna yazılır.'),
-    alan('Koleksiyon dosyası', koleksiyonDosyasi, { zorunlu: true, icerik: h('div', {}, koleksiyonDosyasi, koleksiyonSecimi.not) }),
-    alan('Ortam dosyası (isteğe bağlı)', ortamDosyasi, { icerik: h('div', {}, ortamDosyasi, ortamSecimi.not), yardim: 'Postman environment JSON: {{değişken}} değerleri buradan çözülür (koleksiyon değişkenlerini ezer).' })), sonuc);
+    alan('Koleksiyon dosyası', koleksiyonDosyasi, { zorunlu: true, icerik: h('div', {}, koleksiyonSecimi.kutu) }),
+    alan('Ortam dosyası (isteğe bağlı)', ortamDosyasi, { icerik: h('div', {}, ortamSecimi.kutu), yardim: 'Postman environment JSON: {{değişken}} değerleri buradan çözülür (koleksiyon değişkenlerini ezer).' })), sonuc);
 }
 
 function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {

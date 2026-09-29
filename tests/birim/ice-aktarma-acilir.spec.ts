@@ -64,10 +64,16 @@ test('arayüz: önizlemede türler ve gruplar kapalı; başlıkta sayılar + ü�
 
     await p.goto('/#/ayarlar/yedekleme');
     await p.getByRole('button', { name: 'Yedek dosyası seç…' }).click();
+    // Tarayıcının kendi (İngilizce "Choose File") düğmesi yerine Türkçe düğme; girdi görünmez ama etiketiyle erişilebilir.
+    await expect(p.locator('.dosya-sec-dugmesi')).toHaveText('Dosya seç');
+    await expect(p.getByLabel('Yedek dosyası')).toHaveClass(/gorunmez-dosya/);
     await p.getByLabel('Yedek dosyası').setInputFiles({ name: 'onizleme.tayedek', mimeType: 'application/octet-stream', buffer: yedek });
     await p.getByRole('textbox', { name: 'Yedeğin parolası (zorunlu)' }).fill(PAROLA_A);
     await p.getByRole('button', { name: 'Yükle ve önizle' }).click();
     await expect(p.getByRole('heading', { name: 'Yedek önizlemesi' })).toBeVisible({ timeout: 60_000 });
+    // Önizlemede ham tablo adı (test_verisi_profilleri, servis_kosulari…) görünmez; kullanıcı dilinde etiketler.
+    expect(await p.locator('main').innerText()).not.toMatch(/\b[a-z]+_[a-z_]+\b/);
+    await expect(p.locator('[data-tablo="test_verisi_profilleri"] .acilir-ad').first()).toHaveText('Test verisi tablo satırları');
 
     // Varsayılan: hedef proje ve özet açık; tüm türler/gruplar kapalı, hiçbir satır çizilmemiş, sayfa kısa.
     await expect(p.getByRole('region', { name: 'Hedef proje' }).getByLabel('Yedekteki proje: Önizleme projesi')).toBeVisible();
@@ -170,7 +176,7 @@ test('arayüz: önizlemede türler ve gruplar kapalı; başlıkta sayılar + ü�
     await tasmaYok(p);
     await p.getByRole('button', { name: 'Seçilenleri uygula' }).click();
     await expect(p.getByRole('heading', { name: 'İçe aktarma tamamlandı' })).toBeVisible({ timeout: 60_000 });
-    const ozetSatiri = p.locator('.ozet-tablosu tbody tr').filter({ has: p.getByRole('rowheader', { name: 'Test verisi profilleri' }) });
+    const ozetSatiri = p.locator('.ozet-tablosu tbody tr').filter({ has: p.getByRole('rowheader', { name: 'Test verisi tablo satırları' }) });
     await expect(ozetSatiri.locator('td')).toHaveText(['1', '1', '0']);
     await tasmaYok(p);
     await baglam.close();

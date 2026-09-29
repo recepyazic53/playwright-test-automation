@@ -11,7 +11,7 @@
 // isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { alan, alanHatasi, api, bildir, bosDurum, dosyaSecimi, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, dosyaSecimi, gosterGizleDugmesi, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
 import { adaGoreMaskele, gizliAdMi, maskeyiGeriKoy } from './gizli-adlar.mjs';
 import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
@@ -241,7 +241,7 @@ function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
 }
 
 function soapuiAktarimi(kap, proje, ortamlar) {
-  const dosya = h('input', { type: 'file', accept: '.xml,*/*', 'aria-label': 'SoapUI proje dosyası' });
+  const dosya = h('input', { type: 'file', accept: '.xml,*/*' });
   const mesaj = mesajKutusu();
   const sonuc = h('div', {});
   let xml = '';
@@ -266,7 +266,7 @@ function soapuiAktarimi(kap, proje, ortamlar) {
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'SoapUI proje dosyası'), mesaj.kutu,
     h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Proje, ortam, takım ve test durumu özellikleri (${#Project#…}, ${#TestCase#…}) bir test verisi tablosunun sütunları olur ya da var olan bir sütuna bağlanır; Groovy tarih betikleri hesaplama kuralı olarak önerilir. İstekte özelliğe başvuran alanlar servisin alan bağları olur. Test durumunu seçince neyin nereye yazılacağını görür ve seçersiniz; gizli değerler yalnız siz onaylarsanız şifreli yazılır.'),
-    alan('Dosya', dosya), secim.not), sonuc);
+    alan('SoapUI proje dosyası', dosya, { icerik: secim.kutu })), sonuc);
 }
 
 /** Özellik hedeflerinin görünen adları (önizlemedeki "Nereden dolsun"). */
@@ -807,7 +807,8 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     for (let i = 2; mevcut.has(baslik); i++) baslik = `${x.baslik} (kopya ${i})`;
     const { kosuOrtamlari: _ortamlar, ...icerik } = x.icerik;
     try {
-      await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik } });
+      // Gizli sabitler arayüze maskeli gelir: kaynak senaryo verilir, sunucu değerleri kasadan kopyalar.
+      await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik, kaynakSenaryoId: x.id } });
       bildir(`Kopya oluşturuldu: "${baslik}" (Koşuda kapalı).`);
     } catch (e) { bildir(e.message, 'hata'); }
     yenile();
@@ -993,7 +994,7 @@ async function deneVeGoster(proje, s, ortam, istek, baslik, dugme, yanitGeldi = 
   dugme.disabled = true;
   try {
     // Bitince Dene'nin koşu kaydı düzenleyiciye bildirilir ("Son yanıttan kontrol öner" bu yanıtı açar; kontrolü kullanıcı ekler).
-    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik },
+    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik, ...(istek.kaynakSenaryoId ? { kaynakSenaryoId: istek.kaynakSenaryoId } : {}) },
       bitti: (is) => { const kosuId = is?.satirlar?.[0]?.sonuc?.kosuId; if (kosuId && yanitGeldi) yanitGeldi(kosuId); } });
   } catch (e) { bildir(e.message, 'hata'); } finally { dugme.disabled = false; }
 }
@@ -1213,7 +1214,26 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     });
     return h('span', { class: 'akis-degeri-girdisi', title: 'Akış çalışırken önceki adımın yanıtından okunan değer yazılır' }, h('code', {}, '${akis:'), g, h('code', {}, '}'), not);
   };
-  const degerKontrolu = (alanT, v, tazele) => {
+  /**
+   * Gizli sabiti tabloya taşı (onayla): sunucu değeri — yeni yazılan ya da kayıtlı senaryodaki — "<servis> gizli değerleri" tablosunun
+   * gizli sütununa yazar; alan o sütuna bağlanır (kaynak: Tablodan). Senaryo kaydedilince sabit değer senaryodan kalkar.
+   */
+  const gizliTabloyaTasi = async (alanT, v, yeni, dugme, yenidenCiz) => {
+    const tamam = await onayIste({ baslik: 'Değer tabloya gizli sütun olarak taşınsın mı?', ikonAd: 'liste', dugme: 'Taşı',
+      metin: `"${alanT.ad}" değeri "${s.ad} gizli değerleri" tablosunun gizli sütununa yazılır (kasada şifreli; listelerde görünmez) ve alan o sütuna bağlanır. Senaryoyu kaydedince sabit değer senaryodan kalkar.` });
+    if (!tamam) return;
+    try {
+      const r = await mesgulIken(dugme, 'Taşınıyor…', () => api('/platform/servis/senaryo/gizli-tabloya-tasi', { govde: {
+        projeId: proje.id, servisId: s.id, alanAdi: alanT.ad, ...(senaryo ? { senaryoId: senaryo.id } : {}), ...(yeni ? { deger: yeni } : {}) } }));
+      const { tablolar: guncel } = await api(`/platform/tablolar?projeId=${q(proje.id)}`);
+      tablolar.splice(0, tablolar.length, ...guncel);
+      v.kaynak = 'tablo';
+      v.deger = r.basvuru;
+      yenidenCiz();
+      bildir(`"${alanT.ad}" değeri "${r.tablo}" tablosunun gizli "${r.sutun}" sütununa taşındı; senaryoyu kaydedin.`);
+    } catch (e) { bildir(e.message, 'hata'); }
+  };
+  const degerKontrolu = (alanT, v, tazele, yenidenCiz = () => {}) => {
     if (v.kaynak === 'tablo') return tabloDegeri(alanT, v);
     if (v.kaynak === 'akis') return akisDegeri(alanT, v, tazele);
     if (v.kaynak === 'parametre') {
@@ -1242,19 +1262,20 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     } else if (alanT.tip === 'tarihSaat') {
       g = h('input', { type: 'datetime-local', step: '1', 'aria-label': alanT.ad, value: (v.deger || '').slice(0, 19) });
     } else if (gizliMi(alanT.ad)) {
-      // Adı maskeleme listesinde (parola, token… + Ayarlar > Güvenlik > Maskeleme eki) olan alanın sabit değeri gizli yazılır;
-      // "Göster" ile açılır. Değer senaryoda aynen saklanır (saklama biçimi değişmez).
-      g = h('input', { type: 'password', autocomplete: 'new-password', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '' });
-      const goster = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false', 'aria-label': `${alanT.ad}: göster veya gizle` }, 'Göster');
-      goster.addEventListener('click', () => {
-        const acik = g.type === 'password';
-        g.type = acik ? 'text' : 'password';
-        goster.textContent = acik ? 'Gizle' : 'Göster';
-        goster.setAttribute('aria-pressed', acik ? 'true' : 'false');
-      });
-      g.addEventListener('input', () => guncelle(g.value));
-      not.textContent = sabitDegerUyarisi(alanT, v.deger || '') || '';
-      return h('span', { class: 'sabit-deger gizli-sabit' }, h('span', { class: 'parola-kutusu' }, g, goster), not);
+      // Adı maskeleme listesinde (parola, token… + Ayarlar > Güvenlik > Maskeleme eki) olan alanın sabit değeri gizli yazılır ve
+      // kasada ayrı bir gizli değer olarak saklanır: kayıtlı değer bu tarayıcıya hiç gelmez (yerinde maske durur); boş bırakılırsa
+      // korunur, yeni yazılan değer onun yerine geçer. "Göster" yalnız yeni yazılanı açar.
+      const kayitli = v.deger === METIN_MASKESI;
+      g = h('input', { type: 'password', autocomplete: 'new-password', spellcheck: 'false', 'aria-label': alanT.ad, value: kayitli ? '' : v.deger || '',
+        placeholder: kayitli ? 'Kayıtlı (gizli) — değiştirmek için yazın' : '' });
+      const goster = gosterGizleDugmesi(g, alanT.ad);
+      g.addEventListener('input', () => guncelle(g.value || (kayitli ? METIN_MASKESI : '')));
+      not.textContent = kayitli ? '' : sabitDegerUyarisi(alanT, v.deger || '') || '';
+      // Öneri: sabit parola yerine test verisi tablosunun gizli sütunu (cURL içe aktarmadaki gizli değerle aynı yer).
+      const tasi = h('button', { type: 'button', class: 'kucuk-dugme hayalet gizli-tasi', title: 'Değer "<servis> gizli değerleri" tablosunun gizli sütununa yazılır; alan o sütuna bağlanır. Ortam başına değer tabloda tutulur.' },
+        ikon('liste'), 'Tabloya gizli sütun olarak taşı');
+      tasi.addEventListener('click', () => gizliTabloyaTasi(alanT, v, g.value, tasi, yenidenCiz));
+      return h('span', { class: 'sabit-deger gizli-sabit' }, h('span', { class: 'parola-kutusu' }, g, goster), tasi, not);
     } else {
       g = h('input', { type: 'text', inputmode: alanT.tip === 'tamsayi' || alanT.tip === 'ondalik' ? 'decimal' : null,
         autocomplete: 'off', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '', placeholder: alanT.tip === 'tamsayi' ? 'sayı' : alanT.tip === 'ondalik' ? '0.00' : '' });
@@ -1349,7 +1370,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Zorunlu alan' }, '*') : null,
             h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
           h('span', { role: 'cell' }, kaynak),
-          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele), eksikNotu, kuralNotu(sat.yol, v)),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele, () => satirCiz()), eksikNotu, kuralNotu(sat.yol, v)),
           h('span', { role: 'cell' }, pin));
         tazele();
       };
@@ -1395,7 +1416,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       h('div', { class: 'govde-duzen' }, alan(rest ? `İstek gövdesi${i.http?.icerikTuru ? ` (${i.http.icerikTuru})` : ''}` : 'İstek gövdesi (SOAP zarfı)', govde, { yardim: rest
         ? 'GET / DELETE için boş bırakılabilir. Değerler ${Tablo.Sütun}, ${akis:Ad} ya da tarih kuralıyla yazılır; JSON gövdede değerler kaçışlanır.'
         : 'Parametreler adıyla yazılır: ${MUSTERI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()),
-      h('div', { class: 'dugmeler' }, gizliGosterDugmesi, h('span', { class: 'soluk kucuk' }, 'Adı gizli sayılan alanların (parola, token… ve Ayarlar > Güvenlik > Maskeleme ekleri) değeri maskeli gösterilir; senaryoda aynen saklanır.')));
+      h('div', { class: 'dugmeler' }, gizliGosterDugmesi, h('span', { class: 'soluk kucuk' }, 'Adı gizli sayılan alanların (parola, token… ve Ayarlar > Güvenlik > Maskeleme ekleri) değeri kasada ayrı, gizli saklanır ve burada •••••• olarak kalır (dokunulmazsa korunur); "Gizli değerleri göster" yalnız yeni yazdığınızı açar.')));
   };
   const parametrePaneli = () => {
     const ekle = (ad) => { govde.setRangeText(`\${${ad}}`, govde.selectionStart, govde.selectionEnd, 'end'); govde.focus(); };
@@ -1608,7 +1629,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (eksik) { mesaj.goster(eksikMetni(eksik)); return; }
     let taslakIcerik;
     try { taslakIcerik = icerikAl(); } catch (e) { mesaj.goster(e.message); return; }
-    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik }, baslik.value.trim() || 'Taslak', dene,
+    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik, kaynakSenaryoId: senaryo?.id }, baslik.value.trim() || 'Taslak', dene,
       (kosuId) => { sonDeneKosusu = kosuId; if (!yanitPaneli.hidden) yanitPaneliAc(kosuId); });
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' },

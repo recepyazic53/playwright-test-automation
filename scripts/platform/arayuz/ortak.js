@@ -373,7 +373,56 @@ export function h(etiket, ozellikler, ...cocuklar) {
     else el.setAttribute(ad, String(deger));
   }
   ekle(el, cocuklar);
+  if (ozellikler && ozellikler['aria-label']) adiGorunenMetinleUyumla(el);
   return el;
+}
+
+// ---- Erişilebilir ad = görünen metinle başlar (WCAG 2.5.3 "Label in Name") ----
+// Görünen metni olan düğme / bağlantı / sekme / menü öğesinin aria-label'ı bağlam için daha uzun olabilir (ör. hangi ortamın
+// düğmesi), ama GÖRÜNEN METİNLE BAŞLAMALIDIR: sesli komut kullanıcısı ekranda gördüğünü söyler ("Elle tanımla"), ekran okuyucu
+// da önce onu okur. h() ile kurulan her öğede kendiliğinden uygulanır: "TEST: giriş tarifi ekle" + görünen "Elle tanımla" →
+// "Elle tanımla — TEST: giriş tarifi ekle" (bağlam korunur). Yalnız simge / sayı olan metin (×, ⋯, 3) ve uzun kart metinleri
+// (40+ karakter; kartın adı içeriğidir) dokunulmaz.
+const AD_UYUMLU_ETIKETLER = new Set(['BUTTON', 'A', 'SUMMARY']);
+const AD_UYUMLU_ROLLER = new Set(['button', 'tab', 'menuitem', 'menuitemradio', 'menuitemcheckbox', 'link', 'switch', 'option']);
+const duzAd = (m) => String(m).replace(/\s+/g, ' ').trim();
+/** Öğenin görünen metni (aria-hidden ve görsel olarak gizli .gorunmez parçalar hariç). @param {Node} dugum */
+function gorunenMetin(dugum) {
+  let m = '';
+  for (const c of dugum.childNodes) {
+    if (c.nodeType === 3) m += c.textContent || '';
+    else if (c.nodeType === 1 && c.getAttribute('aria-hidden') !== 'true' && !c.classList.contains('gorunmez') && !c.hidden) m += ` ${gorunenMetin(c)} `;
+  }
+  return m;
+}
+/**
+ * aria-label görünen metinle başlamıyorsa başına görünen metni ekler. h() kendiliğinden çağırır; aria-label'ı sonradan
+ * (setAttribute) ya da metni değişen (Göster ↔ Gizle) öğede çağıran yeniden çağırır. @param {Element} el @param {string} [taban] asıl bağlam
+ */
+export function adiGorunenMetinleUyumla(el, taban) {
+  if (!AD_UYUMLU_ETIKETLER.has(el.tagName) && !AD_UYUMLU_ROLLER.has(el.getAttribute('role') || '')) return;
+  const etiket = duzAd(taban ?? el.getAttribute('aria-label') ?? '');
+  const gorunen = duzAd(gorunenMetin(el));
+  if (!etiket || !gorunen || gorunen.length > 40 || !/\p{L}{2}/u.test(gorunen)) return;
+  if (etiket.toLocaleLowerCase('tr').startsWith(gorunen.toLocaleLowerCase('tr'))) { if (taban !== undefined) el.setAttribute('aria-label', etiket); return; }
+  el.setAttribute('aria-label', `${gorunen} — ${etiket}`);
+}
+
+/**
+ * Parola / gizli değer kutusunun "Göster" düğmesi: metin Göster ↔ Gizle, aria-pressed; erişilebilir ad görünen metinle başlar
+ * ("Göster — Parola: göster veya gizle"). @param {HTMLInputElement} girdi @param {string} etiket alanın adı
+ */
+export function gosterGizleDugmesi(girdi, etiket) {
+  const taban = `${etiket}: göster veya gizle`;
+  const dugme = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false', 'aria-label': taban }, 'Göster');
+  dugme.addEventListener('click', () => {
+    const acik = girdi.type === 'password';
+    girdi.type = acik ? 'text' : 'password';
+    dugme.textContent = acik ? 'Gizle' : 'Göster';
+    dugme.setAttribute('aria-pressed', acik ? 'true' : 'false');
+    adiGorunenMetinleUyumla(dugme, taban);
+  });
+  return dugme;
 }
 
 /** @typedef {{ metin: string; satir?: HTMLElement | null; odak?: () => HTMLElement | null }} KapatmaNedeni */
@@ -597,10 +646,13 @@ export function alanHatasi(girdi, mesaj) {
  * Dosya seçme girdisi: her seçimden sonra girdi SIFIRLANIR (value = ''), böylece aynı adlı dosya yeniden seçilince "change" yeniden
  * gelir ve dosya yeniden okunur (düzeltilmiş dosya eski sonucun yerine geçer). Seçilen dosyalar saklanır; "not" öğesi girdinin
  * yanında son seçilen dosyanın adını ve seçim saatini gösterir. secildi: her seçimde (dosyalarla) çağrılır.
- * @param {HTMLInputElement} girdi @param {(dosyalar: File[]) => void} [secildi]
- * @returns {{ dosyalar: () => File[]; not: HTMLElement; temizle: () => void }}
+ * TÜRKÇE DÜĞME: kutu = görünmez girdi + "Dosya seç" düğmesi (tıklayınca girdinin dosya penceresi açılır) + not.
+ * Tarayıcının kendi (dile göre "Choose File") düğmesi görünmez; girdi klavyeyle odaklanır, odak halkası düğmede görünür, ekran
+ * okuyucu girdiyi alanın etiketiyle okur. Çağıran kutuyu girdinin yerine yerleştirir (alan(..., { icerik: secim.kutu })).
+ * @param {HTMLInputElement} girdi @param {(dosyalar: File[]) => void} [secildi] @param {{ dugme?: string }} [secenekler]
+ * @returns {{ dosyalar: () => File[]; not: HTMLElement; kutu: HTMLElement; temizle: () => void }}
  */
-export function dosyaSecimi(girdi, secildi) {
+export function dosyaSecimi(girdi, secildi, secenekler = {}) {
   /** @type {File[]} */
   let secilen = [];
   const not = h('span', { class: 'dosya-secimi-notu kucuk soluk', 'aria-live': 'polite' });
@@ -612,7 +664,24 @@ export function dosyaSecimi(girdi, secildi) {
     not.textContent = `Seçilen: ${yeni.map((f) => f.name).join(', ')} · ${new Date().toLocaleTimeString('tr-TR')}`;
     if (secildi) secildi(yeni);
   });
-  return { dosyalar: () => secilen, not, temizle: () => { secilen = []; not.textContent = ''; } };
+  if (!girdi.id) girdi.id = yeniKimlik('dosya');
+  /** @type {HTMLElement | null} */
+  let kutu = null;
+  return {
+    dosyalar: () => secilen, not, temizle: () => { secilen = []; not.textContent = ''; },
+    // İlk istendiğinde kurulur: kutuyu kullanmayan (kendi seçme alanı olan) çağıranın girdisi yerinden oynamaz.
+    get kutu() {
+      if (!kutu) {
+        girdi.classList.add('gorunmez-dosya');
+        // Görsel düğme: fareyle tıklanır (girdiyi açar); klavye ve ekran okuyucu girdinin kendisini kullanır (odak halkası düğmede
+        // görünür, CSS). Düğme erişilebilir ağaçta yok: girdinin adı alanın etiketi olarak kalır.
+        const dugme = h('button', { type: 'button', class: 'kucuk-dugme dosya-sec-dugmesi', tabindex: '-1', 'aria-hidden': 'true', onclick: () => girdi.click() },
+          ikon('klasor'), secenekler.dugme || (girdi.multiple ? 'Dosyaları seç' : 'Dosya seç'));
+        kutu = h('span', { class: 'dosya-secimi' }, girdi, dugme, not);
+      }
+      return kutu;
+    }
+  };
 }
 
 /**
@@ -626,14 +695,7 @@ export function parolaAlani(etiket, secenekler = {}) {
     name: secenekler.ad, spellcheck: 'false'
   });
   if (secenekler.kayitli && secenekler.kayitli.dolu) girdi.placeholder = `${secenekler.kayitli.maske} kayıtlı — değiştirmek için yazın`;
-  const goster = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false' }, 'Göster');
-  goster.addEventListener('click', () => {
-    const acik = girdi.type === 'password';
-    girdi.type = acik ? 'text' : 'password';
-    goster.textContent = acik ? 'Gizle' : 'Göster';
-    goster.setAttribute('aria-pressed', acik ? 'true' : 'false');
-  });
-  goster.setAttribute('aria-label', `${etiket}: ${'göster veya gizle'}`);
+  const goster = gosterGizleDugmesi(girdi, etiket);
   const satir = h('div', { class: 'parola-satiri' }, h('div', { class: 'parola-kutusu' }, girdi, goster));
   if (secenekler.kayitli && secenekler.kayitli.dolu && secenekler.gosterFn) {
     const kayitliGoster = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('goz'), 'Kayıtlı değeri göster');
@@ -644,6 +706,7 @@ export function parolaAlani(etiket, secenekler = {}) {
         girdi.type = 'text';
         goster.textContent = 'Gizle';
         goster.setAttribute('aria-pressed', 'true');
+        adiGorunenMetinleUyumla(goster, `${etiket}: göster veya gizle`);
         girdi.focus();
       } catch (hata) {
         alanHatasi(girdi, hata.message);
@@ -725,6 +788,9 @@ export const boyutMetni = (bayt) => {
   if (bayt < 1024 * 1024 * 1024) return `${(bayt / 1024 / 1024).toFixed(1)} MB`;
   return `${(bayt / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
+
+/** Ortam adresi açıklaması (kurulum sihirbazı ve Ayarlar > Proje ve ortamlar): hangi adres yazılır. */
+export const ADRES_YARDIMI = 'Uygulamanın bu ortamdaki açılış (kök) adresi; giriş sayfasının adresi değil. Ör. https://test.uygulamaniz.example/ — ekran ve giriş adresleri buna göre yazılır.';
 
 /** http(s) adres kontrolü. */
 export function adresGecerliMi(metin) {

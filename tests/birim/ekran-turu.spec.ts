@@ -235,12 +235,23 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.goto('/');
       await expect(page.locator('.secim-karti')).toHaveCount(2);
       await kontrol('karsilama');
+      // Kavram ilişkisi: tek cümle + "Çalışma alanı (kasa) › Proje › Ortam" şeması.
+      await expect(page.getByRole('list', { name: 'Çalışma alanı, proje ve ortam ilişkisi' }).getByRole('listitem')).toHaveText([/^Çalışma alanı \(kasa\)/, 'Proje', /^Ortam/]);
+      // Ayrıntılar açılınca uzun veri klasörü yolu kutudan / sayfadan taşmaz.
+      const ayrinti = page.locator('.veri-klasoru-ayrintilari');
+      if (await ayrinti.count()) {
+        await ayrinti.locator('summary').click();
+        await expect(page.locator('.veri-klasoru-satiri code')).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+        const tasma = await page.locator('.veri-klasoru-satiri code').evaluate((c) => { const a = c.getBoundingClientRect(); const d = (c.closest('details') as HTMLElement).getBoundingClientRect(); return a.right - d.right; });
+        expect(tasma, 'veri klasörü yolu kutudan taşmaz').toBeLessThanOrEqual(1);
+      }
       await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
       // "Sizi tanıyalım" adımı yok (ortamlar Ortamlar adımında / Ayarlar'da); giriş profili adımı da yok.
       await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
       await expect(page.getByRole('form', { name: 'Tanışma soruları' })).toHaveCount(0);
-      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Tamam']);
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 5');
+      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Giriş', 'Tamam']);
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 6');
       await kontrol('kasa');
       await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
       await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA);
@@ -249,8 +260,11 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByLabel('Proje adı').fill('İlk kurulum projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
       // Ortamlar: satır = × | Ortam adı | Adres | Ortam türü (Test / Canlı; × yalnız ikon, TEST'te yok). CANLI "Ortam ekle" ile eklenir.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 5');
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 6');
       await expect(page.getByLabel('Ortam adı')).toHaveCount(1);
+      // "Ortam türü" etiketi diğer alan etiketleriyle aynı biçimde (büyük harf değil); adres alanında hangi adresin yazılacağı ve örnek.
+      await expect(page.locator('.ortam-turu-secimi > legend').first()).toHaveCSS('text-transform', 'none');
+      await expect(page.getByText(/açılış \(kök\) adresi; giriş sayfasının adresi değil/).first()).toBeVisible();
       await page.getByRole('button', { name: 'Ortam ekle' }).click();
       await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
       // TEST satırının türü sabit Test; eklenen satırda tür önceden seçili gelmez (zorunlu seçim, aşağıda denetlenir).
@@ -287,12 +301,19 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
       await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
       // İzinler (ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — varsayılan Hiçbiri, canlı kutusu işaretsiz; Atla hiçbir izni açmaz.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 5');
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 6');
       await expect(page.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
       await expect(page.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırabilsin' })).not.toBeChecked();
       await kontrol('izinler');
       await page.getByRole('button', { name: 'Atla' }).click();
+      // İsteğe bağlı giriş sorusu (kendi adımı): Hayır → Başlarken'de "Girişe gerek yok" işaretlenir.
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 5 / 6');
+      await expect(page.getByRole('heading', { name: 'Uygulamanız giriş istiyor mu?' })).toBeVisible();
+      await expect(page.getByRole('radio', { name: /^Emin değilim/ })).toBeChecked();
+      await kontrol('giris-sorusu');
+      await page.getByRole('radio', { name: /^Hayır, giriş gerekmiyor/ }).check();
+      await page.getByRole('button', { name: 'Devam' }).click();
       // Proje hazır: kısa özet (kaydedilen ortamlar) + "Ana sayfaya geç"; yapılacaklar / sıradaki kartlar yok.
       await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
       const ozet = page.getByRole('region', { name: 'Proje özeti' });
@@ -303,11 +324,14 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await expect(page.getByText('Sizin için yapılacaklar')).toHaveCount(0);
       await expect(page.getByText('Sırada ne var?')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);
+      await expect(ozet.getByRole('note')).toContainText('Giriş gerekmiyor.');
       await kontrol('tamam');
       // Kayıt doğrulaması: iki ortam da sunucuda, riskli seçimleri doğru.
       const { projeler } = (await nobetciApi(bos, '/platform/projeler')) as unknown as { projeler: Array<{ id: string }> };
       const { ortamlar } = (await nobetciApi(bos, `/platform/ortamlar?projeId=${projeler[0].id}`)) as unknown as { ortamlar: Array<{ ad: string; riskli: boolean | null }> };
       expect(ortamlar.map((o) => `${o.ad}:${String(o.riskli)}`).sort()).toEqual(['CANLI:true', 'TEST:false']);
+      const { baslarken } = (await nobetciApi(bos, `/platform/baslarken?projeId=${projeler[0].id}`)) as unknown as { baslarken: { adimlar: Array<{ anahtar: string; atlandi?: boolean }> } };
+      expect(baslarken.adimlar.find((a) => a.anahtar === 'giris')?.atlandi).toBe(true);
       await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
       await expect(page).toHaveURL(/#\/sonuclar/);
       // Ayarlar > Proje ve ortamlar: iki ortam listelenir, "null" metni yok.
