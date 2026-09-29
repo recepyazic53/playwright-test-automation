@@ -189,7 +189,7 @@ test('Özet rehberi bölümleri ekrandaki sırayla anlatır ve vurgular; Sonuçl
   const { page, kapat } = await sayfaAc(1440, 1000);
   await git(page, '#/sonuclar/ozet');
   const bolumler: Array<[string, string]> = [
-    ['Ürün / ekran seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık ve "Rapor al (PDF)"', '.sonuc-icerik > .sayfa-basligi'],
+    ['Ekran / servis seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık ve "Rapor al (PDF)"', '.sonuc-icerik > .sayfa-basligi'],
     ['Rapor sekmeleri', '.sonuc-sekmeleri'], ['Tarih aralığı', '.sonuc-araligi'], ['Özet kutuları', '.ozet-kutulari'],
     ['Dikkat', '.farkindalik-karti.dikkat'], ['Bakım', '.farkindalik-karti.bakim'], ['Kapsam ve güvenlik', '.farkindalik-karti.kapsam']
   ];
@@ -217,7 +217,9 @@ test('Özet rehberi bölümleri ekrandaki sırayla anlatır ve vurgular; Sonuçl
   await git(page, '#/sonuclar/ekranlar');
   await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
   await rehber.getByRole('button', { name: 'Adım 4: Rapor sekmeleri', exact: true }).click();
-  await expect(rehber).toContainText('Özet (varsayılan');
+  // "varsayılan" / "bu sayfa" çelişkisi giderildi: Özet ilk açılan sekme, Ekranlar şu an açık olan.
+  await expect(rehber).toContainText('Özet ("Genel"e tıklayınca ilk açılan sekme');
+  await expect(rehber).toContainText('Ekranlar (ekran senaryolarının koşuları; şu an açık olan sekme)');
   await page.keyboard.press('Escape');
   await kapat();
 });

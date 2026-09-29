@@ -201,7 +201,7 @@ ${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><
 
 /** @param {any[]} ogeler @param {Yazici} e */
 function kapsamTablosu(ogeler, e) {
-  return `<table><thead><tr><th scope="col">Ekran</th><th scope="col" class="s">Senaryo (koşuya dahil)</th><th scope="col" class="s">Dönemde koşmayan</th><th scope="col" class="s">Hep atlanan</th><th scope="col" class="s">Tam koşu</th><th scope="col">Model sürümü</th></tr></thead><tbody>
+  return `<table><thead><tr><th scope="col">Ekran</th><th scope="col" class="s">Senaryo (toplu koşuya dahil)</th><th scope="col" class="s">Dönemde koşmayan</th><th scope="col" class="s">Hep atlanan</th><th scope="col" class="s">Tam koşu</th><th scope="col">Model sürümü</th></tr></thead><tbody>
 ${ogeler.map((o) => `<tr><td>${e(o.ad)}</td><td class="s">${o.kapsam.senaryo} (${o.kapsam.kosuyaDahil})</td><td class="s ${o.kapsam.hicKosmayan ? 'kotu' : ''}">${o.kapsam.hicKosmayan}</td><td class="s ${o.kapsam.hepAtlanan ? 'kotu' : ''}">${o.kapsam.hepAtlanan}</td><td class="s">${o.tamKosu}</td><td class="kucuk">${o.kapsam.modelSurumu ? `v${o.kapsam.modelSurumu.surum} · ${kacis(tarihSaat(o.kapsam.modelSurumu.tarih).slice(0, 10))}` : '—'}</td></tr>`).join('')}
 </tbody></table><p class="kucuk">Model alan kapsamı ve senaryosu olmayan alan grupları sonraki sürümde eklenecek.</p>`;
 }

@@ -58,6 +58,7 @@ kullanmasını ister (`MEVCUT_TABLO_KURALI`).
 Nöbetçi hiçbir yapay zekâ servisine istek atmaz. "Yapay zekâ ile yorumla" / "Tekrar analiz et" düğmeleri, yapay zekâ aracınıza
 verilecek **gizli değer içermeyen** bir analiz/istek dosyası yazar (`veri/analiz/<ekran>-<tarih>.json`).
 
+Kısa, kod bilgisi gerektirmeyen 2 sayfalık özet: [`sayfa-paketi-ozet.md`](sayfa-paketi-ozet.md) (arayüzde "Paket nedir?" bağlantısı).
 Makine tarafından okunabilir zarf şeması: [`sayfa-paketi.schema.json`](sayfa-paketi.schema.json).
 Doğrulayıcı: `scripts/platform/ekranlar/sayfa-paketi.mjs` (sunucu ve birim testleri aynı kuralları kullanır).
 Model kuralları: `scripts/dogrulama/ekran-modeli-dogrulayici.mjs` (testlerin model yükleyicisiyle ORTAK).
@@ -102,6 +103,11 @@ bölümler → alanlar (tip, etiket, seçenekler, zorunluluk, görünürlük ko�
 adlandırılmış koşullar, senaryo düzeyi ayarlar (başlık, adım kapsamı, beklenen sonuç), iş kuralları,
 bilinmeyenler. Model kendi kendine yetmeli; alt model başvurusu (`altModel`) yalnızca projede zaten
 var olan alt modellere yapılabilir.
+
+`specDosyasi` ve `pageObject` **isteğe bağlıdır** (model koşucusu bunları kullanmaz; kod bilgisi gerektirmesin diye).
+Yazılmazsa Nöbetçi paketi yüklerken `specDosyasi` için `tests/scenarios/<anahtar>/<anahtar>.spec.ts`, `pageObject` için
+`yok (model koşucusu)` yazar; "Modeli değiştir"de mevcut modeldeki değer korunur. Yazılırsa boş olmayan metin olmalıdır.
+Eski paketler (bu alanları yazan) aynen geçerlidir.
 
 Paket, modele isteğe bağlı bir **gözlem** ekler:
 
@@ -286,7 +292,7 @@ edilince sürüm 2'ye yükselir.
 ## Model koşucusu
 
 Tüm senaryolar `tests/model-kosucu/model-senaryolari.spec.ts` tarafından üretilen testlerle koşar. Her test `@model-<senaryo kimliği>` etiketini taşır; Nöbetçi tek senaryo koşusunu bu
-etiketle daraltır, "Koşuyu başlat" Koşuda açık model senaryolarını da dahil eder.
+etiketle daraltır, "Koşuyu başlat" toplu koşuya dahil model senaryolarını da dahil eder.
 
 Koşu: giriş tarifiyle giriş → senaryonun bağlam profiliyle (modelde `eslesme.profilHavuzu` olan alan; havuz adı
 giriş tarifinin bağlam türüdür) bağlam değiştirme → `ekranUrl` → modelin adımları sırayla. Senaryoda değeri olan her
@@ -507,9 +513,9 @@ artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarıl
 * `adimKapsami`: dahil edilen isteğe bağlı adımların kimlikleri (modelin adım kapsamı ayarlarına çevrilir).
 * `beklenenSonuc.tur`: `basari` | `hata` (iş kuralı hatası beklenir — ayrıntısı `veri`deki beklenen sonuç alanında).
 * Öneriler tek senaryo doğrulayıcısından geçirilir; modele uymayan öneri önizlemede sorunlarıyla
-  gösterilir ve seçilemez. Kabul edilen öneriler **Koşuda kapalı** eklenir: test kodu gerekmez, **model
+  gösterilir ve seçilemez. Kabul edilen öneriler **"Toplu koşuya dahil" kapalı** eklenir: test kodu gerekmez, **model
   koşucusuyla** çalışırlar (Senaryolar'da "model" rozeti; bkz. [Model koşucusu](#model-koşucusu)). Koşuya
-  almak kullanıcının kararıdır (Koşuda anahtarı).
+  almak kullanıcının kararıdır ("Toplu koşuya dahil" anahtarı).
 
 ## gerekenAyarlar
 

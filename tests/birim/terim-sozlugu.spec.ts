@@ -29,13 +29,16 @@ test('denetim sözlüğe aykırı kullanımları yakalar, doğru kullanımlara t
     ['Veri'], ['Henüz tablo yok (Veri > Tablolar).'], ["Tabloyu Veri'de tamamlayın"],
     ['Kaldı'], ['Kaldı: '], ['Sözleşme: Kaldı — 2 uyumsuzluk'], ['✗ kaldı'], ['geçti / kaldı'], ['Yalnız kalanlar'],
     ['Kalan testlerin hataları (3)'], ['yalnız kalan testlerde'], ['yeni kalan'],
-    ['CANLI', "h('span', { class: 'canli-rozeti' }, 'CANLI')"], ['CANLI önizleme']
+    ['CANLI', "h('span', { class: 'canli-rozeti' }, 'CANLI')"], ['CANLI önizleme'],
+    ['3 ürün / ekran'], ['Ürünler'], ['Koşuda'], ['"Koşuda" kapalı'], ['Koşuda (TEST): Formdan senaryo'], ['Koşudan çıkar'], ['Koşuya dahil'], ['Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.']
   ];
   for (const [metin, satir] of aykiri) expect(terimIhlalleri(metin, satir), metin).not.toEqual([]);
   const dogru: Array<[string, string?]> = [
     ['Planlı koşular'], ['Test verisi'], ['Veri sağlığı'], ['Veri koşusu'], ['Veri klasörü'], ['Başarısız'], ['Yalnız başarısızlar'],
     ['Yarıda kaldı'], ['İçerik aynı kaldı (yeniden kaydedildi).'], ['Kalan tablonun adı'], ['kalan süre'], ['CANLI onayı verilmedi; kalan senaryolar koşmadı.'],
-    ['CANLI ortam'], ["CANLI'da çağrılmasın"], ['CANLI', "const KAPSAM = { test: 'TEST', canli: 'CANLI' };"], ['Canlı görüntü'], ['Canlı']
+    ['CANLI ortam'], ["CANLI'da çağrılmasın"], ['CANLI', "const KAPSAM = { test: 'TEST', canli: 'CANLI' };"], ['Canlı görüntü'], ['Canlı'],
+    ['Ekranlar ve servisler'], ['3 ekran'], ['Toplu koşuya dahil (TEST): Formdan senaryo'], ['Toplu koşudan çıkar'], ['Koşuda seçilen satırdan gelir.'],
+    ['Koşuda yakalanan mesajlar'], ['"Toplu koşuya dahil" kapalı'], ['Başlık, raporlarda görünen test adıdır; aynı ekranda tekil olmalıdır.'], ['Playwright koduna dışa aktar']
   ];
   for (const [metin, satir] of dogru) expect(terimIhlalleri(metin, satir), metin).toEqual([]);
 });
@@ -94,7 +97,8 @@ test('tema: "Canlı" adı "Parlak" oldu; eski "canli" anahtarı "parlak"a eşlen
 
 test('Terimler sözlüğü: istenen her kavram tek cümleyle; sözlüğün kendisi de kurallara uyar', () => {
   const terimler = TERIMLER.map((t) => t.terim);
-  for (const t of ['Ekran', 'Ortak akış', 'Akış', 'Senaryo', 'Model', 'Paket', 'Bulgu', 'Test verisi tablosu (kayıt / liste)', 'Karşılık', 'Ortam türü', 'İzin', 'Planlı koşu', 'Dene / Koşu']) {
+  for (const t of ['Ekran', 'Ortak akış', 'Akış', 'Senaryo', 'Model', 'Paket', 'Bulgu', 'Test verisi tablosu (kayıt / liste)', 'Karşılık', 'Ortam türü', 'İzin', 'Planlı koşu', 'Dene / Koşu',
+    'Ekranlar ve servisler', 'Toplu koşuya dahil', 'Korunan parça', 'Alan bağlantısı', 'Kanıt']) {
     expect(terimler, t).toContain(t);
   }
   expect(new Set(terimler).size).toBe(terimler.length);
@@ -129,7 +133,21 @@ test('rehber: tarama adımları ("Düğmeyi ve sonucu işaretle", "Sayfada seç"
   expect(basliklar('ayarlar-arayuz')).toContain('Terimler');
   // Sonuçlar rehberinin bölüm sırası (arayuz-tasma testi) değişmez.
   const sonuclar = basliklar('sonuclar');
-  const sira = ['Ürün / ekran seçimi', 'Sağlık noktası', 'Rapor sekmeleri', 'Başlık ve "Koşuyu başlat"', 'Tarih aralığı',
+  const sira = ['Ekran / servis seçimi', 'Sağlık noktası', 'Rapor sekmeleri', 'Başlık ve "Koşuyu başlat"', 'Tarih aralığı',
     'Özet kartlar', 'Koşu trendi', 'Başarısız testler', 'Test paneli', 'Koşu geçmişi', 'Hata kalıpları'].map((b) => sonuclar.indexOf(b));
   expect(sira.every((x, i) => x > 0 && (i === 0 || x > sira[i - 1])), JSON.stringify(sira)).toBe(true);
+});
+
+test('v1.4 terimleri: sol menü "Ekranlar ve servisler" / "N ekran", senaryo formunda "Toplu koşuya dahil", başlık açıklaması', () => {
+  const arayuz = (ad: string): string => readFileSync(join(KOK, 'scripts', 'platform', 'arayuz', ad), 'utf8');
+  expect(arayuz('urunler.js')).toContain("'aria-hidden': 'true' }, 'Ekranlar ve servisler')");
+  for (const ad of ['senaryolar.js', 'sonuclar.js', 'servisler.js', 'uctan-uca.js']) expect(arayuz(ad), ad).toContain("'aria-label': 'Ekranlar ve servisler'");
+  expect(arayuz('senaryolar.js')).toMatch(/\.length\} ekran`/);
+  // Sonuçlar: ortak akış ekran sayısına girmez, ayrı grupta.
+  expect(arayuz('sonuclar.js')).toMatch(/ozet\.ekranlar\.filter\(\(e\) => !e\.ortakAkis\)\.length\} ekran`/);
+  expect(arayuz('sonuclar.js')).toContain("anahtar: 'ortak-akislar', baslik: 'Ortak akışlar'");
+  const form = arayuz('senaryo-formu.js');
+  expect(form).toContain("kosudaKutu, 'Toplu koşuya dahil')");
+  expect(form).not.toMatch(/kosudaKutu, 'Koşuda'\)/);
+  expect(form).toContain('Başlık, raporlarda görünen test adıdır');
 });

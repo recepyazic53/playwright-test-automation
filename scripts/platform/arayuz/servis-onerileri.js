@@ -82,7 +82,7 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
       }
       // Kabul kararı (öğrenme); kaydedilemese de senaryo eklenmiştir.
       try { await karar(o, 'kabul'); } catch { /* karar kaydı isteğe bağlı */ }
-      bildir(`"${o.baslik}" senaryo olarak eklendi ("Koşuda" kapalı; koşturana kadar istek atılmaz).`);
+      bildir(`"${o.baslik}" senaryo olarak eklendi ("Toplu koşuya dahil" kapalı; koşturana kadar istek atılmaz).`);
       eklendi = true;
     });
     // Liste yeniden okunur: eklenen artık kapsamda (öneri olarak çıkmaz).
@@ -113,10 +113,10 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
   function oneriSatiri(o) {
     const [nedenEtiketi, nedenTuru] = NEDEN_ETIKETLERI[o.neden] || [o.neden, ''];
     const neden = o.eksikler.length ? `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')} (Önizle ile doldurun)` : o.engel ? `${o.engel} (Önizle ile açın)` : '';
-    const ekleDugmesi = h('button', { type: 'button', class: 'kucuk-dugme birincil', 'aria-label': `${o.baslik}: ekle`, disabled: !o.eklenebilir || o.reddedildi, title: neden || 'Senaryo olarak ekle ("Koşuda" kapalı)' },
+    const ekleDugmesi = h('button', { type: 'button', class: 'kucuk-dugme birincil', 'aria-label': `${o.baslik}: ekle`, disabled: !o.eklenebilir || o.reddedildi, title: neden || 'Senaryo olarak ekle ("Toplu koşuya dahil" kapalı)' },
       ikon('artiYalin'), 'Ekle');
     ekleDugmesi.addEventListener('click', () => ekle(o, ekleDugmesi));
-    return h('li', { class: `oneri servis-oneri${o.reddedildi ? ' reddedildi' : ''}`, 'data-oneri': o.kimlik, 'data-tur': o.tur },
+    return h('li', { class: `oneri servis-oneri${o.reddedildi ? ' reddedildi' : ''}`, 'data-oneri': o.kimlik, 'data-puan': String(o.puan), 'data-tur': o.tur },
       h('div', { class: 'oneri-icerigi' },
         h('p', { class: 'oneri-gerekcesi' }, o.gerekce),
         h('div', { class: 'oneri-ust' }, h('span', { class: 'oneri-basligi' }, o.baslik),
@@ -124,8 +124,8 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
             durum.operasyon ? null : rozet(o.operasyon, '', { title: 'Metot' }),
             rozet(TUR_ETIKETLERI[o.tur] || o.tur, 'tur-rozeti'), rozet(nedenEtiketi, nedenTuru),
             rozet(o.beklenenMetni, o.beklenen.tur === 'basari' ? 'basari' : 'hata'),
-            o.eksikler.length ? rozet('değer eksik', 'atlanan', { title: neden }) : null, o.reddedildi ? rozet('reddedildi', 'atlanan') : null),
-          h('small', { class: 'oneri-puani cok-soluk', title: 'Sıralama puanı (neden + önem; kabul / red kararlarınızla değişir)' }, `puan ${o.puan}`)),
+            o.eksikler.length ? rozet('değer eksik', 'atlanan', { title: neden }) : null, o.reddedildi ? rozet('reddedildi', 'atlanan') : null)),
+        // Sıralama puanı kullanıcıya gösterilmez (anlamsız sayı); liste zaten önem sırasındadır (data-puan yalnız iz için).
         o.degisiklikler.length
           ? h('ul', { class: 'oneri-farklari', 'aria-label': `${o.baslik}: farklar` }, o.degisiklikler.slice(0, 12).map((d) => h('li', {}, h('b', {}, `${d.etiket}: `), d.deger)),
             o.degisiklikler.length > 12 ? h('li', { class: 'soluk' }, `+${o.degisiklikler.length - 12} alan`) : null)
@@ -150,12 +150,13 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
         h('span', { class: 'alt' }, 'Mevcut senaryolar; eksikleri görmek için tıklayın')),
       h('div', { class: 'kapsam-olculeri', role: 'group', 'aria-label': 'Kapsam' }, OLCULER.map(([ad, etiket, aciklama]) => {
         const x = k[ad];
-        const oran = x.toplam ? Math.round((x.kapsanan / x.toplam) * 100) : 100;
+        // Verisiz ölçüde ('—') çubuk boş kalır; genişlik CSS değişkeniyle (CSP: satır içi style özniteliği yok).
+      const oran = x.toplam ? Math.round((x.kapsanan / x.toplam) * 100) : 0;
         return h('button', {
           type: 'button', class: `kapsam-olcusu${durum.acikOlcu === ad ? ' acik' : ''}`, 'aria-expanded': String(durum.acikOlcu === ad), title: aciklama, 'data-olcu': ad,
           onclick: () => { durum.acikOlcu = durum.acikOlcu === ad ? '' : ad; ciz(); }
         }, h('span', { class: 'kapsam-adi' }, etiket), h('b', { class: 'kapsam-degeri' }, x.toplam ? `${x.kapsanan} / ${x.toplam}` : '—'),
-        h('span', { class: 'kapsam-cubugu', 'aria-hidden': 'true' }, h('span', { style: `width: ${oran}%` })));
+        h('span', { class: `kapsam-cubugu${x.toplam ? '' : ' bos'}`, 'aria-hidden': 'true' }, h('span', { style: { '--oran': `${oran}%` } })));
       })),
       acik ? h('div', { class: 'kapsam-eksikleri' },
         h('p', { class: 'kucuk soluk' }, `${acik[1]}: eksikler`),
@@ -215,14 +216,14 @@ export function servisOnerileriSayfasi(icerik, { proje, s, ortamlar, onizle }) {
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/senaryolar', title: 'Servisler, Senaryolar bölümündedir (sol panel: Ürünler > Servisler)' }, 'Senaryolar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/senaryolar', title: 'Servisler, Senaryolar bölümündedir (sol panel: Ekranlar ve servisler > Servisler)' }, 'Senaryolar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'),
           h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: servisAdresi(s.id) }, s.ad),
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Senaryo önerileri')),
         h('h2', { tabindex: '-1' }, 'Senaryo önerileri')),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: servisAdresi(s.id) }, ikon('geri'), 'Senaryolara dön'))),
     araclar,
     h('div', { class: 'not-kutusu bilgi oneri-bilgisi', role: 'note' },
-      h('p', {}, h('b', {}, 'Öneriler yalnızca taslaktır. '), 'Sayfa hiçbir istek atmaz; "Ekle" senaryoyu "Koşuda" kapalı kaydeder, siz koşturana kadar hiçbir yere gitmez.'),
+      h('p', {}, h('b', {}, 'Öneriler yalnızca taslaktır. '), 'Sayfa hiçbir istek atmaz; "Ekle" senaryoyu "Toplu koşuya dahil" kapalı kaydeder, siz koşturana kadar hiçbir yere gitmez.'),
       h('p', { class: 'kucuk' }, 'Negatif önerilerde "Hata beklenir" işaretlidir ve mesaj boştur (tahmin edilmez): mesajı siz yazın ya da ilk koşunun yanıtından "Son yanıttan kontrol öner" ile alın.')),
     govde);
   yukle();

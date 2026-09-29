@@ -18,6 +18,12 @@ export declare const OLUSTURMA_TURLERI: readonly OlusturmaTuru[];
  * meta.ekran.urlYolu, senaryo önerileri ve "Beklenen sonuç" alanı çıkarılır). Ortak akış / alt model paketi ve paket olmayan girdi aynen döner.
  */
 export declare function ortakAkisPaketineCevir(ham: unknown): unknown;
+/** Paketin yazmadığı "pageObject" için Nöbetçi'nin yazdığı değer. */
+export declare const PAGE_OBJECT_VARSAYILANI: string;
+/** Paketin yazmadığı "specDosyasi" için Nöbetçi'nin yazdığı değer (ekran anahtarından). */
+export declare function specDosyasiVarsayilani(anahtar: string): string;
+/** "specDosyasi" / "pageObject" isteğe bağlı: eksikse mevcut modeldeki değer, yoksa varsayılan yazılır (ortak akış / alt model aynen). */
+export declare function kodAlanlariniTamamla<T extends Record<string, unknown>>(model: T, anahtar: string, mevcut?: Record<string, unknown> | null): T & { specDosyasi?: string; pageObject?: string };
 
 /** Anahtar adı gizli bilgi taşıdığını söylüyor mu (parola, apiKey, totpGizli, guvenlikKodu...)? */
 export declare function gizliAdMi(ad: string): boolean;

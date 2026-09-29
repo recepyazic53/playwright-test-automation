@@ -66,7 +66,9 @@ function gruplar(ayarBolumleri) {
         { baslik: 'Giriş profili / tarifi', aciklama: 'Testlerin gireceği kullanıcı ve giriş adımları', ikonAd: 'anahtar', git: () => '#/ayarlar/giris' },
         { baslik: 'Servis taban adresi', aciklama: 'Servislerin ortam adresleri (toplu düzenleme)', ikonAd: 'ag', git: () => '#/ayarlar/proje' },
         ...ayar('entegrasyonlar', 'Entegrasyon', 'Bildirim, hata kaydı, veritabanı bağlantısı', 'simsek'),
-        { baslik: 'Hata sınıflandırma kuralı', aciklama: 'Hata mesajı → kategori', ikonAd: 'uyari', git: () => '#/ayarlar/kosu' }
+        { baslik: 'Hata sınıflandırma kuralı', aciklama: 'Hata mesajı → kategori', ikonAd: 'uyari', git: () => '#/ayarlar/kosu' },
+        ...(ayarBolumleri.some((b) => b.ad === 'kurtarma')
+          ? [{ baslik: 'Kurtarma kuralı', aciklama: 'Koşuda şu görülürse şunu yap (ör. oturum bitti → girişi yenile)', ikonAd: 'yenile', git: () => '#/ayarlar/kurtarma/yeni' }] : [])
       ]
     }
   ];

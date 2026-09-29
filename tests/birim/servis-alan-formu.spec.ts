@@ -467,7 +467,7 @@ test.describe('alan formu uçtan uca', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     const dahiller = async () => ((await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar as Nesne[]).map((x) => x.kosuyaDahil);
     await page.goto(`/#/servisler/s/${servisId}`);
-    const anahtar = page.getByRole('switch', { name: 'Koşuda (TEST): Formdan senaryo' });
+    const anahtar = page.getByRole('switch', { name: 'Toplu koşuya dahil (TEST): Formdan senaryo' });
     await expect(anahtar).toBeChecked();
     await anahtar.click();
     await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar.find((x: Nesne) => x.baslik === 'Formdan senaryo').kosuyaDahil).toBe(false);
@@ -475,12 +475,12 @@ test.describe('alan formu uçtan uca', () => {
     // Toplu: görünenlerin hepsini seç → Koşuya ekle / Koşudan çıkar.
     await page.getByLabel('Görünen tüm senaryoları seç').check();
     const toplu = page.getByRole('toolbar', { name: 'Seçili senaryolar için işlemler' });
-    await toplu.getByRole('button', { name: 'Koşuya ekle' }).click();
+    await toplu.getByRole('button', { name: 'Toplu koşuya ekle' }).click();
     await expect.poll(async () => (await dahiller()).every(Boolean)).toBe(true);
-    await toplu.getByRole('button', { name: 'Koşudan çıkar' }).click();
+    await toplu.getByRole('button', { name: 'Toplu koşudan çıkar' }).click();
     await expect.poll(async () => (await dahiller()).some(Boolean)).toBe(false);
     // Filtre: hepsi hariçken "Koşuda" süzgeci boş liste verir; arama süzer.
-    await page.getByLabel('Koşuda', { exact: true }).selectOption('evet');
+    await page.getByLabel('Toplu koşuya dahil', { exact: true }).selectOption('evet');
     await expect(page.getByText('Filtreyle eşleşen senaryo yok.')).toBeVisible();
     await page.getByRole('button', { name: 'Filtreleri temizle' }).first().click();
     await page.getByLabel('Senaryo ara').fill('formdan');

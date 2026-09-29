@@ -56,12 +56,13 @@ Kasa parolasını unutmayın: parola unutulursa veriler kurtarılamaz.
 
 ## Günlük kullanım
 
-Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapılacağını anlatır. İlk açılışta kendiliğinden başlar
-(Ayarlar > Arayüz'den kapatılabilir), sonra üst çubuktaki **?** düğmesiyle istediğiniz zaman yeniden açılır.
+Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapılacağını anlatır. Sayfa başlığındaki
+**Bu sayfanın rehberi** bağlantısı ya da üst çubuktaki **?** düğmesi istediğiniz zaman açar; ilk girişte kendiliğinden açılması isteğe bağlıdır
+(Ayarlar > Arayüz, varsayılan kapalı). Kurulumdan sonra kısa genel tanıtım bir kez açılır.
 
 - **Ekranlar** — test edilecek ekranlar: ekran paketi yükleme, otomatik tarama, akış kaydı, akış diyagramı ve ortak
   akışlar, ekran modeli sürümleri.
-- **Senaryolar** — ekran modelinden üretilen formla senaryo oluşturma/düzenleme, "Koşuda" seçimi, **Dene** (taslak,
+- **Senaryolar** — ekran modelinden üretilen formla senaryo oluşturma/düzenleme, "Toplu koşuya dahil" seçimi, **Dene** (taslak,
   kaydetmeden) ve **Çalıştır** (canlı ekran görüntüsü, durdurma).
 - **Servisler** — SOAP/REST servis senaryoları, servis akışları (bir yanıttan okunan değeri sonraki isteğe taşıma,
   oturum/token akışları).

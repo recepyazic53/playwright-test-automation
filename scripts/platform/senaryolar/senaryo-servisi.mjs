@@ -1195,11 +1195,11 @@ export function senaryoGecmisi(vt, id) {
       const ortamFarklari = ortakOrtamlar.flatMap((o) => {
         const x = ortamdaKosuyaDahil(a, once.kosuya_dahil === 1, o);
         const y = ortamdaKosuyaDahil(b, sonra.kosuya_dahil === 1, o);
-        return x === y ? [] : [`Koşuda (${ortamAdlari.get(o) ?? o}): ${acikMi(x)} → ${acikMi(y)}`];
+        return x === y ? [] : [`Toplu koşuya dahil (${ortamAdlari.get(o) ?? o}): ${acikMi(x)} → ${acikMi(y)}`];
       });
       // Tüm ortamlar birlikte değiştiyse tek (genel) satır; bir kısmı değiştiyse ortam başına satırlar.
       if (ortamFarklari.length && (ortamFarklari.length < ortakOrtamlar.length || once.kosuya_dahil === sonra.kosuya_dahil)) degisenler.push(...ortamFarklari);
-      else if (once.kosuya_dahil !== sonra.kosuya_dahil) degisenler.push(`Koşuda: ${acikMi(once.kosuya_dahil === 1)} → ${acikMi(sonra.kosuya_dahil === 1)}`);
+      else if (once.kosuya_dahil !== sonra.kosuya_dahil) degisenler.push(`Toplu koşuya dahil: ${acikMi(once.kosuya_dahil === 1)} → ${acikMi(sonra.kosuya_dahil === 1)}`);
       if (a && b) {
         const oa = ortamKimlikleri(a);
         const ob = ortamKimlikleri(b);
