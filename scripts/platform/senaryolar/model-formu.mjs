@@ -57,7 +57,8 @@ export const ANA_AKIS_ID = 'ana';
 // Form, doğrulama ve koşu bu AÇILMIŞ (düz) modeli görür. Açılan adımın kimliği "<başvuru adımı>_<ortak adım>"; başvuru
 // adımının görünürlüğü (ör. "ödeme dahil") her açılan adıma eklenir (ortak adımın kendi koşuluyla "ve"). Ortak akışın
 // koşulları çakışmasın diye "<ortak akış id>_<ad>" adıyla taşınır. Ortak akış "yalnizTestOrtami" ise açılan adımlar
-// "yalnizTest" işaretlenir (koşucu canlı ortamda atlar).
+// "yalnizTest" işaretlenir (koşucu canlı ortamda atlar). Ortak akışın senaryo düzeyi alanları da başvuru adımının görünürlüğünü
+// alır: blok dahil değilken gizli ve zorunlu değildir.
 
 /**
  * @param {any} model ekran modeli (bir akışın) @param {Record<string, any>} ortakAkislar dosya → ortak akış modeli
@@ -73,6 +74,8 @@ export function ortakAkislariAc(model, ortakAkislar) {
   const eksikler = [];
   /** @type {any[]} */
   const sonuc = [];
+  /** Ortak akışlardan eklenen senaryo düzeyi alanları → alan ve onu getiren blokların görünürlük ifadeleri (null: koşulsuz). @type {Map<string, { alan: any; basvurular: any[] }>} */
+  const ortakAlanlari = new Map();
   /** Görünürlüğün ifadesi (adlandırılmış koşul çözülür). @param {any} g @param {Record<string, any>} kosullar */
   const ifadesi = (g, kosullar) => (!nesneMi(g) ? null : typeof g.kosul === 'string' ? (nesneMi(kosullar[g.kosul]) ? kosullar[g.kosul].ifade : null) : g.ifade ?? null);
   for (const adim of yeni.adimlar) {
@@ -110,14 +113,27 @@ export function ortakAkislariAc(model, ortakAkislar) {
       kopyaAdim.ortakAkisAdi = String(ortak.ad || on);
       sonuc.push(kopyaAdim);
     }
-    // Ortak akışın senaryo düzeyi alanları (ör. kart profili) eklenir (aynı kimlikli alan varsa ekranınki geçerli).
+    // Ortak akışın senaryo düzeyi alanları (ör. kart profili) eklenir (aynı kimlikli alan varsa ekranınki geçerli). Bu alanlar
+    // adıma bağlı değildir: görünürlükleri (dolayısıyla zorunlulukları) aşağıda bloğun görünürlüğüne ("dahil") bağlanır.
     const sd = nesneMi(ortak.senaryoDuzeyi) && Array.isArray(ortak.senaryoDuzeyi.alanlar) ? ortak.senaryoDuzeyi.alanlar : [];
     for (const alan of sd) {
-      if (!nesneMi(alan) || sdAlanlar.some((x) => nesneMi(x) && x.id === alan.id)) continue;
+      if (!nesneMi(alan)) continue;
+      const onceki = ortakAlanlari.get(alan.id);
+      if (onceki) { onceki.basvurular.push(basvuruIfadesi); continue; }
+      if (sdAlanlar.some((x) => nesneMi(x) && x.id === alan.id)) continue;
       const k = kopya(alan);
       yenidenAdlandir(k);
       sdAlanlar.push(k);
+      ortakAlanlari.set(alan.id, { alan: k, basvurular: [basvuruIfadesi] });
     }
+  }
+  // Ortak akış alanının görünürlüğü: kendi koşulu VE onu getiren bloklardan en az birinin koşulu (koşulsuz blok varsa yalnız
+  // kendi koşulu). Blok dahil değilken alan gizli olur; form değerini yazmaz, doğrulayıcı zorunlu saymaz.
+  for (const { alan, basvurular } of ortakAlanlari.values()) {
+    if (basvurular.some((b) => !b)) continue;
+    const blok = basvurular.length === 1 ? kopya(basvurular[0]) : { veya: basvurular.map(kopya) };
+    const kendi = ifadesi(alan.gorunurluk, yeni.kosullar);
+    alan.gorunurluk = { ifade: kendi ? { ve: [blok, kendi] } : blok };
   }
   sonuc.forEach((a, i) => { if (nesneMi(a)) a.sira = i + 1; });
   yeni.adimlar = sonuc;
