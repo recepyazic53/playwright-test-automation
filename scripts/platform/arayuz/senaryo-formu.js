@@ -1790,10 +1790,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
     senaryo ? h('span', { class: 'mono cok-soluk' }, senaryo.id) : null
   ];
   // Playwright koduna dışa aktar: KAYDEDİLMİŞ senaryodan (kaydedilmemiş değişiklikler dosyaya girmez); senaryonun kayıtlı ortamlarından biri.
+  // İndirmeden önce açıklamalı onay (playwright-disa-aktarma.js). Yeni senaryoda düğme görünür ama kapalıdır (önce kaydedilir).
   const disaAktarDugmesi = senaryo ? h('button', {
     type: 'button', class: 'hayalet', title: 'Kaydedilmiş senaryoyu seçilen ortam için çalıştırılabilir tek bir .spec.ts dosyası olarak indirir (gizli değerler ortam değişkeniyle)',
     onclick: () => playwrightKodunaAktar({ projeId: s.proje.id, senaryo: { id: senaryo.id, baslik: senaryo.baslik }, ortamlar: s.ortamlar.filter((o) => senaryo.ortamlar.includes(o.id)) })
-  }, ikon('indir'), 'Playwright koduna dışa aktar') : null;
+  }, ikon('indir'), 'Playwright koduna dışa aktar')
+    : h('button', { type: 'button', class: 'hayalet', disabled: true, title: 'Önce senaryoyu kaydedin; kaydedilmiş senaryo .spec.ts dosyası olarak indirilebilir.' }, ikon('indir'), 'Playwright koduna dışa aktar');
   yerlestir(icerik,
     sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, disaAktarDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), s.taslak?.oneri ? 'Önerilere dön' : 'Listeye dön')),
     h('div', { class: 'form-duzeni' },

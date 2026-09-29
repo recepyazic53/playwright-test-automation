@@ -332,7 +332,7 @@ test.describe('kurtarma kuralları: model ve servis', () => {
     farkindalikOnbelleginiTemizle();
     const f = await farkindalikVerisi(vt, projeId, { aralik: { baslangic: null, bitis: null }, onbellek: false });
     const madde = f.kartlar.dikkat.maddeler.find((m) => m.tur === 'kurtarma' && m.ad === 'Geçici hata kodu');
-    expect(madde).toEqual({ tur: 'kurtarma', ad: 'Geçici hata kodu', ayrinti: 'Kurtarma kuralı · 3 kez çalıştı · 2 kurtarıldı · 1 yine başarısız oldu', adres: '#/ayarlar/proje' });
+    expect(madde).toEqual({ tur: 'kurtarma', ad: 'Geçici hata kodu', ayrinti: 'Kurtarma kuralı · 3 kez çalıştı · 2 kurtarıldı · 1 yine başarısız oldu', adres: '#/ayarlar/kurtarma' });
     expect(f.kartlar.dikkat.maddeler.some((m) => m.tur === 'kurtarma' && m.ayrinti.includes('tekrar denenmedi'))).toBe(true);
   });
 });

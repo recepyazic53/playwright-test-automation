@@ -585,7 +585,7 @@ export async function akisTasarimi(icerik, s) {
   }
 
   /**
-   * "Tekrar denenebilir" işareti (Ayarlar > Proje ve ortamlar > Kurtarma kuralları): kural bu adımı tekrar deneyebilir, sayfayı
+   * "Tekrar denenebilir" işareti (Ayarlar > Kurtarma kuralları): kural bu adımı tekrar deneyebilir, sayfayı
    * yenileyebilir ya da senaryoyu baştan başlatabilir. Varsayılan işaretsiz — kayıt oluşturan adım tekrar edilmez. Modelde kosu.tekrarDenenebilir.
    */
   function tekrarIsareti(b) {

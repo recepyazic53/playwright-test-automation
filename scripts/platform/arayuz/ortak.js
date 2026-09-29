@@ -263,7 +263,7 @@ export function canliOnayPenceresi(ortamAdi) {
   return new Promise((coz) => {
     const evet = h('button', { type: 'button', class: 'tehlike canli-onay-evet' }, 'Evet, devam et');
     const vazgec = h('button', { type: 'button', class: 'hayalet canli-onay-vazgec' }, 'Vazgeç');
-    const diyalog = h('dialog', { class: 'onay-diyalogu tehlikeli canli-onay-penceresi', 'aria-labelledby': 'canli-onay-basligi', 'aria-describedby': 'canli-onay-metni' },
+    const diyalog = h('dialog', { class: 'onay-diyalogu tehlikeli canli-onay-penceresi', 'data-pencere': 'karar', 'aria-labelledby': 'canli-onay-basligi', 'aria-describedby': 'canli-onay-metni' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'canli-onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('uyari')), 'CANLI ortam'),
         h('p', { id: 'canli-onay-metni' }, 'Bu işlem ', h('strong', {}, ortamAdi || 'seçilen'), ' (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Emin misiniz?')),
@@ -315,7 +315,7 @@ async function izinPenceresi(anahtar, mesaj) {
     const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
     const ver = kasaAcik ? h('button', { type: 'button', class: 'birincil izin-ver' }, ikon('onay'), 'İzin ver ve devam et') : null;
     const hataKutusu = h('p', { class: 'alan-hatasi', role: 'alert' });
-    const diyalog = h('dialog', { class: 'onay-diyalogu izin-uyarisi', 'aria-labelledby': 'izin-uyarisi-basligi', 'aria-describedby': 'izin-uyarisi-metni' },
+    const diyalog = h('dialog', { class: 'onay-diyalogu izin-uyarisi', 'data-pencere': 'karar', 'aria-labelledby': 'izin-uyarisi-basligi', 'aria-describedby': 'izin-uyarisi-metni' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'izin-uyarisi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kilit')), 'İzin gerekli'),
         h('p', { id: 'izin-uyarisi-metni' }, mesaj),

@@ -358,6 +358,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/hizli-arama.js', { dosya: 'hizli-arama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/olustur-menusu.js', { dosya: 'olustur-menusu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rehber-icerikleri.js', { dosya: 'rehber-icerikleri.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/pencere-yoneticisi.js', { dosya: 'pencere-yoneticisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
