@@ -30,7 +30,7 @@ function veriKosulariniDenetle(db, projeId, icerik) {
 import { raporMetniniMaskele } from '../sonuclar/servis-sonuclari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { servisTabanBaglantisi, tabanAdresiIslemi, tabanKararlariniDogrula, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
-import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
+import { gizliAlanDegerleriniDogrula, restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
@@ -407,9 +407,14 @@ export const SERVIS_POST_UCLARI = [
   // REST servisi (Adım adım > REST ve İşlemler): uçlarla kayıt (ağ isteği yok) ve isteğe bağlı "Dene" (kullanıcı isteğiyle; CANLI ortamda ayrıca onayla).
   ['/platform/servis/rest/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
+    // Yeni servis adlandırılmış taban adresine bağlanıyorsa (cURL'den ekleme) adresler o tabandan gelir.
+    const grup = !secimli(g.id) && typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : undefined;
+    const bagli = grup ? servisTabanBaglantisi(db, projeId, undefined, grup) : null;
     return restServisiKaydet(db, projeId, {
       id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
-      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(bagli ? { tabanlar: bagli.tabanlar, tabanGrubu: grup } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(g.gizliBosSutun === true ? { gizliBosSutun: true } : {}),
+      ...(g.gizliAlanDegerleri !== undefined ? { gizliAlanDegerleri: gizliAlanDegerleriniDogrula(g.gizliAlanDegerleri) } : {}),
       ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
       ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
