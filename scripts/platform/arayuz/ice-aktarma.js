@@ -3,7 +3,7 @@
 // olarak ya da mevcut bir projeye (ortamları o projenin ortamlarına eşlenerek) aktarılır; seçim değişince önizleme yenilenir. Hoş geldiniz ekranında (boş veritabanı:
 // yedeğin parolası bu bilgisayarın kasa parolası olur) ve Ayarlar > Yedekleme'de kullanılır.
 import {
-  ApiHatasi, TOKEN, alan, alanHatasi, api, bosDurum, boyutMetni, geriSayim, h, ikon, mesajKutusu, parolaAlani, rozet, tarihMetni, yeniKimlik
+  ApiHatasi, TOKEN, alan, alanHatasi, api, bosDurum, boyutMetni, dosyaSecimi, geriSayim, h, ikon, mesajKutusu, parolaAlani, rozet, tarihMetni, yeniKimlik
 } from './ortak.js';
 
 const ADIMLAR = [['dosya', 'Dosya ve parola'], ['hazirlik', 'Hazırlık'], ['onizleme', 'Önizleme ve seçim'], ['ozet', 'Özet']];
@@ -88,6 +88,8 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
   // --- 1) Dosya + parola ------------------------------------------------------------
   function dosyaFormu(onMesaj) {
     const dosyaGirdisi = h('input', { type: 'file', accept: '.tayedek', name: 'yedek', required: true });
+    // Her seçimden sonra girdi sıfırlanır (aynı adlı dosya yeniden seçilince yeniden alınır); seçilen dosya saklanır.
+    const dosyaSecimiDurumu = dosyaSecimi(dosyaGirdisi);
     const parola = parolaAlani('Yedeğin parolası', {
       zorunlu: true, otomatik: 'current-password',
       yardim: secenekler.mod === 'hosgeldin'
@@ -100,7 +102,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       h('h2', {}, ikon('yukle'), 'Yedek yükle'),
       h('p', { class: 'soluk' }, 'Bir .tayedek dosyası seçin. Uygulamadan önce neyin ekleneceğini ve neyin değişeceğini göreceksiniz; bu bilgisayardaki hiçbir kayıt silinmez.'),
       mesaj.kutu,
-      alan('Yedek dosyası', dosyaGirdisi, { zorunlu: true, yardim: 'Yalnızca bu platformun ürettiği .tayedek dosyaları.' }),
+      alan('Yedek dosyası', dosyaGirdisi, { zorunlu: true, icerik: h('div', {}, dosyaGirdisi, dosyaSecimiDurumu.not), yardim: 'Yalnızca bu platformun ürettiği .tayedek dosyaları.' }),
       parola.kapsayici,
       h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'Vazgeç')));
     if (onMesaj) mesaj.goster(onMesaj.metin, onMesaj.tur);
@@ -108,7 +110,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       olay.preventDefault();
       alanHatasi(dosyaGirdisi, '');
       alanHatasi(parola.girdi, '');
-      const dosya = dosyaGirdisi.files && dosyaGirdisi.files[0];
+      const [dosya] = dosyaSecimiDurumu.dosyalar();
       let hata = false;
       if (!dosya) { alanHatasi(dosyaGirdisi, 'Bir yedek dosyası seçin.'); hata = true; }
       else if (!dosya.name.toLowerCase().endsWith('.tayedek')) { alanHatasi(dosyaGirdisi, 'Dosya uzantısı .tayedek olmalıdır.'); hata = true; }

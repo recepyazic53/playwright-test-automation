@@ -13,7 +13,7 @@
 // diyagramdan eklenir. Ortak akışın senaryosu yoktur (önizlemede senaryo / ortam seçimi yok); ekranlara ekleme otomatik yapılmaz.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
-import { api, bildir, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { api, bildir, dosyaSecimi, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { bicimIndirBaglantisi, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz } from './ekran-ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
@@ -133,12 +133,13 @@ function yuklemeAdimi(govde, s, onceki = null) {
       yerlestir(durumAlani, hataListesi('Paket gönderilemedi', e.govde && e.govde.hatalar ? e.govde.hatalar : [{ yer: dosya.name, mesaj: e.message }]));
     }
   };
-  girdi.addEventListener('change', () => isle(girdi.files && girdi.files[0]));
+  // Her seçimden sonra girdi sıfırlanır: aynı adlı (düzeltilmiş) paket yeniden seçilince yeniden okunur, eski hatalar kalmaz.
+  const secim = dosyaSecimi(girdi, (l) => isle(l[0]));
   alan.addEventListener('dragover', (o) => { o.preventDefault(); alan.classList.add('surukleniyor'); });
   alan.addEventListener('dragleave', () => alan.classList.remove('surukleniyor'));
   alan.addEventListener('drop', (o) => { o.preventDefault(); alan.classList.remove('surukleniyor'); isle(o.dataTransfer && o.dataTransfer.files[0]); });
   yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
-    h('section', { class: 'kart' }, olusturmaSecimi(s), modSecimi, girdi, alan, durumAlani, onceki),
+    h('section', { class: 'kart' }, olusturmaSecimi(s), modSecimi, girdi, alan, secim.not, durumAlani, onceki),
     eklemeKutulari(s)));
 }
 

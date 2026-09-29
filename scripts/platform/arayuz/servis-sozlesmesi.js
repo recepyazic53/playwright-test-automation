@@ -4,7 +4,7 @@
 // yalnız okunup sunucuya önizleme için gönderilir. Önizleme / taslak alan alan düzenlenir (tür, zorunlu, null izinli, kaldır) ve
 // "Onayla ve kaydet" ile yazılır; var olan sözleşmeyi değiştirmek / silmek ayrıca onay ister (fark gösterilir), geçmişe yazılır.
 // Senaryo başına "Yanıt sözleşmeye uymalı" senaryo düzenleyicisindedir (varsayılan kapalı). Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
-import { alan, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, api, bildir, bosDurum, dosyaSecimi, h, ikon, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { SEMA_TIPLERI, TIP_ETIKETLERI, alanKaldir, alanNullAyarla, alanTipiAyarla, alanZorunluAyarla, semaAlanlari } from './sozlesme-dogrulayici.mjs';
 
@@ -22,8 +22,7 @@ function yolGoster(parcalar, bicim, xmlKok) {
 const tipAdi = (tip) => (tip ? tip.split('|').map((t) => TIP_ETIKETLERI[t] ?? t).join(' | ') : TIP_ETIKETLERI['']);
 
 /** Dosya(lar)ı metin olarak okur (boyut sınırıyla). */
-async function dosyaMetinleri(girdi) {
-  const dosyalar = [...(girdi.files || [])];
+async function dosyaMetinleri(dosyalar) {
   if (!dosyalar.length) throw new Error('Dosya seçilmedi.');
   for (const f of dosyalar) if (f.size > EN_BUYUK_DOSYA) throw new Error(`"${f.name}" en fazla 15 MB olabilir.`);
   return { metinler: await Promise.all(dosyalar.map((f) => f.text())), ad: dosyalar.map((f) => f.name).join(', ') };
@@ -104,26 +103,28 @@ export async function sozlesmeSekmesi(kap, proje, s, altKimlik) {
       const kayitli = h('button', { type: 'button', disabled: !bilgi.wsdlYanitiVar }, ikon('liste'), 'Kayıtlı WSDL şemasından al');
       kayitli.addEventListener('click', () => onizle(kayitli, { kaynak: 'wsdl' }));
       const dosya = h('input', { type: 'file', multiple: true, accept: '.wsdl,.xsd,.xml', id: yeniKimlik('wsdl') });
+      const secim = dosyaSecimi(dosya);
       const yukle = h('button', { type: 'button' }, ikon('yukle'), 'Dosyadan önizle');
       yukle.addEventListener('click', async () => {
-        try { const d = await dosyaMetinleri(dosya); await onizle(yukle, { kaynak: 'wsdl', metinler: d.metinler, dosyaAdi: d.ad }); } catch (e) { mesaj.goster(e.message); }
+        try { const d = await dosyaMetinleri(secim.dosyalar()); await onizle(yukle, { kaynak: 'wsdl', metinler: d.metinler, dosyaAdi: d.ad }); } catch (e) { mesaj.goster(e.message); }
       });
       yerlestir(kaynakPanel,
         h('p', { class: 'soluk kucuk' }, bilgi.wsdlYanitiVar
           ? 'Servisin kayıtlı WSDL\'indeki yanıt öğesi kullanılır (minOccurs → zorunlu, nillable → null izinli, maxOccurs → dizi).'
           : 'Kayıtlı WSDL\'de bu operasyonun yanıt şeması yok: İşlemler > "WSDL\'den yeniden al" (TEST\'e istek, onayla) ya da WSDL / XSD dosyasını yükleyin.'),
         h('div', { class: 'dugmeler' }, kayitli),
-        alan('WSDL / XSD dosyaları (yerel; birden çok seçilebilir)', dosya, { yardim: 'Dosyalar yalnız okunur; içe aktarılan adresler indirilmez. Şema ayrı XSD\'deyse onu da seçin.' }),
+        alan('WSDL / XSD dosyaları (yerel; birden çok seçilebilir)', dosya, { icerik: h('div', {}, dosya, secim.not), yardim: 'Dosyalar yalnız okunur; içe aktarılan adresler indirilmez. Şema ayrı XSD\'deyse onu da seçin.' }),
         h('div', { class: 'dugmeler' }, yukle));
     } else if (k === 'openapi') {
       const dosya = h('input', { type: 'file', accept: '.json,.yaml,.yml', id: yeniKimlik('openapi') });
+      const secim = dosyaSecimi(dosya);
       const secimKap = h('div', {});
       let metin = '';
       let dosyaAdi = '';
       const oku = h('button', { type: 'button' }, ikon('yukle'), 'Dosyayı oku');
       oku.addEventListener('click', async () => {
         try {
-          const d = await dosyaMetinleri(dosya);
+          const d = await dosyaMetinleri(secim.dosyalar());
           metin = d.metinler[0]; dosyaAdi = d.ad;
           const r = await onizle(oku, { kaynak: 'openapi', metin, dosyaAdi });
           if (!r || !r.operasyonlar) return;
@@ -137,20 +138,21 @@ export async function sozlesmeSekmesi(kap, proje, s, altKimlik) {
       });
       yerlestir(kaynakPanel,
         h('p', { class: 'soluk kucuk' }, 'OpenAPI 3 ya da Swagger 2 (JSON / YAML). Yalnız başarılı (2xx) yanıt şeması alınır; belge içi $ref çözülür, dış $ref (başka dosya / adres) indirilmez.'),
-        alan('OpenAPI / Swagger dosyası', dosya), h('div', { class: 'dugmeler' }, oku), secimKap);
+        alan('OpenAPI / Swagger dosyası', dosya, { icerik: h('div', {}, dosya, secim.not) }), h('div', { class: 'dugmeler' }, oku), secimKap);
     } else if (k === 'jsonSchema') {
       const dosya = h('input', { type: 'file', accept: '.json,.yaml,.yml', id: yeniKimlik('sema') });
+      const secim = dosyaSecimi(dosya);
       const yapistir = h('textarea', { rows: '6', spellcheck: 'false', class: 'kod-alani', placeholder: '{ "type": "object", "required": ["orderId"], "properties": { "orderId": { "type": "integer" } } }' });
       const al = h('button', { type: 'button', class: 'birincil' }, 'Önizle');
       al.addEventListener('click', async () => {
         try {
-          const d = dosya.files && dosya.files.length ? await dosyaMetinleri(dosya) : { metinler: [yapistir.value], ad: '' };
+          const d = secim.dosyalar().length ? await dosyaMetinleri(secim.dosyalar()) : { metinler: [yapistir.value], ad: '' };
           await onizle(al, { kaynak: 'jsonSchema', metin: d.metinler[0], dosyaAdi: d.ad });
         } catch (e) { mesaj.goster(e.message); }
       });
       yerlestir(kaynakPanel,
         h('p', { class: 'soluk kucuk' }, 'Desteklenen: type, required, properties, items, enum, nullable / "null" türü, format (date, date-time, email). Belge içi $ref (#/definitions, #/$defs) çözülür.'),
-        alan('JSON Schema dosyası', dosya), alan('ya da yapıştırın', yapistir), h('div', { class: 'dugmeler' }, al));
+        alan('JSON Schema dosyası', dosya, { icerik: h('div', {}, dosya, secim.not) }), alan('ya da yapıştırın', yapistir), h('div', { class: 'dugmeler' }, al));
     } else {
       if (!bilgi.ornekler.length) {
         yerlestir(kaynakPanel, bosDurum('Başarılı yanıt yok.', `Bu ${rest ? 'ucun' : 'operasyonun'} senaryolarını Dene ya da Koşu ile çalıştırın; başarılı yanıtlar burada listelenir.`, { ikon: 'grafik' }));

@@ -14,7 +14,7 @@
 // ortam adresleri ondan gelir (bağ kaldırılabilir).
 import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
-import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, api, bildir, dosyaSecimi, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { benzerTabloNotu } from './veri-sagligi.js';
@@ -438,8 +438,11 @@ export function postmanAktarimi(kap, proje, ortamlar) {
   const sonuc = h('div', { 'aria-live': 'polite' });
   /** Dosya metinleri tarayıcıda kalır; yalnız önizleme / aktarım isteğinde sunucuya gider (diske yazılmaz). */
   const dosyalar = { koleksiyon: '', ortam: '' };
-  const oku = async (girdi) => {
-    const f = girdi.files && girdi.files[0];
+  // Her seçimden sonra girdiler sıfırlanır (aynı adlı dosya yeniden seçilince yeniden okunur); seçilen dosyalar saklanır.
+  const koleksiyonSecimi = dosyaSecimi(koleksiyonDosyasi, () => onizle());
+  const ortamSecimi = dosyaSecimi(ortamDosyasi, () => { if (koleksiyonSecimi.dosyalar().length) onizle(); });
+  const oku = async (secim) => {
+    const [f] = secim.dosyalar();
     if (!f) return '';
     if (f.size > 15 * 1024 * 1024) throw new Error('Dosya en fazla 15 MB olabilir.');
     return f.text();
@@ -448,20 +451,18 @@ export function postmanAktarimi(kap, proje, ortamlar) {
     mesaj.temizle();
     yerlestir(sonuc);
     try {
-      dosyalar.koleksiyon = await oku(koleksiyonDosyasi);
-      dosyalar.ortam = await oku(ortamDosyasi);
+      dosyalar.koleksiyon = await oku(koleksiyonSecimi);
+      dosyalar.ortam = await oku(ortamSecimi);
       if (!dosyalar.koleksiyon) return;
       const { onizleme } = await api('/platform/servis/postman/onizle', { govde: { projeId: proje.id, koleksiyon: dosyalar.koleksiyon, ...(dosyalar.ortam ? { ortam: dosyalar.ortam } : {}) } });
       if (!onizleme.klasorler.length) { yerlestir(sonuc, h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Koleksiyonda istek yok.')); return; }
       postmanOnizlemesi(sonuc, proje, ortamlar, onizleme, dosyalar);
     } catch (e) { mesaj.goster(e.message); }
   };
-  koleksiyonDosyasi.addEventListener('change', onizle);
-  ortamDosyasi.addEventListener('change', () => { if (koleksiyonDosyasi.files && koleksiyonDosyasi.files[0]) onizle(); });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Postman koleksiyonu (REST)'), mesaj.kutu,
     h('p', { class: 'soluk kucuk' }, 'Postman\'den "Collection v2.1" (ya da v2.0) olarak dışa aktarılan JSON. Koleksiyonunuz yoksa, yalnız adresiniz varsa "Adım adım" sekmesinde "REST (JSON)" türünü seçin. Dosyalar yalnızca okunur; hiçbir servise istek atılmaz. Her klasör ayrı bir servis, klasördeki istekler o servisin senaryoları olur; klasörsüz istekler koleksiyon adıyla tek serviste toplanır. {{değişken}} değerleri bir test verisi tablosuna gider; gizli değerler yalnız siz onaylarsanız şifreli sütuna yazılır.'),
-    alan('Koleksiyon dosyası', koleksiyonDosyasi, { zorunlu: true }),
-    alan('Ortam dosyası (isteğe bağlı)', ortamDosyasi, { yardim: 'Postman environment JSON: {{değişken}} değerleri buradan çözülür (koleksiyon değişkenlerini ezer).' })), sonuc);
+    alan('Koleksiyon dosyası', koleksiyonDosyasi, { zorunlu: true, icerik: h('div', {}, koleksiyonDosyasi, koleksiyonSecimi.not) }),
+    alan('Ortam dosyası (isteğe bağlı)', ortamDosyasi, { icerik: h('div', {}, ortamDosyasi, ortamSecimi.not), yardim: 'Postman environment JSON: {{değişken}} değerleri buradan çözülür (koleksiyon değişkenlerini ezer).' })), sonuc);
 }
 
 function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {

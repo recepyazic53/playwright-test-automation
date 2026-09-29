@@ -11,7 +11,7 @@
 // isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, dosyaSecimi, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
 import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { riskBelirtilmemisMi } from './ortam-riski.mjs';
@@ -244,9 +244,9 @@ function soapuiAktarimi(kap, proje, ortamlar) {
   const mesaj = mesajKutusu();
   const sonuc = h('div', {});
   let xml = '';
-  dosya.addEventListener('change', async () => {
+  // Her seçimden sonra girdi sıfırlanır: aynı adlı dosya yeniden seçilince yeniden okunur.
+  const secim = dosyaSecimi(dosya, async ([f]) => {
     mesaj.temizle();
-    const f = dosya.files && dosya.files[0];
     if (!f) return;
     if (f.size > 15 * 1024 * 1024) { mesaj.goster('Dosya en fazla 15 MB olabilir.'); return; }
     xml = await f.text();
@@ -265,7 +265,7 @@ function soapuiAktarimi(kap, proje, ortamlar) {
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'SoapUI proje dosyası'), mesaj.kutu,
     h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Proje, ortam, takım ve test durumu özellikleri (${#Project#…}, ${#TestCase#…}) bir test verisi tablosunun sütunları olur ya da var olan bir sütuna bağlanır; Groovy tarih betikleri hesaplama kuralı olarak önerilir. İstekte özelliğe başvuran alanlar servisin alan bağları olur. Test durumunu seçince neyin nereye yazılacağını görür ve seçersiniz; gizli değerler yalnız siz onaylarsanız şifreli yazılır.'),
-    alan('Dosya', dosya)), sonuc);
+    alan('Dosya', dosya), secim.not), sonuc);
 }
 
 /** Özellik hedeflerinin görünen adları (önizlemedeki "Nereden dolsun"). */
