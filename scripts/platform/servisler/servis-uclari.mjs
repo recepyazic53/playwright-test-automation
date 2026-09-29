@@ -27,7 +27,7 @@ function veriKosulariniDenetle(db, projeId, icerik) {
   if (v.hatalar.length) throw new DepoHatasi(v.hatalar[0]);
   return v.ayar ? { ...kalan, veriKosulari: v.ayar } : kalan;
 }
-import { raporMetniniMaskele } from '../sonuclar/servis-sonuclari.mjs';
+import { raporMetniniMaskele, servisKosusuGosterimi } from '../sonuclar/servis-sonuclari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { servisTabanBaglantisi, tabanAdresiIslemi, tabanKararlariniDogrula, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { gizliAlanDegerleriniDogrula, restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
@@ -178,7 +178,8 @@ export const SERVIS_GET_UCLARI = [
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const k = servisKosusuGetir(db, kimlik(q.get('id')));
     if (!k || k.projeId !== projeId) throw new DepoHatasi('Koşu kaydı bulunamadı.');
-    return { kosu: k };
+    // Adı gizli alanların değeri istekte maskeli gösterilir (eski kayıtlar dahil; Sonuçlar'daki kuralla aynı).
+    return { kosu: servisKosusuGosterimi(k, ekGizliAdlar(db)) };
   }],
   // Canlı panel: arka plandaki koşunun durumu (adımlar, maskeli istek / yanıt).
   ['/platform/servis/is', (db, q) => ({ is: servisIsiDurumu(kimlik(q.get('projeId'), 'projeId'), kimlik(q.get('id'))) })],

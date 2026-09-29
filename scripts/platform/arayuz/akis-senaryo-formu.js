@@ -15,6 +15,7 @@ import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyari
 import { basvuru } from './tablo-secimi.mjs';
 import { dosyaKontroluFormu, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { talepAlani } from './talep-alani.js';
+import { adaGoreMaskele, gizliAdMi, maskeyiGeriKoy } from './gizli-adlar.mjs';
 
 const q = encodeURIComponent;
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -105,11 +106,14 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     return t && t.sutunlar.some((c) => c.ad === b.sutun) ? basvuru(t.ad, b.sutun, b.etiket || '', b.bicim || '') : '';
   };
 
+  /** Maskeleme ek adları (Ayarlar > Güvenlik > Maskeleme): adı gizli alanın sabit değeri ve gövdedeki değeri maskeli gösterilir. @type {string[]} */
+  let ekGizliAdlar = [];
   async function adimlariYukle() {
     form = null;
     durumlar = [];
     if (!akisId) { yerlestir(adimKap, h('p', { class: 'soluk' }, 'Akış seçin: akıştaki her operasyon için alanlar burada sorulur.')); kapsamDenetle(); return; }
     yerlestir(adimKap, h('p', { class: 'soluk' }, 'Akış okunuyor…'));
+    ekGizliAdlar = await api('/platform/maskeleme').then((m) => m.ekAdlar || []).catch(() => []);
     try { form = await api(`/platform/servis/akis-senaryo-formu?projeId=${q(proje.id)}&akisId=${q(akisId)}`); } catch (e) { yerlestir(adimKap, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); return; }
     durumlar = form.adimlar.map((a) => adimDurumu(a));
     kapsamDenetle();
@@ -163,8 +167,11 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     const alanlariCiz = () => {
       if (!d.degerler) {
         const g = h('textarea', { class: 'kod-alani', rows: 10, spellcheck: 'false', 'aria-label': `${a.no}. adım istek gövdesi` });
-        g.value = d.govdeG ?? '';
-        g.addEventListener('input', () => { d.govdeG = g.value; });
+        // Adı gizli alanların değeri maskeli gösterilir; maskeli kalan yerlere asıl değer geri yazılır (saklanan gövde değişmez).
+        const MASKE = '••••••';
+        const m = adaGoreMaskele(d.govdeG ?? '', ekGizliAdlar, MASKE);
+        g.value = m.metin;
+        g.addEventListener('input', () => { d.govdeG = maskeyiGeriKoy(g.value, m.asillar, ekGizliAdlar, MASKE); });
         yerlestir(alanKap,
           a.servis.tur === 'rest' && d.http ? h('p', { class: 'kucuk' }, h('code', { class: 'duz' }, `${d.http.metot} ${d.http.yol || '/'}`)) : null,
           a.sema ? h('div', { class: 'not-kutusu uyari' }, 'Kayıtlı gövde alan formunda gösterilemiyor; gövde metin olarak düzenlenir.') : null,
@@ -196,8 +203,15 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
           if (v.kaynak === 'sabit') {
             girdi = sat.alan.secenekler && sat.alan.secenekler.length
               ? h('select', { 'aria-label': `${a.no}. adım ${sat.alan.ad}` }, h('option', { value: '' }, '—'), sat.alan.secenekler.map((x) => h('option', { value: x, selected: v.deger === x }, x)))
-              : h('input', { type: 'text', value: v.deger || '', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${a.no}. adım ${sat.alan.ad}` });
-            girdi.addEventListener(girdi.tagName === 'SELECT' ? 'change' : 'input', () => { v.deger = girdi.value; not.textContent = sabitDegerUyarisi(sat.alan, v.deger) || ''; });
+              : h('input', { type: gizliAdMi(sat.alan.ad, ekGizliAdlar) ? 'password' : 'text', value: v.deger || '', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${a.no}. adım ${sat.alan.ad}` });
+            const kutu = girdi;
+            kutu.addEventListener(kutu.tagName === 'SELECT' ? 'change' : 'input', () => { v.deger = kutu.value; not.textContent = sabitDegerUyarisi(sat.alan, v.deger) || ''; });
+            // Adı gizli alanın sabit değeri (ör. parola) maskeli; "Göster" ile açılır.
+            if (kutu.type === 'password') {
+              const goster = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false', 'aria-label': `${sat.alan.ad}: göster veya gizle` }, 'Göster');
+              goster.addEventListener('click', () => { const acik = kutu.type === 'password'; kutu.type = acik ? 'text' : 'password'; goster.textContent = acik ? 'Gizle' : 'Göster'; goster.setAttribute('aria-pressed', acik ? 'true' : 'false'); });
+              girdi = h('span', { class: 'parola-kutusu' }, kutu, goster);
+            }
           } else if (v.kaynak === 'tablo') {
             girdi = h('select', { 'aria-label': `${a.no}. adım ${sat.alan.ad} tablo sütunu` }, h('option', { value: '' }, '— tablo sütunu —'),
               tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', { value: basvuru(t.ad, c.ad), selected: v.deger === basvuru(t.ad, c.ad) }, `${t.ad} → ${c.ad}`)))),

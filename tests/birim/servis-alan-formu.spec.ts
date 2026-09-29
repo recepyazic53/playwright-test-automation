@@ -489,4 +489,42 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
+  test('arayüz: adı gizli alanın sabit değeri (Password) formda ve gövde metninde maskeli; Göster ile açılır; senaryoda aynen saklanır', async () => {
+    test.setTimeout(60_000);
+    const SABIT = 'Sabit-Form-Parolasi-7';
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    const form = page.locator('.alan-formu');
+    const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await page.getByRole('checkbox', { name: 'Yalnız gönderilenler' }).uncheck();
+    await satir('Password').getByLabel('Password değer kaynağı').selectOption('sabit');
+    const girdi = satir('Password').getByLabel('Password', { exact: true });
+    await expect(girdi).toHaveAttribute('type', 'password');
+    await girdi.fill(SABIT);
+    await satir('Password').getByRole('button', { name: 'Password: göster veya gizle' }).click();
+    await expect(girdi).toHaveAttribute('type', 'text');
+    await satir('Password').getByRole('button', { name: 'Password: göster veya gizle' }).click();
+    await expect(girdi).toHaveAttribute('type', 'password');
+    // Gövde metni görünümünde değer maskeli; "Gizli değerleri göster" ile açılır, yeniden gizlenir.
+    await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
+    const govde = page.getByLabel('İstek gövdesi (SOAP zarfı)');
+    await expect(govde).toHaveValue(/<Password>••••••<\/Password>/);
+    await expect(govde).not.toHaveValue(new RegExp(SABIT));
+    await page.getByRole('button', { name: 'Gizli değerleri göster' }).click();
+    await expect(govde).toHaveValue(new RegExp(`<Password>${SABIT}</Password>`));
+    await page.getByRole('button', { name: 'Gizli değerleri gizle' }).click();
+    await expect(govde).toHaveValue(/<Password>••••••<\/Password>/);
+    await page.getByLabel('Başlık').fill('Parolalı senaryo');
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
+    const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
+    const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Parolalı senaryo');
+    expect(kayit.icerik.govde).toContain(`<Password>${SABIT}</Password>`);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
 });

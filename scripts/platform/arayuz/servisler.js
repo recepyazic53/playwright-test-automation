@@ -13,6 +13,7 @@
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, alanHatasi, api, bildir, bosDurum, dosyaSecimi, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
+import { adaGoreMaskele, gizliAdMi, maskeyiGeriKoy } from './gizli-adlar.mjs';
 import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { riskBelirtilmemisMi } from './ortam-riski.mjs';
 import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
@@ -1028,7 +1029,12 @@ const TIP_ETIKETI = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', man
 const ayniDeger = (a, b) => Boolean(a && b) && a.kaynak === b.kaynak && (a.deger ?? '') === (b.deger ?? '');
 
 async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
-  const { tablolar } = await api(`/platform/tablolar?projeId=${q(proje.id)}`);
+  const [{ tablolar }, ekGizliAdlar] = await Promise.all([
+    api(`/platform/tablolar?projeId=${q(proje.id)}`),
+    api('/platform/maskeleme').then((m) => m.ekAdlar || []).catch(() => [])
+  ]);
+  /** Maskeleme kuralı (çekirdek adlar + Ayarlar > Güvenlik > Maskeleme eki): adı gizli sayılan alanın sabit değeri gizli yazılır. */
+  const gizliMi = (ad) => gizliAdMi(ad, ekGizliAdlar);
   // REST servisi: istek metodu + göreli yol senaryoda (icerik.http); yeni senaryo operasyonun tanımıyla başlar.
   const rest = s.tur === 'rest';
   const ilkOp = (s.ayarlar.operasyonlar || [])[0];
@@ -1070,18 +1076,42 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   // Ek HTTP başlıkları: her satır "Ad: değer" (ör. Authorization: Bearer ${akis:Token}); Content-Type / SOAPAction koşucunundur.
   const basliklar = h('textarea', { class: 'kod-alani', rows: 3, spellcheck: 'false', autocomplete: 'off', 'aria-label': 'HTTP header',
     placeholder: 'Authorization: Bearer ${akis:Token}' });
-  basliklar.value = Object.entries(i.basliklar || {}).map(([a, d]) => `${a}: ${d}`).join('\n');
+  // Gövde ve başlık metinlerinde adı gizli alanların değeri (ör. sabit parola) maskeli gösterilir; "Gizli değerleri göster" ile açılır.
+  // Kaydederken / denerken maskeli yerlere asıl değer geri yazılır (saklanan senaryo değişmez).
+  const METIN_MASKESI = '••••••';
+  let gizliAcik = false;
+  const maskeliMetin = (girdi, bicim) => {
+    let asillar = {};
+    return {
+      yaz: (m) => { if (gizliAcik) { girdi.value = m || ''; asillar = {}; return; } const r = adaGoreMaskele(m || '', ekGizliAdlar, METIN_MASKESI, { bicim }); girdi.value = r.metin; asillar = r.asillar; },
+      oku: () => (gizliAcik ? girdi.value : maskeyiGeriKoy(girdi.value, asillar, ekGizliAdlar, METIN_MASKESI, { bicim })),
+      maskeliMi: () => Object.values(asillar).some((l) => l.some((x) => x !== null))
+    };
+  };
+  const baslikMetni = maskeliMetin(basliklar, 'basliklar');
+  baslikMetni.yaz(Object.entries(i.basliklar || {}).map(([a, d]) => `${a}: ${d}`).join('\n'));
   const basliklarAl = () => {
     /** @type {Record<string, string>} */
     const b = {};
-    for (const satir of basliklar.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) {
+    for (const satir of baslikMetni.oku().split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) {
       const k = satir.indexOf(':');
       if (k <= 0) throw new Error(`Başlık satırı anlaşılmadı: "${satir}" (biçim: Ad: değer)`);
       b[satir.slice(0, k).trim()] = satir.slice(k + 1).trim();
     }
     return Object.keys(b).length ? b : undefined;
   };
-  govde.value = i.govde;
+  const govdeMetni = maskeliMetin(govde, 'govde');
+  govdeMetni.yaz(i.govde);
+  const gizliGosterDugmesi = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-pressed': 'false' }, ikon('goz'), 'Gizli değerleri göster');
+  gizliGosterDugmesi.addEventListener('click', () => {
+    const g = govdeMetni.oku();
+    const b = baslikMetni.oku();
+    gizliAcik = !gizliAcik;
+    govdeMetni.yaz(g);
+    baslikMetni.yaz(b);
+    gizliGosterDugmesi.setAttribute('aria-pressed', gizliAcik ? 'true' : 'false');
+    gizliGosterDugmesi.lastChild.textContent = gizliAcik ? 'Gizli değerleri gizle' : 'Gizli değerleri göster';
+  });
   let mod = 'xml';
   let degerler = {};
   // REST'te alan şeması yalnız tablo bağlama içindir; gövde metin olarak düzenlenir (XML alan formu yok).
@@ -1111,7 +1141,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     const sm = sema();
     if (!sm) return false;
     if (!govde.value.trim()) { degerler = baslangic(sm); mod = 'alanlar'; return true; }
-    const c = govdeCoz(govde.value, sm);
+    const c = govdeCoz(govdeMetni.oku(), sm);
     if (c.uyumsuz.length && !zorla) {
       yerlestir(uyari, h('div', { class: 'not-kutusu uyari', role: 'status' },
         h('b', {}, 'Bu gövde alan formunda tam gösterilemiyor: '), c.uyumsuz.slice(0, 6).join(' '), c.uyumsuz.length > 6 ? ` (+${c.uyumsuz.length - 6})` : '',
@@ -1211,6 +1241,20 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       g = h('input', { type: 'date', 'aria-label': alanT.ad, value: v.deger || '' });
     } else if (alanT.tip === 'tarihSaat') {
       g = h('input', { type: 'datetime-local', step: '1', 'aria-label': alanT.ad, value: (v.deger || '').slice(0, 19) });
+    } else if (gizliMi(alanT.ad)) {
+      // Adı maskeleme listesinde (parola, token… + Ayarlar > Güvenlik > Maskeleme eki) olan alanın sabit değeri gizli yazılır;
+      // "Göster" ile açılır. Değer senaryoda aynen saklanır (saklama biçimi değişmez).
+      g = h('input', { type: 'password', autocomplete: 'new-password', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '' });
+      const goster = h('button', { type: 'button', class: 'kucuk-dugme goster-dugmesi', 'aria-pressed': 'false', 'aria-label': `${alanT.ad}: göster veya gizle` }, 'Göster');
+      goster.addEventListener('click', () => {
+        const acik = g.type === 'password';
+        g.type = acik ? 'text' : 'password';
+        goster.textContent = acik ? 'Gizle' : 'Göster';
+        goster.setAttribute('aria-pressed', acik ? 'true' : 'false');
+      });
+      g.addEventListener('input', () => guncelle(g.value));
+      not.textContent = sabitDegerUyarisi(alanT, v.deger || '') || '';
+      return h('span', { class: 'sabit-deger gizli-sabit' }, h('span', { class: 'parola-kutusu' }, g, goster), not);
     } else {
       g = h('input', { type: 'text', inputmode: alanT.tip === 'tamsayi' || alanT.tip === 'ondalik' ? 'decimal' : null,
         autocomplete: 'off', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '', placeholder: alanT.tip === 'tamsayi' ? 'sayı' : alanT.tip === 'ondalik' ? '0.00' : '' });
@@ -1341,7 +1385,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       title: m === 'alanlar' && !sm ? 'Bu operasyonun alan listesi yok' : null,
       onclick: () => {
         if (m === mod) return;
-        if (m === 'xml') { govde.value = govdeUretFormdan(); mod = 'xml'; yerlestir(uyari); ciz(); return; }
+        if (m === 'xml') { govdeMetni.yaz(govdeUretFormdan()); mod = 'xml'; yerlestir(uyari); ciz(); return; }
         if (formaGec()) { yerlestir(uyari); ciz(); }
       }
     }, e)));
@@ -1350,7 +1394,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       sm || rest ? null : h('div', { class: 'not-kutusu', role: 'status' }, `"${operasyon.value}" operasyonunun alan listesi yok; gövde XML olarak düzenlenir. `, ortamlar.length > 1 ? semaOrtami.el : null, ' ', semaAl),
       h('div', { class: 'govde-duzen' }, alan(rest ? `İstek gövdesi${i.http?.icerikTuru ? ` (${i.http.icerikTuru})` : ''}` : 'İstek gövdesi (SOAP zarfı)', govde, { yardim: rest
         ? 'GET / DELETE için boş bırakılabilir. Değerler ${Tablo.Sütun}, ${akis:Ad} ya da tarih kuralıyla yazılır; JSON gövdede değerler kaçışlanır.'
-        : 'Parametreler adıyla yazılır: ${MUSTERI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()));
+        : 'Parametreler adıyla yazılır: ${MUSTERI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()),
+      h('div', { class: 'dugmeler' }, gizliGosterDugmesi, h('span', { class: 'soluk kucuk' }, 'Adı gizli sayılan alanların (parola, token… ve Ayarlar > Güvenlik > Maskeleme ekleri) değeri maskeli gösterilir; senaryoda aynen saklanır.')));
   };
   const parametrePaneli = () => {
     const ekle = (ad) => { govde.setRangeText(`\${${ad}}`, govde.selectionStart, govde.selectionEnd, 'end'); govde.focus(); };
@@ -1366,7 +1411,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (rest && op?.metot) { httpMetot.value = op.metot; httpYol.value = restOpYolu(op); }
     const sm = sema();
     if (mod === 'alanlar' || !govde.value.trim()) {
-      if (sm) { degerler = baslangic(sm); mod = 'alanlar'; } else { govde.value = ''; mod = 'xml'; }
+      if (sm) { degerler = baslangic(sm); mod = 'alanlar'; } else { govdeMetni.yaz(''); mod = 'xml'; }
     }
     yerlestir(uyari);
     ciz();
@@ -1496,8 +1541,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   /** Senaryodaki tablo grupları (formdaki metinlerden; sırayla, tekrarsız). */
   const veriGruplari = () => {
     let metinler = [];
-    const govdeMetni = mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value;
-    metinler = [govdeMetni, basliklar.value, rest ? httpYol.value : ''];
+    const guncelGovde = mod === 'alanlar' && sema() ? govdeUretFormdan() : govdeMetni.oku();
+    metinler = [guncelGovde, baslikMetni.oku(), rest ? httpYol.value : ''];
     const gruplar = new Map();
     for (const m of metinler.join('\n').matchAll(/\$\{([^{}]+)\}/g)) {
       const b = basvuruCoz(m[1]);
@@ -1531,7 +1576,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const icerikAl = () => ({
     ...i, tabloSecimleri: tabloSecimleriAl(),
     // Çalıştırma biçimi: yalnız senaryoda kullanılan çoklu gruplar; hiçbiri yoksa alan kaldırılır (bugünkü davranış).
-    veriKosulari: kaydedilecekVeriKosulari(veriKosulari, veriGruplari().map((g) => g.anahtar)) ?? undefined, operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value, basliklar: basliklarAl(),
+    veriKosulari: kaydedilecekVeriKosulari(veriKosulari, veriGruplari().map((g) => g.anahtar)) ?? undefined, operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govdeMetni.oku(), basliklar: basliklarAl(),
     ...(rest ? { http: { ...(i.http || {}), metot: httpMetot.value, yol: httpYol.value.trim() } } : {}),
     sozlesmeDogrula: sozlesmeKutusu.checked,
     talepler: talep.degerler(),

@@ -44,7 +44,7 @@ import { kesilebilirBekle, servisEszamanliOku, servisIstekBeklemeOku, sinirliKos
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
-import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { adaGoreMaskele, gizliAdMi, gizliAdliDegerler } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
 import { HAZIR_YETKI, beklemeMs, hazirYetkiKuraliAcik, servisKosuluDegerlendir, servisKurallari, suzgecTutar } from '../ayarlar/kurtarma-kurallari.mjs';
@@ -1110,12 +1110,17 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     // REST: gövde değerleri içerik türüne göre kaçışlanır (JSON / form / XML); yol değerleri URL kodlanır.
     const govde = yerTutuculariDoldur(icerik.govde, http ? { ...doldurma, kacis: govdeKacisi(http.icerikTuru) } : doldurma);
     cagri.istek = govde;
+    // Adı gizli (maskeleme listesi + Ayarlar > Güvenlik > Maskeleme eki) alanların değerleri de sırdır — ör. "Sabit değer" olarak
+    // yazılan parola: istek, adres, yanıt ve kayıtta maskelenir (senaryodaki değer olduğu gibi saklanır).
+    gizliler = [...gizliler, ...gizliAdliDegerler(govde, ekAdlar)];
     if (http) {
       adres = adresBirlestirRest(servisAdr, yerTutuculariDoldur(http.yol, { ...doldurma, kacis: 'url' }));
+      gizliler = [...gizliler, ...gizliAdliDegerler(adres, ekAdlar, { bicim: 'yol' })];
       sonuc.adres = gizlileriMaskele(adres, gizliler);
     }
     const ekBasliklar = Object.fromEntries(Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]));
-    sonuc.istek = gizlileriMaskele(govde, gizliler);
+    gizliler = [...gizliler, ...Object.entries(ekBasliklar).filter(([a, d]) => gizliAdMi(a, ekAdlar) && typeof d === 'string' && d.trim()).map(([, d]) => String(d))];
+    sonuc.istek = adaGoreMaskele(gizlileriMaskele(govde, gizliler), ekAdlar, MASKE).metin;
     if (Object.keys(ekBasliklar).length) sonuc.istekBasliklari = basliklariMaskele(ekBasliklar, gizliler, ekAdlar);
     olay('hazirlik', 'tamam', { adres: sonuc.adres, istek: sonuc.istek });
     adim = 'gonderim';
