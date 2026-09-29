@@ -27,6 +27,8 @@ export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (yeniden adlandır, varsayılan yap, sil), projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: kanıt düzeyi ve ortam hızı profilleri, yeniden deneme ve süre limiti; tüm ayrıntılar (video / ekran görüntüsü / iz kaydı, bekleme süreleri, servis zaman aşımı, tarih biçimi, tarama / akış kaydı) Gelişmiş\'te. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
+  // Kurtarma kuralları eskiden "Proje ve ortamlar" sayfasının dibindeydi; orada "taşındı" bağlantısı kalır (adres: #/ayarlar/kurtarma).
+  { ad: 'kurtarma', etiket: 'Kurtarma kuralları', ikon: 'yenile', aciklama: 'Koşuda bilinen geçici bir sorun görülünce ne yapılacağı: "şu görülürse şunu yap" kuralları (ör. oturum bitti yazısı → girişi yenile, HTTP 503 → bekleyip tekrar gönder). Proje düzeyindedir; ekran ve servis kuralları, kapsam (ekranlar / servisler, ortamlar) ve son 7 günde kaç kez çalıştıkları burada.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Saklama kartı dört saklama kuralını (koşu sonuçları, medya inceltme, rapor ve video saklama) ve otomatik yedek sayısını tek zaman çizelgesinde gösterir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; bir izin paketiyle birkaçını tek onayla ya da tek tek açarsınız. Açtığınız izinler kasada saklanır.' },
@@ -46,7 +48,8 @@ export const UST_SAYFALAR = [
 ];
 
 /** Eski adres → yeni adres (Ayarlar'dan taşınan sayfalar; eski yer imleri ve bağlantılar çalışmaya devam eder). */
-export const ESKI_ADRESLER = Object.freeze({ 'test-verisi': '#/veri', baglam: '#/veri', 'zamanlanmis-kosular': '#/planli-kosular', 'planli-kosular': '#/planli-kosular' });
+export const ESKI_ADRESLER = Object.freeze({ 'test-verisi': '#/veri', baglam: '#/veri', 'zamanlanmis-kosular': '#/planli-kosular', 'planli-kosular': '#/planli-kosular',
+  'kurtarma-kurallari': '#/ayarlar/kurtarma' });
 
 const ISLEM_ETIKETI = {
   olustur: 'Oluşturuldu', guncelle: 'Güncellendi', sil: 'Silindi',
@@ -73,7 +76,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
     entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
-    kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
+    kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -339,7 +342,19 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
     tabanAdresleriBolumu(proje),
-    kurtarmaKurallariBolumu(proje));
+    // Kurtarma kuralları kendi Ayarlar bölümüne taşındı; eski yerinden de bulunabilsin.
+    h('p', { class: 'not-kutusu bilgi tasindi-notu kurtarma-tasindi', role: 'note' }, 'Kurtarma kuralları artık Ayarlar menüsünde kendi bölümünde: ',
+      h('a', { href: '#/ayarlar/kurtarma' }, 'Kurtarma kuralları'), '.'));
+}
+
+/**
+ * Ayarlar > Kurtarma kuralları (eskiden Proje ve ortamlar sayfasının dibinde). Proje yoksa kısa not.
+ * #/ayarlar/kurtarma/yeni: "Kural ekle" penceresi açık gelir (hızlı aramadaki "Kurtarma kuralı ekle").
+ */
+function kurtarmaKurallariSayfasi(govde, baglam) {
+  const proje = baglam.durum.proje;
+  if (!proje) { yerlestir(govde, bosDurum('Önce bir proje seçin.', null, { ikon: 'yenile', rol: 'status' })); return; }
+  yerlestir(govde, kurtarmaKurallariBolumu(proje, { sayfa: true, yeniKural: baglam.odak === 'yeni' }));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -752,6 +767,12 @@ async function yedekleme(govde, baglam, yenile) {
     yedekKlasoruBolumu(yedekKlasoru, yenile),
     liste);
   govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, veriKarti, sonucTemizlemeKarti());
+  // Hızlı aramadan gelince (#/ayarlar/yedekleme/disa | ice): ilgili kart görünür alana gelir ve ilk öğesine odaklanılır.
+  const hedef = baglam.odak === 'disa' ? disaForm : baglam.odak === 'ice' ? iceKart : null;
+  if (hedef) {
+    hedef.scrollIntoView({ block: 'start' });
+    /** @type {HTMLElement | null} */ (baglam.odak === 'ice' ? iceBaslat : hedef.querySelector('input[type="password"]'))?.focus();
+  }
 }
 
 /**
@@ -880,6 +901,16 @@ async function kosuAyarlari(govde, baglam) {
   const tasindi = h('p', { class: 'not-kutusu bilgi tasindi-notu', role: 'note' }, 'Planlı koşular (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma) artık üst menüde: ',
     h('a', { href: '#/planli-kosular' }, 'Planlı koşular'), '.');
   yerlestir(govde, form, kurallar, tasindi);
+  // #/ayarlar/kosu/<ayar anahtarı> (ör. giriş tarifindeki "Oturum kontrolü" bağlantısı, hızlı arama): ayarın bulunduğu kapalı
+  // "Gelişmiş" açılır, alan görünür alana gelir ve odaklanır.
+  const odak = baglam && baglam.odak ? form.querySelector(`[data-ayar="${CSS.escape(baglam.odak)}"]`) : null;
+  if (odak) {
+    const kapali = odak.closest('details');
+    if (kapali) /** @type {HTMLDetailsElement} */ (kapali).open = true;
+    odak.classList.add('ayar-vurgu');
+    odak.scrollIntoView({ block: 'center' });
+    /** @type {HTMLElement | null} */ (odak.querySelector('input, select'))?.focus();
+  }
 }
 
 /**
@@ -1039,6 +1070,7 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
           h('label', { class: 'secenek', for: girdi.id }, girdi, t.etiket),
           h('div', { class: 'yardim', id: yardimId }, kisaAciklama(t.aciklama, t.etiket), ` Varsayılan: ${t.varsayilan ? 'açık' : 'kapalı'}.`),
           h('div', { class: 'alan-hatasi', id: `${girdi.id}-hata`, role: 'alert' }));
+        kutu.dataset.ayar = t.anahtar;
         if (t.etkinKosul) {
           const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);
           girdi.setAttribute('aria-describedby', `${girdi.getAttribute('aria-describedby')} ${not.id}`);
@@ -1054,7 +1086,10 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
       const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
       // Uzun açıklama: 1–2 cümle görünür, ayrıntı "?" ipucunda; sınırlar ve varsayılan her zaman görünür.
-      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: h('span', {}, kisaAciklama(t.aciklama, t.etiket), ` ${sinir}Varsayılan: ${varsayilan}.`) });
+      // İlişkili ayarın yeri (tanımdaki "baglanti"; ör. Oturum kontrolü → giriş tarifindeki Oturum kontrol adresi): her zaman görünür.
+      const baglanti = t.baglanti ? h('span', { class: 'ayar-baglantisi' }, ' ', t.baglanti.metin, ' ', h('a', { href: t.baglanti.adres }, t.baglanti.etiket), '.') : null;
+      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: h('span', {}, kisaAciklama(t.aciklama, t.etiket), ` ${sinir}Varsayılan: ${varsayilan}.`, baglanti) });
+      kutu.dataset.ayar = t.anahtar;
       if (t.etkinKosul) {
         // Bağlı ayar (etkinKosul) bu değerde değilken alan pasif; neden alanın altında yazar (değer korunur, kaydedilir).
         const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);

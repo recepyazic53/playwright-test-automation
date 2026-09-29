@@ -73,7 +73,7 @@ test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
     // Ayarlar: bölüm listesinde Test verisi yok; "Üst menüye taşındı" bağlantıları yeni yerlere gider.
     await menu.getByRole('link', { name: 'Ayarlar' }).click();
     const bolumler = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
-    await expect(bolumler.getByRole('link')).toHaveText(['Proje ve ortamlar', 'Giriş profilleri', 'Koşu', 'Yedekleme', 'Güvenlik', 'İzinler', 'Entegrasyonlar', 'Raporlar', 'Arayüz']);
+    await expect(bolumler.getByRole('link')).toHaveText(['Proje ve ortamlar', 'Giriş profilleri', 'Koşu', 'Kurtarma kuralları', 'Yedekleme', 'Güvenlik', 'İzinler', 'Entegrasyonlar', 'Raporlar', 'Arayüz']);
     const tasinan = page.getByRole('navigation', { name: 'Üst menüye taşınan sayfalar' });
     await tasinan.getByRole('link', { name: 'Test verisi' }).click();
     await expect(page).toHaveURL(/#\/veri$/);

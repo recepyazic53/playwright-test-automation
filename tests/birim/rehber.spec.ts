@@ -44,7 +44,7 @@ test('rehber içerikleri: ürün/şirket adı içermez; her rehberin adımı ve 
   expect(yasakSozcukleriBul(metin)).toEqual([]);
   const anahtarlar = [...metin.matchAll(/^ {2}(?:'([a-z0-9-]+)'|([a-z0-9]+)): \{/gm)].map((m) => m[1] || m[2]);
   expect(anahtarlar).toEqual(expect.arrayContaining(['genel', 'sonuclar', 'senaryolar', 'senaryo-formu', 'servisler', 'servis-akislari', 'ekranlar', 'ekran',
-    'akis-tasarimi', 'ayarlar-proje', 'ayarlar-giris', 'veri', 'planli-kosular', 'ayarlar-kosu', 'ayarlar-arayuz']));
+    'akis-tasarimi', 'ayarlar-proje', 'ayarlar-giris', 'veri', 'planli-kosular', 'ayarlar-kosu', 'ayarlar-kurtarma', 'ayarlar-arayuz']));
 });
 
 test.describe('Rehber arayüzü', () => {
