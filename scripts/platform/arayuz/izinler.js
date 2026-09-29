@@ -51,7 +51,7 @@ export function izinPaketiSecimi(s) {
     canliUyarisi.hidden = !sec.canli;
     const istenen = paketIzinleri(sec);
     const acilacak = istenen.filter((a) => izinler[a] !== true);
-    liste.replaceChildren(
+    liste.replaceChildren(...[
       ...istenen.map((a) => {
         const t = IZIN_TANIMLARI.find((x) => x.anahtar === a);
         const acik = izinler[a] === true;
@@ -62,7 +62,8 @@ export function izinPaketiSecimi(s) {
       }),
       istenen.length ? null : h('li', { class: 'soluk kucuk' }, 'Hiçbir izin açılmaz: izne bağlı her işlemde "Bu işlem için … iznini açmalısınız" uyarısı çıkar ve izni orada tek tek açarsınız.'),
       h('li', { class: 'izin-paketi-disi kucuk' }, ikon('carpi'), ' Pakete girmez, her zaman tek tek açılır: ',
-        PAKET_DISI_IZINLER.map((a) => IZIN_TANIMLARI.find((x) => x.anahtar === a)?.etiket || a).join(', '), '.'));
+        PAKET_DISI_IZINLER.map((a) => IZIN_TANIMLARI.find((x) => x.anahtar === a)?.etiket || a).join(', '), '.')
+    ].filter(Boolean));
     dugme.textContent = acilacak.length ? (s.dugmeMetni ? s.dugmeMetni(acilacak.length) : `Bu ${acilacak.length} izni aç`) : (s.bosDugmeMetni || 'Açılacak izin yok');
     dugme.disabled = !acilacak.length && !s.bosDugmeMetni;
   };

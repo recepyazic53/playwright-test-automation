@@ -120,6 +120,7 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     await kart.getByRole('radio', { name: /Test \+ veritabanı okuma/ }).check();
     await expect(liste.locator('li[data-izin]')).toHaveCount(4);
     await expect(liste.locator('li[data-izin="veritabani-okuma"]')).toContainText('risk:');
+    await expect(liste).not.toContainText('null');
     await expect(liste).toContainText('Pakete girmez, her zaman tek tek açılır: Veritabanına yazma, Sistem değişikliği, Güvenlik gevşetme.');
     const canli = kart.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırabilsin' });
     await expect(canli).not.toBeChecked();
