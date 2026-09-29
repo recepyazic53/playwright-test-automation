@@ -95,9 +95,11 @@ export function kartlariHesapla(kosular) {
 /**
  * Trend noktaları (kronolojik). urun verilmezse Genel trendi: yalnızca 'Genel' kapsamlı tam
  * koşuların toplamı; verilirse o ürünü içeren tam koşulardaki yalnızca o ürünün sayıları.
- * @param {HesapKosusu[]} kosular @param {string | null} urun
+ * secenek.tumKapsamlar (yalnız Genel'de): kapsamı ne olursa olsun (ekran kapsamlı dahil) tüm tam koşular — Genel
+ * kapsamlı koşu yokken trendin neden boş kaldığını açıklamak ve istenirse bu koşuları göstermek için.
+ * @param {HesapKosusu[]} kosular @param {string | null} urun @param {{ tumKapsamlar?: boolean }} [secenek]
  */
-export function trendHesapla(kosular, urun) {
+export function trendHesapla(kosular, urun, secenek = {}) {
   return kosular
     .filter((k) => k.tur === 'tam')
     .flatMap((k) => {
@@ -105,7 +107,8 @@ export function trendHesapla(kosular, urun) {
         const s = k.urunler[urun];
         return s && durumToplami(s) > 0 ? [{ kosuId: k.id, z: k.z, kapsam: k.kapsam, ...sayilariTopla([s]) }] : [];
       }
-      if ((k.kapsam ?? 'Genel') !== 'Genel') return [];
-      return [{ kosuId: k.id, z: k.z, kapsam: 'Genel', ...sayilariTopla(Object.values(k.urunler)) }];
+      const kapsam = k.kapsam ?? 'Genel';
+      if (kapsam !== 'Genel' && !secenek.tumKapsamlar) return [];
+      return [{ kosuId: k.id, z: k.z, kapsam, ...sayilariTopla(Object.values(k.urunler)) }];
     });
 }

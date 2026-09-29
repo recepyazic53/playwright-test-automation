@@ -4351,3 +4351,11 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 /* Radyo alanı: kaynak (Tablodan al) değerden ayrı, başlıkta düğme; tablodan alınınca seçenekler yerine kaynak kutusu. */
 .kaynak-dugmesi { border-style: dashed; }
 .tablodan-deger.kaynak-kutusu { border: 1px dashed var(--cizgi); border-radius: var(--yaricap-m); padding: 6px 10px; }
+
+
+/* v1.4 Sonuçlar (ku14-sonuclar): tıklanabilir koşu geçmişi satırı, özet kutusunda sarı eşik, dönem notu, boş koşu onayının nedeni. */
+.gecmis-tablosu tr.tiklanabilir-satir { cursor: pointer; }
+.gecmis-tablosu tr.tiklanabilir-satir:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; background: var(--panel-2); }
+.sonuc-karti.uyari { --k: var(--atlanan-dolgu); }
+.ozet-donem-notu { display: block; margin-top: 2px; }
+.kosu-bos-nedeni { margin: 0 0 10px; }

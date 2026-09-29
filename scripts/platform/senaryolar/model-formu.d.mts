@@ -107,7 +107,9 @@ export declare function senaryoNesnesiOlustur(
 export declare function hataKontrolu(alanYolu: string, sema: FormSemasi): string | null;
 export declare function hatalariDagit(bulgular: readonly DogrulamaBulgusu[], sema: FormSemasi): { alanlar: Record<string, string[]>; genel: string[] };
 export declare function akisMesajlari(model: unknown): { uyarilar: Array<{ adim: string; adimBasligi: string; metin: string }>; basariMesajlari: string[] };
-export declare function beklenenSonucEtiketi(sema: FormSemasi, veri: unknown): { tur: 'basari' | 'hata'; metin: string; aciklama: string } | null;
+export declare function beklenenSonucEtiketi(sema: FormSemasi, veri: unknown): { tur: 'basari' | 'hata'; metin: string; aciklama: string; adimId?: string } | null;
+/** Sonuç kaydındaki beklenen sonuç metni: hata → adım + mesaj; başarı → son adımın başarı göstergesi (yoksa akış açıklaması). */
+export declare function beklenenSonucMetni(model: unknown, sema: FormSemasi, veri: unknown): string | null;
 export declare function beklenenHataOnerisi(
   sonuc: { hataMesaji?: string | null; basarisizAdim?: string | null } | null,
   sema: FormSemasi
