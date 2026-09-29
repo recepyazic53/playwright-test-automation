@@ -148,6 +148,19 @@ function karsilikPenceresi(s, degerler) {
       const dolu = degerler.filter((d) => is[d].sayfa.trim() || is[d].servis.trim()).length;
       sayac.textContent = `${degerler.length} değer · ${dolu} karşılık tanımlı`;
     }
+    // Servis kodları sayfa kodlarıyla aynıysa: dolu sayfa değerleri yalnız BOŞ servis değerlerine kopyalanır (dolu servis değeri korunur).
+    const kopyalaNotu = h('span', { class: 'kucuk soluk', 'aria-live': 'polite' });
+    const kopyala = h('button', { type: 'button', class: 'kucuk-dugme', title: 'Sayfa değeri dolu ve servis değeri boş olan satırlarda sayfa değerini servis değerine yazar; dolu servis değerleri değişmez.' },
+      ikon('kopya'), 'Sayfa değerlerini servis değerine kopyala');
+    kopyala.addEventListener('click', () => {
+      const hedef = degerler.filter((d) => is[d].sayfa.trim() && !is[d].servis.trim());
+      for (const d of hedef) is[d].servis = is[d].sayfa.trim();
+      const korunan = degerler.filter((d) => is[d].sayfa.trim() && is[d].servis.trim() && is[d].servis.trim() !== is[d].sayfa.trim()).length;
+      kopyalaNotu.textContent = hedef.length
+        ? `${hedef.length} değer kopyalandı${korunan ? ` · ${korunan} dolu servis değeri korundu` : ''}. Tamam'a basınca kaydedilir.`
+        : 'Kopyalanacak değer yok: sayfa değeri dolu ve servis değeri boş satır bulunmuyor.';
+      ciz();
+    });
     const tamam = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Tamam');
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const diyalog = h('dialog', { class: 'onay-diyalogu karsilik-diyalogu', 'aria-labelledby': 'karsilik-basligi' },
@@ -155,7 +168,8 @@ function karsilikPenceresi(s, degerler) {
         h('h2', { id: 'karsilik-basligi' }, `"${s.ad}" değerlerinin karşılıkları`),
         h('p', { class: 'soluk kucuk' }, 'Senaryoda tablodaki değer seçilir. ', h('b', {}, 'Sayfa değeri'), ': ekranda seçeneğin değeri farklıysa (ör. EKSPRES → 1) koşu seçeneği bununla seçer. ',
           h('b', {}, 'Servis değeri'), ': servis gövdesine yazılacak değer. Boş bırakılırsa tablodaki değer kullanılır.'),
-        h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
+        h('div', { class: 'karsilik-arac-cubugu' }, h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG), kopyala),
+        kopyalaNotu,
         h('div', { class: 'tablo-kaydirma karsilik-tablosu' }, h('table', { class: 'veri-tablosu' },
           h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Tablodaki değer'), h('th', { scope: 'col' }, 'Sayfa değeri'), h('th', { scope: 'col' }, 'Servis değeri'))), govde)),
         alt),

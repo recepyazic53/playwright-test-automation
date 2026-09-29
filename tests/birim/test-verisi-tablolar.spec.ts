@@ -240,6 +240,19 @@ test.describe('test verisi tabloları', () => {
     await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
     const t = (await tablolar()).find((x) => x.ad === 'Ülke seçenekleri') as Nesne;
     expect(t.sutunlar[0].karsiliklar).toEqual({ 'EKSPRES': { sayfa: '1', servis: 'EXPRESS' }, 'STANDART': { sayfa: '2' } });
+    // Sayfa değerlerini servis değerine kopyala: yalnız boş servis değerleri dolar, dolu olan (EXPRESS) korunur.
+    await duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' }).click();
+    await p.getByRole('button', { name: 'Sayfa değerlerini servis değerine kopyala' }).click();
+    await expect(p.getByLabel('STANDART servis değeri')).toHaveValue('2');
+    await expect(p.getByLabel('EKSPRES servis değeri')).toHaveValue('EXPRESS');
+    await expect(p.getByText('1 değer kopyalandı · 1 dolu servis değeri korundu.', { exact: false })).toBeVisible();
+    await p.getByRole('button', { name: 'Sayfa değerlerini servis değerine kopyala' }).click();
+    await expect(p.getByText('Kopyalanacak değer yok', { exact: false })).toBeVisible();
+    await p.getByRole('button', { name: 'Tamam' }).click();
+    await duz.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
+    const t2 = (await tablolar()).find((x) => x.ad === 'Ülke seçenekleri') as Nesne;
+    expect(t2.sutunlar[0].karsiliklar).toEqual({ 'EKSPRES': { sayfa: '1', servis: 'EXPRESS' }, 'STANDART': { sayfa: '2', servis: '2' } });
     // Vazgeç değiştirmez.
     await duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' }).click();
     await p.getByLabel('EKSPRES sayfa değeri').fill('9');
