@@ -32,7 +32,7 @@ import { senaryoSayfasi } from './akis-senaryo-formu.js';
 import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
-import { calistirmaBicimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
+import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -593,7 +593,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
   let aramaZamanlayici = null;
   arama.addEventListener('input', () => {
     clearTimeout(aramaZamanlayici);
-    aramaZamanlayici = setTimeout(() => { liste.arama = arama.value; ciz(); }, 120);
+    aramaZamanlayici = setTimeout(() => { if (liste.arama === arama.value) return; liste.arama = arama.value; ciz(); }, 120);
   });
   const gorunenler = () => senaryolar.filter((x) => {
     if (liste.kosuda === 'evet' && !dahilMi(x)) return false;
@@ -749,7 +749,15 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
       h('span', { class: 'sag' }, h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { liste.secim.clear(); ciz(); } }, 'Seçimi temizle'))));
   }
 
+  // Açık ⋯ menüsünün senaryosu: tablo yeniden çizilince (ör. 120 ms gecikmeli arama, menü o arada açıldıysa) menü aynı satırda
+  // açık kalır. Önceki çizimin menülerinin belge dinleyicileri yeniden çizimde kaldırılır.
+  /** @type {string | null} */
+  let acikMenu = null;
+  /** @type {Array<() => void>} */
+  let menuTemizlikleri = [];
   function tabloCiz(gorunen) {
+    for (const kaldir of menuTemizlikleri.splice(0)) kaldir();
+    if (acikMenu && !gorunen.some((x) => x.id === acikMenu)) acikMenu = null;
     if (!gorunen.length) {
       yerlestir(tabloAlani, h('section', { class: 'kart' }, bosDurum('Filtreyle eşleşen senaryo yok.', 'Aramayı ya da filtreleri değiştirin.', { ikon: 'ara', eylem: h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => temizle.click() }, 'Filtreleri temizle') })));
       return;
@@ -849,14 +857,23 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
       h('button', { type: 'button', role: 'menuitem', class: 'tehlikeli', onclick: () => { kapat(); sil([x]); } }, ikon('cop'), 'Sil'));
     const kutu = h('span', { class: 'satir-menusu-kap' }, dugme, menu);
     const disTik = (o) => { if (!kutu.contains(o.target)) kapat(); };
-    function kapat() { menu.hidden = true; dugme.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', disTik); }
-    dugme.addEventListener('click', () => {
-      if (!menu.hidden) { kapat(); return; }
+    function kapat() {
+      menu.hidden = true; dugme.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', disTik);
+      if (acikMenu === x.id) acikMenu = null;
+    }
+    /** @param {boolean} odakla ilk öğeye odak (yeniden çizimde yalnız odak sayfada kaybolduysa) */
+    function ac(odakla) {
       menu.hidden = false; dugme.setAttribute('aria-expanded', 'true');
-      setTimeout(() => document.addEventListener('click', disTik), 0);
-      menu.querySelector('button:not(:disabled)')?.focus();
-    });
+      acikMenu = x.id;
+      setTimeout(() => { if (!bitti && !menu.hidden) document.addEventListener('click', disTik); }, 0);
+      if (odakla) menu.querySelector('button:not(:disabled)')?.focus();
+    }
+    dugme.addEventListener('click', () => { if (!menu.hidden) kapat(); else ac(true); });
     menu.addEventListener('keydown', (o) => { if (o.key === 'Escape') { kapat(); dugme.focus(); } });
+    let bitti = false;
+    menuTemizlikleri.push(() => { bitti = true; document.removeEventListener('click', disTik); });
+    // Tablo yeniden çizildi (ör. gecikmeli arama) ve bu satırın menüsü açıktı: yeni satırda açık kalır.
+    if (acikMenu === x.id) ac(!document.activeElement || document.activeElement === document.body);
     return kutu;
   }
 
@@ -1323,8 +1340,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   operasyon.addEventListener('change', sozlesmeNotuCiz);
   sozlesmeNotuCiz();
-  // --- Veri koşusu (tablodan çoklu satır; tablolar/veri-kosulari.mjs): gövde / header / yoldaki ${Tablo.Sütun} gruplarının çalıştırma
-  // biçimi. Varsayılan "Tek satır" (bugünkü davranış); tahmini çalıştırma sayısı varsayılan (yoksa ilk) ortam için gösterilir.
+  // --- Veri koşusu (tablodan çoklu satır; tablolar/veri-kosulari.mjs): gövde / header / yoldaki ${Tablo.Sütun} gruplarında sade çoklu
+  // çalıştırma ("Uyan her satır ayrı test"; kayıtlı "seçili satırlar" korunur). Varsayılan tek satır (bugünkü davranış); tahmini çalıştırma sayısı varsayılan (yoksa ilk) ortam için gösterilir.
   const veriKosulari = JSON.parse(JSON.stringify(i.veriKosulari || {}));
   veriKosulari.gruplar ??= {};
   const veriKutusu = h('div', { class: 'veri-kosusu-kutusu' });
@@ -1354,7 +1371,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     const d = { veriKosulari, ortam: veriOrtami, ortamAdi: (id) => (ortamlar.find((o) => o.id === id) || {}).ad || 'başka ortam', tablolar, tabloSecimleri, degisti: () => veriCiz(true) };
     yerlestir(veriKutusu,
       gruplar.map((g) => h('div', { class: 'satir-secimi-grubu' }, h('h4', {}, `${g.tablo.ad}${g.etiket ? ` [${g.etiket}]` : ''}`),
-        calistirmaBicimi(g.tablo, g.anahtar, tabloSecimleri[g.anahtar] || {}, d))),
+        cokluCalistirmaSecimi(g.tablo, g.anahtar, tabloSecimleri[g.anahtar] || {}, d) || h('p', { class: 'soluk kucuk' }, 'Tabloda birden çok satır yok; her koşuda bir kez çalışır.'))),
       veriKosusuOzeti(gruplar, d));
   };
   const veriBolumu = h('fieldset', {}, h('legend', {}, 'Veri koşusu'), veriKutusu);

@@ -143,11 +143,12 @@ test.describe('servis senaryosu: tablodan çoklu veri koşusu ve başarısızlar
     await tasmaYok();
     await plan.getByRole('button', { name: 'Vazgeç' }).click();
     await page.setViewportSize({ width: 1400, height: 1000 });
-    // Senaryo formu: "Veri koşusu" bölümünde Kişi grubu "Uyan tüm satırlar".
+    // Senaryo formu: "Veri koşusu" bölümünde Kişi grubu sade "Uyan her satır ayrı test" kutusu işaretli (eski üç seçenekli liste yok).
     await page.goto(`/#/servisler/s/${servisId}/senaryo/${senaryoId}`);
-    const bicim = page.locator(`select[data-calistirma-bicimi="${kisiId}|"]`);
+    const bicim = page.locator(`input[data-coklu-calistirma="${kisiId}|"]`);
     await expect(bicim).toBeVisible({ timeout: 15_000 });
-    await expect(bicim).toHaveValue('tumu');
+    await expect(bicim).toBeChecked();
+    await expect(page.locator('select[data-calistirma-bicimi]')).toHaveCount(0);
     await expect(page.locator('[data-tahmini-test]')).toHaveAttribute('data-tahmini-test', '2');
     await page.screenshot({ path: test.info().outputPath('servis-formu-veri-kosusu.png'), animations: 'disabled', fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });

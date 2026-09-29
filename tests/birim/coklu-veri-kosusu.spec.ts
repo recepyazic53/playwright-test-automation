@@ -374,14 +374,29 @@ test.describe('uçtan uca: tablodan çoklu senaryo ve başarısızları tekrar �
       const page = await baglam.newPage();
       const hatalar: string[] = [];
       page.on('pageerror', (e) => hatalar.push(String(e)));
-      // 1) Senaryo formu: Plan grubunda "Seçili satırların her biri", işaretli satırlar ve tahmini test sayısı.
+      // 1) Senaryo formu: grubu olmayan tekil tablo (Plan): eski üç seçenekli "Çalıştırma biçimi" listesi yok; kayıtlı "seçili satırlar"
+      //    korunur (kutu işaretli, 4 satır işareti) ve değiştirmeden kaydedince veriKosulari aynı kalır. Kutu kapatılınca tek test,
+      //    yeniden açılınca "uyan her satır" (bu ortamda 3).
+      const senaryoOku = async () => (await api(`/platform/senaryo?id=${senaryoA}&ortamId=${ortamId}`)).senaryo as Nesne;
+      const kayitliVeriKosulari = (await senaryoOku()).veriKosulari as unknown;
+      expect(kayitliVeriKosulari).toMatchObject({ gruplar: { [`${planTablo}|`]: { kip: 'secili' } } });
       await page.goto(`/#/senaryolar/duzenle/${senaryoA}`);
-      const bicim = page.locator(`select[data-calistirma-bicimi="${planTablo}|"]`);
+      const bicim = page.locator(`input[data-coklu-calistirma="${planTablo}|"]`);
       await expect(bicim).toBeVisible({ timeout: 20_000 });
-      await expect(bicim).toHaveValue('secili');
+      await expect(bicim).toBeChecked();
+      await expect(page.locator('select[data-calistirma-bicimi]')).toHaveCount(0);
+      await expect(page.locator('.satir-secimi-karti').getByText('Çalıştırma biçimi')).toHaveCount(0);
       await expect(page.locator('.satir-isaretleri input[type="checkbox"]:checked')).toHaveCount(4);
       await expect(page.locator('[data-tahmini-test]')).toHaveAttribute('data-tahmini-test', '3');
-      await bicim.selectOption('tumu');
+      await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
+      await expect(page).not.toHaveURL(/duzenle/, { timeout: 15_000 });
+      expect((await senaryoOku()).veriKosulari).toEqual(kayitliVeriKosulari);
+      await page.goto(`/#/senaryolar/duzenle/${senaryoA}`);
+      await expect(bicim).toBeChecked({ timeout: 20_000 });
+      await bicim.uncheck();
+      await expect(page.locator('[data-tahmini-test]')).toHaveCount(0);
+      await bicim.check();
+      await expect(page.locator('.satir-isaretleri')).toHaveCount(0);
       await expect(page.locator('[data-tahmini-test]')).toHaveAttribute('data-tahmini-test', '3');
       await page.locator('.satir-secimi-karti').screenshot({ path: test.info().outputPath('senaryo-formu-calistirma-bicimi.png'), animations: 'disabled' });
       await page.setViewportSize({ width: 390, height: 844 });
@@ -389,6 +404,11 @@ test.describe('uçtan uca: tablodan çoklu senaryo ve başarısızları tekrar �
       await tasmaYok(page);
       await page.locator('.satir-secimi-karti').screenshot({ path: test.info().outputPath('senaryo-formu-calistirma-bicimi-telefon.png'), animations: 'disabled' });
       await page.setViewportSize({ width: 1400, height: 1000 });
+      // Değişiklik kaydedilmeden çıkılır (kayıtlı "seçili satırlar" korunur).
+      await page.getByRole('button', { name: 'Vazgeç', exact: true }).click();
+      await page.locator('dialog[open]').getByRole('button', { name: 'Çık', exact: true }).click();
+      await expect(page).not.toHaveURL(/duzenle/, { timeout: 15_000 });
+      expect((await senaryoOku()).veriKosulari).toEqual(kayitliVeriKosulari);
       // 2) Koşu diyaloğu: ▷ tablodan veri alan senaryoda diyalog açılır; tahmini sayı, "Hepsi tek satırla" → 1.
       await page.goto(`/#/senaryolar/u/${ekranId}`);
       await page.getByRole('button', { name: 'Çalıştır: Çoklu plan' }).click();

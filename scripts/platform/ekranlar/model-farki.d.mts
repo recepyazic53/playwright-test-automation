@@ -52,6 +52,8 @@ export declare function kanonikJson(d: unknown): string;
 export declare function gorunurlukMetni(g: unknown): string;
 /** Adım koşu tanımının (sürüm 2) kısa özeti. */
 export declare function kosuTanimiMetni(k: unknown): string;
+/** İki koşu tanımı arasındaki farkların kısa listesi (ör. "bekleme: 60 sn → 90 sn"); bulgu başlığına eklenir. */
+export declare function kosuTanimiFarki(eski: unknown, yeni: unknown): string[];
 export declare function modelEnvanteri(model: unknown): {
   adimlar: Map<string, { adim: Model; sira: number }>;
   bolumler: Map<string, { bolum: Model; adimId: string; sira: number }>;
