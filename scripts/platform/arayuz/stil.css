@@ -2287,6 +2287,16 @@ a.son-sonuc { text-decoration: none; }
 .ekran-baglari .kaynak-hucresi .deger-cipleri { max-width: 100%; }
 /* Ortak akıştan gelen (varsayılan) bağ işareti / ekrana özel bağda "Ortak akışa dön". */
 .ekran-baglari .ortak-bag-isareti { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* Ortak akıştan gelen alanlar: ekranın kendi tablosunun altında, ortak akış başına açılır-kapanır bölüm (ekran-baglari.js). */
+.ortak-bolumler { display: grid; gap: 10px; min-width: 0; }
+.ortak-bolumler:empty { display: none; }
+.ortak-bolum { border: 1px dashed var(--cizgi); border-radius: 10px; padding: 4px 12px; background: var(--panel-2); min-width: 0; }
+.ortak-bolum > .acilir-baslik { flex-wrap: wrap; gap: 4px 10px; }
+.ortak-bolum > .acilir-baslik > h4 { flex: 1 1 220px; }
+.ortak-bolum > .acilir-govde { display: grid; gap: 6px; padding: 2px 0 8px; min-width: 0; }
+.ortak-bolum > .acilir-govde[hidden] { display: none; }
+.ortak-bolum > .acilir-govde > p { margin: 0; }
+.ortak-bolum .alan-formu { background: var(--panel); }
 @media (max-width: 760px) { .ekran-baglari .alan-satiri { grid-template-columns: minmax(0, 1fr); } .ekran-baglari .kaynak-secimi select { min-width: 0; } }
 /* Sonuçlar > Hata kalıpları: kalıba tıklanınca hatanın alındığı testler. */
 .kalip-satiri { cursor: pointer; }
