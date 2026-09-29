@@ -41,7 +41,7 @@ export const AYAR_BOLUMLERI = [
  * uygulama.js'te yeni adreslere yönlenir (ESKI_ADRESLER).
  */
 export const UST_SAYFALAR = [
-  { ad: 'veri', menu: 'Test verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
+  { ad: 'veri', menu: 'Test verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran alanlarını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'planli-kosular', menu: 'Planlı koşular', etiket: 'Planlı koşular', ikon: 'tarih', aciklama: 'Nöbetçi\'nin belirli zamanlarda (her gün, haftanın seçili günleri, her N saatte bir) kendiliğinden başlattığı koşular: kurallar, son çalışmalar, kaçan / çakışan zaman davranışı ve kasa kilitliyken çalışma tercihleri. Koşular yalnız Nöbetçi ve kasa açıkken çalışır (tercihlerle değiştirilebilir).' }
 ];
 

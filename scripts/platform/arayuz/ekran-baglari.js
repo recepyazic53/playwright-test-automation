@@ -29,8 +29,8 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
   const { baglar, girdiler, tablolar, ortakBaglar = {}, ortakAkis = false } = await api(`/platform/ekran/alan-baglari?projeId=${q(s.proje.id)}&ekranId=${q(ekran.id)}`);
   if (!girdiler.length) {
     yerlestir(kap, h('section', { class: 'kart' }, ortakAkis
-      ? bosDurum('Bu ortak akışın input\'u yok.', 'Akışlar sekmesinde diyagrama alan ekleyince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })
-      : bosDurum('Bu ekranın input\'u yok.', 'Model yüklenince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })));
+      ? bosDurum('Bu ortak akışın alanı yok.', 'Akışlar sekmesinde diyagrama alan ekleyince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })
+      : bosDurum('Bu ekranın alanı yok.', 'Model yüklenince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })));
     return;
   }
   const durum = h('span', { class: 'kayit-durumu soluk kucuk', 'aria-live': 'polite' });
@@ -62,7 +62,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
   const ortakKap = h('div', { class: 'ortak-bolumler' });
   /** @type {Map<string, boolean>} */
   const acik = new Map();
-  const basliklar = () => h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Input'), h('span', {}, 'Tablo sütunu'));
+  const basliklar = () => h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Alan'), h('span', {}, 'Tablo sütunu'));
   /** @param {{ id: string; ad: string }} o @param {HTMLElement[]} satirlar @param {number} ozelSayisi */
   const ortakBolumu = (o, satirlar, ozelSayisi) => {
     if (!acik.has(o.id)) acik.set(o.id, ozelSayisi > 0);
@@ -142,10 +142,10 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
     });
     const bagsiz = girdiler.filter((g) => !baglar[g.id] && !ortakBaglar[g.id] && oneri(g));
     yerlestir(liste, basliklar(), ...kendiSatirlari,
-      kendiSatirlari.length ? null : h('p', { class: 'soluk kucuk' }, 'Bu ekranın kendi input\'u yok; alanları aşağıdaki ortak akışlardan gelir.'));
+      kendiSatirlari.length ? null : h('p', { class: 'soluk kucuk' }, 'Bu ekranın kendi alanı yok; alanları aşağıdaki ortak akışlardan gelir.'));
     yerlestir(ortakKap, [...gruplar.values()].map((x) => ortakBolumu(x.o, x.satirlar, x.ozel)));
     yerlestir(oneriKap, bagsiz.length ? h('div', { class: 'not-kutusu bilgi kucuk' },
-      `${bagsiz.length} input'un adı bir tablo sütunuyla aynı. `,
+      `${bagsiz.length} alanın adı bir tablo sütunuyla aynı. `,
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { for (const g of bagsiz) baglar[g.id] = oneri(g); ciz(); degisti(); } }, 'Adı aynı sütunlara bağla')) : null);
   };
   const oneriKap = h('div', {});
@@ -167,7 +167,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     ortakAkis ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Bu ortak akışın alanlarını burada bir kez bağlayın: bağlar onu kullanan tüm ekranlara varsayılan olarak geçer. Bir ekran aynı alanı kendi Test verisi sekmesinde başka sütuna bağlarsa o ekranda onunki geçerli olur.')
       : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Üstteki tablo bu ekranın kendi alanlarıdır. Ortak akışlardan gelen alanlar altta, ortak akış başına ayrı “Ortak akıştan” bölümündedir; bağları ortak akışın sayfasında kurulur. Değiştirirseniz yalnız bu ekran için geçerli olur (ekrana özel); “Ortak akışa dön” ekranın bağını siler.') : null,
-    h('p', { class: 'soluk kucuk' }, 'Her input\'u bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
+    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Test verisi > Tablolar'), ' bölümünden ekleyin.'),
     oneriKap, liste, ortakKap));
   ciz();

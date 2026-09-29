@@ -606,12 +606,31 @@ export function profilHavuzuBul(alan, degerler, sema) {
   return null;
 }
 
-/** Seçim alanının şu anki seçenekleri (bağımlıysa bağlı alanın değerine göre). */
-export function secenekleriBul(alan, degerler, sema) {
+/**
+ * Seçim alanının şu anki seçenekleri (bağımlıysa bağlı alanın değerine göre). Harita anahtarı bağlı alanın değeridir; tablodaki değer
+ * (ör. "Ankara") için anahtar model yüklenirken karşılıktan eklenir (deger-listesi-modeli.mjs). Bağlı alanın değeri tablo başvurusuysa
+ * (${Tablo.Sütun}) tabloAnahtarlari(değer) seçilen satırdan çıkan aday anahtarları verir (tablodaki değer, sayfa karşılığı); null ise
+ * (değer satıra göre değişiyor / bilinmiyor) tüm listelerin birleşimi döner — koşuda seçilen satıra göre daralır.
+ * @param {(deger: string) => string[] | null} [tabloAnahtarlari]
+ */
+export function secenekleriBul(alan, degerler, sema, tabloAnahtarlari) {
   if (alan.bagimlilik) {
     const bagli = tumFormAlanlari(sema).find((a) => a.id === alan.bagimlilik.alan);
     const deger = bagli ? degerler[bagli.anahtar] : undefined;
-    return typeof deger === 'string' && alan.bagimlilik.harita[deger] ? alan.bagimlilik.harita[deger] : [];
+    const harita = alan.bagimlilik.harita;
+    if (typeof deger !== 'string') return [];
+    if (harita[deger]) return harita[deger];
+    if (typeof tabloAnahtarlari === 'function' && /^\s*\$\{[^{}]+\}\s*$/.test(deger)) {
+      const adaylar = tabloAnahtarlari(deger);
+      if (adaylar === null) {
+        const birlesik = new Map();
+        for (const l of Object.values(harita)) for (const x of l) if (!birlesik.has(x.deger)) birlesik.set(x.deger, x);
+        return [...birlesik.values()];
+      }
+      const k = adaylar.find((a) => harita[a]);
+      return k ? harita[k] : [];
+    }
+    return [];
   }
   return alan.secenekler || [];
 }

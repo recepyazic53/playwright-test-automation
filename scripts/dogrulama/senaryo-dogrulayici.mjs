@@ -538,7 +538,15 @@ function secenekListesi(alan, b) {
   if (Array.isArray(alan.secenekler)) return { liste: alan.secenekler.map(secenekDegeri) };
   const bag = alan.bagimlilik;
   if (bag && nesneMi(bag.secenekHaritasi) && typeof bag.alan === 'string') {
-    const bagliDeger = b.alanDegeri(bag.alan);
+    let bagliDeger = b.alanDegeri(bag.alan);
+    // Bağlı alanın değeri tablodan (${Tablo.Sütun}): seçilen satırdan TEK değer çıkıyorsa onun listesi (tablodaki değer, yoksa sayfa
+    // karşılığı anahtarı); satıra göre değişiyorsa liste bilinmiyor (denetim koşuda, çözülmüş değerle yapılır).
+    const tb = tabloBasvurusuCoz(bagliDeger);
+    if (tb) {
+      const c = typeof b.tabloDegeri === 'function' ? b.tabloDegeri(tb) : null;
+      const k = c ? [c.deger, c.sayfa].find((x) => typeof x === 'string' && Array.isArray(bag.secenekHaritasi[x])) : undefined;
+      bagliDeger = k ?? (c && typeof c.deger === 'string' ? c.deger : undefined);
+    }
     const liste = typeof bagliDeger === 'string' ? bag.secenekHaritasi[bagliDeger] : undefined;
     const bagliAlan = b.idAlan[bag.alan];
     return {

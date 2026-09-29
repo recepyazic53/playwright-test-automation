@@ -96,7 +96,7 @@ export declare function yonetilenAnahtarlar(sema: FormSemasi): string[];
 export declare function kimlikTuruBul(alan: KimlikAlani, degerler: FormDegerleri, sema: FormSemasi): string | null;
 export declare function kimlikAnahtariBul(alan: KimlikAlani, tur: string | null): string | null;
 export declare function profilHavuzuBul(alan: KimlikAlani, degerler: FormDegerleri, sema: FormSemasi): string | null;
-export declare function secenekleriBul(alan: SecimAlani, degerler: FormDegerleri, sema: FormSemasi): FormSecenegi[];
+export declare function secenekleriBul(alan: SecimAlani, degerler: FormDegerleri, sema: FormSemasi, tabloAnahtarlari?: (deger: string) => string[] | null): FormSecenegi[];
 /** secenekler.yeni: yeni senaryo — isteğe bağlı blokların "dahil" anahtarı modelin varsayılanıyla başlar. */
 export declare function formDegerleriniKur(sema: FormSemasi, veri?: Record<string, unknown>, secenekler?: { yeni?: boolean }): FormDegerleri;
 export declare function senaryoNesnesiOlustur(
