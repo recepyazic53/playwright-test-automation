@@ -1,4 +1,4 @@
-// VİDEO SAKLAMA SÜRESİ (Ayarlar > Güvenlik > Video saklama) — sunucu (günlük temizlik) ve doğrudan yazan raporlayıcı (sunucu yokken,
+// VİDEO SAKLAMA SÜRESİ (Ayarlar > Yedekleme > Saklama > Video saklama; güvenlik ayarı) — sunucu (günlük temizlik) ve doğrudan yazan raporlayıcı (sunucu yokken,
 // terminal / CI koşusu) AYNI kuralı kullanır: kasadaki kayıtlı değer (kasa açıkken) > VIDEO_SAKLAMA_GUN ortam değişkeni > 30 gün.
 import { kasaAcikMi } from '../kasa.mjs';
 import { ayarGetir } from '../veritabani/depo.mjs';

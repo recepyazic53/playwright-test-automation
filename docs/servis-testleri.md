@@ -38,7 +38,7 @@ Değer sırası:
    - Adlı profiller, ör. "Kanal 100": `USERNAME`, `PASSWORD`, `CHANNEL`.
    - Servis bir profil seçer; senaryo ezebilir.
    - Profil tüm ortamlar için genel değer taşır. Ortama özel satır, ör. CANLI'da farklı parola, alan alan ezer.
-3. **Test verisi.** Ayarlar > Test verisi > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
+3. **Test verisi.** Veri > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
    - Rol, aynı türün farklı kişileri için ayrı profil seçmeye yarar.
    - Servisin Parametreler sekmesinde her tür + rol için profil seçilir; senaryo ezebilir.
    - Bir parametre adı projede tek bir alana eşlenebilir.
@@ -66,7 +66,7 @@ Adres = taban adres + yol, metin olarak birleştirilir: tabanın kendi yolu koru
 - **Gövde (XML)** sekmesi ileri kullanım içindir. Form gövdeyi tam temsil edemezse (şemada olmayan / tekrar eden öğe) neden gösterilir ve XML görünümünde kalınır; veri kaybolmaz.
 - Kaydedilen gövde yine SOAP XML'idir (koşucu, SoapUI aktarımı, raporlar aynı).
 
-## Test verisi eşlemesi (Ayarlar > Test verisi)
+## Test verisi eşlemesi (Veri > Tablolar)
 
 Alan satırında **Servis parametreleri**: servis seçilir → o servisin senaryolarında geçen parametrelerden biri seçilir (eşlenmemişler önce) ya da "Elle yaz…"; rol addan tahmin edilir (`MUSTERI_…` → musteri, `KEFIL_…` → kefil). Eşleme parametre adına göredir: aynı ad tüm servislerde bu alandan dolar.
 

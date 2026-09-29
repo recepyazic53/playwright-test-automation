@@ -66,7 +66,7 @@ test('veri sağlığı özeti, birleştirme penceresi, onaylı birleştirme ve g
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     const kart = page.getByRole('region', { name: 'Veri sağlığı' });
     await expect(kart.getByText('Birleştirilebilecek tablolar')).toBeVisible();
     await expect(kart).toContainText('“Kargo firmaları” + “Kargo şirketleri (eski)”');
@@ -130,7 +130,7 @@ test('veri sağlığı özeti, birleştirme penceresi, onaylı birleştirme ve g
 test('yeni tablo kaydı: "Benzer tablo var" — onu kullan satırları o tabloya taşır (kaydetmeden)', async () => {
   const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
   const page = await baglam.newPage();
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   const liste = page.getByRole('navigation', { name: 'Tablolar' });
   await liste.getByRole('button', { name: 'Tablo ekle' }).click();
   const duz = page.getByRole('region', { name: 'Tablo düzenleyici' });
@@ -161,7 +161,7 @@ test('veri sağlığı: öneriler puana göre; eşik altı (genel sütun adları
   expect(dusuk?.puan).toBeLessThan(50);
   const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
   const page = await baglam.newPage();
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   const kart = page.getByRole('region', { name: 'Veri sağlığı' });
   await expect(kart).toContainText('“Kargo firmaları” + “Kargo şirketleri (eski)”');
   await expect(kart).not.toContainText('“Durum kodları”');
@@ -191,7 +191,7 @@ test('veri sağlığı: öneriler puana göre; eşik altı (genel sütun adları
 test('Test verisi ayarları diyaloğu 390px: dişli düğmesi görünür, diyalog taşmaz; "Eşiği değiştir" de diyaloğu açar', async () => {
   const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 844 } });
   const page = await baglam.newPage();
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   const kart = page.getByRole('region', { name: 'Veri sağlığı' });
   await expect(kart.getByRole('button', { name: 'Test verisi ayarları' })).toBeVisible();
   await expect(kart.getByRole('button', { name: 'Birleştirme geçmişi' })).toBeVisible();
@@ -209,7 +209,7 @@ test('Test verisi ayarları diyaloğu 390px: dişli düğmesi görünür, diyalo
 test('Ayarlar açıklamaları kısa (1–2 cümle), ayrıntı "?" ipucunda; Test verisi bilgisi bir kez (açıklama + bilgi kutusu yinelenmez)', async () => {
   const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 900 } });
   const page = await baglam.newPage();
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   const aciklama = page.locator('.bolum-aciklamasi');
   await expect(aciklama).toContainText('Her tablo bir Excel sayfası gibidir');
   await expect(page.getByText(/Her tablo bir Excel sayfası gibidir/)).toHaveCount(1);
@@ -224,6 +224,7 @@ test('Ayarlar açıklamaları kısa (1–2 cümle), ayrıntı "?" ipucunda; Test
   // Uzun alan açıklamaları da kısalır; varsayılan değer her zaman görünür.
   await page.goto('/#/ayarlar/kosu');
   const form = page.getByRole('form', { name: 'Koşu ayarları' });
+  await form.locator('details.gelismis-ayarlar > summary').click();
   await expect(form.getByText(/Varsayılan: Token'ı yenile, bir kez tekrar dene\./)).toBeVisible();
   await expect(form.getByRole('button', { name: 'Ayrıntıyı göster' }).first()).toBeVisible();
   await baglam.close();
@@ -237,7 +238,7 @@ test('yeni tek sütunlu tablo: ayırt edici başlık + örtüşen satırlar → 
   expect((await nobetciApi(nobetci, '/platform/tablo/benzer', { projeId, sutunlar: ['MÜŞTERİ TİPİ'], satirlar: [] })).benzerler).toEqual([]);
   const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
   const page = await baglam.newPage();
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   await page.getByRole('navigation', { name: 'Tablolar' }).getByRole('button', { name: 'Tablo ekle' }).click();
   const duz = page.getByRole('region', { name: 'Tablo düzenleyici' });
   await duz.getByRole('textbox', { name: 'Tablo adı' }).fill('Fatura formu — Müşteri tipi');
@@ -272,7 +273,7 @@ test('birleştirme geçmişi: aynı tabloyu etkileyen sonraki birleştirme varsa
   for (const [genislik, yukseklik] of [[390, 844], [1280, 900]] as const) {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: genislik, height: yukseklik } });
     const page = await baglam.newPage();
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     await page.getByRole('region', { name: 'Veri sağlığı' }).getByRole('button', { name: 'Birleştirme geçmişi' }).click();
     const g = page.getByRole('dialog', { name: 'Birleştirme geçmişi' });
     const satirlar = g.getByRole('listitem');

@@ -307,3 +307,22 @@ test('girişte giriş alanı beklemesi / oturum kontrolü: Ayarlar > Koşu > Tar
     kosuAyarlariniKaydet(vt, { taramaGirisAlanBeklemeSn: 15, taramaOturumKontrolSn: 15, girisAlanBeklemeSn: 15 });
   }
 });
+
+test('"Tarama ve akış kaydında koşu ayarlarını kullan" açıkken tarama tarayıcısı koşunun ekran boyutunu, dilini ve giriş beklemelerini alır', async () => {
+  test.setTimeout(120_000);
+  // Taramanın ayrı değerleri farklı: açıkken kullanılmaz (silinmez).
+  kosuAyarlariniKaydet(vt, { taramaKosuAyarlariniKullan: true, taramaEkranGenisligi: 1600, taramaGirisAlanBeklemeSn: 3,
+    kosuEkranGenisligi: 1440, kosuEkranYuksekligi: 810, kosuDili: 'varsayilan', oturumKontrolSn: 12, girisAlanBeklemeSn: 9 });
+  try {
+    const b = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Birlesik Ayar', ortamId: ortamlar.TEST, hedef: '/basvuru/', kesif: false, onay: true });
+    expect(b.durum, JSON.stringify(b.y)).toBe(202);
+    const isId = String(b.y.isId);
+    const kayit = yonetici.isler.get(isId) as { girdi: { tarayici: Record<string, unknown> } };
+    // Koşudaki "Tarayıcı varsayılanı" dili: dil verilmez (null).
+    expect(kayit.girdi.tarayici).toMatchObject({ genislik: 1440, yukseklik: 810, dil: null, oturumKontrolMs: 12_000, girisAlanBeklemeMs: 9_000 });
+    await bekle(isId, (d) => d.durum !== 'suruyor');
+  } finally {
+    kosuAyarlariniKaydet(vt, { taramaKosuAyarlariniKullan: false, taramaEkranGenisligi: 1366, taramaGirisAlanBeklemeSn: 15,
+      kosuEkranGenisligi: 1280, kosuEkranYuksekligi: 720, kosuDili: 'varsayilan', oturumKontrolSn: 15, girisAlanBeklemeSn: 15 });
+  }
+});

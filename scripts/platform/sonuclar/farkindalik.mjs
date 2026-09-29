@@ -387,7 +387,7 @@ async function hesapla(vt, projeId, x) {
       ['Kırık tablo başvurusu', v.kirikBasvurular.length], ['Kullanılmayan tablo', v.kullanilmayan.length],
       ['Birleştirilebilecek tablolar', v.benzer.filter((o) => o.puan >= v.benzerlikEsigi).length], ['Boş sütun', v.bosSutunlar.length]
     ]);
-    for (const [baslik, n] of satirlar) if (n) bakim.push({ tur: 'veri', ad: baslik, ayrinti: `Test verisi sağlığı · ${n}`, adres: '#/ayarlar/test-verisi' });
+    for (const [baslik, n] of satirlar) if (n) bakim.push({ tur: 'veri', ad: baslik, ayrinti: `Test verisi sağlığı · ${n}`, adres: '#/veri' });
   }, undefined);
 
   // ================================ KAPSAM VE GÜVENLİK ================================

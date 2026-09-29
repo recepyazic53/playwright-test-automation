@@ -101,7 +101,8 @@ test.describe('tüm ekranlar taşmasız', () => {
       `#/sonuclar/karsilastir/${z.kosuIdleri[0]}/${z.kosuIdleri[1]}`, '#/senaryolar', `#/senaryolar/u/${e}`, `#/senaryolar/duzenle/${encodeURIComponent(z.senaryoIdleri[3])}`,
       '#/servisler', `#/servisler/s/${z.soapServisId}`, `#/servisler/s/${z.restServisId}`, '#/servisler/sonuclar', '#/akislar', `#/akislar/${z.uctanUcaId}`,
       '#/ekranlar', `#/ekranlar/e/${e}`, '#/ekranlar/yeni',
-      ...['proje', 'giris', 'test-verisi', 'kosu', 'guvenlik', 'izinler', 'entegrasyonlar'].map((b) => `#/ayarlar/${b}`)
+      '#/veri', '#/planli-kosular',
+      ...['proje', 'giris', 'kosu', 'yedekleme', 'guvenlik', 'izinler', 'entegrasyonlar'].map((b) => `#/ayarlar/${b}`)
     ];
     const sorunlar: string[] = [];
     const hatalar: string[] = [];

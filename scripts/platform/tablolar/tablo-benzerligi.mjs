@@ -11,7 +11,7 @@
 //     (gizli değerler dahil; imza çağıran tarafından hesaplanır, değer DÖNMEZ).
 //   · Genel sütun adları ("kod", "açıklama", "ad", "değer", "id" …) az ayırt edicidir: başlık benzerliğinde düşük ağırlık alır
 //     (GENEL_AGIRLIK); yalnız bu adlarda ortak olan tablolar düşük puan alır. Eşik altı öneriler arayüzde varsayılan gizlidir
-//     (Ayarlar > Test verisi > "Birleştirme önerisi eşiği").
+//     (Veri > "Birleştirme önerisi eşiği").
 
 /** @typedef {{ ad: string; gizli?: boolean }} BSutun */
 /** @typedef {{ id: string; ad: string; sutunlar: BSutun[]; baglam?: boolean; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null; satirImzalari?: string[]; satirlar?: Array<{ degerler: Record<string, unknown> }> }} BTablo */

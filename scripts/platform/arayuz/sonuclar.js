@@ -875,7 +875,7 @@ const ALINAMADI_DESENI = /^(.*) \(ekran görüntüsü alınamadı(?:: (.*))?\)$/
 const alinamadiMi = (m) => m.tur === 'diger' && ALINAMADI_DESENI.test(m.ad);
 
 /**
- * Sonucun medya notları: saklama süresi dolduğu için silinen ekran görüntüleri (Ayarlar > Yedekleme > Sonuç saklama > Medyayı
+ * Sonucun medya notları: saklama süresi dolduğu için silinen ekran görüntüleri (Ayarlar > Yedekleme > Saklama > Medyayı
  * incelt) ve alınamayan adım görüntüleri ("görüntü alınamadı: neden").
  */
 function medyaNotlari(s2) {

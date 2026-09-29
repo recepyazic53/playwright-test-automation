@@ -1,4 +1,4 @@
-// AYARLAR > KOŞU > ZAMANLANMIŞ KOŞULAR — Nöbetçi'nin belirli zamanlarda kendiliğinden koşu başlatması (kullanıcı kararı).
+// PLANLI KOŞULAR (üst menü) > ZAMANLANMIŞ KOŞULAR — Nöbetçi'nin belirli zamanlarda kendiliğinden koşu başlatması (kullanıcı kararı).
 // Kurallar kasada şifreli saklanır (sunucu: scripts/platform/zamanlama/*.mjs). Bu ekran hiçbir koşu BAŞLATMAZ ("Şimdi koş" yok;
 // elle koşu için Senaryolar > "Koşuyu başlat"). Kural listesi: sonraki çalışma, son çalışma + sonucu, etkin anahtarı, son 20 tetikleme.
 // Kartın altındaki "Kasa kilitliyken ve açılışta" bölümü: A/B/C tercihleri (üçü de varsayılan KAPALI; her biri ayrı açılır, ne yaptığı
@@ -22,7 +22,7 @@ const KILAVUZ = 'Zamanlanmış koşular yalnız Nöbetçi açıkken (sunucu çal
   + 'Koşular "Koşuyu başlat" ile aynı yoldan yapılır; sonuçlar Sonuçlar\'a düşer.';
 
 /**
- * Ayarlar > Koşu içindeki "Zamanlanmış koşular" kartı.
+ * Planlı koşular sayfasındaki (üst menü) "Zamanlanmış koşular" kartı.
  * @param {{ id: string; ad: string }} proje
  * @param {{ davranisFormu?: () => Promise<HTMLElement> }} [secenek] davranisFormu: kaçan / çakışan zaman kararları formu (ayarlar.js; tüm kurallar için)
  */

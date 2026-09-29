@@ -366,7 +366,7 @@ test.describe('arayüz: tablo kaydında onay penceresi', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     const liste = page.getByRole('navigation', { name: 'Tablolar' });
     await liste.getByRole('button', { name: /^Ürünler/ }).click();
     await page.getByRole('textbox', { name: '1. satır Ürün', exact: true }).fill('Ürün X');

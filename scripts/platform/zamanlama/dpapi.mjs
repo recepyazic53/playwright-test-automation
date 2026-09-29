@@ -1,4 +1,4 @@
-// ZAMANLANMIŞ KOŞULAR — "Windows oturumuna bağlı otomatik açma (DPAPI)" (Ayarlar > Koşu; varsayılan KAPALI; yalnız Windows).
+// ZAMANLANMIŞ KOŞULAR — "Windows oturumuna bağlı otomatik açma (DPAPI)" (Planlı koşular; varsayılan KAPALI; yalnız Windows).
 // Kasa anahtarı Windows DPAPI (CurrentUser kapsamı + ek entropi) ile şifrelenip çalışma alanının veri klasörüne yazılır; diske
 // YALNIZ DPAPI ile korunmuş hâli yazılır, düz anahtar asla. Sunucu açılışında dosya çözülür ve anahtar YALNIZ zamanlayıcının
 // emanetine verilir (arayüz kilitli başlar; bkz. anahtar-emaneti.mjs).

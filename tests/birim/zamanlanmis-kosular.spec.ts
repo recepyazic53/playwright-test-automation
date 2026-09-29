@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Zamanlanmış koşular (Ayarlar > Koşu). "Vakti geldi mi" hesabı saf fonksiyondur ve SAHTE saatle doğrulanır;
+// KORUMA TESTLERİ — Zamanlanmış koşular (Planlı koşular; üst menü). "Vakti geldi mi" hesabı saf fonksiyondur ve SAHTE saatle doğrulanır;
 // tetikleme yolu SAHTE koşucu ile sınanır (gerçek Playwright koşusu, tarayıcı, ağ isteği YOK). Kurallar kasada şifreli saklanır.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -310,7 +310,7 @@ test('uçtan uca akışlar: kuralda seçilir (yalnız uçtan uca akış), koşud
   }
 });
 
-test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
+test.describe('Planlı koşular > Zamanlanmış koşular arayüzü', () => {
   const PAROLA = `Gecici-ZamanliUI-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
   let tarayici: Browser;
@@ -345,7 +345,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/kosu');
+    await page.goto('/#/planli-kosular');
     const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
     await expect(kart.getByText('kaçan zamanlar sonradan toplu koşulmaz')).toBeVisible();
     await expect(kart.getByText('Zamanlanmış koşu yok.')).toBeVisible();
@@ -396,7 +396,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/kosu');
+    await page.goto('/#/planli-kosular');
     const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
     await kart.getByRole('button', { name: 'Zamanlanmış koşu ekle' }).click();
     const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
@@ -419,7 +419,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/kosu');
+    await page.goto('/#/planli-kosular');
     const bolum = page.getByRole('region', { name: 'Kasa kilitliyken ve açılışta' });
     await expect(bolum.getByText('varsayılan olarak kapalıdır', { exact: false })).toBeVisible();
     const a = bolum.getByRole('switch', { name: 'Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)' });

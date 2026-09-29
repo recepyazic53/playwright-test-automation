@@ -703,7 +703,7 @@ function tabloSatirlariniEkle(vt, projeId, istek, veri, ortamIdleri) {
   for (const x of istek) {
     const o = /** @type {Nesne} */ (nesneMi(x) ? x : {});
     const t = typeof o.tablo === 'string' ? tabloBul(tablolariListele(vt, projeId, { cozulsun: true }), o.tablo) : undefined;
-    if (!t || t.id.startsWith(BAGLAM_ONEKI)) throw hata(`"${String(o.tablo ?? '')}" adında tablo yok (Ayarlar > Test verisi).`);
+    if (!t || t.id.startsWith(BAGLAM_ONEKI)) throw hata(`"${String(o.tablo ?? '')}" adında tablo yok (Veri > Tablolar).`);
     const etiket = typeof o.etiket === 'string' ? o.etiket.trim() : '';
     if (!/^[\p{L}\p{N} _-]{0,40}$/u.test(etiket)) throw hata('Satır etiketi geçersiz.');
     const anahtar = grupAnahtari(t.id, etiket);

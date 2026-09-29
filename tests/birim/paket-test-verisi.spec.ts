@@ -465,7 +465,7 @@ test.describe('Arayüz: paket önizlemesinde test verisi', () => {
       await page.getByRole('button', { name: 'Hiçbiri' }).click();
       await page.getByRole('button', { name: 'Ekranı oluştur' }).click();
       await expect(page.getByText(/Test verisi: Kapsam - Alternatif \(4 satır\), Taksit \(3 satır\); 2 alan bağlandı/)).toBeVisible();
-      await page.goto('/#/ayarlar/test-verisi');
+      await page.goto('/#/veri');
       const nav = page.getByRole('navigation', { name: 'Tablolar' });
       await expect(nav.getByRole('button', { name: /^Kapsam - Alternatif/ })).toContainText('kaynak: Ekran paketi');
       await nav.getByRole('button', { name: /^Kapsam - Alternatif/ }).click();

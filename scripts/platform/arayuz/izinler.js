@@ -3,10 +3,103 @@
 // (neler yapabilir, nerelerde, hangi işlemlerde, riski ve kapalıyken), açma onayı ve kapalı izin uyarısı. Açmak kısa bir onay
 // penceresi ister (ne yapar / riski); kapatmak serbesttir. Değişiklikler kasada saklanır ve "Son değişiklikler"de görünür.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, bildir, h, ikon, rozet, tarihMetni } from './ortak.js';
+import { api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, tarihMetni } from './ortak.js';
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
+import { CANLI_IZNI, IZIN_PAKETLERI, OZEL_SECILEBILIR, PAKET_DISI_IZINLER, paketIzinleri } from './izin-paketleri.mjs';
 
 let sayac = 0;
+
+/**
+ * "Nöbetçi sizin adınıza neleri yapabilsin?" — izin paketi seçimi (ilk kurulum sihirbazı ve Ayarlar > İzinler). Seçenekler:
+ * Hiçbiri / Test ortamında ekran ve servis testi / Test + veritabanı okuma / Özel…; altında ayrı "Canlı ortamda da çalıştırabilsin"
+ * kutusu (varsayılan işaretsiz; işaretlenince açık risk uyarısı). Seçimin açacağı izinler riskleriyle tek listede görünür; düğme tek
+ * onaydır (sunucu: /platform/izin/paket-uygula; açılan her izin geçmişe yazılır). Paket hiçbir izni kapatmaz; veritabanına yazma,
+ * sistem değişikliği ve güvenlik gevşetme listede "pakete girmez" olarak yazar.
+ * @param {{ izinler: Record<string, boolean>; baslik?: string; dugmeMetni?: (n: number) => string; bosDugmeMetni?: string | null;
+ *   ekDugmeler?: Node[]; bitti: (r: { izinler: Record<string, boolean>; acilanlar: string[]; degisiklikler?: any[] }) => void }} s
+ *   bosDugmeMetni: açılacak izin yokken düğmenin metni (null: düğme kapalı kalır)
+ */
+export function izinPaketiSecimi(s) {
+  const no = ++sayac;
+  const ad = `izin-paketi-${no}`;
+  const mesaj = mesajKutusu();
+  let izinler = { ...s.izinler };
+  const radyolar = IZIN_PAKETLERI.map((p) => {
+    const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'radio', name: ad, value: p.ad, id: `${ad}-${p.ad}`, checked: p.ad === 'hicbiri' }));
+    return { p, girdi, etiket: h('label', { class: 'profil-secenegi', for: girdi.id }, girdi, h('span', {}, h('b', {}, p.etiket), h('small', { class: 'soluk' }, p.ozet))) };
+  });
+  const ozelKutular = OZEL_SECILEBILIR.map((a) => {
+    const t = IZIN_TANIMLARI.find((x) => x.anahtar === a);
+    const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `${ad}-ozel-${a}`, value: a }));
+    return { a, girdi, etiket: h('label', { class: 'secenek', for: girdi.id }, girdi, t ? t.etiket : a) };
+  });
+  const ozelAlan = h('fieldset', { class: 'izin-paketi-ozel', hidden: true }, h('legend', {}, 'Açılacak izinleri seçin'), ozelKutular.map((k) => k.etiket));
+  const canli = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `${ad}-canli` }));
+  const canliTanimi = IZIN_TANIMLARI.find((x) => x.anahtar === CANLI_IZNI);
+  const canliUyarisi = h('div', { class: 'not-kutusu hata izin-paketi-canli-uyarisi', role: 'note', hidden: true },
+    h('p', {}, h('strong', {}, 'Risk: '), canliTanimi ? canliTanimi.risk : ''),
+    h('p', {}, 'Canlı ortamdaki her işlemden önce sorulan "CANLI ortam — emin misiniz?" onayı aynen kalır; bu kutu o onayı kaldırmaz.'));
+  const liste = h('ul', { class: 'izin-paketi-listesi', 'aria-label': 'Açılacak izinler' });
+  const dugme = h('button', { type: 'button', class: 'birincil' });
+  const secim = () => {
+    const r = radyolar.find((x) => x.girdi.checked) || radyolar[0];
+    return { paket: r.p.ad, canli: canli.checked, ozel: ozelKutular.filter((k) => k.girdi.checked).map((k) => k.a) };
+  };
+  const ciz = () => {
+    const sec = secim();
+    ozelAlan.hidden = sec.paket !== 'ozel';
+    canliUyarisi.hidden = !sec.canli;
+    const istenen = paketIzinleri(sec);
+    const acilacak = istenen.filter((a) => izinler[a] !== true);
+    liste.replaceChildren(...[
+      ...istenen.map((a) => {
+        const t = IZIN_TANIMLARI.find((x) => x.anahtar === a);
+        const acik = izinler[a] === true;
+        return h('li', { class: `izin-paketi-satiri${a === CANLI_IZNI ? ' canli' : ''}`, 'data-izin': a },
+          h('span', { class: 'izin-paketi-isaret', 'aria-hidden': 'true' }, ikon(acik ? 'onay' : 'kilit')),
+          h('span', { class: 'izin-paketi-metni' }, h('b', {}, t ? t.etiket : a), acik ? h('span', { class: 'soluk kucuk' }, ' (zaten açık)') : null,
+            h('span', { class: 'kucuk izin-risk' }, ' risk: ', t ? t.risk : '')));
+      }),
+      istenen.length ? null : h('li', { class: 'soluk kucuk' }, 'Hiçbir izin açılmaz: izne bağlı her işlemde "Bu işlem için … iznini açmalısınız" uyarısı çıkar ve izni orada tek tek açarsınız.'),
+      h('li', { class: 'izin-paketi-disi kucuk' }, ikon('carpi'), ' Pakete girmez, her zaman tek tek açılır: ',
+        PAKET_DISI_IZINLER.map((a) => IZIN_TANIMLARI.find((x) => x.anahtar === a)?.etiket || a).join(', '), '.')
+    ].filter(Boolean));
+    dugme.textContent = acilacak.length ? (s.dugmeMetni ? s.dugmeMetni(acilacak.length) : `Bu ${acilacak.length} izni aç`) : (s.bosDugmeMetni || 'Açılacak izin yok');
+    dugme.disabled = !acilacak.length && !s.bosDugmeMetni;
+  };
+  for (const r of radyolar) r.girdi.addEventListener('change', ciz);
+  for (const k of ozelKutular) k.girdi.addEventListener('change', ciz);
+  canli.addEventListener('change', ciz);
+  dugme.addEventListener('click', async () => {
+    mesaj.temizle();
+    const sec = secim();
+    const acilacak = paketIzinleri(sec).filter((a) => izinler[a] !== true);
+    if (!acilacak.length) { s.bitti({ izinler, acilanlar: [] }); return; }
+    try {
+      // Düğme tek onaydır: açılacak izinler ve riskleri hemen üstte listelenir.
+      const r = await mesgulIken(dugme, 'Açılıyor…', () => api('/platform/izin/paket-uygula', { govde: { ...sec, onay: true } }));
+      izinler = { ...r.izinler };
+      bildir(`${r.acilanlar.length} izin açıldı.`);
+      ciz();
+      s.bitti(r);
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  ciz();
+  const kok = h('section', { class: 'kart izin-paketi', 'aria-label': 'İzin paketi' },
+    h('h3', {}, ikon('kalkan'), s.baslik || 'Nöbetçi sizin adınıza neleri yapabilsin?'),
+    h('p', { class: 'soluk kucuk' }, 'Bir paket seçin; açacağı izinler riskleriyle aşağıda listelenir ve tek onayla açılır. Paket hiçbir izni kapatmaz; izinleri istediğiniz an Ayarlar > İzinler\'den tek tek açıp kapatabilirsiniz.'),
+    mesaj.kutu,
+    h('fieldset', { class: 'profil-secimi' }, h('legend', {}, 'Paket'), h('div', { class: 'profil-secenekleri' }, radyolar.map((r) => r.etiket))),
+    ozelAlan,
+    h('div', { class: 'alan onay-alani izin-paketi-canli' }, h('label', { class: 'secenek', for: canli.id }, canli, 'Canlı ortamda da çalıştırabilsin'),
+      h('div', { class: 'yardim' }, '"Canlı ortamda çalıştırma" iznini de açar. Varsayılan: işaretsiz.')),
+    canliUyarisi,
+    h('h4', {}, 'Açılacak izinler'), liste,
+    h('div', { class: 'dugmeler' }, ...(s.ekDugmeler || []), dugme));
+  /** İzinler başka yerden (tek tek) değişince listeyi tazeler. @param {Record<string, boolean>} yeni */
+  kok.izinleriGuncelle = (yeni) => { izinler = { ...yeni }; ciz(); };
+  return kok;
+}
 
 /** "?" açıklamasının gövdesi (tanımdan). @param {import('./izin-tanimlari.mjs').IzinTanimi} t */
 function aciklamaGovdesi(t) {
@@ -125,6 +218,7 @@ export async function izinlerBolumu(govde, baglam = {}) {
     try {
       const r = await api('/platform/izin/degistir', { govde: { anahtar, acik, ...(acik ? { onay: true } : {}) } });
       veri = { ...veri, izinler: r.izinler, degisiklikler: r.degisiklikler };
+      paket.izinleriGuncelle(r.izinler);
       bildir(`"${t.etiket}" izni ${acik ? 'açıldı' : 'kapatıldı'}.`);
       ciz();
       const yeni = liste.querySelector(`[data-izin="${anahtar}"] .izin-anahtari`);
@@ -136,10 +230,16 @@ export async function izinlerBolumu(govde, baglam = {}) {
     }
   };
   ciz();
+  // Paket seçimi: seçilen paketin kapalı izinlerini tek onayla açar (açıkları kapatmaz); liste ve geçmiş hemen güncellenir.
+  const paket = izinPaketiSecimi({
+    izinler: veri.izinler, bosDugmeMetni: null,
+    bitti: (r) => { veri = { ...veri, izinler: r.izinler, degisiklikler: r.degisiklikler || veri.degisiklikler }; ciz(); }
+  });
   govde.replaceChildren(
+    paket,
     h('div', { class: 'kart' },
       h('h3', {}, ikon('kalkan'), 'İzinler'),
-      h('p', { class: 'soluk kucuk' }, 'Nöbetçi\'nin sizin adınıza yaptığı her işlem bir izne bağlıdır. İzinler varsayılan olarak kapalıdır; kapalı bir izne bağlı işlem denenirse yapılmaz ve buraya yönlendiren bir uyarı çıkar. Her iznin yanındaki "?" ne yaptığını, nerede kullanıldığını ve riskini anlatır.'),
+      h('p', { class: 'soluk kucuk' }, 'Nöbetçi\'nin sizin adınıza yaptığı her işlem bir izne bağlıdır. İzinler varsayılan olarak kapalıdır (yukarıdaki paketle birkaçını tek onayla açabilirsiniz); kapalı bir izne bağlı işlem denenirse yapılmaz ve buraya yönlendiren bir uyarı çıkar. Her iznin yanındaki "?" ne yaptığını, nerede kullanıldığını ve riskini anlatır.'),
       ozet,
       liste),
     h('div', { class: 'kart' }, h('h3', {}, ikon('tarih'), 'Son değişiklikler'), gecmis));

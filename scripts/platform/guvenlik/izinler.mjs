@@ -11,6 +11,7 @@
 import { kasaAcikMi } from '../kasa.mjs';
 import { DepoHatasi, ayarGetir, ayarYaz, gecmisYaz } from '../veritabani/depo.mjs';
 import { IZIN_ANAHTARLARI, izinMesaji, izinTanimi } from './izin-tanimlari.mjs';
+import { CANLI_IZNI, IZIN_PAKETLERI, paketIzinleri } from './izin-paketleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -97,6 +98,38 @@ export function izinDegistir(vt, anahtar, acik, s = {}) {
     });
   });
   return { izinler: izinleriOku(vt), degisti: true };
+}
+
+/**
+ * İzin paketi ("Nöbetçi sizin adınıza neleri yapabilsin?"; izin-paketleri.mjs): seçimin açacağı izinlerden KAPALI olanları tek
+ * işlemde açar (hiçbir izni kapatmaz). Açılacak izin varsa onay ister (arayüz izinleri riskleriyle tek listede gösterip onay: true
+ * gönderir). Her açılan izin izin geçmişine ayrı satır olarak yazılır ("açıldı (izin paketinden: …)"). Veritabanına yazma, sistem
+ * değişikliği ve güvenlik gevşetme paketle açılamaz (paketIzinleri hata verir).
+ * @param {Veritabani} vt @param {{ paket?: unknown; canli?: unknown; ozel?: unknown; onay?: unknown; yapan?: string }} s
+ * @returns {{ izinler: Record<string, boolean>; acilanlar: string[]; degisti: boolean }}
+ */
+export function izinPaketiUygula(vt, s) {
+  let istenen;
+  try { istenen = paketIzinleri({ paket: s?.paket, canli: s?.canli, ozel: s?.ozel }); } catch (hata) { throw new DepoHatasi(/** @type {Error} */ (hata).message); }
+  const kayit = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(vt, IZIN_AYAR_ANAHTARI));
+  const acilanlar = istenen.filter((a) => kayit?.[a] !== true);
+  if (!acilanlar.length) return { izinler: izinleriOku(vt), acilanlar: [], degisti: false };
+  if (s.onay !== true) throw new DepoHatasi('İzinleri açmak için ne yaptıklarını ve risklerini onaylamalısınız.');
+  const paketEtiketi = IZIN_PAKETLERI.find((p) => p.ad === s.paket)?.etiket ?? String(s.paket);
+  /** @type {Record<string, boolean>} */
+  const yeni = {};
+  for (const x of IZIN_ANAHTARLARI) if (kayit?.[x] === true || acilanlar.includes(x)) yeni[x] = true;
+  vt.islem(() => {
+    ayarYaz(vt, IZIN_AYAR_ANAHTARI, yeni);
+    for (const a of acilanlar) {
+      gecmisYaz(vt, {
+        varlikTuru: IZIN_GECMIS_TURU, varlikId: a, islem: 'guncelle', ...(s.yapan ? { yapan: s.yapan } : {}),
+        onceki: { acik: false }, sonraki: { acik: true },
+        aciklama: `açıldı (izin paketinden: ${paketEtiketi}${a === CANLI_IZNI ? '; "Canlı ortamda da çalıştırabilsin" işaretli' : ''})`
+      });
+    }
+  });
+  return { izinler: izinleriOku(vt), acilanlar, degisti: true };
 }
 
 /**

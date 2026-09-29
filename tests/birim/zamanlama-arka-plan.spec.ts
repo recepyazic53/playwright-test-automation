@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Zamanlanmış koşuların kasa kilitliyken / açılışta çalışma tercihleri (Ayarlar > Koşu; üçü de varsayılan KAPALI):
+// KORUMA TESTLERİ — Zamanlanmış koşuların kasa kilitliyken / açılışta çalışma tercihleri (Planlı koşular; üçü de varsayılan KAPALI):
 //   A) anahtar yalnız bellekte (anahtar-emaneti.mjs): arayüz kilidi, veri uçları 423, zamanlayıcı SAHTE koşucuyla çalışır,
 //      "Tamamen kilitle" anahtarı siler.
 //   B) Windows DPAPI (dpapi.mjs): GERÇEK gidiş-dönüş yalnız Windows'ta (geçici dosya, sahte anahtar; kullanıcının kasasına dokunulmaz),
