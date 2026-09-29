@@ -22,7 +22,7 @@ import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zar
 import { medyaSifrele } from '../medya.mjs';
 import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
-import { bagsizKosulUyarilari, ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { anlasilirDogrulamaIletisi, bagsizKosulUyarilari, ekranModeliniDogrula, dogrulamaMaddeleri, semaSurumunuYukselt } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
@@ -117,6 +117,8 @@ function ortakAkisModelleri(model, kaynak) {
 export function modeliDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {unknown} */ model, /** @type {string} */ ad) {
   // Varsayılan akışın kopyası model.adimlar ile eşitlenir (bulgular / adres değişikliği model.adimlar'ı değiştirir).
   akislariEsitle(model);
+  // Kaydedilen modele koşu tanımı yazıldıysa (akış diyagramı / akış kaydı) sürüm 1 model kendiliğinden sürüm 2'ye çıkar (üst küme).
+  semaSurumunuYukselt(model);
   const kaynak = altModelKaynagi(vt, projeId);
   try {
     return ekranModeliniDogrula(ad, model, (dosya) => {
@@ -126,7 +128,8 @@ export function modeliDogrula(/** @type {Veritabani} */ vt, /** @type {string} *
     });
   } catch (e) {
     const maddeler = dogrulamaMaddeleri(e);
-    throw new EkranDogrulamaHatasi(`Model geçersiz (${maddeler.length} sorun).`, maddeler.map((m) => ({ yer: 'model', mesaj: m })));
+    // Kullanıcıya anlaşılır ileti; doğrulayıcının teknik iletisi "ayrinti"de (arayüzde "Ayrıntı" altında).
+    throw new EkranDogrulamaHatasi(`Model geçersiz (${maddeler.length} sorun).`, maddeler.map((m) => ({ yer: 'model', mesaj: anlasilirDogrulamaIletisi(m, model), ayrinti: m })));
   }
 }
 

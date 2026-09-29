@@ -234,7 +234,10 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
         if (e.durum === 423) return;
         const hatalar = e.govde && e.govde.hatalar ? e.govde.hatalar : [];
         yerlestir(altCubuk, h('div', { class: 'not-kutusu hata', role: 'alert' }, h('b', {}, e.message),
-          hatalar.length ? h('ul', {}, hatalar.slice(0, 20).map((x) => h('li', {}, x.yer ? `${x.yer}: ` : '', x.mesaj))) : null), altCubukIcerigi());
+          hatalar.length ? h('ul', {}, hatalar.slice(0, 20).map((x) => h('li', {}, x.yer && x.yer !== 'model' ? `${x.yer}: ` : '', x.mesaj))) : null,
+          // Model doğrulamasının teknik iletileri yalnız "Ayrıntı" altında.
+          hatalar.some((x) => x.ayrinti) ? h('details', { class: 'hata-ayrintisi' }, h('summary', {}, 'Ayrıntı'),
+            h('ul', {}, hatalar.slice(0, 20).filter((x) => x.ayrinti).map((x) => h('li', {}, h('code', {}, x.ayrinti))))) : null), altCubukIcerigi());
       }
     });
     const iptal = h('button', { type: 'button', class: 'hayalet' }, 'Analizi iptal et');

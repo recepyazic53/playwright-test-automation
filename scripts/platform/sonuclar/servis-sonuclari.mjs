@@ -55,6 +55,17 @@ export function raporMetniniMaskele(metin, ekler) {
     .replace(/"([^"\\]{1,80})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g, (tam, ad, ara, deger) => (gizliAdMi(ad, ekler) && deger && deger !== MASKE ? `"${ad}"${ara}"${MASKE}"` : tam));
 }
 
+/**
+ * Servis koşu kaydının gösterimi (GET /platform/servis/kosu): istekte adı gizli alanların değeri maskeli (maskesiz saklanmış eski
+ * kayıtlar dahil; ör. "Sabit değer" olarak yazılan parola). Kayıt değişmez.
+ * @template {{ sonuc?: unknown }} K @param {K} kosu @param {ReadonlyArray<string>} ekler @returns {K}
+ */
+export function servisKosusuGosterimi(kosu, ekler) {
+  const sonuc = kosu.sonuc && typeof kosu.sonuc === 'object' ? /** @type {Record<string, unknown>} */ (kosu.sonuc) : null;
+  if (!sonuc || typeof sonuc.istek !== 'string') return kosu;
+  return { ...kosu, sonuc: { ...sonuc, istek: raporMetniniMaskele(sonuc.istek, ekler) } };
+}
+
 /** Başlık adı gizliyse değeri maskelenir (şema kalır: "Bearer ***"). @param {unknown} b @param {ReadonlyArray<string>} ekler */
 function basliklariMaskele(b, ekler) {
   if (!b || typeof b !== 'object' || Array.isArray(b)) return b;

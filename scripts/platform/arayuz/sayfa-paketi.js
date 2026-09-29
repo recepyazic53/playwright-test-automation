@@ -14,7 +14,7 @@
 // diyagramdan eklenir. Ortak akışın senaryosu yoktur (önizlemede senaryo / ortam seçimi yok); ekranlara ekleme otomatik yapılmaz.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
-import { api, bildir, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { api, bildir, dosyaSecimi, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { bicimIndirBaglantisi, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz } from './ekran-ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
@@ -136,14 +136,15 @@ function yuklemeAdimi(govde, s, onceki = null, ileriAcik = false) {
       yerlestir(durumAlani, hataListesi('Paket gönderilemedi', e.govde && e.govde.hatalar ? e.govde.hatalar : [{ yer: dosya.name, mesaj: e.message }]));
     }
   };
-  girdi.addEventListener('change', () => isle(girdi.files && girdi.files[0]));
+  // Her seçimden sonra girdi sıfırlanır: aynı adlı (düzeltilmiş) paket yeniden seçilince yeniden okunur, eski hatalar kalmaz.
+  const dosyaSec = dosyaSecimi(girdi, (l) => isle(l[0]));
   alan.addEventListener('dragover', (o) => { o.preventDefault(); alan.classList.add('surukleniyor'); });
   alan.addEventListener('dragleave', () => alan.classList.remove('surukleniyor'));
   alan.addEventListener('drop', (o) => { o.preventDefault(); alan.classList.remove('surukleniyor'); isle(o.dataTransfer && o.dataTransfer.files[0]); });
   // Tekrar analiz ("Paket yükle" ile gelinir): yükleme alanı üstte, tarama / kayıt / yapay zekâ kutuları altta (bugünkü düzen).
   if (s.mod === 'analiz') {
     yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
-      h('section', { class: 'kart' }, modSecimi, girdi, alan, durumAlani, onceki),
+      h('section', { class: 'kart' }, modSecimi, girdi, alan, dosyaSec.not, durumAlani, onceki),
       eklemeKutulari(s, { yapayZeka: true, baslik: 'Paketiniz yoksa' })));
     return;
   }
@@ -153,7 +154,7 @@ function yuklemeAdimi(govde, s, onceki = null, ileriAcik = false) {
   yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
     secim ? h('section', { class: 'kart' }, secim) : null,
     eklemeKutulari(s, { yapayZeka: false, baslik: 'Nasıl eklensin?' }),
-    ileriDuzey(s, h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, durumAlani, onceki), Boolean(onceki) || ileriAcik)));
+    ileriDuzey(s, h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, dosyaSec.not, durumAlani, onceki), Boolean(onceki) || ileriAcik)));
 }
 
 /**
