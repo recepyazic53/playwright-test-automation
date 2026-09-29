@@ -126,6 +126,85 @@ test.describe('servis akışları arayüzü', () => {
     await baglam.close();
   });
 
+  test('"Yanıttan seç": yanıt yoksa önce Dene istenir; Dene sonrası alan tıklanır, yol + ad dolar (gizli, değer görünmez); akış değeri sonraki adıma taşır; 1440 / 390 px taşmasız', async () => {
+    test.setTimeout(90_000);
+    // Hiç koşulmamış senaryo (yanıtı yok).
+    await basarili('/platform/servis/senaryo/kaydet', {
+      projeId, servisId, baslik: 'Oturum aç', icerik: { operasyon: 'Siparis', govde: zarf('<Giris/>'), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }] }
+    });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    /** Sayfa yatay taşmıyor ve seçici kutusundaki öğeler kutudan dışarı çıkmıyor. */
+    const tasmaYok = async (etiket: string) => {
+      const b = await page.evaluate(() => {
+        const out: string[] = [];
+        if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push(`sayfa ${document.documentElement.scrollWidth} > ${window.innerWidth}`);
+        for (const kutu of Array.from(document.querySelectorAll('.yanit-secici, .okuma-karti'))) {
+          const r = kutu.getBoundingClientRect();
+          for (const el of Array.from(kutu.querySelectorAll('*'))) {
+            const e = el.getBoundingClientRect();
+            if (e.width && e.right > r.right + 1) out.push(`${el.tagName}.${(el as HTMLElement).className} kutudan taşıyor`);
+          }
+        }
+        return out;
+      });
+      expect(b, etiket).toEqual([]);
+    };
+    await page.goto(`/#/servisler/s/${servisId}/akislar`);
+    await page.getByRole('link', { name: 'Akış ekle' }).click();
+    await page.getByLabel('Başlık').fill('Yanıttan seçilen token');
+    await page.getByLabel('1. adım türü').selectOption('senaryo');
+    await page.getByLabel('1. adım senaryosu').selectOption({ label: 'Oturum aç' });
+    await page.getByRole('button', { name: 'Değer oku' }).click();
+    const sec = page.getByRole('button', { name: 'Yanıttan seç (1. adım 1. okuma)' });
+    await sec.click();
+    await expect(page.getByRole('status').filter({ hasText: 'Bu adımın yanıtı henüz yok. Önce “Dene”' })).toBeVisible();
+    await sec.click();   // kapanır
+    // Dene: önce onay; tek adımlı akış yanıtı kaydeder (istek yalnız yerel sahte sunucuya).
+    await page.getByRole('button', { name: 'Dene', exact: true }).click();
+    await page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' }).getByRole('button', { name: 'Dene' }).click();
+    await expect(page.locator('.akis-sonucu')).toContainText('1 adım başarılı');
+    await sec.click();
+    const liste = page.getByRole('list', { name: '1. adım: yanıt alanları' });
+    await expect(liste).toBeVisible();
+    const tokenYolu = '/Envelope/Body/GirisResponse/Sonuc/Token';
+    const satir = liste.locator(`li[data-yol="${tokenYolu}"]`);
+    await expect(satir).toContainText('gizli: değer yok');
+    await expect(liste.locator('li[data-yol="/Envelope/Body/GirisResponse/Sonuc/Durum"]')).toContainText('OK');
+    expect(await page.content()).not.toMatch(/tok-\d/);
+    await tasmaYok('1440 px');
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(satir).toBeVisible();
+    await tasmaYok('390 px');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await satir.getByRole('button', { name: `${tokenYolu}: seç` }).click();
+    await expect(liste).toHaveCount(0);
+    await expect(page.getByLabel('1. adım 1. okuma adı')).toHaveValue('Token');
+    await expect(page.getByLabel('1. adım 1. okuma yolu')).toHaveValue(tokenYolu);
+    await expect(page.getByLabel('1. adım 1. okuma kaynağı')).toHaveValue('xml');
+    await expect(page.getByLabel('1. adım 1. okuma gizli')).toBeChecked();
+    // 2. adım okunan token'ı başlıkta kullanır.
+    await page.getByRole('button', { name: 'Adım ekle' }).click();
+    await page.getByLabel('2. adım türü').selectOption('senaryo');
+    await page.getByLabel('2. adım servisi').selectOption({ label: 'Ornek' });
+    await page.getByLabel('2. adım senaryosu').selectOption({ label: 'Siparis' });
+    const once = soap.istekler.length;
+    await page.getByRole('button', { name: 'Dene', exact: true }).click();
+    await page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' }).getByRole('button', { name: 'Dene' }).click();
+    const sonuc = page.locator('.akis-sonucu');
+    await expect(sonuc).toContainText('2 adım başarılı');
+    await expect(sonuc).toContainText('Token = ***');
+    const yeni = soap.istekler.slice(once);
+    const giris = yeni.find((x) => x.govde.includes('<Giris'));
+    expect(giris).toBeTruthy();
+    expect(yeni[yeni.length - 1].basliklar.authorization).toMatch(/^Bearer tok-\d+$/);
+    expect(await page.content()).not.toMatch(/tok-\d/);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
   test('oturum akışı servise atanır; senaryo düzenleyicide HTTP başlıkları görünür ve kaydedilir', async () => {
     test.setTimeout(60_000);
     const { servis, senaryolar } = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);

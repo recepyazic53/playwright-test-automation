@@ -11,6 +11,8 @@
 //                                  tutucusuyla giriş profilinin ek alanından gelir), doğrulama kodu alanı → ikinci adım.
 //                                  Mevcut tarifin başarı/hata göstergeleri, bağlam değiştirme ve süreleri KORUNUR. Tarif
 //                                  KAYDEDİLMEZ: arayüz önizletir, kullanıcı tarif formunda kontrol edip kaydeder.
+//                                  Girişten sonra açılan sayfa oturum kontrol adresi (ve çıkış yazısı başarı göstergesi)
+//                                  olarak ÖNERİLİR (sayfaOnerileri); mevcut tarifte yalnız kullanıcı onaylarsa yazılır.
 // NOT: import.meta KULLANILMAZ. Tipler: giris-kaydi.d.mts.
 
 import { regexKacis, varsayilanGirisAdimlariMi } from './tarif.mjs';
@@ -187,16 +189,28 @@ export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu, secimlerH
   const sonYol = yalin(taslak.sonSayfa?.yol) || yalin(taslak.sonYol);
   const yolDegisti = Boolean(sonYol) && sonYol !== (yalin(girisYolu) || yalin(taslak.ilkYol));
   const cikis = taslak.sonSayfa?.cikisMetni ?? null;
+  // Öneriler (girişten sonra açılan sayfadan): oturum kontrol adresi ve başarı göstergesi. KULLANICI ONAYLAMADAN yazılmaz:
+  // secimler.oturumOnerisi / basariOnerisi true ise kullanılır, false ise kullanılmaz. Seçim gönderilmezse yalnız YENİ tarifte
+  // (değiştirilecek bir değer yokken) kullanılır; mevcut tarifin değeri kendiliğinden değişmez.
+  const girisAdresi = m?.girisAdresi ?? (girisYolu || '/');
+  const eskiOturum = m?.oturumKontrolAdresi ?? (girisYolu || '/');
+  const oturumOnerisi = yolDegisti && sonYol !== yalin(eskiOturum) ? sonYol : null;
+  const cikisGostergesi = cikis ? { tur: 'metin', deger: cikis } : null;
+  const basariOnerisi = m?.basariGostergesi && cikisGostergesi
+    && !(m.basariGostergesi.tur === 'metin' && m.basariGostergesi.deger === cikis) ? cikisGostergesi : null;
+  const kabul = (/** @type {unknown} */ s) => (typeof s === 'boolean' ? s : !m);
+  const oturumKabul = Boolean(oturumOnerisi) && kabul(secimler.oturumOnerisi);
+  const basariKabul = Boolean(basariOnerisi) && kabul(secimler.basariOnerisi);
   /** @type {Record<string, unknown>} */
   const tarif = {
-    girisAdresi: m?.girisAdresi ?? (girisYolu || '/'),
-    oturumKontrolAdresi: m?.oturumKontrolAdresi ?? (yolDegisti ? sonYol : girisYolu || '/'),
+    girisAdresi,
+    oturumKontrolAdresi: oturumKabul ? oturumOnerisi : eskiOturum,
     kullaniciAlani: secici.kullaniciAlani,
     parolaAlani: secici.parolaAlani,
     gonderDugmesi: secici.gonderDugmesi,
-    // Öncelik: kullanıcının yazdığı metin > mevcut tarif > görünen çıkış yazısı > girişten sonraki adres.
-    basariGostergesi: basariMetni ? { tur: 'metin', deger: basariMetni } : m?.basariGostergesi
-      ?? (cikis ? { tur: 'metin', deger: cikis } : yolDegisti ? { tur: 'url', deger: regexKacis(sonYol) } : { tur: 'metin', deger: '' }),
+    // Öncelik: kullanıcının yazdığı metin > onaylanan öneri > mevcut tarif > görünen çıkış yazısı > girişten sonraki adres.
+    basariGostergesi: basariMetni ? { tur: 'metin', deger: basariMetni } : basariKabul ? basariOnerisi : m?.basariGostergesi
+      ?? (cikisGostergesi ?? (yolDegisti ? { tur: 'url', deger: regexKacis(sonYol) } : { tur: 'metin', deger: '' })),
     hataGostergeleri: m?.hataGostergeleri ?? [],
     ikinciAdim: m?.ikinciAdim ?? { tur: 'yok' },
     zamanAsimiSn: m?.zamanAsimiSn ?? 45,
@@ -214,5 +228,11 @@ export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu, secimlerH
   if (!m?.basariGostergesi && !basariMetni && !/** @type {any} */ (tarif.basariGostergesi).deger) {
     notlar.push('Girişten sonra ekranda görünen bir yazı (ör. menüdeki bir başlık) belirtin; giriş bununla doğrulanır.');
   }
-  return { tarif, ekAlanlar, hatalar, notlar };
+  return {
+    tarif, ekAlanlar, hatalar, notlar,
+    sayfaOnerileri: {
+      oturumKontrolAdresi: oturumOnerisi ? { adres: oturumOnerisi, mevcut: m ? eskiOturum : null, kabul: oturumKabul } : null,
+      basariGostergesi: basariOnerisi ? { gosterge: basariOnerisi, mevcut: m?.basariGostergesi ?? null, kabul: basariKabul } : null
+    }
+  };
 }

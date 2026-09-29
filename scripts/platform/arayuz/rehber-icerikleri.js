@@ -12,7 +12,7 @@ const ANA_AKIS = {
   tur: 'akis',
   kutular: [
     { baslik: 'Ortam + giriş', alt: 'Ayarlar', ikon: 'ayar' },
-    { baslik: 'Ekran', alt: 'paket / tarama', ikon: 'ekran' },
+    { baslik: 'Ekran', alt: 'tara / kaydet', ikon: 'ekran' },
     { baslik: 'Senaryo', alt: 'formdan', ikon: 'liste' },
     { baslik: 'Koşu', alt: 'tarayıcıda', ikon: 'oynat' },
     { baslik: 'Sonuç', alt: 'kanıtlarıyla', ikon: 'grafik' }
@@ -27,7 +27,7 @@ export const REHBERLER = {
       {
         baslik: "Nöbetçi'ye hoş geldiniz",
         metin: ['Nöbetçi, web ekranlarınızı ve servislerinizi kod yazmadan test eder: ekranı tanıtırsınız, senaryoyu formdan yazarsınız, Nöbetçi tarayıcıda sizin yerinize dener ve sonucu kanıtlarıyla (ekran görüntüsü, video) saklar.',
-          'Çizim bir işin baştan sona yolunu gösteriyor. Her ekranın kendi rehberi, o ekrandaki adımları ayrıca anlatır.'],
+          'Çizim bir işin baştan sona yolunu gösteriyor. Ana sayfadaki "Başlarken" listesi bu yolda sıradaki adımı gösterir ve tek tıkla oraya götürür; her ekranın kendi rehberi o ekrandaki adımları ayrıca anlatır.'],
         cizim: ANA_AKIS
       },
       {
@@ -113,6 +113,11 @@ export const REHBERLER = {
         baslik: 'Kalan bir testi incelemek',
         sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Kalan test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
+      },
+      // Sona eklendi (ekrandaki bölümlerin adım sırası değişmesin): yalnız henüz tam koşusu olmayan projede görünür.
+      {
+        baslik: 'Başlarken', hedef: '.baslarken-karti',
+        metin: 'Proje henüz tam koşu görmediyse sekmelerin altında "Başlarken" listesi durur: ortam, giriş tarifi, ilk ekran, ilk senaryo, Dene, Koşuyu başlat, sonuçları incele. Sıradaki adımın düğmesi ilgili ekranı açar; liste Özet sekmesinde tamamlanana ya da gizlenene kadar kalır.'
       }
     ]
   },
@@ -149,6 +154,12 @@ export const REHBERLER = {
         baslik: 'Kapsam ve güvenlik', hedef: '.farkindalik-karti.kapsam',
         metin: 'Kapsam boşlukları ve güvenlik hatırlatmaları: senaryosu olmayan servis metotları, denenmemiş koşul dalları (ekran başına), son yedeğin yaşı, açık riskli izinler ve türü (Test / Canlı) seçilmemiş ortamlar.',
         ipucu: 'Kartta ilk beş madde görünür; gerisi "Tümü (N)" ile açılır.'
+      },
+      {
+        baslik: 'Başlarken', hedef: '.baslarken-karti',
+        metin: ['Yeni projede ilk koşuya giden yedi adım: ortam, giriş tarifi, ilk ekran (Tara / Akışı kaydet), ilk senaryo, Dene, Koşuyu başlat ve sonuçları incelemek. Her adım projenizin verisinden işaretlenir (✓); ilk eksik adım "Sıradaki"dir ve düğmesi ilgili ekranı açar.',
+          'Uygulamanız giriş istemiyorsa giriş adımında "Girişe gerek yok" deyin. Liste tamamlanınca kendiliğinden kaybolur; "Gizle" ile de kaldırabilirsiniz (proje için saklanır, Ayarlar > Arayüz\'den geri gelir).'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', alt: 'Girişi kaydet', ikon: 'anahtar' }, { baslik: 'Ekran', alt: 'tara / kaydet', ikon: 'ekran' }, { baslik: 'Senaryo', alt: 'Dene', ikon: 'liste' }, { baslik: 'Koşu', ikon: 'oynat' }, { baslik: 'Sonuç', ikon: 'grafik' }] }
       }
     ]
   },
@@ -385,7 +396,7 @@ export const REHBERLER = {
       { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz. "Yetki hatasında (401 / 403)": Tekrar deneme ya da Token\'ı yenile, bir kez tekrar dene (oturum / token adımı yeniden çalışır, istek bir kez daha gönderilir; raporda not olarak görünür). "Genel ayarı kullan" seçiliyse Ayarlar > Koşu\'daki genel değer (varsayılan: Token\'ı yenile, bir kez tekrar dene) kullanılır.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
       {
         baslik: 'Akış kurma sırası',
-        sira: ['"Akış ekle"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" ile değeri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).',
+        sira: ['"Akış ekle"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" > "Değer oku" deyin. Yolu yazmanız gerekmez: akışı bir kez "Dene"yin, sonra "Yanıttan seç" ile yanıttaki alanı tıklayın; yol ve ad dolar (gizli alanın değeri gösterilmez, okunan değer maskeli kalır). Elle yazarsanız ad alanı öneki gerekmez: "//Token" yeter. Bulunamazsa hata, yanıttaki benzer adları yollarıyla önerir.',
           'Sonraki adımda "Alan bağla" ile o değeri operasyonun alanına bağlayın; diyagramdaki oklar taşınan değerleri gösterir.', 'Kaydedin; sayfanın altındaki "Bu akışın senaryoları"ndan "Senaryo ekle" ile verileri girin.'],
         cizim: { tur: 'akis', kutular: [{ baslik: '+ Operasyon', ikon: 'artiYalin' }, { baslik: 'Yanıttan oku', ikon: 'hedef' }, { baslik: 'Alan bağla', ikon: 'ok' }, { baslik: 'Senaryo ekle', ikon: 'liste' }] }
       }
@@ -404,7 +415,7 @@ export const REHBERLER = {
       {
         baslik: 'Akış kurma sırası',
         sira: ['"Uçtan uca akış ekle"ta "+" ile adım koyun: ekran senaryosu, bir servisin operasyonu (ya da kayıtlı senaryosu) veya SQL sorgusu.',
-          'Değer üreten adımda okumayı tanımlayın: serviste "Yanıttan oku", ekranda "Değer oku" (seçici + ad), SQL\'de sonuç sütunu. Gizli değerleri işaretleyin.',
+          'Değer üreten adımda okumayı tanımlayın: serviste "Yanıttan oku" (Dene sonrası "Yanıttan seç" ile alanı tıklayarak), ekranda "Değer oku" (seçici + ad), SQL\'de sonuç sütunu. Gizli değerleri işaretleyin.',
           'Sonraki adımda değeri kullanın: ekranda "Alan doldur" ile senaryonun bir alanına, serviste "Alan bağla" ile, SQL\'de sorgunun içinde ${akis:Ad}.',
           'Kaydedin ve "Koş…" ile ortam seçip çalıştırın.'],
         cizim: { tur: 'akis', kutular: [{ baslik: '+ Adım', ikon: 'artiYalin' }, { baslik: 'Değer oku', ikon: 'hedef' }, { baslik: 'Alan doldur', ikon: 'ok' }, { baslik: 'Koş…', ikon: 'oynat' }] }
@@ -433,12 +444,12 @@ export const REHBERLER = {
       {
         baslik: 'Ekranlar',
         metin: ['Test edeceğiniz her sayfa bir "ekran"dır. Ekranın modeli; alanları, adımları ve kuralları (hangi alan ne zaman görünür, hangisi zorunlu) tutar. Senaryo formu ve koşu bu modelden çalışır.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Sayfa', alt: 'uygulamanızda', ikon: 'ekran' }, { baslik: 'Paket / tarama', alt: 'yalnız okur', ikon: 'ara' }, { baslik: 'Ekran modeli', alt: 'sürümlü', ikon: 'katman' }, { baslik: 'Senaryolar', ikon: 'liste' }] }
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Sayfa', alt: 'uygulamanızda', ikon: 'ekran' }, { baslik: 'Tara / kaydet', alt: 'yalnız okur', ikon: 'ara' }, { baslik: 'Ekran modeli', alt: 'sürümlü', ikon: 'katman' }, { baslik: 'Senaryolar', ikon: 'liste' }] }
       },
       {
-        baslik: 'Ekran eklemenin üç yolu',
-        sira: ['Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp yalnızca okur.', 'Akışı kaydet: işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.', 'Yapay zekâ ile oluştur: istek metnini kopyalayıp sayfanın bağlantısıyla yapay zekâ aracınıza verin, ürettiği paketi yükleyin.'],
-        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Üçü de "Ekran ekle"de yan yana' }
+        baslik: 'Ekran eklemenin yolları',
+        sira: ['Ekranı tara (önerilen): Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp yalnızca okur.', 'Akışı kaydet: çok adımlı formlarda işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.', 'İleri düzey: hazır bir ekran paketini yükleyin ya da yapay zekâ aracınıza ürettirin ("Ekran ekle"de kapalı "İleri düzey" bölümü).'],
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Tara ve Akışı kaydet "Ekran ekle"de önde' }
       },
       { baslik: 'Sol panel', hedef: '.alt-nav', metin: 'Ekranlar, alt modeller (ör. bir kart bloğu) ve ortak akışlar (birden çok ekranın kullandığı adımlar, ör. ödeme) burada. Devre dışı ekranlar varsayılan olarak gizlidir.' },
       { baslik: 'Ortak akışlar', metin: 'Ortak akış da ekran gibi oluşturulur: "Ortak akış ekle" (ya da "Ekran ekle"de "Ne oluşturulsun? Ortak akış") ile paket yükleyin, sayfayı taratın, akışı kaydedin ya da boş başlayıp diyagramdan adım ekleyin. Sayfası ekranınkiyle aynıdır (model, geçmiş, akış diyagramı, Test verisi); senaryosu yoktur. Ekranlara eklemek sizin kararınızdır: "Ekranlara ekle…" ya da diyagramda "+ > Ortak akış".', cizim: { tur: 'akis', kutular: [{ baslik: 'Oluştur', alt: 'ekranla aynı', ikon: 'arti' }, { baslik: 'Diyagram', alt: 'adımlar', ikon: 'pusula' }, { baslik: 'Ekrana ekle', alt: 'sizin kararınız', ikon: 'artiYalin' }, { baslik: 'Koşu', alt: 'ekranın içinde', ikon: 'onay' }] } },
@@ -448,10 +459,11 @@ export const REHBERLER = {
   'ekran-ekle': {
     baslik: 'Ekran ekle',
     adimlar: [
-      { baslik: 'Ekran paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
-      { baslik: 'Ne oluşturulsun?', hedef: '.olusturma-secimi', metin: 'Varsayılan "Ekran"dır. "Ortak akış" seçerseniz aynı yollar (paket yükle, tara, kaydet) ortak akış oluşturur ve "Ortak akışlar" altına kaydeder; ayrıca "Boş başla" ile adımsız bir ortak akış açıp adımlarını diyagramdan eklersiniz. Ortak akışın senaryosu yoktur; ekranlara ekleme otomatik yapılmaz.' },
-      { baslik: 'Paketiniz yoksa: üç yol', hedef: '.ekleme-kutulari', sira: ['Ekranı tara: Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).', 'Yapay zekâ ile oluştur: "İstek metnini kopyala" ile metni alın, sayfanın bağlantısıyla (ve "Paket biçimini indir" dosyasıyla) yapay zekâ aracınıza verin; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.'] },
-      { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da aşağıdaki kutulardan birini seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
+      { baslik: 'Ekran ekle', metin: 'Yeni ekranın modeli (alanlar, adımlar, önerilen senaryolar) en kolay sayfayı taratarak ya da akışı kaydederek çıkar. Sonuç önce önizlenir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Tara / kaydet', ikon: 'ara' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
+      { baslik: 'Ne oluşturulsun?', hedef: '.olusturma-secimi', metin: 'Varsayılan "Ekran"dır. "Ortak akış" seçerseniz aynı yollar (tara, kaydet, paket yükle) ortak akış oluşturur ve "Ortak akışlar" altına kaydeder; ayrıca "Boş başla" ile adımsız bir ortak akış açıp adımlarını diyagramdan eklersiniz. Ortak akışın senaryosu yoktur; ekranlara ekleme otomatik yapılmaz.' },
+      { baslik: 'Nasıl eklensin?', hedef: '.ekleme-kutulari', sira: ['Ekranı tara (önerilen): Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).'] },
+      { baslik: 'İleri düzey', hedef: '.ileri-duzey > summary', metin: 'Kapalı gelen "İleri düzey" bölümü ekran paketi içindir: paket, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json). Elinizde hazır paket varsa "Dosya seç" ile yükleyin; "Yapay zekâ ile oluştur" istek metnini kopyalatır, aracınızın ürettiği paketi yine buradan yüklersiniz.' },
+      { baslik: 'Adımlar', sira: ['Ekranı tarayın ya da akışı kaydedin (hazır paket varsa İleri düzey\'den yükleyin).', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
       { baslik: 'Güvenlik', metin: 'Tarama sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Yasak adreslere (Ayarlar > Güvenlik) hiç gidilmez.' }
     ]
   },

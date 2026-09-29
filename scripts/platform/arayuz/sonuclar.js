@@ -13,6 +13,7 @@
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
 import { api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, s, TOKEN, tarihMetni, yerlestir } from './ortak.js';
+import { baslarkenKarti, sonuclarIncelendi } from './baslarken.js';
 import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { hataKaydiDugmesi } from './entegrasyonlar.js';
@@ -189,6 +190,8 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         const sekmeler = genelSekmeleri('ekranlar');
         const baslik = icerik.querySelector(':scope > .sayfa-basligi');
         if (baslik) baslik.after(sekmeler); else icerik.prepend(sekmeler);
+        // Henüz tam koşusu olmayan projede "Başlarken" listesi burada da (ilk açılış bu görünümdür; baslarken.js).
+        sekmeler.after(baslarkenKarti(proje, { yalnizKosusuz: true }));
       }
       return undefined;
     })
@@ -1051,6 +1054,8 @@ async function kosuDetayi(icerik, id, proje) {
   ]);
   const ortamKaydi = kosu.ortamId ? ortamlar.find((o) => o.id === kosu.ortamId) || null : null;
   const ortam = ortamKaydi ? ortamKaydi.ad : null;
+  // Başlarken listesinin son adımı ("Sonuçları incele"): tam koşunun ayrıntısı açıldı.
+  if (kosu.tur === 'tam') sonuclarIncelendi(proje);
   // Hızlı süzgeçler: "Yalnız kalanlar" ve hata kalıbı (kalıba tıklayınca yalnız o kalıptaki testler; çip ile kaldırılır).
   const suzgec = { kalan: false, kalip: /** @type {string | null} */ (null) };
   let suzgecUygula = () => {};

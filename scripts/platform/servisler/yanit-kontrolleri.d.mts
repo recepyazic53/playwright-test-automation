@@ -16,6 +16,10 @@ export declare function sayiOku(d: unknown): number | null;
 export declare function degerBicimi(d: string | null): string;
 export declare function yanitAlanlari(govde: string): { bicim: 'xml' | 'json' | null; alanlar: YanitAlani[]; kirpildi: boolean };
 export declare const alanAdi: (yol: string) => string;
+export declare function arananAd(yol: string): string;
+export declare function benzerAlanlar(govde: string, yol: string, enCok?: number): {
+  bicim: 'xml' | 'json' | null; ad: string; alanlar: Array<{ ad: string; yol: string }>; toplam: number;
+};
 export declare const yapiYolu: (yol: string) => string;
 export declare function yanitAlaniOku(govde: string, kaynak: 'xml' | 'json', yol: string): { bulundu: boolean; deger: string | null };
 export declare function yanitAlaniAdi(k: YanitAlaniKontrolu): string;
