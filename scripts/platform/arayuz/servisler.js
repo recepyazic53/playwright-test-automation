@@ -160,7 +160,7 @@ export function servislerEkrani(main, parcalar, baglam) {
   }
   const servisId = tur === 's' && kimlik ? decodeURIComponent(kimlik) : null;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve akışlar' }, iskelet('liste'));
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Servisler'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' },

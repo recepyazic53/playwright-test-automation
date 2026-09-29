@@ -1441,7 +1441,7 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .tasarim-alani .sinir-dugmesi.var { color: var(--vurgu); background: var(--vurgu-zemin); }
 /* "Doldurduktan sonra" tuşu (Tab / Enter): alandan çıkınca çıkan uyarılar için. */
 .tasarim-alani .tus-secimi { display: inline-flex; align-items: center; gap: 4px; font: 600 10.5px var(--yazi-mono); color: var(--metin-3); }
-.tasarim-alani .tus-secimi select { min-height: 20px; height: 20px; padding: 0 4px; font: 600 10.5px var(--yazi-mono); width: auto; }
+.tasarim-alani .tus-secimi select { min-height: 20px; height: 20px; padding: 0 22px 0 6px; background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; font: 600 10.5px var(--yazi-mono); width: auto; }
 .tasarim-alani .tus-secimi.var { color: var(--vurgu); }
 .alan-sonrasi-ipucu { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 8px; border-radius: 7px; font-size: 12px; color: var(--durdu); background: var(--durdu-zemin); }
 .alan-sonrasi-ipucu .ikon { width: 13px; height: 13px; flex: none; margin-top: 2px; }
@@ -4321,3 +4321,22 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ekleme-kutulari.tekli { grid-template-columns: minmax(0, 1fr); }
 .ekleme-kutulari.tekli .ekleme-kutusu { min-height: 0; }
 @media (max-width: 900px) { .ekleme-kutulari.ikili { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- v1.4 kullanılabilirlik: paket, terimler ve görsel düzeltmeler (ku14) ---------------------------------------------------- */
+/* Akış diyagramı: "Başarı / Uyarı" radyoları etiketlerine binmez. */
+.mesaj-turu label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+/* "Ekran açılır" düğümü giriş kartıyla aynı genişlikte; ikisinin arasında bağlantı çizgisi (üst üste binmez). */
+.tasarim-akisi > .ekran-acilisi { width: min(100%, 30rem); margin-top: 26px; }
+.tasarim-akisi > .ekran-acilisi::after { content: ""; position: absolute; left: 50%; top: -26px; width: 2px; height: 26px; background: var(--cizgi-2); transform: translateX(-50%); }
+/* Boş aksiyon (düğme seçilmedi): hata değil, yol gösteren ipucu. "Yalnız görünürse bas" kuralı onay kutusunun yanında. */
+.aksiyon-ipucu, .gorunurse-ipucu { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--metin-2); }
+.gorunurse-ipucu.uyari { color: var(--durdu); }
+.aksiyon-ipucu .ikon, .gorunurse-ipucu .ikon { width: 13px; height: 13px; flex: none; margin-top: 2px; }
+.onay-satiri .satir-aciklamasi { display: block; font-size: 11.5px; font-weight: 400; color: var(--metin-3); }
+/* Senaryo / servis önerileri: kapsam çubuğu genişliği CSS değişkeninden (CSP: satır içi style yok); verisiz ölçüde çubuk boş. */
+.kapsam-cubugu > span { width: var(--oran, 0%); }
+.kapsam-cubugu.bos > span { display: none; }
+/* Tarama önizlemesi: bölüm başlığının altındaki bir cümlelik açıklama. */
+.bolum-aciklamasi { margin: 2px 0 8px; font-size: 12.5px; color: var(--metin-3); max-width: 80ch; }
+/* Sol menü: ortak akışlar ekranlardan ayrı grup (Sonuçlar). "Boş başla" (ortak akış) ad kutusunun görünür etiketi. */
+.bos-basla-kutusu .alan-etiketi { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--metin-2); }

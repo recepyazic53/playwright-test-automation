@@ -189,7 +189,7 @@ test('Özet rehberi bölümleri ekrandaki sırayla anlatır ve vurgular; Sonuçl
   const { page, kapat } = await sayfaAc(1440, 1000);
   await git(page, '#/sonuclar/ozet');
   const bolumler: Array<[string, string]> = [
-    ['Ürün / ekran seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık ve "Rapor al (PDF)"', '.sonuc-icerik > .sayfa-basligi'],
+    ['Ekran / servis seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık ve "Rapor al (PDF)"', '.sonuc-icerik > .sayfa-basligi'],
     ['Rapor sekmeleri', '.sonuc-sekmeleri'], ['Tarih aralığı', '.sonuc-araligi'], ['Özet kutuları', '.ozet-kutulari'],
     ['Dikkat', '.farkindalik-karti.dikkat'], ['Bakım', '.farkindalik-karti.bakim'], ['Kapsam ve güvenlik', '.farkindalik-karti.kapsam']
   ];

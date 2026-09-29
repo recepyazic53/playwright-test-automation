@@ -158,7 +158,8 @@ test('Ekran ekle: önde Ekranı tara / Akışı kaydet (yan yana eşit, tek eyle
   await expect(page.locator('details.istek-metni-acilir')).not.toHaveAttribute('open', '');
   await yz.getByRole('button', { name: 'İstek metnini kopyala' }).click();
   await expect(page.getByText('İstek metni kopyalandı.')).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(metin);
+  // Pano Windows'ta satır sonunu \r\n yapar (metnin başında sade açıklama + boş satır).
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')).toBe(metin);
   await yz.getByText('Metni göster').click();
   await expect(yz.locator('pre.istek-metni')).toHaveText(metin);
   const kutu = page.locator('.ekleme-kutusu');
@@ -201,7 +202,7 @@ test('Ekranlar: istek metni tam gösterilmez (kopyala düğmesi); ortak akış k
   await expect(serit.locator('pre.istek-metni')).toBeHidden();
   await serit.locator('details.kesif-ileri > summary').click();
   await serit.getByRole('button', { name: 'İstek metnini kopyala' }).click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(paketIstekCumlesi(''));
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')).toBe(paketIstekCumlesi(''));
 
   const bolum = page.locator('.ortak-akis-bolumu');
   const kartlar = bolum.locator('article.ekran-karti.ortak-akis-karti');

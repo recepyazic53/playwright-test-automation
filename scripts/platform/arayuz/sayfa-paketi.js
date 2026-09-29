@@ -157,6 +157,12 @@ function yuklemeAdimi(govde, s, onceki = null, ileriAcik = false) {
     ileriDuzey(s, h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, dosyaSec.not, durumAlani, onceki), Boolean(onceki) || ileriAcik)));
 }
 
+/** Paketin 2 sayfalık özeti (docs/sayfa-paketi-ozet.md; yerel sunucu düz metin olarak verir; yeni sekmede açılır). */
+export const PAKET_OZETI_ADRESI = '/arayuz/sayfa-paketi-ozet.md';
+export function paketOzetiBaglantisi() {
+  return h('a', { href: PAKET_OZETI_ADRESI, target: '_blank', rel: 'noopener', class: 'paket-ozeti-baglantisi' }, 'Paket özetini oku (2 sayfa)');
+}
+
 /**
  * "İleri düzey" (varsayılan kapalı): "Paket nedir?" kısa açıklaması, paket yükleme alanı ve "Yapay zekâ ile oluştur" kutusu.
  * @param {AkisSecenekleri} s @param {HTMLElement} yukleme @param {boolean} acik
@@ -167,7 +173,8 @@ function ileriDuzey(s, yukleme, acik) {
       h('small', {}, 'Elinizde ekran paketi varsa'), ikon('asagi', 'ileri-duzey-ok')),
     h('div', { class: 'ileri-duzey-govdesi' },
       h('p', { class: 'soluk kucuk paket-nedir' }, h('b', {}, 'Paket nedir? '),
-        'Ekran paketi, bir sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json). Tarama ve akış kaydı da aynı paketi arka planda kendisi üretir; bu bölüm yalnız paketi başka bir yolla (yapay zekâ aracı ya da elle) hazırladıysanız gerekir. Yüklenen paket önce önizlenir; gizli değer içeren paket reddedilir.'),
+        'Ekran paketi, bir sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json). Tarama ve akış kaydı da aynı paketi arka planda kendisi üretir; bu bölüm yalnız paketi başka bir yolla (yapay zekâ aracı ya da elle) hazırladıysanız gerekir. Yüklenen paket önce önizlenir; gizli değer içeren paket reddedilir. ',
+        paketOzetiBaglantisi()),
       yukleme,
       eklemeKutulari(s, { yapayZeka: true, yalnizYapayZeka: true, baslik: null })));
 }
@@ -213,7 +220,9 @@ function eklemeKutulari(s, secenek) {
     h('p', { class: 'ekleme-notu' }, not));
   const analiz = s.mod === 'analiz';
   const yalnizYz = Boolean(secenek.yalnizYapayZeka);
+  // Ortak akışta "Boş başla" en basit yol: ilk kutu (tara / kaydet bir başlangıç ekranı ister).
   const kutular = [
+    ortakMi(s) && !yalnizYz ? bosBaslaKutusu(s, kutu) : null,
     s.tara && !yalnizYz ? kutu('tara-kutusu', 'ara', 'Ekranı tara', h('p', {}, 'Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.'),
       h('button', { type: 'button', class: 'birincil', onclick: () => s.tara() }, ikon('ara'), 'Ekranı tara'),
       '“Web uygulamasına erişim” izni gerekir; CANLI ortamda ayrıca izin ve onay ister.') : null,
@@ -228,8 +237,7 @@ function eklemeKutulari(s, secenek) {
           h('li', {}, 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin'),
           h('li', {}, 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin')),
       analiz ? h('a', { class: 'dugme birincil', href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, ikon('yenile'), 'Ekrana dön') : istekMetniKutusu(CUMLE, { birincil: true, ek: bicimIndirBaglantisi() }),
-      'Araç: tarayıcıyı kullanabilen bir kodlama asistanı. Gizli değer içeren paket reddedilir.'),
-    ortakMi(s) && !yalnizYz ? bosBaslaKutusu(s, kutu) : null
+      'Araç: tarayıcıyı kullanabilen bir kodlama asistanı. Gizli değer içeren paket reddedilir.')
   ].filter(Boolean);
   const duzen = kutular.length > 3 ? ' dortlu' : kutular.length === 2 ? ' ikili' : kutular.length === 1 ? ' tekli' : '';
   const izgara = h('div', { class: `ekleme-kutulari${duzen}` }, kutular);
@@ -244,10 +252,11 @@ function eklemeKutulari(s, secenek) {
  * @param {AkisSecenekleri} s @param {(sinif: string, ikonAd: string, baslik: string, aciklama: Node, eylem: Node, not: string) => HTMLElement} kutu
  */
 function bosBaslaKutusu(s, kutu) {
-  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Ödeme adımları', 'aria-label': 'Ortak akışın adı', autocomplete: 'off' });
+  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Ödeme adımları', autocomplete: 'off', id: `bos-ortak-adi-${Math.random().toString(36).slice(2, 8)}` });
   const hata = h('p', { class: 'hata-metni kucuk', role: 'alert', hidden: true });
   const olustur = h('button', { type: 'submit', class: 'birincil' }, ikon('arti'), 'Boş ortak akış oluştur');
-  const form = h('form', { class: 'bos-baslat-formu', 'aria-label': 'Boş ortak akış' }, ad, hata, olustur);
+  const form = h('form', { class: 'bos-baslat-formu', 'aria-label': 'Boş ortak akış' },
+    h('label', { class: 'alan-etiketi', for: ad.id }, 'Ortak akışın adı'), ad, hata, olustur);
   form.addEventListener('submit', async (o) => {
     o.preventDefault();
     hata.hidden = true;
@@ -264,7 +273,7 @@ function bosBaslaKutusu(s, kutu) {
   });
   return kutu('bos-basla-kutusu', 'pusula', 'Boş başla',
     h('p', {}, 'Adımsız bir ortak akış oluşturulur; adımlarını Akışlar sekmesinde diyagramdan eklersiniz (alan, düğme, beklenen mesaj…).'),
-    form, 'Siteye bağlanılmaz. Alan ve düğmeleri diyagramda seçicisiyle elle tanımlarsınız ya da sonra “Akışı kaydet” ile kaydedersiniz.');
+    form, 'Siteye bağlanılmaz. Alan ve düğmeleri diyagramda “Sayfada seç” ile eklersiniz ya da sonra “Akışı kaydet” ile kaydedersiniz.');
 }
 
 // ---------------------------------------------------------------------------------------
@@ -296,7 +305,7 @@ export function testVerisiSecimi(t, degisti) {
     return h('li', { class: acik ? '' : 'soluk' }, h('label', {}, k,
       h('span', {}, h('b', {}, b.alanEtiketi), ' → ', h('code', {}, `${b.tablo} → ${b.sutun}`)),
       degisir ? rozet(`şu an: ${b.mevcut.tablo} → ${b.mevcut.sutun} (değişir)`, 'uyari') : null,
-      b.modeldeVar ? null : rozet('bulgu kabul edilince bağlanır', '', { title: 'Alan henüz modelde değil: bağlantı, alanın bulgusu kabul edilince yazılır; reddedilirse yazılmaz.' })));
+      b.modeldeVar ? null : rozet('bulgu kabul edilince bağlanır', '', { title: 'Bulgu, yeni paketle mevcut model arasındaki bir farktır (ör. eklenen alan). Alan henüz modelde değil: bağlantı, alanın bulgusu kabul edilince yazılır; reddedilirse yazılmaz.' })));
   }));
   const tabloSatiri = (x) => {
     const d = durum.get(x.ad);
@@ -340,7 +349,7 @@ export function testVerisiSecimi(t, degisti) {
     const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
     const satir = h('li', { class: 'tv-tablo' },
       h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
-        x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listeleri grubunda görünür.' }) : null,
+        x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablo; Test verisi > Ekran listeleri grubunda görünür.' }) : null,
         h('span', { class: 'kucuk soluk' }, `${x.sutunlar.length} sütun · ${x.satirSayisi} satır${x.tekrarSayisi ? ` (${x.tekrarSayisi} tekrar atıldı)` : ''}`),
         gizliVar ? rozet('gizli sütun: değeri Nöbetçi\'de şifreli girilir', 'uyari') : null),
       x.aciklama ? h('p', { class: 'kucuk soluk' }, x.aciklama) : null,
@@ -357,8 +366,11 @@ export function testVerisiSecimi(t, degisti) {
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar'),
       h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Ekran paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
     h('p', { class: 'kucuk soluk' }, 'Tablolar üst menüdeki Test verisi sayfasına Excel sayfası gibi yazılır (satır = birlikte geçerli değerler): seçim alanlarının seçenekleri "Ekran listeleri"ne ("<Ekran> — <Alan>"), kişi ve kayıt verileri "Kişi ve kayıt verileri"ne. Alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
+    t.tablolar.some((x) => x.tur === 'liste') ? h('p', { class: 'bolum-aciklamasi' }, 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablodur; senaryo formundaki seçenekler buradan gelir.') : null,
     h('ul', { class: 'tv-tablolar' }, t.tablolar.map(tabloSatiri)),
-    t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`), bagListesi] : null);
+    t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`),
+      h('p', { class: 'bolum-aciklamasi' }, 'Alan bağlantısı, ekrandaki bir alanın değerini hangi tablo sütunundan alacağını söyler; işaretli olanlar kabul edince kurulur.'),
+      bagListesi] : null);
   bagCiz();
   return {
     bolum,
@@ -592,6 +604,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
       tv.bolum,
       kanitlar.length ? [
         h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('ekran'), 'Kanıtlar', rozet(String(kanitlar.length), 'vurgu')), h('span', { class: 'kucuk cok-soluk' }, 'kabul edilince şifreli saklanır')),
+        h('p', { class: 'bolum-aciklamasi' }, 'Kanıtlar, incelemede sayfanın o anki hâlini gösteren ekran görüntüleridir; modelin neye göre çıkarıldığını sonradan görmek içindir.'),
         h('ul', { class: 'gorsel-izgarasi genis-gorseller kart' }, kanitlar.map((k) => {
           const src = `data:image/png;base64,${String(k.veri).replace(/^data:image\/png;base64,/, '')}`;
           return h('li', {},
@@ -613,7 +626,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         analiz ? h('p', { class: 'kucuk soluk' }, 'Paket mevcut modelle karşılaştırılır; her değişiklik bir bulgu olur ve siz kabul edene kadar model değişmez. Daha önce reddettiğiniz aynı değişiklikler gösterilmez.')
           : ortak ? h('p', { class: 'kucuk soluk' }, `Ortak akış “Ortak akışlar” altına kaydedilir; ekranlara eklenmez. ${EKRANLARA_EKLEME_NOTU}`)
           : [h('div', { class: 'ara-baslik' }, 'Senaryoların ortamları'), ortamSecimleri,
-            h('p', { class: 'kucuk soluk' }, 'Senaryolar "Koşuda" KAPALI eklenir: siz gözden geçirip açana kadar toplu koşuya girmez.')],
+            h('p', { class: 'kucuk soluk' }, 'Senaryolar "Toplu koşuya dahil" KAPALI eklenir: siz gözden geçirip açana kadar toplu koşuya girmez.')],
         hataAlani,
         h('div', { class: 'form-eylemleri' }, kabulDugmesi, nedenAlani,
           h('button', { type: 'button', class: 'hayalet', onclick: () => yuklemeAdimi(govde, s, null, true) }, 'Başka dosya'),

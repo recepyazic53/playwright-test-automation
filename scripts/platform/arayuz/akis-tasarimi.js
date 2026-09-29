@@ -4,8 +4,10 @@
 //   Bekleme süresi (saniye; önceki düğmeden sonra), Bitir. Blokların arasındaki "+" ile blok eklenir; ↑/↓ ile taşınır, Sil ile
 //   çıkarılır. Alan grubundaki her alan "Zorunlu" (senaryoda değer şart; koşuda görünmezse test başarısız) ya da "Görünürse
 //   doldur" (boş bırakılabilir; görünmüyorsa atlanır) — alanın yanındaki düğmeyle değişir; varsayılan sayfanın zorunluluğu.
-//   Alanın koşulu ("Müşteri tipi = Bireysel ise") yanında yazar; "Koşul" ile seçim alanı + seçenekler seçilerek düzeltilir ya
-//   da kaldırılır (kayıttan otomatik bulunan taslakta gelir). Koşuldaki seçim alanı akışta olmalı (sunucu doğrular).
+//   Alanın koşulu ("Müşteri tipi = Bireysel ise") yanında yazar; "Koşul" ile seçim alanı + seçenekler (ya da onay kutusu +
+//   işaretli / işaretsiz) seçilerek düzeltilir ya da kaldırılır (kayıttan otomatik bulunan taslakta gelir). Koşuldaki alan
+//   akışta olmalı (sunucu doğrular). "+ > Aksiyon" kullanılmayan ilk düğmeyle gelir; sonradan eklenen düğme (sağ liste, "Sayfada
+//   seç", elle) düğmesi seçilmemiş aksiyona yerleşir, yoksa yeni aksiyon bloğu olur.
 //   Alanın "Doldurduktan sonra" seçimi — (yok) / Tab / Enter — modelde alan.doldurucuParametreleri.tus'tur. Beklenen mesaj bir
 //   alan grubundan sonra da gelebilir (alandan çıkınca çıkan uyarı); grubun son alanında tuş yoksa mesajda ipucu görünür.
 //   sağda "Kayıtta yakalananlar": alanlar (sürükleyip bir alan grubuna bırakılır ya da "Ekle" ile etkin gruba eklenir; bir
@@ -301,6 +303,24 @@ export async function akisTasarimi(icerik, s) {
     const ilk = akis.querySelector(`[data-blok="${konum}"] input, [data-blok="${konum}"] select`);
     if (ilk) ilk.focus();
   }
+  /** Aksiyon bloklarında henüz kullanılmayan ilk düğmenin sırası (yoksa -1): "+ > Aksiyon" boş gelmesin. */
+  const kullanilmayanDugme = () => {
+    const kullanilan = new Set(bloklar.filter((b) => b.tur === 'aksiyon').map((b) => b.dugme));
+    const d = palet.dugmeler.find((x) => !kullanilan.has(x.sira));
+    return d ? d.sira : -1;
+  };
+  /**
+   * Eklenen düğmenin yeri (sağ liste, "Sayfada seç", elle ekleme — hepsi aynı kural): düğmesi seçilmemiş bir aksiyon bloğu varsa
+   * (önce etkin blok) düğme ona yerleşir; yoksa yeni aksiyon bloğu eklenir. Böylece akışta düğmesiz aksiyon kalmaz.
+   */
+  function dugmeYerlestir(sira) {
+    const bos = (b) => Boolean(b) && b.tur === 'aksiyon' && !(b.dugme >= 0);
+    const hedef = bos(bloklar[etkin]) ? etkin : bloklar.findIndex(bos);
+    if (hedef < 0) { blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: sira, istegeBagli: false }); return; }
+    bloklar[hedef].dugme = sira;
+    etkin = hedef;
+    degisti();
+  }
   /** Etkin bloktan sonra (Bitir'den önce) eklenecek konum. */
   const eklemeKonumu = () => {
     const bitir = bloklar.findIndex((b) => b.tur === 'bitir');
@@ -396,7 +416,7 @@ export async function akisTasarimi(icerik, s) {
       }, ikon('artiYalin')),
       acik ? h('div', { class: 'ekle-menusu', role: 'group', 'aria-label': 'Eklenecek blok' },
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'alanlar', ad: '', alanlar: [], zorunlu: [] }) }, ikon('liste'), 'Alan grubu'),
-        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'aksiyon', dugme: -1, istegeBagli: false }) }, ikon('simsek'), 'Aksiyon'),
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'aksiyon', dugme: kullanilmayanDugme(), istegeBagli: false }) }, ikon('simsek'), 'Aksiyon'),
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'mesaj', mesaj: null, metin: '' }) }, ikon('hedef'), 'Beklenen mesaj'),
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bekle', saniye: 3 }) }, ikon('saat'), 'Bekleme süresi'),
         ortakAkislar.length ? h('button', {
@@ -524,9 +544,11 @@ export async function akisTasarimi(icerik, s) {
     const secenekleriCiz = () => {
       const s = alanBilgisi.get(secim.value);
       hataEl.textContent = '';
+      // Onay kutusu: tek durum seçilir (işaretliyken / işaretsizken görünür); seçim alanında birden çok seçenek işaretlenebilir.
+      const onay = Boolean(s && s.tur === 'checkbox');
       yerlestir(degerler, s ? s.secenekler.map((o) => h('label', { class: 'onay-satiri kucuk' },
-        h('input', { type: 'checkbox', value: o.deger, checked: Boolean(mevcut && mevcut.secim === secim.value && mevcut.degerler.includes(o.deger)) }), o.metin))
-        : h('p', { class: 'soluk kucuk' }, adaylar.length ? 'Alan her zaman görünür kabul edilir.' : 'Akışta seçim alanı (açılır liste / radyo) yok; önce seçim alanını bir gruba ekleyin.'));
+        h('input', { type: onay ? 'radio' : 'checkbox', name: onay ? 'kosul-onay-durumu' : null, value: o.deger, checked: Boolean(mevcut && mevcut.secim === secim.value && mevcut.degerler.includes(o.deger)) }), o.metin))
+        : h('p', { class: 'soluk kucuk' }, adaylar.length ? 'Alan her zaman görünür kabul edilir.' : 'Akışta seçim alanı (açılır liste / radyo) ya da onay kutusu yok; önce o alanı bir gruba ekleyin.'));
     };
     secim.addEventListener('change', secenekleriCiz);
     degerler.addEventListener('change', () => { hataEl.textContent = ''; });
@@ -702,11 +724,22 @@ export async function akisTasarimi(icerik, s) {
         if (sure.value === '') delete b.zamanAsimiSn; else b.zamanAsimiSn = Number.isInteger(n) ? n : sure.value;
         sakla();
       });
+      // "Yalnız görünürse bas" yalnız adımın ilerleme düğmesinden (her senaryoda basılan aksiyon; araya başka "görünürse" aksiyonlar
+      // girebilir) hemen sonra gelir: kural kaydetmeden önce burada söylenir (sunucu da aynı kuralla reddeder).
+      let onceki = i - 1;
+      while (onceki >= 0 && bloklar[onceki].tur === 'aksiyon' && bloklar[onceki].gorunurse) onceki--;
+      const ilerlemedenSonra = bloklar[onceki]?.tur === 'aksiyon' && !bloklar[onceki].istegeBagli;
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Basılacak düğme'), secim),
+        b.dugme >= 0 ? null : h('p', { class: 'aksiyon-ipucu', role: 'note' }, ikon('isaret'), palet.dugmeler.length
+          ? 'Düğme seçilmedi: listeden seçin ya da sağdaki listeden bir düğme ekleyin (eklenen düğme bu bloğa yerleşir).'
+          : 'Henüz düğme yok: sağdaki “Sayfada seç” ile düğmeyi ekleyin; eklenen düğme bu bloğa yerleşir.'),
         korunanParca,
         b.gorunurse ? null : h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda basılmaz (senaryoda seçilir)'),
-        b.istegeBagli ? null : h('label', { class: 'onay-satiri kucuk' }, gorunurse, 'Yalnız görünürse bas'),
+        b.istegeBagli ? null : h('label', { class: 'onay-satiri kucuk', title: 'Adımın ilerleme düğmesinden hemen sonra, bazı ekranlarda açılan ara penceredeki düğme için.' }, gorunurse,
+          h('span', {}, 'Yalnız görünürse bas', h('small', { class: 'satir-aciklamasi' }, 'Yalnız her senaryoda basılan bir düğmenin hemen ardından gelir (ör. onaydan sonra bazen açılan pencere).'))),
+        b.gorunurse && !ilerlemedenSonra ? h('p', { class: 'gorunurse-ipucu uyari', role: 'note', 'aria-label': 'Yalnız görünürse bas kuralı' }, ikon('uyari'),
+          'Bu blok şu an bir ilerleme düğmesinin ardından gelmiyor; kaydetmeden önce ↑/↓ ile her senaryoda basılan bir aksiyonun hemen altına taşıyın ya da işareti kaldırın.') : null,
         b.gorunurse ? h('p', { class: 'soluk kucuk' }, 'Önceki düğmeden sonra bazı ekranlarda açılan (bazılarında açılmayan) ara penceredeki düğme: kısa süre beklenir, görünürse basılır, görünmezse atlanır (raporda not). Adımın ilerleme düğmesinden sonra gelir.') : null,
         b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, sureEtiketi), sure),
         b.istegeBagli || b.gorunurse ? null : goruntuIsareti(b),
@@ -842,7 +875,11 @@ export async function akisTasarimi(icerik, s) {
       h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(tur.ikonAd)),
       h('h4', {}, turEtiketi(b)),
       b.tur === 'korunan' ? rozet('salt okunur', 'uyari', { title: 'Diyagramda düzenlenemez; kaydederken modeldeki hâliyle aynen korunur.' }) : null,
-      b.tur !== 'korunan' && b.korunan ? rozet('korunan parça', 'uyari', { title: 'Bu adımın bazı parçaları diyagramda düzenlenemez; kaydederken aynen korunur.' }) : null,
+      // "korunan parça" ne demek: ipucu (fareyle) ve klavye / ekran okuyucu için odaklanabilir açıklama.
+      b.tur !== 'korunan' && b.korunan ? rozet('korunan parça', 'uyari', {
+        title: 'Korunan parça: bu adımın diyagramda gösterilemeyen ayarları var (ör. seçime bağlı düğme, kod yöntemi). Siz değiştirmeseniz de kaydederken olduğu gibi korunur; neler olduğu bloğun içindeki kilitli notta yazar.',
+        tabindex: '0', 'aria-description': 'Bu adımın diyagramda gösterilemeyen ayarları kaydederken olduğu gibi korunur; ayrıntı bloğun içindeki kilitli notta.'
+      }) : null,
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'aksiyon' && b.gorunurse ? rozet('görünürse basılır', 'vurgu', { title: 'Düğme kısa sürede görünmezse atlanır (ör. her ekranda çıkmayan ara pencere).' }) : null,
       b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu', { kisalt: true }) : null,
@@ -937,7 +974,7 @@ export async function akisTasarimi(icerik, s) {
         elle.dugmeler.push({ metin: m, secici: o.secici });
         const sira = palet.dugmeler.length;
         palet.dugmeler.push({ sira, metin: m, blok: null });
-        blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: sira, istegeBagli: false });
+        dugmeYerlestir(sira);
       } else if (o.tur === 'alan') {
         let n = elle.alanlar.length + 1;
         while (alanBilgisi.has(`elle-${n}`)) n++;
@@ -979,7 +1016,7 @@ export async function akisTasarimi(icerik, s) {
       elle.dugmeler.push({ metin: m, secici: sc });
       const sira = palet.dugmeler.length;
       palet.dugmeler.push({ sira, metin: m, blok: null });
-      blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: sira, istegeBagli: false });
+      dugmeYerlestir(sira);
       return null;
     });
   }
@@ -1017,7 +1054,7 @@ export async function akisTasarimi(icerik, s) {
         const blok = bloklar.findIndex((b) => b.tur === 'aksiyon' && b.dugme === d.sira);
         return h('li', { class: `palet-ogesi${blok >= 0 ? ' kullanildi' : ''}` },
           h('div', { class: 'palet-metni' }, h('span', { class: 'ad' }, `“${d.metin}”`)), kullanim(blok),
-          h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `“${d.metin}”: aksiyon ekle`, onclick: () => blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: d.sira, istegeBagli: false }) }, ikon('artiYalin'), 'Aksiyon ekle'));
+          h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `“${d.metin}”: aksiyon ekle`, onclick: () => dugmeYerlestir(d.sira) }, ikon('artiYalin'), 'Aksiyon ekle'));
       })) : h('p', { class: 'soluk kucuk' }, ekranKipi ? 'Modelde düğme yok. Aşağıdaki “Sayfada seç” ile ekleyin.' : 'Kayıtta düğmeye basılmadı.')];
     } else {
       icerikEl = palet.mesajlar.length ? h('ul', { class: 'palet-listesi' }, palet.mesajlar.map((m) => {

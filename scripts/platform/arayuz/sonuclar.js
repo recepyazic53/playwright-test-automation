@@ -14,7 +14,7 @@
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
 import { api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, s, TOKEN, tarihMetni, yerlestir } from './ortak.js';
 import { baslarkenKarti, sonuclarIncelendi } from './baslarken.js';
-import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
+import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { hataKaydiDugmesi } from './entegrasyonlar.js';
 import { veriyiSirala } from './tablo-siralama.js';
@@ -127,7 +127,7 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   const proje = baglam.durum.proje;
   const [tur, kimlik] = parcalar;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
-  const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve akışlar' }, iskelet('liste'));
   // Sağlık noktası eşikleri proje başınadır (Ayarlar > Arayüz > Sağlık noktası); not eşikler gelince güncellenir.
   const saglikMetni = h('span', {}, esikMetni(ESIKLER));
   const saglikNotu = h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}), saglikMetni, ' ',
@@ -239,7 +239,11 @@ function urunListesi(nav, ekranlar, secili, servisler = [], seciliServis = null)
   nav.replaceChildren(
     baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
     ...urunlerBasligi(),
-    ekranlarGrubu(ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu))),
+    // Ortak akışlar ekranlardan ayrı grupta (ekran sayısına girmez); ortak akışı yoksa grup hiç çizilmez.
+    ekranlarGrubu(ekranlar.filter((e) => !e.ortakAkis).map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu))),
+    ekranlar.some((e) => e.ortakAkis)
+      ? navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: ekranlar.filter((e) => e.ortakAkis).map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)) })
+      : '',
     // Ekranlarla aynı davranış: servis bağlantısı Sonuçlar ekranında kalır ve Servis sonuçlarının o servise süzülmüş
     // görünümünü açar (#/sonuclar/s/<servisId>; servis sonuçları ekran sonuçlarına karışmaz).
     ...servislerBolumu(servisler, { adres: servisSonucAdresi, seciliServis: seciliServis ?? null, saglik: true }));
@@ -283,7 +287,7 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran, aralikDegisti) {
     if (sonKosu && sonKosu.bitis) meta.push(h('span', {}, ikon('saat'), h('span', { class: 'mono' }, sureMetni(new Date(sonKosu.bitis).getTime() - new Date(sonKosu.baslangic).getTime()))));
   }
   meta.push(h('span', {}, ikon('liste'), `${urun ? (ekran ? ekran.senaryoSayisi : 0) : ozet.ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0)} senaryo`));
-  if (!urun) meta.push(h('span', {}, ikon('ekran'), `${ozet.ekranlar.length} ürün / ekran`));
+  if (!urun) meta.push(h('span', {}, ikon('ekran'), `${ozet.ekranlar.filter((e) => !e.ortakAkis).length} ekran`));
   if (urun && kart && kart.son.kapsam) meta.push(h('span', {}, ikon('hedef'), `kapsam: ${kart.son.kapsam}`));
   if (ekran && ekranDurumRozeti(ekran.ekranDurumu)) meta.push(h('span', {}, ekranDurumRozeti(ekran.ekranDurumu)));
 

@@ -58,6 +58,7 @@ kullanmasını ister (`MEVCUT_TABLO_KURALI`).
 Nöbetçi hiçbir yapay zekâ servisine istek atmaz. "Yapay zekâ ile yorumla" / "Tekrar analiz et" düğmeleri, yapay zekâ aracınıza
 verilecek **gizli değer içermeyen** bir analiz/istek dosyası yazar (`veri/analiz/<ekran>-<tarih>.json`).
 
+Kısa, kod bilgisi gerektirmeyen 2 sayfalık özet: [`sayfa-paketi-ozet.md`](sayfa-paketi-ozet.md) (arayüzde "Paket nedir?" bağlantısı).
 Makine tarafından okunabilir zarf şeması: [`sayfa-paketi.schema.json`](sayfa-paketi.schema.json).
 Doğrulayıcı: `scripts/platform/ekranlar/sayfa-paketi.mjs` (sunucu ve birim testleri aynı kuralları kullanır).
 Model kuralları: `scripts/dogrulama/ekran-modeli-dogrulayici.mjs` (testlerin model yükleyicisiyle ORTAK).
@@ -102,6 +103,11 @@ bölümler → alanlar (tip, etiket, seçenekler, zorunluluk, görünürlük ko�
 adlandırılmış koşullar, senaryo düzeyi ayarlar (başlık, adım kapsamı, beklenen sonuç), iş kuralları,
 bilinmeyenler. Model kendi kendine yetmeli; alt model başvurusu (`altModel`) yalnızca projede zaten
 var olan alt modellere yapılabilir.
+
+`specDosyasi` ve `pageObject` **isteğe bağlıdır** (model koşucusu bunları kullanmaz; kod bilgisi gerektirmesin diye).
+Yazılmazsa Nöbetçi paketi yüklerken `specDosyasi` için `tests/scenarios/<anahtar>/<anahtar>.spec.ts`, `pageObject` için
+`yok (model koşucusu)` yazar; "Modeli değiştir"de mevcut modeldeki değer korunur. Yazılırsa boş olmayan metin olmalıdır.
+Eski paketler (bu alanları yazan) aynen geçerlidir.
 
 Paket, modele isteğe bağlı bir **gözlem** ekler:
 

@@ -133,8 +133,11 @@ const gostergeTemsilEdilir = (g, sonAdim) => {
 };
 /** Görünürlüğün ifadesi (adlandırılmış koşul ya da doğrudan ifade). @param {Nesne} model @param {unknown} g */
 const gorunurlukIfadesi = (model, g) => (nesneMi(g) ? (typeof g.kosul === 'string' ? model.kosullar?.[g.kosul]?.ifade : g.ifade) : undefined);
-/** Seçim alanına bağlı basit koşul → { secim, degerler } (diyagramın koşul biçimi), değilse null. @param {unknown} ifade */
-const secimKosulu = (ifade) => (nesneMi(ifade) && typeof ifade.alan === 'string' && (Array.isArray(ifade.icinde) || typeof ifade.esit === 'string')
+/**
+ * Seçim alanına (ya da onay kutusuna: esit true / false → "true" / "false") bağlı basit koşul → { secim, degerler } (diyagramın
+ * koşul biçimi), değilse null. @param {unknown} ifade
+ */
+const secimKosulu = (ifade) => (nesneMi(ifade) && typeof ifade.alan === 'string' && (Array.isArray(ifade.icinde) || typeof ifade.esit === 'string' || typeof ifade.esit === 'boolean')
   ? { secim: ifade.alan, degerler: Array.isArray(ifade.icinde) ? ifade.icinde.map(String) : [String(ifade.esit)] } : null);
 
 /** Modeldeki alanların kimlik → etiket haritası (tüm akışlar + senaryo düzeyi). @param {Nesne} model */
@@ -351,6 +354,7 @@ function tamAdimOzeti(model, adim, etiketler) {
 /** Koşul diyagramda gösterilebilir mi (seçim alanı envanterde select/radio ve değerleri seçeneklerinden)? @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env @param {{ secim: string; degerler: string[] }} k */
 function kosulTemsilEdilir(env, k) {
   const s = env.alanlar.find((x) => x.alan.anahtar === k.secim)?.alan;
+  if (s && s.tur === 'checkbox') return k.degerler.length === 1 && ['true', 'false'].includes(k.degerler[0]);
   if (!s || !['select', 'radio'].includes(s.tur)) return false;
   const degerler = new Set([...(s.secenekler ?? []), ...(s.radyolar ?? [])].map((x) => x.deger));
   return k.degerler.length > 0 && k.degerler.every((d) => degerler.has(d));

@@ -130,7 +130,11 @@ export const TERIM_KURALLARI: readonly TerimKurali[] = [
     // Tek başına "CANLI" yalnız TEST / CANLI seçeneklerinin (kapsam) yanında; rozet, başlık ya da tema adı olamaz.
     ad: 'ortam dışı "CANLI" (canlı görüntü / tema)',
     bul: (m, satir) => /CANLI/u.test(m) && (m.trim() === 'CANLI' ? !/TEST/u.test(satir) : !ORTAM_BAGLAMI.test(m))
-  }
+  },
+  // Sol menü "Ekranlar ve akışlar" (ürün kavramı tanıtılmıyor): sayaç "N ekran", başlık "Ürünler" değil.
+  { ad: '"ürün / ekran" / "Ürünler" yerine "ekran" / "Ekranlar ve akışlar"', bul: (m) => /ürün \/ ekran|^\s*(Ürünler|ÜRÜNLER)\s*$/u.test(m) },
+  // Kod bilmeyen kullanıcıya "Playwright test adı" denmez; başlık raporlarda görünen test adıdır.
+  { ad: '"Playwright test adı" yerine "raporlarda görünen test adı"', bul: (m) => /Playwright test adı/u.test(m) }
 ];
 
 /** Tek bir dize değişmezini tüm kurallara karşı dener; takılan kuralların adları. */

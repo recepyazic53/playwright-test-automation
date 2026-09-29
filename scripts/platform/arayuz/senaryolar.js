@@ -64,7 +64,7 @@ export function senaryolarEkrani(main, parcalar, baglam) {
   const [tur, kimlik] = parcalar;
   const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : '';
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve akışlar' }, iskelet('liste'));
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Senaryolar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
@@ -108,7 +108,7 @@ export function senaryolarEkrani(main, parcalar, baglam) {
 }
 
 /**
- * Sol panel "ÜRÜNLER" (Servisler sayfası da kullanır): açılır-kapanır Ekranlar ve Servisler grupları.
+ * Sol panel "Ekranlar ve akışlar" (Servisler sayfası da kullanır): açılır-kapanır Ekranlar ve Servisler grupları.
  * @param {HTMLElement} nav @param {{ id: string }} proje @param {{ servisId?: string | null }} secim
  */
 export async function urunlerPaneli(nav, proje, secim) {
@@ -321,7 +321,7 @@ function listeGorunumu(icerik, s) {
     yerlestir(baslikRozeti, rozet(`${kapsam.length} senaryo`, 'vurgu'));
     yerlestir(metaAlani,
       h('span', { title: 'En az bir ortamda Koşuda açık olan senaryolar' }, ikon('liste'), `${dahil} / ${kapsam.length} koşuda`),
-      ekran ? h('span', {}, ikon(ekran.modelVar ? 'katman' : 'ekran'), ekran.modelVar ? 'ekran modeli var' : 'ekran modeli yok') : h('span', {}, ikon('ekran'), `${veri.ekranlar.filter((e) => e.senaryoSayisi).length} ürün / ekran`));
+      ekran ? h('span', {}, ikon(ekran.modelVar ? 'katman' : 'ekran'), ekran.modelVar ? 'ekran modeli var' : 'ekran modeli yok') : h('span', {}, ikon('ekran'), `${veri.ekranlar.filter((e) => e.senaryoSayisi).length} ekran`));
     yerlestir(ozetAlani, liste2.length !== kapsam.length ? h('span', {}, h('b', {}, String(liste2.length)), ` / ${kapsam.length} gösteriliyor`) : '');
     temizle.hidden = !filtreliMi();
     kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));

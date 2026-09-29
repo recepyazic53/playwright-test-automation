@@ -53,7 +53,7 @@ export const REHBERLER = {
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Özet kartlar ve eğilim' }
       },
       {
-        baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav',
+        baslik: 'Ekran / servis seçimi', hedef: '.alt-nav',
         metin: ['"Genel" bütün projeyi gösterir. Altında her ekran, renkli sağlık noktası ve senaryo sayısıyla listelenir; bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir.',
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
@@ -132,7 +132,7 @@ export const REHBERLER = {
           'Kartlardaki her madde ilgili ekranı açar. Madde yoksa kart tek satırlık "Sorun yok" olur.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Özet kutuları', alt: 'dönem başarısı', ikon: 'grafik' }, { baslik: 'Dikkat', ikon: 'uyari' }, { baslik: 'Bakım', ikon: 'duzenle' }, { baslik: 'Kapsam ve güvenlik', ikon: 'kalkan' }] }
       },
-      { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
+      { baslik: 'Ekran / servis seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
       { baslik: 'Başlık ve "Rapor al (PDF)"', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. "Rapor al (PDF)" genel kapsamlı dönem raporunu hazırlar.' },
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar, Raporlar. Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
