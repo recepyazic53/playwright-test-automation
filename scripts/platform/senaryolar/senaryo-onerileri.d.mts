@@ -35,6 +35,9 @@ export interface OneriSenaryosu {
 export interface OneriKarari {
   zaman: string;
   ekranId?: string | null;
+  /** Servis önerisi kararı: servis kimliği ve metot (operasyon) adı (ekranId yerine). */
+  servisId?: string | null;
+  metot?: string | null;
   kimlik: string;
   tur: string;
   neden?: string | null;
@@ -196,5 +199,9 @@ export interface PairwiseSonucu {
 export declare function ikiliAnahtari(a: string, av: string, b: string, bv: string): string;
 export declare function ikiliCoz(anahtar: string): Array<[string, string]>;
 export declare function pairwiseUret(g: PairwiseGirdisi): PairwiseSonucu;
-export declare function kararAgirliklari(kararlar: ReadonlyArray<OneriKarari>, ekranId: string | null): { carpan(tur: string, alanlar: string[]): number };
+export declare function kararAgirliklari(kararlar: ReadonlyArray<OneriKarari>, ekranId: string | null, alanKapsami?: (k: OneriKarari) => boolean): { carpan(tur: string, alanlar: string[]): number };
+export declare function normalMetin(m: unknown): string;
+export declare function kisalt(m: unknown, n?: number): string;
+export declare function oneriPuani(neden: string, ic: number, carpan: number): number;
+export declare function oneriRedDurumu(kararlar: ReadonlyArray<OneriKarari>, kimlik: string, simdiMs: number): 'reddedilen' | 'ertelenen' | null;
 export declare function senaryoOnerileri(g: OneriGirdisi): OneriSonucu;

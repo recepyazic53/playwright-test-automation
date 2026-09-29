@@ -26,7 +26,8 @@ const EN_COK_ORNEK = 10;
 const EN_COK_GOSTERILEN = 50;
 
 /**
- * @typedef {{ kaynak: (typeof SOZLESME_KAYNAKLARI)[number]; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; guncellenme: string }} Sozlesme
+ * @typedef {{ kaynak: (typeof SOZLESME_KAYNAKLARI)[number]; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; istek?: Alan[]; guncellenme: string }} Sozlesme
+ *   istek: kaynaktaki (OpenAPI / yüklenen WSDL) istek alanları ve kısıtları — yalnız senaryo önerileri kullanır (yanıt doğrulamasına girmez).
  * @typedef {{ zaman: string; islem: 'olustur' | 'degistir' | 'sil'; kaynak?: string; kaynakBilgisi?: string; alanSayisi?: number;
  *   fark?: { eklenen: number; kaldirilan: number; degisen: number }; yapan?: string }} SozlesmeGecmisi
  */
@@ -105,7 +106,8 @@ export function refCoz(belge, dugum, uyarilar = []) {
 /**
  * OpenAPI 3 / Swagger 2 belgesinin operasyonları ve başarılı (2xx; yoksa default) yanıtlarının JSON şemaları.
  * @param {string} metin
- * @returns {{ baslik: string; operasyonlar: Array<{ anahtar: string; metot: string; yol: string; operationId?: string; ozet?: string; durumKodu?: string; sema?: Sema; uyarilar: string[]; hata?: string }> }}
+ * @returns {{ baslik: string; operasyonlar: Array<{ anahtar: string; metot: string; yol: string; operationId?: string; ozet?: string; durumKodu?: string; sema?: Sema;
+ *   istek?: Alan[]; uyarilar: string[]; hata?: string }> }}
  */
 export function openapiOperasyonlari(metin) {
   const belge = belgeOku(metin);
@@ -134,8 +136,13 @@ export function openapiOperasyonlari(metin) {
           sonuc = ham === undefined ? { hata: `${secilen} yanıtının JSON şeması yok` } : { sema: semaTemizle(ham) };
         } catch (e) { sonuc = { hata: hataMesaji(e) }; }
       }
+      // İstek kısıtları (parametreler + JSON gövde şeması): servis senaryo önerileri sınır / negatifleri yalnız bunlardan üretir.
+      /** @type {Alan[]} */
+      let istek = [];
+      try { istek = openapiIstekAlanlari(belge, [...(Array.isArray(oge.parameters) ? oge.parameters : []), ...(Array.isArray(op.parameters) ? op.parameters : [])], op.requestBody, surum2, uyarilar); }
+      catch (e) { uyarilar.push(`İstek şeması okunamadı: ${hataMesaji(e)}`); }
       operasyonlar.push({
-        anahtar: `${metot.toUpperCase()} ${yol}`, metot: metot.toUpperCase(), yol,
+        anahtar: `${metot.toUpperCase()} ${yol}`, metot: metot.toUpperCase(), yol, ...(istek.length ? { istek } : {}),
         ...(typeof op.operationId === 'string' ? { operationId: op.operationId } : {}), ...(typeof op.summary === 'string' ? { ozet: op.summary.slice(0, 200) } : {}),
         ...(secilen ? { durumKodu: secilen } : {}), ...sonuc, uyarilar
       });
@@ -143,6 +150,86 @@ export function openapiOperasyonlari(metin) {
   }
   if (!operasyonlar.length) throw new SozlesmeHatasi('Belgede operasyon yok.');
   return { baslik: String(/** @type {any} */ (belge).info?.title ?? '').slice(0, 200), operasyonlar };
+}
+
+const OPENAPI_TIPLERI = /** @type {Record<string, import('./servis-govdesi.mjs').AlanTipi>} */ ({ integer: 'tamsayi', number: 'ondalik', boolean: 'mantiksal', string: 'metin' });
+/** İstek şemasında en çok alan (çok büyük şemalar kırpılır). */
+const EN_COK_ISTEK_ALANI = 500;
+
+/**
+ * OpenAPI / Swagger şema düğümü → alan (tip, seçenekler, kısıtlar, varsayılan / örnek; nesne → alt alanlar, dizi → çoklu).
+ * Yalnız belgede yazanlar alınır; tahmin yok. $ref önceden çözülmüş olmalı.
+ * @param {string} ad @param {any} s @param {boolean} zorunlu @param {{ n: number }} sayac @param {number} [derinlik] @returns {Alan}
+ */
+function openapiAlani(ad, s, zorunlu, sayac, derinlik = 0) {
+  sayac.n++;
+  const sema = s && typeof s === 'object' ? (Array.isArray(s.allOf) ? Object.assign({}, ...s.allOf.filter((x) => x && typeof x === 'object'), { ...s, allOf: undefined }) : s) : {};
+  const tip = Array.isArray(sema.type) ? sema.type.find((/** @type {unknown} */ t) => t !== 'null') : sema.type;
+  if ((tip === 'array' || sema.items) && derinlik < 10) {
+    const ic = openapiAlani(ad, sema.items ?? {}, zorunlu, sayac, derinlik + 1);
+    return { ...ic, coklu: true };
+  }
+  if ((tip === 'object' || (sema.properties && typeof sema.properties === 'object')) && derinlik < 10) {
+    const gerekli = new Set(Array.isArray(sema.required) ? sema.required : []);
+    const cocuklar = Object.entries(sema.properties ?? {}).filter(() => sayac.n < EN_COK_ISTEK_ALANI)
+      .map(([a, alt]) => openapiAlani(a, alt, gerekli.has(a), sayac, derinlik + 1));
+    return { ad, ...(zorunlu ? { zorunlu: true } : {}), ...(cocuklar.length ? { cocuklar } : { tip: 'metin' }) };
+  }
+  /** @type {import('./servis-govdesi.mjs').AlanKisiti} */
+  const k = {};
+  const sayi = (/** @type {unknown} */ v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const tamSayi = (/** @type {unknown} */ v) => (Number.isInteger(v) && Number(v) >= 0 ? Number(v) : undefined);
+  // exclusiveMinimum: 3.0'da minimum'un bayrağı (true), 3.1'de sayı.
+  const alt = sayi(sema.minimum) ?? sayi(sema.exclusiveMinimum);
+  const ust = sayi(sema.maximum) ?? sayi(sema.exclusiveMaximum);
+  if (alt !== undefined) { k.enAz = alt; if (sema.exclusiveMinimum === true || sayi(sema.exclusiveMinimum) !== undefined) k.altHaric = true; }
+  if (ust !== undefined) { k.enCok = ust; if (sema.exclusiveMaximum === true || sayi(sema.exclusiveMaximum) !== undefined) k.ustHaric = true; }
+  if (tamSayi(sema.minLength) !== undefined) k.enAzUzunluk = tamSayi(sema.minLength);
+  if (tamSayi(sema.maxLength) !== undefined) k.enCokUzunluk = tamSayi(sema.maxLength);
+  if (typeof sema.pattern === 'string' && sema.pattern) k.desen = sema.pattern;
+  if (typeof sema.format === 'string' && sema.format) k.bicim = sema.format.slice(0, 40);
+  const alanTipi = tip === 'string' && sema.format === 'date' ? 'tarih' : tip === 'string' && sema.format === 'date-time' ? 'tarihSaat' : OPENAPI_TIPLERI[String(tip)] ?? 'metin';
+  const secenekler = Array.isArray(sema.enum) ? sema.enum.filter((/** @type {unknown} */ x) => ['string', 'number', 'boolean'].includes(typeof x)).map(String).slice(0, 200) : [];
+  const ornek = [sema.default, sema.example, Array.isArray(sema.examples) ? sema.examples[0] : undefined].find((x) => ['string', 'number', 'boolean'].includes(typeof x));
+  return {
+    ad, tip: alanTipi, ...(zorunlu ? { zorunlu: true } : {}), ...(sema.nullable === true ? { nillable: true } : {}), ...(secenekler.length ? { secenekler } : {}),
+    ...(Object.keys(k).length ? { kisit: k } : {}), ...(ornek !== undefined ? { varsayilan: String(ornek) } : {})
+  };
+}
+
+/**
+ * OpenAPI operasyonunun istek alanları: "yol" (path parametreleri), "sorgu" (query), "govde" (JSON gövde şeması) grupları
+ * (rest-semasi.mjs restSemasi ile aynı yol biçimi: yol/id, sorgu/sayfa, govde/a/b). Başlık / çerez parametreleri alınmaz.
+ * @param {unknown} belge @param {unknown[]} parametreler @param {unknown} requestBody @param {boolean} surum2 @param {string[]} uyarilar
+ * @returns {Alan[]}
+ */
+export function openapiIstekAlanlari(belge, parametreler, requestBody, surum2, uyarilar) {
+  const sayac = { n: 0 };
+  /** @type {Record<'yol' | 'sorgu', Alan[]>} */
+  const gruplar = { yol: [], sorgu: [] };
+  /** @type {Alan[]} */
+  let govde = [];
+  const gorulen = new Set();
+  for (const ham of parametreler) {
+    const p = refCoz(belge, ham, uyarilar);
+    if (!p || typeof p !== 'object' || typeof p.name !== 'string') continue;
+    if (surum2 && p.in === 'body') { const g = openapiAlani('govde', p.schema ?? {}, true, sayac); govde = g.cocuklar ?? []; continue; }
+    const grup = p.in === 'path' ? 'yol' : p.in === 'query' ? 'sorgu' : null;
+    if (!grup || gorulen.has(`${grup}/${p.name}`)) continue;
+    gorulen.add(`${grup}/${p.name}`);
+    // Swagger 2: tip ve kısıtlar parametrenin kendisinde; OpenAPI 3: schema altında.
+    gruplar[grup].push(openapiAlani(p.name, surum2 ? p : (p.schema ?? {}), p.required === true || grup === 'yol', sayac));
+  }
+  if (!surum2 && requestBody) {
+    const rb = refCoz(belge, requestBody, uyarilar);
+    const sema = jsonIcerigi(rb?.content);
+    if (sema !== undefined) govde = openapiAlani('govde', sema, rb?.required === true, sayac).cocuklar ?? [];
+  }
+  if (sayac.n >= EN_COK_ISTEK_ALANI) uyarilar.push(`İstek şemasının ilk ${EN_COK_ISTEK_ALANI} alanı alındı.`);
+  return [
+    ...(gruplar.yol.length ? [{ ad: 'yol', cocuklar: gruplar.yol }] : []), ...(gruplar.sorgu.length ? [{ ad: 'sorgu', cocuklar: gruplar.sorgu }] : []),
+    ...(govde.length ? [{ ad: 'govde', cocuklar: govde }] : [])
+  ];
 }
 
 /** OpenAPI 3 content: application/json (ya da +json, joker tür), yoksa ilk içerik türü. @param {unknown} content */
@@ -213,13 +300,18 @@ export function alanlardanSema(alanlar) {
  * @param {string[]} metinler @param {string} operasyon
  */
 export function wsdlDosyalarindanYanit(metinler, operasyon) {
+  const y = wsdlDosyalarindanOperasyon(metinler, operasyon)?.yanit;
+  if (!y) throw new SozlesmeHatasi(`WSDL'de "${operasyon}" operasyonunun yanıt şeması bulunamadı (şema ayrı XSD dosyasındaysa onu da yükleyin).`);
+  return y;
+}
+
+/** Yüklenen WSDL / XSD metinlerinden operasyonun şeması (istek alanları kısıtlarıyla + yanıt). @param {string[]} metinler @param {string} operasyon */
+function wsdlDosyalarindanOperasyon(metinler, operasyon) {
   const ana = metinler.find((m) => /<(?:[\w.-]+:)?definitions\b/.test(m));
   if (!ana) throw new SozlesmeHatasi('Yüklenen dosyalarda WSDL (definitions) yok.');
   const ekler = metinler.filter((m) => m !== ana).map((m) => m.replace(/^\s*<\?xml[^>]*\?>/, ''));
   const birlesik = ekler.length ? ana.replace(/<\/((?:[\w.-]+:)?definitions)>\s*$/, `${ekler.join('\n')}</$1>`) : ana;
-  const y = wsdlSemalari(birlesik)[operasyon]?.yanit;
-  if (!y) throw new SozlesmeHatasi(`WSDL'de "${operasyon}" operasyonunun yanıt şeması bulunamadı (şema ayrı XSD dosyasındaysa onu da yükleyin).`);
-  return y;
+  return wsdlSemalari(birlesik)[operasyon];
 }
 
 // ---------------------------------------------------------------------------------------
@@ -280,7 +372,10 @@ export function sozlesmeOnizle(vt, projeId, g) {
       const metinler = (g.metinler ?? []).filter((x) => typeof x === 'string' && x.trim());
       const y = metinler.length ? wsdlDosyalarindanYanit(metinler, g.operasyon) : s.ayarlar.operasyonSemalari?.[g.operasyon]?.yanit;
       if (!y) throw new DepoHatasi('Kayıtlı WSDL\'de bu operasyonun yanıt şeması yok: İşlemler > "WSDL\'den yeniden al" ile alın ya da WSDL / XSD dosyasını yükleyin.');
-      return taslakYaniti({ kaynak: 'wsdl', bicim, sema: semaTemizle(alanlardanSema(y.alanlar)), xmlKok: y.kok, kaynakBilgisi: metinler.length ? `Yüklenen dosya${dosya ? `: ${dosya}` : ''}` : 'Kayıtlı WSDL', uyarilar: [] });
+      // Yüklenen dosyadaki istek alanları (kısıtlarıyla) da saklanır: senaryo önerileri sınır / negatifleri bunlardan üretir.
+      const istek = metinler.length ? wsdlDosyalarindanOperasyon(metinler, g.operasyon)?.alanlar ?? [] : [];
+      return taslakYaniti({ kaynak: 'wsdl', bicim, sema: semaTemizle(alanlardanSema(y.alanlar)), xmlKok: y.kok, kaynakBilgisi: metinler.length ? `Yüklenen dosya${dosya ? `: ${dosya}` : ''}` : 'Kayıtlı WSDL', uyarilar: [],
+        ...(istek.length ? { istek } : {}) });
     }
     if (g.kaynak === 'openapi') {
       if (typeof g.metin !== 'string' || !g.metin.trim()) throw new DepoHatasi('OpenAPI / Swagger dosyası boş.');
@@ -291,7 +386,8 @@ export function sozlesmeOnizle(vt, projeId, g) {
       const secilen = o.operasyonlar.find((x) => x.anahtar === g.openapiAnahtari);
       if (!secilen) throw new DepoHatasi('Seçilen OpenAPI operasyonu belgede yok.');
       if (!secilen.sema) throw new DepoHatasi(`${secilen.anahtar}: ${secilen.hata ?? 'şema yok'}`);
-      return taslakYaniti({ kaynak: 'openapi', bicim, sema: secilen.sema, kaynakBilgisi: `${dosya || o.baslik || 'OpenAPI'} · ${secilen.anahtar} (${secilen.durumKodu})`, uyarilar: secilen.uyarilar });
+      return taslakYaniti({ kaynak: 'openapi', bicim, sema: secilen.sema, kaynakBilgisi: `${dosya || o.baslik || 'OpenAPI'} · ${secilen.anahtar} (${secilen.durumKodu})`, uyarilar: secilen.uyarilar,
+        ...(secilen.istek ? { istek: secilen.istek } : {}) });
     }
     if (g.kaynak === 'jsonSchema') {
       if (typeof g.metin !== 'string' || !g.metin.trim()) throw new DepoHatasi('JSON Schema boş.');
@@ -333,8 +429,41 @@ export function sozlesmeOnizle(vt, projeId, g) {
   });
 }
 
-/** @param {{ kaynak: string; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; uyarilar: string[] }} t */
+/** @param {{ kaynak: string; bicim: 'json' | 'xml'; sema: Sema; xmlKok?: string; kaynakBilgisi?: string; uyarilar: string[]; istek?: Alan[] }} t */
 const taslakYaniti = (t) => ({ taslak: { ...t, ozet: sozlesmeOzeti(t.sema) } });
+
+/**
+ * Sözleşmeyle gelen istek alanları (OpenAPI / yüklenen WSDL): yalnız beklenen biçim (ad, tip, zorunlu, seçenekler, kısıtlar, varsayılan,
+ * alt alanlar) kalır; gerisi atılır. Boş ya da geçersizse undefined.
+ * @param {unknown} v @returns {Alan[] | undefined}
+ */
+export function istekAlanlariniTemizle(v) {
+  if (!Array.isArray(v)) return undefined;
+  let sayac = 0;
+  const TIPLER = ['metin', 'tamsayi', 'ondalik', 'mantiksal', 'tarih', 'tarihSaat'];
+  /** @param {unknown} x @param {number} d @returns {Alan | null} */
+  const temizle = (x, d) => {
+    if (!x || typeof x !== 'object' || Array.isArray(x) || ++sayac > EN_COK_ISTEK_ALANI || d > 12) return null;
+    const a = /** @type {Record<string, any>} */ (x);
+    if (typeof a.ad !== 'string' || !a.ad || a.ad.length > 200) return null;
+    const cocuklar = Array.isArray(a.cocuklar) ? a.cocuklar.map((c) => temizle(c, d + 1)).filter((c) => c !== null) : [];
+    /** @type {import('./servis-govdesi.mjs').AlanKisiti} */
+    const k = {};
+    const kh = a.kisit && typeof a.kisit === 'object' ? a.kisit : {};
+    for (const s of /** @type {const} */ (['enAz', 'enCok', 'enAzUzunluk', 'enCokUzunluk'])) if (typeof kh[s] === 'number' && Number.isFinite(kh[s])) k[s] = kh[s];
+    for (const s of /** @type {const} */ (['altHaric', 'ustHaric'])) if (kh[s] === true) k[s] = true;
+    if (typeof kh.desen === 'string' && kh.desen && kh.desen.length <= 500) k.desen = kh.desen;
+    if (typeof kh.bicim === 'string' && kh.bicim && kh.bicim.length <= 40) k.bicim = kh.bicim;
+    return {
+      ad: a.ad, ...(cocuklar.length ? { cocuklar } : { tip: TIPLER.includes(a.tip) ? a.tip : 'metin' }), ...(a.zorunlu === true ? { zorunlu: true } : {}),
+      ...(a.nillable === true ? { nillable: true } : {}), ...(a.coklu === true ? { coklu: true } : {}),
+      ...(Array.isArray(a.secenekler) && a.secenekler.length ? { secenekler: a.secenekler.filter((/** @type {unknown} */ s) => typeof s === 'string').slice(0, 200) } : {}),
+      ...(Object.keys(k).length ? { kisit: k } : {}), ...(typeof a.varsayilan === 'string' && a.varsayilan.length <= 500 ? { varsayilan: a.varsayilan } : {})
+    };
+  };
+  const alanlar = v.map((x) => temizle(x, 0)).filter((x) => x !== null);
+  return alanlar.length ? alanlar : undefined;
+}
 
 /**
  * Sözleşmeyi kaydeder. Var olan sözleşme değişiyorsa onay: true gerekir (yoksa { onayGerekli, fark } döner, yazılmaz).
@@ -355,8 +484,9 @@ export function sozlesmeKaydet(vt, projeId, g) {
   const f = sozlesmeFarki(onceki?.sema, sema);
   const fark = { eklenen: f.eklenen.length, kaldirilan: f.kaldirilan.length, degisen: f.degisen.length };
   if (onceki && g.onay !== true) return { onayGerekli: true, fark: { ...f, sayilar: fark } };
+  const istek = istekAlanlariniTemizle(h.istek);
   /** @type {Sozlesme} */
-  const yeni = { kaynak: h.kaynak, bicim, sema, ...(xmlKok ? { xmlKok } : {}), ...(kaynakBilgisi ? { kaynakBilgisi } : {}), guncellenme: new Date().toISOString() };
+  const yeni = { kaynak: h.kaynak, bicim, sema, ...(xmlKok ? { xmlKok } : {}), ...(kaynakBilgisi ? { kaynakBilgisi } : {}), ...(istek ? { istek } : {}), guncellenme: new Date().toISOString() };
   const gecmis = gecmisEkle(s.ayarlar.sozlesmeGecmisi?.[g.operasyon], {
     zaman: yeni.guncellenme, islem: onceki ? 'degistir' : 'olustur', kaynak: yeni.kaynak, ...(kaynakBilgisi ? { kaynakBilgisi } : {}),
     alanSayisi: sozlesmeOzeti(sema).alanSayisi, ...(onceki ? { fark } : {}), ...(g.yapan ? { yapan: g.yapan } : {})

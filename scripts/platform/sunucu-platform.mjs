@@ -63,6 +63,7 @@
 //        ortamda / akışta tanımlı senaryoları (veri, satır seçimleri, son durum, veri güdümlü satır değerleri) + diğer akışların
 //        senaryoları (kapsam) + koşu geçmişi (başarısız sonuçlar, görülen uyarılar) + öneri kararları; öneriyi tarayıcı üretir, hiçbir şey yazılmaz
 //   POST /platform/senaryo/oneri-karari { projeId, ekranId, kimlik, tur, neden?, alanlar?, karar: 'kabul'|'red', redNedeni? }
+//   (Servis senaryo önerileri: GET /platform/servis/oneriler ve POST /platform/servis/oneri-karari — servisler/servis-uclari.mjs.)
 //   GET  /platform/senaryo/gecmis?id=                  değişiklik geçmişi (değişen alan ADLARI; değer yok)
 //   GET  /platform/senaryo/son-sonuc?id=&ortamId=       seçili ortamdaki son sonuç + adım sonuçları (akış diyagramı renkleri)
 //   POST /platform/senaryo/kaydet | kosuya-dahil | sil | kopyala

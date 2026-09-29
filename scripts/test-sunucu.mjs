@@ -334,6 +334,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-onerileri.js', { dosya: 'servis-onerileri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sonuclari.js', { dosya: 'servis-sonuclari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/html-rapor.js', { dosya: 'html-rapor.js', tur: 'text/javascript; charset=utf-8' }],
@@ -378,6 +379,9 @@ const ARAYUZ_DOSYALARI = new Map([
   // Servis sözleşmesi: yanıt doğrulayıcı / taslak düzenleme (saf modül) sunucuyla ORTAK; sekme arayüzü.
   ['/arayuz/sozlesme-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'sozlesme-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sozlesmesi.js', { dosya: 'servis-sozlesmesi.js', tur: 'text/javascript; charset=utf-8' }],
+  // Yanıttan kontrol üretme (yanıt ağacı, işleç önerisi, altın yanıt): koşudaki değerlendirmeyle ORTAK saf modül.
+  ['/arayuz/yanit-kontrolleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'yanit-kontrolleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/yanit-kontrol-paneli.js', { dosya: 'yanit-kontrol-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],

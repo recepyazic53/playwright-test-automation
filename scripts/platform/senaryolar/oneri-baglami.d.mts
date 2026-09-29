@@ -10,6 +10,10 @@ export declare const UYARI_GUNU: number;
 /** oneriGecmisi sonucu: tüm alanlar dolu. */
 export type OneriGecmisiSonucu = Required<OneriGecmisi>;
 
+export declare function degerSatirlari(
+  veri: Record<string, unknown>, veriKosulari: Record<string, unknown> | null, tabloSecimleri: Record<string, Record<string, string>> | null, tablolar: unknown[], ortamId: string
+): Array<Record<string, unknown>> | null;
+
 export declare function oneriBaglami(
   vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null, simdi?: Date
 ): Record<string, unknown> & { senaryolar: unknown[]; kapsamSenaryolari: unknown[]; gecmis: OneriGecmisiSonucu; kararlar: unknown[] };

@@ -26,8 +26,8 @@ const acikKutular = new Set();
 export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 
 /**
- * Koşuyu başlatır ve paneli açar. bitti(): koşu bitince (tabloyu yenilemek için) çağrılır.
- * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string }; bitti?: () => void;
+ * Koşuyu başlatır ve paneli açar. bitti(is): koşu bitince (tabloyu yenilemek için; iş durumu verilir) çağrılır.
+ * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string }; bitti?: (is?: any) => void;
  *   uygulamaSurumu?: string }} s
  */
 export async function servisKosusuBaslat(s) {
@@ -55,7 +55,8 @@ function sorgula() {
       if (is.calisanSenaryo && onceki && onceki.durum === 'calisiyor' && is.satirlar.find((x) => x.senaryoId === durum.secili)?.durum !== 'calisiyor') durum.secili = is.calisanSenaryo;
       durum.is = is;
       ciz();
-      if (is.bitti) { durum.bitti?.(); return; }
+      // bitti(is): çağıran isterse sonuçları (ör. Dene'nin koşu kaydı) kullanır; diğerleri yok sayar.
+      if (is.bitti) { durum.bitti?.(is); return; }
     } catch { /* bağlantı kesintisi: sonraki denemede */ }
     sorgula();
   }, SORGU_MS);

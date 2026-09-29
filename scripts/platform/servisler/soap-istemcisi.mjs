@@ -7,6 +7,7 @@ import { AD_KALIBI, BICIM_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi
 import * as hesap from './hesap-kurallari.mjs';
 import { dosyayiDogrula, sonucOzeti, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
 import { tarihBicimle, VARSAYILAN_TARIH_BICIMI } from './hesap-kurallari.mjs';
+import { altinYanitKarsilastir, yanitAlaniAdi, yanitAlaniDegerlendir, yanitSuresiDegerlendir } from './yanit-kontrolleri.mjs';
 
 export { tarihBicimle, VARSAYILAN_TARIH_BICIMI };
 
@@ -459,9 +460,15 @@ export function kontrolAdi(k) {
     case 'jsonEsit': return `JSON ${k.yol} = "${k.deger}"`;
     case 'veya': return `Şunlardan biri: ${(k.alt ?? []).map(kontrolAdi).join(' | ')}`;
     case 'dosya': return `Yanıttaki dosya doğrulanır (${k.dosya?.beklentiler?.length ?? 0} beklenti)`;
+    case 'yanitAlani': return yanitAlaniAdi(k);
+    case 'altinYanit': return `Altın yanıtla karşılaştır (${k.alanlar?.length ?? 0} sabit alan, ${k.yokSay?.length ?? 0} yok sayılan)`;
+    case 'yanitSuresi': return `Yanıt en çok ${k.deger} ms`;
     default: return String(k.tur);
   }
 }
+
+/** Altın yanıt farkının açıklaması (değer yok; yalnız yol ve fark türü). */
+const ALTIN_FARK = { eklenen: 'eklenen alan', kaldirilan: 'kaldırılan alan', degisen: 'değişen alan' };
 
 /** @param {string} govde @param {ServisKontrolu} k */
 function metinEslesir(govde, k) {
@@ -503,7 +510,7 @@ function dosyaKontrolu(yanit, k, ad, s) {
  */
 
 /**
- * @param {{ durumKodu: number; govde: string; ham?: Buffer; basliklar?: Record<string, string> }} yanit @param {ServisKontrolu[]} kontroller
+ * @param {{ durumKodu: number; govde: string; ham?: Buffer; basliklar?: Record<string, string>; sureMs?: number }} yanit @param {ServisKontrolu[]} kontroller
  * @param {DosyaKontrolSecenekleri} [dosyaSecenekleri] dosya kontrolü varsa
  * @returns {KontrolSonucu[]}
  */
@@ -540,6 +547,13 @@ export function kontrolleriDegerlendir(yanit, kontroller, dosyaSecenekleri = {})
         return { ...s(gecen.length > 0, gecen.length ? `Geçen: ${gecen.map((a) => a.ad).join(' | ')}` : 'Hiçbiri geçmedi'), alt: altlar };
       }
       case 'dosya': return dosyaKontrolu(yanit, k, ad, dosyaSecenekleri);
+      case 'yanitAlani': { const r = yanitAlaniDegerlendir(yanit.govde, k); return s(r.gecti, r.aciklama); }
+      case 'yanitSuresi': { const r = yanitSuresiDegerlendir(yanit.sureMs, k); return s(r.gecti, r.aciklama); }
+      case 'altinYanit': {
+        // Farklar yol yol alt sonuç (değer yazılmaz); en çok 50 yol listelenir.
+        const r = altinYanitKarsilastir(yanit.govde, k);
+        return { ...s(r.gecti, r.aciklama), ...(r.farklar.length ? { alt: r.farklar.slice(0, 50).map((f) => ({ tur: 'altinFark', ad: f.yol, gecti: false, aciklama: ALTIN_FARK[f.tur] })) } : {}) };
+      }
       default: return s(false, 'Bilinmeyen kontrol türü');
     }
   };

@@ -180,7 +180,7 @@ export async function sozlesmeSekmesi(kap, proje, s, altKimlik) {
     const kayitMesaji = mesajKutusu();
     kaydet.addEventListener('click', async () => {
       kayitMesaji.temizle();
-      const govde = { projeId: proje.id, servisId: s.id, operasyon, sozlesme: { kaynak: t.kaynak, sema, xmlKok: t.xmlKok, kaynakBilgisi: t.kaynakBilgisi } };
+      const govde = { projeId: proje.id, servisId: s.id, operasyon, sozlesme: { kaynak: t.kaynak, sema, xmlKok: t.xmlKok, kaynakBilgisi: t.kaynakBilgisi, ...(t.istek ? { istek: t.istek } : {}) } };
       try {
         const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/sozlesme/kaydet', { govde }));
         if (r.onayGerekli) {
