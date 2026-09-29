@@ -1454,7 +1454,7 @@ async function arayuzAyarlari(govde, baglam) {
     try {
       const y = await api('/platform/rehber/kaydet', { govde: { otomatik: otomatik.checked } });
       rehberAyarlariniGuncelle(y.rehber);
-      mesaj.goster(otomatik.checked ? 'Rehberler her ekranın ilk açılışında kendiliğinden başlayacak.' : 'Rehberler artık kendiliğinden açılmayacak; "?" düğmesi çalışmaya devam eder.', 'basari');
+      mesaj.goster(otomatik.checked ? 'Rehberler her ekranın ilk açılışında kendiliğinden başlayacak.' : 'Rehberler artık kendiliğinden açılmayacak; "?" düğmesi ve "Bu sayfanın rehberi" bağlantısı çalışmaya devam eder.', 'basari');
     } catch (hata) { otomatik.checked = !otomatik.checked; mesaj.goster(hata.message); }
   });
   sifirla.addEventListener('click', async () => {
@@ -1484,7 +1484,7 @@ async function arayuzAyarlari(govde, baglam) {
       h('span', {}, h('b', {}, 'Rehberleri ilk girişte kendiliğinden göster'),
         h('small', { class: 'blok soluk' }, rehber.ortamKapali
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
-          : 'Kapalıysa rehberler yalnızca üst çubuktaki "?" düğmesiyle açılır.'))),
+          : 'Varsayılan kapalı: rehberler sayfa başlığındaki "Bu sayfanın rehberi" bağlantısıyla ya da üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
     h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), acilisKarti(acilis), listeFormu, saglik, terimlerKarti());
 }

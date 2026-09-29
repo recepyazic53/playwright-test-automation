@@ -1,5 +1,6 @@
 // EKRAN REHBERİ İÇERİKLERİ (bkz. rehber.js). Her rehber: { baslik, adimlar: [{ baslik, metin, hedef?, sira?, cizim?, ipucu? }] }.
-//   hedef: vurgulanacak öğenin CSS seçicisi (ya da seçici listesi; ilk bulunan). Sayfada yoksa kart ortada, geniş açılır.
+//   hedef: vurgulanacak öğenin CSS seçicisi (ya da seçici listesi; ilk bulunan). Hedefi sayfada olmayan adım ATLANIR (anlattığı
+//   bölüm bu sayfada yok); atlanmaz: true ise kart ortada, vurgusuz açılır. Hedefsiz adımlar her zaman gösterilir.
 //   sira: numaralı iş listesi ("hangi sırayla"). cizim: canlandırılmış anlatım (tür: akis | maket | form | istek | katman;
 //   ayrıntı rehber.js'te) — örnek veri kurulmaz.
 // Yazım ilkesi: her adım "bu nedir → ne işe yarar → ne yapmalıyım" sorularını kısa cümlelerle cevaplar. Metinler geneldir:
@@ -38,7 +39,7 @@ export const REHBERLER = {
       },
       { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar, Test verisi (tablolar), Planlı koşular ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır. Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar durur.' },
       { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok uygulamayı test ediyorsanız her biri ayrı bir projedir. Aralarında buradan geçersiniz; "Proje ekle" aynı kasada yeni bir proje açar.' },
-      { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi ekrandaysanız o ekranın rehberini bu "?" düğmesiyle istediğiniz an yeniden açabilirsiniz. Kendiliğinden açılmasını Ayarlar > Arayüz\'den kapatabilirsiniz.', ipucu: 'Rehberde ← / → tuşlarıyla gezinebilir, Esc ile kapatabilirsiniz.' }
+      { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi sayfadaysanız o sayfanın rehberini bu "?" düğmesiyle ya da sayfa başlığının altındaki "Bu sayfanın rehberi" bağlantısıyla istediğiniz an açabilirsiniz. Sayfa rehberleri kendiliğinden açılmaz; isterseniz Ayarlar > Arayüz\'den ilk girişte açılmasını seçebilirsiniz.', ipucu: 'Rehberde ← / → tuşlarıyla gezinebilir, Esc ile kapatabilirsiniz.' }
     ]
   },
 
@@ -58,7 +59,7 @@ export const REHBERLER = {
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
-      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde beş sekme vardır, bu sırayla: Özet (varsayılan; "Genel"e tıklayınca açılır — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; bu sayfa), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde beş sekme vardır, bu sırayla: Özet ("Genel"e tıklayınca ilk açılan sekme — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; şu an açık olan sekme), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
         metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin başarısız olduğunu ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
@@ -105,7 +106,7 @@ export const REHBERLER = {
       {
         baslik: 'Kapsam matrisi',
         metin: ['Raporlar sekmesindeki "Kapsam matrisi", senaryolara yazdığınız talep numaralarını senaryolarla ve son sonuçlarıyla eşler: her talep için hangi ekran senaryosu, servis senaryosu ya da uçtan uca akışın onu sınadığı ve son koşunun başarılı mı, başarısız mı olduğu ya da hiç koşmadığı (tarih ve ortamla).',
-          'Ortam ve dönem süzülebilir; tablo PDF ya da CSV olarak indirilir. Yalnız senaryosu olan talepler listelenir: talep no senaryo formunda başlığın yanındaki "Talep no" alanından eklenir.'],
+          'Ortam ve dönem süzülebilir; tablo PDF ya da CSV olarak indirilir. Yalnız senaryosu olan talepler listelenir: talep no senaryo formunda başlığın altındaki "Talep no" alanından eklenir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Talep', alt: 'serbest metin', ikon: 'isaret' }, { baslik: 'Senaryolar', alt: 'ekran / servis / uçtan uca', ikon: 'liste' }, { baslik: 'Son sonuç', alt: 'ortam, dönem', ikon: 'grafik' }] },
         ipucu: 'Talep no yalnız metindir; Nöbetçi hiçbir talep sistemine bağlanmaz.'
       },
@@ -163,7 +164,27 @@ export const REHBERLER = {
       }
     ]
   },
-  'sonuclar-kosu': {
+  // Sonuçlar'ın BOŞ DURUM rehberi: projede henüz tam koşu yokken "sonuclar" ve "sonuclar-ozet" yerine açılır (bkz. BOS_DURUM_REHBERLERI;
+  // rehber.js). Adımlar Başlarken listesiyle aynı yolu anlatır; ayrıntılı rehber ilk tam koşudan sonra açılır.
+  'sonuclar-ilk-kosu': {
+    baslik: 'Sonuçlar — ilk koşu',
+    adimlar: [
+      {
+        baslik: 'Sonuçlar koşudan sonra dolar',
+        metin: ['Bu projede henüz tam koşu yok; bu yüzden kartlar, eğilim ve başarısız testler boş. İlk koşuyu yaptığınızda burada ne kadar başarılı olduğunu, hangi testlerin neden başarısız olduğunu kanıtlarıyla görürsünüz.'],
+        cizim: ANA_AKIS
+      },
+      {
+        baslik: 'Sıradaki adım: Başlarken', hedef: '.baslarken-karti', atlanmaz: true,
+        metin: 'İlk koşuya giden yol "Başlarken" listesindedir. Adımlar projenizin verisinden işaretlenir (✓); "Sıradaki" adımın düğmesi ilgili sayfayı açar.',
+        sira: ['Ortam ekle ve girişi kaydet (Ayarlar).', 'İlk ekranı ekle: "Ekranı tara" ya da "Akışı kaydet".', 'İlk senaryoyu yaz ve "Dene" ile bir kez çalıştır.', '"Koşuyu başlat" ile tam koşuyu yap.']
+      },
+      {
+        baslik: 'Koşudan sonra', hedef: '.sayfa-rehberi', atlanmaz: true,
+        metin: 'İlk tam koşu bitince bu sayfa kartlar, eğilim, başarısız testler ve koşu geçmişiyle dolar. O zaman "Bu sayfanın rehberi" (ya da "?") her bölümü ayrıntılı anlatır.'
+      }
+    ]
+  },  'sonuclar-kosu': {
     baslik: 'Koşu ayrıntısı',
     adimlar: [
       { baslik: 'Koşu ayrıntısı', metin: ['Bu koşudaki tüm testler, durumları ve süreleri. Başarısız bir testi açarak hatasını, adımlarını ve kayıtlarını inceleyin.', '"Yalnız başarısızlar" yalnız başarısız testleri gösterir; bir hata kalıbına tıklayınca yalnız o kalıptaki testler listelenir (çipteki × ile kaldırılır). Koşu geçmişinde de "Yalnız başarısızlar" vardır.'], cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Koşudaki testler' } },
@@ -725,9 +746,16 @@ export const REHBERLER = {
   },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
-    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı, listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
+    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, sayfa rehberlerinin ilk açılışta kendiliğinden başlayıp başlamayacağı (varsayılan kapalı), listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi ve "Bu sayfanın rehberi" bağlantısı her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
       { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' },
       { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' },
       { baslik: 'Terimler', hedef: '.terimler-karti', metin: 'Sayfanın altındaki "Terimler" kartı arayüzde geçen kavramları (ekran, ortak akış, akış, senaryo, model, paket, bulgu, test verisi tablosu, karşılık, ortam türü, izin, planlı koşu, Dene / Koşu) birer cümleyle açıklar. Her kavram arayüzde tek adla geçer: ör. "Planlı koşular", "Test verisi", sonuç durumu "Başarısız"; "CANLI" yalnız ortam türüdür.' }]
   }
 };
+
+/**
+ * Boş durum rehberleri: projede henüz tam koşu yokken sayfanın rehberi yerine açılan kısa rehber (rehber.js > etkinRehber).
+ * Veri gelince (ilk tam koşudan sonra) ayrıntılı rehber açılır.
+ * @type {Record<string, string>}
+ */
+export const BOS_DURUM_REHBERLERI = { sonuclar: 'sonuclar-ilk-kosu', 'sonuclar-ozet': 'sonuclar-ilk-kosu' };

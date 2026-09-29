@@ -4321,3 +4321,20 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ekleme-kutulari.tekli { grid-template-columns: minmax(0, 1fr); }
 .ekleme-kutulari.tekli .ekleme-kutusu { min-height: 0; }
 @media (max-width: 900px) { .ekleme-kutulari.ikili { grid-template-columns: minmax(0, 1fr); } }
+
+/* ==== v1.4 Sayfa rehberi bağlantısı (rehber.js > sayfaRehberiBaglantisiKur): başlığın altında küçük "Bu sayfanın rehberi (N adım)";
+   işlem penceresi yüzünden başlatılamayan rehberde "hazir" işareti. ==== */
+.sayfa-basligi .sayfa-rehberi, button.sayfa-rehberi {
+  display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 0; padding: 2px 4px; min-height: 0; width: auto;
+  background: transparent; border: 0; box-shadow: none; border-radius: var(--yaricap-s, 6px);
+  color: var(--metin-2); font: inherit; font-size: 12.5px; font-weight: 500; line-height: 1.4; cursor: pointer;
+  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; white-space: normal; text-align: left;
+}
+.sayfa-basligi > div:first-child > .sayfa-rehberi { display: flex; width: fit-content; max-width: 100%; }
+button.sayfa-rehberi .ikon { width: 14px; height: 14px; color: var(--metin-3); flex: none; }
+button.sayfa-rehberi:hover { background: transparent; color: var(--vurgu); text-decoration-color: currentColor; }
+button.sayfa-rehberi:hover .ikon { color: var(--vurgu); }
+button.sayfa-rehberi:focus-visible { outline: 2px solid var(--vurgu); outline-offset: 2px; }
+button.sayfa-rehberi.hazir { color: var(--vurgu); font-weight: 600; }
+button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--vurgu); flex: none; }
+.icerik-alani > button.sayfa-rehberi { display: flex; width: fit-content; max-width: 100%; margin: 0 0 12px; }

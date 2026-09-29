@@ -15,14 +15,14 @@ import { yasakSozcukleriBul } from './yasak-sozcukler';
 
 const KOK = join(__dirname, '..', '..');
 
-test('rehber ayarları: varsayılan otomatik, görülenler tekil, sıfırlama, doğrulama, kasada şifreli, ortam değişkeniyle kapatma', async () => {
+test('rehber ayarları: varsayılan kapalı (yeni kurulum), görülenler tekil, sıfırlama, doğrulama, kasada şifreli, ortam değişkeniyle kapatma', async () => {
   const klasor = geciciKlasor('rehber-ayar');
   const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
   const onceki = process.env.NOBETCI_REHBER_OTOMATIK;
   try {
     await kasaOlustur(vt, 'Gecici-Rehber-1', { kdf: HIZLI_KDF });
     delete process.env.NOBETCI_REHBER_OTOMATIK;
-    expect(rehberAyarlariniOku(vt)).toEqual({ otomatik: true, gorulenler: [], ortamKapali: false });
+    expect(rehberAyarlariniOku(vt)).toEqual({ otomatik: false, gorulenler: [], ortamKapali: false });
     rehberAyarlariniKaydet(vt, { gorulen: 'senaryolar' });
     expect(rehberAyarlariniKaydet(vt, { gorulen: 'senaryolar' }).gorulenler).toEqual(['senaryolar']);
     expect(rehberAyarlariniKaydet(vt, { otomatik: false })).toMatchObject({ otomatik: false, gorulenler: ['senaryolar'] });
@@ -152,7 +152,8 @@ test.describe('Rehber arayüzü', () => {
         const cikti: string[] = [];
         for (const anahtar of Object.keys(REHBERLER)) {
           rehberBaslat(anahtar);
-          const adimlar = REHBERLER[anahtar].adimlar.length;
+          // Hedefi bu sayfada olmayan adımlar atlanır: adım sayısı karttaki sayaçtan okunur.
+          const adimlar = Number((document.querySelector('.rehber-sayac')?.textContent || '').split('/')[1]) || REHBERLER[anahtar].adimlar.length;
           for (let i = 0; i < adimlar; i++) {
             await bekle();
             const kart = document.querySelector('.rehber-karti') as HTMLElement;
@@ -186,7 +187,8 @@ test.describe('Rehber arayüzü', () => {
     const page = await baglam.newPage();
     await page.goto('/#/sonuclar');
     await expect(page.locator('section[aria-labelledby="kalip-basligi"]')).toBeVisible();
-    await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
+    // Proje henüz tam koşu görmedi: "?" kısa "ilk koşu" rehberini açar; ayrıntılı rehber doğrudan başlatılır.
+    await page.evaluate(async () => (await import('/arayuz/rehber.js' as string)).rehberBaslat('sonuclar'));
     const kart = rehberKarti(page);
     for (const baslik of ['Koşu geçmişi', 'Hata kalıpları']) {
       await kart.getByRole('button', { name: new RegExp(`^Adım \\d+: ${baslik}$`) }).click();
