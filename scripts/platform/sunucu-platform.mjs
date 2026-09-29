@@ -88,7 +88,7 @@
 //        üstündeki blok sayısı — baştaki ortak akışlar ekran açılmadan önce mi sonra mı),
 //        varsa yeni model sürümü · POST /platform/ekran/akis/varsayilan | sil { projeId, ekranId, akisId }
 //   GET  /platform/ortak-akis/ekranlar?projeId=&ekranId=  ortak akışın eklenebileceği ekranlar (ekranId: ortak akış)
-//   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, onay }  ortak akışı seçilen ekranların
+//   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, dahilVarsayilan, onay }  ortak akışı seçilen ekranların
 //        varsayılan akışının sonuna ekler; onay yoksa etki
 //   POST /platform/ortak-akis/olustur { projeId, ad, anahtar? }  boş ortak akış ("Boş başla"; adımları diyagramdan eklenir)
 //   POST /platform/sayfa-paketi/onizle { projeId, paket, ekranId?, mod?, olusturulacak? }   doğrulama + önizleme (gövde en fazla
@@ -1522,7 +1522,7 @@ const POST_UCLARI = new Map([
   ['/platform/ekran/akis/varsayilan', (db, g) => akisVarsayilanYap(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ortak-akis/olustur', (db, g) => bosOrtakAkisOlustur(db, kimlikAl(g.projeId, 'projeId'), { ad: g.ad, anahtar: g.anahtar })],
   ['/platform/ortak-akis/ekle', (db, g) => ortakAkisEkranlaraEkle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
-    ekranIdleri: g.ekranIdleri, istegeBagli: g.istegeBagli === true, onay: g.onay === true
+    ekranIdleri: g.ekranIdleri, istegeBagli: g.istegeBagli === true, dahilVarsayilan: g.dahilVarsayilan === true, onay: g.onay === true
   })],
   ['/platform/ekran/akis/sil', (db, g) => akisSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ekran/reddedilenleri-unut', (db, g) => reddedilenleriUnut(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],

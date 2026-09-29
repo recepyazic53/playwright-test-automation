@@ -51,7 +51,8 @@ export type AkisBlogu =
   /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
   | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }
   /** Ortak akış (ör. ödeme): dosya = "<ortak akış anahtarı>.model.json"; ad adımın başlığı; istegeBagli: senaryoda "“ad” dahil". */
-  | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean }
+  /** dahilVarsayilan (yalnız istegeBagli iken): yeni senaryolarda "“ad” dahil" işaretli başlar (ayar alanının varsayilan.deger). */
+  | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean; dahilVarsayilan?: boolean }
   /** SQL sorgusu adımı (sql/sql-adimi.mjs SqlTanimi; kaydederken doğrulanır). */
   | { tur: 'sql'; ad: string; sql: Record<string, unknown> }
   /** İndirilen dosyayı doğrula: dugme (sağ listedeki düğmenin sırası) indirmeyi başlatır; dosya: DosyaTanimi (kaydederken doğrulanır). */

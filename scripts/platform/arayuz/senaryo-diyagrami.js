@@ -192,8 +192,10 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
     const dugumId = `adim:${a.id}`;
     const p = duzenlemeParcalari(dz, dugumId, `${a.no}. ${a.baslik}`);
     const rozetler = [
-      a.istegeBagli ? rozet(`isteğe bağlı: ${a.kapsamEtiketi}`, 'vurgu', { title: 'Senaryoda bu kutu işaretliyse adım koşulur.' })
+      a.istegeBagli ? rozet(`isteğe bağlı: ${a.kapsamEtiketi}`, 'uyari', { title: 'Senaryoda bu anahtar açıksa adım koşulur.', 'data-ortak-durumu': a.ortakAkis ? 'istege-bagli' : null })
         : a.kapsamEtiketi ? rozet(`koşul: ${a.kapsamEtiketi}`, 'vurgu', { title: 'Adım yalnızca bu koşulda koşulur.' }) : null,
+      // Ortak akış her senaryoda çalışıyorsa bunu açıkça gösterir (isteğe bağlı olduğu sanılmasın).
+      a.ortakAkis && !a.istegeBagli ? rozet('ortak akış · her zaman', 'basari', { title: `“${a.ortakAkis}” bu akışı kullanan her senaryoda çalışır.`, 'data-ortak-durumu': 'her-zaman' }) : null,
       disarida ? rozet('bu senaryoda koşulmaz') : a.kosulur === null ? rozet('koşulup koşulmayacağı bilinmiyor', 'atlanan') : null,
       a.hedef === 'hata' ? rozet('hata beklenir', 'hata') : null,
       p.rozetEl

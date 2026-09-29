@@ -557,7 +557,12 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
     const istegeBagli = Boolean(kapsamAyari(model, adim)) && !an.gorunurlukKorunur;
     // Ortak akış adımı: tek blok (içi ortak akışın kendi yerinde düzenlenir).
     if (nesneMi(adim.ortakAkis) && typeof adim.ortakAkis.dosya === 'string') {
-      bloklar.push({ tur: 'ortak', dosya: adim.ortakAkis.dosya, ad: String(adim.baslik || adim.id), istegeBagli });
+      // "Yeni senaryolarda dahil": bloğun "dahil" ayar alanının varsayılanı (senaryoDuzeyi; yoksa dahil değil).
+      const ayarId = istegeBagli ? kapsamAyari(model, adim) : null;
+      const sd = nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : [];
+      const ayarAlani = ayarId ? sd.find((/** @type {unknown} */ a) => nesneMi(a) && a.id === ayarId) : undefined;
+      const dahil = nesneMi(ayarAlani) && nesneMi(ayarAlani.varsayilan) && ayarAlani.varsayilan.deger === true;
+      bloklar.push({ tur: 'ortak', dosya: adim.ortakAkis.dosya, ad: String(adim.baslik || adim.id), istegeBagli, ...(dahil ? { dahilVarsayilan: true } : {}) });
       continue;
     }
     // SQL sorgusu adımı: tek blok (tanım aynen).
@@ -757,10 +762,11 @@ export function ortakAkisAdaylari(vt, projeId, ortakEkranId) {
 /**
  * Ortak akışı seçilen ekranların VARSAYILAN akışının sonuna ekler (diyagramdaki "+ > Ortak akış" ile aynı çeviri; her ekran
  * için yeni model sürümü). istegeBagli: senaryoda “… dahil” işaretlenince koşar (mevcut senaryolar etkilenmez); değilse
- * varsayılan akıştaki tüm senaryolar koşar. onay: false → yalnızca etki (ekran, akış, senaryo sayısı); true → yazar.
+ * varsayılan akıştaki tüm senaryolar koşar. dahilVarsayilan (yalnız isteğe bağlıyken): yeni senaryolarda "dahil" işaretli başlar
+ * (kayıtlı senaryolar değişmez). onay: false → yalnızca etki (ekran, akış, senaryo sayısı, seçim); true → yazar.
  * Eklenemeyen ekran seçilirse hiçbiri yazılmaz (DepoHatasi).
  * @param {Veritabani} vt @param {string} projeId @param {string} ortakEkranId
- * @param {{ ekranIdleri: unknown; istegeBagli?: boolean; onay?: boolean }} g
+ * @param {{ ekranIdleri: unknown; istegeBagli?: boolean; dahilVarsayilan?: boolean; onay?: boolean }} g
  */
 export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
   const { ortakAkis, ekranlar } = ortakAkisAdaylari(vt, projeId, ortakEkranId);
@@ -777,12 +783,14 @@ export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
     return e;
   });
   const etki = secilen.map((e) => ({ id: e.id, ad: e.ad, akis: e.varsayilanAkis, senaryoSayisi: e.senaryoSayisi }));
+  const istegeBagli = g.istegeBagli === true;
+  const dahilVarsayilan = istegeBagli && g.dahilVarsayilan === true;
   // Önce hepsi doğrulanır (onaysız kayıt: yalnızca doğrulama); biri hatalıysa hiçbiri yazılmaz.
   const hazirlik = secilen.map((e) => {
     const { model } = ekranModeli(vt, projeId, e.id);
     const akis = akisListesi(model)[0];
     const bloklar = adimlardanBloklar(model, /** @type {Nesne} */ (akisModeli(model, akis.id)).adimlar, modeldenAkisEnvanteri(model), akis.id);
-    bloklar.splice(bloklar.length - 1, 0, { tur: 'ortak', dosya: ortakAkis.dosya, ad: ortakAkis.ad, istegeBagli: g.istegeBagli === true });
+    bloklar.splice(bloklar.length - 1, 0, { tur: 'ortak', dosya: ortakAkis.dosya, ad: ortakAkis.ad, istegeBagli, ...(dahilVarsayilan ? { dahilVarsayilan: true } : {}) });
     const girdi = { akisId: akis.id, ad: akis.ad, bloklar };
     try { akisKaydet(vt, projeId, e.id, { ...girdi, onay: false }); } catch (hataNesnesi) {
       const mesaj = hataNesnesi instanceof EkranDogrulamaHatasi && hataNesnesi.hatalar.length ? hataNesnesi.hatalar.map((/** @type {Nesne} */ x) => x.mesaj).join(' ') : /** @type {Error} */ (hataNesnesi).message;
@@ -790,7 +798,7 @@ export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
     }
     return { e, girdi };
   });
-  if (g.onay !== true) return { etki: { ortakAkis: ortakAkis.ad, istegeBagli: g.istegeBagli === true, ekranlar: etki } };
+  if (g.onay !== true) return { etki: { ortakAkis: ortakAkis.ad, istegeBagli, dahilVarsayilan, ekranlar: etki } };
   return vt.islem(() => ({
     eklenen: hazirlik.map(({ e, girdi }) => ({ id: e.id, ad: e.ad, surum: /** @type {{ surum: number }} */ (akisKaydet(vt, projeId, e.id, { ...girdi, onay: true })).surum }))
   }));
@@ -1127,6 +1135,14 @@ export function akisKaydet(vt, projeId, ekranId, g) {
     if (!sdIdleri.has(a.id)) { sd.push(a); sdIdleri.add(a.id); continue; }
     // Beklenen sonuç alanı güncellenir (bu akıştaki uyarılı adımlar adım seçeneklerine eklenmiş olabilir).
     if (nesneMi(a) && a.tip === 'birlesim') sd[sd.findIndex((x) => nesneMi(x) && x.id === a.id)] = a;
+    // "“…” dahil" ayarının "Yeni senaryolarda dahil" seçimi (varsayilan) diyagramdan güncellenir; ayarın geri kalanı korunur.
+    if (nesneMi(a) && a.tip === 'onayKutusu') {
+      const i = sd.findIndex((x) => nesneMi(x) && x.id === a.id);
+      if (i >= 0 && nesneMi(sd[i]) && sd[i].tip === 'onayKutusu') {
+        const { varsayilan: _eski, ...kalan } = /** @type {Nesne} */ (sd[i]);
+        sd[i] = nesneMi(a.varsayilan) ? { ...kalan, varsayilan: kopya(a.varsayilan) } : kalan;
+      }
+    }
   }
   yeni.senaryoDuzeyi = { ...(nesneMi(yeni.senaryoDuzeyi) ? yeni.senaryoDuzeyi : {}), alanlar: sd };
   const akislar = Array.isArray(yeni.akislar) && yeni.akislar.length ? yeni.akislar

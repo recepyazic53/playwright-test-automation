@@ -247,6 +247,10 @@ export const REHBERLER = {
         ipucu: 'Uzun listelerde yazarak arayın: listeye tıklayın ya da odaklanıp yazmaya başlayın; ↑ / ↓ ile gezip Enter ile seçin.'
       },
       {
+        baslik: 'İsteğe bağlı adımlar',
+        metin: ['İsteğe bağlı bir ortak akışın (ya da düğmenin) adımlarında başlıkta "“<ad>” dahil" anahtarı vardır. Anahtar kapalıysa o adımlar "Koşulmaz" görünür ve koşuda atlanır. Yeni senaryoda anahtar, akış diyagramındaki "Yeni senaryolarda" seçimiyle başlar. Her senaryoda çalışan ortak akışın adımlarında anahtar yoktur, "her senaryoda çalışır" bilgisi görünür.']
+      },
+      {
         baslik: 'Tarih alanları: sabit ya da bugüne göre',
         metin: 'Tarih alanında "Sabit tarih" ya da "Bugüne göre" seçilir. Bugüne göre: "Bugün / Ay başı / Ay sonu" + / − N gün (ör. bugün+7); altında "Bugün koşulursa: …" önizlemesi görünür, alanın sınırı dışındaysa uyarır. Senaryo her koşuda o günün tarihini (Türkiye saati) alanın biçimiyle yazar; tarih geçince senaryo kırılmaz. Sabit tarih geçmişte kaldıysa alanın altında "Bugüne göre yap" önerisi çıkar; Senaryolar listesinde "tarih eskidi" rozeti görünür ve seçilenler "Tarihleri bugüne göre yap…" ile topluca düzeltilir.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Bugüne göre', alt: 'bugün+7', ikon: 'takvim' }, { baslik: 'Önizleme', alt: 'bugün koşulursa', ikon: 'gorunum' }, { baslik: 'Her koşu', alt: 'o günün tarihi', ikon: 'oynat' }] },
@@ -481,12 +485,13 @@ export const REHBERLER = {
     baslik: 'Akış tasarımı',
     adimlar: [
       { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, çalışma sırasıyla. Kutuları sürükleyerek sıralar, "+" ile koşullu adım ya da ortak akış eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adım 1', ikon: 'duzenle' }, { baslik: 'Koşullu', alt: 'ör. Kurumsal ise', ikon: 'isaret' }, { baslik: 'Ortak akış', ikon: 'pusula' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Akış ekle" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
+      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Akış ekle" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; blokta "Ne zaman çalışır?" seçin: her senaryoda ya da isteğe bağlı (yeni senaryolarda dahil mi?).', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
       {
         baslik: 'Ekran açılır',
         metin: 'Giriş ile ilk ekran adımı arasındaki "Ekran açılır" kutusu ekranın sayfasının açıldığı yerdir; taşınmaz, silinmez. Üstündeki ortak akışlar (ör. ana sayfada kullanıcı değiştirme) girişten sonra açılan sayfada — girişsiz senaryoda ortamın taban adresinde — ekran açılmadan önce koşar; ekran adımları altında başlar. Ortak akış bloğunu ↑/↓ ile kutunun üstüne ya da altına taşıyın ya da kutudaki "Baştaki ortak akışlar" seçimini değiştirin (varsayılan: ekran açılmadan önce). Blok "Ekrana dön" ile bitiyorsa ekran ikinci kez açılmaz.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Ortak akış', alt: 'ör. kullanıcı değiştir', ikon: 'pusula' }, { baslik: 'Ekran açılır', ikon: 'oynat' }, { baslik: 'Ekran adımları', ikon: 'duzenle' }] }
       },
+      { baslik: 'İsteğe bağlı ortak akış', metin: 'Ortak akış bloğunda "Ne zaman çalışır?" seçimi vardır. "Her senaryoda çalışır": bu akışı kullanan bütün senaryolarda koşar (blokta "her zaman" rozeti). "İsteğe bağlı (senaryoda seçilir)": yalnız senaryo formundaki "“<ad>” dahil" anahtarı açıksa koşar (blokta "isteğe bağlı" rozeti); "Yeni senaryolarda" ile yeni senaryonun anahtarı açık ya da kapalı başlar, kayıtlı senaryolar değişmez. Kaydederken ve "Ekranlara ekle…" ile eklerken onay penceresi seçimi tekrarlar. Anahtar kapalıysa bloğun adımları senaryoda "koşulmaz" görünür; uçtan uca akışın ekran adımı senaryonun kendi seçimiyle koşar.', cizim: { tur: 'akis', kutular: [{ baslik: 'Ortak akış', alt: 'her zaman / isteğe bağlı', ikon: 'pusula' }, { baslik: 'Senaryo', alt: '“ad” dahil', ikon: 'duzenle' }, { baslik: 'Koşu', alt: 'kapalıysa koşulmaz', ikon: 'onay' }] } },
       { baslik: 'Elle alan ve düğme', metin: 'Sağdaki listede olmayan bir alanı ya da düğmeyi "Listede olmayan alanı / düğmeyi elle ekle" ile tanımlayın: etiket (ya da düğmenin yazısı), tür ve sayfadaki seçicisi (ör. #onayla). Böylece boş başlayan bir ortak akışa da sıfırdan adım eklenir; kaydedince modele yazılır. Ortak akışı kaydederken onu kullanan ekranlar gösterilir.' },
       { baslik: 'Ekran görüntüsü al', metin: 'Alan grubunda (ya da aksiyonda) "Ekran görüntüsü al" işaretli adımların sonunda görüntü alınır — adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu). Diğer seçimlerde işaret etkisizdir.' },
       {

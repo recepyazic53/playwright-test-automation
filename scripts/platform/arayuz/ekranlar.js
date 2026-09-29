@@ -31,6 +31,7 @@ import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi 
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
 import { acilirMenu } from './calisma-alani.js';
+import { ortakCalismaSecimi, ortakSecimMetni } from './akis-tasarimi.js';
 
 /** Otomatik tarama modülü isteğe bağlı yüklenir (yüklenemezse yalnızca tarama çalışmaz). */
 let taramaSozu = null;
@@ -508,7 +509,8 @@ async function ortakAkisiEkranlaraEkle(proje, ortak, yeniden) {
     aday = await api(`/platform/ortak-akis/ekranlar?projeId=${encodeURIComponent(proje.id)}&ekranId=${encodeURIComponent(ortak.id)}`);
   } catch (hataNesnesi) { bildir(hataNesnesi.message, 'hata'); return; }
   const kutular = aday.ekranlar.map((x) => ({ x, kutu: h('input', { type: 'checkbox', value: x.id, disabled: !x.eklenebilir }) }));
-  const istegeBagli = h('input', { type: 'checkbox', checked: true });
+  // Çalışma seçimi (akış diyagramındaki ortak akış bloğuyla aynı denetim): varsayılan her senaryoda çalışır (kullanıcı kararı; diyagramdaki yeni blokla aynı).
+  const secim = { istegeBagli: false };
   formDiyalogu({
     baslik: `“${aday.ortakAkis.ad}” ekranlara eklensin`, ikonAd: 'pusula', dugme: 'Devam',
     aciklama: 'Seçilen ekranların varsayılan akışının sonuna eklenir. Ekranlar ortak akışın hep son sürümüyle koşar.',
@@ -518,17 +520,18 @@ async function ortakAkisiEkranlaraEkle(proje, ortak, yeniden) {
           h('label', {}, kutu, h('b', {}, x.ad), h('span', { class: 'kucuk cok-soluk' }, ` · ${x.varsayilanAkis} · ${x.senaryoSayisi} senaryo`)),
           x.eklenebilir ? null : h('div', { class: 'kucuk cok-soluk' }, x.neden))))
         : h('p', { class: 'soluk' }, 'Projede ekran yok.'),
-      h('label', { class: 'onay-satiri' }, istegeBagli, h('span', {}, 'İsteğe bağlı: yalnızca senaryoda “… dahil” işaretlenirse koşar (mevcut senaryolar etkilenmez)'))
+      ortakCalismaSecimi(secim, () => {}, aday.ortakAkis.ad)
     ],
     gonder: async () => {
       const ekranIdleri = kutular.filter(({ kutu }) => kutu.checked).map(({ x }) => x.id);
       if (!ekranIdleri.length) throw new Error('En az bir ekran seçin.');
-      const govde = { projeId: proje.id, ekranId: ortak.id, ekranIdleri, istegeBagli: istegeBagli.checked };
+      const govde = { projeId: proje.id, ekranId: ortak.id, ekranIdleri, istegeBagli: secim.istegeBagli === true, dahilVarsayilan: secim.dahilVarsayilan === true };
       const on = await api('/platform/ortak-akis/ekle', { govde });
       const toplam = on.etki.ekranlar.reduce((n, x) => n + x.senaryoSayisi, 0);
       const onay = await onayIste({
         baslik: `“${on.etki.ortakAkis}” ${on.etki.ekranlar.length} ekrana eklensin mi?`,
-        metin: `${on.etki.istegeBagli ? 'İsteğe bağlı eklenir: mevcut senaryolar değişmez; koşması için senaryoda işaretlenir.' : `Varsayılan akıştaki senaryolar (${toplam}) sonraki koşularında ortak akışı da koşar.`} Her ekranın yeni model sürümü açılır.`,
+        // Seçim tekrarlanır (ör. "“Çıkış”: isteğe bağlı, yeni senaryolarda dahil değil").
+        metin: `“${on.etki.ortakAkis}”: ${ortakSecimMetni(on.etki)}. ${on.etki.istegeBagli ? 'Mevcut senaryolar değişmez; koşması için senaryo formunda “… dahil” anahtarı açılır.' : `Varsayılan akıştaki senaryolar (${toplam}) sonraki koşularında ortak akışı da koşar.`} Her ekranın yeni model sürümü açılır.`,
         liste: on.etki.ekranlar.map((x) => `${x.ad} · ${x.akis} · ${x.senaryoSayisi} senaryo`), dugme: 'Ekle', tehlikeli: false, ikonAd: 'uyari'
       });
       if (!onay) return false;

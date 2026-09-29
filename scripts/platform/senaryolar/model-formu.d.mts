@@ -57,12 +57,15 @@ export interface FormSemasi {
   baslik: string;
   adimlar: Array<{
     id: string; baslik: string; sira: number; ayar: string | null;
+    /** Ortak akış adımıysa ortak akışın adı (formda "her senaryoda çalışır" / "“…” dahil" bilgisi). */
+    ortakAkis?: string;
     /** Adımın çözülmüş görünürlük ifadesi (koşullu adım; ör. ortak akış "dahil" ve "ödeme şekli = kart"). */
     kosul?: Record<string, unknown>;
     bolumler: Array<{ id: string; baslik: string; gorunurlukVar: boolean; alanlar: FormAlani[] }>;
   }>;
   senaryoAlanlari: FormAlani[];
-  adimKapsami: Array<{ ayar: string; alanId: string; etiket: string; adimlar: string[]; zorunlu: boolean }>;
+  /** varsayilanDahil: yeni senaryoda anahtarın başlangıç değeri (akış diyagramında "Yeni senaryolarda: dahil"). */
+  adimKapsami: Array<{ ayar: string; alanId: string; etiket: string; adimlar: string[]; zorunlu: boolean; varsayilanDahil: boolean }>;
   beklenenSonuc: {
     anahtar: string; etiket: string; varyantlar: string[]; basariTipi: string; hataTipi: string | null;
     adimAnahtari: string | null; adimEtiketi: string | null; adimlar: FormSecenegi[];
@@ -94,7 +97,8 @@ export declare function kimlikTuruBul(alan: KimlikAlani, degerler: FormDegerleri
 export declare function kimlikAnahtariBul(alan: KimlikAlani, tur: string | null): string | null;
 export declare function profilHavuzuBul(alan: KimlikAlani, degerler: FormDegerleri, sema: FormSemasi): string | null;
 export declare function secenekleriBul(alan: SecimAlani, degerler: FormDegerleri, sema: FormSemasi): FormSecenegi[];
-export declare function formDegerleriniKur(sema: FormSemasi, veri?: Record<string, unknown>): FormDegerleri;
+/** secenekler.yeni: yeni senaryo — isteğe bağlı blokların "dahil" anahtarı modelin varsayılanıyla başlar. */
+export declare function formDegerleriniKur(sema: FormSemasi, veri?: Record<string, unknown>, secenekler?: { yeni?: boolean }): FormDegerleri;
 export declare function senaryoNesnesiOlustur(
   sema: FormSemasi,
   degerler: FormDegerleri,

@@ -2081,6 +2081,23 @@ dialog.kapat-diyalogu { width: min(38rem, calc(100vw - 2rem)); overflow: auto; }
 
 /* Akış tasarımı: ortak akış bloğunun adımları */
 .ortak-akis-adimlari { margin: 4px 0 6px 18px; padding: 0; }
+/* Ortak akışın çalışma seçimi (akış diyagramı bloğu, "Ekranlara ekle"): her senaryoda / isteğe bağlı + yeni senaryolarda dahil mi */
+.ortak-calisma-secimi, .ortak-varsayilan { border: 0; margin: 6px 0 0; padding: 0; min-width: 0; display: grid; gap: 6px; }
+.ortak-calisma-secimi > legend, .ortak-varsayilan > legend { padding: 0; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--metin-2); }
+.ortak-varsayilan { margin-top: 4px; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.ortak-secenekler { display: grid; gap: 4px; min-width: 0; }
+.ortak-secenekler.yatay { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.ortak-secenek { display: flex; align-items: flex-start; gap: 8px; margin: 0; min-height: 32px; cursor: pointer; font-size: 12.5px; min-width: 0; }
+.ortak-secenek input { margin-top: 3px; flex: none; }
+.ortak-secenek > span { display: grid; gap: 1px; min-width: 0; overflow-wrap: anywhere; }
+.ortak-secenek b { font-weight: 560; }
+.ortak-blok-ozeti { display: grid; gap: 4px; margin: 4px 0 8px; min-width: 0; }
+.ortak-blok-ozeti li { overflow-wrap: anywhere; }
+/* Senaryo formu: isteğe bağlı adım anahtarının etiketi uzun olabilir ("“…” dahil"); dar ekranda alta iner */
+.adim-karti > .adim-basligi { flex-wrap: wrap; }
+.adim-karti > .adim-basligi > div:not(.sag) { min-width: 0; flex: 1 1 160px; }
+.adim-karti > .adim-basligi .sag { flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
+.kapsam-anahtari > span { overflow-wrap: anywhere; }
 
 /* Ekranlar: ortak akışlar bölümü */
 .ortak-akis-bolumu { margin-top: 18px; }

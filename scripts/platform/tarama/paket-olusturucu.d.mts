@@ -162,7 +162,7 @@ export type KayitAdimi = {
   /** "Tekrar denenebilir" işareti (akış tasarımı; kosu.tekrarDenenebilir — kurtarma kuralı adımı tekrar deneyebilir). */
   tekrarDenenebilir?: boolean;
   /** Ortak akış adımı (akış tasarımında "+ > Ortak akış"): alanı yoktur; istegeBagli ise senaryoda "“ad” dahil" ile seçilir. */
-  ortakAkis?: { dosya: string; istegeBagli: boolean };
+  ortakAkis?: { dosya: string; istegeBagli: boolean; dahilVarsayilan?: boolean };
   /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */
   sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi;
   /** İndirilen dosyayı doğrulama adımı (akış tasarımında "+ > Dosya doğrula"): alanı yoktur; modelde adımın dosyaKontrolu olur. */

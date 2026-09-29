@@ -138,7 +138,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const sema = formSemasiOlustur(baglam.model, baglam.altModeller);
   // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
   const onceki = s.taslak?.veri || senaryo?.veri || undefined;
-  const degerler = formDegerleriniKur(sema, onceki || {});
+  // Yeni senaryo: isteğe bağlı ortak akışların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
+  const degerler = formDegerleriniKur(sema, onceki || {}, { yeni: !onceki });
   let baslikDegeri = s.taslak ? s.taslak.baslik : senaryo ? senaryo.baslik : '';
   // Akış değişince (s.taslak) kaydedilmemiş ortam / koşuda / mutlaka görünmeli seçimleri de taşınır.
   const ortamSecimi = new Set(s.taslak?.ortamlar ?? (senaryo ? senaryo.ortamlar.filter((o) => s.ortamlar.some((x) => x.id === o)) : [s.ortam.id]));
@@ -555,7 +556,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       if (!kart) continue;
       const disarida = g.adimlar[adim.id] === false;
       kart.el.classList.toggle('kapsam-disi', disarida);
-      kart.alt.textContent = disarida ? 'Bu senaryoda koşulmaz (adım kapsamı dışında)' : kart.altMetin;
+      kart.alt.textContent = !disarida ? kart.altMetin
+        : adim.ayar && degerler[adim.ayar] !== true ? `Koşulmaz: ${kapsamEtiketi(adim)} kapalı` : 'Bu senaryoda koşulmaz (adım kapsamı dışında)';
     }
     for (const [id, kap] of bolumKaplari) kap.hidden = g.bolumler[id] === false;
     for (const [id, cip] of bolumCipleri) {
@@ -1007,6 +1009,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   }
 
   // --- Adımlar ----------------------------------------------------------------------------
+  // İsteğe bağlı adım grubunun anahtarı: görünen metni grubun etiketi (ör. "“Çıkış” dahil"); gruptaki her adımda aynı değer.
   function kapsamAnahtari(adim) {
     const grup = sema.adimKapsami.find((k) => k.ayar === adim.ayar);
     const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: degerler[adim.ayar] === true, 'aria-label': `${grup ? grup.etiket : adim.baslik}` });
@@ -1015,13 +1018,18 @@ function modelFormu(icerik, s, senaryo, baglam) {
       for (const k of adimAkisi.querySelectorAll(`input[data-ayar="${CSS.escape(adim.ayar)}"]`)) k.checked = kutu.checked;
     });
     kutu.dataset.ayar = adim.ayar;
-    return h('label', { class: 'kapsam-anahtari', title: grup ? `${grup.etiket} (${grup.adimlar.length} adım)` : '' }, kutu, 'Dahil');
+    return h('label', { class: 'kapsam-anahtari', title: grup ? `${grup.etiket} (${grup.adimlar.length} adım)` : '' }, kutu, h('span', {}, grup ? grup.etiket : 'Dahil'));
   }
+  /** İsteğe bağlı adımın grubunun etiketi (ör. "“Çıkış” dahil"). @param {{ ayar: string | null }} adim */
+  const kapsamEtiketi = (adim) => sema.adimKapsami.find((k) => k.ayar === adim.ayar)?.etiket ?? 'Dahil';
 
   const adimAkisi = h('div', { class: 'adim-akisi' });
   sema.adimlar.forEach((adim, i) => {
     const alanSayisi = adim.bolumler.reduce((t, b) => t + b.alanlar.length, 0);
-    const altMetin = adim.ayar ? `İsteğe bağlı adım${alanSayisi ? ` · ${alanSayisi} alan` : ''}` : alanSayisi ? `${alanSayisi} alan` : 'Bu adımda senaryoya özel alan yok';
+    // Ortak akış adımı: isteğe bağlıysa anahtar (başlıkta), her senaryoda çalışıyorsa yalnız bilgi rozeti.
+    const ortakOnEki = adim.ortakAkis ? `“${adim.ortakAkis}” ortak akışı · ` : '';
+    const altMetin = adim.ayar ? `${ortakOnEki}İsteğe bağlı adım${alanSayisi ? ` · ${alanSayisi} alan` : ''}`
+      : `${ortakOnEki}${alanSayisi ? `${alanSayisi} alan` : 'Bu adımda senaryoya özel alan yok'}`;
     const alt = h('small', {}, altMetin);
     const govde = h('div', { class: 'adim-govdesi' });
     for (const bolum of adim.bolumler) {
@@ -1040,7 +1048,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     const el = h('section', { class: `kart adim-karti ${alanSayisi ? '' : 'bos'}`.trim(), 'aria-labelledby': `adim-${adim.id}` },
       h('div', { class: 'adim-basligi' }, h('span', { class: 'adim-no', 'aria-hidden': 'true' }, String(i + 1)),
         h('div', {}, h('h3', { id: `adim-${adim.id}` }, adim.baslik), alt),
-        adim.ayar ? h('div', { class: 'sag' }, kapsamAnahtari(adim)) : null),
+        adim.ayar ? h('div', { class: 'sag' }, kapsamAnahtari(adim))
+          : adim.ortakAkis ? h('div', { class: 'sag' }, rozet('her senaryoda çalışır', 'basari', { title: `“${adim.ortakAkis}” ortak akışı bu akışta her senaryoda çalışır (akış diyagramında “İsteğe bağlı” seçilirse burada “… dahil” anahtarı çıkar).`, 'data-ortak-durumu': 'her-zaman' })) : null),
       govde);
     adimKartlari.set(adim.id, { el, alt, altMetin, govde, alanSayisi });
     adimAkisi.append(el);
@@ -1629,7 +1638,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       degerYaz(adim.ayar, kutu.checked);
       for (const k of adimAkisi.querySelectorAll(`input[data-ayar="${CSS.escape(adim.ayar)}"]`)) k.checked = kutu.checked;
     });
-    return h('label', { class: 'kapsam-anahtari' }, kutu, 'Bu senaryoda dahil');
+    return h('label', { class: 'kapsam-anahtari' }, kutu, h('span', {}, `Bu senaryoda: ${kapsamEtiketi(adim)}`));
   }
   /** Beklenen hatayı bu adıma kurar ve beklenen sonucun düzenleme alanını açar (mesaj orada yazılır / seçilir). */
   function buradaHataBekle(adimId) {

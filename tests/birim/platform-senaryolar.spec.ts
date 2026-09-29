@@ -211,7 +211,7 @@ test.describe('Model tabanlı form — şema', () => {
   });
 
   test('isteğe bağlı adımlar = adım kapsamı; beklenen sonuç varyantları ve adım seçenekleri', () => {
-    expect(sema.adimKapsami).toEqual([{ ayar: 'onayAdimiDahil', alanId: 'onayAdimiDahil', etiket: 'Onay adımını dahil et', adimlar: ['onay', 'odeme'], zorunlu: true }]);
+    expect(sema.adimKapsami).toEqual([{ ayar: 'onayAdimiDahil', alanId: 'onayAdimiDahil', etiket: 'Onay adımını dahil et', adimlar: ['onay', 'odeme'], zorunlu: true, varsayilanDahil: false }]);
     expect(sema.adimlar.filter((a) => a.ayar).map((a) => a.id)).toEqual(['onay', 'odeme']);
     expect(sema.beklenenSonuc).toMatchObject({ anahtar: 'beklenenSonuc', basariTipi: 'basarili', hataTipi: 'isKuraliHatasi', adimAnahtari: 'adim', mesajAnahtari: 'mesaj' });
     expect(sema.beklenenSonuc?.adimlar.map((s) => s.deger)).toEqual(['hesaplama', 'onay', 'odeme']);

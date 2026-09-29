@@ -26,8 +26,8 @@ export declare function ortakAkisAdaylari(vt: Veritabani, projeId: string, ortak
   ortakAkis: { id: string; ad: string; dosya: string };
   ekranlar: Array<{ id: string; ad: string; varsayilanAkis: string; senaryoSayisi: number; kullananAkislar: string[]; eklenebilir: boolean; neden: string | null }>;
 };
-export declare function ortakAkisEkranlaraEkle(vt: Veritabani, projeId: string, ortakEkranId: string, g: { ekranIdleri: unknown; istegeBagli?: boolean; onay?: boolean }):
-  { etki: { ortakAkis: string; istegeBagli: boolean; ekranlar: Array<{ id: string; ad: string; akis: string; senaryoSayisi: number }> } }
+export declare function ortakAkisEkranlaraEkle(vt: Veritabani, projeId: string, ortakEkranId: string, g: { ekranIdleri: unknown; istegeBagli?: boolean; dahilVarsayilan?: boolean; onay?: boolean }):
+  { etki: { ortakAkis: string; istegeBagli: boolean; dahilVarsayilan: boolean; ekranlar: Array<{ id: string; ad: string; akis: string; senaryoSayisi: number }> } }
   | { eklenen: Array<{ id: string; ad: string; surum: number }> };
 export declare function akisTasarimi(vt: Veritabani, projeId: string, ekranId: string, s: { akisId?: string | null; kopya?: string | null }): {
   ekran: { id: string; anahtar: string; ad: string }; bloklar: AkisBlogu[]; palet: AkisPaleti; ortakAkislar: OrtakAkisOzeti[]; ortakAkis: boolean; kullananlar?: OrtakAkisKullanani[];
