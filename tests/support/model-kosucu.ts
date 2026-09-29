@@ -27,7 +27,7 @@ import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/p
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
-  YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, gizliDegerleriMaskele, modelKosuPlani, secenekBul, veriHatalariMetni, yasakDesenleri, yasakliAdresMesaji,
+  YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, gizliDegerleriMaskele, modelKosuPlani, planHatasiMetni, secenekBul, veriHatalariMetni, yasakDesenleri, yasakliAdresMesaji,
   yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanBasariGostergesi, type PlanKosuTanimi
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { girisKokenleri, type GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
@@ -1026,7 +1026,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   const plan = modelKosuPlani(s.model, s.veri, {
     altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli, kimlikProfilleri: ortam.veri.kimlikProfilleri ?? {}, ...(ortam.simdi ? { simdi: ortam.simdi() } : {})
   });
-  if (plan.hatalar.length) throw new Error(`"${s.baslik}" model koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
+  // Tek cümlelik gerekçe (arayüzün "Neden çalışmıyor?" metniyle aynı; senaryolar/hazirlik.mjs).
+  if (plan.hatalar.length) throw new Error(planHatasiMetni(s.baslik, plan.hatalar));
   testInfo.annotations.push({ type: 'urun', description: s.ekran.ad || 'Diğer' });
 
   // Model "giriş gerekmez" diyorsa (ekran girişsiz açılır; akış kaydı/tarama "Giriş yapmadan aç") ya da senaryonun giriş

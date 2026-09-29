@@ -186,6 +186,8 @@ async function ekranAdiminiKos(vt, projeId, g) {
     let durum;
     let neden = '';
     if (govde.basarili === false) { durum = 'hata'; neden = maskele(govde.mesaj ?? 'Ekran koşusu başlatılamadı.'); }
+    // Hazırlığı eksik ekran senaryosu koşuya alınmaz: adım "hata" (çalıştırılamadı), gerekçe cümlesiyle.
+    else if (govde.durum === 'calistirilamadi') { durum = 'hata'; neden = maskele(govde.hataMesaji ?? 'Senaryonun hazırlığı eksik.'); }
     else if (govde.durum === 'passed') durum = 'basarili';
     else if (govde.durum === 'iptal') { durum = 'durduruldu'; neden = 'kullanıcı durdurdu'; }
     else { durum = 'basarisiz'; neden = maskele(govde.hataMesaji ?? govde.mesaj ?? `ekran senaryosu: ${govde.durum ?? 'sonuç yok'}`); }

@@ -1100,7 +1100,8 @@ async function kosuDetayi(icerik, id, proje) {
     class: [alt ? 'veri-kosusu-alt' : '', x.durum === 'basarisiz' ? 'kalan-satir' : ''].join(' ').trim() || null, hidden: alt ? true : null,
     'data-kalip': x.hataKalibi || null
   },
-    h('td', {}, durumRozeti(x.durum)),
+    // Hazırlığı eksik (koşuya alınmadı): "Çalıştırılamadı" + gerekçe (atlananlar içinde sayılır).
+    h('td', {}, x.hamDurum === 'calistirilamadi' ? rozet('Çalıştırılamadı', 'atlanan', { title: 'Hazırlığı eksik: koşuya alınmadı (gerekçe test ayrıntısında)' }) : durumRozeti(x.durum)),
     h('td', {}, x.urun, x.ekranDurumu === 'silindi' || x.ekranDurumu === 'devre_disi' ? [' ', ekranDurumRozeti(x.ekranDurumu)] : null),
     h('td', {}, h('a', { href: `#/sonuclar/sonuc/${encodeURIComponent(x.id)}` }, alt && x.veriKosusu && x.veriKosusu.ad ? x.veriKosusu.ad : x.senaryoBaslik)),
     h('td', { class: 'sayi' }, sureMetni(x.sureMs)),
@@ -1204,7 +1205,8 @@ async function kosuDetayi(icerik, id, proje) {
       ozetKarti('Atlanan', kosu.atlanan, 'atlanan'), ozetKarti('Durduruldu', kosu.durduruldu, 'durduruldu'),
       h('div', { class: 'sonuc-karti oran' }, h('span', { class: 'kart-etiket' }, 'Başarı oranı'),
         h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, o === null ? '—' : `%${o}`)), dagilimCubugu(kosu, '100%'))),
-    h('p', { class: 'kart-kaynak' }, `${kosu.basarili} başarılı, ${kosu.basarisiz} başarısız, ${kosu.atlanan} atlanan, ${kosu.durduruldu} durduruldu`),
+    h('p', { class: 'kart-kaynak' }, `${kosu.basarili} başarılı, ${kosu.basarisiz} başarısız, ${kosu.atlanan} atlanan, ${kosu.durduruldu} durduruldu`,
+      kosu.calistirilamadi ? `; atlananlardan ${kosu.calistirilamadi} senaryo hazırlığı eksik olduğu için koşuya alınmadı (Çalıştırılamadı)` : ''),
     h('section', { class: 'kart', 'aria-labelledby': 'senaryo-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-basligi' }, ikon('liste'), `Senaryolar (${sonuclar.length})`),
         h('span', { class: 'alt' }, 'Başarısızlar önce; bir senaryoya tıklayınca test ayrıntısı açılır; hata kalıbına tıklayınca yalnız o kalıptaki testler'),

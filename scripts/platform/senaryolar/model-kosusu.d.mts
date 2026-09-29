@@ -129,3 +129,6 @@ export declare function yuklemeDosyasiYolu(
 export declare function gizliDegerleriMaskele(metin: string, gizliler: ReadonlyArray<unknown>): string;
 /** Çözülemeyen tablo başvuruları → koşuyu durduran hata metni. */
 export declare function veriHatalariMetni(baslik: string, hatalar: ReadonlyArray<{ alan: string; mesaj: string }>): string;
+export declare function planHatasiMetni(baslik: string, hatalar: ReadonlyArray<string>): string;
+export declare const CALISTIRILAMADI: 'calistirilamadi';
+export declare function kosuEngeli(s: { model: unknown; veri: Record<string, unknown>; altModeller?: Record<string, unknown>; mutlakaGorunmeli?: string[]; veriHatalari?: ReadonlyArray<{ alan: string; mesaj: string }> }): string | null;

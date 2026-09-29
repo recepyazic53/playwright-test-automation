@@ -197,7 +197,9 @@ function kosuOzetiHesapla(vt, kosuId) {
   for (const s of vt.tumu('SELECT durum, COUNT(*) AS n FROM kosu_sonuclari WHERE kosu_id = ? GROUP BY durum', [kosuId])) {
     if (String(s.durum) in ozet) ozet[/** @type {keyof typeof ozet} */ (String(s.durum))] = Number(s.n);
   }
-  return ozet;
+  // Hazırlığı eksik olduğu için koşuya alınmayan senaryolar (atlananların içinde; ham durum "calistirilamadi"): koşu kaydında ayrıca.
+  const n = Number(vt.tek("SELECT COUNT(*) AS n FROM kosu_sonuclari WHERE kosu_id = ? AND ham_durum = 'calistirilamadi'", [kosuId])?.n ?? 0);
+  return n ? { ...ozet, calistirilamadi: n } : ozet;
 }
 
 /**
@@ -430,7 +432,7 @@ export function kosuDetayi(vt, kosuId) {
       id: String(k.id), projeId: k.proje_id == null ? null : String(k.proje_id), ortamId: k.ortam_id == null ? null : String(k.ortam_id),
       tur: String(k.tur), kapsam: k.kapsam == null ? null : String(k.kapsam), durum: String(k.durum), baslangic: String(k.baslangic),
       bitis: k.bitis == null ? null : String(k.bitis), kaynak: String(k.kaynak ?? 'raporlayici'),
-      ...sayilariTopla([kosuOzetiHesapla(vt, kosuId)]),
+      ...(() => { const o = kosuOzetiHesapla(vt, kosuId); return { ...sayilariTopla([o]), calistirilamadi: /** @type {any} */ (o).calistirilamadi ?? 0 }; })(),
       // "Tekrar: <önceki koşu>" (kaynak koşu silinmişse yalnız kimlik) ve bu koşunun tekrarları.
       tekrarKaynagi: tekrarKaynagi ? { id: tekrarKaynagi, baslangic: kaynak ? String(kaynak.baslangic) : null, bitis: kaynak?.bitis == null ? null : String(kaynak.bitis), var: Boolean(kaynak) } : null,
       tekrarlar

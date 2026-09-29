@@ -210,6 +210,8 @@ import {
   sahipsizSenaryoDosyalariniTemizle, senaryoDosyasiBilgisi, senaryoDosyasiEkle
 } from './dosyalar/senaryo-dosyalari.mjs';
 import { formSemasiOlustur, tumFormAlanlari } from './senaryolar/model-formu.mjs';
+import { listeHazirliklari, senaryoHazirligi } from './senaryolar/hazirlik-servisi.mjs';
+import { ORTAM_DENETIM_UCU, ortamBaglantisiniDenetle, ortamDenetimSonucu } from './senaryolar/ortam-denetimi.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, GIRIS_ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
@@ -1280,9 +1282,23 @@ const GET_UCLARI = new Map([
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     // ortamId verilmezse BİRLEŞİK liste (tüm senaryolar; satırda ortam başına tanım / Koşuda / son sonuç).
     const ham = q.get('ortamId');
-    if (ham === null || ham === '') return { ortamId: null, ...senaryoListesi(db, projeId, null) };
+    // Hazırlık (senaryolar/hazirlik-servisi.mjs): ortam başına çalıştırılabilir mi + tek cümlelik neden (istek atılmaz).
+    if (ham === null || ham === '') { const l = senaryoListesi(db, projeId, null); listeHazirliklari(db, projeId, l.senaryolar, null); return { ortamId: null, ...l }; }
     const ortamId = ortamSec(db, projeId, ham);
-    return { ortamId, ...senaryoListesi(db, projeId, ortamId) };
+    const l = senaryoListesi(db, projeId, ortamId);
+    listeHazirliklari(db, projeId, l.senaryolar, ortamId);
+    return { ortamId, ...l };
+  }],
+  // Tek senaryonun hazırlık maddeleri (koşu diyaloğu): test verisi, gönderme eylemi, beklenen sonuç ve neden. İstek atılmaz.
+  ['/platform/senaryo/hazirlik', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    return { hazirlik: senaryoHazirligi(db, projeId, kimlikAl(q.get('id')), ortamSec(db, projeId, q.get('ortamId'))) };
+  }],
+  // Ortam bağlantısı denetiminin saklanan son sonucu (10 dk; senaryolar/ortam-denetimi.mjs). İSTEK ATMAZ.
+  ['/platform/ortam/denetim', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    const servisId = q.get('servisId');
+    return { denetim: ortamDenetimSonucu(projeId, kimlikAl(q.get('ortamId'), 'ortamId'), servisId ? kimlikAl(servisId, 'servisId') : null) };
   }],
   ['/platform/senaryo', (db, q) => {
     const id = kimlikAl(q.get('id'));
@@ -1881,6 +1897,8 @@ const POST_UCLARI = new Map([
 ]);
 // Servis testleri (servisler/servis-uclari.mjs): ekran uçlarından ayrı; aynı belirteç / kasa kuralları.
 for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
+// Ortam bağlantısı denetimi: YALNIZ kullanıcı "Denetle"ye basınca tek GET (izin + CANLI onayı uçta: uc-denetimi.mjs).
+POST_UCLARI.set(ORTAM_DENETIM_UCU, async (db, g) => ({ denetim: await ortamBaglantisiniDenetle(db, g) }));
 for (const [yol, islem] of KURTARMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of AKIS_SENARYO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of UCTAN_UCA_POST_UCLARI) POST_UCLARI.set(yol, islem);

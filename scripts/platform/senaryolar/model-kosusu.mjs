@@ -15,6 +15,7 @@
 import { bilerekBosAnahtarlari, gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { formDegerleriniKur, formSemasiOlustur, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul, tumFormAlanlari } from './model-formu.mjs';
 import { VARSAYILAN_TARIH_BICIMI, goreliIfadeKanonik, goreliTarihCoz } from './goreli-tarih.mjs';
+import { NEDENLER, calistirilamazCumlesi, eylemDenetimi, hazirlikOzeti } from './hazirlik.mjs';
 
 /** Model senaryolarını üreten spec dosyası (Playwright testDir'e göre göreli yol). */
 export const MODEL_SPEC_DOSYASI = 'model-kosucu/model-senaryolari.spec.ts';
@@ -138,6 +139,45 @@ export function veriHatalariMetni(baslik, hatalar) {
   return `"${baslik}": senaryonun test verisi başvurusu çözülemedi — ${hatalar.map((h) => h.mesaj).join(' ')} Tabloyu Test verisi sayfasında tamamlayın ya da senaryoda başka bir değer seçin. Tarayıcı açılmadı.`;
 }
 
+/**
+ * Koşu planı kurulamayan senaryonun hata metni: tek cümlelik gerekçe (hazirlik.mjs > calistirilamazCumlesi; arayüzün "Neden
+ * çalışmıyor?" metniyle aynı).
+ * @param {string} baslik @param {ReadonlyArray<string>} hatalar modelKosuPlani(...).hatalar
+ */
+export function planHatasiMetni(baslik, hatalar) {
+  return `"${baslik}": ${calistirilamazCumlesi(hatalar) ?? 'Bu senaryo çalıştırılamıyor.'} Tarayıcı açılmadı.`;
+}
+
+/** Sonuç kaydında hazırlığı eksik (koşuya alınmayan) testin ham durumu ve annotation türü. */
+export const CALISTIRILAMADI = 'calistirilamadi';
+
+/**
+ * KOŞUYA ALINMAMA GEREKÇESİ (planlı koşu, komut satırı ve sunucunun koşu ucu — hepsi model spec'inden geçer): senaryonun kesin
+ * engelleri (hazirlik.mjs; senaryo listesi ve Koşuyu başlat penceresiyle AYNI kurallar ve AYNI cümle): model yok, koşu planı
+ * kurulamıyor (ör. beklenen hata mesajı yok, ortak akış eksik), gönderme düğmesi yok, beklenen sonuç (başarı göstergesi) yok, test
+ * verisi çözülemedi. Engel yoksa null. Test "Çalıştırılamadı" olarak kaydedilir (atlanan gibi sayılır; başarısız ya da geçti değil).
+ * @param {{ model: any; veri: Record<string, unknown>; altModeller?: Record<string, any>; mutlakaGorunmeli?: string[];
+ *   veriHatalari?: ReadonlyArray<{ alan: string; mesaj: string }> }} s
+ * @returns {string | null}
+ */
+export function kosuEngeli(s) {
+  if (!nesneMi(s.model)) return calistirilamazCumlesi([NEDENLER.modelYok]);
+  /** @type {string[]} */
+  const nedenler = [];
+  if (s.veriHatalari?.length) nedenler.push(NEDENLER.veriEksik(s.veriHatalari[0].mesaj));
+  let plan;
+  try {
+    plan = modelKosuPlani(s.model, s.veri ?? {}, { altModeller: s.altModeller ?? {}, mutlakaGorunmeli: s.mutlakaGorunmeli ?? [] });
+  } catch {
+    return nedenler.length ? calistirilamazCumlesi(nedenler) : null;
+  }
+  const e = eylemDenetimi(s.model, {
+    adimDahil: Object.fromEntries(plan.adimlar.map((a) => [a.id, a.dahil])),
+    beklenen: plan.beklenen.tur === 'hata' ? { tur: 'hata', adim: plan.beklenen.adim, mesaj: plan.beklenen.mesaj } : { tur: 'basari' }
+  });
+  return hazirlikOzeti([e.gonderme, e.beklenen], [...nedenler, ...plan.hatalar, ...e.engeller]).neden;
+}
+
 /** Yasaklı host'a giden koşunun hata metni (host yazılır; adresin yolu/sorgusu yazılmaz). @param {string} adres @param {string} kalip */
 export function yasakliAdresMesaji(adres, kalip) {
   let host = '?';
@@ -201,8 +241,9 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
     if (nesneMi(kayit) && typeof kayit.tip === 'string' && kayit.tip !== bs.basariTipi) {
       const adim = bs.adimAnahtari ? String(kayit[bs.adimAnahtari] ?? '') : '';
       const mesaj = bs.mesajAnahtari ? String(kayit[bs.mesajAnahtari] ?? '').trim() : '';
-      if (!adim) hatalar.push('Beklenen iş kuralı hatasının adımı yok.');
-      if (!mesaj) hatalar.push('Beklenen iş kuralı hatasının mesajı yok.');
+      // Gerekçe parçaları tek kaynaktan (hazirlik.mjs): koşucu ve arayüz aynı cümleyi yazar (planHatasiMetni).
+      if (!adim) hatalar.push(NEDENLER.hataAdimiYok);
+      if (!mesaj) hatalar.push(NEDENLER.hataMesajiYok);
       // Akıştaki uyarılardan birden çoğu seçildiyse (mesajlar): herhangi biri görünürse beklenen sonuç sağlanır.
       const liste = Array.isArray(kayit.mesajlar) ? kayit.mesajlar.filter((m) => typeof m === 'string' && m.trim()).map((m) => m.trim()) : [];
       beklenen = { tur: 'hata', adim, mesaj, mesajlar: liste.length ? [...new Set([mesaj, ...liste].filter(Boolean))] : [mesaj] };
@@ -309,7 +350,7 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
         alanlar.push({ ...planAlani(alan, t.deger), ...(t.goreliIfade ? { goreliIfade: t.goreliIfade, tarihBicimi: t.bicim } : {}) });
       }
     }
-    if (dahil && typeof adim.eksikOrtakAkis === 'string') hatalar.push(`"${adim.baslik || adim.id}" adımının ortak akışı ("${adim.eksikOrtakAkis}") bu projede bulunamadı.`);
+    if (dahil && typeof adim.eksikOrtakAkis === 'string') hatalar.push(NEDENLER.ortakAkisYok(String(adim.baslik || adim.id), adim.eksikOrtakAkis));
     return {
       id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, dahil, alanlar, kosu: nesneMi(adim.kosu) ? adim.kosu : null, sonAdim: false,
       // Ortak akıştan açılan adım: "yalnızca test ortamı" (koşucu canlı ortamda atlar) ve ortak akışın adı (raporda).
@@ -338,8 +379,8 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
   let son;
   if (beklenen.tur === 'hata') {
     son = adimlar.find((a) => a.id === beklenen.adim);
-    if (!son) hatalar.push(`Beklenen hata adımı "${beklenen.adim}" modelde yok.`);
-    else if (!son.dahil) hatalar.push(`Beklenen hata adımı "${son.baslik}" bu senaryonun adım kapsamında değil.`);
+    if (!son) { if (beklenen.adim) hatalar.push(NEDENLER.hataAdimiModeldeYok(beklenen.adim)); }
+    else if (!son.dahil) hatalar.push(NEDENLER.hataAdimiKapsamDisi(son.baslik));
   } else {
     son = adimlar.filter((a) => a.dahil).pop();
   }

@@ -429,6 +429,8 @@ export default class PlatformRaporlayici {
     const hataMesaji = ansiTemizle(result.error?.message
       ?? (result.errors ?? []).map((e) => e.message ?? e.value ?? '').filter(Boolean).join('\n\n')) || null;
     const durum = playwrightDurumuEsle(result.status, hataMesaji, test.expectedStatus);
+    // Hazırlığı eksik (koşuya alınmayan) test: atlanan gibi sayılır; ham durum "calistirilamadi", hata metni gerekçe cümlesi.
+    const calistirilamadi = durum === 'atlanan' && aciklama.has('calistirilamadi') ? String(aciklama.get('calistirilamadi')) : null;
     const adimlar = (result.steps ?? [])
       .filter((a) => a.category === 'test.step' && !adimGurultuMu(a.title))
       .map((a) => ({
@@ -473,7 +475,7 @@ export default class PlatformRaporlayici {
       await baglam.yazici.sonucKaydet({
         kosuId, projeId: baglam.projeId, testKimligi: test.id, senaryoAnahtari: `${dosya}::${test.title}`,
         senaryoId: aciklama.get('senaryoId') ?? null, senaryoBaslik: test.title, urunAdi: aciklama.get('urun') ?? null,
-        durum, hamDurum: result.status, sureMs: result.duration, hataMesaji, beklenenSonuc: aciklama.get('beklenenSonuc') ?? null,
+        durum, hamDurum: calistirilamadi ? 'calistirilamadi' : result.status, sureMs: result.duration, hataMesaji: calistirilamadi ?? hataMesaji, beklenenSonuc: aciklama.get('beklenenSonuc') ?? null,
         atlananAlanlar: atlanan, deneme: result.retry,
         // Koşuda yakalanan mesajlar (tests/support/mesaj-yakalayici.ts; maskeli): geçen testlerde de.
         yakalananMesajlar: yakalananMesajlariAyristir(aciklama.get('yakalananMesajlar') ?? '[]'),
