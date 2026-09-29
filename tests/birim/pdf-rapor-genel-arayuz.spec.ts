@@ -114,16 +114,18 @@ test('diyalog: "Genel" etkin; seçildiğinde öğe seçimi gizlenir, açıklama 
   const cerceve = page.frameLocator('iframe.pdf-rapor-onizleme');
   await expect(cerceve.getByRole('heading', { name: /Genel Rapor — Tüm Proje/ })).toBeVisible();
   await expect(cerceve.getByRole('heading', { name: /Servis akışları ve uçtan uca akışlar/ })).toBeVisible();
-  const [indirme] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), d.getByRole('button', { name: 'PDF indir' }).click()]);
-  expect(indirme.suggestedFilename()).toMatch(/^nobetci-rapor-genel-tum-proje-\d{4}-\d{2}-\d{2}\.pdf$/);
-  expect(readFileSync(await indirme.path()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
-  await expect(d.getByRole('status')).toContainText("Raporlar'a kaydedildi");
-  // Tek ekrana dönülünce seçim listesi geri gelir, açıklama gizlenir.
+  // Tek ekrana dönülünce seçim listesi geri gelir, açıklama gizlenir; Genel'e geri dönülür.
   await d.getByRole('radio', { name: 'Tek ekran' }).check();
   await expect(d.getByLabel('Ekran', { exact: true })).toBeVisible();
   await expect(not).toBeHidden();
-  await d.getByRole('button', { name: 'Vazgeç' }).click();
+  await genel.check();
+  await expect(not).toBeVisible();
+  // PDF indir ve kaydet: indirme sonrası pencere kapanır, bildirim görünür.
+  const [indirme] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), d.getByRole('button', { name: 'PDF indir ve kaydet' }).click()]);
+  expect(indirme.suggestedFilename()).toMatch(/^nobetci-rapor-genel-tum-proje-\d{4}-\d{2}-\d{2}\.pdf$/);
+  expect(readFileSync(await indirme.path()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
   await expect(d).toBeHidden();
+  await expect(page.locator('#bildirimler')).toContainText("Raporlar'a kaydedildi");
   expect(hatalar).toEqual([]);
   await kapat();
 });
