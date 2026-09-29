@@ -217,7 +217,9 @@ test('Özet rehberi bölümleri ekrandaki sırayla anlatır ve vurgular; Sonuçl
   await git(page, '#/sonuclar/ekranlar');
   await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
   await rehber.getByRole('button', { name: 'Adım 4: Rapor sekmeleri', exact: true }).click();
-  await expect(rehber).toContainText('Özet (varsayılan');
+  // "varsayılan" / "bu sayfa" çelişkisi giderildi: Özet ilk açılan sekme, Ekranlar şu an açık olan.
+  await expect(rehber).toContainText('Özet ("Genel"e tıklayınca ilk açılan sekme');
+  await expect(rehber).toContainText('Ekranlar (ekran senaryolarının koşuları; şu an açık olan sekme)');
   await page.keyboard.press('Escape');
   await kapat();
 });
