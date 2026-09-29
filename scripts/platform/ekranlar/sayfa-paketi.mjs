@@ -14,7 +14,7 @@
 // geriye uyum için korunur) GEREKEN TABLO ADLARIDIR.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: sayfa-paketi.d.mts.
 
-import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { bagsizKosulUyarilari, ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { senaryoyuDogrula, tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { paketListeleri, paketTablolari, testVerisiniDogrula } from '../tablolar/paket-tablolari.mjs';
@@ -273,6 +273,7 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
       hata('model.ekranUrl', 'tam adres değil YOL olmalı (ör. "/satis/odeme/"); ortam adresi Ayarlar\'dan gelir.');
     }
     for (const g of modelGizliVarsayilanlari(model)) hata(g.yer, g.mesaj);
+    for (const u of bagsizKosulUyarilari(model)) uyari(`model.${u.yer}`, u.mesaj);
     const bg = nesneMi(model.baglamGorunurlugu) ? model.baglamGorunurlugu : null;
     if (bg && Array.isArray(bg.profiller) && nesneMi(meta) && metinDizisiMi(meta.baglamProfilleri)) {
       for (const p of bg.profiller) if (!meta.baglamProfilleri.includes(p)) uyari('model.baglamGorunurlugu', `"${p}" profili meta.baglamProfilleri listesinde yok.`);

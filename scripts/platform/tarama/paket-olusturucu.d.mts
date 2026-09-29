@@ -120,13 +120,13 @@ export type KorunanAlan = { alan: Record<string, unknown>; bolum: { id: string; 
  * Akış diyagramında düzenlenemeyen, kaydederken modeldeki hâliyle AYNEN korunan parça (akis-servisi.mjs üretir):
  *  - 'adim': adımın tamamı (ör. alt model adımı); alanAnahtarlari: adımın diyagram alan anahtarları (başka grupta olamaz).
  *  - 'ek': düzenlenebilir adımın gösterilemeyen özellikleri — id (kaydedilen adım bu kimlikle yazılır), adimEk (gorunurluk,
- *    pomMetodu), kosuEk (basariGostergesi, zamanAsimiSn, not), alanlar (gösterilemeyen alanlar), bolumEk (bölüm kimliği →
- *    pomMetodu / gorunurluk).
+ *    pomMetodu), kosuEk (basariGostergesi, zamanAsimiSn, not), alanlar (gösterilemeyen alanlar). Bölüm özellikleri (gorunurluk,
+ *    pomMetodu…) adıma değil bölüme bağlıdır: kayitPaketiOlustur onları bölümle birlikte taşır.
  *  - 'aksiyonlar': adımın koşu aksiyonları (ör. metinle süzülen tıklama, öğeye bağlı bekleme).
  */
 export type KorunanParca =
   | { tur: 'adim'; adim: Record<string, unknown> & { id: string }; alanAnahtarlari?: string[] }
-  | { tur: 'ek'; id: string; adimEk?: Record<string, unknown>; kosuEk?: Record<string, unknown>; alanlar?: KorunanAlan[]; bolumEk?: Record<string, Record<string, unknown>> }
+  | { tur: 'ek'; id: string; adimEk?: Record<string, unknown>; kosuEk?: Record<string, unknown>; alanlar?: KorunanAlan[] }
   | { tur: 'aksiyonlar'; aksiyonlar: Array<Record<string, unknown>> };
 export type KayitAdimi = {
   ad: string; yol: string; baslik: string; alanlar: HamAlan[]; ilerleme: KayitOgesi | null;
