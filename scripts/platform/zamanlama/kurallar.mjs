@@ -1,4 +1,4 @@
-// ZAMANLANMIŞ KOŞU KURALLARI (Ayarlar > Koşu > Zamanlanmış koşular) — kullanıcının kararı; kasada ŞİFRELİ ayar olarak saklanır:
+// ZAMANLANMIŞ KOŞU KURALLARI (Planlı koşular) — kullanıcının kararı; kasada ŞİFRELİ ayar olarak saklanır:
 //   ayarlar["zamanlanmis-kosular"]      = { kurallar: Kural[] }
 //   ayarlar["zamanlanmis-kosu-gecmisi"] = { [kuralId]: Tetikleme[] }   (kural başına son 20 tetikleme; en yeni başta)
 // Canlı / riskli işaretli ortamda kural, kullanıcı "Canlı ortamda zamanlanmış koşuya izin veriyorum" onayını vermeden kaydedilmez.

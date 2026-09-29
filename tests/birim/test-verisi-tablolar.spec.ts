@@ -151,7 +151,7 @@ test.describe('test verisi tabloları', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     // Test verisi yalnız tablolardan oluşur (eski Kayıtlar / Değer listeleri sekmeleri yok).
     await expect(page.getByRole('tab', { name: /Kayıtlar|Değer listeleri/ })).toHaveCount(0);
     const nav = page.getByRole('navigation', { name: 'Tablolar' });
@@ -215,7 +215,7 @@ test.describe('test verisi tabloları', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     const nav = page.getByRole('navigation', { name: 'Tablolar' });
     const duz = page.getByRole('region', { name: 'Tablo düzenleyici' });
     await nav.getByRole('button', { name: /^Servis girişi/ }).click();

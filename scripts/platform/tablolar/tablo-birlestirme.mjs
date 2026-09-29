@@ -1,4 +1,4 @@
-// TABLO BİRLEŞTİRME (Ayarlar > Test verisi > Veri sağlığı > Birleştirilebilecek tablolar). Adları farklı, başlıkları aynı (esnek
+// TABLO BİRLEŞTİRME (Veri > Veri sağlığı > Birleştirilebilecek tablolar). Adları farklı, başlıkları aynı (esnek
 // karşılaştırma; tablo-benzerligi.mjs) tablolar kullanıcının seçtiği KALACAK tabloda toplanır; birleştirilen tabloları kullanan her şey
 // kalan tabloya yeniden eşlenir. Karar kullanıcınındır: önizleme gösterilir, onay olmadan hiçbir şey yazılmaz.
 //   · Satırlar: kalan tablonun satırları başta, kaynakların FARKLI satırları sona eklenir (aynı ortam + aynı değerler = aynı satır,
@@ -273,7 +273,7 @@ export function veriSagligi(vt, projeId) {
   const oneriler = birlestirmeOnerileri(tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunlar: t.sutunlar, kaynak: t.kaynak ?? null, satirImzalari: t.satirlar.map((r) => satirImzasi(r, t.sutunlar)) })), ek);
   const ad = new Map(tablolar.map((t) => [t.id, t.ad]));
   const gecmis = gecmisOku(vt, projeId);
-  // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Ayarlar > Test verisi'nde.
+  // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Veri'de.
   let benzerlikEsigi = 50;
   try { benzerlikEsigi = kosuAyarlariniOku(vt).benzerlikEsigi; } catch { /* varsayılan */ }
   return {

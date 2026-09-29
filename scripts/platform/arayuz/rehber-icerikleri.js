@@ -36,7 +36,7 @@ export const REHBERLER = {
         cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'parolanızla şifreli' }, { baslik: 'Proje', alt: 'ekranlar, senaryolar, servisler' }, { baslik: 'Ortamlar', alt: 'test, canlı… ve giriş bilgileri' }] },
         ipucu: 'Kasa parolası unutulursa veriler kurtarılamaz. Ayarlar > Yedekleme\'den düzenli yedek alın.'
       },
-      { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır.' },
+      { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar, Veri (test verisi tabloları), Planlı koşular (zamanlanmış koşular) ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır. Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar durur.' },
       { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok uygulamayı test ediyorsanız her biri ayrı bir projedir. Aralarında buradan geçersiniz; "Proje ekle" aynı kasada yeni bir proje açar.' },
       { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi ekrandaysanız o ekranın rehberini bu "?" düğmesiyle istediğiniz an yeniden açabilirsiniz. Kendiliğinden açılmasını Ayarlar > Arayüz\'den kapatabilirsiniz.', ipucu: 'Rehberde ← / → tuşlarıyla gezinebilir, Esc ile kapatabilirsiniz.' }
     ]
@@ -246,7 +246,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Çalışma sırası',
-        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
+        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu, cURL komutu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Servis', alt: 'ekle', ikon: 'ag' }, { baslik: 'Senaryo', alt: 'istek', ikon: 'duzenle' }, { baslik: 'Kontroller', ikon: 'onay' }, { baslik: 'Akış', alt: 'zincir', ikon: 'katman' }] }
       }
     ]
@@ -256,15 +256,20 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Servis ekleme yolları',
-        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
+        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan, bir cURL komutundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman / cURL', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
       },
       {
         baslik: 'Yalnız adresiniz varsa: REST',
         metin: ['"Adım adım" sekmesinde türü "REST (JSON)" seçin. Tam adresi yapıştırın (ör. xxx.com/api/v1/authenticate): sunucu kısmı taban adres olur, şema yazılmadıysa https:// varsayılır. İstekler adımında yolun devamını ve HTTP işlemini (GET / POST / PUT…) seçin; POST için örnek JSON gövde yapıştırabilirsiniz, alanları tablo sütunlarına bağlanır.'],
         cizim: { tur: 'form', alanlar: ['Taban adres', 'HTTP işlemi + yol', 'Gövde örneği'], dugme: 'Kaydet' }
       },
-      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki gizli değerler yalnızca siz onaylarsanız alınır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
+      {
+        baslik: 'cURL komutunuz varsa',
+        metin: ['"cURL yapıştır" sekmesine bir ya da daha çok curl komutu yapıştırın (bash, Windows cmd ya da PowerShell\'deki curl.exe; tarayıcıdaki "Copy as cURL" dahil); her komut bir istek olur. Önizlemede taban adres, yol, metot, başlıklar, sorgu ve gövde alanları görünür; kayıtlı bir taban adresle eşleşirse ona bağlanması önerilir. "Devam" ile adım adım sihirbaz dolu açılır: alanları tablo sütunlarına bağlayıp kaydedersiniz.', 'Metin yalnız tarayıcıda okunur; önizlemede ve kayıtta hiçbir servise istek atılmaz. -F / --form ve dosyadan veri (@dosya) desteklenmez; tanınmayan seçenekler uyarıyla gösterilir. SOAP isteği gibi görünen komutta WSDL yolu önerilir.'],
+        cizim: { tur: 'form', alanlar: ['cURL komutları', 'Önizleme', 'Gizli değer onayı'], dugme: 'Devam' }
+      },
+      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki ve cURL komutundaki (Authorization, Cookie, -u, API anahtarı) gizli değerler yalnızca siz onaylarsanız alınır; onaylamazsanız hiç kaydedilmez, sütunu boş açılır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
       { baslik: 'Ekledikten sonra', sira: ['Servisin her ortamdaki adresini kontrol edin.', 'Giriş gerekiyorsa servis giriş bilgisini ekleyin.', 'Senaryolar sekmesinden ilk senaryoyu oluşturun.'] }
     ]
   },
@@ -506,7 +511,7 @@ export const REHBERLER = {
       { baslik: 'Sıra', sira: ['Giriş profilini ekleyin.', 'Ortamın giriş tarifinde "Varsayılanları öner" ile alanları algılatın (yalnızca siz basınca).', 'Önerileri kontrol edip kaydedin.'] }
     ]
   },
-  'ayarlar-test-verisi': {
+  veri: {
     baslik: 'Test verisi',
     adimlar: [
       { baslik: 'Tablolar', metin: 'Her satır birlikte geçerli değerlerdir (ör. kanal | kullanıcı | ürün kodu). Ekran ve servis alanları sütunlara bağlanır; senaryoda seçim yaptıkça diğer seçenekler süzülür.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Satırlar birlikte geçerli değerler' } },
@@ -546,7 +551,14 @@ export const REHBERLER = {
   'ayarlar-kosu': {
     baslik: 'Koşu ayarları',
     adimlar: [
-      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi, servislerde yetki hatasında (401 / 403) ne yapılacağı ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı, girişte giriş alanı beklemesi; koşudaki giriş beklemelerinden ayrı). Tarama ve akış kaydında giriş: varsayılan her seferinde baştan giriş; "Koşunun saklanan oturumunu kullan" seçilirse koşunun aynı ortam ve giriş profili için şifreli sakladığı oturum denenir ("Girişte oturum kontrolü" süresiyle), geçersizse baştan girilip oturum güncellenir; "Giriş yapmadan aç" saklanan oturumu hiç kullanmaz. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      {
+        baslik: 'Hazır profiller', hedef: '.profil-secimi',
+        metin: ['Sayfa önce iki kararı sorar. Kanıt düzeyi: Hafif (yalnız kalan testlerde görüntü ve iz), Dengeli (bugünkü varsayılanlar) ya da Tam kanıt (her testte her şey) altı kayıt ayarını topluca seçer. Ortam hızı: Hızlı ×0,7, Normal ×1, Yavaş ×2 — 15 zaman aşımı ve bekleme süresini varsayılanın bu katına ayarlar.',
+          'Profil ayrıca saklanmaz: seçim ilgili alanları doldurur, Kaydet ile yazılır. Gelişmiş\'te bir ayarı elle değiştirirseniz profil "Özel" görünür; kayıtlı ayarlarınız bir profile uymuyorsa da "Özel" görünür. Aradaki beklemeler ve ortam bazındaki koşu hızı profilden etkilenmez.'],
+        cizim: { tur: 'form', alanlar: ['Kanıt düzeyi', 'Ortam hızı', 'Yeniden deneme'], dugme: 'Kaydet' }
+      },
+      { baslik: 'Koşu ayarları ve Gelişmiş', hedef: '.gelismis-ayarlar', metin: 'Sayfada yeniden deneme, süre limiti ve "Tarama ve akış kaydında koşu ayarlarını kullan" durur; diğer tüm ayarlar (kayıt, bekleme süreleri, servis zaman aşımı, tarih biçimi, servislerde yetki hatasında ne yapılacağı, tarama / akış kaydı, koşucu davranışı) açılır "Gelişmiş" bölümündedir ve tek tek değiştirilebilir; başlıkta varsayılandan farklı ayar sayısı yazar. Tarama ve akış kaydında giriş: varsayılan her seferinde baştan giriş; "Koşunun saklanan oturumunu kullan" seçilirse koşunun aynı ortam ve giriş profili için şifreli sakladığı oturum denenir, geçersizse baştan girilip oturum güncellenir; "Giriş yapmadan aç" saklanan oturumu hiç kullanmaz. Değişiklik sonraki koşulardan itibaren geçerlidir.' },
+      { baslik: 'Tarama ve akış kaydında koşu ayarları', metin: 'Tarayıcı ekran boyutu, dili, girişte oturum kontrolü ve giriş alanı beklemesi hem koşuda hem taramada vardır. "Tarama ve akış kaydında koşu ayarlarını kullan" açıkken tarama bu dördünde koşunun değerini kullanır (tek yerden ayarlanır); kapalıyken Gelişmiş > Tarama ve akış kaydı\'ndaki ayrı değerler geçerlidir. Varsayılan kapalıdır çünkü ikisinin varsayılanları farklıdır (tarama 1366 × 900, Türkçe; koşu 1280 × 720, tarayıcı varsayılanı); kayıtlı değerleriniz zaten aynıysa açık görünür.' },
       {
         baslik: 'Kayıt: görüntü, video ve iz',
         metin: ['Video, test sonu ekran görüntüsü ve iz (trace) için: her testte, yalnız başarılı testlerde, yalnız kalan testlerde ya da kapalı. "Yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir.',
@@ -554,8 +566,14 @@ export const REHBERLER = {
           'Adım ekran görüntüleri: her adımda (varsayılan), yalnız kalan adımda, seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) ya da kapalı; senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan) ya da Ekranla aynı (koşu ekran boyutu).'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', alt: 'görüntü', ikon: 'ekran' }, { baslik: 'Test sonu', alt: 'görüntü', ikon: 'onay' }, { baslik: 'Video', alt: 'boyut', ikon: 'video' }, { baslik: 'İz', alt: 'trace', ikon: 'liste' }] }
       },
-      { baslik: 'Gelişmiş koşu davranışı', metin: 'Açılır bölümde koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
+      { baslik: 'Gelişmiş koşu davranışı', metin: 'Gelişmiş bölümünün sonunda koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
       { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
+      { baslik: 'Zamanlanmış koşular taşındı', hedef: '.tasindi-notu', metin: 'Zamanlanmış koşular artık üst menüde "Planlı koşular" sayfasındadır (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma). Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar kalır.' }
+    ]
+  },
+  'planli-kosular': {
+    baslik: 'Planlı koşular',
+    adimlar: [
       {
         baslik: 'Zamanlanmış koşular',
         metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Kural ekran senaryolarını, servis akışlarını ve uçtan uca akışları koşabilir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır. Varsayılan olarak kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır; kartın "Zamanlanmış koşu davranışı" bölümünden "Sonra bir kez koş" / "Bitince koş" seçebilirsiniz.',
@@ -574,8 +592,8 @@ export const REHBERLER = {
       {
         baslik: 'Medyayı incelt (kademeli saklama)',
         metin: ['N günden eski sonuçlarda başarılı, kalan ya da tüm testlerin ekran görüntüleri ve videoları silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Kalan testlerde "kalan adımın görüntüsünü ve test sonu görüntüsünü koru" işaretliyse (varsayılan) hatanın görüldüğü iki görüntü kalır. Silinen medya sonuçta "saklama süresi doldu" diye görünür.',
-          'Günlük temizlikte sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra inceltme, en son Güvenlik > Video saklama süresi. Video hangi süre önce dolarsa o zaman silinir.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Sonuç saklama', alt: 'bütün sonuç', ikon: 'cop' }, { baslik: 'İnceltme', alt: 'görüntü + video', ikon: 'ekran' }, { baslik: 'Video saklama', alt: 'Güvenlik', ikon: 'video' }] }
+          'Günlük temizlikte sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra inceltme, en son Video saklama süresi. Video hangi süre önce dolarsa o zaman silinir. Dört kural ve otomatik yedek sayısı tek "Saklama" kartında, "Ne zaman ne silinir?" zaman çizelgesiyle görünür; video saklama güvenlik amaçlı olduğu için kalkan simgesiyle işaretlidir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Sonuç saklama', alt: 'bütün sonuç', ikon: 'cop' }, { baslik: 'İnceltme', alt: 'görüntü + video', ikon: 'ekran' }, { baslik: 'Video saklama', alt: 'güvenlik amaçlı', ikon: 'video' }] }
       }
     ]
   },
@@ -588,6 +606,11 @@ export const REHBERLER = {
         metin: ['Nöbetçi\'nin sizin adınıza yaptığı her işlem (tarayıcıyla siteye girmek, servise istek atmak, veritabanını sorgulamak, dışarıya bildirim göndermek…) bir izne bağlıdır.',
           'Tüm izinler varsayılan olarak KAPALIDIR. Kapalı bir izne bağlı işlem denenirse yapılmaz; ekranda "Bu işlem için Ayarlar > İzinler\'de … iznini açmalısınız." uyarısı ve "İzinlere git" düğmesi çıkar.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'İşlem', alt: 'ör. Koşuyu başlat', ikon: 'oynat' }, { baslik: 'İzin açık mı?', ikon: 'kalkan' }, { baslik: 'Yapılır', alt: 'mevcut onaylarla', ikon: 'onay' }] }
+      },
+      {
+        baslik: 'İzin paketi', hedef: '.izin-paketi',
+        metin: ['"Nöbetçi sizin adınıza neleri yapabilsin?" sorusu ilk kurulumda ve burada sorulur: Hiçbiri (her işlemde sorulsun), Test ortamında ekran ve servis testi, Test + veritabanı okuma ya da Özel. Seçilen paketin açacağı izinler riskleriyle tek listede görünür; düğmeye basınca hepsi birlikte açılır ve her biri "Son değişiklikler"e yazılır. Paket hiçbir izni kapatmaz.',
+          '"Canlı ortamda da çalıştırabilsin" ayrı bir kutudur (varsayılan işaretsiz): işaretlenirse "Canlı ortamda çalıştırma" izni de açılır ve riski yanında yazar. Canlı ortamdaki her işlemden önce sorulan "CANLI ortam" onayı yine sorulur. Veritabanına yazma, sistem değişikliği ve güvenlik gevşetme hiçbir pakete girmez; bunları aşağıdaki listeden tek tek açarsınız.']
       },
       { baslik: 'İzin listesi', hedef: '.izin-listesi', sira: IZIN_TANIMLARI.map((t) => `${t.etiket}: ${t.aciklama}`) },
       { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-soru', metin: 'Her iznin yanındaki "?" düğmesi o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır.' },

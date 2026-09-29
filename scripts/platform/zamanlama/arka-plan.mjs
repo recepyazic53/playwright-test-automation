@@ -1,4 +1,4 @@
-// ZAMANLANMIŞ KOŞULAR — kilitliyken / açılışta çalışma tercihleri (Ayarlar > Koşu > Zamanlanmış koşular; üçü de varsayılan KAPALI):
+// ZAMANLANMIŞ KOŞULAR — kilitliyken / açılışta çalışma tercihleri (Planlı koşular; üçü de varsayılan KAPALI):
 //   A) kilitliyken  : "Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)" — anahtar-emaneti.mjs
 //   B) dpapi        : "Windows oturumuna bağlı otomatik açma (DPAPI)" — dpapi.mjs (yalnız Windows)
 //   C) oturumAcilisi: "Bilgisayar açılınca Nöbetçi arka planda başlasın" — oturum-gorevi.mjs (yalnız Windows)
@@ -185,7 +185,7 @@ export function arkaPlanYoneticisi(bag) {
       } else {
         uyari = 'Windows oturumuna bağlı otomatik açma dosyası çözülemedi (başka bir Windows kullanıcısı ya da bozuk dosya olabilir); zamanlanmış koşular kasa açılana kadar çalışmaz.';
       }
-      log('[zamanlama] Windows oturumuna bağlı otomatik açma kullanılamadı; ayrıntı Ayarlar > Koşu\'da.');
+      log('[zamanlama] Windows oturumuna bağlı otomatik açma kullanılamadı; ayrıntı Planlı koşular sayfasında.');
       return false;
     } finally {
       anahtar?.fill(0);

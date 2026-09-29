@@ -9,6 +9,9 @@
 // 3. adım uçların alanları (yol / sorgu / gövde); 4. adımda uç başına başlangıç senaryosu seçilir (rest-sihirbazi.js). WSDL yok;
 // "Dene" isteğe bağlı ve onaylıdır. Tam adres yapıştırılırsa köken taban adres, kalanı ilk isteğin yolu / sorgusu olur.
 // Hiçbir ağ isteği kullanıcı onayı olmadan atılmaz; kaydetmeden önce hiçbir şey veritabanına yazılmaz.
+// "cURL yapıştır" (curl-aktarimi.js) sihirbazı REST türünde, isteklerle dolu açar (baslangic): gizli değerlerin yalnız onaylananları
+// gelir (başlıkta değer, sorgu / gövdede gizliDegerler); onaysızların sütunu kayıtta boş açılır. Adlandırılmış taban adresine bağlıysa
+// ortam adresleri ondan gelir (bağ kaldırılabilir).
 import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
@@ -38,8 +41,11 @@ function anahtarUret(ad) {
  * @param {HTMLElement} kap
  * @param {{ id: string; ad: string }} proje
  * @param {Array<{ id: string; ad: string; canli: boolean; varsayilan: boolean; tabanUrl: string; tabanAdresleri?: string[] }>} ortamlar
+ * @param {{ ad: string; tabanlar: Record<string, string>; tabanGrubu: string | null; uclar: ReturnType<typeof yeniUc>[];
+ *   gizliDegerler: Record<string, Record<string, string | null>>; gizliOzeti: { onayli: number; onaysiz: number } } | null} [baslangic]
+ *   cURL'den: REST türünde, isteklerle dolu açılır. gizliDegerler uç kimliğine göre (alan yolu → onaylı değer | null).
  */
-export async function servisSihirbazi(kap, proje, tumOrtamlar) {
+export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null) {
   // TEST ortamları önce (denetleme ve ilk adres oradan), CANLI sonra.
   const ortamlar = [...tumOrtamlar].sort((a, b) => Number(a.canli) - Number(b.canli));
   const [{ servisler }, { tablolar }] = await Promise.all([
@@ -56,8 +62,14 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     // REST: tür, uçlar, uç kimliğine göre alan bağları / zorunluluklar, başlangıç senaryosu istenen uçlar (kimlik).
     tur: 'soap', uclar: [yeniUc()], restBaglar: {}, restZorunlu: {}, senaryoIstenen: null, kapsam: 'test',
     // Hesaplama kuralları (alan bağlamada "+ Yeni kural…" ile eklenenler; tarih önerileri kayıtta birleşir).
-    kurallar: {}
+    kurallar: {},
+    // cURL'den: adlandırılmış taban adres bağı ve başlangıç verisi (gizli alan değerleri uç kimliğine göre).
+    tabanGrubu: null, curl: null
   };
+  if (baslangic) {
+    Object.assign(d, { tur: 'rest', ad: baslangic.ad, anahtar: anahtarUret(baslangic.ad), uclar: baslangic.uclar, tabanGrubu: baslangic.tabanGrubu, curl: baslangic });
+    Object.assign(d.tabanlar, baslangic.tabanlar);
+  }
   const rest = () => d.tur === 'rest';
   const adimAdlari = () => (rest() ? REST_ADIMLARI : ADIMLAR);
 
@@ -70,7 +82,9 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       for (const [yol, b] of Object.entries(alanlar)) if (b && tablolar.some((x) => x.id === b.tablo)) ogrenilen[kucuk(yol.split('/').pop())] ??= b;
     }
   }
-  const bagOnerisi = (alanT) => {
+  const bagOnerisi = (alanT, yer) => {
+    // cURL'den gelen gizli alan önerilmez: kayıtta kendi gizli sütununa bağlanır (değer onaylıysa oraya yazılır).
+    if (yer && d.curl && d.curl.gizliDegerler[yer.uc.kimlik] && yer.yol in d.curl.gizliDegerler[yer.uc.kimlik]) return null;
     const b = ogrenilen[kucuk(alanT.ad)];
     if (b) return { ...b };
     for (const tb of tablolar) {
@@ -96,12 +110,12 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
 
   const ortamSatiri = (o) => {
     const liste = [...new Set((o.tabanAdresleri && o.tabanAdresleri.length ? o.tabanAdresleri : [o.tabanUrl]).map(temizTaban))];
-    const sec = h('select', { 'aria-label': `${o.ad} taban adresi` },
+    const sec = h('select', { 'aria-label': `${o.ad} taban adresi`, disabled: Boolean(d.tabanGrubu) },
       ...liste.map((a) => h('option', { value: a, selected: temizTaban(d.tabanlar[o.id] || '') === a }, a)),
       h('option', { value: '__yeni', selected: Boolean(d.tabanlar[o.id]) && !liste.includes(temizTaban(d.tabanlar[o.id])) }, 'Yeni adres yaz…'),
-      o.canli ? h('option', { value: '', selected: d.tabanlar[o.id] === '' }, '— Bu ortamda yok —') : null);
+      o.canli || d.tabanlar[o.id] === '' ? h('option', { value: '', selected: d.tabanlar[o.id] === '' }, '— Bu ortamda yok —') : null);
     const yeni = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://ornek.com/', 'aria-label': `${o.ad} yeni taban adresi`,
-      value: sec.value === '__yeni' ? d.tabanlar[o.id] : '', hidden: sec.value !== '__yeni' });
+      value: sec.value === '__yeni' ? d.tabanlar[o.id] : '', hidden: sec.value !== '__yeni', disabled: Boolean(d.tabanGrubu) });
     sec.addEventListener('change', () => {
       yeni.hidden = sec.value !== '__yeni';
       d.tabanlar[o.id] = sec.value === '__yeni' ? yeni.value.trim() : sec.value;
@@ -163,12 +177,14 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     surum.addEventListener('change', () => { d.soapSurumu = surum.value; });
     const tls = h('input', { type: 'checkbox', id: yeniKimlik('tls'), checked: d.tls });
     tls.addEventListener('change', () => { d.tls = tls.checked; d.erisim = null; });
+    const bagNotu = d.tabanGrubu ? h('div', { class: 'not-kutusu basari', role: 'status' }, `"${d.tabanGrubu}" taban adresine bağlı: adresler ondan gelir ve birlikte güncellenir. `,
+      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { d.tabanGrubu = null; ciz(); } }, 'Bağı kaldır')) : null;
     return [
-      turSecimi(),
+      d.curl ? h('div', { class: 'not-kutusu', role: 'status' }, `cURL komutlarından ${d.uclar.length} istek hazır (REST). Servis adını ve adresleri gözden geçirin; istekler sonraki adımda.`) : turSecimi(),
       alan('Servis adı', ad, { zorunlu: true }), alan('Anahtar', anahtar, { yardim: 'Küçük harf, rakam ve "-". Addan önerilir.' }),
       h('fieldset', {}, h('legend', {}, 'Taban adresler (adresin başı)'),
         h('p', { class: 'soluk kucuk' }, 'Her ortam için servisin adresinin başını seçin ya da yazın. Yeni yazılan adres ortama kaydedilir; sonraki servislerde listede hazır olur. Yol bir sonraki adımda.'),
-        ...ortamlar.map(ortamSatiri),
+        bagNotu, ...ortamlar.map(ortamSatiri),
         h('details', { class: 'yapistir', open: rest() && Boolean(d.yapistirNotu) }, h('summary', {}, 'Tam adresi biliyorum (yapıştır, ayrılsın)'), alan('Servisin TEST adresi', yapistir), yapistirNotu)),
       h('div', { class: 'satir-duzen' }, rest() ? null : alan('SOAP sürümü', surum), h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula (iç ortam sertifikası tanınmıyorsa kapatın)'))
     ];
@@ -256,7 +272,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     return [
       h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → kanal); senaryoda değer o sütundan seçilir, aynı tablodaki alanlar birbirini süzer. Öneriler hazır geldi: başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun. Bağlanmayan alanlar senaryoda elle yazılır ya da gönderilmez.'),
       h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin. WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Başlangıç / bitiş tarihleri tarih kuralıyla (bugün, bugün + 1 yıl) dolar. Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
-      tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz (Ayarlar > Test verisi > Tablolar).'),
+      tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz (Veri > Tablolar).'),
       ...bolumler
     ];
   };
@@ -292,7 +308,10 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       h('dt', {}, 'Servis'), h('dd', {}, `${d.ad} (${d.anahtar}) `, rozet('REST', 'vurgu')),
       h('dt', {}, 'Taban adresler'), h('dd', {}, h('ul', {}, ortamlar.map((o) => h('li', {}, `${o.ad}: `, d.tabanlar[o.id] ? h('code', { class: 'duz' }, temizTaban(d.tabanlar[o.id])) : h('span', { class: 'soluk' }, 'yok (bu ortamda koşmaz)'))))),
       h('dt', {}, 'İstekler'), h('dd', {}, h('ul', {}, d.uclar.map((u) => h('li', {}, rozet(u.metot, 'vurgu'), ' ', h('b', {}, u.ad), ' ', h('code', { class: 'duz' }, u.yol || '/'), u.yalnizTest ? ' (CANLI\'da çağrılmaz)' : '')))),
-      h('dt', {}, 'Tabloya bağlı alanlar'), h('dd', {}, `${bagli} alan`)),
+      h('dt', {}, 'Tabloya bağlı alanlar'), h('dd', {}, `${bagli} alan`),
+      d.tabanGrubu ? [h('dt', {}, 'Taban adresi'), h('dd', {}, `"${d.tabanGrubu}" (bağlı)`)] : null,
+      d.curl && d.curl.gizliOzeti.onayli + d.curl.gizliOzeti.onaysiz ? [h('dt', {}, 'Gizli değerler'),
+        h('dd', {}, `${d.curl.gizliOzeti.onayli} değer şifreli kaydedilecek; ${d.curl.gizliOzeti.onaysiz} değer kaydedilmeyecek (sütunu boş açılır, tabloda doldurun).`)] : null),
       h('fieldset', {}, h('legend', {}, 'Başlangıç senaryoları'),
         h('p', { class: 'soluk kucuk' }, 'İşaretli her istek için bir senaryo oluşturulur: gövde / yol / sorgu şablonu bağlı alanlarda tablo sütununa başvurur, diğer alanlarda örnek değer durur (gizli alanlarınki yazılmaz). Kontrol: HTTP 200-299.'),
         d.uclar.map((u) => {
@@ -318,6 +337,13 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     }
     return k;
   }
+
+  /** cURL'den: onaysız gizli başlığın sütunu boş açılır; gizli alan değerleri uç adına göre; taban adresi bağı. */
+  const curlKayitEki = () => ({
+    gizliBosSutun: true,
+    gizliAlanDegerleri: Object.fromEntries(d.uclar.filter((u) => d.curl.gizliDegerler[u.kimlik]).map((u) => [u.ad.trim(), d.curl.gizliDegerler[u.kimlik]])),
+    ...(d.tabanGrubu ? { tabanGrubu: d.tabanGrubu } : {})
+  });
 
   /** Adımdan ileri geçilemiyorsa nedeni (null = geçilebilir). */
   const eksik = () => {
@@ -351,6 +377,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
           const r = await api('/platform/servis/rest/kaydet', { govde: {
             projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), tabanlar: d.tabanlar, tlsDogrulama: d.tls, uclar: d.uclar.map(ucGovdesi),
             ...adaGore(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu }), ...(Object.keys(d.kurallar).length ? { tarihKurallari: d.kurallar } : {}),
+            ...(d.curl ? curlKayitEki() : {}),
             senaryolar: d.uclar.filter((u) => (d.senaryoIstenen ?? new Set(d.uclar.map((x) => x.kimlik))).has(u.kimlik)).map((u) => u.ad.trim()), kapsam: d.kapsam
           } });
           bildir(`REST servisi eklendi${r.eklenenSenaryolar.length ? `; ${r.eklenenSenaryolar.length} başlangıç senaryosu oluşturuldu` : ''}.`);

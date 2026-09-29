@@ -1,4 +1,4 @@
-// TEST VERİSİ TABLOLARI (Ayarlar > Test verisi > Tablolar). Test verisi Excel sayfaları gibidir: sütunlar alan, her satır
+// TEST VERİSİ TABLOLARI (Veri > Tablolar). Test verisi Excel sayfaları gibidir: sütunlar alan, her satır
 // birlikte geçerli bir değer kombinasyonu (ör. Servis girişi: Kanal | Kullanıcı | Parola). Ekran input'ları ve servis
 // parametreleri bir sütuna bağlanır; senaryoda seçtikçe aynı tablodaki listeler satırlardan süzülür (koşul tanımı yok).
 //   · Sol: tablolar (sütun / satır sayısı) + "Yeni tablo".

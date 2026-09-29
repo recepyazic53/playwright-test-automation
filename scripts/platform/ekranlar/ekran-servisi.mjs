@@ -509,13 +509,13 @@ export function paketOnizle(vt, projeId, ham, secenekler = {}) {
     gerekenAyarlar.push({
       anahtar: `tur:${t}`, etiket: 'Gereken tablo', deger: t, durum: var_ ? 'tamam' : paketle ? 'bilgi' : 'eksik',
       aciklama: var_ ? 'Projede bu adla tablo var.' : paketle ? 'Paketin test verisi bölümünde; onaylarsanız yazılır.' : 'Projede bu adla test verisi tablosu yok.',
-      baglanti: '#/ayarlar/test-verisi'
+      baglanti: '#/veri'
     });
   }
   const baglamTurleri = new Set(baglamProfilAdlari(vt, projeId).map((b) => b.tur));
   for (const t of /** @type {string[]} */ (Array.isArray(ayar.baglamTurleri) ? ayar.baglamTurleri : [])) {
     const var_ = baglamTurleri.has(t);
-    gerekenAyarlar.push({ anahtar: `baglam:${t}`, etiket: 'Bağlam türü', deger: t, durum: var_ ? 'tamam' : 'eksik', aciklama: var_ ? 'Projede bu türde bağlam profili var.' : 'Projede bu türde bağlam profili yok.', baglanti: '#/ayarlar/test-verisi' });
+    gerekenAyarlar.push({ anahtar: `baglam:${t}`, etiket: 'Bağlam türü', deger: t, durum: var_ ? 'tamam' : 'eksik', aciklama: var_ ? 'Projede bu türde bağlam profili var.' : 'Projede bu türde bağlam profili yok.', baglanti: '#/veri' });
   }
   const incelenen = /** @type {string[]} */ (Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : []);
   const ortamlar = ortamlariListele(vt, projeId).map((o) => ({ id: o.id, ad: o.ad, varsayilan: o.varsayilan }));

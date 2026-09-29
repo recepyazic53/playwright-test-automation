@@ -121,11 +121,11 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
   yerlestir(kap, h('section', { class: 'kart form-paneli', 'aria-label': 'Ekranın test verisi bağlantıları' },
     // Ortak akışın senaryosu yok: senaryo dönüşümleri ("Değerleri / Kişi alanlarını tabloya bağla…") gösterilmez.
     h('div', { class: 'kart-basligi' }, h('h3', {}, 'Test verisi'), h('span', { class: 'sag' }, durum, ortakAkis ? null : donustur, ortakAkis ? null : kisi,
-      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/ayarlar/test-verisi' }, 'Test verisi tabloları'))),
+      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     ortakAkis ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Bu ortak akışın alanlarını burada bir kez bağlayın: bağlar onu kullanan tüm ekranlara varsayılan olarak geçer. Bir ekran aynı alanı kendi Test verisi sekmesinde başka sütuna bağlarsa o ekranda onunki geçerli olur.')
       : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, '“Ortak akıştan” işaretli bağlar ortak akışın sayfasında kuruldu. Değiştirirseniz bu ekrana özel olur; “Ortak akışa dön” ekranın bağını siler.') : null,
     h('p', { class: 'soluk kucuk' }, 'Her input\'u bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
-    tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/ayarlar/test-verisi' }, 'Ayarlar > Test verisi > Tablolar'), ' bölümünden ekleyin.'),
+    tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Veri > Tablolar'), ' bölümünden ekleyin.'),
     oneriKap, liste));
   ciz();
 }
@@ -251,7 +251,7 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
       uygula.disabled = true;
       if (o && !o.alanlar.length) parcalar.push(h('div', { class: 'not-kutusu bilgi kucuk' }, 'Bu ekranda kişi / kimlik alanı bulunamadı.'));
       else if (o && !o.tabloId) {
-        parcalar.push(h('div', { class: 'not-kutusu uyari kucuk' }, 'Bu alanlara uyan bir kişi / kayıt tablosu yok. Önce ', h('a', { href: '#/ayarlar/test-verisi' }, 'Test verisi'),
+        parcalar.push(h('div', { class: 'not-kutusu uyari kucuk' }, 'Bu alanlara uyan bir kişi / kayıt tablosu yok. Önce ', h('a', { href: '#/veri' }, 'Test verisi'),
           ' bölümünde bu türden sütunları olan bir tablo oluşturun (ör. Kimlik no, Telefon, E-posta).'));
       } else if (o) {
         const tabloSec = h('select', { 'aria-label': 'Kişi tablosu' }, o.tablolar.map((t) => h('option', { value: t.id, selected: t.id === o.tabloId }, `${t.ad} (${t.puan} alan türü uyuyor)`)));

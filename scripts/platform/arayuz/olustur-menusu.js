@@ -52,7 +52,7 @@ function gruplar(ayarBolumleri) {
     {
       grup: 'Servis testleri',
       ogeler: [
-        { baslik: 'Servis', aciklama: 'WSDL, SoapUI projesi, Postman koleksiyonu ya da elle', ikonAd: 'ag', git: () => '#/servisler/yeni' },
+        { baslik: 'Servis', aciklama: 'WSDL, SoapUI projesi, Postman koleksiyonu, cURL ya da elle', ikonAd: 'ag', git: () => '#/servisler/yeni' },
         { baslik: 'Servis senaryosu', aciklama: 'Bir servise istek + kontroller', ikonAd: 'duzenle', git: (p) => servisSec(p, 'Hangi serviste senaryo oluşturulsun?', (id) => `#/servisler/s/${encodeURIComponent(id)}/senaryolar`) },
         { baslik: 'Servis akışı', aciklama: 'İstekleri zincirle (yanıttan değer taşı)', ikonAd: 'katman', git: (p) => servisSec(p, 'Hangi serviste akış oluşturulsun?', (id) => `#/servisler/s/${encodeURIComponent(id)}/akislar/yeni`) }
       ]
@@ -60,7 +60,8 @@ function gruplar(ayarBolumleri) {
     {
       grup: 'Veri ve ayarlar',
       ogeler: [
-        { baslik: 'Test verisi', aciklama: 'Ekran listesi ya da kişi / kayıt tablosu', ikonAd: 'veri', git: () => '#/ayarlar/test-verisi' },
+        { baslik: 'Test verisi', aciklama: 'Ekran listesi ya da kişi / kayıt tablosu', ikonAd: 'veri', git: () => '#/veri' },
+        { baslik: 'Planlı koşu', aciklama: 'Belirli zamanlarda kendiliğinden koşu', ikonAd: 'tarih', git: () => '#/planli-kosular' },
         { baslik: 'Ortam', aciklama: 'Test, hazırlık, canlı… adresleri', ikonAd: 'ag', git: () => '#/ayarlar/proje' },
         { baslik: 'Giriş profili / tarifi', aciklama: 'Testlerin gireceği kullanıcı ve giriş adımları', ikonAd: 'anahtar', git: () => '#/ayarlar/giris' },
         { baslik: 'Servis taban adresi', aciklama: 'Servislerin ortam adresleri (toplu düzenleme)', ikonAd: 'ag', git: () => '#/ayarlar/proje' },

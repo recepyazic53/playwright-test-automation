@@ -79,9 +79,9 @@ Playwright iz görüntüleyicisiyle açılır) için her testte / yalnız başar
 ("yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir). Adım ekran görüntüleri: her adımda
 (varsayılan) / yalnız kalan adımda / seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) / kapalı;
 senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan, 800 px'e sığdırma) ya da Ekranla aynı.
-**Ayarlar > Yedekleme > Sonuç saklama**: sonuçları N gün sonra silme ve "medyayı incelt" (N günden eski sonuçlarda başarılı,
+**Ayarlar > Yedekleme > Saklama**: sonuçları N gün sonra silme ve "medyayı incelt" (N günden eski sonuçlarda başarılı,
 kalan ya da tüm testlerin görüntü ve videoları silinir; sonucun kendisi kalır). Günlük temizlikte sıra: sonuç saklama →
-medya inceltme → Güvenlik > Video saklama süresi. Her yeni ayarın varsayılanı önceki davranıştır.
+medya inceltme → video saklama süresi (dördü Ayarlar > Yedekleme > Saklama kartında, tek zaman çizelgesiyle). Her yeni ayarın varsayılanı önceki davranıştır.
 
 ### Giriş
 
@@ -112,7 +112,7 @@ Playwright HTML raporu üretilmez.
 
 ### Zamanlanmış koşular ve kilitli kasa
 
-**Ayarlar > Koşu > Zamanlanmış koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
+**Planlı koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
 "Kasa kilitliyken ve açılışta" bölümündeki üç seçenek **varsayılan kapalıdır** ve ayrı ayrı açılır:
 
 - **Kilitliyken çalışsın (anahtar yalnız bellekte)** — kilitlemede arayüz kilitlenir (veri uçları 423), anahtarın kopyası

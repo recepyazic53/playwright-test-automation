@@ -538,6 +538,8 @@ test.describe('Ayarlar > Koşu arayüzü: tarama ve akış kaydında giriş', ()
     const tasma = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     await page.goto('/#/ayarlar/kosu');
     const form = page.getByRole('form', { name: 'Koşu ayarları' });
+    const gelismisiAc = () => form.locator('details.gelismis-ayarlar > summary').click();
+    await gelismisiAc();
     const kip = form.getByLabel('Tarama ve akış kaydında giriş');
     const kontrol = form.getByLabel('Girişte oturum kontrolü (sn)');
     const not = form.getByText('Yalnız "Koşunun saklanan oturumunu kullan" seçiliyken kullanılır.');
@@ -570,6 +572,7 @@ test.describe('Ayarlar > Koşu arayüzü: tarama ve akış kaydında giriş', ()
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
+    await gelismisiAc();
     await expect(kontrol).toBeDisabled();
     await not.scrollIntoViewIfNeeded();
     await expect(not).toBeVisible();

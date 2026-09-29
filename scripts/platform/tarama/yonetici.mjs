@@ -64,7 +64,7 @@ import {
   oturumAnahtariTuret, oturumDosyaYolu, oturumDosyasiniOku, oturumDosyasinaYaz, oturumDurumuMu, oturumuKokenlereSinirla
 } from '../giris/oturum-dosyasi.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
-import { kosuAyarlariniOku, sqlSatirSiniriOku, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
+import { kosuAyarlariniOku, sqlSatirSiniriOku, taramaEtkinAyarlari, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
 import { baglamAlanlari, girisKokenleri, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
@@ -189,11 +189,13 @@ function altModelAnlikGoruntusu(vt, projeId, model) {
 function taramaTarayiciGirdisi(vt) {
   let a;
   try { a = vt ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari(); } catch { a = varsayilanKosuAyarlari(); }
+  // Ekran boyutu, dil ve giriş beklemeleri: "Tarama ve akış kaydında koşu ayarlarını kullan" açıksa koşudaki eşleri, kapalıysa
+  // Ayarlar > Koşu > Gelişmiş > Tarama ve akış kaydı'ndaki ayrı değerler (taramaEtkinAyarlari).
+  const e = taramaEtkinAyarlari(a);
   return {
-    genislik: a.taramaEkranGenisligi, yukseklik: a.taramaEkranYuksekligi, dil: a.taramaDili,
+    genislik: e.genislik, yukseklik: e.yukseklik, dil: e.dil,
     saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri,
-    // Giriş beklemeleri: koşudaki Gelişmiş > Giriş ayarlarından AYRI (Ayarlar > Koşu > Tarama ve akış kaydı).
-    oturumKontrolMs: a.taramaOturumKontrolSn * 1000, girisAlanBeklemeMs: a.taramaGirisAlanBeklemeSn * 1000
+    oturumKontrolMs: e.oturumKontrolSn * 1000, girisAlanBeklemeMs: e.girisAlanBeklemeSn * 1000
   };
 }
 
@@ -468,7 +470,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       const gerekli = baglamAlanlari(tarif);
       profiller = istenen.map((ad) => {
         const degerler = havuz[ad];
-        if (!degerler) throw new TaramaHatasi('PROFIL', `"${ad}" adlı ${tur} bağlam profili bu ortamda yok (Ayarlar > Test verisi > Kişi ve kayıt verileri).`);
+        if (!degerler) throw new TaramaHatasi('PROFIL', `"${ad}" adlı ${tur} bağlam profili bu ortamda yok (Veri > Kişi ve kayıt verileri).`);
         const eksik = gerekli.filter((a) => degerler[a] === undefined || degerler[a] === null || degerler[a] === '');
         if (eksik.length) throw new TaramaHatasi('PROFIL', `"${ad}" bağlam profilinde tarifin kullandığı alan(lar) boş: ${eksik.join(', ')}.`);
         return { ad, degerler };

@@ -1,4 +1,4 @@
-// ZAMANLANMIŞ KOŞULAR — anahtar emaneti ("Kasa kilitlense de zamanlanmış koşular çalışsın", Ayarlar > Koşu; varsayılan KAPALI).
+// ZAMANLANMIŞ KOŞULAR — anahtar emaneti ("Kasa kilitlense de zamanlanmış koşular çalışsın", Planlı koşular; varsayılan KAPALI).
 // Kullanıcı tercihi açıkken kasa kilitlenince ARAYÜZ kilitlenir ama kasa anahtarının bir KOPYASI yalnız bu modülün içindeki
 // değişkende (bellekte) kalır. Kopyayı dışarı veren bir fonksiyon YOKTUR: yalnız zamanlayıcının arka plan işi
 // (arkaPlanIsiBaslat) onu kasaya "arka plan kipinde" (kasa.mjs > kasayiArkaPlandaAc) geçici olarak yerleştirir:

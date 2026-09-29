@@ -38,7 +38,7 @@ Değer sırası:
    - Adlı profiller, ör. "Kanal 100": `USERNAME`, `PASSWORD`, `CHANNEL`.
    - Servis bir profil seçer; senaryo ezebilir.
    - Profil tüm ortamlar için genel değer taşır. Ortama özel satır, ör. CANLI'da farklı parola, alan alan ezer.
-3. **Test verisi.** Ayarlar > Test verisi > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
+3. **Test verisi.** Veri > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
    - Rol, aynı türün farklı kişileri için ayrı profil seçmeye yarar.
    - Servisin Parametreler sekmesinde her tür + rol için profil seçilir; senaryo ezebilir.
    - Bir parametre adı projede tek bir alana eşlenebilir.
@@ -66,7 +66,7 @@ Adres = taban adres + yol, metin olarak birleştirilir: tabanın kendi yolu koru
 - **Gövde (XML)** sekmesi ileri kullanım içindir. Form gövdeyi tam temsil edemezse (şemada olmayan / tekrar eden öğe) neden gösterilir ve XML görünümünde kalınır; veri kaybolmaz.
 - Kaydedilen gövde yine SOAP XML'idir (koşucu, SoapUI aktarımı, raporlar aynı).
 
-## Test verisi eşlemesi (Ayarlar > Test verisi)
+## Test verisi eşlemesi (Veri > Tablolar)
 
 Alan satırında **Servis parametreleri**: servis seçilir → o servisin senaryolarında geçen parametrelerden biri seçilir (eşlenmemişler önce) ya da "Elle yaz…"; rol addan tahmin edilir (`MUSTERI_…` → musteri, `KEFIL_…` → kefil). Eşleme parametre adına göredir: aynı ad tüm servislerde bu alandan dolar.
 
@@ -127,6 +127,16 @@ Servis ekle > Postman koleksiyonu. Postman Collection v2.1 (v2.0 da olur) JSON; 
 - **Yetki:** bearer → `Authorization: Bearer …`, apikey → başlık ya da sorgu (miras: istek > klasör > koleksiyon).
 - **Desteklenmeyenler** uyarı olarak gösterilir: istek öncesi / test betiklerinin geri kalanı, form-data ve dosya gövdesi, basic / digest / oauth yetkileri, `{{$guid}}` gibi dinamik değişkenler (`{{$isoTimestamp}}` tarih ifadesine çevrilir), Postman v1.
 
+## cURL'den servis (REST)
+
+Servis ekle > cURL yapıştır. Bir ya da daha çok curl komutu yapıştırılır; her komut bir istek (uç) olur. Metin yalnız tarayıcıda çözülür (`curl-ayristirici.mjs`, saf modül): sunucuya, günlüğe ya da geçmişe gitmez; önizlemede ve kayıtta hiçbir servise istek atılmaz. Deneme İstekler adımındaki "Dene" ile ve onayla olur.
+
+- **Biçimler:** bash / sh (tek / çift tırnak, `$'…'`, `\` satır devamı), Windows cmd (`^` satır devamı, `^"` kaçışı; tarayıcının "Copy as cURL (cmd)" çıktısı), PowerShell'den `curl.exe` (`` ` `` satır devamı). Kapanmamış tırnak satır numarasıyla açık hata verir (metin hata mesajına yazılmaz).
+- **Desteklenen seçenekler:** `-X/--request`, `-H/--header`, `-d/--data/--data-ascii/--data-raw/--data-binary/--data-urlencode`, `--json`, `-u/--user` (Basic), `-b/--cookie` (çerez metni), `-G/--get` (veri sorguya), `-I/--head`, `--url`, `-A`, `-e`, `--oauth2-bearer`. Desteklenmeyen (uyarıyla, alınmaz): `-F/--form`, `-T`, `@dosya` ile veri / başlık, çerez dosyası, Digest / NTLM. Koşuyu etkilemeyenler (`--compressed`, `-k`, `-L`, `-s`, `-v`, zaman aşımları…) yok sayılır; tanınmayan seçenekler ayrı listelenir.
+- **Önizleme:** taban adres, yol, metot, sorgu, başlıklar, içerik türü, gövde (JSON ise alanlar, form ise alan listesi, değilse ham). Adres adlandırılmış bir taban adresle eşleşirse ona bağlanma (önerilen, işaretli), ortamın kayıtlı taban adresiyle eşleşirse o adres; değilse yeni taban adres (seçilen ortama eklenir). Farklı sunucuya giden istek o servise alınmaz. SOAP gövdesi (`text/xml`, `SOAPAction`, Envelope) algılanırsa WSDL yolu önerilir; ham gövdeyle devam edilebilir.
+- **Gizli değerler:** Authorization, Cookie, `-u`, API anahtarı / token başlıkları ve gizli ad listesindeki (Ayarlar > Güvenlik > Maskeleme dahil) sorgu / gövde alanları önizlemede `•••`. "Şifreli kaydet" işaretlenen değer kasada şifreli sütuna yazılır (başlıklar `<servis> başlıkları`, sorgu / JSON gövde alanları `<servis> gizli değerleri`; alan o sütuna bağlanır). İşaretlenmeyen değer hiç kaydedilmez: sütun boş açılır, koşudan önce tabloda doldurulur. Form / ham gövdedeki gizli değer her durumda silinir.
+- **Devam:** Adım adım > REST sihirbazı isteklerle dolu açılır; alan bağlama önerileri, özet ve kayıt oradaki akışla (başlangıç senaryoları dahil).
+
 REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON / form / XML), yoldaki değerler URL kodlanır; Content-Type içerik türünden yazılır. Yanıtta `jsonEsit` kontrolü (`yol: data.id`) ve akışta `json` okuması kullanılır. REST servisinde WSDL olmadığından erişim kontrolü istenmez.
 
 ## Yanıttaki dosyayı doğrula
@@ -146,6 +156,7 @@ Kontrol türü `dosya`: yanıt gövdesi (baytları) dosya olarak okunur. Ad `Con
 | `scripts/platform/servisler/soap-istemcisi.mjs` | Parametre doldurma, HTTP/SOAP isteği, WSDL, kontroller |
 | `scripts/platform/servisler/soapui-ice-aktarma.mjs` | SoapUI okuyucu |
 | `scripts/platform/servisler/postman-ice-aktarma.mjs` | Postman koleksiyonu okuyucu |
+| `scripts/platform/servisler/curl-ayristirici.mjs` | cURL komutu ayrıştırıcısı (arayüzle ortak, saf) ve REST uç taslağı |
 | `scripts/platform/servisler/rest-istemcisi.mjs` | REST isteği |
 | `scripts/platform/servisler/taban-adresleri.mjs` | Adlandırılmış taban adresleri (ekle / değiştir / sil) ve toplu düzenleme (önizleme → onay) |
 | `scripts/platform/servisler/servis-islemleri.mjs` | Erişim kontrolü, kayıt, parametre çözümü, Dene / koşu |
