@@ -2,7 +2,14 @@
 import type { GirisTarifi } from '../giris/tarif.mjs';
 import type { YasakDeseni } from '../senaryolar/model-kosusu.mjs';
 
-export type TaramaAsamasi = 'hazirlik' | 'giris' | 'baglam' | 'tarama' | 'kayit';
+export type TaramaAsamasi = 'hazirlik' | 'giris' | 'baglam' | 'tarama' | 'kayit' | 'secme';
+
+export declare const KESIF_TURLERI: readonly string[];
+export declare const KESIF_RISKLI_DESENI: RegExp;
+export declare function kesifGuvenligi(a: {
+  tur: string; etiket?: string | null; ad?: string | null; kimlik?: string | null; devreDisi?: boolean; saltOkunur?: boolean;
+  radyolar?: Array<{ metin?: string | null; deger?: string }>;
+}): { guvenli: true } | { guvenli: false; neden: string };
 
 export declare const OKUMA_YONTEMLERI: readonly string[];
 export declare class HedefHatasi extends Error {}

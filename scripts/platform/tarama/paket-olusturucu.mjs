@@ -8,8 +8,10 @@
 //    mevcut model TABAN alınır; taranan alanlar seçiciyle eşleştirilip etiket/zorunluluk/seçenek/görünürlük
 //    güncellenir, yeni alanlar en yakın eşleşen alanın bölümüne eklenir, taramada görülmeyen alanlar
 //    KALDIRILMAZ (başka adımda/koşulda olabilir) — bilinmeyenlere yazılır. Böylece fark (bulgular) anlamlı kalır.
-//  - Seçim keşfi (≤ 8 seçenekli açılır listeler): bir seçenekte beliren/kaybolan alanlar adlandırılmış koşul +
-//    gorunurluk olur.
+//  - Seçim keşfi (açılır listeler, radyo grupları, onay kutuları): bir değerde beliren/kaybolan alanlar adlandırılmış koşul +
+//    gorunurluk olur (onay kutusunda esit: true/false); üst seçime göre seçenekleri değişen açılır liste bagimlilik
+//    { alan, secenekHaritasi } olur (ör. İl → İlçe); keşifte etkinleşen (taramada devre dışı) alan senaryoda doldurulur.
+//    "Düğmeyi ve sonucu işaretle" (düğme / sonuç / göstergeler) sonradan oge-isaretleri.mjs ile uygulanır.
 //  - Test verisi: seçim alanlarının seçenekleri paketin "testVerisi" bölümüne tablo olarak yazılır (bağımlı listelerde —
 //    keşifte / kayıtta üst seçime göre seçenekleri değişen alanlar — satır = geçerli kombinasyon) ve alanlar sütunlara
 //    bağlanır (paket-tablolari.mjs > secenekTablolariUret). Tablo adı "<Ekran adı> — <Alan>", türü "liste" (Ekran listeleri).
@@ -75,7 +77,7 @@ function benzersiz(temel, kullanilan) {
  * (sayac.gizlenen artar).
  * @param {unknown} m @param {{ gizlenen: number }} sayac @param {number} [uzunluk]
  */
-function temizMetin(m, sayac, uzunluk = 200) {
+export function temizMetin(m, sayac, uzunluk = 200) {
   if (typeof m !== 'string') return null;
   const t = m.replace(/\s+/g, ' ').trim().slice(0, uzunluk);
   if (!t) return null;
@@ -189,6 +191,67 @@ function temelKimlik(a) {
 }
 
 /**
+ * Keşfedilen seçimin olası değerleri: açılır liste → seçenek değerleri (boş "Seçiniz" hariç), radyo → radyo değerleri,
+ * onay kutusu → "true" / "false". @param {import('./paket-olusturucu.d.mts').HamAlan} a
+ */
+function kesifDegerleri(a) {
+  if (a.tur === 'checkbox') return ['true', 'false'];
+  if (a.tur === 'radio') return (a.radyolar ?? []).map((r) => r.deger).filter((d) => d !== '');
+  return (a.secenekler ?? []).map((s) => s.deger).filter((d) => d !== '');
+}
+
+/** Keşif değerinin ekranda görünen adı (seçenek / radyo metni; onay kutusunda "işaretli" / "işaretsiz"). @param {import('./paket-olusturucu.d.mts').HamAlan | undefined} a @param {string} d */
+function kesifDegerMetni(a, d) {
+  if (a?.tur === 'checkbox') return d === 'true' ? 'işaretli' : 'işaretsiz';
+  return [...(a?.secenekler ?? []), ...(a?.radyolar ?? [])].find((s) => s.deger === d)?.metin || d;
+}
+
+/**
+ * Keşiften bağımlı listeler: bir seçimin (açılır liste / radyo) değerine göre seçenekleri DEĞİŞEN açılır listeler. Sonuç: alt
+ * listenin anahtarı → { ust: üst seçimin anahtarı, harita: üst değer → seçenekler, kismi }. En az iki üst değerde dolu ve farklı
+ * seçenek görülmüş olmalı; bir liste birden çok seçime bağlı görünürse ilki alınır (not düşülür). Boş değerli seçenekler
+ * ("Önce il seçin") alınmaz.
+ * @param {import('./paket-olusturucu.d.mts').ProfilEnvanteri[]} profiller @param {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} hamlar
+ * @param {string[]} notlar
+ */
+function bagimliliklariHesapla(profiller, hamlar, notlar) {
+  /** @type {Map<string, { ust: string; harita: Map<string, import('./paket-olusturucu.d.mts').HamSecenek[]>; kismi: boolean }>} */
+  const sonuc = new Map();
+  const dolu = (/** @type {import('./paket-olusturucu.d.mts').HamSecenek[] | undefined} */ l) => (l ?? []).filter((s) => s.deger !== '');
+  for (const p of profiller) {
+    const temel = new Map(p.alanlar.map((a) => [a.anahtar, a]));
+    for (const k of p.kesifler) {
+      const ust = hamlar.get(k.secim);
+      if (!ust || (ust.tur !== 'select' && ust.tur !== 'radio')) continue;
+      const denenen = k.degerler.filter((d) => !d.gezinme && !d.hata);
+      const cocuklar = new Set(denenen.flatMap((d) => Object.keys(d.secenekler ?? {})));
+      for (const d of denenen) for (const a of d.gorunenler) if (a.tur === 'select') cocuklar.add(a.anahtar);
+      for (const c of cocuklar) {
+        if (c === k.secim || hamlar.get(c)?.tur !== 'select') continue;
+        /** @type {Map<string, import('./paket-olusturucu.d.mts').HamSecenek[]>} */
+        const harita = new Map();
+        const tabanda = temel.get(c);
+        if (typeof k.ilkDeger === 'string' && k.ilkDeger !== '' && tabanda && dolu(tabanda.secenekler).length) harita.set(k.ilkDeger, dolu(tabanda.secenekler));
+        for (const d of denenen) {
+          const liste = d.secenekler?.[c] ?? d.gorunenler.find((a) => a.anahtar === c)?.secenekler ?? (tabanda && !d.kaybolanlar.includes(c) ? tabanda.secenekler : undefined);
+          if (dolu(liste).length) harita.set(d.deger, dolu(liste));
+        }
+        const imzalar = new Set([...harita.values()].map((l) => JSON.stringify(l.map((s) => s.deger))));
+        if (harita.size < 2 || imzalar.size < 2) continue;
+        const onceki = sonuc.get(c);
+        if (onceki && onceki.ust !== k.secim) {
+          notlar.push(`"${hamlar.get(c)?.etiket || c}" listesinin seçenekleri birden çok seçime bağlı görünüyor; yalnızca ilk seçime ("${hamlar.get(onceki.ust)?.etiket || onceki.ust}") göre bağımlılık yazıldı.`);
+          continue;
+        }
+        if (onceki) { for (const [x, l] of harita) if (!onceki.harita.has(x)) onceki.harita.set(x, l); continue; }
+        sonuc.set(c, { ust: k.secim, harita, kismi: k.kismi === true });
+      }
+    }
+  }
+  return sonuc;
+}
+
+/**
  * Bir profilin keşif verisinden alan görünürlük koşulları: alan anahtarı → { secim, degerler } (alan yalnızca
  * seçim bu değerlerden biri olunca görünür). Birden çok seçime bağlı görünen alanlar notlara yazılır.
  * @param {import('./paket-olusturucu.d.mts').ProfilEnvanteri} p @param {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} hamlar
@@ -199,9 +262,12 @@ function kosullariHesapla(p, hamlar, notlar) {
   const sonuc = new Map();
   const temel = new Set(p.alanlar.map((a) => a.anahtar));
   for (const k of p.kesifler) {
+    // Uzun listede yalnız ilk seçenekler denendi: görünürlük koşulu çıkarılamaz (yalnız bağımlı liste).
+    if (k.kismi) continue;
     const secim = hamlar.get(k.secim);
-    if (!secim || !Array.isArray(secim.secenekler)) continue;
-    const tumDegerler = secim.secenekler.map((s) => s.deger).filter((d) => d !== '');
+    if (!secim) continue;
+    const tumDegerler = kesifDegerleri(secim);
+    if (!tumDegerler.length) continue;
     const denenen = k.degerler.filter((d) => !d.gezinme && !d.hata);
     /** @type {Map<string, Set<string>>} */
     const gorunen = new Map();
@@ -239,7 +305,7 @@ function kosullariHesapla(p, hamlar, notlar) {
  * bilinmeyenler için toplar; gizli veri kalıbına benzeyen metinleri atar (sayac.gizlenen artar).
  * @param {{ gizlenen: number }} sayac
  */
-function alanDonusturucu(sayac) {
+export function alanDonusturucu(sayac) {
   /** @type {string[]} */
   const etiketsizler = [];
   /** @type {string[]} */
@@ -340,6 +406,23 @@ export function taramaPaketiOlustur(meta, envanter) {
     for (const a of p.alanlar) ekle(a, p.profil);
     for (const k of p.kesifler) for (const d of k.degerler) for (const a of d.gorunenler) ekle(a, p.profil);
   }
+  // Keşifte ETKİNLEŞEN alanlar (ör. il seçilince açılan ilçe): taramada devre dışıydı ama senaryoda doldurulur.
+  /** @type {Map<string, string>} ham anahtar → alan notu */
+  const ekNotlar = new Map();
+  for (const p of profiller) {
+    for (const k of p.kesifler) {
+      for (const d of k.degerler) {
+        for (const anahtar of d.etkinlesenler ?? []) {
+          const a = hamlar.get(anahtar);
+          if (!a || !a.devreDisi || ekNotlar.has(anahtar)) continue;
+          hamlar.set(anahtar, { ...a, devreDisi: false });
+          ekNotlar.set(anahtar, `Taramada devre dışıydı; "${temizMetin(hamlar.get(k.secim)?.etiket, sayac, 80) ?? k.secim}" seçilince etkinleşiyor (keşif).`);
+        }
+      }
+    }
+  }
+  // Bağımlı listeler (keşifte üst seçime göre seçenekleri değişen açılır listeler).
+  const bagimliliklar = bagimliliklariHesapla(profiller, hamlar, notlar);
 
   // 2) Görünürlük koşulları (ilk keşif verisi olan profilden; profiller arasında farklıysa not).
   /** @type {Map<string, { secim: string; degerler: string[] }>} */
@@ -374,10 +457,15 @@ export function taramaPaketiOlustur(meta, envanter) {
     if (!secimId) return null;
     const ad = benzersiz(`${alanId}Gorunur`, mevcutAdlar);
     const secimHam = hamlar.get(k.secim);
-    const metinler = k.degerler.map((d) => secimHam?.secenekler?.find((s) => s.deger === d)?.metin || d);
+    const metinler = k.degerler.map((d) => kesifDegerMetni(secimHam, d));
+    // Onay kutusu: değer mantıksal (işaretli: true); diğerleri seçenek değeri.
+    const onay = secimHam?.tur === 'checkbox';
     kosulTanimlari[ad] = {
-      aciklama: `${temizMetin(secimHam?.etiket, sayac) || secimId} = ${metinler.map((m) => temizMetin(m, sayac) ?? '?').join(' / ')} seçilince görünür (otomatik tarama keşfi).`,
-      ifade: k.degerler.length === 1 ? { alan: secimId, esit: k.degerler[0] } : { alan: secimId, icinde: k.degerler }
+      aciklama: onay
+        ? `${temizMetin(secimHam?.etiket, sayac) || secimId} ${metinler[0]} iken görünür (otomatik tarama keşfi).`
+        : `${temizMetin(secimHam?.etiket, sayac) || secimId} = ${metinler.map((m) => temizMetin(m, sayac) ?? '?').join(' / ')} seçilince görünür (otomatik tarama keşfi).`,
+      ifade: onay ? { alan: secimId, esit: k.degerler[0] === 'true' }
+        : k.degerler.length === 1 ? { alan: secimId, esit: k.degerler[0] } : { alan: secimId, icinde: k.degerler }
     };
     kosulAdlari.set(anahtar, ad);
     return ad;
@@ -550,6 +638,37 @@ export function taramaPaketiOlustur(meta, envanter) {
     if (profilAdlari.length) model.baglamGorunurlugu = { profiller: profilAdlari, alanlar: bgAlanlar, kaynak: 'otomatik tarama' };
   }
 
+  // 5b) Keşfin bağımlı listeleri ve etkinleşen alanların notları (modeldeki alana; mevcut bağımlılık korunur).
+  const anahtardan = new Map([...kimlikler].map(([anahtar, id]) => [id, anahtar]));
+  let bagimlilikSayisi = 0;
+  for (const adim of /** @type {Array<Record<string, any>>} */ (Array.isArray(model.adimlar) ? model.adimlar : [])) {
+    for (const bolum of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      for (const alan of Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
+        if (!nesneMi(alan)) continue;
+        const anahtar = anahtardan.get(String(alan.id));
+        if (!anahtar) continue;
+        const not = ekNotlar.get(anahtar);
+        if (not) alan.notlar = [...(Array.isArray(alan.notlar) ? alan.notlar : []).filter((x) => x !== 'Taramada devre dışıydı.'), not];
+        const b = bagimliliklar.get(anahtar);
+        const ustId = b ? kimlikler.get(b.ust) : undefined;
+        if (!b || !ustId || alan.tip !== 'secim' || alan.bagimlilik !== undefined || alan.seceneklerDurumu === 'dinamik') continue;
+        const temizle = (/** @type {import('./paket-olusturucu.d.mts').HamSecenek[]} */ l) => l.filter((s) => !gizliKalipBul(String(s.deger)))
+          .map((s) => ({ deger: String(s.deger).slice(0, 200), metin: temizMetin(s.metin, sayac) ?? String(s.deger).slice(0, 200) }));
+        const harita = Object.fromEntries([...b.harita].filter(([d]) => !gizliKalipBul(d)).map(([d, l]) => [d, temizle(l)]));
+        /** @type {Map<string, { deger: string; metin: string }>} */
+        const birlesik = new Map();
+        for (const l of Object.values(harita)) for (const s of l) if (!birlesik.has(s.deger)) birlesik.set(s.deger, s);
+        alan.bagimlilik = { alan: ustId, secenekHaritasi: harita };
+        alan.secenekler = [...birlesik.values()];
+        alan.seceneklerDurumu = b.kismi ? 'kismi' : 'tam';
+        alan.seceneklerKaynagi = 'otomatik tarama keşfi (bağımlı liste)';
+        const ustEtiket = temizMetin(hamlar.get(b.ust)?.etiket, sayac, 80) ?? ustId;
+        alan.notlar = [...(Array.isArray(alan.notlar) ? alan.notlar : []), `Seçenekleri "${ustEtiket}" seçimine bağlı (keşif; ${Object.keys(harita).length} değer${b.kismi ? ', uzun listenin ilk seçenekleri' : ''}).`];
+        bagimlilikSayisi++;
+      }
+    }
+  }
+
   // 6) Bilinmeyenler.
   for (const p of profiller) {
     const ad = p.profil ? `"${p.profil}" profili` : 'Tarama';
@@ -572,12 +691,12 @@ export function taramaPaketiOlustur(meta, envanter) {
   }
   const yasakli = envanter.engellenenler.filter((e) => e.neden === 'yasakli');
   if (yasakli.length) bilinmeyenler.push(`Yasaklı adres kalıbına uyan ${yasakli.length} istek engellendi (${[...new Set(yasakli.map((e) => e.adres))].slice(0, 3).join(', ')}).`);
-  if (!envanter.kesifYapildi) bilinmeyenler.push('Seçim keşfi kapalıydı: açılır listelere bağlı olarak beliren alanlar ve görünürlük koşulları çıkarılmadı.');
+  if (!envanter.kesifYapildi) bilinmeyenler.push('Seçim keşfi kapalıydı: açılır listelere, radyolara ve onay kutularına bağlı olarak beliren alanlar, görünürlük koşulları ve bağımlı listeler çıkarılmadı.');
   // Keşif sınırı: taramanın kullandığı (Ayarlar > Koşu > Açılır liste keşif sınırı); eski envanterde yok → varsayılan.
   const kesifSiniri = Number.isInteger(envanter.kesifSecenekSiniri) ? Number(envanter.kesifSecenekSiniri) : KESIF_SECENEK_SINIRI;
   const buyukListeler = [...hamlar.values()].filter((a) => a.tur === 'select' && !a.coklu && (a.secenekler?.length ?? 0) > kesifSiniri);
   if (envanter.kesifYapildi && buyukListeler.length) {
-    bilinmeyenler.push(`Keşif sınırından (${kesifSiniri} seçenek) uzun ${buyukListeler.length} liste keşfedilmedi (${buyukListeler.slice(0, 5).map((a) => temizMetin(a.etiket, sayac) ?? a.anahtar).join(', ')}); bu listelere bağlı alanlar olabilir.`);
+    bilinmeyenler.push(`Keşif sınırından (${kesifSiniri} seçenek) uzun ${buyukListeler.length} listede yalnız ilk ${kesifSiniri} seçenek denendi (${buyukListeler.slice(0, 5).map((a) => temizMetin(a.etiket, sayac) ?? a.anahtar).join(', ')}): bu listelere bağlı görünürlük koşulu çıkarılmadı, bağımlı listeleri kısmi olabilir.`);
   }
   if (etiketsizler.length) bilinmeyenler.push(`Etiketi bulunamayan ${etiketsizler.length} alan: ${etiketsizler.slice(0, 10).join(', ')} (etiketi ekrandan kontrol edin).`);
   if (cokluDegerliler.length) bilinmeyenler.push(`Çoklu seçim listeleri: ${cokluDegerliler.join(', ')} — model tek değer bekler.`);
@@ -627,7 +746,7 @@ export function taramaPaketiOlustur(meta, envanter) {
     paket,
     ozet: {
       alanSayisi: hamlar.size, kosulSayisi: Object.keys(kosulTanimlari).length, yeniAlanSayisi, eslesenSayisi,
-      eslesmeyenSayisi: eslesmeyenler.length, engellenenYazma: yazmaSayisi, kanitSayisi: kanitlar.length
+      eslesmeyenSayisi: eslesmeyenler.length, engellenenYazma: yazmaSayisi, kanitSayisi: kanitlar.length, bagimlilikSayisi
     }
   };
 }

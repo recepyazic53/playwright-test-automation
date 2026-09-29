@@ -414,6 +414,30 @@ export function ozelBilesenIsaretle(s: Element, isaret: string): boolean {
   return false;
 }
 
+/**
+ * Tarama sayfasında (addInitScript; YALNIZ otomatik tarama — kullanıcının tıkladığı kayıt / öğe seçme penceresinde değil):
+ * düğmeye / bağlantıya gelen HER tıklama sayfa içinde yutulur. Tarama hiçbir düğmeye basmaz; bu, keşif bir seçimi değiştirince
+ * SAYFANIN KENDİ BETİĞİNİN bir düğmeye basmaya çalışmasına (ör. "değişince kaydet") karşı ek savunmadır. Seçim kutularının
+ * (radyo / onay kutusu) kendisine tıklamak düğme sayılmaz. Yutulan tıklama sayısı window.__nobetciYutulanTiklama'da.
+ */
+export function dugmeTiklamaKorumasi(): void {
+  const w = window as unknown as { __nobetciDugmeKorumasi?: boolean; __nobetciYutulanTiklama?: number };
+  if (w.__nobetciDugmeKorumasi) return;
+  w.__nobetciDugmeKorumasi = true;
+  w.__nobetciYutulanTiklama = 0;
+  const DUGME = 'button, [role="button"], [role="link"], [role="menuitem"], a[href], input[type="submit"], input[type="button"], input[type="image"], input[type="reset"], summary';
+  const yut = (o: Event): void => {
+    const t = o.target;
+    if (!(t instanceof Element)) return;
+    if (t.matches('input[type="radio"], input[type="checkbox"], select, option')) return;
+    if (!t.closest(DUGME)) return;
+    o.preventDefault();
+    o.stopImmediatePropagation();
+    w.__nobetciYutulanTiklama = (w.__nobetciYutulanTiklama ?? 0) + 1;
+  };
+  for (const tur of ['click', 'auxclick', 'dblclick']) window.addEventListener(tur, yut, true);
+}
+
 /** Tarama sayfasında (addInitScript) form gönderimini ve yeni pencereleri etkisizleştirir. */
 export function formGonderimKorumasi(): void {
   const w = window as unknown as { __nobetciTaramaKorumasi?: boolean };
