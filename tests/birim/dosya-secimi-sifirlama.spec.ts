@@ -56,7 +56,7 @@ async function sayfa(): Promise<{ page: Page; istekler: string[] }> {
 }
 
 function paket(bozuk: boolean): Record<string, unknown> {
-  const model = { ...ornekBasvuruModeli(), id: 'musteri-kaydi', ad: 'Müşteri Kaydı', ekranUrl: '/musteri/' } as Record<string, unknown> & { adimlar: Array<Record<string, unknown>> };
+  const model = { ...ornekBasvuruModeli(), id: 'musteri-kaydi', ad: 'Müşteri Kaydı', ekranUrl: '/musteri/' } as unknown as Record<string, unknown> & { adimlar: Array<Record<string, unknown>> };
   model.adimlar = bozuk ? [] : model.adimlar.map((a, i) => (i === 0 ? { ...a, baslik: `${String(a.baslik)} (yeni başlık)` } : a));
   return {
     tur: 'sayfa-paketi', surum: 1,

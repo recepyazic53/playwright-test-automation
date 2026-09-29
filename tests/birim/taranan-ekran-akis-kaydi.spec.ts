@@ -172,7 +172,7 @@ test('sürüm 1 model: koşu tanımı yoksa yükseltilmez; ortak akış / alt mo
   expect(v1.semaSurumu).toBe(1);
   expect(() => modeliDogrula(vt, projeId, kopya(v1), 'taranan.model.json')).not.toThrow();
   // Koşu tanımı yalnız başka bir akışta olsa da yükseltilir.
-  const akisli = { ...kopya(v1), akislar: [
+  const akisli: Nesne = { ...kopya(v1), akislar: [
     { id: 'ana', ad: 'Ana akış', varsayilan: true, adimlar: kopya(v1.adimlar) },
     { id: 'diger', ad: 'Diğer', adimlar: [{ ...(kopya(v1.adimlar) as Nesne[])[0], kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#gonder' }] } }] }
   ] };
