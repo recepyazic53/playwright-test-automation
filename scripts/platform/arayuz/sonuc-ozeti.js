@@ -8,7 +8,7 @@
 import { api, h, ikon, rozet } from './ortak.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
-import { farkHapi } from './sonuclar.js';
+import { farkHapi, oranSaglikSinifi } from './sonuclar.js';
 import { baslarkenKarti } from './baslarken.js';
 
 /** Kartta ilk bakışta gösterilen madde. */
@@ -25,6 +25,9 @@ const KARTLAR = [
   ['kapsam', 'Kapsam ve güvenlik', 'kalkan', 'Senaryosuz metotlar, denenmemiş koşul dalları, yedek, riskli izinler, ortam türü']
 ];
 
+/** Sağlık sınıfı → özet kutusunun renk sınıfı. */
+const KUTU_SINIFI = { basari: 'basarili', uyari: 'uyari', hata: 'basarisiz' };
+
 const yuzde = (v) => (v === null || v === undefined ? '—' : `%${Math.round(v).toLocaleString('tr-TR')}`);
 
 /**
@@ -35,6 +38,8 @@ const yuzde = (v) => (v === null || v === undefined ? '—' : `%${Math.round(v).
  */
 export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
   const donemMetni = h('span', { class: 'mono' }, aralikMetni(kayitliAralik()) || '');
+  const donemNotu = h('span', { class: 'soluk kucuk ozet-donem-notu', hidden: true },
+    'Özet, önceki dönemle karşılaştırabilmek için sabit bir dönem kullanır; başka dönem için tarih aralığını seçin.');
   const kutuAlani = h('div', { class: 'sonuc-kartlari ozet-kutulari', 'aria-busy': 'true' },
     KUTULAR.map(([anahtar, etiket]) => h('div', { class: 'sonuc-karti ozet-kutusu yukleniyor', 'data-kutu': anahtar },
       h('span', { class: 'kart-etiket' }, etiket), h('div', { class: 'iskelet' }, h('i', { class: 'yarim' }), h('i', {})))));
@@ -55,7 +60,7 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
         h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar/ozet' }, 'Sonuçlar'),
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Genel')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Sonuçlar — '), 'Genel')),
-        h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), 'Dönem ', donemMetni))),
+        h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), 'Dönem ', donemMetni), donemNotu)),
       h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'genel' }))),
     sekmeler,
     // Başlarken: ilk koşuya giden yol (tamamlanınca ya da gizlenince kaybolur; baslarken.js).
@@ -67,7 +72,13 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
 
   const sorgu = araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik());
   api(`/platform/sonuclar/farkindalik?${sorgu}`).then((v) => {
-    if (v.donem) donemMetni.textContent = `${v.donem.etiket}${v.donem.tumu ? ' (Tümü seçiliyken son 30 gün)' : ''} · önceki ${v.donem.oncekiEtiket}`;
+    // Tarih aralığı "Tümü" iken özet, önceki eşit dönemle karşılaştırılabilsin diye son 30 günü kullanır; bunu açıkça söyle.
+    if (v.donem) {
+      donemMetni.textContent = v.donem.tumu
+        ? `son 30 gün (${v.donem.etiket}) · önceki 30 gün (${v.donem.oncekiEtiket})`
+        : `${v.donem.etiket} · önceki ${v.donem.oncekiEtiket}`;
+      donemNotu.hidden = !v.donem.tumu;
+    }
     kutuAlani.removeAttribute('aria-busy');
     kutuAlani.replaceChildren(...KUTULAR.map(([anahtar, etiket, ikonAd, adres]) => ozetKutusu(v.ozet[anahtar], etiket, ikonAd, adres)));
     for (const [anahtar] of KARTLAR) kartCiz(kartlar[anahtar], v.kartlar[anahtar]);
@@ -86,7 +97,8 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
 /** Özet kutusu: dönem başarı oranı, önceki döneme göre fark (puan), sayılar; tıklayınca ilgili sekme. */
 function ozetKutusu(k, etiket, ikonAd, adres) {
   const fark = k && k.basari !== null && k.oncekiBasari !== null ? Math.round(k.basari - k.oncekiBasari) : null;
-  const sinif = !k || k.basari === null ? '' : k.kalan ? 'basarisiz' : 'basarili';
+  // Renk, soldaki "Sağlık noktası" açıklamasıyla aynı eşiklerden (oranSaglikSinifi): yeşil / sarı / kırmızı.
+  const sinif = !k || k.basari === null ? '' : KUTU_SINIFI[oranSaglikSinifi(k.basari)] || '';
   return h('a', { class: `sonuc-karti ozet-kutusu ${sinif}`, href: adres, 'aria-label': `${etiket}: ${k && k.basari !== null ? `başarı ${yuzde(k.basari)}` : 'bu dönemde koşu yok'} — sekmeyi aç` },
     h('span', { class: 'kart-etiket' }, ikon(ikonAd), etiket),
     h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, k ? yuzde(k.basari) : '—'), h('small', {}, 'başarı')),
