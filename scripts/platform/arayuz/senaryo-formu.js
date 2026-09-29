@@ -22,7 +22,7 @@ import {
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
 import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
-import { basvuru, degerBasvurusuYaz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { basvuru, basvurununTekDegeri, degerBasvurusuYaz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
@@ -159,7 +159,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const veriKosulari = JSON.parse(JSON.stringify(s.taslak?.veriKosulari ?? senaryo?.veriKosulari ?? {}));
   veriKosulari.gruplar ??= {};
   const modelGirissiz = baglam.model?.girisGerekmez === true;
-  const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit' };
+  // Koşullar (görünürlük) tablodan gelen değerle de değerlendirilir: seçilen satır(lar)dan, seçili ortamların hepsinde TEK değer
+  // çıkıyorsa o değer (sunucu her ortamı ayrı denetler; aynı kural: tablo-secimi.mjs > basvurununTekDegeri). Tablolar henüz
+  // okunmadıysa ya da değer satıra göre değişiyorsa koşul bilinmiyor kalır ("koşullu · satıra göre").
+  const dogrulamaBaglami = {
+    model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit',
+    tabloDegeri: (b) => (tabloListesi ? basvurununTekDegeri(tabloListesi, b, { tabloSecimleri, veriKosulari, ortamIdler: [...ortamSecimi] }) : null)
+  };
   const tumAlanlar = tumFormAlanlari(sema);
   // Koşullu değer listeleri (Veri > Tablolar): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
   // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi. Senaryo ayarının listesi (senaryoAyari; ekranda
@@ -228,7 +234,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     tabloIstegi ??= api(`/platform/tablolar?projeId=${encodeURIComponent(s.proje.id)}&secim=1`)
       .then((y) => { tabloListesi = y.tablolar || []; })
       .catch(() => { tabloListesi = []; })
-      .finally(() => { satirSecimiCiz(true); kayitGruplariniYenile(); });
+      .finally(() => { satirSecimiCiz(true); kayitGruplariniYenile(); planla(); });
     return tabloIstegi;
   }
   /** Satırın açık sütun değerleri (satır seçiminin koşulları; gizli sütun koşula girmez). */
@@ -322,6 +328,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     degisti = true;
     kayitGruplariniYenile();
     satirSecimiCiz(true);
+    planla();
     if (!diyagramAlani.hidden) diyagramiCiz();
   }
   function kayitGrubuCiz(g, kap) {
@@ -510,6 +517,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const alanlar = new Map();
   const adimKartlari = new Map();
   const bolumKaplari = new Map();
+  /** koşullu bölüm kimliği → "koşullu · …" çipi */
+  const bolumCipleri = new Map();
   const dokunulan = new Set();
   let gonderildi = false;
   let degisti = false;
@@ -549,17 +558,28 @@ function modelFormu(icerik, s, senaryo, baglam) {
       kart.alt.textContent = disarida ? 'Bu senaryoda koşulmaz (adım kapsamı dışında)' : kart.altMetin;
     }
     for (const [id, kap] of bolumKaplari) kap.hidden = g.bolumler[id] === false;
+    for (const [id, cip] of bolumCipleri) {
+      const satiraGore = g.satiraGore?.bolumler[id] === true;
+      cip.hidden = g.bolumler[id] !== null;
+      cip.title = satiraGore
+        ? 'Koşullu bölüm: koşul tablodan gelen değere bağlı ve değer seçilen satırlara göre değişiyor; bölüm gösterilir, zorunlu alanları zorunlu kabul edilir.'
+        : 'Koşullu bölüm: bu senaryonun bağlamında ekranda görünüp görünmediği bilinmiyor; zorunlu alanları zorunlu kabul edilir.';
+      cip.lastChild.textContent = satiraGore ? 'koşullu · satıra göre' : 'koşullu · bilinmiyor';
+    }
     for (const alan of tumAlanlar) {
       const k = alanlar.get(alan.id);
       if (!k) continue;
       const v = g.alanlar[alan.id];
       k.kap.hidden = v === false;
       if (k.gorunurlukCipi) {
+        const satiraGore = v === null && g.satiraGore?.alanlar[alan.id] === true;
         k.gorunurlukCipi.hidden = !alan.gorunurlukVar;
-        k.gorunurlukCipi.title = v === null
+        k.gorunurlukCipi.title = satiraGore
+          ? 'Koşullu alan: koşul tablodan gelen değere bağlı ve değer seçilen satırlara göre değişiyor; zorunlu kabul edilir.'
+          : v === null
           ? 'Koşullu alan: seçili bağlamda ekranda görünüp görünmediği bilinmiyor; zorunlu kabul edilir.'
           : 'Koşullu alan: bu senaryonun bağlamında ekranda görünür.';
-        k.gorunurlukCipi.lastChild.textContent = v === null ? 'koşullu · bilinmiyor' : 'koşullu';
+        k.gorunurlukCipi.lastChild.textContent = satiraGore ? 'koşullu · satıra göre' : v === null ? 'koşullu · bilinmiyor' : 'koşullu';
       }
       if (alan.tip === 'kimlik') {
         for (const alt of alan.altAlanlar) {
@@ -630,7 +650,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       el: h('div', { class: 'alan-ust' },
         h('label', { for: id }, alan.etiket, alan.zorunlu === true ? h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*') : null,
           alan.zorunlu === true ? h('span', { class: 'gorunmez' }, ' (zorunlu)') : null),
-        h('span', { class: 'sag' }, cip, mutlakaKutu, ...ekler)),
+        h('span', { class: 'sag secenek-seridi' }, cip, mutlakaKutu, ...ekler)),
       cip
     };
   }
@@ -668,7 +688,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         kontrolKaydet(alan.anahtar, [], hata, uyari);
         kayit.gorunurlukCipi = ust.cip;
         kap.classList.remove('bilerek-bos-acik');
-        yerlestir(kap, ust.el, ozet, hata, uyari);
+        yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, ozet, hata, uyari));
         return;
       }
       kayit.ozetCiz = null;
@@ -808,7 +828,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
         if (acik) for (const el of [govde, ...govde.querySelectorAll('input, select, textarea, button')]) if ('disabled' in el) el.disabled = true;
       }
       kayit.gorunurlukCipi = ust.cip;
-      yerlestir(kap, ust.el, govde, hata, uyari);
+      // Başlık (etiket + seçenekler şeridi) ve gövde (girdi + hata / uyarı) iki ayrı parça: aynı ızgara satırındaki alanların
+      // girdileri, başlık yükseklikleri farklı olsa da aynı hizadan başlar (stil.css > .alan-izgarasi, subgrid).
+      yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, govde, hata, uyari));
     };
     kayit.ciz = () => { ciz(); planla(); };
     ciz();
@@ -1004,7 +1026,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
     const govde = h('div', { class: 'adim-govdesi' });
     for (const bolum of adim.bolumler) {
       if (!bolum.alanlar.length) continue;
-      const grup = h('div', { class: 'bolum-grubu' }, adim.bolumler.filter((b) => b.alanlar.length).length > 1 || bolum.baslik !== adim.baslik ? h('h4', {}, bolum.baslik) : null,
+      // Koşullu bölüm: görünürlüğü bilinmiyorsa (ör. koşul tablodan gelen, satıra göre değişen değere bağlı) bölüm görünür kalır
+      // ve bunu açıklayan çip taşır; koşul bilindiğinde çip gizlidir (bölüm ya görünür ya gizli).
+      const cip = bolum.gorunurlukVar ? h('span', { class: 'kosullu-cip', 'data-bolum-cipi': bolum.id, hidden: true }, ikon('isaret'), 'koşullu') : null;
+      if (cip) bolumCipleri.set(bolum.id, cip);
+      const baslikVar = adim.bolumler.filter((b) => b.alanlar.length).length > 1 || bolum.baslik !== adim.baslik;
+      const grup = h('div', { class: 'bolum-grubu', 'data-bolum': bolum.id }, baslikVar ? h('h4', {}, bolum.baslik, cip ? ' ' : null, cip) : cip ? h('div', { class: 'bolum-kosulu' }, cip) : null,
         kayitGrubuBasliklari(bolum.alanlar),
         h('div', { class: 'alan-izgarasi' }, bolum.alanlar.map(alanCiz)));
       bolumKaplari.set(bolum.id, grup);
@@ -1153,7 +1180,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   };
   const veriKosusuDurumu = () => ({
     veriKosulari, ortam: s.ortam, ortamAdi, tablolar: tabloListesi || [], tabloSecimleri,
-    degisti: () => { degisti = true; satirSecimiCiz(true); kayitGruplariniYenile(); }
+    degisti: () => { degisti = true; satirSecimiCiz(true); kayitGruplariniYenile(); planla(); }
   });
   /**
    * Grubu olmayan (tekil) tablo başvurusunda sade çoklu çalıştırma ("Uyan her satır ayrı test"; veri-kosusu-secimi.js). Açılırken
@@ -1190,6 +1217,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       }
       degisti = true;
       satirSecimiCiz(true);
+      planla();
       if (!diyagramAlani.hidden) diyagramiCiz();
     });
     const uyan = uyanSatirlar(t, secim, { ortamId: s.ortam.id });
@@ -1305,7 +1333,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const ortamKutulari = h('div', { class: 'ortam-secimleri', role: 'group', 'aria-label': 'Senaryonun geçerli olduğu ortamlar' },
     s.ortamlar.map((o) => {
       const k = h('input', { type: 'checkbox', checked: ortamSecimi.has(o.id) });
-      k.addEventListener('change', () => { if (k.checked) ortamSecimi.add(o.id); else ortamSecimi.delete(o.id); degisti = true; ortamHata.textContent = ''; girisCiz(); });
+      k.addEventListener('change', () => { if (k.checked) ortamSecimi.add(o.id); else ortamSecimi.delete(o.id); degisti = true; ortamHata.textContent = ''; girisCiz(); planla(); });
       return h('label', {}, k, o.ad);
     }));
   const ortamHata = h('div', { class: 'alan-hatasi', role: 'alert' });

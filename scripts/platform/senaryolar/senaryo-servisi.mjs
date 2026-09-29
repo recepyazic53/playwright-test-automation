@@ -24,7 +24,7 @@ import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiO
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula, senaryoAyariAlanlari } from './deger-listesi-modeli.mjs';
 import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
 import { BAGLAM_ONEKI, tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { basvuru, grupAnahtari, sutunBul, tabloBul, tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
+import { basvuru, basvurununTekDegeri, grupAnahtari, sutunBul, tabloBul, tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari.mjs';
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { ayarBasvurulariniDenetle, modelAlanBilgisi, tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
@@ -565,12 +565,18 @@ export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
  * @returns {{ veri: Nesne; uyarilar: Array<{ alan: string; mesaj: string }> }}
  */
 function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {{ model: Nesne; altModeller: Record<string, Nesne> }} */ mb,
-  /** @type {Nesne} */ veri, /** @type {string[]} */ ortamIdleri, /** @type {Map<string, string>} */ ortamAdlari) {
+  /** @type {Nesne} */ veri, /** @type {string[]} */ ortamIdleri, /** @type {Map<string, string>} */ ortamAdlari,
+  /** @type {{ tabloSecimleri?: unknown; veriKosulari?: unknown }} */ satirlar = {}) {
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   let sonuc = kopya(veri);
   // Değeri ${Tablo.Sütun} olan alanlar: tablo ve sütun projede olmalı (değer koşuda seçilen satırdan gelir; ekran-basvurulari.mjs).
-  const tablolar = tabloBasvurusuVarMi(veri)
-    ? tablolariListele(vt, projeId).map((t) => ({ ad: t.ad, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli })) }))
+  const tamTablolar = tabloBasvurusuVarMi(veri) ? tablolariListele(vt, projeId) : undefined;
+  const tablolar = tamTablolar?.map((t) => ({ ad: t.ad, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli })) }));
+  // Koşullar (görünürlük) tablodan gelen değerle, senaryonun seçtiği satırdan TEK değer çıkıyorsa değerlendirilir (formla aynı kural).
+  const tabloSecimleri = nesneMi(satirlar.tabloSecimleri) ? /** @type {Record<string, Record<string, string>>} */ (satirlar.tabloSecimleri) : null;
+  const veriKosulari = nesneMi(satirlar.veriKosulari) ? /** @type {{ gruplar?: Record<string, { kip: string; satirlar?: string[] }> }} */ (satirlar.veriKosulari) : null;
+  const tabloDegeri = (/** @type {string} */ ortamId) => tamTablolar
+    ? (/** @type {import('../tablolar/tablo-secimi.mjs').Basvuru} */ b) => basvurununTekDegeri(tamTablolar, b, { tabloSecimleri, veriKosulari, ortamIdler: [ortamId] })
     : undefined;
   /** @type {Array<{ alan: string; mesaj: string }>} */
   const hatalar = [];
@@ -586,14 +592,14 @@ function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ proje
       if (alan.tip !== 'altModel' || !nesneMi(sonuc[alan.anahtar])) continue;
       // Alt model alanları modelde "eslesme.kayitAlani" ile tanımlıdır (kayıt kuralları doğrulayıcıdadır).
       if (!alan.alanlar.length) continue;
-      const on = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar });
+      const on = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar, tabloDegeri: tabloDegeri(ortamId) });
       if (on.hatalar.some((h) => h.alan.startsWith(`${alan.anahtar}.`) || h.alan === alan.anahtar)) continue;
       const varsayilan = profiller && nesneMi(profiller.varsayilanKayit) ? profiller.varsayilanKayit : null;
       const kart = kartiNormallestir(/** @type {Nesne} */ (sonuc[alan.anahtar]), varsayilan);
       if (varsayilan && krediKartlariAyniMi(kart, varsayilan)) delete sonuc[alan.anahtar];
       else sonuc[alan.anahtar] = kart;
     }
-    const d = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar });
+    const d = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar, tabloDegeri: tabloDegeri(ortamId) });
     const onEk = birden ? `[${ortamAdlari.get(ortamId) ?? ortamId}] ` : '';
     for (const h of d.hatalar) if (!hatalar.some((x) => x.alan === h.alan && x.mesaj.endsWith(h.mesaj))) hatalar.push({ alan: h.alan, mesaj: `${onEk}${h.mesaj}` });
     for (const u of d.uyarilar) if (!uyarilar.some((x) => x.alan === u.alan && x.mesaj.endsWith(u.mesaj))) uyarilar.push({ alan: u.alan, mesaj: `${onEk}${u.mesaj}` });
@@ -882,7 +888,10 @@ function senaryoKaydetIslem(vt, girdi, secenekler = {}) {
     if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; senaryo verisi yalnızca ekran modeliyle düzenlenebilir.');
     if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
     const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
-    const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: baslik }, ortamIdleri, ortamAdlari);
+    const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: baslik }, ortamIdleri, ortamAdlari, {
+      tabloSecimleri: girdi.tabloSecimleri !== undefined ? girdi.tabloSecimleri : mevcut?.icerik.tabloSecimleri,
+      veriKosulari: girdi.veriKosulari !== undefined ? girdi.veriKosulari : mevcut?.icerik.veriKosulari
+    });
     uyarilar = d.uyarilar;
     // Kayıt grubu tabloya da eklenir (aynı işlemde; veri yerinde ${…} başvurusuna çevrilir).
     if (girdi.yeniTabloSatirlari !== undefined && girdi.yeniTabloSatirlari !== null) {
@@ -1268,7 +1277,7 @@ function modelDenemePaketi(vt, girdi, mb, secenekler) {
   const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
   const geciciBaslik = `${DENEME_BASLIK_ON_EKI}${secenekler.geciciEk}`;
   const d = veriyiDogrula(vt, girdi.projeId, mb, { .../** @type {Nesne} */ (girdi.veri), [baslikAnahtari]: geciciBaslik }, [girdi.ortamId],
-    new Map(ortamlar.map((o) => [o.id, o.ad])));
+    new Map(ortamlar.map((o) => [o.id, o.ad])), { tabloSecimleri: girdi.tabloSecimleri });
   const denemeId = `deneme-${secenekler.geciciEk}`;
   const mutlaka = Array.isArray(girdi.mutlakaGorunmeli) ? girdi.mutlakaGorunmeli.filter((x) => typeof x === 'string').slice(0, 500) : [];
   return {

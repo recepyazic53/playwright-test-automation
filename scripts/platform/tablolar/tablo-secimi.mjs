@@ -175,6 +175,41 @@ export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId, satirSecimi) 
   return { tablo: t, sutun, satir, deger: String(d) };
 }
 
+/**
+ * KOŞUL DEĞERLENDİRMESİ İÇİN başvurunun TEK değeri (senaryo doğrulayıcısının baglam.tabloDegeri'si; form ve sunucu aynı kuralı
+ * kullanır): senaryonun satır seçimiyle (tabloSecimleri; çalıştırma biçimi 'secili' ise işaretli satırlar, 'tumu' ise uyan tüm
+ * satırlar) ve ortam(lar)la uyan satırların bu sütundaki değerleri TEK ise { deger (tablodaki), sayfa (sayfa karşılığı) }. Değer satıra
+ * göre değişiyorsa (birden çok farklı değer), satır yoksa, satırda boşsa, sütun gizliyse ya da tablo / sütun yoksa null (bilinmiyor).
+ * ortamIdler: senaryonun ortamları (birden çoksa hepsinde aynı olmalı); verilmezse tüm satırlar.
+ * @param {ReadonlyArray<Tablo>} tablolar @param {Basvuru} b
+ * @param {{ tabloSecimleri?: Record<string, Record<string, string>> | null; veriKosulari?: { gruplar?: Record<string, { kip: string; satirlar?: string[] }> } | null;
+ *   ortamIdler?: ReadonlyArray<string | null> }} [s]
+ * @returns {{ deger: string; sayfa: string } | null}
+ */
+export function basvurununTekDegeri(tablolar, b, s = {}) {
+  const t = tabloBul([...tablolar], b.tablo);
+  const sutun = t ? sutunBul(t, b.sutun) : undefined;
+  if (!t || !sutun || sutun.gizli) return null;
+  const gk = grupAnahtari(t.id, b.etiket);
+  const ham = s.tabloSecimleri?.[gk];
+  const secim = ham && typeof ham === 'object' && !Array.isArray(ham) ? ham : {};
+  const ayar = s.veriKosulari?.gruplar?.[gk];
+  const isaretli = ayar && Array.isArray(ayar.satirlar) ? ayar.satirlar.map(String) : [];
+  const ortamlar = s.ortamIdler && s.ortamIdler.length ? s.ortamIdler : [null];
+  /** @type {Set<Satir>} */
+  const satirlar = new Set();
+  for (const o of ortamlar) {
+    const uyan = ayar && ayar.kip === 'secili'
+      ? t.satirlar.filter((r) => isaretli.includes(String(r.id)) && (!r.ortamId || !o || r.ortamId === o))
+      : uyanSatirlar(t, secim, { ortamId: o });
+    for (const r of uyan) satirlar.add(r);
+  }
+  const degerler = new Set([...satirlar].map((r) => r.degerler[sutun.ad] ?? ''));
+  if (degerler.size !== 1) return null;
+  const deger = String([...degerler][0]);
+  return deger ? { deger, sayfa: sayfaDegeri(sutun, deger) } : null;
+}
+
 const dolu = (/** @type {unknown} */ v) => v !== null && v !== undefined && v !== '';
 
 /**

@@ -1207,10 +1207,22 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .alan-izgarasi { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 12px 14px; align-items: start; }
 .alan-izgarasi > .genis { grid-column: 1 / -1; }
 .model-alani { margin: 0; min-width: 0; }
-.model-alani > .alan-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; min-height: 18px; min-width: 0; }
+/* Alan başlığı: önce etiket (ve zorunlu *), altında seçenekler şeridi (koşullu çipi, Mutlaka görünmeli, Tablodan, Bilerek boş bırak).
+   Şerit sığmazsa kendi içinde sarar; hiçbir öğe başka alanın kutusuna taşmaz. */
+.model-alani > .alan-ust { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 6px; min-height: 18px; min-width: 0; }
 .model-alani > .alan-ust label { margin: 0; }
+.model-alani > .alan-ust > label { overflow-wrap: anywhere; }
+.model-alani > .alan-ust > label:empty { display: none; }
 .model-alani > .alan-ust .zorunlu-isareti { color: var(--hata); font-weight: 700; margin-left: 2px; }
-.model-alani > .alan-ust .sag { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 6px; min-width: 0; }
+.model-alani > .alan-ust .sag { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 4px 10px; min-width: 0; }
+.model-alani > .alan-ust .sag:empty { display: none; }
+.model-alani > .alan-ust .sag > * { max-width: 100%; }
+/* Aynı ızgara satırındaki alanlar ortak iki satırlı ızgarayı paylaşır (başlık | gövde): başlık yükseklikleri farklı olsa da girdiler aynı
+   hizadan başlar. subgrid yoksa alanlar eskisi gibi üstten hizalanır. */
+@supports (grid-template-rows: subgrid) {
+  .alan-izgarasi > .model-alani:not(.genis):has(> .alan-govdesi) { display: grid; grid-template-rows: subgrid; grid-row: span 2; row-gap: 0; align-content: start; }
+  .alan-izgarasi > .model-alani:not(.genis) > .alan-ust { align-self: start; }
+}
 .kosullu-cip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 5px; font: 600 10px var(--yazi-mono); letter-spacing: .02em; color: var(--durdu); background: var(--durdu-zemin); cursor: help; }
 .kosullu-cip .ikon { width: 11px; height: 11px; }
 .mutlaka-gorunmeli { display: inline-flex; align-items: center; gap: 5px; margin: 0; font: 500 11px var(--yazi); color: var(--metin-3); cursor: pointer; white-space: nowrap; }
