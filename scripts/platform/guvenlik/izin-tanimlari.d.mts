@@ -2,7 +2,10 @@
 export type IzinIslemi = { ad: string; uclar: readonly string[]; kosul?: string };
 export type IzinTanimi = {
   anahtar: string; etiket: string; aciklama: string; yapabilecekleri: readonly string[]; yerler: readonly string[];
-  islemler: readonly IzinIslemi[]; risk: string; kapaliyken: string;
+  islemler: readonly IzinIslemi[]; risk: string;
+  /** Açık kalması Sonuçlar > Özet > Kapsam ve güvenlik kartında hatırlatılan izin. */
+  yuksekRisk?: boolean;
+  kapaliyken: string;
 };
 export declare const IZIN_TANIMLARI: readonly IzinTanimi[];
 export declare const IZIN_ANAHTARLARI: readonly string[];

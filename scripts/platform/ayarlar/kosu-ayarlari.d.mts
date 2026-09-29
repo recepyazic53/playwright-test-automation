@@ -21,6 +21,8 @@ export interface KosuAyarlari {
   medyaInceltme: 'kapali' | 'basarili' | 'hatali' | 'ikisi'; medyaInceltmeGun: number; medyaInceltmeKoru: boolean;
   /** Ayarlar > Koşu > Tek senaryoda en çok veri koşusu (tablodan çoklu satır). */
   enCokVeriKosusu: number;
+  /** Ayarlar > Arayüz > Sonuçlar özeti (Sonuçlar > Genel > Özet kartlarının eşikleri; sonuclar/farkindalik.mjs). */
+  ozetKirmiziGun: number; ozetYavaslamaYuzde: number; ozetKosmayanGun: number; ozetYedekGun: number;
 }
 export declare const KOSU_AYAR_ANAHTARI: string;
 export declare const KOSU_AYAR_TANIMLARI: ReadonlyArray<KosuAyarTanimi>;

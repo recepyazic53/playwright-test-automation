@@ -13,6 +13,8 @@
 //                                 (koşul kodu: guvenlik/uc-denetimi.mjs). uclar boşsa işlem bir HTTP ucu değildir
 //                                 (zamanlayıcı, koşucu, otomatik bildirim) ve aynı merkezden denetlenir.
 //   risk                          riski
+//   yuksekRisk                    açık kalması ayrıca hatırlatılan izin (Sonuçlar > Özet > Kapsam ve güvenlik; sonuclar/farkindalik.mjs):
+//                                 veriyi kalıcı değiştiren, canlı ortama giden, dışarı veri gönderen ya da güvenliği gevşeten izinler
 //   kapaliyken                    izin kapalıyken ne olur
 
 import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
@@ -21,7 +23,7 @@ import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
  * @typedef {{ ad: string; uclar: readonly string[]; kosul?: string }} IzinIslemi
  * @typedef {{
  *   anahtar: string; etiket: string; aciklama: string; yapabilecekleri: readonly string[]; yerler: readonly string[];
- *   islemler: readonly IzinIslemi[]; risk: string; kapaliyken: string
+ *   islemler: readonly IzinIslemi[]; risk: string; yuksekRisk?: boolean; kapaliyken: string
  * }} IzinTanimi
  */
 
@@ -135,6 +137,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'SQL adımında yazma sorgusu', uclar: [...EKRAN_KOSU_UCLARI, '/platform/servis-akisi/dene', '/platform/servis-akisi/kos', ...UCTAN_UCA_UCLARI], kosul: '"Yalnız okuma" kapalı bağlantıda yazma sorgusu çalışırken' }
     ],
     risk: 'Veriler kalıcı olarak değişebilir ya da silinebilir; geri alınamayabilir.',
+    yuksekRisk: true,
     kapaliyken: 'Yazma sorgusu çalıştırılmaz ve "Yalnız okuma" kapatılamaz; okuma sorguları (izni açıksa) çalışır.'
   },
   {
@@ -166,6 +169,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Canlı ortamda zamanlanmış koşu', uclar: [] }
     ],
     risk: 'Gerçek kullanıcıların verisi ve gerçek işlemler etkilenebilir. İzin açıkken de canlı ortama istek atan her işlemde ayrıca onay sorulur.',
+    yuksekRisk: true,
     kapaliyken: 'Canlı ortamda hiçbir koşu, Dene, tarama ya da kayıt başlamaz; test ortamındaki çalışmalar etkilenmez.'
   },
   {
@@ -212,6 +216,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Koşu bitti bildirimi', uclar: [] }
     ],
     risk: 'Test sonuçları, hata metinleri ve ekler kurum dışındaki bir sisteme çıkabilir.',
+    yuksekRisk: true,
     kapaliyken: 'Dışarıya hiçbir bildirim ya da kayıt gönderilmez; bağlantıların durumuna "izin kapalı" yazılır.'
   },
   {
@@ -250,6 +255,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Windows oturum açılışı görevi ekleme', uclar: ['/platform/zamanlama/tercih'], kosul: 'oturum açılışı tercihi açılırken' }
     ],
     risk: 'Windows oturumunuzu açan herkes kasanın kilidini açmadan zamanlanmış koşuları çalıştırabilir; bilgisayar açılışı değişir.',
+    yuksekRisk: true,
     kapaliyken: 'Görev eklenmez, anahtar dosyası yazılmaz. Mevcut görevi / dosyayı kaldırmak her zaman serbesttir.'
   },
   {
@@ -270,6 +276,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'TLS doğrulaması kapalı istek', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene', ...SERVIS_KOSU_UCLARI, ...UCTAN_UCA_UCLARI], kosul: 'servisin TLS doğrulaması kapalıysa' }
     ],
     risk: 'Sahte sertifikalı bir sunucu araya girip istekleri ve yanıtları (kimlik bilgileri dahil) okuyabilir.',
+    yuksekRisk: true,
     kapaliyken: 'TLS doğrulaması kapatılamaz; doğrulaması kapalı servislere istek gönderilmez.'
   }
 ]);

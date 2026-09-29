@@ -35,6 +35,7 @@
 //        — AÇIK göster: tek bir gizli değeri düz metin döner (yalnızca kullanıcı isteyince).
 // Koşu sonuçları (şema v5; Playwright raporlayıcısı: scripts/platform/raporlayici.mjs):
 //   GET  /platform/sonuclar/ozet?projeId=&urun=&baslangic=&bitis=(|&gun=)   ürün listesi, kartlar, trend, koşu geçmişi (aralıkta)
+//   GET  /platform/sonuclar/farkindalik?projeId=&baslangic=&bitis=   Sonuçlar > Özet: özet kutuları + Dikkat / Bakım / Kapsam ve güvenlik kartları
 //   GET  /platform/sonuclar/kosu?id=                  koşu detayı (senaryo bazında sonuçlar)
 //   GET  /platform/sonuclar/sonuc?id=                 test detayı (hata, adımlar, medya listesi)
 //   GET  /platform/sonuclar/kaliplar?projeId=&urun=&baslangic=&bitis=   hata kalıpları
@@ -244,6 +245,7 @@ import {
   gosterimMaskesi, hataKaliplariniMaskele, kosuDetayiniMaskele, servisSonucunuMaskele, sonucDetayiniMaskele
 } from './sonuclar/gosterim-maskesi.mjs';
 import { sorgudanAralik } from './sonuclar/aralik.mjs';
+import { farkindalikVerisi } from './sonuclar/farkindalik.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
 import {
   raporIndir, raporListesi, raporOnizle, raporPdf, raporSaklamaTemizligi, raporSecenekleri, raporSilUc, raporVerileriEkrani, raporYenidenOlustur
@@ -1424,19 +1426,34 @@ const GET_UCLARI = new Map([
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     return hataKaliplariniMaskele(hataKaliplari(db, projeId, { urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q) }), gosterimMaskesi(db, projeId));
   }],
+  // Sonuçlar > Genel > Özet: Dikkat / Bakım / Kapsam ve güvenlik kartları ve özet kutuları (sonuclar/farkindalik.mjs; kısa önbellekli).
+  ['/platform/sonuclar/farkindalik', (db, q) => farkindalikVerisi(db, kimlikAl(q.get('projeId'), 'projeId'), { aralik: sorgudanAralik(q), sonYedek: sonYedekZamani(db) })],
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
   ['/platform/yedek/klasor', (db) => ({ klasor: yedekKlasoruBilgisi(db) })],
-  ['/platform/yedek/otomatik-liste', (db) => {
-    const klasor = varsayilanYedekKlasoru(db);
-    const dosyalar = existsSync(klasor)
-      ? readdirSync(klasor).filter((ad) => ad.endsWith(YEDEK_UZANTISI)).map((ad) => {
-        const s = statSync(join(klasor, ad));
-        return { ad, boyut: s.size, zaman: s.mtime.toISOString(), otomatik: ad.startsWith('otomatik-') };
-      }).sort((a, b) => b.zaman.localeCompare(a.zaman))
-      : [];
-    return { klasor, dosyalar };
-  }]
+  ['/platform/yedek/otomatik-liste', (db) => ({ klasor: varsayilanYedekKlasoru(db), dosyalar: yedekDosyalari(db) })]
 ]);
+
+/** Varsayılan yedek klasöründeki .tayedek dosyaları (en yeni önce). @param {import('./veritabani/baglanti.mjs').Veritabani} db */
+function yedekDosyalari(db) {
+  const klasor = varsayilanYedekKlasoru(db);
+  return existsSync(klasor)
+    ? readdirSync(klasor).filter((ad) => ad.endsWith(YEDEK_UZANTISI)).map((ad) => {
+      const s = statSync(join(klasor, ad));
+      return { ad, boyut: s.size, zaman: s.mtime.toISOString(), otomatik: ad.startsWith('otomatik-') };
+    }).sort((a, b) => b.zaman.localeCompare(a.zaman))
+    : [];
+}
+
+/**
+ * Son yedeğin zamanı (ISO; yoksa null): yedek klasöründeki en yeni dosya ya da son dışa aktarma (hangisi yeniyse).
+ * @param {import('./veritabani/baglanti.mjs').Veritabani} db
+ */
+function sonYedekZamani(db) {
+  let dosya = null;
+  try { dosya = yedekDosyalari(db)[0]?.zaman ?? null; } catch { dosya = null; }
+  const disaAktarma = degisiklikDurumu(db).sonDisaAktarma;
+  return [dosya, disaAktarma].filter((z) => typeof z === 'string').sort().pop() ?? null;
+}
 for (const [yol, islem] of SERVIS_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of TABLO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // SQL adımları: veritabanı bağlantısı seçim listesi (sql/sorgu-bagdastirici.mjs).
