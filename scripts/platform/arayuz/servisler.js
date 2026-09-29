@@ -34,7 +34,7 @@ import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrol
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
-import { servisOnerileriPaneli } from './servis-onerileri.js';
+import { servisOnerileriAdresi, servisOnerileriSayfasi } from './servis-onerileri.js';
 import { sonYanitliKosu, yanitKontrolPaneli } from './yanit-kontrol-paneli.js';
 import { talepAlani } from './talep-alani.js';
 import { talebeUyar, talepKosuDugmesi, talepSecenekleri } from './talep-kosusu.js';
@@ -174,6 +174,8 @@ export function servislerEkrani(main, parcalar, baglam) {
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
   if (tur === 'yeni') { servisEkleSayfasi(icerik, proje).catch(hata); return; }
   if (!servisId) { yerlestir(icerik, bosDurum('Servis seçin.', 'Soldaki listeden bir servis seçin ya da yeni servis ekleyin.', { ikon: 'ag', eylem: h('a', { class: 'dugme birincil', href: '#/servisler/yeni' }, ikon('arti'), 'Servis ekle') })); return; }
+  // Senaryo önerileri ayrı sayfa (#/servisler/s/<id>/oneriler; ekran önerileri sayfasının karşılığı).
+  if (sekme === 'oneriler') { oneriSayfasiAc(icerik, proje, servisId).catch(hata); return; }
   servisSayfasi(icerik, proje, servisId, SEKMELER.some(([a]) => a === sekme) ? sekme : sekme === 'senaryo' ? 'senaryo' : 'senaryolar', altKimlik ? decodeURIComponent(altKimlik) : null).catch(hata);
 }
 
@@ -471,6 +473,29 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
 // Servis sayfası
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Başlıktaki "Senaryo önerileri" düğmesi (ekran senaryolarındaki düğmenin karşılığı): servisin metodu varsa (senaryo oluşturulabilir)
+ * öneriler sayfasını açar. Öneri kaydetmez; kullanıcı ekleyince senaryo oluşur.
+ */
+function oneriDugmesi(s) {
+  return (s.ayarlar.operasyonlar || []).length
+    ? h('a', { class: 'dugme senaryo-onerileri-dugmesi', href: servisOnerileriAdresi(s.id), title: 'Servis şemasından ve mevcut senaryolardan senaryo önerileri (siz eklemeden senaryo oluşmaz)' }, ikon('simsek'), 'Senaryo önerileri')
+    : null;
+}
+
+/** Senaryo önerileri sayfası (servis-onerileri.js). "Önizle" yeni senaryo düzenleyicisini taslakla açar (kaydetmez). */
+async function oneriSayfasiAc(icerik, proje, servisId) {
+  const [d, ortamlar] = await Promise.all([api(`/platform/servis?projeId=${q(proje.id)}&id=${q(servisId)}`), ortamlariAl(proje)]);
+  const s = d.servis;
+  servisOnerileriSayfasi(icerik, {
+    proje, s, ortamlar,
+    onizle: (o) => {
+      bekleyenTaslak = { servisId: s.id, baslik: o.baslik, icerik: o.icerik, not: [o.gerekce, o.engel, o.eksikler.length ? `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')}` : ''].filter(Boolean).join(' · ') };
+      location.hash = `#/servisler/s/${q(s.id)}/senaryo/yeni`;
+    }
+  });
+}
+
 async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   const [d, ortamlar] = await Promise.all([api(`/platform/servis?projeId=${q(proje.id)}&id=${q(servisId)}`), ortamlariAl(proje)]);
   const s = d.servis;
@@ -491,7 +516,7 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
           h('span', {}, ikon('liste'), `${s.senaryoSayisi} senaryo`),
           s.ayarlar.erisim ? h('span', { title: tarihMetni(s.ayarlar.erisim.zaman) }, ikon('onay'), 'erişim kontrol edildi') : null,
           son ? h('span', { title: `${sonOrtamAdi ? `${sonOrtamAdi} · ` : ''}${tarihMetni(son.baslangic)}` }, ikon('saat'), `son: ${DURUM[son.durum]?.[0] ?? son.durum}${sonOrtamAdi ? ` (${sonOrtamAdi})` : ''}`) : null)),
-      h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'servis', id: s.id }), h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
+      h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'servis', id: s.id }), oneriDugmesi(s), h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
     // Riskli olup olmadığı belirtilmemiş ortam (riskli sayılır): uyarı + Ayarlar bağlantısı.
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Servis bölümleri' },
@@ -596,16 +621,12 @@ function beklenenOzeti(kontroller) {
 }
 
 function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortamlar = []) {
-  // Senaryo önerileri (servis-onerileri.js): kural tabanlı taslaklar; "Önizle" yeni senaryo düzenleyicisini taslakla açar (kaydetmez).
-  const oneriPaneli = servisOnerileriPaneli(proje, s, ortamlar, {
-    yenile,
-    onizle: (o) => {
-      bekleyenTaslak = { servisId: s.id, baslik: o.baslik, icerik: o.icerik, not: [o.gerekce, o.engel, o.eksikler.length ? `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')}` : ''].filter(Boolean).join(' · ') };
-      location.hash = `#/servisler/s/${q(s.id)}/senaryo/yeni`;
-    }
-  });
+  // Senaryo önerileri ayrı sayfada (başlıktaki düğme); burada yalnız kısa bağlantı (ekran sayfasındaki bağlantının karşılığı).
+  const oneriBaglantisi = oneriDugmesi(s)
+    ? h('p', { class: 'kucuk servis-onerileri-baglantisi' }, h('a', { href: servisOnerileriAdresi(s.id) }, 'Senaryo önerileri →'))
+    : null;
   if (!senaryolar.length) {
-    yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin, SoapUI dosyasından aktarın ya da aşağıdaki önerilerden başlayın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }), oneriPaneli);
+    yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin, SoapUI dosyasından aktarın ya da "Senaryo önerileri"nden başlayın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }), oneriBaglantisi);
     return;
   }
   // Servis değişince seçim ve filtreler sıfırlanır; aynı serviste yenilemeden sonra korunur.
@@ -798,7 +819,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama),
       kosudaSecimi.kap, operasyonSecimi.kap, kapsamSecimi.kap, sonSecimi.kap, talepSecimi ? talepSecimi.kap : null, talepKosusu, temizle, ozetAlani),
-    topluAlani, tabloAlani, oneriPaneli);
+    topluAlani, tabloAlani, oneriBaglantisi);
 
   function ciz() {
     const gorunen = gorunenler();

@@ -1,6 +1,7 @@
-// KORUMA TESTLERİ — servis senaryo önerileri arayüzü (Servisler > servis > Senaryolar > "Senaryo önerileri"): panel açılır, kapsam ve
-// gerekçeli liste görünür; "Ekle" senaryoyu "Koşuda" kapalı kaydeder (beklenen: SOAP Fault, mesaj yok) ve servise HİÇBİR istek gitmez;
-// "Reddet" (neden seçilerek) öneriyi gizler ve kararı servis + metot kimliğiyle kaydeder; "Önizle" düzenleyiciyi taslakla açar (kaydetmez);
+// KORUMA TESTLERİ — servis senaryo önerileri sayfası (Servisler > servis > başlıkta "Senaryo önerileri"; #/servisler/s/<id>/oneriler):
+// düğme başlıkta "Senaryo ekle"nin yanında, servis sayfasında öneri kartı yok; kapsam ve gerekçeli liste görünür; "Ekle" senaryoyu
+// "Koşuda" kapalı kaydeder (beklenen: SOAP Fault, mesaj yok) ve servise HİÇBİR istek gitmez; "Reddet" (neden seçilerek) öneriyi gizler
+// ve kararı servis + metot kimliğiyle kaydeder; "Önizle" düzenleyiciyi taslakla açar (kaydetmez); kırıntıyla servise dönülür;
 // 1440 px ve 390 px'te yatay taşma yok. Yalnız yerel Nöbetçi + 127.0.0.1 sahte SOAP servisi.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -66,13 +67,12 @@ test.describe('servis senaryo önerileri arayüzü', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('panel: kapsam + gerekçeli liste; Ekle (Koşuda kapalı, Hata beklenir) istek atmaz; Reddet kararı kaydeder; Önizle taslakla açar', async () => {
+  test('sayfa: kapsam + gerekçeli liste; Ekle (Koşuda kapalı, Hata beklenir) istek atmaz; Reddet kararı kaydeder; Önizle taslakla açar', async () => {
     test.setTimeout(90_000);
     const istekOnce = servis.istekler.length;
     const { page, hatalar, kapat } = await sayfa();
-    await page.goto(`/#/servisler/s/${servisId}`);
-    const panel = page.getByRole('region', { name: 'Senaryo önerileri' });
-    await panel.getByRole('button', { name: 'Önerileri göster' }).click();
+    await page.goto(`/#/servisler/s/${servisId}/oneriler`);
+    const panel = page.locator('.icerik-alani');
     await expect(panel.getByRole('group', { name: 'Kapsam' })).toContainText('Metotlar');
     await expect(panel.locator('[data-olcu="metotlar"]')).toContainText('1 / 2');
     // Tüm metotlar: senaryosu olmayan metoda başarılı akış önerisi.
@@ -89,7 +89,7 @@ test.describe('servis senaryo önerileri arayüzü', () => {
     expect(eklenen).toMatchObject({ kosuyaDahil: false, kapsam: 'test' });
     expect(eklenen!.icerik.kontroller).toEqual([{ tur: 'soapHatasi' }]);
     expect(eklenen!.icerik.govde).toContain('<Tutar>1001</Tutar>');
-    // Panel yenilemeden sonra açık kalır; eklenen öneri artık kapsanmış (çıkmaz).
+    // Liste yeniden okunur; eklenen öneri artık kapsanmış (çıkmaz).
     await expect(panel.getByRole('list', { name: 'Öneriler' })).toBeVisible();
     await expect(panel.locator('li.oneri', { hasText: 'Negatif: Tutar = 1001' })).toHaveCount(0);
     // Reddet (neden: Gereksiz): öneri gizlenir, karar servis + metotla yazılır.
@@ -114,28 +114,102 @@ test.describe('servis senaryo önerileri arayüzü', () => {
     await expect(page.getByLabel('Koşuya dahil')).not.toBeChecked();
     expect((await senaryolar()).length).toBe(sayi);
     await tasmaYok(page);
-    // Panel ve önizleme servise hiçbir istek atmadı.
+    // Sayfa ve önizleme servise hiçbir istek atmadı.
     expect(servis.istekler.length).toBe(istekOnce);
     expect(hatalar).toEqual([]);
     await kapat();
   });
 
-  test('390 px: öneri paneli (liste, kapsam eksikleri, kombinasyon alanları) ve önizleme yatay taşmaz', async () => {
+  test('390 px: öneri sayfası (liste, kapsam eksikleri, kombinasyon alanları) ve önizleme yatay taşmaz', async () => {
     test.setTimeout(60_000);
     const { page, hatalar, kapat } = await sayfa(390);
-    await page.goto(`/#/servisler/s/${servisId}`);
-    const panel = page.getByRole('region', { name: 'Senaryo önerileri' });
-    // Panel önceki testte açık bırakıldı (oturum durumu yalnız bu sekmede): yeni sayfada kapalı açılır.
-    await panel.getByRole('button', { name: 'Önerileri göster' }).click();
+    await page.goto(`/#/servisler/s/${servisId}/oneriler`);
+    const panel = page.locator('.icerik-alani');
     await panel.getByLabel('Metot').selectOption('SiparisVer');
     await expect(panel.getByRole('list', { name: 'Öneriler' })).toBeVisible();
     await panel.locator('[data-olcu="alanlar"]').click();
     await expect(panel.getByRole('list', { name: 'Alanlar: eksikler' })).toBeVisible();
     await expect(panel.getByRole('group', { name: 'İkili kombinasyon alanları' })).toContainText('Kanal');
-    await tasmaYok(page);    await panel.locator('li.oneri').first().getByRole('button', { name: /: önizle$/ }).click();
+    await tasmaYok(page);
+    await panel.locator('li.oneri').first().getByRole('button', { name: /: önizle$/ }).click();
     await expect(page.getByText('Öneriden açıldı (kaydedilmedi).')).toBeVisible();
     await tasmaYok(page);
     expect(hatalar).toEqual([]);
     await kapat();
+  });
+
+  test('giriş noktası: düğme başlıkta "Senaryo ekle"nin yanında, sayfayı açar; metot seçimi, Ekle, Reddet; kırıntıyla dönüş; kart yok; 1440 / 390 px taşmaz', async () => {
+    test.setTimeout(90_000);
+    const istekOnce = servis.istekler.length;
+    const { page, hatalar, kapat } = await sayfa();
+    await page.goto(`/#/servisler/s/${servisId}`);
+    const eylemler = page.locator('.sayfa-basligi .eylemler');
+    const dugme = eylemler.getByRole('link', { name: 'Senaryo önerileri' });
+    await expect(dugme).toBeVisible();
+    await expect(dugme).toHaveClass(/senaryo-onerileri-dugmesi/);
+    await expect(dugme).toHaveAttribute('title', /senaryo önerileri/);
+    // Düğme "Senaryo ekle"nin hemen önünde (ekran senaryolarındaki sırayla).
+    const adlar = (await eylemler.locator(':scope > a, :scope > button').allTextContents()).map((x) => x.trim());
+    expect(adlar.indexOf('Senaryo ekle') - adlar.indexOf('Senaryo önerileri')).toBe(1);
+    // Servis sayfasında öneri kartı yok; yerinde yalnız kısa bağlantı.
+    await expect(page.getByRole('region', { name: 'Senaryo önerileri' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Önerileri göster' })).toHaveCount(0);
+    await expect(page.locator('.servis-oneri-govdesi')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Senaryo önerileri →' })).toHaveAttribute('href', `#/servisler/s/${servisId}/oneriler`);
+    await tasmaYok(page);
+
+    await dugme.click();
+    await expect(page).toHaveURL(new RegExp(`#/servisler/s/${servisId}/oneriler$`));
+    await expect(page.getByRole('heading', { name: 'Senaryo önerileri', level: 2 })).toBeVisible();
+    const kirinti = page.locator('.kirinti');
+    await expect(kirinti).toContainText('Servisler');
+    await expect(kirinti.locator('.simdiki')).toHaveText('Senaryo önerileri');
+    await expect(page.getByRole('link', { name: 'Senaryolara dön' })).toBeVisible();
+    // Metot seçimi: liste o metoda iner (satırlarda metot rozeti yok, metot üstte seçili).
+    const liste = page.getByRole('list', { name: 'Öneriler' });
+    await expect(liste).toBeVisible();
+    await page.getByLabel('Metot').selectOption('SiparisVer');
+    await expect(page.getByLabel('Metot')).toHaveValue('SiparisVer');
+    await expect(liste.locator('li.oneri').first()).toBeVisible();
+    await expect(liste).not.toContainText('Başarılı akış: DurumSor');
+    // Ekle: ilk eklenebilir öneri "Koşuda" kapalı kaydedilir, listeden çıkar.
+    const ekleDugmesi = liste.getByRole('button', { name: /: ekle$/ }).and(page.locator(':enabled')).first();
+    const eklenenBaslik = String(await ekleDugmesi.getAttribute('aria-label')).replace(/: ekle$/, '');
+    await ekleDugmesi.click();
+    await expect(page.getByText(/senaryo olarak eklendi/)).toBeVisible();
+    expect((await senaryolar()).find((x) => x.baslik === eklenenBaslik)).toMatchObject({ kosuyaDahil: false });
+    await expect(liste.getByText(eklenenBaslik, { exact: true })).toHaveCount(0);
+    // Reddet (neden: Sonra): öneri gizlenir; "Reddedilenleri göster" açılır / kapanır.
+    const hedef = liste.locator('li.oneri').first();
+    const reddedilen = String(await hedef.locator('.oneri-basligi').textContent());
+    await hedef.getByRole('button', { name: /: reddet$/ }).click();
+    await hedef.getByRole('group', { name: /red nedeni/ }).getByRole('button', { name: 'Sonra' }).click();
+    await expect(page.getByText('Öneri bir hafta gizlendi.')).toBeVisible();
+    await expect(liste.getByText(reddedilen, { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Reddedilenleri göster' }).click();
+    await expect(page.getByRole('button', { name: 'Reddedilenleri gizle' })).toBeVisible();
+    await page.getByRole('button', { name: 'Reddedilenleri gizle' }).click();
+    await expect(page.getByRole('button', { name: 'Reddedilenleri göster' })).toBeVisible();
+    await tasmaYok(page);
+    // Kırıntıdaki servis adı servis sayfasına döner.
+    await kirinti.getByRole('link', { name: 'Ornek' }).click();
+    await expect(page).toHaveURL(new RegExp(`#/servisler/s/${servisId}$`));
+    await expect(page.locator('.sayfa-basligi .eylemler').getByRole('link', { name: 'Senaryo önerileri' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Senaryo önerileri' })).toHaveCount(0);
+    expect(hatalar).toEqual([]);
+    await kapat();
+
+    // 390 px: servis sayfası ve öneri sayfası taşmaz.
+    const dar = await sayfa(390);
+    await dar.page.goto(`/#/servisler/s/${servisId}`);
+    await expect(dar.page.getByRole('link', { name: 'Senaryo önerileri →' })).toBeVisible();
+    await tasmaYok(dar.page);
+    await dar.page.getByRole('link', { name: 'Senaryo önerileri', exact: true }).click();
+    await expect(dar.page.getByRole('list', { name: 'Öneriler' })).toBeVisible();
+    await tasmaYok(dar.page);
+    expect(dar.hatalar).toEqual([]);
+    await dar.kapat();
+    // Hiçbir adım servise istek atmadı.
+    expect(servis.istekler.length).toBe(istekOnce);
   });
 });
