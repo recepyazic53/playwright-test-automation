@@ -12,12 +12,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { ayarYaz, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
-import { rehberAyarlariniKaydet, rehberAyarlariniOku } from '../../scripts/platform/ayarlar/rehber-ayarlari.mjs';
+import { ayarGetir, ayarYaz, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { REHBER_TERCIH_SURUMU, rehberAyarlariniKaydet, rehberAyarlariniOku } from '../../scripts/platform/ayarlar/rehber-ayarlari.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
-test('rehber tercihi: yeni kurulumda kapalı; mevcut kullanıcının kayıtlı tercihi (açık / kapalı) korunur', async () => {
+test('rehber tercihi: yeni kurulumda kapalı; eski sürümün kendiliğinden yazdığı açık tercih bir kez kapanır, sonraki kullanıcı seçimi korunur', async () => {
   const klasor = geciciKlasor('rehber-varsayilan');
   const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
   const onceki = process.env.NOBETCI_REHBER_OTOMATIK;
@@ -27,13 +27,19 @@ test('rehber tercihi: yeni kurulumda kapalı; mevcut kullanıcının kayıtlı t
     // Yeni kurulum: kayıt yok → kapalı; "görüldü" yazmak tercihi açmaz.
     expect(rehberAyarlariniOku(vt)).toEqual({ otomatik: false, gorulenler: [], ortamKapali: false });
     expect(rehberAyarlariniKaydet(vt, { gorulen: 'genel' })).toMatchObject({ otomatik: false, gorulenler: ['genel'] });
-    // Eski sürümün yazdığı kayıt (tercih açık) korunur; görüldü işaretlemek de değiştirmez.
+    // Eski sürümün işaretsiz kaydı (her "görüldü"de kendiliğinden otomatik: true yazılırdı) kullanıcı seçimi sayılmaz: bir kez
+    // kapanır, görülenler korunur ve ilk kayıtta sürüm işareti yazılır.
     ayarYaz(vt, 'rehber', { otomatik: true, gorulenler: ['senaryolar'] });
-    expect(rehberAyarlariniOku(vt)).toMatchObject({ otomatik: true, gorulenler: ['senaryolar'] });
-    expect(rehberAyarlariniKaydet(vt, { gorulen: 'ekranlar' })).toMatchObject({ otomatik: true, gorulenler: ['senaryolar', 'ekranlar'] });
+    expect(rehberAyarlariniOku(vt)).toMatchObject({ otomatik: false, gorulenler: ['senaryolar'] });
+    expect(rehberAyarlariniKaydet(vt, { gorulen: 'ekranlar' })).toMatchObject({ otomatik: false, gorulenler: ['senaryolar', 'ekranlar'] });
+    expect(ayarGetir(vt, 'rehber')).toEqual({ tercihSurumu: REHBER_TERCIH_SURUMU, otomatik: false, gorulenler: ['senaryolar', 'ekranlar'] });
+    // Geçişten sonra kullanıcı Ayarlar'dan açarsa açık kalır (görüldü işaretlemek de değiştirmez).
+    expect(rehberAyarlariniKaydet(vt, { otomatik: true })).toMatchObject({ otomatik: true, gorulenler: ['senaryolar', 'ekranlar'] });
+    expect(rehberAyarlariniKaydet(vt, { gorulen: 'veri' })).toMatchObject({ otomatik: true, gorulenler: ['senaryolar', 'ekranlar', 'veri'] });
+    expect(rehberAyarlariniOku(vt).otomatik).toBe(true);
     // Kullanıcının kapattığı tercih de korunur.
-    ayarYaz(vt, 'rehber', { otomatik: false, gorulenler: [] });
-    expect(rehberAyarlariniKaydet(vt, { gorulen: 'veri' })).toMatchObject({ otomatik: false, gorulenler: ['veri'] });
+    expect(rehberAyarlariniKaydet(vt, { otomatik: false })).toMatchObject({ otomatik: false });
+    expect(rehberAyarlariniKaydet(vt, { gorulen: 'genel' })).toMatchObject({ otomatik: false });
   } finally {
     if (onceki === undefined) delete process.env.NOBETCI_REHBER_OTOMATIK; else process.env.NOBETCI_REHBER_OTOMATIK = onceki;
     vt.kapat();
