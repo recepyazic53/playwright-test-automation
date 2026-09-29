@@ -1,6 +1,6 @@
 // KORUMA TESTLERİ — Ayarlar > İzinler. Her izin varsayılan KAPALI (yeni ve mevcut veritabanı); kapalı izne tabi işlem sunucuda
 // 403 IZIN_KAPALI ile reddedilir ve sahte hedefe (127.0.0.1) hiçbir istek gitmez; izin açılınca işlem yapılır. Riskli ortamda açık
-// onay (canliOnay), yasak adresler (servis / WSDL / öner), giriş bilgisinin köken denetimi, zamanlanmış koşuda "izin kapalı" kaydı,
+// onay (canliOnay), yasak adresler (servis / WSDL / öner), giriş bilgisinin köken denetimi, planlı koşuda "izin kapalı" kaydı,
 // bildirim aboneliğinin varsayılan kapalı olması, izin değişikliği kaydı ve arayüz (uyarı + "İzinlere git", "?" açıklamaları,
 // masaüstü + 390 px ekran görüntüsü, taşma yok). Dışarıya istek yok: tüm hedefler 127.0.0.1 ya da route ile yakalanan sahte köken.
 import { randomBytes } from 'node:crypto';
@@ -154,7 +154,7 @@ test('yasak adres servis isteklerinde (SOAP / REST / WSDL): istek hiç gönderil
   }
 });
 
-test('zamanlanmış koşu: arka plan izni kapalıysa atlanır; web erişimi kapalıysa senaryo atlanır ve "izin kapalı: X" kayda geçer', async () => {
+test('planlı koşu: arka plan izni kapalıysa atlanır; web erişimi kapalıysa senaryo atlanır ve "izin kapalı: X" kayda geçer', async () => {
   const klasor = geciciKlasor('izin-zamanlama');
   try {
     const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));

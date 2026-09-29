@@ -202,7 +202,7 @@ function servisSonucTarafi(vt, projeId, ref, m) {
     const kalan = adimlar.filter((a) => a.durum === 'basarisiz' || a.durum === 'hata');
     return {
       id: ref, durum: k.durduruldu ? 'durduruldu' : kalan.length ? 'basarisiz' : 'basarili', sureMs: typeof k.sureMs === 'number' ? k.sureMs : null, httpKodu: null,
-      hata: kalan.length ? kalan.map((a) => `${a.ad}: ${a.hata ?? 'kaldı'}`).join('\n') : null, adimlar
+      hata: kalan.length ? kalan.map((a) => `${a.ad}: ${a.hata ?? 'başarısız'}`).join('\n') : null, adimlar
     };
   }
   const r = servisKosusuGetir(vt, kimlik(ref));

@@ -8,8 +8,8 @@
 // ("canli-ortam" izninin koşullu uçları: koşu, Dene, tarama, akış / giriş kaydı, giriş denemesi, giriş sayfası önerisi, servis
 // erişim kontrolü, şema yenileme, REST Dene, servis / servis akışı / uçtan uca koşu ve Dene, CANLI ortamın veritabanı eşlemesindeki
 // bağlantının denenmesi) istekte canliOnay: true ister; yoksa hiçbir şey yapılmadan 409 CANLI_ONAY_GEREKLI döner (arayüz standart
-// "CANLI ortam" penceresini açar). Onay hatırlanmaz: her istek kendi onayını taşır. Zamanlanmış koşu bu uçlardan geçmez; onayı
-// kuralın "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusudur (zamanlama/kurallar.mjs).
+// "CANLI ortam" penceresini açar). Onay hatırlanmaz: her istek kendi onayını taşır. Planlı koşu bu uçlardan geçmez; onayı
+// kuralın "Canlı ortamda planlı koşuya izin veriyorum" kutusudur (zamanlama/kurallar.mjs).
 //   kapaliIzinler(vt, yol, g)  zamanlayıcı için: kapalı izinlerin anahtarları (işlem atlanır, kayda "izin kapalı: X")
 // NOT: import.meta KULLANILMAZ.
 import { ortamGetir, senaryoGetir } from '../veritabani/depo.mjs';
@@ -231,7 +231,7 @@ export function gerekenIzinler(vt, yol, g) {
     if (tur === 'veritabani' && b?.alanlar?.yalnizOkuma !== false) izinler.add('veritabani-yazma');
   }
 
-  // Zamanlanmış koşu tercihleri (yalnız AÇARKEN; kapatmak serbest).
+  // Planlı koşu tercihleri (yalnız AÇARKEN; kapatmak serbest).
   if (yol === '/platform/zamanlama/tercih' && g.acik === true) {
     if (g.ad === 'kilitliyken') izinler.add('arka-plan');
     if (g.ad === 'dpapi' || g.ad === 'oturumAcilisi') izinler.add('sistem-degisikligi');

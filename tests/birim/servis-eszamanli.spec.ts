@@ -1,7 +1,7 @@
 // KORUMA TESTLERİ — servis senaryolarında eşzamanlı koşu (Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu").
 // Sahte SOAP sunucusu (yalnız 127.0.0.1) her yanıtı geciktirir ve aynı anda işlenen istekleri sayar: N = 1'de sırayla (en çok 1
 // istek), N = 3'te en çok 3; durdurma çalışanların tümünü keser; sonuç kayıtları tam; akış içi adımlar sırayla; paylaşılan oturum
-// (token) paralel senaryolarda bir kez alınır / 401 sonrası bir kez yenilenir. Zamanlanmış koşudaki servis akışları da aynı ayarla.
+// (token) paralel senaryolarda bir kez alınır / 401 sonrası bir kez yenilenir. Planlı koşudaki servis akışları da aynı ayarla.
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
@@ -175,7 +175,7 @@ test.describe('eşzamanlı servis koşusu', () => {
     servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', oturumAkisi: null });
   });
 
-  test('zamanlanmış koşu: servis akışları aynı ayarla paralel; akışın kendi adımları sırayla', async () => {
+  test('planlı koşu: servis akışları aynı ayarla paralel; akışın kendi adımları sırayla', async () => {
     kosuAyarlariniKaydet(vt, { servisEszamanli: 2 });
     const akis = (ad: string) => servisAkisiKaydet(vt, { projeId, baslik: ad, icerik: { adimlar: [
       { ad: 'Adım 1', servisId, senaryoId: senaryolar[0] }, { ad: 'Adım 2', servisId, senaryoId: senaryolar[1] }, { ad: 'Adım 3', servisId, senaryoId: senaryolar[2] }] } });
@@ -199,7 +199,7 @@ test.describe('eşzamanlı servis koşusu', () => {
     kosuAyarlariniKaydet(vt, { servisEszamanli: 1 });
   });
 
-  test('zamanlanmış koşu: ekran senaryoları "Aynı anda en çok N ekran senaryosu" ile (sahte koşucu); ortam ezmesi', async () => {
+  test('planlı koşu: ekran senaryoları "Aynı anda en çok N ekran senaryosu" ile (sahte koşucu); ortam ezmesi', async () => {
     const kural = { id: 'k2', projeId, ad: 'Gece', ortamId, kapsam: { senaryolar: 'tum', ekranIdleri: [], servisAkisIdleri: [] }, canliOnay: false } as unknown as Kural;
     let aktif = 0;
     let enCok = 0;

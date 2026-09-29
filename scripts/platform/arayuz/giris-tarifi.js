@@ -327,7 +327,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       h('div', { class: 'secenek-grubu', role: 'radiogroup', 'aria-label': 'SMS kodunun kaynağı' }, sProfil.etiket, sSabit.etiket, sElle.etiket),
       h('div', { class: 'not-kutusu bilgi' },
         h('p', {}, h('strong', {}, 'Elle kipi: '), 'Nöbetçi’den başlatılan koşularda giriş SMS kodu isteyince canlı koşu panelinde bir kod kutusu açılır; telefonunuza gelen kodu oraya yazarsınız.'),
-        h('p', {}, 'Kod aşağıdaki süre içinde girilmezse giriş “Doğrulama kodu alınamadı” hatasıyla durur. Gözetimsiz (zamanlanmış) koşular için sabit test kodu tanımlayın.')),
+        h('p', {}, 'Kod aşağıdaki süre içinde girilmezse giriş “Doğrulama kodu alınamadı” hatasıyla durur. Gözetimsiz (planlı) koşular için sabit test kodu tanımlayın.')),
       alan('Kod bekleme süresi (sn)', elleSure, { yardim: '15–1800 saniye.' }));
     const kodAlanlari = h('div', { class: 'ic-alanlar' },
       alan('Kod alanı', kodAlani, { yardim: `Boş bırakılırsa kod alanı giriş sonrası sayfadan otomatik bulunur (tek kullanımlık kod alanına benzeyen alan). ${SECICI_YARDIMI}` }),

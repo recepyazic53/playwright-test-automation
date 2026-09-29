@@ -473,7 +473,7 @@ export const GOCLER = [
     `
   },
   {
-    // Sürüm 10 — servis parametre tanımları (Veri > Servis parametreleri; bkz. servisler/parametre-tanimlari.mjs).
+    // Sürüm 10 — servis parametre tanımları (Test verisi > Servis parametreleri; bkz. servisler/parametre-tanimlari.mjs).
     // Bir alanın (ör. DeliveryType) alabileceği değerler ve hangi servislerde geçerli olduğu. ad = XML alan adı; aynı ad için
     // bir ortak (tüm servisler) ve servisleri çakışmayan servise özel tanımlar olabilir (depo denetler).
     // icerik_json (şifreli): { aciklama, tur, degerler: [{ deger, aciklama }], kaynak: { turId, alan }, varsayilan,

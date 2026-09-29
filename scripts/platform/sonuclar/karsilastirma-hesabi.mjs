@@ -11,7 +11,7 @@
 /** Varsayılan sıralama (önce dikkat isteyenler). */
 export const DEGISIM_SINIFLARI = Object.freeze(['yeni-kalan', 'yalniz-b', 'degisti', 'duzelen', 'yalniz-a', 'hep-kalan', 'ayni', 'hep-gecen']);
 export const DEGISIM_ETIKETLERI = Object.freeze({
-  'yeni-kalan': 'yeni kalan', duzelen: 'düzelen', 'hep-kalan': 'hep kalan', 'hep-gecen': 'hep geçen',
+  'yeni-kalan': 'yeni başarısız', duzelen: 'düzelen', 'hep-kalan': 'hep başarısız', 'hep-gecen': 'hep geçen',
   'yalniz-a': "yalnız A'da", 'yalniz-b': "yalnız B'de", degisti: 'durum değişti', ayni: 'aynı'
 });
 /** "Yalnız değişenler" süzgecinde gizlenenler. */

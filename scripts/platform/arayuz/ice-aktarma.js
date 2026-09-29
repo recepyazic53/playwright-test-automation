@@ -264,7 +264,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       if (hedefProje && kp.ortamlar.length) {
         ortamlar = h('div', { class: 'esleme-ortamlari' },
           h('h5', {}, `Ortam eşlemesi (${kp.ad} → ${hedefProje.ad})`),
-          h('p', { class: 'soluk kucuk' }, 'Yedekteki ortamlara başvuran her şey (servis adresleri, tablo satırları, senaryo ortamları, giriş profilleri, zamanlanmış koşular…) seçtiğiniz ortama yazılır. Eşlenen ortamın bu bilgisayardaki adresi ve ayarları değişmez.'),
+          h('p', { class: 'soluk kucuk' }, 'Yedekteki ortamlara başvuran her şey (servis adresleri, tablo satırları, senaryo ortamları, giriş profilleri, planlı koşular…) seçtiğiniz ortama yazılır. Eşlenen ortamın bu bilgisayardaki adresi ve ayarları değişmez.'),
           h('ul', { class: 'esleme-listesi' }, kp.ortamlar.map((ko) => {
             const secim = h('select', { 'data-yedek-ortam': ko.id },
               hedefProje.ortamlar.map((yo) => h('option', { value: yo.id, selected: (e.ortamlar || {})[ko.id] === yo.id }, `→ ${ortamEtiketi(yo)}`)),

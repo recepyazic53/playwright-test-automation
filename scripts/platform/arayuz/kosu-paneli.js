@@ -513,7 +513,7 @@ function veriKosusuOzeti(sonuc) {
   const v = sonuc && Array.isArray(sonuc.veriKosulari) ? sonuc.veriKosulari : null;
   if (!v || v.length < 2) return '';
   const kalan = v.filter((x) => x.durum === 'basarisiz').length;
-  return `${v.length} veri koşusu${kalan ? `, ${kalan} kalan` : ''}`;
+  return `${v.length} veri koşusu${kalan ? `, ${kalan} başarısız` : ''}`;
 }
 
 function paneliCiz() {

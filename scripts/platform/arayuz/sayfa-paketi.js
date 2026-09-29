@@ -356,7 +356,7 @@ export function testVerisiSecimi(t, degisti) {
   const bolum = h('section', { class: 'kart test-verisi-onizleme', 'aria-label': 'Test verisine yazılacaklar' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar'),
       h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Ekran paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
-    h('p', { class: 'kucuk soluk' }, 'Tablolar üst menüdeki Veri sayfasına Excel sayfası gibi yazılır (satır = birlikte geçerli değerler): seçim alanlarının seçenekleri "Ekran listeleri"ne ("<Ekran> — <Alan>"), kişi ve kayıt verileri "Kişi ve kayıt verileri"ne. Alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
+    h('p', { class: 'kucuk soluk' }, 'Tablolar üst menüdeki Test verisi sayfasına Excel sayfası gibi yazılır (satır = birlikte geçerli değerler): seçim alanlarının seçenekleri "Ekran listeleri"ne ("<Ekran> — <Alan>"), kişi ve kayıt verileri "Kişi ve kayıt verileri"ne. Alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
     h('ul', { class: 'tv-tablolar' }, t.tablolar.map(tabloSatiri)),
     t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`), bagListesi] : null);
   bagCiz();

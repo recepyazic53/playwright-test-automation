@@ -168,7 +168,7 @@ test.describe('kurtarma kuralları: model ve servis', () => {
     once = [say('/api/durum'), kayitSayisi()];
     const r2 = await kos(sen.durum);
     expect(r2.durum).toBe('basarisiz');
-    expect(r2.kurtarma).toMatchObject({ durum: 'kaldi', deneme: 3, not: 'kurtarma denendi, yine kaldı: Durum 9999 → 3 denemede de başarısız' });
+    expect(r2.kurtarma).toMatchObject({ durum: 'kaldi', deneme: 3, not: 'kurtarma denendi, yine başarısız: Durum 9999 → 3 denemede de başarısız' });
     expect([say('/api/durum') - once[0], kayitSayisi() - once[1]]).toEqual([3, 1]);
     kuyruk['/api/durum'] = [];
     // Başarılı çağrıda kural hiç çalışmaz (not yok).
@@ -234,7 +234,7 @@ test.describe('kurtarma kuralları: model ve servis', () => {
     kural({ ad: 'Bağlantı', kosul: { tur: 'baglanti' }, yapilacak: { tekrarGonder: true, enCokDeneme: 2 }, kapsam: { ogeler: [{ servisId: kapaliServis, metot: null }], ortamlar: null } });
     const r = await kos(sen.kapali, ortamId, kapaliServis);
     expect(r.durum).toBe('hata');
-    expect(r.kurtarma).toMatchObject({ durum: 'kaldi', deneme: 2, not: 'kurtarma denendi, yine kaldı: bağlantı hatası → 2 denemede de başarısız' });
+    expect(r.kurtarma).toMatchObject({ durum: 'kaldi', deneme: 2, not: 'kurtarma denendi, yine başarısız: bağlantı hatası → 2 denemede de başarısız' });
   });
 
   test('çift kayıt koruması: işaretsiz (kayıt oluşturan) metot tekrar gönderilmez ve notu düşer; işaretlenince tekrar gönderilir', async () => {
@@ -332,7 +332,7 @@ test.describe('kurtarma kuralları: model ve servis', () => {
     farkindalikOnbelleginiTemizle();
     const f = await farkindalikVerisi(vt, projeId, { aralik: { baslangic: null, bitis: null }, onbellek: false });
     const madde = f.kartlar.dikkat.maddeler.find((m) => m.tur === 'kurtarma' && m.ad === 'Geçici hata kodu');
-    expect(madde).toEqual({ tur: 'kurtarma', ad: 'Geçici hata kodu', ayrinti: 'Kurtarma kuralı · 3 kez çalıştı · 2 kurtarıldı · 1 yine kaldı', adres: '#/ayarlar/proje' });
+    expect(madde).toEqual({ tur: 'kurtarma', ad: 'Geçici hata kodu', ayrinti: 'Kurtarma kuralı · 3 kez çalıştı · 2 kurtarıldı · 1 yine başarısız oldu', adres: '#/ayarlar/proje' });
     expect(f.kartlar.dikkat.maddeler.some((m) => m.tur === 'kurtarma' && m.ayrinti.includes('tekrar denenmedi'))).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Zamanlanmış koşuların kasa kilitliyken / açılışta çalışma tercihleri (Planlı koşular; üçü de varsayılan KAPALI):
+// KORUMA TESTLERİ — Planlı koşuların kasa kilitliyken / açılışta çalışma tercihleri (Planlı koşular; üçü de varsayılan KAPALI):
 //   A) anahtar yalnız bellekte (anahtar-emaneti.mjs): arayüz kilidi, veri uçları 423, zamanlayıcı SAHTE koşucuyla çalışır,
 //      "Tamamen kilitle" anahtarı siler.
 //   B) Windows DPAPI (dpapi.mjs): GERÇEK gidiş-dönüş yalnız Windows'ta (geçici dosya, sahte anahtar; kullanıcının kasasına dokunulmaz),
@@ -113,7 +113,7 @@ test('A: tercih kapalıyken kilitleme bugünkü gibi; açıkken arayüz kilitli,
     expect(String(vt.tek('SELECT deger_json FROM ayarlar WHERE anahtar = ?', [TERCIH_AYAR_ANAHTARI])?.deger_json)).toMatch(/^kasa:v1:/);
     expect(yonetici.kilitSecimiVarMi(vt)).toBe(true);
 
-    // "Kilitle (zamanlanmış koşular sürsün)": arayüz kilitli, anahtar kasada YOK (yalnız emanette).
+    // "Kilitle (planlı koşular sürsün)": arayüz kilitli, anahtar kasada YOK (yalnız emanette).
     expect(yonetici.kilitle(vt)).toEqual({ arkaPlan: true });
     expect(kasaDurumu(vt).acik).toBe(false);
     expect(kasaAcikMi(vt)).toBe(false);
@@ -276,7 +276,7 @@ test('A (uçtan uca, geçici sunucu): kilitleme seçimi, arayüz kilidinde veri 
     expect((await nobetciApi(n2, '/platform/kasa/ac', { parola: PAROLA })).basarili).toBe(true);
     let d = await nobetciApi(n2, '/platform/durum');
     expect(d.zamanlama).toMatchObject({ kilitSecimi: true, anahtarBellekte: false });
-    // "Kilitle (zamanlanmış koşular sürsün)": arayüz kilitli, anahtar zamanlayıcı için bellekte.
+    // "Kilitle (planlı koşular sürsün)": arayüz kilitli, anahtar zamanlayıcı için bellekte.
     const k = await nobetciApi(n2, '/platform/kasa/kilitle', {});
     expect(k).toMatchObject({ basarili: true, arkaPlan: true, kasa: { acik: false } });
     d = await nobetciApi(n2, '/platform/durum');

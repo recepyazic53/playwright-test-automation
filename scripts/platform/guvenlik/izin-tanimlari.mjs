@@ -53,7 +53,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Sonuçlar > Başarısızları tekrar çalıştır',
       'Ekranlar > Ekranı tara, Akışı kaydet',
       'Ayarlar > Giriş profilleri > Giriş tarifi > Varsayılanları öner, Girişi kaydet',
-      'Komut satırı koşusu (npm run kos) ve zamanlanmış koşular'
+      'Komut satırı koşusu (npm run kos) ve planlı koşular'
     ],
     islemler: [
       { ad: 'Ekran senaryosu koşusu', uclar: ['/platform/senaryolar/calistir'] },
@@ -61,7 +61,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi', uclar: ['/platform/tarama/baslat'] },
       { ad: 'Giriş sayfası önerisi (Varsayılanları öner)', uclar: ['/platform/giris-tarifi/oner'] },
       { ad: 'Uçtan uca akışta ekran adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta ekran adımı varsa' },
-      { ad: 'Zamanlanmış koşudaki ekran senaryoları', uclar: [] }
+      { ad: 'Planlı koşudaki ekran senaryoları', uclar: [] }
     ],
     risk: 'Koşu uygulamada gerçek kayıt oluşturabilir, form gönderebilir; yanlış ortamda veri değişebilir.',
     kapaliyken: 'Hiçbir tarayıcı açılmaz: koşu, Dene, tarama, akış / giriş kaydı ve öneri başlamadan durur.'
@@ -82,7 +82,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Servisler > REST sihirbazı > Dene',
       'Servisler > Akışlar > Dene, Koş',
       'Uçtan uca akışlar > Koş (servis adımı)',
-      'Zamanlanmış koşudaki servis akışları'
+      'Planlı koşudaki servis akışları'
     ],
     islemler: [
       { ad: 'Erişim kontrolü (WSDL isteği)', uclar: ['/platform/servis/erisim'] },
@@ -92,7 +92,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'REST sihirbazında Dene', uclar: ['/platform/servis/rest/dene'] },
       { ad: 'Servis akışı Dene / Koş', uclar: ['/platform/servis-akisi/dene', '/platform/servis-akisi/kos'] },
       { ad: 'Uçtan uca akışta servis adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta servis adımı varsa' },
-      { ad: 'Zamanlanmış koşudaki servis akışları', uclar: [] }
+      { ad: 'Planlı koşudaki servis akışları', uclar: [] }
     ],
     risk: 'İstekler servislerde gerçek işlem başlatabilir (kayıt oluşturma, güncelleme); yanıtlar kişisel veri içerebilir.',
     kapaliyken: 'Servislere hiçbir istek gönderilmez: koşu, Dene, erişim kontrolü, şema indirme ve servis akışları başlamadan durur.'
@@ -149,7 +149,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Canlı ortamda ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi yapmak; giriş sayfası önermek.',
       'Canlı ortamda servis erişim kontrolü, şema yenileme ve REST Dene yapmak.',
       'Canlı ortamın veritabanı eşlemesindeki bağlantıyı denemek.',
-      'Zamanlanmış koşuları (kuralında canlı onayı varsa) canlı ortamda başlatmak.'
+      'Planlı koşuları (kuralında canlı onayı varsa) canlı ortamda başlatmak.'
     ],
     yerler: [
       'Senaryolar > Koşuyu başlat, Dene (canlı ortam seçiliyken)',
@@ -166,7 +166,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Canlı ortamda servis ve servis akışı koşusu / Dene', uclar: SERVIS_KOSU_UCLARI, kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamda uçtan uca akış koşusu', uclar: UCTAN_UCA_UCLARI, kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamın veritabanı bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'bağlantı bir canlı ortamın veritabanı eşlemesindeyse' },
-      { ad: 'Canlı ortamda zamanlanmış koşu', uclar: [] }
+      { ad: 'Canlı ortamda planlı koşu', uclar: [] }
     ],
     risk: 'Gerçek kullanıcıların verisi ve gerçek işlemler etkilenebilir. İzin açıkken de canlı ortama istek atan her işlemde ayrıca onay sorulur.',
     yuksekRisk: true,
@@ -222,21 +222,21 @@ export const IZIN_TANIMLARI = Object.freeze([
   {
     anahtar: 'arka-plan',
     etiket: 'Arka plan çalışması',
-    aciklama: 'Siz ekran başında değilken zamanlanmış koşuların başlamasına ve kasa kilitliyken çalışmasına izin verir.',
+    aciklama: 'Siz ekran başında değilken planlı koşuların başlamasına ve kasa kilitliyken çalışmasına izin verir.',
     yapabilecekleri: [
-      'Zamanlanmış koşuları vakti gelince sizin adınıza başlatmak.',
-      'Kasa kilitliyken zamanlanmış koşular için kasa anahtarını yalnız bellekte tutmak ("Kilitliyken de çalışsın").'
+      'Planlı koşuları vakti gelince sizin adınıza başlatmak.',
+      'Kasa kilitliyken planlı koşular için kasa anahtarını yalnız bellekte tutmak ("Kilitliyken de çalışsın").'
     ],
     yerler: [
       'Planlı koşular',
       'Planlı koşular > Kilitliyken de çalışsın'
     ],
     islemler: [
-      { ad: 'Zamanlanmış koşuların başlatılması', uclar: [] },
+      { ad: 'Planlı koşuların başlatılması', uclar: [] },
       { ad: '"Kilitliyken de çalışsın" tercihini açma', uclar: ['/platform/zamanlama/tercih'], kosul: '"Kilitliyken de çalışsın" açılırken' }
     ],
     risk: 'Koşular siz izlemezken çalışır; kilitliyken anahtar bellekte kalır.',
-    kapaliyken: 'Zamanlanmış koşular başlamaz; geçmişte "izin kapalı" olarak görünür. "Kilitliyken de çalışsın" açılamaz.'
+    kapaliyken: 'Planlı koşular başlamaz; geçmişte "izin kapalı" olarak görünür. "Kilitliyken de çalışsın" açılamaz.'
   },
   {
     anahtar: 'sistem-degisikligi',
@@ -254,7 +254,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'DPAPI anahtar dosyası oluşturma', uclar: ['/platform/zamanlama/tercih'], kosul: 'DPAPI tercihi açılırken' },
       { ad: 'Windows oturum açılışı görevi ekleme', uclar: ['/platform/zamanlama/tercih'], kosul: 'oturum açılışı tercihi açılırken' }
     ],
-    risk: 'Windows oturumunuzu açan herkes kasanın kilidini açmadan zamanlanmış koşuları çalıştırabilir; bilgisayar açılışı değişir.',
+    risk: 'Windows oturumunuzu açan herkes kasanın kilidini açmadan planlı koşuları çalıştırabilir; bilgisayar açılışı değişir.',
     yuksekRisk: true,
     kapaliyken: 'Görev eklenmez, anahtar dosyası yazılmaz. Mevcut görevi / dosyayı kaldırmak her zaman serbesttir.'
   },
@@ -295,7 +295,7 @@ export function izinMesaji(anahtar) {
   return `Bu işlem için Ayarlar > İzinler'de "${t ? t.etiket : anahtar}" iznini açmalısınız.`;
 }
 
-/** Zamanlanmış koşu / otomatik işlem kaydındaki kısa not ("izin kapalı: X"). @param {string} anahtar */
+/** Planlı koşu / otomatik işlem kaydındaki kısa not ("izin kapalı: X"). @param {string} anahtar */
 export function izinKapaliNotu(anahtar) {
   const t = izinTanimi(anahtar);
   return `izin kapalı: ${t ? t.etiket : anahtar}`;

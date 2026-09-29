@@ -1,5 +1,5 @@
-// KORUMA TESTLERİ — Günlük iş nesneleri Ayarlar'dan üst menüye (S3): Sonuçlar · Senaryolar · Ekranlar · Veri · Planlı koşular ·
-// Ayarlar. Veri (#/veri) test verisi tablolarını, Planlı koşular (#/planli-kosular) zamanlanmış koşuları gösterir; Ayarlar'da yalnız
+// KORUMA TESTLERİ — Günlük iş nesneleri Ayarlar'dan üst menüye (S3): Sonuçlar · Senaryolar · Ekranlar · Test verisi · Planlı koşular ·
+// Ayarlar. Test verisi (#/veri) test verisi tablolarını, Planlı koşular (#/planli-kosular) planlı koşuları gösterir; Ayarlar'da yalnız
 // ayarlar kalır. Eski adresler (#/ayarlar/test-verisi, #/ayarlar/baglam, #/ayarlar/zamanlanmis-kosular) yeni yerlere yönlenir;
 // uygulama içindeki bağlantılar yeni adresleri kullanır. Güvenlik: yalnız 127.0.0.1'deki geçici Nöbetçi; dışarıya istek yok.
 import { randomBytes } from 'node:crypto';
@@ -23,7 +23,7 @@ test('uygulama içindeki bağlantılar yeni adresleri kullanır (eski adres yaln
   }
 });
 
-test.describe('Üst menü: Veri ve Planlı koşular', () => {
+test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
   const PAROLA = `Gecici-UstMenu-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
   let tarayici: Browser;
@@ -47,18 +47,18 @@ test.describe('Üst menü: Veri ve Planlı koşular', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('menü sırası ve adları; Veri ve Planlı koşular sayfaları; Ayarlar\'da yalnız ayarlar + "taşındı" bağlantıları; Oluştur menüsü', async () => {
+  test('menü sırası ve adları; Test verisi ve Planlı koşular sayfaları; Ayarlar\'da yalnız ayarlar + "taşındı" bağlantıları; Oluştur menüsü', async () => {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } });
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/sonuclar');
     const menu = page.getByRole('navigation', { name: 'Ana menü' });
-    await expect(menu.getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Veri', 'Planlı koşular', 'Ayarlar']);
+    await expect(menu.getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Test verisi', 'Planlı koşular', 'Ayarlar']);
 
-    await menu.getByRole('link', { name: 'Veri' }).click();
+    await menu.getByRole('link', { name: 'Test verisi' }).click();
     await expect(page).toHaveURL(/#\/veri$/);
-    await expect(menu.getByRole('link', { name: 'Veri' })).toHaveAttribute('aria-current', 'page');
+    await expect(menu.getByRole('link', { name: 'Test verisi' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { level: 2, name: 'Test verisi' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Tablolar' })).toBeVisible();
     await expect(page).toHaveTitle(/^Test verisi/);
@@ -67,8 +67,8 @@ test.describe('Üst menü: Veri ve Planlı koşular', () => {
     await expect(page).toHaveURL(/#\/planli-kosular$/);
     await expect(menu.getByRole('link', { name: 'Planlı koşular' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { level: 2, name: 'Planlı koşular' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Zamanlanmış koşular' })).toBeVisible();
-    await expect(page.getByRole('form', { name: 'Zamanlanmış koşu davranışı' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Planlı koşu kuralları' })).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Planlı koşu davranışı' })).toBeVisible();
 
     // Ayarlar: bölüm listesinde Test verisi yok; "Üst menüye taşındı" bağlantıları yeni yerlere gider.
     await menu.getByRole('link', { name: 'Ayarlar' }).click();
@@ -112,7 +112,7 @@ test.describe('Üst menü: Veri ve Planlı koşular', () => {
     await page.goto('/#/sonuclar');
     await page.evaluate(() => { location.hash = '#/ayarlar/test-verisi'; });
     await expect(page).toHaveURL(/#\/veri$/);
-    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link', { name: 'Veri' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link', { name: 'Test verisi' })).toHaveAttribute('aria-current', 'page');
     await baglam.close();
   });
 
@@ -120,7 +120,7 @@ test.describe('Üst menü: Veri ve Planlı koşular', () => {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 844 } });
     const page = await baglam.newPage();
     await page.goto('/#/planli-kosular');
-    await expect(page.getByRole('region', { name: 'Zamanlanmış koşular' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Planlı koşu kuralları' })).toBeVisible();
     for (const genislik of [390, 768, 1024, 1100, 1200, 1300, 1360, 1440]) {
       await page.setViewportSize({ width: genislik, height: 844 });
       await page.waitForTimeout(150);

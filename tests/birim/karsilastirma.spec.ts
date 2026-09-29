@@ -113,7 +113,7 @@ test.describe('HTML karşılaştırma raporu (saf)', () => {
     expect(html).not.toContain('<b>Proje</b>');
     for (const sizinti of [GIZLI_PAROLA, 'test.ornek.invalid', 't=1']) expect(html, sizinti).not.toContain(sizinti);
     expect(html).toContain('Nöbetçi karşılaştırma raporu');
-    expect(html).toContain('yeni kalan');
+    expect(html).toContain('yeni başarısız');
     expect(html).toContain('<dt>Beklenen</dt><dd>&quot;Tamam&quot;</dd>');
     expect(html).toContain('↓ 34 puan'); // oran 67 → 33
     expect(html).not.toContain('<img');
@@ -179,7 +179,7 @@ test.describe('Karşılaştırma uçları (geçici veritabanı, sahte koşular)'
       const medyaKlasoru = join(klasor, 'medya');
       const r = await karsilastirmaRaporuOlustur(vt, q({ tur: 'ekran', id: f.kosuA, b: f.kosuB }), { medyaKlasoru });
       expect(r.dosyaAdi).toMatch(/^nobetci-karsilastirma-karsilastirma-projesi-test-\d{4}-\d{2}-\d{2}-\d{4}\.html$/);
-      expect(r.html).toContain('yeni kalan');
+      expect(r.html).toContain('yeni başarısız');
       expect(r.html).not.toContain('<img');
       for (const sizinti of [GIZLI_PAROLA, 'test.ornek.invalid']) expect(r.html, sizinti).not.toContain(sizinti);
       const g = await karsilastirmaRaporuOlustur(vt, q({ tur: 'ekran', id: f.kosuA, b: f.kosuB, goruntuler: '1' }), { medyaKlasoru });

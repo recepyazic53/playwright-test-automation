@@ -1,6 +1,6 @@
 // Arayüz taraması fikstürü (spec DEĞİL): gerçekçi, SAHTE veriyle dolu geçici bir Nöbetçi kurar — uzun adlı ekranlar ve
 // senaryolar, SOAP + REST servisler, servis / uçtan uca akışlar, çok sütunlu tablolar (gizli sütun, ortama özel satır,
-// karşılık), taban adresleri, veritabanı eşlemesi, giriş profilleri, zamanlanmış koşu kuralları ve sahte koşu sonuçları.
+// karşılık), taban adresleri, veritabanı eşlemesi, giriş profilleri, planlı koşu kuralları ve sahte koşu sonuçları.
 // Yalnız 127.0.0.1 (sahte SOAP sunucusu) ve geçici veritabanı; gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz.
 // Koşu sonuçları sunucu durdurulup sonuç deposu işlevleriyle doğrudan yazılır (gerçek koşu yok), sonra sunucu yeniden başlar.
 import { randomBytes } from 'node:crypto';
@@ -221,7 +221,7 @@ export async function zenginNobetciKur(klasor: string, secenek: { sonuclar?: boo
   const bCanli = await bag('siparis-veritabani-CANLI', canliId);
   await basarili('/platform/sql/veritabani/kaydet', { projeId, ad: 'Sipariş veritabanı (raporlama kopyası)', eslemeler: { [testId]: bTest, [canliId]: bCanli } });
 
-  // Zamanlanmış koşu kuralları (pasif: gerçek tetikleme olmaz).
+  // Planlı koşu kuralları (pasif: gerçek tetikleme olmaz).
   await basarili('/platform/zamanlanmis-kosu/kaydet', { projeId, kural: { ad: 'Gece tam koşu (tüm ekranlar ve servisler)', ortamId: testId, zaman: { tur: 'gunluk', saat: '02:30' }, etkin: false } });
   await basarili('/platform/zamanlanmis-kosu/kaydet', { projeId, kural: { ad: 'Canlı duman testi', ortamId: canliId, zaman: { tur: 'haftalik', saat: '07:00', gunler: [1, 3, 5] }, etkin: false, canliOnay: true } });
 

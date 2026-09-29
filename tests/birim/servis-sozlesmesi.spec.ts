@@ -1,7 +1,7 @@
 // KORUMA TESTLERİ — servis sözleşmesi (veri + koşu): kaynaklar (kayıtlı WSDL yanıt şeması, yerel OpenAPI, JSON Schema, başarılı
 // yanıttan taslak) önizleme olarak döner ve YAZMAZ; kayıt kasada şifreli, var olanı değiştirmek / silmek onayla, geçmişe yazılır.
 // "Yanıt sözleşmeye uymalı" varsayılan KAPALI (bugünkü davranış değişmez); açıkken uyum geçer, uyumsuzluk senaryoyu kaldırır ve
-// rapora "Sözleşme: Kaldı — N uyumsuzluk" + yol bazında liste yazılır (SOAP: XML yolları, REST: JSON yolları); değerler rapora
+// rapora "Sözleşme: Başarısız — N uyumsuzluk" + yol bazında liste yazılır (SOAP: XML yolları, REST: JSON yolları); değerler rapora
 // yazılmaz. Yalnız 127.0.0.1'deki sahte servis ve geçici veri kökü.
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -84,7 +84,7 @@ test.describe('servis sözleşmesi', () => {
     expect(senaryoIceriginiDogrula({ operasyon: 'SiparisGetir', govde: '<a/>', kontroller: [], sozlesmeDogrula: false })).not.toHaveProperty('sozlesmeDogrula');
   });
 
-  test('SOAP açık: uyan yanıt geçer; uymayan kalır, rapor "Sözleşme: Kaldı — 3 uyumsuzluk" + XML yolları; değer yazılmaz', async () => {
+  test('SOAP açık: uyan yanıt geçer; uymayan kalır, rapor "Sözleşme: Başarısız — 3 uyumsuzluk" + XML yolları; değer yazılmaz', async () => {
     const iyi = senaryo(soapId, 'İyi yanıt', { operasyon: 'SiparisGetir', govde: soapIstegi('iyi'), kontroller: [{ tur: 'soapYaniti' }], sozlesmeDogrula: true });
     const kotu = senaryo(soapId, 'Kötü yanıt', { operasyon: 'SiparisGetir', govde: soapIstegi('kotu'), kontroller: [{ tur: 'soapYaniti' }], sozlesmeDogrula: true });
     const r1 = await kos(soapId, iyi);
@@ -94,7 +94,7 @@ test.describe('servis sözleşmesi', () => {
     const r2 = await kos(soapId, kotu);
     expect(r2.durum).toBe('basarisiz');
     const k = r2.kontroller!.at(-1)!;
-    expect(k).toMatchObject({ tur: 'sozlesme', ad: 'Sözleşme: Kaldı — 3 uyumsuzluk', gecti: false });
+    expect(k).toMatchObject({ tur: 'sozlesme', ad: 'Sözleşme: Başarısız — 3 uyumsuzluk', gecti: false });
     expect(k.alt!.map((a) => [a.ad, a.aciklama])).toEqual([
       ['/SiparisGetirResponse/Tutar', 'zorunlu alan yok'],
       ['/SiparisGetirResponse/SiparisNo', 'tam sayı bekleniyordu, metin geldi'],
@@ -141,7 +141,7 @@ test.describe('servis sözleşmesi', () => {
     expect((await kos(restId, iyi)).durum).toBe('basarili');
     const r = await kos(restId, kotu);
     expect(r.durum).toBe('basarisiz');
-    expect(r.kontroller!.at(-1)!.ad).toBe('Sözleşme: Kaldı — 4 uyumsuzluk');
+    expect(r.kontroller!.at(-1)!.ad).toBe('Sözleşme: Başarısız — 4 uyumsuzluk');
     expect(r.sozlesme!.uyumsuzluklar).toEqual([
       { yol: 'response.name', mesaj: 'zorunlu alan yok' },
       { yol: 'response.orderId', mesaj: 'tam sayı bekleniyordu, metin geldi' },

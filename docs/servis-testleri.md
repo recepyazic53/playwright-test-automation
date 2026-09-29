@@ -38,7 +38,7 @@ Değer sırası:
    - Adlı profiller, ör. "Kanal 100": `USERNAME`, `PASSWORD`, `CHANNEL`.
    - Servis bir profil seçer; senaryo ezebilir.
    - Profil tüm ortamlar için genel değer taşır. Ortama özel satır, ör. CANLI'da farklı parola, alan alan ezer.
-3. **Test verisi.** Veri > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
+3. **Test verisi.** Test verisi > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
    - Rol, aynı türün farklı kişileri için ayrı profil seçmeye yarar.
    - Servisin Parametreler sekmesinde her tür + rol için profil seçilir; senaryo ezebilir.
    - Bir parametre adı projede tek bir alana eşlenebilir.
@@ -66,7 +66,7 @@ Adres = taban adres + yol, metin olarak birleştirilir: tabanın kendi yolu koru
 - **Gövde (XML)** sekmesi ileri kullanım içindir. Form gövdeyi tam temsil edemezse (şemada olmayan / tekrar eden öğe) neden gösterilir ve XML görünümünde kalınır; veri kaybolmaz.
 - Kaydedilen gövde yine SOAP XML'idir (koşucu, SoapUI aktarımı, raporlar aynı).
 
-## Test verisi eşlemesi (Veri > Tablolar)
+## Test verisi eşlemesi (Test verisi > Tablolar)
 
 Alan satırında **Servis parametreleri**: servis seçilir → o servisin senaryolarında geçen parametrelerden biri seçilir (eşlenmemişler önce) ya da "Elle yaz…"; rol addan tahmin edilir (`MUSTERI_…` → musteri, `KEFIL_…` → kefil). Eşleme parametre adına göredir: aynı ad tüm servislerde bu alandan dolar.
 
@@ -171,7 +171,7 @@ Servis sayfasının **Sözleşme** sekmesinde her operasyon (REST'te uç) için 
 
 - **Kaynaklar:** WSDL / XSD (kayıtlı WSDL'deki yanıt öğesi ya da yüklenen dosyalar), OpenAPI / Swagger (yerel JSON / YAML; yalnız başarılı yanıt şeması, belge içi `$ref` çözülür, dış `$ref` indirilmez), JSON Schema (dosya ya da yapıştırma), **başarılı yanıttan taslak** (seçilen kayıtlı başarılı yanıtlardan: zorunlu = tüm örneklerde var, null görüldüyse null izinli; tek örnekte zorunluluk kesin değildir uyarısı).
 - **Önizleme / taslak** alan alan düzenlenir (tür, zorunlu, null izinli, kaldır); "Onayla ve kaydet" ile servis ayarlarına (kasada şifreli) yazılır. Var olan sözleşmeyi değiştirmek ve silmek onay ister (fark gösterilir); değişiklikler geçmişe yazılır.
-- **Senaryo:** "Yanıt sözleşmeye uymalı" (varsayılan kapalı). Açıkken yanıt doğrulanır; uyumsuzluk senaryoyu kaldırır. Rapor: `Sözleşme: Kaldı — N uyumsuzluk` ve yol bazında liste — SOAP'ta XML yolları (`/SiparisResponse/Kalemler/Kalem[2]/Adet: zorunlu alan yok`), REST'te JSON yolları (`response.orderId: sayı bekleniyordu, metin geldi`). Mesajlar değer içermez; gizli değerler maskelenir.
+- **Senaryo:** "Yanıt sözleşmeye uymalı" (varsayılan kapalı). Açıkken yanıt doğrulanır; uyumsuzluk senaryoyu başarısız yapar. Rapor: `Sözleşme: Başarısız — N uyumsuzluk` ve yol bazında liste — SOAP'ta XML yolları (`/SiparisResponse/Kalemler/Kalem[2]/Adet: zorunlu alan yok`), REST'te JSON yolları (`response.orderId: sayı bekleniyordu, metin geldi`). Mesajlar değer içermez; gizli değerler maskelenir.
 - Desteklenen alt küme: `type` (dizi ve `null` dahil), `required`, `properties`, `items`, `enum`, `nullable`, `format` (date, date-time, email), `anyOf` / `oneOf`, `allOf` (birleştirilir). Fazla alan uyumsuzluk sayılmaz.
 
 ## Yetki hatasında (401 / 403)

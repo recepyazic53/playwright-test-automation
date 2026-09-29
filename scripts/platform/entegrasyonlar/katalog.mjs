@@ -47,7 +47,7 @@ const hostAl = (/** @type {string} */ adres) => { try { return new URL(adres).ho
 export function kosuBildirimMetni(k) {
   const oran = k.basariOrani === null ? '—' : `%${k.basariOrani}`;
   const durum = k.durum === 'tamamlandi' ? '' : ` (${{ durduruldu: 'durduruldu', zaman_asimi: 'zaman aşımı', hata: 'hatayla bitti' }[k.durum] ?? k.durum})`;
-  return `Nöbetçi · Koşu bitti${durum} — Proje: ${k.proje} · Ortam: ${k.ortam ?? '—'} · Başarı: ${oran} (${k.basarili}/${k.basarili + k.kalan}) · Kalan: ${k.kalan}` +
+  return `Nöbetçi · Koşu bitti${durum} — Proje: ${k.proje} · Ortam: ${k.ortam ?? '—'} · Başarı: ${oran} (${k.basarili}/${k.basarili + k.kalan}) · Başarısız: ${k.kalan}` +
     (k.atlanan ? ` · Atlanan: ${k.atlanan}` : '');
 }
 
@@ -61,14 +61,14 @@ const WEBHOOK = {
   tur: 'webhook',
   ad: 'Webhook bildirimi',
   ikon: 'simsek',
-  aciklama: 'Koşu bitince bir adrese kısa bir JSON bildirimi gönderir. Sohbet uygulamalarının "gelen webhook" adresleriyle (ör. Slack, Teams) uyumludur. İçerik: proje, ortam, başarı oranı ve kalan sayısı; test verisi ya da gizli değer gönderilmez.',
+  aciklama: 'Koşu bitince bir adrese kısa bir JSON bildirimi gönderir. Sohbet uygulamalarının "gelen webhook" adresleriyle (ör. Slack, Teams) uyumludur. İçerik: proje, ortam, başarı oranı ve başarısız sayısı; test verisi ya da gizli değer gönderilmez.',
   alanlar: [
     { ad: 'adres', etiket: 'Webhook adresi', tur: 'adres', gizli: true, zorunlu: true, yerTutucu: 'https://…',
       yardim: 'Uygulamanın verdiği gelen webhook adresi. Adres gizli bir anahtar içerdiği için kasada şifreli saklanır ve ekranda gösterilmez.' },
     { ad: 'bicim', etiket: 'İleti biçimi', tur: 'secim', zorunlu: true, varsayilan: 'sohbet',
       secenekler: [['sohbet', 'Sohbet uygulaması (yalnız "text")'], ['ayrintili', 'Ayrıntılı JSON ("text" + "nobetci" alanları)']],
       yardim: 'Ayrıntılı JSON, metnin yanında sayıları ayrı alanlar olarak da gönderir (kendi sisteminiz işleyecekse).' },
-    { ad: 'yalnizKalanVarsa', etiket: 'Yalnız kalan test varsa gönder', tur: 'onay', varsayilan: false,
+    { ad: 'yalnizKalanVarsa', etiket: 'Yalnız başarısız test varsa gönder', tur: 'onay', varsayilan: false,
       yardim: 'Açıksa tüm testler geçtiğinde bildirim gönderilmez.' }
   ],
   olaylar: [{ ad: 'kosu-bitti', etiket: 'Koşu bitti', aciklama: 'Nöbetçi\'den başlatılan bir ekran koşusu bitince.' }],

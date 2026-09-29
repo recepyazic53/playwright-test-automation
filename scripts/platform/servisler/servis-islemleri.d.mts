@@ -99,7 +99,7 @@ export interface CalistirmaSonucu {
   yetkiTekrari?: { ilkDurumKodu: number; not: string; ikinciDurumKodu?: number };
   /** "Yanıt sözleşmeye uymalı" açıkken doğrulama özeti. */
   sozlesme?: { durum: 'gecti' | 'kaldi' | 'yok'; toplam: number; uyumsuzluklar: Array<{ yol: string; mesaj: string }> };
-  /** Çalışan kurtarma kuralının notu (kurtarıldı / yine kaldı / tekrar denenmedi / denendi). */
+  /** Çalışan kurtarma kuralının notu (kurtarıldı / yine başarısız oldu / tekrar denenmedi / denendi). */
   kurtarma?: { kuralId: string; kural: string; durum: 'kurtarildi' | 'kaldi' | 'tekrarlanmadi' | 'denendi'; deneme: number; not: string };
 }
 export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }

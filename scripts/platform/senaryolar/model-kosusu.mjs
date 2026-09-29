@@ -135,7 +135,7 @@ export function gizliDegerleriMaskele(metin, gizliler) {
  * @param {string} baslik @param {ReadonlyArray<{ alan: string; mesaj: string }>} hatalar
  */
 export function veriHatalariMetni(baslik, hatalar) {
-  return `"${baslik}": senaryonun test verisi başvurusu çözülemedi — ${hatalar.map((h) => h.mesaj).join(' ')} Tabloyu Veri'de tamamlayın ya da senaryoda başka bir değer seçin. Tarayıcı açılmadı.`;
+  return `"${baslik}": senaryonun test verisi başvurusu çözülemedi — ${hatalar.map((h) => h.mesaj).join(' ')} Tabloyu Test verisi sayfasında tamamlayın ya da senaryoda başka bir değer seçin. Tarayıcı açılmadı.`;
 }
 
 /** Yasaklı host'a giden koşunun hata metni (host yazılır; adresin yolu/sorgusu yazılmaz). @param {string} adres @param {string} kalip */
@@ -260,7 +260,7 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       const havuz = profilHavuzuBul(f, formDegerleri, sema);
       const bulunan = profil && havuz ? secenekler.kimlikProfilleri?.[havuz]?.[profil] : undefined;
       if (nesneMi(bulunan)) kimlik = bulunan;
-      else neden = profil ? `"${profil}" kimlik kaydı bulunamadı (Veri > Kişi ve kayıt verileri: "${havuz ?? '?'}" tablosunda bu adla satır yok)` : 'kimlik bilgisi (kayıt ya da yeni kimlik) yok';
+      else neden = profil ? `"${profil}" kimlik kaydı bulunamadı (Test verisi > Kişi ve kayıt verileri: "${havuz ?? '?'}" tablosunda bu adla satır yok)` : 'kimlik bilgisi (kayıt ya da yeni kimlik) yok';
     }
     if (!kimlik) return [{ ...planAlani(alan, null), atla: neden }];
     const altlar = (Array.isArray(alan.altAlanlar) ? alan.altAlanlar : []).filter((a) => nesneMi(a) && nesneMi(a.eslesme) && a.eslesme.kimlikAlani !== undefined)

@@ -75,9 +75,9 @@ Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapıla
 ### Kayıt ve saklama
 
 **Ayarlar > Koşu > Kayıt**: video, test sonu ekran görüntüsü ve iz (trace; ağ istekleri, sayfa yapısı ve adımların kaydı,
-Playwright iz görüntüleyicisiyle açılır) için her testte / yalnız başarılı testlerde / yalnız kalan testlerde / kapalı
-("yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir). Adım ekran görüntüleri: her adımda
-(varsayılan) / yalnız kalan adımda / seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) / kapalı;
+Playwright iz görüntüleyicisiyle açılır) için her testte / yalnız başarılı testlerde / yalnız başarısız testlerde / kapalı
+("yalnız başarılı"da kayıt her testte alınır, başarısız testlerinki kaydedilmeden silinir). Adım ekran görüntüleri: her adımda
+(varsayılan) / yalnız başarısız adımda / seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) / kapalı;
 senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan, 800 px'e sığdırma) ya da Ekranla aynı.
 **Ayarlar > Yedekleme > Saklama**: sonuçları N gün sonra silme ve "medyayı incelt" (N günden eski sonuçlarda başarılı,
 kalan ya da tüm testlerin görüntü ve videoları silinir; sonucun kendisi kalır). Günlük temizlikte sıra: sonuç saklama →
@@ -110,7 +110,7 @@ Koşular yalnızca Nöbetçi'den başlatılır: sunucu Playwright'ı (`playwrigh
 çalıştırır; veri, giriş bilgisi ve giriş tarifi şifreli veritabanından okunur, sonuçlar şifreli olarak yazılır.
 Playwright HTML raporu üretilmez.
 
-### Zamanlanmış koşular ve kilitli kasa
+### Planlı koşular ve kilitli kasa
 
 **Planlı koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
 "Kasa kilitliyken ve açılışta" bölümündeki üç seçenek **varsayılan kapalıdır** ve ayrı ayrı açılır:
@@ -119,7 +119,7 @@ Playwright HTML raporu üretilmez.
   yalnız zamanlayıcının belleğinde kalır; Nöbetçi kapanınca gider. Kilitlerken "Tamamen kilitle" anahtarı da siler.
 - **Windows oturumuna bağlı otomatik açma (DPAPI)** — parola yeniden sorulur; anahtar DPAPI (CurrentUser) ile şifrelenip
   çalışma alanının klasörüne yazılır (`<veritabanı>.zamanlayici.dpapi`; yedeğe/pakete girmez). Açılışta yalnız zamanlayıcıya
-  verilir, arayüz kilitli başlar. Risk: Windows oturumunuzu ele geçiren biri zamanlanmış koşuların kullandığı verilere erişebilir.
+  verilir, arayüz kilitli başlar. Risk: Windows oturumunuzu ele geçiren biri planlı koşuların kullandığı verilere erişebilir.
 - **Bilgisayar açılınca arka planda başlasın** — Görev Zamanlayıcı'ya kendi hesabınızla, yönetici izni gerektirmeyen
   "Nöbetçi (arka plan)" görevi eklenir (`baslat.mjs --arka-plan`; pakette `Nöbetçi.exe --arka-plan`, pencere açılmaz).
 

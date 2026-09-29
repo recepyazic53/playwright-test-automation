@@ -601,7 +601,7 @@ function kosuGecmisi(kosular, urun) {
   const sayfalama = h('div', { class: 'sayfalama' });
   let sayfa = 0;
   let filtre = 'tumu';
-  // "Yalnız kalanlar": yalnız başarısız testi olan koşular (hızlı süzgeç).
+  // "Yalnız başarısızlar": yalnız başarısız testi olan koşular (hızlı süzgeç).
   let yalnizKalan = false;
   // Sıralama VERİDE (sayfalı tablo; tablo-siralama.js 'tablo-sirala' olayı → { anahtar, yon }).
   /** @type {{ anahtar: string | null; yon: 'artan' | 'azalan' | null }} */
@@ -650,7 +650,7 @@ function kosuGecmisi(kosular, urun) {
   const filtreSegmenti = segment([['tumu', 'Tümü'], ['tam', 'Tam'], ['tekil', 'Tekil']], filtre, (d) => { filtre = d; sayfa = 0; ciz(); }, 'Koşu türü');
   const kalanKutusu = h('input', { type: 'checkbox', id: 'gecmis-yalniz-kalan' });
   kalanKutusu.addEventListener('change', () => { yalnizKalan = kalanKutusu.checked; sayfa = 0; ciz(); });
-  const kalanSuzgeci = h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id, 'data-kayit-disi': '' }, kalanKutusu, 'Yalnız kalanlar');
+  const kalanSuzgeci = h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id, 'data-kayit-disi': '' }, kalanKutusu, 'Yalnız başarısızlar');
   const tablo = h('table', { class: 'ozet-tablosu gecmis-tablosu', 'data-siralama': 'veri' },
     h('caption', { class: 'gorunmez' }, 'Koşu geçmişi'),
     h('thead', {}, h('tr', {}, basliklar)),
@@ -777,7 +777,7 @@ function yakalananMesajlarGorunumu(y, urun, ornekAc) {
         if (acik && !testler.childElementCount) yerlestir(testler, yakalananTestleri(k, ornekAc));
       };
       ac.addEventListener('click', (o) => { o.stopPropagation(); degistir(); });
-      const gecenKalan = [k.kalanTestSayisi ? `${k.kalanTestSayisi} kalan` : null, k.gecenTestSayisi ? `${k.gecenTestSayisi} geçen` : null].filter(Boolean).join(' · ');
+      const gecenKalan = [k.kalanTestSayisi ? `${k.kalanTestSayisi} başarısız` : null, k.gecenTestSayisi ? `${k.gecenTestSayisi} geçen` : null].filter(Boolean).join(' · ');
       const satir = h('div', { class: `kalip-satiri yakalanan-satiri ${k.beklenen ? 'beklenen' : 'beklenmeyen'}`, role: 'listitem' },
         h('span', { class: 'kalip-ikon', 'aria-hidden': 'true' }, ikon(k.beklenen ? 'onay' : 'uyari')),
         h('div', { class: 'kalip-baslik' }, kaynakRozeti(k.kaynak), beklenenRozeti(k.beklenen), rozet(`${k.senaryoSayisi} senaryo`),
@@ -822,11 +822,11 @@ function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
     sonucAlani.replaceChildren(iskelet('liste'));
     try {
       const v = await api(`/platform/sonuclar/kaliplar?${q}`);
-      // İki görünüm: "Kalan testlerin hataları" (Playwright hata mesajı) ve "Koşuda yakalanan mesajlar" (geçen testler dahil).
+      // İki görünüm: "Başarısız testlerin hataları" (Playwright hata mesajı) ve "Koşuda yakalanan mesajlar" (geçen testler dahil).
       const y = v.yakalanan || { toplam: 0, beklenmeyen: 0, kaynaklar: {}, kaliplar: [] };
       const kalanAlani = h('div', { class: 'kalip-gorunumu', hidden: kalipGorunumu !== 'kalan' });
       const yakalananAlani = h('div', { class: 'kalip-gorunumu', hidden: kalipGorunumu !== 'yakalanan' }, yakalananMesajlarGorunumu(y, urun, ornekAc));
-      const sekmeler = segment([['kalan', `Kalan testlerin hataları (${v.toplam})`], ['yakalanan', `Koşuda yakalanan mesajlar (${y.toplam})`]], kalipGorunumu, (d) => {
+      const sekmeler = segment([['kalan', `Başarısız testlerin hataları (${v.toplam})`], ['yakalanan', `Koşuda yakalanan mesajlar (${y.toplam})`]], kalipGorunumu, (d) => {
         kalipGorunumu = d;
         kalanAlani.hidden = d !== 'kalan';
         yakalananAlani.hidden = d !== 'yakalanan';
@@ -1056,7 +1056,7 @@ async function kosuDetayi(icerik, id, proje) {
   const ortam = ortamKaydi ? ortamKaydi.ad : null;
   // Başlarken listesinin son adımı ("Sonuçları incele"): tam koşunun ayrıntısı açıldı.
   if (kosu.tur === 'tam') sonuclarIncelendi(proje);
-  // Hızlı süzgeçler: "Yalnız kalanlar" ve hata kalıbı (kalıba tıklayınca yalnız o kalıptaki testler; çip ile kaldırılır).
+  // Hızlı süzgeçler: "Yalnız başarısızlar" ve hata kalıbı (kalıba tıklayınca yalnız o kalıptaki testler; çip ile kaldırılır).
   const suzgec = { kalan: false, kalip: /** @type {string | null} */ (null) };
   let suzgecUygula = () => {};
   const kalipDugmesi = (kalip) => h('button', { type: 'button', class: 'baglanti-dugmesi kalip-suzgec-dugmesi', title: 'Yalnız bu hata kalıbındaki testleri göster',
@@ -1097,7 +1097,7 @@ async function kosuDetayi(icerik, id, proje) {
     const ust = h('tr', { class: `veri-kosusu-grubu${kalan ? ' kalan-satir' : ''}`, 'data-senaryo': ilk.senaryoId, 'data-kaliplar': JSON.stringify([...new Set(liste.map((x) => x.hataKalibi).filter(Boolean))]) },
       h('td', {}, durumRozeti(durum)), h('td', {}, ilk.urun), h('td', {}, ac),
       h('td', { class: 'sayi' }, sureMetni(liste.reduce((t, x) => t + (x.sureMs || 0), 0))),
-      h('td', { class: 'kalip' }, kalan ? `${kalan} / ${liste.length} satır kaldı` : `${liste.length} satırın hepsi geçti`),
+      h('td', { class: 'kalip' }, kalan ? `${kalan} / ${liste.length} satır başarısız` : `${liste.length} satırın hepsi geçti`),
       h('td', {}));
     return [ust, ...altlar];
   };
@@ -1110,7 +1110,7 @@ async function kosuDetayi(icerik, id, proje) {
     islenen.add(x.senaryoId);
     tabloSatirlari.push(...grupSatirlari(g));
   }
-  // Başarısızları tekrar çalıştır: yalnız kalan testler (veri koşularında yalnız kalan satırlar), aynı ortam, o koşudaki satırlar ve model sürümü.
+  // Başarısızları tekrar çalıştır: yalnız başarısız testler (veri koşularında yalnız kalan satırlar), aynı ortam, o koşudaki satırlar ve model sürümü.
   const tekrarlanabilir = sonuclar.filter((x) => x.durum === 'basarisiz' && x.senaryoId).length;
   const tekrarDugmesi = tekrarlanabilir && kosu.ortamId
     ? h('button', { type: 'button', class: 'dugme', onclick: () => basarisizlariTekrarCalistir(kosu, ortamKaydi, proje) }, ikon('yenile'), `Başarısızları tekrar çalıştır (${tekrarlanabilir})`)
@@ -1143,7 +1143,7 @@ async function kosuDetayi(icerik, id, proje) {
   };
   kalanKutusu.addEventListener('change', () => { suzgec.kalan = kalanKutusu.checked; suzgecUygula(); });
   const hizliSuzgec = sonuclar.length ? h('div', { class: 'hizli-suzgec', 'data-kayit-disi': '' },
-    h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id }, kalanKutusu, `Yalnız kalanlar (${kalanSayisi})`), suzgecCipi) : null;
+    h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id }, kalanKutusu, `Yalnız başarısızlar (${kalanSayisi})`), suzgecCipi) : null;
   const sure = kosu.bitis ? new Date(kosu.bitis).getTime() - new Date(kosu.baslangic).getTime() : null;
   const o = oran(kosu);
   const ozetKarti = (etiket, deger, sinif) => h('div', { class: `sonuc-karti ${sinif}` },
@@ -1184,7 +1184,7 @@ async function kosuDetayi(icerik, id, proje) {
 }
 
 /**
- * "Başarısızları tekrar çalıştır": önce plan (kalan testler, o koşudan bu yana değişen satırlar / model) gösterilir; kullanıcı model
+ * "Başarısızları tekrar çalıştır": önce plan (başarısız testler, o koşudan bu yana değişen satırlar / model) gösterilir; kullanıcı model
  * sürümünü (o koşudaki / güncel) ve değişen satırlar için veriyi (güncel / o koşudaki — yalnız o koşudaki değerleri saklanabilen,
  * gizli sütunsuz tablolarda) seçer. Riskli ortamda ayrıca açık onay istenir; izinler sunucuda denetlenir. Yeni koşu "Tekrar:" bağı taşır.
  */
@@ -1221,7 +1221,7 @@ async function basarisizlariTekrarCalistir(kosu, ortam, proje) {
       plan.bagsiz ? h('p', { class: 'soluk kucuk' }, `${plan.bagsiz} sonuç bir senaryoya bağlı olmadığı için dahil edilmedi.`) : null);
     const tamam = await onayIste({
       baslik: 'Başarısızları tekrar çalıştır?', ikonAd: 'yenile', dugme: `${plan.sayi} testi çalıştır`, ek,
-      metin: `Yalnız kalan ${plan.sayi} test ${ortam.ad} ortamında, o koşudaki tablo satırlarıyla, sırayla ve kısmi (tekil) koşu olarak çalışır. Yeni koşu "Tekrar: önceki koşu" bağıyla kaydedilir.`
+      metin: `Yalnız başarısız ${plan.sayi} test ${ortam.ad} ortamında, o koşudaki tablo satırlarıyla, sırayla ve kısmi (tekil) koşu olarak çalışır. Yeni koşu "Tekrar: önceki koşu" bağıyla kaydedilir.`
     });
     if (!tamam) return;
     if (!(await canliOnayIste(ortam, 'Tekrar koşusu'))) return;

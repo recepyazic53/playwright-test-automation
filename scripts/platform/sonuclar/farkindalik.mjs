@@ -5,7 +5,7 @@
 // HESAPLAR YENİDEN KULLANILIR (kopya yok):
 //   - Dönem, sorunlar (P1), kritik işaret, yavaşlayan metotlar, özet kutuları: genel dönem raporu (donem-raporu.mjs > donemRaporuVerisi,
 //     kapsam 'genel' — sorun-modeli.mjs, oncelik.mjs, coklu.mjs, rapor-verileri.mjs'nin hesabı).
-//   - Zamanlanmış koşular: genel.mjs > pencereGuvenilirligi (kaçan / atlanan / yarıda), neden tetikleme kaydının mesajından.
+//   - Planlı koşular: genel.mjs > pencereGuvenilirligi (kaçan / atlanan / yarıda), neden tetikleme kaydının mesajından.
 //   - Metot kapsamı: genel.mjs > metotKapsami. Test verisi sağlığı: tablo-birlestirme.mjs > veriSagligi.
 //   - Sabit tarihi eskiyen senaryolar ve son sonuçlar: senaryo-servisi.mjs > senaryoListesi. Bekleyen bulgular: ekran-servisi.mjs >
 //     ekranListesi. Denenmemiş koşul dalları: senaryo-onerileri.mjs'nin kapsam ölçüsü (öneri bağlamı sunucuda kurulur; ekran başına sayı).
@@ -116,7 +116,7 @@ export function yavaslayanMetotlar(metotlar, yuzde) {
 }
 
 /**
- * Zamanlanmış koşu tetiklemesinin kaçma / atlanma nedeni (kaydın mesajından; metin gösterilmez, yalnız sınıf).
+ * Planlı koşu tetiklemesinin kaçma / atlanma nedeni (kaydın mesajından; metin gösterilmez, yalnız sınıf).
  * @param {{ durum: string; mesaj?: string }} t
  */
 export function tetiklemeNedeni(t) {
@@ -215,12 +215,12 @@ async function hesapla(vt, projeId, x) {
   // ================================ DİKKAT ================================
   /** @type {Madde[]} */
   const dikkat = [];
-  // Öğe başına TEK madde (ekran / servis / akış): kritik işaretli ve son koşusunda kaldı, P1 sorun sayısı, N gündür kırmızı.
+  // Öğe başına TEK madde (ekran / servis / akış): kritik işaretli ve son koşusunda başarısız oldu, P1 sorun sayısı, N gündür kırmızı.
   /** @type {Map<string, { tur: 'ekran' | 'servis' | 'akis'; etiket: string; ad: string; adres: string; kritik: boolean; p1: number; gun: number | null }>} */
   const ogeler = new Map();
   /** @param {string} k @param {{ tur: 'ekran' | 'servis' | 'akis'; etiket: string; ad: string; adres: string }} o */
   const oge = (k, o) => ogeler.get(k) ?? ogeler.set(k, { ...o, kritik: false, p1: 0, gun: null }).get(k);
-  // 1) Kritik işaretli öğe son koşusunda kaldı (rapor-verileri.mjs işareti; genel raporun hesabı).
+  // 1) Kritik işaretli öğe son koşusunda başarısız oldu (rapor-verileri.mjs işareti; genel raporun hesabı).
   for (const o of coklu?.ekranTarafi?.ogeler ?? []) {
     const x = o.kritikKaldi ? oge(`ekran:${o.id}`, { tur: 'ekran', etiket: 'Ekran', ad: o.ad, adres: `#/sonuclar/u/${encodeURIComponent(o.id)}` }) : null;
     if (x) x.kritik = true;
@@ -300,7 +300,7 @@ async function hesapla(vt, projeId, x) {
   }, undefined);
   for (const o of [...ogeler.values()].sort((a, b) => Number(b.kritik) - Number(a.kritik) || b.p1 - a.p1 || (b.gun ?? -1) - (a.gun ?? -1) || a.ad.localeCompare(b.ad, 'tr'))) {
     const parca = [o.etiket];
-    if (o.kritik) parca.push(o.tur === 'servis' ? 'kritik · son çağrısı kaldı' : 'kritik · son koşusunda kaldı');
+    if (o.kritik) parca.push(o.tur === 'servis' ? 'kritik · son çağrısı başarısız oldu' : 'kritik · son koşusunda başarısız oldu');
     if (o.p1) parca.push(`${o.p1} P1 sorun`);
     if (o.gun !== null) parca.push(`${o.gun} gündür kırmızı`);
     dikkat.push({ tur: o.kritik ? 'kritik' : o.p1 ? 'p1' : 'kirmizi', ad: ad(o.ad), ayrinti: parca.join(' · '), adres: o.adres });
@@ -311,8 +311,8 @@ async function hesapla(vt, projeId, x) {
     dikkat.push({ tur: 'yavas', ad: `${ad(m.servis)} › ${yolAdi(m.ad)}`, ayrinti: `Yavaşladı · p95 %${m.artis} arttı (${m.n} ölçüm)`, adres: `#/sonuclar/s/${encodeURIComponent(m.servisId)}` });
   }
 
-  // 4) Kaçan / atlanan / yarıda kalan zamanlanmış koşular (seçili dönem; neden tetikleme kaydından).
-  dene('Zamanlanmış koşular', () => {
+  // 4) Kaçan / atlanan / yarıda kalan planlı koşular (seçili dönem; neden tetikleme kaydından).
+  dene('Planlı koşular', () => {
     if (!donemBilgisi) return;
     for (const k of kurallariListele(vt, projeId, { simdi })) {
       if (!k.etkin) continue;
@@ -329,7 +329,7 @@ async function hesapla(vt, projeId, x) {
       if (!nedenler.size) continue;
       dikkat.push({
         tur: 'zamanlanmis', ad: ad(k.ad),
-        ayrinti: `Zamanlanmış koşu · ${[...nedenler.entries()].sort((a, b) => b[1] - a[1]).map(([n, s]) => `${s} ${n}`).join(', ')}`,
+        ayrinti: `Planlı koşu · ${[...nedenler.entries()].sort((a, b) => b[1] - a[1]).map(([n, s]) => `${s} ${n}`).join(', ')}`,
         adres: '#/ayarlar/kosu'
       });
     }
@@ -340,7 +340,7 @@ async function hesapla(vt, projeId, x) {
   dene('Kurtarma kuralları', () => {
     if (!donemBilgisi) return;
     for (const k of calisanKurallar(vt, projeId, { bas: donemBilgisi.bas, bit: donemBilgisi.bit })) {
-      const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine kaldı` : '',
+      const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine başarısız oldu` : '',
         k.tekrarlanmadi ? `${k.tekrarlanmadi} tekrar denenmedi` : ''].filter(Boolean);
       dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/proje' });
     }

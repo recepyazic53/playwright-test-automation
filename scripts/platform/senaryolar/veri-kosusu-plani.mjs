@@ -124,7 +124,7 @@ function satirDurumu(s, tablolar) {
 const sonModelSurumu = (vt, ekranId) => (ekranId ? ekranModeliGetir(vt, ekranId)?.surum ?? null : null);
 
 /**
- * "Başarısızları tekrar çalıştır" önizlemesi: kalan testler senaryo başına, satır / model değişiklikleri ve atlananlar. Hiçbir şey
+ * "Başarısızları tekrar çalıştır" önizlemesi: başarısız testler senaryo başına, satır / model değişiklikleri ve atlananlar. Hiçbir şey
  * başlatmaz. projeId verilirse koşu o projede olmalı.
  * @param {Veritabani} vt @param {string} kosuId @param {string | null} [projeId]
  */
@@ -224,7 +224,7 @@ export function tekrarSenaryoPlani(vt, g) {
   const { kosu, gruplar } = kalanlar(vt, kimlik(g.kaynakKosuId, 'tekrar.kaynakKosuId'));
   if (kosu.ortamId !== g.ortamId) throw new DepoHatasi('Başarısızlar yalnız o koşunun ortamında tekrar çalıştırılabilir.');
   const grup = gruplar.get(g.senaryoId);
-  if (!grup) throw new DepoHatasi('Bu senaryonun o koşuda kalan testi yok.');
+  if (!grup) throw new DepoHatasi('Bu senaryonun o koşuda başarısız testi yok.');
   const s = senaryoGetir(vt, g.senaryoId);
   if (!s || s.projeId !== kosu.projeId) throw new DepoHatasi('Senaryo bulunamadı.');
   const kullanilan = grup.sonuclar.map((x) => x.vk?.modelSurumu).find((x) => typeof x === 'number') ?? null;

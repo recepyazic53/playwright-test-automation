@@ -44,7 +44,7 @@ export function ekranGoruntusuAl(page: Page, s: { fullPage: boolean; sureMs: num
 }
 
 /**
- * Adımın ekran görüntüsünü ekler (ad: "NN - <adım>"; kalan adımda alınan görüntü "… (kalan adım)" — saklama inceltmesi onu tanır).
+ * Adımın ekran görüntüsünü ekler (ad: "NN - <adım>"; başarısız adımda alınan görüntü "… (başarısız adım)" — saklama inceltmesi onu tanır).
  * Alınamazsa koşu takılmaz: görüntü yerine adında nedeni yazan bir not eklenir ("… (ekran görüntüsü alınamadı: <neden>)"); Sonuçlar
  * ekranı bunu "görüntü alınamadı: <neden>" olarak gösterir.
  */

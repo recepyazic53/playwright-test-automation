@@ -54,7 +54,7 @@ export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
  * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo "dene" olarak koşar (CANLI ortamda onay HTTP ucunda).
  * VERİ KOŞULARI: tablodan çoklu satırla koşan senaryonun her satırı / kombinasyonu ayrı satır ("Senaryo [ad]"); tek senaryodaki üst
  * sınır (Ayarlar > Koşu) aşılırsa iş başlatılmaz; bu ortamda koşulacak satır yoksa senaryo nedeniyle atlanır.
- * TEKRAR: tekrar = { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — yalnız o koşuda kalan çalıştırmalar, o koşudaki satırlarla
+ * TEKRAR: tekrar = { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — yalnız o koşuda başarısız çalıştırmalar, o koşudaki satırlarla
  * (senaryoIdleri yok sayılır); kayıtlar "Tekrar:" bağı taşır. Servis ve ortam o koşununkiyle aynı olmalı.
  * @param {Veritabani} vt @param {string} projeId
  * UYGULAMA SÜRÜMÜ: uygulamaSurumu (koşu başlatılırken girilen; isteğe bağlı) her koşu kaydına etiket olarak yazılır; boşsa ortam
@@ -81,7 +81,7 @@ export function servisIsiBaslat(vt, projeId, girdi) {
   if (tekrar) {
     const plan = servisTekrarPlani(vt, projeId, String(tekrar.kaynakKosuId), { veri: tekrar.veri });
     if (plan.kosu.servisId !== servis.id || plan.kosu.ortamId !== ortam.id) throw new DepoHatasi('Başarısızlar yalnız o koşunun servisi ve ortamında tekrar çalıştırılabilir.');
-    if (!plan.testler.length) throw new DepoHatasi('Bu koşuda tekrar çalıştırılacak kalan senaryo yok.');
+    if (!plan.testler.length) throw new DepoHatasi('Bu koşuda tekrar çalıştırılacak başarısız senaryo yok.');
     tekrarSatirlari = plan.testler.map((t) => sirada({ senaryoId: t.senaryoId, baslik: t.baslik, veriKosusu: t.veriKosusu }));
   }
   const satirlar = tekrarSatirlari ?? (taslak ? [/** @type {IsSatiri} */ ({

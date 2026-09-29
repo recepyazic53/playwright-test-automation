@@ -90,7 +90,7 @@ export function baslarkenDurumu(vt, projeId) {
       adres: senaryo ? `#/senaryolar/duzenle/${kodla(senaryo.id)}` : '#/senaryolar', bitti: isaret.denendi || kosuVar },
     { anahtar: 'kosu', baslik: 'Koşuyu başlat', aciklama: 'Koşudaki senaryoların hepsi seçtiğiniz ortamda çalışır; sonuçlar kanıtlarıyla saklanır.', eylem: 'Senaryolara git',
       adres: '#/senaryolar', bitti: Boolean(tamKosu) },
-    { anahtar: 'sonuc', baslik: 'Sonuçları incele', aciklama: 'Koşuyu açın: kalan testin adımları, ekran görüntüleri ve videosu oradadır.', eylem: 'Son koşuyu aç',
+    { anahtar: 'sonuc', baslik: 'Sonuçları incele', aciklama: 'Koşuyu açın: başarısız testin adımları, ekran görüntüleri ve videosu oradadır.', eylem: 'Son koşuyu aç',
       adres: tamKosu ? `#/sonuclar/kosu/${kodla(String(tamKosu.id))}` : '#/sonuclar/ekranlar', bitti: isaret.incelendi }
   ];
   let siradakiVerildi = false;

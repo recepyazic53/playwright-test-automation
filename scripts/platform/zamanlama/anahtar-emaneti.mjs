@@ -1,4 +1,4 @@
-// ZAMANLANMIŞ KOŞULAR — anahtar emaneti ("Kasa kilitlense de zamanlanmış koşular çalışsın", Planlı koşular; varsayılan KAPALI).
+// ZAMANLANMIŞ KOŞULAR — anahtar emaneti ("Kasa kilitlense de planlı koşular çalışsın", Planlı koşular; varsayılan KAPALI).
 // Kullanıcı tercihi açıkken kasa kilitlenince ARAYÜZ kilitlenir ama kasa anahtarının bir KOPYASI yalnız bu modülün içindeki
 // değişkende (bellekte) kalır. Kopyayı dışarı veren bir fonksiyon YOKTUR: yalnız zamanlayıcının arka plan işi
 // (arkaPlanIsiBaslat) onu kasaya "arka plan kipinde" (kasa.mjs > kasayiArkaPlandaAc) geçici olarak yerleştirir:
@@ -47,7 +47,7 @@ export function arkaPlanIsiSuruyorMu(vt) {
 }
 
 /**
- * "Kilitle (zamanlanmış koşular sürsün)": açık kasanın anahtarı emanete alınır ve arayüz kilitlenir. Süren arka plan işi
+ * "Kilitle (planlı koşular sürsün)": açık kasanın anahtarı emanete alınır ve arayüz kilitlenir. Süren arka plan işi
  * yoksa anahtar kasadan hemen silinir (yalnız emanette kalır); varsa iş bitince silinir.
  * @param {Veritabani} vt
  */
@@ -73,7 +73,7 @@ export function arkaPlanIsiBaslat(vt) {
       kasayiArkaPlandaAc(vt, anahtar);
     } catch {
       emanetiSil(vt);
-      console.error('[zamanlama] Bellekteki kasa anahtarı bu kasaya artık uymuyor (parola değişmiş ya da yedek yüklenmiş olabilir); zamanlanmış koşular kasa açılana kadar çalışmaz.');
+      console.error('[zamanlama] Bellekteki kasa anahtarı bu kasaya artık uymuyor (parola değişmiş ya da yedek yüklenmiş olabilir); planlı koşular kasa açılana kadar çalışmaz.');
       return null;
     }
   }

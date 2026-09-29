@@ -1,7 +1,7 @@
 // GENEL RAPOR HESABI (saf; yan etki yok): projenin tamamını kapsayan dönem raporunun (A3) yalnız genel rapora özgü bölümleri.
 // Ekran / servis toplamı, sorunlar, aksiyonlar, bağlantılı sorunlar ve sağlık sıralaması çoklu raporun hesabıdır (coklu.mjs,
 // donem-raporu.mjs > cokluBolumler); burada kopyalanmaz. Buradakiler:
-//   - zamanlanmış koşu güvenilirliği: tamamlanan tetikleme ÷ takvime göre beklenen tetikleme (sonucun başarısından bağımsız);
+//   - planlı koşu güvenilirliği: tamamlanan tetikleme ÷ takvime göre beklenen tetikleme (sonucun başarısından bağımsız);
 //     tetikleme geçmişi kural başına son GECMIS_SINIRI kayıtla sınırlıdır: pencere geçmişin en eski kaydından öncesini kapsıyorsa
 //     hesap o kayıttan başlatılır ve "kısıtlı" işaretlenir (kalıcı tetikleme kaydı sonraki aşamada);
 //   - kararsız testler listesi (ekran + servis senaryoları; kararlılık sorun-modeli.mjs'dendir);
@@ -11,7 +11,7 @@
 import { basariYuzdesi } from './hesaplama.mjs';
 import { gununZamanlari } from '../zamanlama/takvim.mjs';
 
-/** Tamamlanmış sayılan tetikleme durumları ("başarısız" = koşu tamamlandı ama en az bir test kaldı). */
+/** Tamamlanmış sayılan tetikleme durumları ("başarısız" = koşu tamamlandı ama en az bir test başarısız oldu). */
 export const TAMAMLANAN_TETIKLEMELER = Object.freeze(['tamamlandi', 'basarisiz']);
 
 /**

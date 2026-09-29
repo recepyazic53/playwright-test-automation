@@ -1,6 +1,6 @@
 // KORUMA TESTLERİ — PDF raporu A3: genel rapor (projenin tamamı; veritabanı fikstürüyle, ağ YOK).
 // Denetlenenler: seçimsiz kapsam (o anki tüm ekranlar ve servisler; ortak akış işaretli), toplamların çoklu raporla aynı hesaptan
-// gelmesi, akışlar (servis + uçtan uca), zamanlanmış koşu güvenilirliği (kısıtlı geçmiş, devre dışı kural), kararsız testler, test
+// gelmesi, akışlar (servis + uçtan uca), planlı koşu güvenilirliği (kısıtlı geçmiş, devre dışı kural), kararsız testler, test
 // verisi sağlığı, kapsam ve açıklar, ortamlara göre; girdi doğrulama; maskeleme (gizli değer, gizli sütun, e-posta, uzun rakam,
 // ortam adresi, gövde HTML'de ve PDF'te yok); PDF (%PDF, sayfa > 1, dış istek yok); arşiv (kaydet → meta; yeniden oluşturma o
 // anki tüm öğelerle).
@@ -71,7 +71,7 @@ test('genel: tüm ekranlar ve servisler (seçimsiz), ortak akış işaretli, top
   expect(v.genel!.ozet).toEqual({ ekranSayisi: 3, ortakAkisSayisi: 1, servisSayisi: 3, akisSayisi: 1, uctanUcaSayisi: 1, kuralSayisi: 2 });
 });
 
-test('genel: akışlar (servis + uçtan uca), zamanlanmış koşu güvenilirliği', async () => {
+test('genel: akışlar (servis + uçtan uca), planlı koşu güvenilirliği', async () => {
   const { veri: v } = await hazirla(genelGirdi(f));
   const gn = v.genel!;
   expect(v.coklu!.akislar.map((a) => [a.ad, a.tur, a.kosu, a.basarili, a.oncekiKosu, a.oncekiBasarili])).toEqual([
@@ -154,8 +154,8 @@ test('maskeleme: genel raporun HTML\'inde gizli değer, gizli sütun, e-posta, u
   expect(html).toContain('Gece koşusu •••'); // kural adındaki gizli sütun değeri maskeli
   expect(html).toContain('parola=•••');
   for (const bolum of ['Tek bakışta', 'Ele alınması gerekenler', 'Bağlantılı sorunlar (ekran ↔ servis)', 'Sorunlar ve eğilimleri', 'Eğilim', 'Ekranlar ve ortak akışlar',
-    'Servisler', 'Servis akışları ve uçtan uca akışlar', 'Zamanlanmış koşular', 'Kararsız testler', 'Test verisi sağlığı', 'Kapsam ve açıklar', 'Ortamlara göre',
-    'Yöntem', 'Gizlilik.', '(ortak akış)', 'Uçtan uca akış', 'Zamanlanmış koşu güvenilirliği', 'Sonraki aşama']) {
+    'Servisler', 'Servis akışları ve uçtan uca akışlar', 'Planlı koşular', 'Kararsız testler', 'Test verisi sağlığı', 'Kapsam ve açıklar', 'Ortamlara göre',
+    'Yöntem', 'Gizlilik.', '(ortak akış)', 'Uçtan uca akış', 'Planlı koşu güvenilirliği', 'Sonraki aşama']) {
     expect(html, bolum).toContain(bolum);
   }
   // Tek ortam seçilince "Ortamlara göre" bölümü yok; karşılaştırma kapalıysa önceki dönem sütunları yok.

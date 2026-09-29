@@ -44,7 +44,7 @@ export declare function kasaDurumu(vt: Veritabani): KasaDurumu;
 export declare function kasaAcikMi(vt: Veritabani): boolean;
 /** Kasa arayüzde açık mı (arka plan kipinde false). */
 export declare function arayuzAcikMi(vt: Veritabani): boolean;
-/** Anahtar bellekte, arayüz kilitli (zamanlanmış koşuların arka plan kipi). */
+/** Anahtar bellekte, arayüz kilitli (planlı koşuların arka plan kipi). */
 export declare function arkaPlanKipindeMi(vt: Veritabani): boolean;
 export declare function arayuzuKilitle(vt: Veritabani): KasaDurumu;
 export declare function kasayiArkaPlandaAc(vt: Veritabani, anahtar: Buffer): boolean;

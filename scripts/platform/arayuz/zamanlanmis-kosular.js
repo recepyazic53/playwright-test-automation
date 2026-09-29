@@ -10,24 +10,24 @@ import { ortamRiskRozeti, riskliOrtamMi } from './kosu-paneli.js';
 const GUNLER = [[1, 'Pzt'], [2, 'Sal'], [3, 'Çar'], [4, 'Per'], [5, 'Cum'], [6, 'Cmt'], [7, 'Paz']];
 const ARALIKLAR = [1, 2, 3, 4, 6, 8, 12];
 const DURUM = {
-  calisiyor: ['Çalışıyor', 'uyari'], tamamlandi: ['Başarılı', 'basari'], basarisiz: ['Kalan var', 'hata'],
+  calisiyor: ['Çalışıyor', 'uyari'], tamamlandi: ['Başarılı', 'basari'], basarisiz: ['Başarısız var', 'hata'],
   atlandi: ['Atlandı', 'durdu'], yarida: ['Yarıda kaldı', 'uyari'], hata: ['Başlatılamadı', 'hata']
 };
 const durumRozeti = (d) => { const [m, t] = DURUM[d] || [d, '']; return rozet(m, t); };
 const ortamRiskli = (o) => riskliOrtamMi(o);
-const KILAVUZ = 'Zamanlanmış koşular yalnız Nöbetçi açıkken (sunucu çalışırken) ve kasa AÇIKKEN çalışır (aşağıdaki "Kasa kilitliyken ve açılışta" tercihleriyle değiştirebilirsiniz); zamanlar bu bilgisayarın saatine göredir. '
+const KILAVUZ = 'Planlı koşular yalnız Nöbetçi açıkken (sunucu çalışırken) ve kasa AÇIKKEN çalışır (aşağıdaki "Kasa kilitliyken ve açılışta" tercihleriyle değiştirebilirsiniz); zamanlar bu bilgisayarın saatine göredir. '
   + 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar sonradan toplu koşulmaz; varsayılan olarak bir sonraki zaman beklenir. Otomatik kilit süresi '
   + '(Ayarlar > Güvenlik) dolunca kasa kilitlenir. Vakti geldiğinde başka bir koşu sürüyorsa o zaman varsayılan olarak atlanır ("Atlandı: koşu sürüyordu"). '
-  + 'Bu iki davranışı aşağıdaki "Zamanlanmış koşu davranışı" bölümünden değiştirebilirsiniz. '
+  + 'Bu iki davranışı aşağıdaki "Planlı koşu davranışı" bölümünden değiştirebilirsiniz. '
   + 'Koşular "Koşuyu başlat" ile aynı yoldan yapılır; sonuçlar Sonuçlar\'a düşer.';
 
 /**
- * Planlı koşular sayfasındaki (üst menü) "Zamanlanmış koşular" kartı.
+ * Planlı koşular sayfasındaki (üst menü) "Planlı koşular" kartı.
  * @param {{ id: string; ad: string }} proje
  * @param {{ davranisFormu?: () => Promise<HTMLElement> }} [secenek] davranisFormu: kaçan / çakışan zaman kararları formu (ayarlar.js; tüm kurallar için)
  */
 export async function zamanlanmisKosularKarti(proje, secenek = {}) {
-  const kart = h('section', { class: 'kart form-paneli zamanlanmis-kosular', 'aria-label': 'Zamanlanmış koşular' });
+  const kart = h('section', { class: 'kart form-paneli zamanlanmis-kosular', 'aria-label': 'Planlı koşu kuralları' });
   const ciz = async () => {
     const q = `projeId=${encodeURIComponent(proje.id)}`;
     const bos = (anahtar) => () => ({ [anahtar]: [] });
@@ -48,15 +48,15 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
       yerlestir(formAlani, kuralFormu({ ...secenekler, kural, kapat: () => formAlani.replaceChildren(), kaydedildi: () => { void ciz(); } }));
       formAlani.scrollIntoView({ block: 'nearest' });
     };
-    const ekle = h('button', { type: 'button', class: 'birincil', onclick: () => formAc(null) }, ikon('arti'), 'Zamanlanmış koşu ekle');
+    const ekle = h('button', { type: 'button', class: 'birincil', onclick: () => formAc(null) }, ikon('arti'), 'Planlı koşu ekle');
     yerlestir(kart,
-      h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular', rozet(String(veri.kurallar.length))), ekle),
+      h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('tarih'), 'Planlı koşular', rozet(String(veri.kurallar.length))), ekle),
       h('p', { class: 'soluk' }, KILAVUZ),
-      veri.suren ? h('div', { class: 'not-kutusu uyari', role: 'status' }, `Şu an zamanlanmış koşu sürüyor: "${veri.suren.ad}".`) : null,
+      veri.suren ? h('div', { class: 'not-kutusu uyari', role: 'status' }, `Şu an planlı koşu sürüyor: "${veri.suren.ad}".`) : null,
       formAlani,
       veri.kurallar.length ? h('ul', { class: 'kayit-listesi zamanlama-listesi' }, veri.kurallar.map((k) => kuralSatiri(k, { ...secenekler, duzenle: formAc, yenile: ciz })))
-        : bosDurum('Zamanlanmış koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "Zamanlanmış koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
-      secenek.davranisFormu ? h('div', { class: 'zamanlama-davranisi' }, h('h4', {}, 'Zamanlanmış koşu davranışı'), await secenek.davranisFormu()) : null,
+        : bosDurum('Planlı koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "Planlı koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
+      secenek.davranisFormu ? h('div', { class: 'zamanlama-davranisi' }, h('h4', {}, 'Planlı koşu davranışı'), await secenek.davranisFormu()) : null,
       await arkaPlanBolumu().catch((hata) => {
         if (hata && hata.durum === 423) throw hata;
         return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Kilitliyken çalışma tercihleri yüklenemedi: ${hata.message || hata}`);
@@ -73,7 +73,7 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
 const TERCIHLER = [
   {
     ad: 'kilitliyken',
-    baslik: 'Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)',
+    baslik: 'Kasa kilitlense de planlı koşular çalışsın (anahtar yalnız bellekte)',
     metin: 'Kasa kilitlenince (elle ya da otomatik kilit) arayüz kilitlenir ve ekranda hiçbir veri görünmez; ancak kasa anahtarının bir kopyası yalnız zamanlayıcının kullanabildiği bellekte kalır ve vakti gelen koşular yapılır. '
       + 'Nöbetçi kapanınca ya da yeniden başlayınca anahtar silinir; diske hiçbir şey yazılmaz. Kilitlerken "Tamamen kilitle"yi seçerek anahtarı da silebilirsiniz.',
     risk: 'Risk: Nöbetçi açıkken bu bilgisayarın belleğini okuyabilen biri (ör. yönetici yetkili zararlı bir program) kasa anahtarına ulaşabilir; kilitli kasa, bu seçenek kapalıyken olduğu kadar güçlü korunmaz.'
@@ -83,16 +83,16 @@ const TERCIHLER = [
     windows: true,
     baslik: 'Windows oturumuna bağlı otomatik açma (DPAPI)',
     metin: 'Kasa anahtarı Windows\'un veri koruma özelliğiyle (DPAPI, yalnız sizin Windows hesabınız) şifrelenip bu çalışma alanının klasörüne yazılır; düz anahtar diske yazılmaz. '
-      + 'Nöbetçi açılınca bu dosya çözülür ve anahtar yalnız zamanlanmış koşulara verilir: arayüz kilitli başlar, ekranı açmak için yine parolanız gerekir. '
+      + 'Nöbetçi açılınca bu dosya çözülür ve anahtar yalnız planlı koşulara verilir: arayüz kilitli başlar, ekranı açmak için yine parolanız gerekir. '
       + 'Açıkken kilitleme de üstteki seçenek gibi davranır. Dosya yedeklere ve pakete girmez; kasa parolası değişince yenilenir; kapatınca güvenli biçimde silinir.',
-    risk: 'Risk: Windows oturumunuzu ele geçiren biri zamanlanmış koşuların kullandığı verilere erişebilir. Açmak için kasa parolanız yeniden sorulur.'
+    risk: 'Risk: Windows oturumunuzu ele geçiren biri planlı koşuların kullandığı verilere erişebilir. Açmak için kasa parolanız yeniden sorulur.'
   },
   {
     ad: 'oturumAcilisi',
     windows: true,
     baslik: 'Bilgisayar açılınca Nöbetçi arka planda başlasın',
     metin: 'Windows Görev Zamanlayıcı\'ya sizin hesabınızla, yönetici izni gerektirmeden çalışan "Nöbetçi (arka plan)" görevi eklenir: oturum açınca Nöbetçi pencere ya da tarayıcı açmadan başlar (zaten açıksa bir şey yapmaz). '
-      + 'Kasa kilitli başlar; zamanlanmış koşuların çalışması için "Windows oturumuna bağlı otomatik açma"yı da açın ya da Nöbetçi\'yi açıp kasayı açın. Kapatınca görev silinir.',
+      + 'Kasa kilitli başlar; planlı koşuların çalışması için "Windows oturumuna bağlı otomatik açma"yı da açın ya da Nöbetçi\'yi açıp kasayı açın. Kapatınca görev silinir.',
     risk: 'Risk: Nöbetçi siz fark etmeden arka planda çalışır ve bilgisayarın kaynaklarını kullanır (yalnız bu bilgisayardan, 127.0.0.1 üzerinden erişilebilir).'
   }
 ];
@@ -105,7 +105,7 @@ async function arkaPlanBolumu() {
     const satirlar = TERCIHLER.filter((t) => !t.windows || veri.windows).map((t) => tercihSatiri(t, veri, { mesaj, yenile: ciz }));
     yerlestir(bolum,
       h('h4', {}, ikon('kilit'), 'Kasa kilitliyken ve açılışta'),
-      h('p', { class: 'soluk kucuk' }, 'Üç seçenek de varsayılan olarak kapalıdır ve ayrı ayrı açılır. Kapalıyken zamanlanmış koşular yalnız kasa açıkken çalışır.'),
+      h('p', { class: 'soluk kucuk' }, 'Üç seçenek de varsayılan olarak kapalıdır ve ayrı ayrı açılır. Kapalıyken planlı koşular yalnız kasa açıkken çalışır.'),
       veri.uyari ? h('div', { class: 'not-kutusu uyari', role: 'status' }, veri.uyari) : null,
       mesaj.kutu,
       h('ul', { class: 'kayit-listesi zamanlama-tercih-listesi' }, satirlar),
@@ -170,7 +170,7 @@ function tercihOnayi(t, yeni) {
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const kapatmaMetni = t.ad === 'dpapi' ? 'Şifreli anahtar dosyası güvenli biçimde silinir; Nöbetçi açılışta kasa anahtarını artık bilmez.'
       : t.ad === 'oturumAcilisi' ? 'Windows Görev Zamanlayıcı\'daki "Nöbetçi (arka plan)" görevi silinir.'
-        : 'Kasa kilitliyken zamanlanmış koşular artık çalışmaz; bellekteki anahtar kopyası silinir.';
+        : 'Kasa kilitliyken planlı koşular artık çalışmaz; bellekteki anahtar kopyası silinir.';
     const form = h('form', { class: 'diyalog-govde', novalidate: true },
       h('h2', {}, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kilit')), yeni ? `Aç: ${t.baslik}` : `Kapat: ${t.baslik}`),
       yeni ? h('p', { class: 'soluk' }, t.metin) : h('p', { class: 'soluk' }, kapatmaMetni),
@@ -200,11 +200,11 @@ function tercihOnayi(t, yeni) {
 
 /**
  * Kasayı kilitle (üst çubuk, hesap menüsü, Ayarlar > Güvenlik): "kilitliyken çalışsın" ya da DPAPI açıksa iki seçenek sunulur —
- * "Kilitle (zamanlanmış koşular sürsün)" / "Tamamen kilitle (anahtarı da sil)". Tercihler kapalıyken (ya da durum okunamazsa)
+ * "Kilitle (planlı koşular sürsün)" / "Tamamen kilitle (anahtarı da sil)". Tercihler kapalıyken (ya da durum okunamazsa)
  * doğrudan TAMAMEN kilitler: sunucuya her zaman açıkça tamamen:true gider (arada tercih açılmış olsa bile anahtar bellekte kalmaz).
  * Dönen değer sunucunun yanıtına göredir, kullanıcının seçimine göre değil.
  * @returns {Promise<'surdur' | 'tamamen' | 'tamamen-suren-is' | null>} null: vazgeçildi; 'tamamen-suren-is': anahtar silindi,
- *   süren zamanlanmış koşu kalan adımları atlayacak
+ *   süren planlı koşu başarısız adımları atlayacak
  */
 export async function kasayiKilitleSecimli() {
   let secimVar = false;
@@ -212,14 +212,14 @@ export async function kasayiKilitleSecimli() {
   if (!secimVar) return kilitSonucu(await api('/platform/kasa/kilitle', { govde: { tamamen: true } }));
   const secim = await new Promise((coz) => {
     let deger = null;
-    const surdur = h('button', { type: 'button', class: 'birincil' }, ikon('kilit'), 'Kilitle (zamanlanmış koşular sürsün)');
+    const surdur = h('button', { type: 'button', class: 'birincil' }, ikon('kilit'), 'Kilitle (planlı koşular sürsün)');
     const tamamen = h('button', { type: 'button', class: 'tehlike' }, 'Tamamen kilitle (anahtarı da sil)');
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'kilit-secimi-basligi' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'kilit-secimi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kilit')), 'Kasayı kilitle'),
-        h('p', { class: 'soluk' }, 'Kilitle: arayüz kilitlenir, ekranda hiçbir veri görünmez; kasa anahtarı yalnız zamanlanmış koşular için bellekte kalır.'),
-        h('p', { class: 'soluk' }, 'Tamamen kilitle: bellekteki anahtar da silinir; kasa yeniden açılana kadar zamanlanmış koşular çalışmaz.')),
+        h('p', { class: 'soluk' }, 'Kilitle: arayüz kilitlenir, ekranda hiçbir veri görünmez; kasa anahtarı yalnız planlı koşular için bellekte kalır.'),
+        h('p', { class: 'soluk' }, 'Tamamen kilitle: bellekteki anahtar da silinir; kasa yeniden açılana kadar planlı koşular çalışmaz.')),
       h('div', { class: 'diyalog-alt' }, vazgec, tamamen, surdur));
     surdur.addEventListener('click', () => { deger = 'surdur'; diyalog.close(); });
     tamamen.addEventListener('click', () => { deger = 'tamamen'; diyalog.close(); });
@@ -245,9 +245,9 @@ function kilitSonucu(r) {
  * @returns {[string, 'basari' | 'hata']} 'hata': uyarı simgesiyle, daha uzun süre görünür
  */
 export function kilitBildirimi(secim) {
-  if (secim === 'surdur') return ['Kasa kilitlendi; zamanlanmış koşular sürüyor.', 'basari'];
+  if (secim === 'surdur') return ['Kasa kilitlendi; planlı koşular sürüyor.', 'basari'];
   if (secim === 'tamamen-suren-is') {
-    return ['Kasa tamamen kilitlendi; anahtar bellekten silindi. Süren zamanlanmış koşu kasa anahtarı olmadan devam edemez: kalan senaryoları koşulmayacak.', 'hata'];
+    return ['Kasa tamamen kilitlendi; anahtar bellekten silindi. Süren planlı koşu kasa anahtarı olmadan devam edemez: kalan senaryoları koşulmayacak.', 'hata'];
   }
   return ['Kasa kilitlendi.', 'basari'];
 }
@@ -286,11 +286,11 @@ function kuralSatiri(k, s) {
   });
   const sil = h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `${k.ad}: sil` }, ikon('cop'), 'Sil');
   sil.addEventListener('click', async () => {
-    const tamam = await onayIste({ baslik: 'Zamanlanmış koşuyu sil', metin: `"${k.ad}" ve tetikleme geçmişi silinecek. Koşu sonuçları silinmez.`, dugme: 'Sil', tehlikeli: true });
+    const tamam = await onayIste({ baslik: 'Planlı koşuyu sil', metin: `"${k.ad}" ve tetikleme geçmişi silinecek. Koşu sonuçları silinmez.`, dugme: 'Sil', tehlikeli: true });
     if (!tamam) return;
     try {
       await api('/platform/zamanlanmis-kosu/sil', { govde: { projeId: s.proje.id, id: k.id } });
-      bildir('Zamanlanmış koşu silindi.');
+      bildir('Planlı koşu silindi.');
       await s.yenile();
     } catch (hata) { bildir(hata.message, 'hata'); }
   });
@@ -304,7 +304,7 @@ function kuralSatiri(k, s) {
   return h('li', { class: k.etkin ? null : 'pasif-kayit' },
     h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('tarih')),
     h('div', { class: 'kayit-ana' },
-      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Canlı', 'hata', { title: 'Canlı ortamda zamanlanmış koşu (kayıtta onaylandı)' }) : null),
+      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Canlı', 'hata', { title: 'Canlı ortamda planlı koşu (kayıtta onaylandı)' }) : null),
       h('div', { class: 'kayit-meta' }, [k.zamanMetni, k.ortamAdi || 'silinmiş ortam', kapsamMetni(k, s), k.bildirimAdi ? `Bildirim: ${k.bildirimAdi}` : null].filter(Boolean).join(' · ')),
       h('div', { class: 'kayit-meta' }, k.etkin ? `Sonraki çalışma: ${tarihMetni(k.sonrakiCalisma)}` : 'Pasif: çalışmaz.'),
       son ? h('div', { class: 'kayit-meta zamanlama-son' }, `Son çalışma: ${tarihMetni(son.zaman)} `, durumRozeti(son.durum), son.mesaj ? ` ${son.mesaj} ` : ' ', sonucBaglantisi(son))
@@ -394,22 +394,22 @@ function kuralFormu(s) {
   // Canlı ortam onayı
   const canliOnay = h('input', { type: 'checkbox', checked: k ? k.canliOnay : false, id: yeniKimlik('zk-canli') });
   const canliKutusu = h('div', { class: 'not-kutusu hata', role: 'alert' },
-    h('p', {}, h('strong', {}, 'Dikkat: '), 'Seçilen ortam Canlı (ya da türü seçilmemiş). Zamanlanmış koşu bu ortamda sizin başında olmadığınız bir anda gerçek işlemler yapabilir.'),
-    h('label', { class: 'onay-satiri', for: canliOnay.id }, canliOnay, 'Canlı ortamda zamanlanmış koşuya izin veriyorum'));
+    h('p', {}, h('strong', {}, 'Dikkat: '), 'Seçilen ortam Canlı (ya da türü seçilmemiş). Planlı koşu bu ortamda sizin başında olmadığınız bir anda gerçek işlemler yapabilir.'),
+    h('label', { class: 'onay-satiri', for: canliOnay.id }, canliOnay, 'Canlı ortamda planlı koşuya izin veriyorum'));
   const riskGuncelle = () => { canliKutusu.hidden = !ortamRiskli(s.ortamlar.find((o) => o.id === ortam.value)); };
   ortam.addEventListener('change', riskGuncelle);
   riskGuncelle();
 
   const etkin = h('input', { type: 'checkbox', checked: k ? k.etkin : true, id: yeniKimlik('zk-etkin') });
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-  const form = h('form', { class: 'kart form-paneli zamanlama-formu', novalidate: true, 'aria-label': k ? `${k.ad}: düzenle` : 'Yeni zamanlanmış koşu' },
-    h('h3', {}, k ? `Düzenle: ${k.ad}` : 'Yeni zamanlanmış koşu'), mesaj.kutu,
+  const form = h('form', { class: 'kart form-paneli zamanlama-formu', novalidate: true, 'aria-label': k ? `${k.ad}: düzenle` : 'Yeni planlı koşu' },
+    h('h3', {}, k ? `Düzenle: ${k.ad}` : 'Yeni planlı koşu'), mesaj.kutu,
     alan('Ad', ad, { zorunlu: true }), alan('Ortam', ortam, { zorunlu: true }), canliKutusu,
     h('fieldset', {}, h('legend', {}, 'Ne koşulsun?'), alan('Senaryolar', kapsamTuru), ekranKutulari.el, s.akislar.length ? akisKutulari.el : null,
       s.uctanUcalar.length ? uctanKutulari.el : null,
       s.uctanUcalar.length ? h('p', { class: 'soluk kucuk' }, 'Uçtan uca akışlar arayüzdeki "Koş" ile aynı denetimle koşar: kapalı izne tabi akış atlanır ve geçmişe yazılır.') : null),
     h('fieldset', {}, h('legend', {}, 'Ne zaman?'), alan('Tekrar', zamanTuru), saatAlani, gunKutulari.el, aralikAlani, baslangicAlani, onizleme,
-      h('p', { class: 'soluk kucuk' }, 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar varsayılan olarak koşulmaz; bir sonraki zaman beklenir (Zamanlanmış koşu davranışı > Kaçan zaman).')),
+      h('p', { class: 'soluk kucuk' }, 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar varsayılan olarak koşulmaz; bir sonraki zaman beklenir (Planlı koşu davranışı > Kaçan zaman).')),
     bildirimAlani,
     h('label', { class: 'onay-satiri', for: etkin.id }, etkin, 'Etkin'),
     h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: () => s.kapat() }, 'Vazgeç'), kaydet));
@@ -418,7 +418,7 @@ function kuralFormu(s) {
     mesaj.temizle();
     alanHatasi(ad, '');
     if (!ad.value.trim()) { alanHatasi(ad, 'Bir ad girin.'); ad.focus(); return; }
-    if (!canliKutusu.hidden && !canliOnay.checked) { mesaj.goster('Canlı ortam: kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.'); canliOnay.focus(); return; }
+    if (!canliKutusu.hidden && !canliOnay.checked) { mesaj.goster('Canlı ortam: kaydetmek için "Canlı ortamda planlı koşuya izin veriyorum" kutusunu işaretleyin.'); canliOnay.focus(); return; }
     const kural = {
       ...(k ? { id: k.id } : {}), ad: ad.value.trim(), ortamId: ortam.value,
       kapsam: { senaryolar: kapsamTuru.value, ekranIdleri: kapsamTuru.value === 'ekranlar' ? ekranKutulari.secilenler() : [], servisAkisIdleri: akisKutulari.secilenler(),
@@ -427,7 +427,7 @@ function kuralFormu(s) {
     };
     try {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/zamanlanmis-kosu/kaydet', { govde: { projeId: s.proje.id, kural } }));
-      bildir(k ? 'Zamanlanmış koşu güncellendi.' : 'Zamanlanmış koşu eklendi.');
+      bildir(k ? 'Planlı koşu güncellendi.' : 'Planlı koşu eklendi.');
       s.kapat();
       s.kaydedildi();
     } catch (hata) { mesaj.goster(hata.message); }

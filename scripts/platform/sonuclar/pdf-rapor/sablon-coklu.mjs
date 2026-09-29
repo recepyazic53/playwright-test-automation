@@ -208,7 +208,7 @@ ${ogeler.map((o) => `<tr><td>${e(o.ad)}</td><td class="s">${o.kapsam.senaryo} ($
 
 /** @param {any[]} liste @param {Yazici} m */
 function enCokAdimTablosu(liste, m) {
-  if (!liste.length) return '<p class="bos">Bu dönemde kalan test yok.</p>';
+  if (!liste.length) return '<p class="bos">Bu dönemde başarısız test yok.</p>';
   return `<table><thead><tr><th scope="col">Ekran › adım</th><th scope="col" class="s">Adet</th><th scope="col">Durum</th></tr></thead><tbody>
 ${liste.map((s) => `<tr><td class="kucuk">${m(s.nerede)}</td><td class="s"><b>${sy(s.n)}</b></td><td>${durumEtiketi(s.durum)}</td></tr>`).join('')}</tbody></table>`;
 }
@@ -225,10 +225,10 @@ ${metotlar.map((t) => `<tr><td class="kucuk">${e(t.servis)}</td><td><span class=
 /** @param {any[]} satirlar @param {{ e: Yazici; k: boolean }} y */
 function hataMatrisiTablosu(satirlar, y) {
   const { e, k } = y;
-  if (!satirlar.length) return '<p class="bos">Bu dönemde ve önceki dönemde hatalı çağrı yok.</p>';
+  if (!satirlar.length) return '<p class="bos">Bu dönemde ve önceki dönemde başarısız çağrı yok.</p>';
   return `<table><thead><tr><th scope="col">Metot</th>${SERVIS_HATA_TURLERI.map(([, a]) => `<th scope="col" class="c">${kacis(a)}</th>`).join('')}<th scope="col" class="s">Toplam</th>${k ? '' : '<th scope="col" class="s">Önceki</th>'}</tr></thead><tbody>
 ${satirlar.map((r) => `<tr><td><span class="mono" style="color:#1c2430">${e(r.metot)}</span><br><span class="kucuk">${e(r.servis)}</span></td>${SERVIS_HATA_TURLERI.map(([t]) => { const n = r.sayilar[t] ?? 0; return n ? `<td class="c" style="background:${n >= 5 ? '#f7a8a3' : '#fde2e0'};font-weight:700">${n}</td>` : '<td class="c notr">·</td>'; }).join('')}<td class="s"><b>${r.toplam}</b></td>${k ? '' : `<td class="s notr">${r.onceki} ${fark(r.toplam, r.onceki, { yon: 'asagi-iyi' })}</td>`}</tr>`).join('')}
-</tbody></table><div class="lejant"><span>“Kontrol kaldı” = yanıt geldi (2xx) ama senaryodaki bir kontrol tutmadı. Zaman aşımı / bağlantı: yanıt gelmedi.</span></div>`;
+</tbody></table><div class="lejant"><span>“Kontrol başarısız” = yanıt geldi (2xx) ama senaryodaki bir kontrol tutmadı. Zaman aşımı / bağlantı: yanıt gelmedi.</span></div>`;
 }
 
 /**
@@ -241,7 +241,7 @@ export function akisTablosu(akislar, y) {
   return `<table><thead><tr><th scope="col">Akış</th><th scope="col">Tür</th><th scope="col" class="s">Koşu</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">Ort. süre</th><th scope="col">Son</th></tr></thead><tbody>
 ${akislar.map((a) => `<tr><td><b>${e(a.ad)}</b>${a.kritik ? ` ${KRITIK_HAP}` : ''}<br><span class="kucuk">${a.adim} adım</span></td><td class="kucuk">${kacis(a.tur)}</td><td class="s">${a.kosu}</td><td class="s ${renkOran(a.basari, esik)}"><b>${yz(a.basari)}</b></td>${k ? '' : `<td>${a.kosu ? fark(a.basari, a.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(a.ortSure))}</td><td>${sonHap(a.son)}</td></tr>`).join('')}
 </tbody></table><p class="kucuk">${akislar.some((a) => a.kritik)
-    ? 'Kritik işaretli (★) akış son koşusunda kaldıysa durum rozeti Kritik olur; diğer akışlar yalnız gösterilir.'
+    ? 'Kritik işaretli (★) akış son koşusunda başarısız olduysa durum rozeti Kritik olur; diğer akışlar yalnız gösterilir.'
     : 'Akışlar yalnız gösterilir; durum rozetini etkilemez (kritik işaretli akış yok — Ayarlar > Raporlar).'}</p>`;
 }
 

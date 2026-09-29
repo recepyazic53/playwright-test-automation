@@ -53,7 +53,7 @@ test.describe('Ayarlar > Yedekleme > Saklama', () => {
     await expect(kart.getByLabel('Koşu sonuçlarını sakla (gün)')).toHaveValue('200');
     await expect(kart.getByLabel('Eski sonuçlarda medyayı incelt')).toHaveValue('hatali');
     await expect(kart.getByLabel('Medyayı incelt: şu günden eski (gün)')).toHaveValue('45');
-    await expect(kart.getByLabel(/kalan adımın görüntüsünü ve test sonu görüntüsünü koru/)).not.toBeChecked();
+    await expect(kart.getByLabel(/başarısız adımın görüntüsünü ve test sonu görüntüsünü koru/)).not.toBeChecked();
     await expect(kart.getByLabel('Rapor saklama süresi')).toHaveValue('180');
     await expect(kart.getByLabel(/Video saklama süresi \(gün\)/)).toHaveValue('12');
     await expect(kart.getByLabel('Saklanacak otomatik yedek (adet)')).toHaveValue('12');
@@ -67,7 +67,7 @@ test.describe('Ayarlar > Yedekleme > Saklama', () => {
     await expect(cizelge).not.toContainText('null');
     await expect(cizelge.locator('li').nth(0)).toContainText('tüm videolar silinir');
     await expect(cizelge.locator('li.guvenlik-kurali')).toHaveCount(1);
-    await expect(cizelge.locator('li').nth(1)).toContainText('kalan testlerin ekran görüntüleri ve videoları');
+    await expect(cizelge.locator('li').nth(1)).toContainText('başarısız testlerin ekran görüntüleri ve videoları');
     await expect(cizelge.locator('li').nth(2)).toContainText('PDF raporlar');
     await expect(cizelge.locator('li').nth(3)).toContainText('koşu sonucunun tamamı');
     await expect(kart.locator('.saklama-ozeti')).toContainText('200 gün sonra o koşunun sonucu kalmaz');

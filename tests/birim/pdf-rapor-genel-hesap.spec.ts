@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — PDF raporu A3: genel rapora özgü saf hesaplar (sonuclar/genel.mjs; veritabanı ve ağ YOK).
-// Denetlenenler: takvimden beklenen tetikleme sayısı (günlük / haftalık / aralıklı, pencere sınırları), zamanlanmış koşu
+// Denetlenenler: takvimden beklenen tetikleme sayısı (günlük / haftalık / aralıklı, pencere sınırları), planlı koşu
 // güvenilirliği (tamamlanan = tamamlandı + başarısız sonuçlu; kaçan; kural kaydından önceki zamanlar; devre dışı kural; 20 kayıtlık
 // geçmişte pencerenin daraltılması), toplam güvenilirlik, kararsız listesi sırası, metot kapsamı, ortamlara göre oranlar.
 import { expect, test } from '@playwright/test';

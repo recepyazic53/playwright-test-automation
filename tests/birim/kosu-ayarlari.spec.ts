@@ -132,7 +132,7 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await baglam.close();
   });
 
-  test('Gelişmiş koşu davranışı (açılır), zamanlanmış koşu davranışı, rapor sınırı ve sağlık noktası; masaüstü ve 390 px taşmasız', async ({}, testInfo) => {
+  test('Gelişmiş koşu davranışı (açılır), planlı koşu davranışı, rapor sınırı ve sağlık noktası; masaüstü ve 390 px taşmasız', async ({}, testInfo) => {
     test.setTimeout(90_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -158,14 +158,14 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await form.getByLabel('Alanın görünmesi için bekleme (sn)').fill('4');
     await form.getByRole('button', { name: 'Kaydet' }).click();
     await expect(form.getByText('Koşu ayarları kaydedildi')).toBeVisible();
-    // Zamanlanmış koşu davranışı: Zamanlanmış koşular kartının içinde (kart üst menüdeki Planlı koşular sayfasında).
+    // Planlı koşu davranışı: Planlı koşular kartının içinde (kart üst menüdeki Planlı koşular sayfasında).
     await expect(page.locator('.zamanlanmis-kosular')).toHaveCount(0);
     await page.getByRole('link', { name: 'Planlı koşular' }).first().click();
     await expect(page).toHaveURL(/#\/planli-kosular$/);
-    const zamanli = page.getByRole('form', { name: 'Zamanlanmış koşu davranışı' });
-    await expect(page.locator('.zamanlanmis-kosular').getByRole('form', { name: 'Zamanlanmış koşu davranışı' })).toBeVisible();
+    const zamanli = page.getByRole('form', { name: 'Planlı koşu davranışı' });
+    await expect(page.locator('.zamanlanmis-kosular').getByRole('form', { name: 'Planlı koşu davranışı' })).toBeVisible();
     // Tek başlık (dış h4; iç fieldset legend'i yok), çerçevesiz gömülü form; Kaydet kartın içinde; alt bölüm ayrı çizgiyle başlar.
-    await expect(page.locator('.zamanlama-davranisi').getByText('Zamanlanmış koşu davranışı', { exact: true })).toHaveCount(1);
+    await expect(page.locator('.zamanlama-davranisi').getByText('Planlı koşu davranışı', { exact: true })).toHaveCount(1);
     await expect(zamanli.locator('legend')).toHaveCount(0);
     await expect(zamanli).not.toHaveClass(/form-paneli/);
     const kartKutusu = await page.locator('.zamanlanmis-kosular').boundingBox();
@@ -177,7 +177,7 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await zamanli.getByLabel('Kaçan zaman').selectOption('sonraKos');
     await zamanli.getByLabel('Koşu sürerken gelen zaman').selectOption('bitinceKos');
     await zamanli.getByRole('button', { name: 'Kaydet' }).click();
-    await expect(zamanli.getByText('Zamanlanmış koşu davranışı kaydedildi.')).toBeVisible();
+    await expect(zamanli.getByText('Planlı koşu davranışı kaydedildi.')).toBeVisible();
     const y = await nobetciApi(nobetci, '/platform/kosu-ayarlari') as { ayarlar: Record<string, unknown> };
     expect(y.ayarlar).toMatchObject({ onayPenceresi: 'onayla', gorunmeyenAlanBeklemeSn: 4, zamanliKacan: 'sonraKos', zamanliCakisma: 'bitinceKos', gorunmeyenAlan: 'atla' });
     expect(await tasma()).toBeLessThanOrEqual(0);

@@ -21,8 +21,8 @@ export const VIDEO_BOYUTU_SECIMLERI = Object.freeze(['kucuk', 'ekran']);
 export const BASARILI_GORUNTU_ADI = '✅ BAŞARILI - Son Ekran Görüntüsü';
 export const HATA_GORUNTU_ADI = '❌ HATA ANI - Ekran Görüntüsü';
 export const TEST_SONU_GORUNTU_ADLARI = Object.freeze(['screenshot', BASARILI_GORUNTU_ADI, HATA_GORUNTU_ADI]);
-/** Kalan adımda alınan görüntünün adındaki ek ("NN - <adım> (kalan adım)"). */
-export const KALAN_ADIM_EKI = ' (kalan adım)';
+/** başarısız adımda alınan görüntünün adındaki ek ("NN - <adım> (başarısız adım)"). */
+export const KALAN_ADIM_EKI = ' (başarısız adım)';
 /** Adım görüntüsü alınamadığında eklenen notun adındaki ek ("NN - <adım> (ekran görüntüsü alınamadı: <neden>)"). */
 export const GORUNTU_ALINAMADI_EKI = ' (ekran görüntüsü alınamadı';
 
@@ -51,7 +51,7 @@ export function medyaAtilsinMi(secim, basarili) {
 }
 
 /**
- * Ekin / medya satırının sınıfı. video · iz · testSonu (test sonu ekran görüntüsü) · kalanAdim (kalan adımda alınan) · adim
+ * Ekin / medya satırının sınıfı. video · iz · testSonu (test sonu ekran görüntüsü) · kalanAdim (başarısız adımda alınan) · adim
  * (adım görüntüsü, "NN - …") · diger (görüntü olmayan ekler, ör. "görüntü alınamadı" notu).
  * @param {{ ad: string; icerikTuru?: string | null; tur?: string | null }} m
  * @returns {'video' | 'iz' | 'testSonu' | 'kalanAdim' | 'adim' | 'diger'}
@@ -107,7 +107,7 @@ export function senaryoAdimGoruntusuAyikla(ham) {
 
 /**
  * Adım görüntüsü alınsın mı? secili: yalnız ekran modelinde "Ekran görüntüsü al" işaretli akış adımında (sistem adımları — giriş,
- * bağlam, ekran açılışı — alınmaz). yalnizKalan: başarılı adımda alınmaz (kalan adımın görüntüsü ayrıca alınır).
+ * bağlam, ekran açılışı — alınmaz). yalnizKalan: başarılı adımda alınmaz (başarısız adımın görüntüsü ayrıca alınır).
  * @param {string} secim @param {{ isaretli?: boolean }} adim
  */
 export function adimGoruntusuAlinsinMi(secim, adim) {
@@ -125,7 +125,7 @@ export const MEDYA_INCELTME_SECIMLERI = Object.freeze(['kapali', 'basarili', 'ha
 
 /**
  * İnceltmede bu medya satırı silinsin mi? Yalnız ekran görüntüleri ve videolar (izler ve diğer ekler kalır). Hatalı testte
- * "koru" işaretliyse kalan adımın görüntüsü (yoksa son adım görüntüsü — hataya en yakın) ve test sonu görüntüsü korunur.
+ * "koru" işaretliyse başarısız adımın görüntüsü (yoksa son adım görüntüsü — hataya en yakın) ve test sonu görüntüsü korunur.
  * @param {{ secim: string; koru: boolean }} ayar
  * @param {{ sonucBasarili: boolean; sinif: ReturnType<typeof medyaSinifi>; korunanAdim: boolean }} m
  */

@@ -1,7 +1,7 @@
 // ZAMANLANMIŞ KOŞU KURALLARI (Planlı koşular) — kullanıcının kararı; kasada ŞİFRELİ ayar olarak saklanır:
 //   ayarlar["zamanlanmis-kosular"]      = { kurallar: Kural[] }
 //   ayarlar["zamanlanmis-kosu-gecmisi"] = { [kuralId]: Tetikleme[] }   (kural başına son 20 tetikleme; en yeni başta)
-// Canlı / riskli işaretli ortamda kural, kullanıcı "Canlı ortamda zamanlanmış koşuya izin veriyorum" onayını vermeden kaydedilmez.
+// Canlı / riskli işaretli ortamda kural, kullanıcı "Canlı ortamda planlı koşuya izin veriyorum" onayını vermeden kaydedilmez.
 // Kural kaydedilince / etkinleştirilince "tuketilen" o ana çekilir: kayıttan önceki bir zaman tetiklenmez.
 // NOT: import.meta KULLANILMAZ. Tipler: kurallar.d.mts.
 import { randomUUID } from 'node:crypto';
@@ -67,20 +67,20 @@ export function kuralKaydet(vt, projeId, girdi, s = {}) {
   const simdi = (s.simdi ?? new Date()).toISOString();
   const kurallar = tumKurallar(vt);
   const mevcut = g.id === undefined || g.id === null || g.id === '' ? null : kurallar.find((k) => k.id === g.id && k.projeId === projeId);
-  if (g.id && !mevcut) throw new DepoHatasi('Zamanlanmış koşu bulunamadı.');
-  if (!mevcut && kurallar.filter((k) => k.projeId === projeId).length >= EN_COK_KURAL) throw new DepoHatasi(`Bir projede en çok ${EN_COK_KURAL} zamanlanmış koşu olabilir.`);
+  if (g.id && !mevcut) throw new DepoHatasi('Planlı koşu bulunamadı.');
+  if (!mevcut && kurallar.filter((k) => k.projeId === projeId).length >= EN_COK_KURAL) throw new DepoHatasi(`Bir projede en çok ${EN_COK_KURAL} planlı koşu olabilir.`);
 
   const ad = typeof g.ad === 'string' ? g.ad.replace(/[\u0000-\u001f]/g, ' ').trim() : '';
   if (!ad || ad.length > 80) throw new DepoHatasi('Ad 1–80 karakter olmalıdır.');
   if (kurallar.some((k) => k.projeId === projeId && k.id !== mevcut?.id && k.ad.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'))) {
-    throw new DepoHatasi(`"${ad}" adında bir zamanlanmış koşu zaten var.`);
+    throw new DepoHatasi(`"${ad}" adında bir planlı koşu zaten var.`);
   }
 
   const ortam = ortamGetir(vt, kimlik(g.ortamId, 'ortamId'));
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const riskli = ortamRiskliMi(ortam);
   if (riskli && g.canliOnay !== true) {
-    throw new DepoHatasi(`"${ortam.ad}" bir Canlı ortam (ya da türü seçilmemiş). Kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.`);
+    throw new DepoHatasi(`"${ortam.ad}" bir Canlı ortam (ya da türü seçilmemiş). Kaydetmek için "Canlı ortamda planlı koşuya izin veriyorum" kutusunu işaretleyin.`);
   }
 
   const k = /** @type {Record<string, unknown>} */ (g.kapsam && typeof g.kapsam === 'object' ? g.kapsam : {});
@@ -131,7 +131,7 @@ export function kuralKaydet(vt, projeId, girdi, s = {}) {
 export function kuralEtkinlestir(vt, projeId, id, etkin, s = {}) {
   const kurallar = tumKurallar(vt);
   const k = kurallar.find((x) => x.id === id && x.projeId === projeId);
-  if (!k) throw new DepoHatasi('Zamanlanmış koşu bulunamadı.');
+  if (!k) throw new DepoHatasi('Planlı koşu bulunamadı.');
   const simdi = (s.simdi ?? new Date()).toISOString();
   const yeni = { ...k, etkin, guncellenme: simdi, ...(etkin && !k.etkin ? { tuketilen: simdi } : {}) };
   kurallariYaz(vt, kurallar.map((x) => (x.id === id ? yeni : x)));
@@ -141,7 +141,7 @@ export function kuralEtkinlestir(vt, projeId, id, etkin, s = {}) {
 /** Kuralı ve geçmişini siler. @param {Veritabani} vt @param {string} projeId @param {string} id */
 export function kuralSil(vt, projeId, id) {
   const kurallar = tumKurallar(vt);
-  if (!kurallar.some((x) => x.id === id && x.projeId === projeId)) throw new DepoHatasi('Zamanlanmış koşu bulunamadı.');
+  if (!kurallar.some((x) => x.id === id && x.projeId === projeId)) throw new DepoHatasi('Planlı koşu bulunamadı.');
   kurallariYaz(vt, kurallar.filter((x) => x.id !== id));
   const gecmis = tumGecmis(vt);
   if (gecmis[id]) { delete gecmis[id]; ayarYaz(vt, GECMIS_AYAR_ANAHTARI, gecmis); }

@@ -1,6 +1,6 @@
 // KORUMA TESTLERİ — servis sözleşmesi arayüzü: servis sayfasında "Sözleşme" sekmesi; kayıtlı WSDL şemasından önizleme → onayla kaydet;
 // başarılı yanıttan TASLAK (tek örnek uyarısı) → alan alan düzenleme → değiştirme onayı (fark listesi) → kayıt; senaryo düzenleyicide
-// "Yanıt sözleşmeye uymalı" (varsayılan kapalı); raporda "Sözleşme: Kaldı — N uyumsuzluk" ve yollar; akış düzenleyicide "Yetki
+// "Yanıt sözleşmeye uymalı" (varsayılan kapalı); raporda "Sözleşme: Başarısız — N uyumsuzluk" ve yollar; akış düzenleyicide "Yetki
 // hatasında (401 / 403)"; masaüstü ve 390 px'te yatay taşma yok. Yalnız yerel Nöbetçi + 127.0.0.1 sahte servis.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -139,7 +139,7 @@ test.describe('servis sözleşmesi arayüzü', () => {
     expect(r.sonuc.durum).toBe('basarisiz');
     await page.goto(`/#/servisler/s/${servisId}/raporlar/${r.sonuc.kosuId}`);
     const kontroller = page.locator('.kontrol-listesi').first();
-    await expect(kontroller).toContainText('Sözleşme: Kaldı — 3 uyumsuzluk');
+    await expect(kontroller).toContainText('Sözleşme: Başarısız — 3 uyumsuzluk');
     await expect(kontroller).toContainText('/SiparisGetirResponse/SiparisNo');
     await expect(kontroller).toContainText('tam sayı bekleniyordu, metin geldi');
     await page.goto(`/#/servisler/sonuclar/senaryo/${r.sonuc.kosuId}`);

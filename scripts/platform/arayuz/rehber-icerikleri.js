@@ -36,7 +36,7 @@ export const REHBERLER = {
         cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'parolanızla şifreli' }, { baslik: 'Proje', alt: 'ekranlar, senaryolar, servisler' }, { baslik: 'Ortamlar', alt: 'test, canlı… ve giriş bilgileri' }] },
         ipucu: 'Kasa parolası unutulursa veriler kurtarılamaz. Ayarlar > Yedekleme\'den düzenli yedek alın.'
       },
-      { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar, Veri (test verisi tabloları), Planlı koşular (zamanlanmış koşular) ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır. Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar durur.' },
+      { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar, Test verisi (tablolar), Planlı koşular ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır. Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar durur.' },
       { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok uygulamayı test ediyorsanız her biri ayrı bir projedir. Aralarında buradan geçersiniz; "Proje ekle" aynı kasada yeni bir proje açar.' },
       { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi ekrandaysanız o ekranın rehberini bu "?" düğmesiyle istediğiniz an yeniden açabilirsiniz. Kendiliğinden açılmasını Ayarlar > Arayüz\'den kapatabilirsiniz.', ipucu: 'Rehberde ← / → tuşlarıyla gezinebilir, Esc ile kapatabilirsiniz.' }
     ]
@@ -49,7 +49,7 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Sonuçlar ekranı',
-        metin: ['Koşuların sonucu burada toplanır: ne kadar başarılı, hangi testler kaldı, zaman içinde iyiye mi kötüye mi gidiyor.', 'Bir testin neden kaldığını görmek için koşuyu, sonra testi açarsınız; her testin adım adım ekran görüntüleri ve videosu saklanır.'],
+        metin: ['Koşuların sonucu burada toplanır: ne kadar başarılı, hangi testler başarısız oldu, zaman içinde iyiye mi kötüye mi gidiyor.', 'Bir testin neden başarısız olduğunu görmek için koşuyu, sonra testi açarsınız; her testin adım adım ekran görüntüleri ve videosu saklanır.'],
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Özet kartlar ve eğilim' }
       },
       {
@@ -61,21 +61,21 @@ export const REHBERLER = {
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde beş sekme vardır, bu sırayla: Özet (varsayılan; "Genel"e tıklayınca açılır — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; bu sayfa), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
-        metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin kaldığını ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
+        metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin başarısız olduğunu ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
           '"Koşuyu başlat" Senaryolar ekranına götürür; koşu orada onayla başlar. Devre dışı ya da silinmiş bir ekran seçiliyse düğme görünmez.']
       },
       { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Kartlar, eğilim, koşu geçmişi ve hata kalıpları seçtiğiniz aralığa (Son 1 saat, Bugün, Son 7 / 15 / 30 gün ya da Tümü) göre hesaplanır. Seçim bu oturum boyunca hatırlanır.' },
       {
         baslik: 'Özet kartlar', hedef: ['.sonuc-kartlari', '.sonuc-kartlari-bos'],
         metin: ['Son tam koşunun başarılı, başarısız, atlanan ve durdurulan test sayıları ile başarı oranı. Her kartta önceki tam koşuya göre fark (▲ ▼) ve aralıktaki gidişi gösteren küçük bir çizgi vardır; kartların altındaki satır hangi koşulardan hesaplandığını söyler.',
-          'Kalan testlerin hata türü (ör. ortam hatası, iş kuralı uyarısı) Ayarlar > Koşu > Hata sınıflandırma kurallarına göre belirlenir.'],
+          'Başarısız testlerin hata türü (ör. ortam hatası, iş kuralı uyarısı) Ayarlar > Koşu > Hata sınıflandırma kurallarına göre belirlenir.'],
         ipucu: 'Kartlar yalnız tam koşulardan (Koşuyu başlat) hesaplanır; tekil ▷ koşuları koşu geçmişinde görünür.'
       },
       { baslik: 'Koşu trendi', hedef: '.trend-kapsayici', metin: 'Tam koşuların zaman içindeki sonucu. "Adet" test sayılarını, "Oran" yüzdeleri gösterir. Bir çubuğun üzerine gelince o koşunun özeti görünür; tıklayınca koşu açılır.' },
       {
         baslik: 'Başarısız testler', hedef: ['section[aria-labelledby="basarisiz-basligi"]', '.sonuc-sutunu'],
-        metin: ['Son tam koşu önceki tam koşularla karşılaştırılır: "Yeni başarısız" bu koşuda ilk kez kalanlar, "Tekrar eden" kaç koşudur kaldığıyla birlikte, "Düzeldi" önceki koşuda kalıp bu koşuda geçenler. Satırda ekran, hata türü, görüntü / video simgesi ve süre yazar.',
-          '"Yalnızca başarısızları tekrar çalıştır" kalan senaryoları son koşunun ortamında, onayla, tekil koşu olarak yeniden çalıştırır.'],
+        metin: ['Son tam koşu önceki tam koşularla karşılaştırılır: "Yeni başarısız" bu koşuda ilk kez başarısız olanlar, "Tekrar eden" kaç koşudur başarısız olduğuyla birlikte, "Düzeldi" önceki koşuda başarısız olup bu koşuda geçenler. Satırda ekran, hata türü, görüntü / video simgesi ve süre yazar.',
+          '"Yalnızca başarısızları tekrar çalıştır" başarısız senaryoları son koşunun ortamında, onayla, tekil koşu olarak yeniden çalıştırır.'],
         ipucu: 'Önce "Yeni başarısız" satırlara bakın: son değişiklikten etkilenenler onlardır.'
       },
       {
@@ -85,20 +85,20 @@ export const REHBERLER = {
       {
         baslik: 'Koşu geçmişi', hedef: 'section[aria-labelledby="gecmis-basligi"]',
         metin: ['Yapılan bütün koşuların listesi: tam koşular (Koşuyu başlat) ve tekil ▷ koşuları. Her satırda zaman, tür / kapsam, dağılım çubuğu, sayılar ve başarı oranı görünür; sütun başlığına tıklayınca sıralanır, liste sayfalıdır.',
-          '"Tümü / Tam / Tekil" koşu türüne, "Yalnız kalanlar" başarısız testi olan koşulara süzer. Bir satıra tıklayınca koşunun ayrıntısı açılır; iki satırı işaretleyip "Karşılaştır" ile iki koşunun farkını görebilirsiniz.'],
+          '"Tümü / Tam / Tekil" koşu türüne, "Yalnız başarısızlar" başarısız testi olan koşulara süzer. Bir satıra tıklayınca koşunun ayrıntısı açılır; iki satırı işaretleyip "Karşılaştır" ile iki koşunun farkını görebilirsiniz.'],
         ipucu: 'Liste üstteki tarih aralığına göre süzülür.'
       },
       {
         baslik: 'Hata kalıpları', hedef: 'section[aria-labelledby="kalip-basligi"]',
-        metin: ['Kalan testlerin hata mesajları benzerliklerine göre gruplanır: değişken sayılar # ile gösterilir, aynı sorun tek satırda toplanır ve kaç testi etkilediği yazar.',
-          '"Kalan testlerin hataları" kalan testleri, "Koşuda yakalanan mesajlar" ise geçen testlerde de ekranda görülen uyarı / hata mesajlarını kapsar. Üstteki çipler hata türlerine göre dağılımı gösterir; bir kalıpta "Örnek" bir sonucu yanda açar, "Testler" etkilenen testleri listeler.'],
+        metin: ['Başarısız testlerin hata mesajları benzerliklerine göre gruplanır: değişken sayılar # ile gösterilir, aynı sorun tek satırda toplanır ve kaç testi etkilediği yazar.',
+          '"Başarısız testlerin hataları" başarısız testleri, "Koşuda yakalanan mesajlar" ise geçen testlerde de ekranda görülen uyarı / hata mesajlarını kapsar. Üstteki çipler hata türlerine göre dağılımı gösterir; bir kalıpta "Örnek" bir sonucu yanda açar, "Testler" etkilenen testleri listeler.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Hata mesajları', ikon: 'uyari' }, { baslik: 'Kalıp', alt: 'sayılar #', ikon: 'liste' }, { baslik: 'Etkilenenler', alt: 'test sayısı', ikon: 'grafik' }] },
         ipucu: 'Önce en çok testi etkileyen kalıba bakın: tek bir düzeltme birçok testi geçirebilir.'
       },
       {
         baslik: 'Dönem raporu (PDF)',
         metin: ['"Rapor al (PDF)" seçtiğiniz dönemin raporunu bu bilgisayarda üretir: durum rozeti (Sağlıklı / Dikkat / Kritik), önceki eşit döneme göre ▲▼ farklar, öncelikli aksiyonlar (P1 / P2 / P3), sorunların eğilimi ve kapsam.',
-          'Kapsam: tek ekran, tek servis, birden çok ekran, birden çok servis, ekran + servis ya da genel (projenin tamamı; öğe seçilmez, akışlar, zamanlanmış koşular ve test verisi sağlığı da eklenir). Çoklu kapsamda listeden birden çok öğe seçin ya da "Tüm ekranlar" / "Tüm servisler"i işaretleyin (tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar). Çoklu raporda öğeler sağlık sırasıyla karşılaştırılır; ekran + servis raporunda iki taraf ayrı özetlenir, aynı günlerde görülen ekran ve servis sorunları tek aksiyonda birleşir.',
+          'Kapsam: tek ekran, tek servis, birden çok ekran, birden çok servis, ekran + servis ya da genel (projenin tamamı; öğe seçilmez, akışlar, planlı koşular ve test verisi sağlığı da eklenir). Çoklu kapsamda listeden birden çok öğe seçin ya da "Tüm ekranlar" / "Tüm servisler"i işaretleyin (tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar). Çoklu raporda öğeler sağlık sırasıyla karşılaştırılır; ekran + servis raporunda iki taraf ayrı özetlenir, aynı günlerde görülen ekran ve servis sorunları tek aksiyonda birleşir.',
           '"Raporlar\'a kaydet" açıksa PDF şifreli saklanır; Raporlar sekmesinde indirilir, aynı seçimlerle (dönem bugüne kaydırılarak) yeniden oluşturulur ya da silinir.'],
         ipucu: 'Gizli değerler, istek / yanıt gövdeleri ve test verisi değerleri rapora girmez; ortam adresi ve ekran görüntüleri yalnız siz seçerseniz eklenir.'
       },
@@ -110,9 +110,9 @@ export const REHBERLER = {
         ipucu: 'Talep no yalnız metindir; Nöbetçi hiçbir talep sistemine bağlanmaz.'
       },
       {
-        baslik: 'Kalan bir testi incelemek',
-        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Kalan test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
+        baslik: 'Başarısız bir testi incelemek',
+        sira: ['Koşu geçmişinden koşuyu açın.', 'Başarısız testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Başarısız test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
       },
       // Sona eklendi (ekrandaki bölümlerin adım sırası değişmesin): yalnız henüz tam koşusu olmayan projede görünür.
       {
@@ -143,7 +143,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Dikkat', hedef: '.farkindalik-karti.dikkat',
-        metin: 'Hemen bakılması gerekenler: kritik işaretli olup son koşusunda kalan, P1 sorunu olan ya da uzun süredir kırmızı olan ekran, servis ve akışlar; p95 süresi önceki döneme göre belirgin artan servis metotları; kaçan, atlanan ya da yarıda kalan zamanlanmış koşular ve nedeni.',
+        metin: 'Hemen bakılması gerekenler: kritik işaretli olup son koşusunda başarısız olan, P1 sorunu olan ya da uzun süredir kırmızı olan ekran, servis ve akışlar; p95 süresi önceki döneme göre belirgin artan servis metotları; kaçan, atlanan ya da yarıda kalan planlı koşular ve nedeni.',
         ipucu: '"Kaç gündür kırmızı" ve "yavaşlama yüzdesi" eşikleri Ayarlar > Arayüz > Sonuçlar özeti\'ndedir.'
       },
       {
@@ -166,10 +166,10 @@ export const REHBERLER = {
   'sonuclar-kosu': {
     baslik: 'Koşu ayrıntısı',
     adimlar: [
-      { baslik: 'Koşu ayrıntısı', metin: ['Bu koşudaki tüm testler, durumları ve süreleri. Kalan bir testi açarak hatasını, adımlarını ve kayıtlarını inceleyin.', '"Yalnız kalanlar" yalnız kalan testleri gösterir; bir hata kalıbına tıklayınca yalnız o kalıptaki testler listelenir (çipteki × ile kaldırılır). Koşu geçmişinde de "Yalnız kalanlar" vardır.'], cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Koşudaki testler' } },
-      { baslik: 'Önceki koşuyla karşılaştırma', metin: 'Tam koşularda "yeni kalan" ve "düzelen" testler ayrıca işaretlenir; böylece yalnızca değişene odaklanırsınız.', ipucu: 'Bir test bir koşuda kalıp sonrakinde geçiyorsa ortamdan kaynaklı (kararsız) olabilir.' },
-      { baslik: 'Veri koşuları', metin: 'Tablodan birden çok satırla koşan bir senaryonun her satırı (ya da kombinasyonu) ayrı testtir: "Senaryo [satır adı]". Bu testler tek senaryo satırında toplanır; satıra tıklayınca satır satır sonuçlar açılır. Testin ayrıntısında hangi tablo satırıyla koştuğu görünür; gizli sütunların değeri hiç saklanmaz, yalnız adıyla "•••" gösterilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Senaryo', alt: '3 veri koşusu', ikon: 'liste' }, { baslik: '[satır-1]', alt: 'geçti', ikon: 'onay' }, { baslik: '[satır-2]', alt: 'kaldı', ikon: 'uyari' }] } },
-      { baslik: 'Başarısızları tekrar çalıştırmak', metin: '"Başarısızları tekrar çalıştır (N)" yalnız kalan testleri (veri koşularında yalnız kalan satırları) aynı ortamda, o koşudaki tablo satırı ve (varsayılan) o koşudaki model sürümüyle yeniden koşar. Başlamadan satırın verisi ya da ekran modeli o koşudan bu yana değiştiyse bildirilir ve siz seçersiniz: o koşudaki değerler yalnız gizli sütunu olmayan tablolarda saklandığı için, diğerleri güncel veriyle koşar. Yeni koşu "Tekrar: önceki koşu" bağıyla kaydedilir ve iki koşu karşılaştırılabilir.', ipucu: 'İzinler ve riskli ortam onayı normal koşudaki gibi uygulanır.' },
+      { baslik: 'Koşu ayrıntısı', metin: ['Bu koşudaki tüm testler, durumları ve süreleri. Başarısız bir testi açarak hatasını, adımlarını ve kayıtlarını inceleyin.', '"Yalnız başarısızlar" yalnız başarısız testleri gösterir; bir hata kalıbına tıklayınca yalnız o kalıptaki testler listelenir (çipteki × ile kaldırılır). Koşu geçmişinde de "Yalnız başarısızlar" vardır.'], cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Koşudaki testler' } },
+      { baslik: 'Önceki koşuyla karşılaştırma', metin: 'Tam koşularda "yeni başarısız" ve "düzelen" testler ayrıca işaretlenir; böylece yalnızca değişene odaklanırsınız.', ipucu: 'Bir test bir koşuda kalıp sonrakinde geçiyorsa ortamdan kaynaklı (kararsız) olabilir.' },
+      { baslik: 'Veri koşuları', metin: 'Tablodan birden çok satırla koşan bir senaryonun her satırı (ya da kombinasyonu) ayrı testtir: "Senaryo [satır adı]". Bu testler tek senaryo satırında toplanır; satıra tıklayınca satır satır sonuçlar açılır. Testin ayrıntısında hangi tablo satırıyla koştuğu görünür; gizli sütunların değeri hiç saklanmaz, yalnız adıyla "•••" gösterilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Senaryo', alt: '3 veri koşusu', ikon: 'liste' }, { baslik: '[satır-1]', alt: 'geçti', ikon: 'onay' }, { baslik: '[satır-2]', alt: 'başarısız', ikon: 'uyari' }] } },
+      { baslik: 'Başarısızları tekrar çalıştırmak', metin: '"Başarısızları tekrar çalıştır (N)" yalnız başarısız testleri (veri koşularında yalnız başarısız satırları) aynı ortamda, o koşudaki tablo satırı ve (varsayılan) o koşudaki model sürümüyle yeniden koşar. Başlamadan satırın verisi ya da ekran modeli o koşudan bu yana değiştiyse bildirilir ve siz seçersiniz: o koşudaki değerler yalnız gizli sütunu olmayan tablolarda saklandığı için, diğerleri güncel veriyle koşar. Yeni koşu "Tekrar: önceki koşu" bağıyla kaydedilir ve iki koşu karşılaştırılabilir.', ipucu: 'İzinler ve riskli ortam onayı normal koşudaki gibi uygulanır.' },
       { baslik: 'Raporu paylaşmak', metin: '"Raporu indir (HTML)" tek dosyalık, internet gerektirmeyen bir rapor üretir; e-postayla gönderebilir ya da yazdırabilirsiniz. Gizli bilgiler her zaman maskelenir; ekran görüntüleri ve ortam adresi yalnızca siz seçerseniz eklenir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Seçenekler', ikon: 'ayar' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: '.html', alt: 'tek dosya', ikon: 'indir' }] } }
     ]
   },
@@ -177,7 +177,7 @@ export const REHBERLER = {
     baslik: 'Koşu karşılaştırması',
     adimlar: [
       { baslik: 'İki koşuyu seçmek', metin: 'Koşu geçmişinde iki satırı işaretleyip "Karşılaştır"a basın ya da bir koşunun ayrıntısında "Başka bir koşuyla karşılaştır…" deyin. Önceki koşu A, sonraki B olur; adres paylaşılabilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu A', alt: 'önceki', ikon: 'liste' }, { baslik: 'Koşu B', alt: 'sonraki', ikon: 'liste' }, { baslik: 'Karşılaştır', ikon: 'grafik' }] } },
-      { baslik: 'Özet ve değişimler', metin: 'Üstte A | B özeti ve farklar (↑ ↓). Tabloda her senaryonun A ve B durumu ile değişim rozeti: yeni kalan, düzelen, hep kalan, hep geçen, yalnız A\'da / yalnız B\'de. "Yalnız değişenler" varsayılan açıktır.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'A durumu | B durumu | değişim' }, ipucu: 'Önce "yeni kalan" satırlara bakın: son değişiklikten etkilenenler onlardır.' },
+      { baslik: 'Özet ve değişimler', metin: 'Üstte A | B özeti ve farklar (↑ ↓). Tabloda her senaryonun A ve B durumu ile değişim rozeti: yeni başarısız, düzelen, hep başarısız, hep geçen, yalnız A\'da / yalnız B\'de. "Yalnız değişenler" varsayılan açıktır.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'A durumu | B durumu | değişim' }, ipucu: 'Önce "yeni başarısız" satırlara bakın: son değişiklikten etkilenenler onlardır.' },
       { baslik: 'Adım adım fark', metin: 'Bir satırı açınca adımlar yan yana hizalanır; hata farkı (Beklenen / Görülen), iki tarafın ekran görüntüsü ve koşuda yakalanan mesajlar görünür. Servislerde istek başına HTTP kodu ve kontrol sonuçları karşılaştırılır; gövdeler gösterilmez.', cizim: { tur: 'istek', sol: 'A', sag: 'B', gidis: 'istek', donus: 'yanıt', kontroller: ['HTTP kodu', 'Kontrol sonuçları'] } },
       { baslik: 'Paylaşmak', metin: '"Karşılaştırmayı indir (HTML)" tek dosyalık bir rapor üretir. Gizli bilgiler her zaman maskelenir; ekran görüntüleri yalnız siz seçerseniz eklenir.' }
     ]
@@ -187,8 +187,8 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Test ayrıntısı', metin: 'Hata mesajı, "Beklenen / Görülen" karşılaştırması, adım adım ekran görüntüleri, video ve iz kaydı (trace) burada. Görüntüler ve video şifrelidir; yalnızca kasa açıkken gösterilir. Hangi görüntülerin alınacağı Ayarlar > Koşu > Kayıt\'tadır; saklama süresi dolup silinen ya da alınamayan görüntüler not olarak yazar.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', ikon: 'liste' }, { baslik: 'Kalınan adım', alt: 'kırmızı', ikon: 'uyari' }, { baslik: 'Görüntü + video', ikon: 'video' }] } },
       {
-        baslik: 'Test kaldıysa ne yapmalı?',
-        sira: ['Hangi adımda kaldığına bakın (kırmızı adım) ve o anın ekran görüntüsünü açın.', 'Ekran değiştiyse Ekranlar\'da ekranı yeniden tarayın ya da yeni paket yükleyin (tekrar analiz).', 'Beklenen sonuç değiştiyse senaryoyu düzenleyin.', 'Ortamdan kaynaklı geçici bir hataysa senaryoyu tekrar çalıştırın.']
+        baslik: 'Test başarısız olduysa ne yapmalı?',
+        sira: ['Hangi adımda başarısız olduğuna bakın (kırmızı adım) ve o anın ekran görüntüsünü açın.', 'Ekran değiştiyse Ekranlar\'da ekranı yeniden tarayın ya da yeni paket yükleyin (tekrar analiz).', 'Beklenen sonuç değiştiyse senaryoyu düzenleyin.', 'Ortamdan kaynaklı geçici bir hataysa senaryoyu tekrar çalıştırın.']
       }
     ]
   },
@@ -268,7 +268,7 @@ export const REHBERLER = {
         metin: 'Başlığın yanındaki "Talep no" isteğe bağlıdır: senaryonun karşıladığı talep numaralarını yazın (birden çok olabilir; Enter ya da virgülle eklenir, × ile kaldırılır). Yazarken projede daha önce girilen talepler önerilir; aynı talep farklı yazılırsa (ör. büyük / küçük harf, boşluk ya da tire farkı) Nöbetçi projedeki yazımı önerir. Servis senaryosu, akış senaryosu ve uçtan uca akış formlarında da aynı alan vardır.',
         ipucu: 'Talep no serbest metindir, belirli bir biçim gerekmez; hiçbir dış sisteme bağlanmaz.'
       },
-      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır; zorunlu bir alanı "Bilerek boş bırak" ile işaretlerseniz (olumsuz senaryo) koşucu o alana değer yazmaz. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız kalan adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
+      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır; zorunlu bir alanı "Bilerek boş bırak" ile işaretlerseniz (olumsuz senaryo) koşucu o alana değer yazmaz. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız başarısız adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
   },
 
@@ -334,7 +334,7 @@ export const REHBERLER = {
         baslik: 'Senaryo önerileri',
         hedef: '.senaryo-onerileri-dugmesi',
         metin: ['Başlıkta, "Senaryo ekle"nin yanındaki "Senaryo önerileri" ayrı bir sayfa açar (Senaryolar sekmesinin altındaki "Senaryo önerileri →" bağlantısı da aynı sayfaya gider); üstte metot ve ortamı seçersiniz, "Senaryolara dön" ya da kırıntıdaki servis adı servise geri götürür. Öneriler kural tabanlıdır (yapay zekâ yok), metot bazındadır ve her birinin gerekçesi yazar; mevcut senaryoların zaten denediği şey önerilmez. Varsayılan olarak en iyi 10 öneri görünür.',
-          'Türler: senaryosu olmayan metoda başarılı akış; şemadan (WSDL / XSD ya da Sözleşme sekmesinden yüklenen OpenAPI) zorunlu alan eksik, sınır (alt / üst) ve negatif (sınır dışı, uzunluk + 1, liste dışı, desene uymayan, yanlış tip — alan başına yalnız en anlamlısı); liste alanlarının (şemadaki liste, evet / hayır, tablo listesi) eksik ikilileri (pairwise) ve hiç denenmemiş değerleri; geçmişten risk (son 14 günde kalan senaryoların değerleri öne alınır, son 90 günde görülen ve beklenen olarak test edilmemiş hata mesajı).',
+          'Türler: senaryosu olmayan metoda başarılı akış; şemadan (WSDL / XSD ya da Sözleşme sekmesinden yüklenen OpenAPI) zorunlu alan eksik, sınır (alt / üst) ve negatif (sınır dışı, uzunluk + 1, liste dışı, desene uymayan, yanlış tip — alan başına yalnız en anlamlısı); liste alanlarının (şemadaki liste, evet / hayır, tablo listesi) eksik ikilileri (pairwise) ve hiç denenmemiş değerleri; geçmişten risk (son 14 günde başarısız olan senaryoların değerleri öne alınır, son 90 günde görülen ve beklenen olarak test edilmemiş hata mesajı).',
           'Negatif önerilerde beklenen "Hata beklenir"dir (SOAP Fault ya da HTTP 4xx / 5xx) ve mesaj boş gelir: mesajı siz yazın ya da ilk koşudan sonra "Son yanıttan kontrol öner" ile alın. Görülen mesaj önerisinde beklenen o mesajdır; mesajda maskelenmiş parça varsa önizlemede düzeltirsiniz. Hassas alanlarda (gizli adlar, gizli sütunlar) sınır / negatif değer ve kombinasyon üretilmez.',
           'Öneri yalnız taslaktır: sayfa hiçbir istek atmaz. "Ekle" senaryoyu "Koşuda" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Şema + senaryolar', alt: 'kısıtlar, kapsam', ikon: 'katman' }, { baslik: 'Öneri', alt: 'gerekçeli', ikon: 'yildiz' }, { baslik: 'Ekle', alt: 'Koşuda kapalı', ikon: 'arti' }, { baslik: 'Koşu', alt: 'siz başlatınca', ikon: 'oynat' }] }
@@ -361,7 +361,7 @@ export const REHBERLER = {
       {
         baslik: 'Sözleşme nedir?',
         metin: ['Sözleşme, bir metodun (REST\'te ucun) yanıtının beklenen yapısıdır: hangi alanların geleceği, türleri (metin, sayı, tam sayı, evet/hayır, nesne, dizi), hangilerinin zorunlu olduğu ve boş (null) gelip gelemeyeceği.',
-          'Senaryoda "Yanıt sözleşmeye uymalı" açıksa (varsayılan kapalı) koşuda yanıt buna göre denetlenir. Uymazsa senaryo kalır; raporda "Sözleşme: Kaldı — N uyumsuzluk" ve yol yol liste görünür (ör. response.orderId: sayı bekleniyordu, metin geldi). Rapora değer yazılmaz.'],
+          'Senaryoda "Yanıt sözleşmeye uymalı" açıksa (varsayılan kapalı) koşuda yanıt buna göre denetlenir. Uymazsa senaryo başarısız olur; raporda "Sözleşme: Başarısız — N uyumsuzluk" ve yol yol liste görünür (ör. response.orderId: sayı bekleniyordu, metin geldi). Rapora değer yazılmaz.'],
         cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Alanlar tam', 'Türler doğru', 'Null izinli mi'] }
       },
       {
@@ -377,13 +377,13 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Servis sonuçları',
-        metin: ['Servis sonuçlarının tek yeri Sonuçlar > Servisler: başarı oranı, kalan ve atlanan senaryolar, süre ve zaman içindeki eğilim. Soldan bir servisi seçerek yalnızca onun sonuçlarına bakabilirsiniz; Servisler ekranındaki "Sonuçlar" da buraya getirir.', 'Servis sayfasındaki "Raporlar" sekmesi yalnız o servisin çalıştırma listesidir; üstündeki "Tüm servis sonuçları" buraya döner.'],
+        metin: ['Servis sonuçlarının tek yeri Sonuçlar > Servisler: başarı oranı, başarısız ve atlanan senaryolar, süre ve zaman içindeki eğilim. Soldan bir servisi seçerek yalnızca onun sonuçlarına bakabilirsiniz; Servisler ekranındaki "Sonuçlar" da buraya getirir.', 'Servis sayfasındaki "Raporlar" sekmesi yalnız o servisin çalıştırma listesidir; üstündeki "Tüm servis sonuçları" buraya döner.'],
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Kartlar, eğilim ve koşu geçmişi' }
       },
       { baslik: 'Tarih aralığı ve ortam', metin: 'Üstteki tarih aralığıyla (Son 1 saat, Bugün, Son 7 gün…) ve ortam seçimiyle süzün. "Denemeleri de say" açıkken "Dene" ile yapılan tek çalıştırmalar da hesaba girer.' },
       {
-        baslik: 'Kalan bir senaryoyu incelemek',
-        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.', 'Düzelttikten sonra koşu ayrıntısında "Başarısızları tekrar çalıştır": yalnız kalan çalıştırmalar aynı ortamda, o koşudaki tablo satırlarıyla koşar; yeni koşu "Tekrar: önceki koşu" bağı taşır.'],
+        baslik: 'Başarısız bir senaryoyu incelemek',
+        sira: ['Koşu geçmişinden koşuyu açın.', 'Başarısız senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.', 'Düzelttikten sonra koşu ayrıntısında "Başarısızları tekrar çalıştır": yalnız başarısız çalıştırmalar aynı ortamda, o koşudaki tablo satırlarıyla koşar; yeni koşu "Tekrar: önceki koşu" bağı taşır.'],
         cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Kontroller', 'Maskeli yanıt'] }
       }
     ]
@@ -465,9 +465,14 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Ekran ekle', metin: 'Yeni ekranın modeli (alanlar, adımlar, önerilen senaryolar) en kolay sayfayı taratarak ya da akışı kaydederek çıkar. Sonuç önce önizlenir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Tara / kaydet', ikon: 'ara' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
       { baslik: 'Ne oluşturulsun?', hedef: '.olusturma-secimi', metin: 'Varsayılan "Ekran"dır. "Ortak akış" seçerseniz aynı yollar (tara, kaydet, paket yükle) ortak akış oluşturur ve "Ortak akışlar" altına kaydeder; ayrıca "Boş başla" ile adımsız bir ortak akış açıp adımlarını diyagramdan eklersiniz. Ortak akışın senaryosu yoktur; ekranlara ekleme otomatik yapılmaz.' },
-      { baslik: 'Nasıl eklensin?', hedef: '.ekleme-kutulari', sira: ['Ekranı tara (önerilen): Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).'] },
+      { baslik: 'Nasıl eklensin?', hedef: '.ekleme-kutulari', sira: ['Ekranı tara (önerilen): Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez. Seçim keşfi varsayılan olarak açıktır: açılır listeler, radyolar ve onay kutuları tek tek denenir, koşullu alanlar ve bağımlı listeler (ör. İl → İlçe) bulunur.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).'] },
+      {
+        baslik: 'Düğmeyi ve sonucu işaretle',
+        metin: 'Tarama düğmelere basmadığı için testin hangi düğmeye basacağını ve hangi sonucu kontrol edeceğini bilmez. Tarama bitince önizlemeden önce bu adım açılır: keşfin bulduklarını onaylarsınız, "Sayfada seç" ile sayfayı görünür bir tarayıcıda açıp "Öğe seç" açıkken düğmeye (ör. "Hesapla") ve sonuç yazısına tıklarsınız; seçiciyi Nöbetçi üretir.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Tarama', alt: 'keşif açık', ikon: 'ara' }, { baslik: 'İşaretle', alt: 'düğme + sonuç', ikon: 'hedef' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Ekle', ikon: 'onay' }] }
+      },
       { baslik: 'İleri düzey', hedef: '.ileri-duzey > summary', metin: 'Kapalı gelen "İleri düzey" bölümü ekran paketi içindir: paket, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json). Elinizde hazır paket varsa "Dosya seç" ile yükleyin; "Yapay zekâ ile oluştur" istek metnini kopyalatır, aracınızın ürettiği paketi yine buradan yüklersiniz.' },
-      { baslik: 'Adımlar', sira: ['Ekranı tarayın ya da akışı kaydedin (hazır paket varsa İleri düzey\'den yükleyin).', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
+      { baslik: 'Adımlar', sira: ['Ekranı tarayın ya da akışı kaydedin (hazır paket varsa İleri düzey\'den yükleyin).', 'Taramadan sonra "Düğmeyi ve sonucu işaretle": keşif bulgularını onaylayın, "Sayfada seç" ile düğmeyi ve sonuç yazısını seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
       { baslik: 'Güvenlik', metin: 'Tarama sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Yasak adreslere (Ayarlar > Güvenlik) hiç gidilmez.' }
     ]
   },
@@ -492,14 +497,15 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Ortak akış', alt: 'ör. kullanıcı değiştir', ikon: 'pusula' }, { baslik: 'Ekran açılır', ikon: 'oynat' }, { baslik: 'Ekran adımları', ikon: 'duzenle' }] }
       },
       { baslik: 'İsteğe bağlı ortak akış', metin: 'Ortak akış bloğunda "Ne zaman çalışır?" seçimi vardır. "Her senaryoda çalışır": bu akışı kullanan bütün senaryolarda koşar (blokta "her zaman" rozeti). "İsteğe bağlı (senaryoda seçilir)": yalnız senaryo formundaki "“<ad>” dahil" anahtarı açıksa koşar (blokta "isteğe bağlı" rozeti); "Yeni senaryolarda" ile yeni senaryonun anahtarı açık ya da kapalı başlar, kayıtlı senaryolar değişmez. Kaydederken ve "Ekranlara ekle…" ile eklerken onay penceresi seçimi tekrarlar. Anahtar kapalıysa bloğun adımları senaryoda "koşulmaz" görünür; uçtan uca akışın ekran adımı senaryonun kendi seçimiyle koşar.', cizim: { tur: 'akis', kutular: [{ baslik: 'Ortak akış', alt: 'her zaman / isteğe bağlı', ikon: 'pusula' }, { baslik: 'Senaryo', alt: '“ad” dahil', ikon: 'duzenle' }, { baslik: 'Koşu', alt: 'kapalıysa koşulmaz', ikon: 'onay' }] } },
-      { baslik: 'Elle alan ve düğme', metin: 'Sağdaki listede olmayan bir alanı ya da düğmeyi "Listede olmayan alanı / düğmeyi elle ekle" ile tanımlayın: etiket (ya da düğmenin yazısı), tür ve sayfadaki seçicisi (ör. #onayla). Böylece boş başlayan bir ortak akışa da sıfırdan adım eklenir; kaydedince modele yazılır. Ortak akışı kaydederken onu kullanan ekranlar gösterilir.' },
+      { baslik: 'Sayfada seç', hedef: '.sayfada-sec', metin: 'Sağdaki listede olmayan bir düğmeyi, alanı ya da başarı yazısını "Sayfada seç" ile ekleyin: ortamı ve sayfayı seçersiniz, sayfa görünür bir tarayıcıda açılır; "Öğe seç" açıkken öğeye tıklayıp türünü seçersiniz (tıklama sayfaya gitmez). Seçiciyi Nöbetçi üretir; düğme aksiyon bloğu, başarı yazısı beklenen mesaj bloğu olarak diyagrama eklenir.' },
+      { baslik: 'Elle alan ve düğme', metin: 'İleri düzey: seçiciyi biliyorsanız listede olmayan bir alanı ya da düğmeyi "Listede olmayan alanı / düğmeyi elle ekle" ile tanımlayın: etiket (ya da düğmenin yazısı), tür ve sayfadaki seçicisi (ör. #onayla). Böylece boş başlayan bir ortak akışa da sıfırdan adım eklenir; kaydedince modele yazılır. Ortak akışı kaydederken onu kullanan ekranlar gösterilir.' },
       { baslik: 'Ekran görüntüsü al', metin: 'Alan grubunda (ya da aksiyonda) "Ekran görüntüsü al" işaretli adımların sonunda görüntü alınır — adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu). Diğer seçimlerde işaret etkisizdir.' },
       {
         baslik: 'İndirilen dosyayı doğrula',
         metin: ['Ekrandaki bir düğme dosya indiriyorsa (ör. sipariş listesi, fatura) "+ > İndirilen dosyayı doğrula" bloğunu ekleyin: düğmeyi seçin, beklentileri yazın. Koşuda düğmeye basılır, indirilen dosya okunur ve her beklenti ayrı ayrı denetlenir.',
           'Biçimler: CSV (ayraç ve kodlama otomatik bulunur: UTF-8, UTF-8-BOM, Windows-1254), Excel XLSX, PDF (metni olan PDF; şifreli ya da taranmış PDF açık bir hatayla kalır) ve düz metin. Beklentiler: dosya adı deseni (* ve ?), en az boyut, metin içeriyor / içermiyor, sütun var, satır sayısı (= ya da ≥; başlık hariç) ve "şu satırda şu sütun şu değer".',
           'Metinlerde ${Tablo.Sütun} (test verisi), ${akis:Ad} (önceki SQL adımında okunan) ve senaryo alanı yazılabilir. Karşılaştırma büyük / küçük harf farkını yok sayar.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Düğme', alt: 'indir', ikon: 'indir' }, { baslik: 'Dosya', alt: 'geçici klasör', ikon: 'dosya' }, { baslik: 'Beklentiler', alt: 'geçti / kaldı', ikon: 'onay' }, { baslik: 'Silinir', ikon: 'cop' }] },
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Düğme', alt: 'indir', ikon: 'indir' }, { baslik: 'Dosya', alt: 'geçici klasör', ikon: 'dosya' }, { baslik: 'Beklentiler', alt: 'geçti / başarısız', ikon: 'onay' }, { baslik: 'Silinir', ikon: 'cop' }] },
         ipucu: 'Sonuçta her beklenti için Beklenen / Görülen yazar; gizli değerler maskelenir. Dosyanın kendisi varsayılan olarak saklanmaz; Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" ile değiştirebilirsiniz. Saklanan dosya test ayrıntısında "Dosyayı indir" ile iner (ham hâliyle; indirmeden önce onay).'
       }
     ]
@@ -514,7 +520,17 @@ export const REHBERLER = {
   tarama: {
     baslik: 'Ekran taraması',
     adimlar: [
-      { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur ve bir ekran paketi üretir. İlerlemeyi burada izlersiniz; bitince paket önizlemesine geçilir.', cizim: { tur: 'maket', bolge: 'form', etiket: 'Alanlar tek tek okunur' } },
+      { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur ve bir ekran paketi üretir. İlerlemeyi burada izlersiniz; bitince önce "Düğmeyi ve sonucu işaretle" adımı, sonra paket önizlemesi açılır.', cizim: { tur: 'maket', bolge: 'form', etiket: 'Alanlar tek tek okunur' } },
+      {
+        baslik: 'Seçim keşfi',
+        metin: '"Açılır listeleri keşfet (radyo ve onay kutuları dahil)" varsayılan olarak açıktır: seçimler tek tek denenir, beliren alanlar görünürlük koşulu, seçenekleri değişen listeler (ör. İl → İlçe) bağımlı liste olur; sonra ilk değerler geri yüklenir. Keşif hiçbir düğmeye basmaz. Canlı ortamda kapalı başlar; açarsanız ayrıca onay sorulur.'
+      },
+      {
+        baslik: 'Düğmeyi ve sonucu işaretle',
+        sira: ['"1. Keşfin buldukları": modele yazılmasını istemediğiniz koşul ya da bağımlı listenin işaretini kaldırın.', '"2. Düğmeyi ve sonucu işaretle": "Sayfada seç" sayfayı görünür bir tarayıcıda açar.', 'Sayfadaki panelde "Öğe seç"i açın ve düğmeye (ör. "Hesapla"), sonra sonuç yazısına tıklayın; tıklama sayfaya gitmez, öğenin türünü (düğme, sonuç, alan…) siz seçersiniz.', 'Paneldeki "Bitir" ile dönün, "Önizlemeye geç"e basın.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Keşif bulguları', alt: 'onayla', ikon: 'pusula' }, { baslik: 'Sayfada seç', alt: 'Öğe seç', ikon: 'hedef' }, { baslik: 'Önizleme', ikon: 'goz' }] },
+        ipucu: '"Öğe seç" kapalıyken sayfayı normal kullanabilirsiniz (ör. sonucu görmek için hesaplayın); kayıt oluşturan / gönderen istekler engellenir. Düğme ve sonuç işaretlenmezse test yalnız formu doldurur, sonucu doğrulamaz.'
+      },
       { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz. Süre sınırı ve girişte saklanan oturumun kullanılıp kullanılmayacağı Ayarlar > Koşu\'dadır; Giriş adımında hangisinin yapıldığı (saklanan oturum / baştan giriş) yazar.' }
     ]
   },
@@ -600,7 +616,7 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Hazır profiller', hedef: '.profil-secimi',
-        metin: ['Sayfa önce iki kararı sorar. Kanıt düzeyi: Hafif (yalnız kalan testlerde görüntü ve iz), Dengeli (bugünkü varsayılanlar) ya da Tam kanıt (her testte her şey) altı kayıt ayarını topluca seçer. Ortam hızı: Hızlı ×0,7, Normal ×1, Yavaş ×2 — 15 zaman aşımı ve bekleme süresini varsayılanın bu katına ayarlar.',
+        metin: ['Sayfa önce iki kararı sorar. Kanıt düzeyi: Hafif (yalnız başarısız testlerde görüntü ve iz), Dengeli (bugünkü varsayılanlar) ya da Tam kanıt (her testte her şey) altı kayıt ayarını topluca seçer. Ortam hızı: Hızlı ×0,7, Normal ×1, Yavaş ×2 — 15 zaman aşımı ve bekleme süresini varsayılanın bu katına ayarlar.',
           'Profil ayrıca saklanmaz: seçim ilgili alanları doldurur, Kaydet ile yazılır. Gelişmiş\'te bir ayarı elle değiştirirseniz profil "Özel" görünür; kayıtlı ayarlarınız bir profile uymuyorsa da "Özel" görünür. Aradaki beklemeler ve ortam bazındaki koşu hızı profilden etkilenmez.'],
         cizim: { tur: 'form', alanlar: ['Kanıt düzeyi', 'Ortam hızı', 'Yeniden deneme'], dugme: 'Kaydet' }
       },
@@ -608,26 +624,26 @@ export const REHBERLER = {
       { baslik: 'Tarama ve akış kaydında koşu ayarları', metin: 'Tarayıcı ekran boyutu, dili, girişte oturum kontrolü ve giriş alanı beklemesi hem koşuda hem taramada vardır. "Tarama ve akış kaydında koşu ayarlarını kullan" açıkken tarama bu dördünde koşunun değerini kullanır (tek yerden ayarlanır); kapalıyken Gelişmiş > Tarama ve akış kaydı\'ndaki ayrı değerler geçerlidir. Varsayılan kapalıdır çünkü ikisinin varsayılanları farklıdır (tarama 1366 × 900, Türkçe; koşu 1280 × 720, tarayıcı varsayılanı); kayıtlı değerleriniz zaten aynıysa açık görünür.' },
       {
         baslik: 'Kayıt: görüntü, video ve iz',
-        metin: ['Video, test sonu ekran görüntüsü ve iz (trace) için: her testte, yalnız başarılı testlerde, yalnız kalan testlerde ya da kapalı. "Yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir.',
+        metin: ['Video, test sonu ekran görüntüsü ve iz (trace) için: her testte, yalnız başarılı testlerde, yalnız başarısız testlerde ya da kapalı. "Yalnız başarılı"da kayıt her testte alınır, başarısız testlerinki kaydedilmeden silinir.',
           'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı ve ekran anları. Sonuç ayrıntısından indirilir, Playwright iz görüntüleyicisiyle (npx playwright show-trace) açılır.',
-          'Adım ekran görüntüleri: her adımda (varsayılan), yalnız kalan adımda, seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) ya da kapalı; senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan) ya da Ekranla aynı (koşu ekran boyutu).'],
+          'Adım ekran görüntüleri: her adımda (varsayılan), yalnız başarısız adımda, seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) ya da kapalı; senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan) ya da Ekranla aynı (koşu ekran boyutu).'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', alt: 'görüntü', ikon: 'ekran' }, { baslik: 'Test sonu', alt: 'görüntü', ikon: 'onay' }, { baslik: 'Video', alt: 'boyut', ikon: 'video' }, { baslik: 'İz', alt: 'trace', ikon: 'liste' }] }
       },
       { baslik: 'Gelişmiş koşu davranışı', metin: 'Gelişmiş bölümünün sonunda koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
-      { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
-      { baslik: 'Zamanlanmış koşular taşındı', hedef: '.tasindi-notu', metin: 'Zamanlanmış koşular artık üst menüde "Planlı koşular" sayfasındadır (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma). Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar kalır.' }
+      { baslik: 'Hata sınıflandırma', metin: 'Başarısız testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
+      { baslik: 'Planlı koşular taşındı', hedef: '.tasindi-notu', metin: 'Planlı koşular artık üst menüde, kendi sayfasındadır (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma). Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar kalır.' }
     ]
   },
   'planli-kosular': {
     baslik: 'Planlı koşular',
     adimlar: [
       {
-        baslik: 'Zamanlanmış koşular',
-        metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Kural ekran senaryolarını, servis akışlarını ve uçtan uca akışları koşabilir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır. Varsayılan olarak kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır; kartın "Zamanlanmış koşu davranışı" bölümünden "Sonra bir kez koş" / "Bitince koş" seçebilirsiniz.',
+        baslik: 'Planlı koşular',
+        metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Kural ekran senaryolarını, servis akışlarını ve uçtan uca akışları koşabilir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır. Varsayılan olarak kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır; kartın "Planlı koşu davranışı" bölümünden "Sonra bir kez koş" / "Bitince koş" seçebilirsiniz.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Zaman', alt: 'her gün 07:00', ikon: 'saat' }, { baslik: 'Kasa açık mı?', ikon: 'kilit' }, { baslik: 'Koşu', alt: '"Koşuda" senaryolar', ikon: 'oynat' }, { baslik: 'Bildirim', alt: 'isteğe bağlı', ikon: 'simsek' }] },
         ipucu: 'Canlı ortam için ayrıca açık onay gerekir. Her kuralın son 20 çalışması ve sonuç bağlantıları "Geçmiş"te durur. '
           + '"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek (kilitliyken çalışma, Windows oturumuna bağlı açma, açılışta arka planda başlatma) varsayılan kapalıdır; her birinin ne yaptığı ve riski yanında yazar. '
-          + 'Zamanlanmış koşular için Ayarlar > İzinler\'de "Arka plan çalışması" izni gerekir; Windows seçenekleri "Sistem değişikliği" izni ister.'
+          + 'Planlı koşular için Ayarlar > İzinler\'de "Arka plan çalışması" izni gerekir; Windows seçenekleri "Sistem değişikliği" izni ister.'
       }
     ]
   },
@@ -638,7 +654,7 @@ export const REHBERLER = {
       { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' },
       {
         baslik: 'Medyayı incelt (kademeli saklama)',
-        metin: ['N günden eski sonuçlarda başarılı, kalan ya da tüm testlerin ekran görüntüleri ve videoları silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Kalan testlerde "kalan adımın görüntüsünü ve test sonu görüntüsünü koru" işaretliyse (varsayılan) hatanın görüldüğü iki görüntü kalır. Silinen medya sonuçta "saklama süresi doldu" diye görünür.',
+        metin: ['N günden eski sonuçlarda başarılı, başarısız ya da tüm testlerin ekran görüntüleri ve videoları silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Başarısız testlerde "başarısız adımın görüntüsünü ve test sonu görüntüsünü koru" işaretliyse (varsayılan) hatanın görüldüğü iki görüntü kalır. Silinen medya sonuçta "saklama süresi doldu" diye görünür.',
           'Günlük temizlikte sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra inceltme, en son Video saklama süresi. Video hangi süre önce dolarsa o zaman silinir. Dört kural ve otomatik yedek sayısı tek "Saklama" kartında, "Ne zaman ne silinir?" zaman çizelgesiyle görünür; video saklama güvenlik amaçlı olduğu için kalkan simgesiyle işaretlidir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Sonuç saklama', alt: 'bütün sonuç', ikon: 'cop' }, { baslik: 'İnceltme', alt: 'görüntü + video', ikon: 'ekran' }, { baslik: 'Video saklama', alt: 'güvenlik amaçlı', ikon: 'video' }] }
       }
@@ -661,7 +677,7 @@ export const REHBERLER = {
       },
       { baslik: 'İzin listesi', hedef: '.izin-listesi', sira: IZIN_TANIMLARI.map((t) => `${t.etiket}: ${t.aciklama}`) },
       { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-soru', metin: 'Her iznin yanındaki "?" düğmesi o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır.' },
-      { baslik: 'Açmak ve kapatmak', hedef: '.izin-anahtari', metin: 'Açarken kısa bir onay penceresi iznin ne yaptığını ve riskini gösterir. Kapatmak her zaman serbesttir. İzin açıkken de işlem başına onaylar (ör. canlı ortam onayı) sorulmaya devam eder.', ipucu: 'Zamanlanmış koşularda kapalı izne bağlı işlem atlanır ve geçmişte "izin kapalı: …" olarak görünür.' },
+      { baslik: 'Açmak ve kapatmak', hedef: '.izin-anahtari', metin: 'Açarken kısa bir onay penceresi iznin ne yaptığını ve riskini gösterir. Kapatmak her zaman serbesttir. İzin açıkken de işlem başına onaylar (ör. canlı ortam onayı) sorulmaya devam eder.', ipucu: 'Planlı koşularda kapalı izne bağlı işlem atlanır ve geçmişte "izin kapalı: …" olarak görünür.' },
       { baslik: 'Son değişiklikler', metin: 'Hangi iznin kim tarafından, ne zaman açılıp kapandığı bu bölümün altında listelenir.' },
       { baslik: 'Yedekten yüklemede', metin: 'Yedekten tam yüklemede izinler yedektekiyle olduğu gibi geçerli olur (değiştirilmez). Yüklemeden sonra Nöbetçi açılınca bir kez "Yedek yüklendi" penceresi açık izinleri ve ortamların türlerini (Test / Canlı) gösterir; buradan gözden geçirin.' }
     ]
@@ -679,7 +695,7 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Entegrasyonlar',
-        metin: ['Nöbetçi\'yi başka uygulamalara bağlarsınız: koşu bitince sohbet kanalına bildirim (webhook), kalan bir testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantısı.', 'Token, parola ve gizli adresler kasada şifreli durur; siz denemeden ya da seçtiğiniz olay gerçekleşmeden hiçbir istek gönderilmez.'],
+        metin: ['Nöbetçi\'yi başka uygulamalara bağlarsınız: koşu bitince sohbet kanalına bildirim (webhook), başarısız bir testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantısı.', 'Token, parola ve gizli adresler kasada şifreli durur; siz denemeden ya da seçtiğiniz olay gerçekleşmeden hiçbir istek gönderilmez.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Tür', alt: 'webhook / hata kaydı / veritabanı', ikon: 'liste' }, { baslik: 'Ayarlar', alt: 'gizliler kasada', ikon: 'kilit' }, { baslik: 'Dene', alt: 'onayınızla', ikon: 'simsek' }, { baslik: 'Bağlı', ikon: 'onay' }] }
       },
       { baslik: 'Bağlama sırası', sira: ['"Bağlantı ekle" ile türü seçin.', 'Alanları doldurun; hangi olaylarda ve hangi ortamlarda çalışacağını seçin.', '"Bağlantıyı dene": önce hangi adrese deneme isteği gideceği gösterilir, onaylarsanız gider.', 'Kaydedin; durum rozeti bağlı / denenmedi / hata olarak görünür.'] },
@@ -702,15 +718,16 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Ekip', alt: 'sahip önerisi', ikon: 'liste' }, { baslik: 'Kritik', alt: 'öncelik + rozet', ikon: 'uyari' }, { baslik: 'Süre eşiği', alt: 'p95 > eşik', ikon: 'saat' }, { baslik: 'PDF rapor', ikon: 'grafik' }] }
       },
       { baslik: 'Ekipler', metin: 'Ekip ekleyin, yeniden adlandırın ya da silin. Ekran ve servis satırındaki "Ekip" seçimi, raporda o öğenin aksiyonlarının "Sahip önerisi" olur; seçilmezse sınıfın varsayılan ekibi yazılır.' },
-      { baslik: 'Kritik işareti', metin: 'Ekran, ortak akış, servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda kaldıysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.' },
+      { baslik: 'Kritik işareti', metin: 'Ekran, ortak akış, servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda başarısız olduysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.' },
       { baslik: 'Süre eşikleri', metin: 'Ekran ve servis için milisaniye cinsinden eşik; servislerde metot başına ayrı eşik de verebilirsiniz (metodun eşiği yoksa servisinki geçer). Dönemdeki p95 süre eşiği aşarsa raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür.' },
       { baslik: 'Uygulama sürümü', metin: 'Sürüm bu bölümde değil, Proje ve ortamlar > ortam > "Uygulama sürümü"nde ya da koşu başlatılırken girilir. Raporlar sürüme göre başarıyı ve sorunun hangi sürümde başladığını gösterir.', ipucu: 'Nöbetçi sürümü hiçbir adrese sormaz; yalnız sizin girdiğiniz değer kullanılır.' }
     ]
   },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
-    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı, listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
+    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı, listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
       { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' },
-      { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' }]
+      { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' },
+      { baslik: 'Terimler', hedef: '.terimler-karti', metin: 'Sayfanın altındaki "Terimler" kartı arayüzde geçen kavramları (ekran, ortak akış, akış, senaryo, model, paket, bulgu, test verisi tablosu, karşılık, ortam türü, izin, planlı koşu, Dene / Koşu) birer cümleyle açıklar. Her kavram arayüzde tek adla geçer: ör. "Planlı koşular", "Test verisi", sonuç durumu "Başarısız"; "CANLI" yalnız ortam türüdür.' }]
   }
 };

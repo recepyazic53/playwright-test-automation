@@ -57,7 +57,7 @@ test('varsayılanlar bugünkü değerler; aralıklar doğrulanır; gelişmiş ay
     ekranEszamanli: 1, ekranBeklemeMs: 0, servisEszamanli: 1, servisIstekBeklemeMs: 0,
     // Tarama ve akış kaydı: 1366×900, tr-TR, 30 sn sayfa açılma, 8 seçenekli listeler keşfedilir.
     taramaEkranGenisligi: 1366, taramaEkranYuksekligi: 900, taramaDili: 'tr-TR', taramaSayfaAcilmaSn: 30, kesifSecenekSiniri: 8,
-    // Zamanlanmış koşular: kaçan zaman ve koşu sürerken gelen zaman atlanır. HTML rapor görüntü sınırı 25 MB.
+    // Planlı koşular: kaçan zaman ve koşu sürerken gelen zaman atlanır. HTML rapor görüntü sınırı 25 MB.
     zamanliKacan: 'atla', zamanliCakisma: 'atla', raporGoruntuSiniriMb: 25
   });
   expect(SQL_SORGU_SATIR_SINIRI).toBe(1000);
@@ -316,7 +316,7 @@ test('SQL adımı: adımda süre yoksa bağlantının zaman aşımı (sürücüy
   expect(gelen).toEqual([{ zamanAsimiMs: undefined, satirSiniri: 1000 }, { zamanAsimiMs: 5000, satirSiniri: 50_000 }]);
 });
 
-test('zamanlanmış koşular: varsayılan kaçanı ve çakışanı atlar; "sonra bir kez koş" ve "bitince koş" (sahte saat, sahte koşucu)', async () => {
+test('planlı koşular: varsayılan kaçanı ve çakışanı atlar; "sonra bir kez koş" ve "bitince koş" (sahte saat, sahte koşucu)', async () => {
   const an = (gun: number, saat: number, dakika = 0) => new Date(2026, 8, gun, saat, dakika);
   const gunluk: Zaman = { tur: 'gunluk', saat: '09:00' };
   // Takvim: tolerans (5 dk) geçmiş zaman varsayılan olarak dönmez; "kaçanları koş" ile yalnız sonuncusu bir kez döner.

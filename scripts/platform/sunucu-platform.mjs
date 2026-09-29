@@ -123,11 +123,11 @@
 // Otomatik kilit: kasa, kimliği doğrulanmış API etkinliği olmadan ayarlanan süre (Ayarlar >
 // Güvenlik, 5–120 dk, varsayılan 15) geçince kilitlenir. GET /platform/durum etkinlik SAYILMAZ.
 //   GET /platform/guvenlik, POST /platform/guvenlik/kaydet { otomatikKilitDakika }
-// Zamanlanmış koşular kilitliyken / açılışta (zamanlama/arka-plan.mjs; üç tercih de varsayılan KAPALI):
+// Planlı koşular kilitliyken / açılışta (zamanlama/arka-plan.mjs; üç tercih de varsayılan KAPALI):
 //   GET  /platform/zamanlama/tercihler                    tercihler + DPAPI dosyası + Windows görevinin varlığı (schtasks /Query)
 //   POST /platform/zamanlama/tercih { ad, acik, parola?, onay? }   ad: kilitliyken | dpapi (parola + onay) | oturumAcilisi (onay)
 //   POST /platform/kasa/kilitle { tamamen? }               tercih açıkken varsayılan "arayüzü kilitle, anahtar zamanlayıcıda kalsın"
-//   Arka plan kipinde (anahtar yalnız zamanlanmış koşunun işi için bellekte) arayüz KİLİTLİDİR: arayuzKilidindeIzinliMi dışındaki
+//   Arka plan kipinde (anahtar yalnız planlı koşunun işi için bellekte) arayüz KİLİTLİDİR: arayuzKilidindeIzinliMi dışındaki
 //   her /platform/* isteği 423 döner; acikVeritabani da arayuzAcikMi'ye bakar.
 // Gizli değerler (giriş parolası, TOTP anahtarı, hassas test verisi alanları) listelerde ve
 // kaydet yanıtlarında ASLA dönmez: { dolu: true|false, maske: '••••••' } döner. Kaydederken
@@ -472,7 +472,7 @@ uctanUcaKosucusuAyarla({ kosucu: () => kosucu, secenekler: (db) => calistirmaSec
 tabloKosuDenetimiAyarla(kosuyorMu);
 
 /**
- * Zamanlanmış koşular (Planlı koşular; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
+ * Planlı koşular (Planlı koşular; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
  * "Koşuyu başlat" ile aynı yoldan (senaryoCalistir + bu koşucu) koşar. Kasa kilitliyse hiçbir şey yapılmaz — kullanıcı
  * "kilitliyken de çalışsın" / DPAPI tercihini açtıysa anahtar emanetten arka plan kipinde (arayüz kilitli) kullanılır.
  */
@@ -480,7 +480,7 @@ const zamanlayici = zamanlayiciOlustur({
   veritabani: () => (vt && kasaAcikMi(vt) ? vt : null),
   arkaPlanIsi: () => (vt ? arkaPlanIsiBaslat(vt) : null),
   mesgulMu: () => Boolean(kosucu?.mesgulMu?.()),
-  // Planlı koşular > Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman; varsayılan ikisi de "Atla").
+  // Planlı koşular > Planlı koşu davranışı (kaçan zaman / koşu sürerken gelen zaman; varsayılan ikisi de "Atla").
   davranis: (db) => { const a = kosuAyarlariniOku(db); return { kacan: a.zamanliKacan, cakisma: a.zamanliCakisma }; },
   yurut: (db, kural, kosuKimligi, devamMi) => zamanliKosuyuYurut(db, kural, kosuKimligi, {
     senaryolar: (d, projeId, ortamId) => senaryoListesi(d, projeId, ortamId).senaryolar,
@@ -493,7 +493,7 @@ const zamanlayici = zamanlayiciOlustur({
   log: (m) => console.log(m)
 });
 
-/** Test sunucusu başlarken çağırır: zamanlanmış koşuların dakikalık denetimi. */
+/** Test sunucusu başlarken çağırır: planlı koşuların dakikalık denetimi. */
 export function platformZamanlanmisKosulariBaslat() {
   zamanlayici.baslat();
   // Windows oturumuna bağlı otomatik açma (DPAPI dosyası varsa): anahtar YALNIZ zamanlayıcının emanetine; arayüz kilitli başlar.
@@ -602,7 +602,7 @@ export async function platformKasaAcikMi() {
 /**
  * Canlı panel için: koşudaki senaryonun sonucu (durum, hata, son ekran görüntüsü + video medya kimliği).
  * VERİ KOŞULARI: birden çok anahtar verilirse (aynı senaryonun her satırı ayrı test) sonuç toplanır: durum en kötüsü (kalan >
- * durdurulan > atlanan > geçen), süre toplam, ayrıntı (hata, görüntü) ilk kalan testin; veriKosulari her testin durumunu taşır.
+ * durdurulan > atlanan > geçen), süre toplam, ayrıntı (hata, görüntü) ilk başarısız testin; veriKosulari her testin durumunu taşır.
  * @param {string} kosuId @param {string | string[]} senaryoAnahtari
  */
 export async function platformKosuSonucu(kosuId, senaryoAnahtari) {
@@ -712,7 +712,7 @@ const denemeSiniri = /** @type {ParolaDenemeSiniri} */ (/** @type {unknown} */ (
   basarili: () => aktifSinir().basarili(),
   dene: (/** @type {() => Promise<unknown>} */ fn) => aktifSinir().dene(fn)
 }));
-/** Zamanlanmış koşuların kilitliyken / açılışta çalışma tercihleri (A: bellek, B: DPAPI, C: oturum açılışı görevi). */
+/** Planlı koşuların kilitliyken / açılışta çalışma tercihleri (A: bellek, B: DPAPI, C: oturum açılışı görevi). */
 const arkaPlan = arkaPlanYoneticisi({
   veritabaniYolu, projeKoku: PROJE_KOKU, denemeSiniri,
   // YALNIZCA doğrulama örnekleri (birim testlerinin geçici sunucusu): Windows Görev Zamanlayıcı'ya hiç dokunulmaz (schtasks çağrılmaz).
@@ -1064,7 +1064,7 @@ async function acikVeritabani() {
   const db = await platformVeritabani();
   if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
   acikAnahtar(db);
-  // Arka plan kipi (anahtar yalnız zamanlanmış koşunun işi için bellekte): arayüz için kasa KİLİTLİDİR.
+  // Arka plan kipi (anahtar yalnız planlı koşunun işi için bellekte): arayüz için kasa KİLİTLİDİR.
   if (!arayuzAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
   return db;
 }
@@ -1419,7 +1419,7 @@ const GET_UCLARI = new Map([
     if (!d) throw new DepoHatasi('Sonuç bulunamadı.');
     return { sonuc: sonucDetayiniMaskele(d, gosterimMaskesi(db, d.projeId)) };
   }],
-  // "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): kalan testler, satır / model değişiklikleri (senaryolar/veri-kosusu-plani.mjs).
+  // "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): başarısız testler, satır / model değişiklikleri (senaryolar/veri-kosusu-plani.mjs).
   ['/platform/sonuclar/tekrar-plani', (db, q) => {
     const plan = tekrarPlani(db, kimlikAl(q.get('kosuId'), 'kosuId'), secimliKimlik(q.get('projeId')) ?? null);
     const m = gosterimMaskesi(db, plan.kosu.projeId);
@@ -1482,7 +1482,7 @@ for (const [yol, islem] of [...TALEP_GET_UCLARI, ...KAPSAM_MATRISI_GET_UCLARI]) 
 for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Planlı koşular (zamanlama/uclar.mjs).
 for (const [yol, islem] of zamanlamaGetUclari(zamanlayici)) GET_UCLARI.set(yol, islem);
-// Zamanlanmış koşuların kilitliyken / açılışta çalışma tercihleri (A/B/C; görev durumu schtasks /Query ile).
+// Planlı koşuların kilitliyken / açılışta çalışma tercihleri (A/B/C; görev durumu schtasks /Query ile).
 GET_UCLARI.set('/platform/zamanlama/tercihler', (db) => arkaPlan.durum(db));
 // Servis sonuçları ekranı (yalnız okuma): sonuclar/servis-sonuclari.mjs.
 // Hata / kontrol metinleri gösterimde maskelenir (sonuclar/gosterim-maskesi.mjs; saklanan veri değişmez).
@@ -1941,7 +1941,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
   // Kimliği doğrulanmış her istek (durum sorgusu hariç) otomatik kilit sayacını sıfırlar.
   if (disTokenGecerli && yol !== '/platform/durum') platformEtkinligiBildir();
 
-  // Arka plan kipi (kullanıcı tercihiyle kasa kilitliyken zamanlanmış koşu için anahtar bellekte): arayüz KİLİTLİDİR. Varsayılan
+  // Arka plan kipi (kullanıcı tercihiyle kasa kilitliyken planlı koşu için anahtar bellekte): arayüz KİLİTLİDİR. Varsayılan
   // reddet — yalnız durum, kasayı açma/kilitleme, çalışma alanı seçimi ve raporlayıcının yazma uçları geçer; diğer her uç 423.
   if (vt && arkaPlanKipindeMi(vt) && !arayuzKilidindeIzinliMi(req.method ?? '', yol)) {
     req.resume();
@@ -1971,7 +1971,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         // Açık çalışma alanı (yalnızca görünen ad; seçim ekranında da görünür) ve son dışa aktarımdan beri değişiklik.
         calismaAlani: aktifAlan ? { id: aktifAlan.id, ad: aktifAlan.ad, sabit: aktifAlan.sabit } : null,
         degisiklik: db ? degisiklikDurumu(db) : null,
-        // Zamanlanmış koşular (gizli olmayan): anahtar zamanlayıcı için bellekte mi, DPAPI dosyası var mı, kilit menüsü iki seçenekli mi.
+        // Planlı koşular (gizli olmayan): anahtar zamanlayıcı için bellekte mi, DPAPI dosyası var mı, kilit menüsü iki seçenekli mi.
         zamanlama: arkaPlan.kilitDurumu(db)
       });
       return true;
@@ -2446,10 +2446,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
         return true;
       }
       case '/platform/kasa/kilitle': {
-        // { tamamen?: true } — tercih (A/B) açıkken "Kilitle (zamanlanmış koşular sürsün)" varsayılandır; "Tamamen kilitle"
+        // { tamamen?: true } — tercih (A/B) açıkken "Kilitle (planlı koşular sürsün)" varsayılandır; "Tamamen kilitle"
         // bellekteki anahtarı da siler. Tercihler kapalıyken bugünkü gibi tamamen kilitlenir.
         // Süren açma / parola değiştirme varsa önce o biter, sonra kilitlenir (kasaSirali). "Tamamen"de süren arka plan işi
-        // beklenmez: anahtar hemen silinir, iş kalan adımları atlar; surenIs: true ile arayüz kullanıcıyı uyarır.
+        // beklenmez: anahtar hemen silinir, iş başarısız adımları atlar; surenIs: true ile arayüz kullanıcıyı uyarır.
         const db = await platformVeritabani();
         const sonuc = db ? await kasaSirali(() => arkaPlan.kilitle(db, { tamamen: govde.tamamen === true })) : { arkaPlan: false };
         jsonGonder(res, 200, {

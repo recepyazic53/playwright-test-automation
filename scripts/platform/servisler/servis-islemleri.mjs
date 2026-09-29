@@ -1200,7 +1200,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       }
     } : {}), ...okumaSonuclari];
     if (dosyaEkleri.length) sonuc.dosyalar = dosyaEkleri;
-    // "Yanıt sözleşmeye uymalı" (senaryo ayarı; varsayılan kapalı): uyumsuzluk senaryoyu kaldırır (servis-sozlesmesi.mjs).
+    // "Yanıt sözleşmeye uymalı" (senaryo ayarı; varsayılan kapalı): uyumsuzluk senaryoyu başarısız yapar (servis-sozlesmesi.mjs).
     if (icerik.sozlesmeDogrula === true) {
       const sz = yanitSozlesmesiniDenetle(servis, icerik.operasyon, yanit, (m) => gizlileriMaskele(m, gizliler));
       kontroller.push(sz.kontrol);
@@ -1293,7 +1293,7 @@ function kurtarmaKarari(vt, projeId, c) {
   }
   if (c.cagri.durumKodu === null && !c.cagri.hata) {
     // İstek gönderilemedi (hazırlık hatası: eksik parametre, adres…): kural uygulanmaz; süren denemede not düşer.
-    return d ? { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kaldi', deneme: d.deneme, not: `kurtarma denendi, yine kaldı: ${d.neden} → ${d.deneme}. denemede istek gönderilemedi` } } : {};
+    return d ? { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kaldi', deneme: d.deneme, not: `kurtarma denendi, yine başarısız: ${d.neden} → ${d.deneme}. denemede istek gönderilemedi` } } : {};
   }
   const kurallar = servisKurallari(vt, projeId, { ortamId: c.ortamId, servisId: c.servis.id, metot: c.operasyon ?? null })
     .filter((k) => !d || k.id === d.kuralId);
@@ -1310,13 +1310,13 @@ function kurtarmaKarari(vt, projeId, c) {
       if (!isaretli) {
         return { olay: { ...temel, durum: 'tekrarlanmadi', not: `kayıt oluşturan adım tekrar denenmedi: ${neden} ("${c.operasyon}" tekrar denenebilir işaretli değil; kural: ${k.ad})` } };
       }
-      if (deneme >= y.enCokDeneme) return { olay: { ...temel, durum: 'kaldi', not: `kurtarma denendi, yine kaldı: ${neden} → ${deneme} denemede de başarısız` } };
+      if (deneme >= y.enCokDeneme) return { olay: { ...temel, durum: 'kaldi', not: `kurtarma denendi, yine başarısız: ${neden} → ${deneme} denemede de başarısız` } };
       return { tekrar: { durumu: { kuralId: k.id, kural: k.ad, neden, deneme: deneme + 1 }, bekleMs: beklemeMs(y, deneme), token: y.tokenYenile } };
     }
     const yapilan = [y.tokenYenile ? 'token yenilendi' : '', y.bekleSn ? `${y.bekleSn} sn beklendi` : ''].filter(Boolean).join(', ');
     return { beklet: { ms: y.bekleSn * 1000, token: y.tokenYenile }, olay: { ...temel, durum: 'denendi', not: `kurtarma: ${neden} → ${yapilan}; istek tekrar gönderilmedi` } };
   }
-  return d ? { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kaldi', deneme: d.deneme, not: `kurtarma denendi, yine kaldı: ${d.neden} → ${d.deneme}. denemede başka bir nedenle başarısız` } } : {};
+  return d ? { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kaldi', deneme: d.deneme, not: `kurtarma denendi, yine başarısız: ${d.neden} → ${d.deneme}. denemede başka bir nedenle başarısız` } } : {};
 }
 
 /**

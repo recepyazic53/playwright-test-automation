@@ -3,7 +3,7 @@
 //
 // Kayıt: servis akışları tablosunda, içeriği "uctanUca: true" işaretli akış (tür "akis"; şema değişmez). Adımlar: servis
 // (operasyon / kayıtlı senaryo), SQL (sql/sql-adimi.mjs) ve ekran (akislar/ekran-adimi.mjs). Uçtan uca akış yalnız bu modülün
-// ucundan koşar (servis akışı uçları ve zamanlanmış koşular reddeder).
+// ucundan koşar (servis akışı uçları ve planlı koşular reddeder).
 //
 // MİMARİ: akışı SUNUCU yönetir (servis-akislari.mjs > akisiKos, mevcut motor). Servis ve SQL adımları sunucuda, bugünkü
 // istemcilerle koşar (kasa, oturum akışı, maskeleme, servis koşu kaydı aynen). Ekran adımı, ekran senaryosunun MEVCUT koşu

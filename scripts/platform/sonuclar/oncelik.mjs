@@ -88,7 +88,7 @@ export function durumRozeti(g) {
   const yz = (/** @type {number} */ n) => `%${n.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`;
   if (g.basari === null) return { durum: 'dikkat', gerekce: 'Bu dönemde tam koşu yok; başarı oranı hesaplanamadı.' };
   if (g.basari < g.esikler.sari) return { durum: 'kritik', gerekce: `Dönem başarısı ${yz(g.basari)} — sarı eşik %${g.esikler.sari}'in altında.` };
-  if (g.kritikKaldi) return { durum: 'kritik', gerekce: 'Kapsamdaki kritik akış son koşusunda kaldı.' };
+  if (g.kritikKaldi) return { durum: 'kritik', gerekce: 'Kapsamdaki kritik akış son koşusunda başarısız oldu.' };
   if (g.p1 >= 3) return { durum: 'kritik', gerekce: `${g.p1} P1 aksiyon var.` };
   if (g.basari >= g.esikler.yesil && g.p1 === 0) return { durum: 'saglikli', gerekce: `Dönem başarısı ${yz(g.basari)} (yeşil eşik %${g.esikler.yesil}); P1 aksiyon yok.` };
   const nedenler = [];

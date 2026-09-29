@@ -85,7 +85,7 @@ export async function baglantiDene(vt, projeId, g) {
 /**
  * Koşu bitince (raporlayıcının "bitir" çağrısından sonra) "koşu bitti" olayına bağlı etkin bağlantılara bildirim gönderir.
  * Kasa kilitliyse bağlantılar okunamaz → hiçbir şey gönderilmez. Hiçbir durumda hata FIRLATMAZ.
- * s.baglantiIdleri verilirse (zamanlanmış koşunun "sonuçları bildir" seçimi) olay aboneliğine bakılmadan YALNIZ bu etkin
+ * s.baglantiIdleri verilirse (planlı koşunun "sonuçları bildir" seçimi) olay aboneliğine bakılmadan YALNIZ bu etkin
  * bağlantılara gönderilir.
  * @param {Veritabani} vt @param {string} kosuId @param {{ baglantiIdleri?: string[] }} [s]
  * @returns {Promise<Array<{ baglantiId: string; basarili: boolean; mesaj: string }>>}
@@ -163,7 +163,7 @@ function sonucAl(vt, projeId, sonucId) {
   return s;
 }
 
-const DURUM_METNI = /** @type {Record<string, string>} */ ({ basarili: 'Geçti', basarisiz: 'Kaldı', atlanan: 'Atlandı', durduruldu: 'Durduruldu' });
+const DURUM_METNI = /** @type {Record<string, string>} */ ({ basarili: 'Geçti', basarisiz: 'Başarısız', atlanan: 'Atlandı', durduruldu: 'Durduruldu' });
 
 /**
  * Gönderilecek başlık / açıklamanın önizlemesi (kullanıcı düzenleyip onaylar) + eklenebilecek medya.

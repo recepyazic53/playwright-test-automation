@@ -12,7 +12,7 @@ import { girisAdimlariOzeti, tarifFormuAdresi } from './giris-ozeti.mjs';
 
 const DURUMLAR = {
   basarili: { etiket: 'Geçti', sinif: 'basari', ikonAd: 'onay' },
-  basarisiz: { etiket: 'Kaldı', sinif: 'hata', ikonAd: 'carpi' },
+  basarisiz: { etiket: 'Başarısız', sinif: 'hata', ikonAd: 'carpi' },
   durduruldu: { etiket: 'Durduruldu', sinif: 'durdu', ikonAd: 'eksi' },
   atlanan: { etiket: 'Atlandı', sinif: 'atlanan', ikonAd: 'eksi' },
   kosulmadi: { etiket: 'Koşulmadı', sinif: 'notr', ikonAd: 'eksi' }

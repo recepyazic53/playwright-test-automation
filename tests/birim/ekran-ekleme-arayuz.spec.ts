@@ -277,7 +277,7 @@ test('kart ızgaraları (ekran + ortak akış): uzun başlık ve iki rozetle kar
   const uzun = page.locator('.ortak-akis-karti').filter({ hasText: UZUN_ORTAK_AKISLAR[1][1] });
   await expect.soft(uzun.locator('h3 a')).toHaveAttribute('title', UZUN_ORTAK_AKISLAR[1][1]);
   // Üç tema (Ayarlar > Arayüz) yazı ve boşlukları değiştirir: her birinde ölçülür.
-  for (const stil of ['komuta', 'kurumsal', 'canli']) {
+  for (const stil of ['komuta', 'kurumsal', 'parlak']) {
   await page.evaluate((x) => { localStorage.setItem('platform.stil', x); }, stil);
   await page.reload();
   await expect(page.locator('.ortak-akis-izgarasi > article')).toHaveCount(ORTAK_AKIS_SAYISI);

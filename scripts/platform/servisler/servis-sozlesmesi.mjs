@@ -544,7 +544,7 @@ export function yanitSozlesmesiniDenetle(servis, operasyon, yanit, maskele) {
   const gosterilen = uyumsuzluklar.slice(0, EN_COK_GOSTERILEN);
   return {
     kontrol: {
-      tur: 'sozlesme', ad: `Sözleşme: Kaldı — ${r.toplam} uyumsuzluk`, gecti: false,
+      tur: 'sozlesme', ad: `Sözleşme: Başarısız — ${r.toplam} uyumsuzluk`, gecti: false,
       aciklama: r.toplam > gosterilen.length ? `ilk ${gosterilen.length} uyumsuzluk listelendi` : '',
       alt: gosterilen.map((u) => ({ tur: 'sozlesmeYolu', ad: u.yol, gecti: false, aciklama: u.mesaj }))
     },

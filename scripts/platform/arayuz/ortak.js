@@ -1,6 +1,7 @@
 // Platform arayüzü — ortak yardımcılar: API istemcisi, DOM oluşturucu, form bileşenleri.
 // Kullanıcı verisi DOM'a YALNIZCA metin düğümü/özellik olarak yazılır (innerHTML kullanılmaz).
 import { IZIN_TANIMLARI, izinAdresi, izinTanimi } from './izin-tanimlari.mjs';
+import { ESKI_STIL_ADLARI, STILLER, VARSAYILAN_STIL, stilAdiniCoz } from './tema-stilleri.mjs';
 
 /** İzin penceresinden art arda yeniden deneme sınırı (en çok izin sayısı kadar farklı izin). */
 const IZIN_ANAHTAR_SAYISI = IZIN_TANIMLARI.length;
@@ -36,22 +37,25 @@ export function temaUygula(tema) {
 temaUygula(kayitliTema());
 
 // ---------------------------------------------------------------------------------------
-// Görünüm teması (renk ailesi + biçim): <html data-stil="kurumsal|canli">; "komuta" varsayılandır (özellik yok).
+// Görünüm teması (renk ailesi + biçim): <html data-stil="kurumsal|parlak">; "komuta" varsayılandır (özellik yok).
 // Açık / koyu seçiminden bağımsızdır. Kullanıcı kararı: Ayarlar > Arayüz > Tema; seçim 'platform.stil' anahtarında durur
-// (kilit ekranında da geçerli olsun diye tarayıcıda; gizli bilgi değildir).
+// (kilit ekranında da geçerli olsun diye tarayıcıda; gizli bilgi değildir). Tema listesi ve eski anahtar eşlemesi
+// (ör. "canli" → "parlak") tema-stilleri.mjs'te.
 // ---------------------------------------------------------------------------------------
-export const STILLER = /** @type {const} */ ([
-  { ad: 'komuta', etiket: 'Komuta merkezi', aciklama: 'Yazılımsal: koyu ızgara, camgöbeği parıltı, cam paneller.' },
-  { ad: 'kurumsal', etiket: 'Kurumsal', aciklama: 'Sade ve ciddi: lacivert-gri, düz paneller, keskin köşeler.' },
-  { ad: 'canli', etiket: 'Canlı', aciklama: 'Renkli: mor-pembe-turuncu geçişler, yumuşak köşeler.' }
-]);
+export { STILLER };
 const STIL_ANAHTARI = 'platform.stil';
 export function kayitliStil() {
-  try { const s = localStorage.getItem(STIL_ANAHTARI); return STILLER.some((x) => x.ad === s) ? s : 'komuta'; } catch { return 'komuta'; }
+  try {
+    const kayit = localStorage.getItem(STIL_ANAHTARI);
+    const s = stilAdiniCoz(kayit);
+    // Eski anahtar (ör. "canli") yenisiyle yeniden yazılır: seçim korunur.
+    if (kayit !== null && kayit !== s && Object.hasOwn(ESKI_STIL_ADLARI, kayit)) localStorage.setItem(STIL_ANAHTARI, s);
+    return s;
+  } catch { return VARSAYILAN_STIL; }
 }
 /** @param {string} stil */
 export function stilUygula(stil) {
-  const gecerli = STILLER.some((x) => x.ad === stil) ? stil : 'komuta';
+  const gecerli = stilAdiniCoz(stil);
   if (gecerli === 'komuta') delete document.documentElement.dataset.stil;
   else document.documentElement.dataset.stil = gecerli;
   try { localStorage.setItem(STIL_ANAHTARI, gecerli); } catch { /* yok sayılır */ }

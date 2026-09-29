@@ -282,13 +282,13 @@ ${v.kosuDurumu ? `<dt>Koşu durumu</dt><dd>${kacis(KOSU_DURUMU[v.kosuDurumu] ?? 
 <h2 id="ozet-b">Özet</h2>
 <ul class="ozet">
 <li><span class="sayi">${sayilar.basarili}</span><span class="etiket">Başarılı</span></li>
-<li><span class="sayi">${sayilar.basarisiz}</span><span class="etiket">Kalan</span></li>
+<li><span class="sayi">${sayilar.basarisiz}</span><span class="etiket">Başarısız</span></li>
 <li><span class="sayi">${sayilar.atlanan}</span><span class="etiket">Atlanan</span></li>
 <li><span class="sayi">${sayilar.durduruldu}</span><span class="etiket">Durduruldu</span></li>
 <li><span class="sayi">${toplam}</span><span class="etiket">Toplam</span></li>
 <li><span class="sayi">${kacis(oran)}</span><span class="etiket">Başarı oranı</span></li>
 </ul>
-<p class="not">Başarı oranı = başarılı / (başarılı + kalan + atlanan); durdurulanlar orana katılmaz.</p>
+<p class="not">Başarı oranı = başarılı / (başarılı + başarısız + atlanan); durdurulanlar orana katılmaz.</p>
 </section>
 ${s.hatalar && kalipListesi.length ? `<section aria-labelledby="kalip-b">
 <h2 id="kalip-b">Hata kalıpları</h2>
@@ -586,7 +586,7 @@ ${s.adres && v.ortamAdresi ? satir('Ortam adresi', kacis(maskele(v.ortamAdresi))
 ${satir('Kapsam', e(A.kapsam || '—'), e(B.kapsam || '—'), '<td></td>')}
 ${satir('Süre', kacis(sureMetni(A.sureMs)), kacis(sureMetni(B.sureMs)), farkHucresi(A.sureMs !== null && B.sureMs !== null ? B.sureMs - A.sureMs : null, false, sureMetni))}
 ${satir('Başarılı', String(A.sayilar.basarili), String(B.sayilar.basarili), farkHucresi(fark('basarili'), true))}
-${satir('Kalan', String(A.sayilar.kalan), String(B.sayilar.kalan), farkHucresi(fark('kalan'), false))}
+${satir('Başarısız', String(A.sayilar.kalan), String(B.sayilar.kalan), farkHucresi(fark('kalan'), false))}
 ${satir('Atlanan', String(A.sayilar.atlanan), String(B.sayilar.atlanan), farkHucresi(fark('atlanan'), false))}
 ${satir('Durduruldu', String(A.sayilar.durduruldu), String(B.sayilar.durduruldu), farkHucresi(fark('durduruldu'), false))}
 ${satir('Başarı oranı', kacis(oranMetni(A.oran)), kacis(oranMetni(B.oran)), farkHucresi(A.oran !== null && B.oran !== null ? B.oran - A.oran : null, true, (n) => `${n} puan`))}
@@ -604,7 +604,7 @@ ${satirlar.join('\n')}
 </table>` : '<p>Karşılaştırılacak senaryo yok.</p>'}
 </section>
 ${ayrintilar.length ? `<section aria-labelledby="ayrinti-b">
-<h2 id="ayrinti-b">Değişen kalan senaryoların ayrıntısı</h2>
+<h2 id="ayrinti-b">Değişen başarısız senaryoların ayrıntısı</h2>
 ${ayrintilar.join('\n')}
 </section>` : ''}
 <footer>

@@ -13,8 +13,8 @@ import { htmlRaporDugmesi } from './html-rapor.js';
 
 const q = encodeURIComponent;
 const DEGISIM = {
-  'yeni-kalan': ['yeni kalan', 'hata'], 'yalniz-b': ["yalnız B'de", 'vurgu'], degisti: ['durum değişti', 'atlanan'], duzelen: ['düzelen', 'basari'],
-  'yalniz-a': ["yalnız A'da", ''], 'hep-kalan': ['hep kalan', 'hata soluk-rozet'], ayni: ['aynı', ''], 'hep-gecen': ['hep geçen', 'basari soluk-rozet']
+  'yeni-kalan': ['yeni başarısız', 'hata'], 'yalniz-b': ["yalnız B'de", 'vurgu'], degisti: ['durum değişti', 'atlanan'], duzelen: ['düzelen', 'basari'],
+  'yalniz-a': ["yalnız A'da", ''], 'hep-kalan': ['hep başarısız', 'hata soluk-rozet'], ayni: ['aynı', ''], 'hep-gecen': ['hep geçen', 'basari soluk-rozet']
 };
 const DEGISIM_SIRASI = Object.keys(DEGISIM);
 const DEGISMEYEN = new Set(['hep-gecen', 'hep-kalan', 'ayni']);
@@ -240,7 +240,7 @@ function ozetKartlari(v, servis) {
         satir(servis ? 'Servis / akış' : 'Kapsam', k.kapsam || '—'),
         satir('Süre', sureMetni(k.sureMs), fark ? farkHapi(fark.sureMs, false, sureMetni) : null),
         satir('Başarılı', String(k.sayilar.basarili), fark ? farkHapi(fark.basarili, true) : null),
-        satir('Kalan', String(k.sayilar.kalan), fark ? farkHapi(fark.kalan, false) : null),
+        satir('Başarısız', String(k.sayilar.kalan), fark ? farkHapi(fark.kalan, false) : null),
         satir('Atlanan', String(k.sayilar.atlanan), fark ? farkHapi(fark.atlanan, false) : null),
         k.sayilar.durduruldu || (fark && fark.durduruldu) ? satir('Durduruldu', String(k.sayilar.durduruldu), fark ? farkHapi(fark.durduruldu, false) : null) : null,
         satir('Başarı oranı', k.oran === null ? '—' : `%${k.oran}`, fark ? farkHapi(fark.oran, true, (n) => `${n} puan`) : null)));
@@ -413,8 +413,8 @@ function adimTablosu(adimlar, secenek = {}) {
       ek.push(h('ul', { class: 'kars-kontroller', 'aria-label': `Kontrol sonuçları: ${a.ad}` }, kontroller.map((k) => h('li', { class: k.degisti ? 'degisti' : null },
         h('span', { class: 'kars-kontrol-adi' }, k.ad),
         h('span', { class: 'kars-kontrol-sonuclari mono' },
-          h('span', {}, 'A ', k.a ? (k.a.gecti ? '✓' : '✗') : '—', h('span', { class: 'gorunmez' }, k.a ? (k.a.gecti ? ' geçti' : ' kaldı') : ' yok')),
-          h('span', {}, 'B ', k.b ? (k.b.gecti ? '✓' : '✗') : '—', h('span', { class: 'gorunmez' }, k.b ? (k.b.gecti ? ' geçti' : ' kaldı') : ' yok'))),
+          h('span', {}, 'A ', k.a ? (k.a.gecti ? '✓' : '✗') : '—', h('span', { class: 'gorunmez' }, k.a ? (k.a.gecti ? ' geçti' : ' başarısız') : ' yok')),
+          h('span', {}, 'B ', k.b ? (k.b.gecti ? '✓' : '✗') : '—', h('span', { class: 'gorunmez' }, k.b ? (k.b.gecti ? ' geçti' : ' başarısız') : ' yok'))),
         k.degisti ? degisimRozeti(k.degisim) : null,
         (k.a?.aciklama || k.b?.aciklama) ? h('small', { class: 'kars-kontrol-aciklama soluk' },
           k.a?.aciklama === k.b?.aciklama || !k.a || !k.b ? (k.b?.aciklama || k.a?.aciklama) : `A: ${k.a.aciklama || '—'} · B: ${k.b.aciklama || '—'}`) : null))));

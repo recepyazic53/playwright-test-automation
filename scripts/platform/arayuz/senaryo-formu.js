@@ -168,7 +168,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     tabloDegeri: (b) => (tabloListesi ? basvurununTekDegeri(tabloListesi, b, { tabloSecimleri, veriKosulari, ortamIdler: [...ortamSecimi] }) : null)
   };
   const tumAlanlar = tumFormAlanlari(sema);
-  // Koşullu değer listeleri (Veri > Tablolar): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
+  // Koşullu değer listeleri (Test verisi > Tablolar): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
   // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi. Senaryo ayarının listesi (senaryoAyari; ekranda
   // karşılığı olmayan, akışı dallandıran seçim) seçenekleri değiştirmez — kodlar modelden; yalnız "Tablodan" başvurusu için.
   const degerListeleri = baglam.degerListeleri || [];
@@ -355,7 +355,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       tablolariOku();
       parcalar.push(h('p', { class: 'alan-notu' }, 'Satırlar yükleniyor…'));
     } else if (!t) {
-      parcalar.push(h('p', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Veri > Tablolar).`));
+      parcalar.push(h('p', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Test verisi > Tablolar).`));
     } else {
       parcalar.push(...hazirSatirSecimi(g, t, grupAdi));
     }
@@ -1110,7 +1110,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   girisCiz();
   // Adım ekran görüntüleri: "Ayarlara uy" (varsayılan; Ayarlar > Koşu > Kayıt) ya da bu senaryoya özel seçim.
   const adimGoruntusuGirdisi = h('select', { id: yeniId('adimGoruntusu') },
-    [['ayar', 'Ayarlara uy (varsayılan)'], ['her', 'Her adımda'], ['yalnizKalan', 'Yalnız kalan adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']]
+    [['ayar', 'Ayarlara uy (varsayılan)'], ['her', 'Her adımda'], ['yalnizKalan', 'Yalnız başarısız adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']]
       .map(([d, m]) => h('option', { value: d, selected: (adimGoruntusuSecimi ?? 'ayar') === d }, m)));
   adimGoruntusuGirdisi.addEventListener('change', () => {
     adimGoruntusuSecimi = adimGoruntusuGirdisi.value === 'ayar' ? null : adimGoruntusuGirdisi.value;
@@ -1206,7 +1206,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   function satirGrubuCiz(g) {
     const t = tabloBul(tabloListesi, g.tablo);
     const baslikEl = h('h4', {}, `${t ? t.ad : g.tablo}${g.etiket ? ` [${g.etiket}]` : ''}`, h('small', { class: 'soluk' }, ` · ${g.alanlar.join(', ')}`));
-    if (!t) return h('div', { class: 'satir-secimi-grubu' }, baslikEl, h('div', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Veri > Tablolar).`));
+    if (!t) return h('div', { class: 'satir-secimi-grubu' }, baslikEl, h('div', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Test verisi > Tablolar).`));
     const anahtar = grupAnahtari(t.id, g.etiket);
     const secim = tabloSecimleri[anahtar] || {};
     const secimVar = Object.keys(secim).length > 0;
@@ -1527,7 +1527,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       yukle();
       yerlestir(denemeAlani, baslik,
         h('div', { class: 'deneme-sonucu' },
-          h('div', { class: 'izleme-basligi satir' }, h('span', { class: 'canli-rozeti' }, 'CANLI'), h('span', { class: 'soluk kucuk' }, 'Senaryo koşuyor…'), h('span', { class: 'bosluk' }), durdur),
+          h('div', { class: 'izleme-basligi satir' }, h('span', { class: 'canli-rozeti', title: 'Tarayıcıdaki anlık görüntü (Dene sürerken yenilenir)' }, 'Canlı görüntü'), h('span', { class: 'soluk kucuk' }, 'Senaryo koşuyor…'), h('span', { class: 'bosluk' }), durdur),
           h('div', { class: 'goruntuleyici' }, h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, 'canlı')), bos)));
       denemeAlani.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       return;

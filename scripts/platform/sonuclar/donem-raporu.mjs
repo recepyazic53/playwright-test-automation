@@ -1,6 +1,6 @@
 // DÖNEM RAPORU VERİSİ (sunucu; kasa açık olmalı): PDF raporunun bölümlerinin verisi. Kapsamlar: tek ekran, tek servis (A1);
 // birden çok ekran, birden çok servis, ekran + servis (A2); genel (A3: projenin tamamı — tüm ekranlar ve ortak akışlar, tüm
-// servisler, servis akışları ve uçtan uca akışlar, zamanlanmış koşular, kararsız testler, test verisi sağlığı, kapsam ve açıklar,
+// servisler, servis akışları ve uçtan uca akışlar, planlı koşular, kararsız testler, test verisi sağlığı, kapsam ve açıklar,
 // ortamlara göre; toplam ve sorun hesabı çoklu raporunkidir, genele özgü saf hesaplar genel.mjs'de). Çoklu kapsamda her öğe TEK ÖĞE hesabıyla (ekranHesabi / servisHesabi)
 // hesaplanır ve coklu.mjs ile toplanır (sayılar toplanır, oran toplamdan; sorunlar birleşir; bağlantılı sorunlar tek aksiyon).
 // Kaynaklar: kosular + kosu_sonuclari + adim_sonuclari + yakalanan_mesajlar (ekran), servis_kosulari (+ şifreli sonuç), servis
@@ -12,7 +12,7 @@
 // - MASKELEME: hata metinleri kalıba çevrilmeden ÖNCE maskelenir (html-rapor.mjs > raporMaskeleyici); istek / yanıt gövdesi,
 //   başlıklar, okunan değerler ve test verisi değerleri hiç okunmaz. Kontrol kalıbı yalnız kontrol türü + yol (değer yok).
 // - RAPOR VERİLERİ (A4; kullanıcı kararı, Ayarlar > Raporlar — ayarlar/rapor-verileri.mjs; hepsi varsayılan olarak boş):
-//   · kritik işareti: öncelik puanının kritiklik bileşeni 1 olur; kapsamdaki kritik öğe / akış son koşusunda kaldıysa rozet Kritik;
+//   · kritik işareti: öncelik puanının kritiklik bileşeni 1 olur; kapsamdaki kritik öğe / akış son koşusunda başarısız olduysa rozet Kritik;
 //     "Kritik akış" kartı (kritik).
 //   · ekip eşlemesi: sahip önerisi öğenin ekibidir (yoksa sınıfın varsayılan ekibi).
 //   · süre eşiği (ekran: test süresi, servis / metot: çağrı süresi): p95 eşiği aşarsa eşik aşımı listesi (esikAsimlari), sabit puanlı
@@ -112,7 +112,7 @@ function sorunSatiri(s, tur, m, rv) {
  * @param {RaporSorunu[]} sorunlar @param {Array<Record<string, unknown> & { puan: number; bant: string; durum: string }>} ekAksiyonlar
  * @param {{ basari: number | null; oncekiBasari: number | null; esikler: { yesil: number; sari: number }; aksiyonSayisi: number; karsilastir: boolean; kosuVar: boolean;
  *   birlesme?: { haric: Set<string>; notlar: Map<string, string> }; kritikKalanlar?: string[] }} g birlesme: bağlantılı sorunlar (coklu.mjs > aksiyonlariBirlestir);
- *   kritikKalanlar: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda kalanların adları (A4; boşsa rozet önceki kuralla).
+ *   kritikKalanlar: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda başarısız olanların adları (A4; boşsa rozet önceki kuralla).
  */
 function ortakSonuc(sorunlar, ekAksiyonlar, g) {
   const kritikKalanlar = g.kritikKalanlar ?? [];
@@ -132,7 +132,7 @@ function ortakSonuc(sorunlar, ekAksiyonlar, g) {
   const maddeler = [];
   // Madde metni şablonda tam maskeyle yazılır (öğe adları içerir).
   if (kritikKalanlar.length) {
-    maddeler.push(['kotu', `Kritik işaretli ${kritikKalanlar.length === 1 ? 'öğe' : `${kritikKalanlar.length} öğe`} son koşusunda kaldı: ${kritikKalanlar.slice(0, 5).join(', ')}${kritikKalanlar.length > 5 ? ` ve ${kritikKalanlar.length - 5} diğer` : ''}.`]);
+    maddeler.push(['kotu', `Kritik işaretli ${kritikKalanlar.length === 1 ? 'öğe' : `${kritikKalanlar.length} öğe`} son koşusunda başarısız oldu: ${kritikKalanlar.slice(0, 5).join(', ')}${kritikKalanlar.length > 5 ? ` ve ${kritikKalanlar.length - 5} diğer` : ''}.`]);
   }
   const iyi = [];
   if (g.karsilastir && g.basari !== null && g.oncekiBasari !== null && g.basari - g.oncekiBasari >= 0.05) {
@@ -555,8 +555,8 @@ function matrisNotu(dizi, s) {
   if (s.hepAtlandi) return 'Her koşuda atlandı';
   if (s.kararlilik?.durum === 'kararsiz') return `≈ Kararsız (değişim %${Math.round(s.kararlilik.oran * 100)})`;
   const kosan = [...dizi].filter((c) => c === 'G' || c === 'K');
-  if (kosan.length && kosan.every((c) => c === 'K')) return 'Her koşuda kaldı';
-  if (kosan.length >= 2 && kosan[kosan.length - 1] === 'K' && kosan[kosan.length - 2] === 'G') return 'Son koşuda kaldı';
+  if (kosan.length && kosan.every((c) => c === 'K')) return 'Her koşuda başarısız';
+  if (kosan.length >= 2 && kosan[kosan.length - 1] === 'K' && kosan[kosan.length - 2] === 'G') return 'Son koşuda başarısız';
   if (kosan.length >= 2 && kosan[kosan.length - 1] === 'G' && kosan.includes('K')) return 'Son koşularda geçiyor';
   return '';
 }
@@ -827,7 +827,7 @@ function akislariHesapla(ic, servisIdleri) {
         oncekiKosu: o.length, oncekiBasarili: o.filter((x) => x.durum === 'basarili').length,
         basari: oranYuzde(d.filter((x) => x.durum === 'basarili').length, d.length), oncekiBasari: oranYuzde(o.filter((x) => x.durum === 'basarili').length, o.length),
         ortSure: ortalama(d.map((x) => Number(x.sure_ms) || 0)), son: son ? (son.durum === 'basarili' ? 'G' : 'K') : null,
-        // A4: kritik işaretli akış (Ayarlar > Raporlar); son koşusunda kaldıysa rapor rozeti Kritik.
+        // A4: kritik işaretli akış (Ayarlar > Raporlar); son koşusunda başarısız olduysa rapor rozeti Kritik.
         ...(ic.rv.kritik.has(ogeAnahtari('akis', a.id)) ? { kritik: true } : {})
       };
     });
@@ -938,7 +938,7 @@ function servisTarafi(ic, liste) {
     kalan: v.ozet.kalan, oncekiKalan: v.ozet.oncekiKalan, basari: v.ozet.basari, oncekiBasari: v.ozet.oncekiBasari,
     p95: enBuyuk(v.servis.metotlar.map((m) => m.p95)), oncekiP95: enBuyuk(v.servis.metotlar.map((m) => m.oncekiP95)), yavaslayan: v.ozet.yavaslayan,
     oranSeri: v.egilim.kovalar.map((k) => k.oran), son: ham.son, ...sorunSayimi(v.sorunlar),
-    // A4: kritik işaretli servis (son çağrısı kaldıysa öğe rozeti Kritik) ve eşiği aşan metot sayısı.
+    // A4: kritik işaretli servis (son çağrısı başarısız olduysa öğe rozeti Kritik) ve eşiği aşan metot sayısı.
     ...(ham.kritik ? { kritik: true, kritikKaldi: ham.son === 'K' } : {}),
     ...(v.servis.metotlar.some((m) => m.esik) ? { esikAsan: v.servis.metotlar.filter((m) => m.esik?.asti).length } : {})
   })), ic.esikler);
@@ -995,7 +995,7 @@ async function cokluBolumler(ic) {
   const genel = g.kapsam === 'genel';
   // Genel rapor: projenin tüm akışları (servis + oturum + uçtan uca); diğerleri: seçilen servisleri kullanan akışlar.
   const akislar = genel ? akislariHesapla(ic, null) : st?.akislar ?? [];
-  // A4: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda kalanlar → rozet Kritik.
+  // A4: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda başarısız olanlar → rozet Kritik.
   const kritikKalanlar = [
     ...ekranListesi.filter((e) => e.ham.kritik && e.ham.son === 'K').map((e) => e.bolum.oge.ad),
     ...servisListesi.filter((s) => s.ham.kritik && s.ham.son === 'K').map((s) => s.bolum.oge.ad),
@@ -1065,7 +1065,7 @@ const EN_COK_ACIK = 12;
 const EN_COK_KIRIK = 5;
 
 /**
- * Genel rapora özgü bölümler: akış özeti, zamanlanmış koşular, kararsız testler, test verisi sağlığı, kapsam ve açıklar,
+ * Genel rapora özgü bölümler: akış özeti, planlı koşular, kararsız testler, test verisi sağlığı, kapsam ve açıklar,
  * ortamlara göre. Kritik akış, uygulama sürümü, ekip eşlemesi ve süre eşiği A4'te tüm rapor türlerine eklenir (a4Ekleri); kalıcı
  * tetikleme kaydı henüz yoktur (yöntem bölümünde not düşülür).
  * @param {Ic} ic
@@ -1091,7 +1091,7 @@ function genelBolumler(ic, x) {
     oncekiBasari: oranYuzde(topla((a) => a.oncekiBasarili), topla((a) => a.oncekiKosu))
   };
 
-  // Zamanlanmış koşular (kural başına; seçili ortam varsa yalnız o ortamın kuralları).
+  // Planlı koşular (kural başına; seçili ortam varsa yalnız o ortamın kuralları).
   /** @type {ReturnType<typeof kurallariListele>} */
   let kurallar = [];
   try { kurallar = kurallariListele(vt, g.projeId, { simdi: new Date(simdi) }); } catch { kurallar = []; }
@@ -1160,7 +1160,7 @@ function genelBolumler(ic, x) {
   const aciklar = [
     ...metotlar.flatMap((m) => (m.k?.eksik ?? []).map((ad) => ({ tur: 'Senaryosu olmayan metot', yer: `${m.servis} › ${ad}`, oneri: 'Sihirbazdan senaryo oluşturun.' }))),
     ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.hicKosmadi).map((s) => ({
-      tur: 'Dönemde koşmayan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Koşuya dahil ama dönemde hiç koşmadı: zamanlanmış kurala ya da koşuya ekleyin.'
+      tur: 'Dönemde koşmayan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Koşuya dahil ama dönemde hiç koşmadı: planlı koşu kuralına ya da koşuya ekleyin.'
     }))),
     ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.hepAtlandi).map((s) => ({
       tur: 'Her koşuda atlanan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Atlanma nedenini (koşul, eksik test verisi) inceleyin.'

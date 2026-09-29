@@ -95,7 +95,7 @@ ${x.senaryolar.map((/** @type {any} */ s) => `<tr><td>${e(s.ad)}</td><td class="
   // A4: ekranın süre eşiği (Ayarlar > Raporlar) tanımlıysa eşik aşımı.
   h += esikTablosu(v.esikAsimlari, { e, k });
   h += h2('Adım bazında hatalar');
-  h += x.isiHaritasi.length ? isiHaritasi({ satirlar: x.isiHaritasi, etiketler: v.donem.kovaEtiketleri, baslik: `Adım × ${v.donem.kirilim === 'gunluk' ? 'gün' : 'hafta'}: kalan test adedi`, m }) : '<p class="bos">Bu dönemde kalan test yok.</p>';
+  h += x.isiHaritasi.length ? isiHaritasi({ satirlar: x.isiHaritasi, etiketler: v.donem.kovaEtiketleri, baslik: `Adım × ${v.donem.kirilim === 'gunluk' ? 'gün' : 'hafta'}: başarısız test adedi`, m }) : '<p class="bos">Bu dönemde başarısız test yok.</p>';
   const sonHata = x.sonHata
     ? `<div class="blok"><h3>Beklenen / görülen — son hata</h3><table><tbody>
 <tr><th scope="row" style="width:80px">Senaryo</th><td>${e(x.sonHata.senaryo)}</td></tr>${x.sonHata.adim ? `<tr><th scope="row">Adım</th><td>${m(x.sonHata.adim)}</td></tr>` : ''}
@@ -104,9 +104,9 @@ ${x.sonHata.beklenen !== null ? `<tr><th scope="row">Beklenen</th><td class="mon
 ${x.sonHata.metin ? `<pre aria-label="Hata mesajı (ilk satırlar)">${m(x.sonHata.metin)}</pre>` : ''}
 ${(x.sonHata.goruntuler ?? []).filter((/** @type {any} */ g) => /^image\/(png|jpeg|webp|gif)$/.test(g.icerikTuru) && /^[A-Za-z0-9+/=]+$/.test(g.base64))
     .map((/** @type {any} */ g) => `<figure><img src="data:${g.icerikTuru};base64,${g.base64}" alt="${e(`${x.sonHata.senaryo} — ekran görüntüsü`)}"><figcaption>${e(g.ad)}</figcaption></figure>`).join('')}</div>`
-    : `<div class="blok"><h3>Beklenen / görülen — son hata</h3><p class="bos">${v.secenekler.hatalar ? 'Bu dönemde kalan test yok.' : 'Hata ayrıntısı seçenekte kapalı.'}</p></div>`;
+    : `<div class="blok"><h3>Beklenen / görülen — son hata</h3><p class="bos">${v.secenekler.hatalar ? 'Bu dönemde başarısız test yok.' : 'Hata ayrıntısı seçenekte kapalı.'}</p></div>`;
   const yakalanan = `<div class="blok"><h3>Koşuda yakalanan beklenmeyen mesajlar</h3>${x.yakalanan.length ? `<table><thead><tr><th scope="col">Kaynak</th><th scope="col">Mesaj kalıbı (maskeli)</th><th scope="col" class="s">Test</th></tr></thead><tbody>
-${x.yakalanan.map((/** @type {any} */ y2) => `<tr><td class="kucuk">${kacis(KAYNAK[y2.kaynak] ?? y2.kaynak)}</td><td class="mono">${m(y2.kalip)}</td><td class="s">${y2.test}${y2.kalanTest ? ` <span class="kucuk kotu">(${y2.kalanTest} kalan)</span>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="bos">Beklenmeyen mesaj yakalanmadı.</p>'}</div>`;
+${x.yakalanan.map((/** @type {any} */ y2) => `<tr><td class="kucuk">${kacis(KAYNAK[y2.kaynak] ?? y2.kaynak)}</td><td class="mono">${m(y2.kalip)}</td><td class="s">${y2.test}${y2.kalanTest ? ` <span class="kucuk kotu">(${y2.kalanTest} başarısız)</span>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="bos">Beklenmeyen mesaj yakalanmadı.</p>'}</div>`;
   h += `<div class="iki">${sonHata}${yakalanan}</div>`;
   const kp = x.kapsam;
   h += `${h2('Kapsam')}<table><tbody>
@@ -138,13 +138,13 @@ ${x.metotlar.map((/** @type {any} */ t) => `<tr><td><span class="mono" style="fo
   h += h2('Hata türleri ve kontroller');
   h += `<h3>Metot × hata türü</h3>${x.hataMatrisi.length ? `<table><thead><tr><th scope="col">Metot</th>${SERVIS_HATA_TURLERI.map(([, a]) => `<th scope="col" class="c">${kacis(a)}</th>`).join('')}<th scope="col" class="s">Toplam</th>${k ? '' : '<th scope="col" class="s">Önceki</th>'}</tr></thead><tbody>
 ${x.hataMatrisi.map((/** @type {any} */ r) => `<tr><td><span class="mono" style="color:#1c2430">${e(r.metot)}</span></td>${SERVIS_HATA_TURLERI.map(([t]) => { const n = r.sayilar[t] ?? 0; return n ? `<td class="c" style="background:${n >= 5 ? '#f7a8a3' : '#fde2e0'};font-weight:700">${n}</td>` : '<td class="c notr">·</td>'; }).join('')}<td class="s"><b>${r.toplam}</b></td>${k ? '' : `<td class="s notr">${r.onceki} ${fark(r.toplam, r.onceki, { yon: 'asagi-iyi' })}</td>`}</tr>`).join('')}
-</tbody></table><div class="lejant"><span>“Kontrol kaldı” = yanıt geldi (2xx) ama senaryodaki bir kontrol tutmadı. Zaman aşımı / bağlantı: yanıt gelmedi.</span></div>` : '<p class="bos">Bu dönemde hatalı çağrı yok.</p>'}`;
+</tbody></table><div class="lejant"><span>“Kontrol başarısız” = yanıt geldi (2xx) ama senaryodaki bir kontrol tutmadı. Zaman aşımı / bağlantı: yanıt gelmedi.</span></div>` : '<p class="bos">Bu dönemde başarısız çağrı yok.</p>'}`;
   h += `<div class="iki"><div class="blok"><h3>Kontrol türüne göre</h3>${x.kontrolTurleri.length ? `<table><thead><tr><th scope="col">Kontrol</th><th scope="col" class="s">Değerlendirme</th><th scope="col" class="s">Geçme</th></tr></thead><tbody>
 ${x.kontrolTurleri.map((/** @type {any} */ t) => { const o = t.toplam ? (t.gecen / t.toplam) * 100 : null; return `<tr><td>${kacis(t.etiket)}</td><td class="s">${sy(t.toplam)}</td><td class="s ${renkOran(o, v.esikler)}">${yz(o)}</td></tr>`; }).join('')}</tbody></table>` : '<p class="bos">Değerlendirilen kontrol yok.</p>'}</div>
-<div class="blok"><h3>En çok kalan kontroller</h3>${x.kalanKontroller.length ? `<table><thead><tr><th scope="col">Kontrol (tür / yol)</th><th scope="col" class="s">Kalan</th></tr></thead><tbody>
-${x.kalanKontroller.map((/** @type {any} */ t) => `<tr><td class="mono">${m(t.etiket)}</td><td class="s">${t.sayi}</td></tr>`).join('')}</tbody></table>` : '<p class="bos">Kalan kontrol yok.</p>'}</div></div>`;
+<div class="blok"><h3>En çok başarısız olan kontroller</h3>${x.kalanKontroller.length ? `<table><thead><tr><th scope="col">Kontrol (tür / yol)</th><th scope="col" class="s">Başarısız</th></tr></thead><tbody>
+${x.kalanKontroller.map((/** @type {any} */ t) => `<tr><td class="mono">${m(t.etiket)}</td><td class="s">${t.sayi}</td></tr>`).join('')}</tbody></table>` : '<p class="bos">Başarısız kontrol yok.</p>'}</div></div>`;
   h += `<h3>Bu servisi kullanan akışlar</h3>${x.akislar.length ? `<table><thead><tr><th scope="col">Akış</th><th scope="col">Tür</th><th scope="col" class="s">Koşu</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">Ort. süre</th><th scope="col">Son</th></tr></thead><tbody>
 ${x.akislar.map((/** @type {any} */ a) => `<tr><td><b>${e(a.ad)}</b>${a.kritik ? ` ${KRITIK_HAP}` : ''}<br><span class="kucuk">${a.adim} adım</span></td><td class="kucuk">${kacis(a.tur)}</td><td class="s">${a.kosu}</td><td class="s ${renkOran(a.basari, v.esikler)}"><b>${yz(a.basari)}</b></td>${k ? '' : `<td>${a.kosu ? fark(a.basari, a.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(a.ortSure))}</td><td>${sonHap(a.son)}</td></tr>`).join('')}
-</tbody></table><p class="kucuk">${x.akislar.some((/** @type {any} */ a) => a.kritik) ? 'Kritik işaretli akış son koşusunda kaldıysa durum rozeti Kritik olur; diğer akışlar yalnız gösterilir.' : 'İlişkili akışlar yalnız gösterilir; durum rozetini etkilemez.'}</p>` : '<p class="bos">Bu servisi kullanan servis akışı yok.</p>'}`;
+</tbody></table><p class="kucuk">${x.akislar.some((/** @type {any} */ a) => a.kritik) ? 'Kritik işaretli akış son koşusunda başarısız olduysa durum rozeti Kritik olur; diğer akışlar yalnız gösterilir.' : 'İlişkili akışlar yalnız gösterilir; durum rozetini etkilemez.'}</p>` : '<p class="bos">Bu servisi kullanan servis akışı yok.</p>'}`;
   return h;
 }

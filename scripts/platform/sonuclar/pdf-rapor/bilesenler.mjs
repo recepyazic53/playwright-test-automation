@@ -244,7 +244,7 @@ export function trendGrafigi(g) {
         : `<path d="M${(x(i) - 3.5).toFixed(1)},${(yo(v) + 3).toFixed(1)} L${cx},${(yo(v) - 3.5).toFixed(1)} L${(x(i) + 3.5).toFixed(1)},${(yo(v) + 3).toFixed(1)} Z" fill="#b42318" stroke="#fff"/>`;
   });
   return `<div class="blok"><h3>${kacis(g.baslik)}</h3><svg width="100%" viewBox="0 0 ${en} ${boy}" role="img" aria-label="${kacis(g.baslik)}">${s}</svg>
-<div class="lejant"><span><span class="kutu-l" style="background:#cfdcee"></span>${kacis(g.adetEtiketi)} (sağ eksen)</span><span><span class="kutu-l" style="background:#f4a3a0"></span>Kalan</span><span>— Başarı oranı (sol eksen): ● ≥ yeşil eşik · ◆ sarı bant · ▲ kırmızı bant</span>${oncekiOrt !== null ? `<span>- - önceki dönem ortalaması ${yz(oncekiOrt)}</span>` : ''}<span style="color:#1a7f37">- - yeşil eşik %${sy(g.esikler.yesil)}</span><span>Sol eksen alt sınırı %${sy(alt0)}.</span></div></div>`;
+<div class="lejant"><span><span class="kutu-l" style="background:#cfdcee"></span>${kacis(g.adetEtiketi)} (sağ eksen)</span><span><span class="kutu-l" style="background:#f4a3a0"></span>Başarısız</span><span>— Başarı oranı (sol eksen): ● ≥ yeşil eşik · ◆ sarı bant · ▲ kırmızı bant</span>${oncekiOrt !== null ? `<span>- - önceki dönem ortalaması ${yz(oncekiOrt)}</span>` : ''}<span style="color:#1a7f37">- - yeşil eşik %${sy(g.esikler.yesil)}</span><span>Sol eksen alt sınırı %${sy(alt0)}.</span></div></div>`;
 }
 
 /** Süre eğilimi: p50 ve p95 çizgileri (ms), önceki dönem p95 kesikli, (A4) kullanıcı tanımlı süre eşiği kırmızı kesikli çizgi.
@@ -304,7 +304,7 @@ export function isiHaritasi(g) {
     s += `<text x="${en - 20}" y="${yy + 11.8}" font-size="8.4" font-weight="700" text-anchor="middle" fill="${t ? '#b42318' : '#6b7482'}">${t}</text>`;
   });
   return `<div class="blok"><h3>${kacis(g.baslik)}</h3><svg width="100%" viewBox="0 0 ${en} ${boy}" role="img" aria-label="${kacis(g.baslik)}">${s}</svg>
-<div class="lejant"><span><span class="kutu-l" style="background:#fff"></span>0</span><span><span class="kutu-l" style="background:#fde2e0"></span>1</span><span><span class="kutu-l" style="background:#f7a8a3"></span>2–3</span><span><span class="kutu-l" style="background:#d9534f"></span>4+</span><span>Hücredeki sayı = o gün o adımda kalan test adedi; her kalan test yalnız ilk başarısız adımına sayılır.</span></div></div>`;
+<div class="lejant"><span><span class="kutu-l" style="background:#fff"></span>0</span><span><span class="kutu-l" style="background:#fde2e0"></span>1</span><span><span class="kutu-l" style="background:#f7a8a3"></span>2–3</span><span><span class="kutu-l" style="background:#d9534f"></span>4+</span><span>Hücredeki sayı = o gün o adımda başarısız test adedi; her başarısız test yalnız ilk başarısız adımına sayılır.</span></div></div>`;
 }
 
 /** Senaryo matrisi: G = geçti, K = kaldı, A = atlandı, - = koşmadı.
@@ -319,7 +319,7 @@ ${g.satirlar.map((r) => {
     const kosan = d.filter((c) => c === 'G' || c === 'K').length;
     return `<tr><td>${e(r.ad)}</td>${d.map((c) => `<td class="c" style="background:${zemin(c)};padding:2px 1px;border-left:1px solid #fff">${hucre(c)}</td>`).join('')}<td class="s">${kosan ? yz((gecen / kosan) * 100, 0) : '—'}</td><td class="kucuk">${kacis(r.not)}</td></tr>`;
   }).join('')}</tbody></table>
-<div class="lejant"><span class="h-g">✓ geçti</span><span class="h-k">✗ kaldı</span><span class="h-a">○ atlandı</span><span class="h-a">· koşmadı</span><span>Sütunlar: dönemdeki son ${g.etiketler.length} tam koşu (soldan sağa eskiden yeniye). Başarı sütunu yalnız koşan hücrelerden.</span></div>`;
+<div class="lejant"><span class="h-g">✓ geçti</span><span class="h-k">✗ başarısız</span><span class="h-a">○ atlandı</span><span class="h-a">· koşmadı</span><span>Sütunlar: dönemdeki son ${g.etiketler.length} tam koşu (soldan sağa eskiden yeniye). Başarı sütunu yalnız koşan hücrelerden.</span></div>`;
 }
 
 /**
@@ -502,7 +502,7 @@ ${g.govde}
 }
 
 /** @param {string} d */
-export const sonHap = (d) => (d === 'G' ? '<span class="durum-hap h-g">✓ Geçti</span>' : d === 'K' ? '<span class="durum-hap h-k">✗ Kaldı</span>' : d === 'A' ? '<span class="durum-hap h-a">○ Atlandı</span>' : '<span class="notr">—</span>');
+export const sonHap = (d) => (d === 'G' ? '<span class="durum-hap h-g">✓ Geçti</span>' : d === 'K' ? '<span class="durum-hap h-k">✗ Başarısız</span>' : d === 'A' ? '<span class="durum-hap h-a">○ Atlandı</span>' : '<span class="notr">—</span>');
 
 /**
  * Yöntem notunun "Rapor verileri" satırı (A4): Ayarlar > Raporlar'daki verilerden hangileri tanımlı ve rapora nasıl girdi; tanımsız
@@ -512,7 +512,7 @@ export const sonHap = (d) => (d === 'G' ? '<span class="durum-hap h-g">✓ Geçt
 export function raporVerisiNotu(rv) {
   const r = rv ?? { kritik: 0, ekip: 0, esik: 0, surumluSonuc: 0 };
   return [
-    r.kritik ? `Kritik işareti: ${r.kritik} öğe — öncelikte kritiklik 1; kapsamdaki kritik öğe / akış son koşusunda kaldıysa rozet Kritik.`
+    r.kritik ? `Kritik işareti: ${r.kritik} öğe — öncelikte kritiklik 1; kapsamdaki kritik öğe / akış son koşusunda başarısız olduysa rozet Kritik.`
       : 'Kritik işareti yok: kritiklik 0 alınır.',
     r.ekip ? `Ekip eşlemesi: ${r.ekip} öğe — sahip önerisi öğenin ekibi; eşlenmeyenlerde sınıfın varsayılan ekibi.` : 'Ekip eşlemesi yok: sahip önerisi sınıfın varsayılan ekibidir.',
     r.esik ? `Süre eşiği: ${r.esik} öğe — p95 eşiği aşarsa “Süre eşiği aşımları”nda ve P2 ek aksiyon olarak gösterilir.` : 'Süre eşiği yok: süre grafiklerinde eşik çizgisi yoktur.',
@@ -528,9 +528,9 @@ export function yontemKutusu(ek = [], rv = null) {
     ['Başarı oranı', 'başarılı ÷ (başarılı + başarısız + atlanan [+ hata]); durdurulan paydaya girmez (Sonuçlar ekranıyla aynı formül). Ekran oranları yalnız tam koşulardan; servis oranları “koşu” türünden (“Dene” hariç).'],
     ['Dönem / karşılaştırma', 'Dönem: seçilen aralık (yerel saat, gün sınırı 00:00). Karşılaştırma: hemen önceki eşit uzunlukta dönem. ▲▼ = bu dönem − önceki dönem. ≤ 31 gün günlük, daha uzun haftalık kırılım.'],
     ['Sorun', 'Aynı imza = öğe + ilk başarısız adım (ekran) / metot (servis) + hata kategorisi / türü + hata kalıbı (maskeli metinden; sayılar “#”).'],
-    ['Sorun durumları', 'Yeni: 90 günlük geriye bakışta yok · Artan / Azalan: maruziyete göre oran ≥ 1,5× / ≤ 0,67× ve adet farkı ≥ 2 · Çözülen: bu dönemde senaryoları ≥ 3 kez geçti, hata yok · Tekrar eden: çözülmüştü, geri geldi · Kararsız: başarısızlıkların ≥ %50’si kararsız senaryolardan (aynı senaryo, ortam, model sürümü ve uygulama sürümünde — sürüm kayıtlı değilse aynı günde — geçti↔kaldı değişimi ≥ %20, ≥ 5 koşu).'],
+    ['Sorun durumları', 'Yeni: 90 günlük geriye bakışta yok · Artan / Azalan: maruziyete göre oran ≥ 1,5× / ≤ 0,67× ve adet farkı ≥ 2 · Çözülen: bu dönemde senaryoları ≥ 3 kez geçti, hata yok · Tekrar eden: çözülmüştü, geri geldi · Kararsız: başarısızlıkların ≥ %50’si kararsız senaryolardan (aynı senaryo, ortam, model sürümü ve uygulama sürümünde — sürüm kayıtlı değilse aynı günde — geçti↔başarısız değişimi ≥ %20, ≥ 5 koşu).'],
     ['Öncelik puanı', '100 × sınıf katsayısı × (0,30 etki + 0,25 sıklık + 0,20 eğilim + 0,15 kritiklik + 0,10 süreklilik). Sınıf: uygulama 1,0 · test verisi 0,8 · test bakımı 0,7 · ortam 0,6 · kararsız 0,5. Kritiklik: kritik işaretli öğe 1, diğer 0. Sınıf bir tahmindir; dayanağı aksiyon satırında yazar.'],
-    ['Durum rozeti', 'Sağlıklı: dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik: < sarı eşik ya da kapsamdaki kritik akış son koşusunda kaldı ya da ≥ 3 P1 · diğer: Dikkat. Eşikler Ayarlar > Arayüz > Sağlık noktası.'],
+    ['Durum rozeti', 'Sağlıklı: dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik: < sarı eşik ya da kapsamdaki kritik akış son koşusunda başarısız oldu ya da ≥ 3 P1 · diğer: Dikkat. Eşikler Ayarlar > Arayüz > Sağlık noktası.'],
     ['Rapor verileri', raporVerisiNotu(rv)],
     ...ek
   ];
@@ -541,14 +541,14 @@ export function yontemKutusu(ek = [], rv = null) {
 // ---------------------------------------------------------------- A4: rapor verileri (kritik akış, uygulama sürümü, süre eşiği)
 
 /**
- * "Kritik akış" kartı: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda kalanlar. Veri yoksa boş metin (kart eklenmez).
+ * "Kritik akış" kartı: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda başarısız olanlar. Veri yoksa boş metin (kart eklenmez).
  * @param {{ toplam: number; kalan: number; ogeler: Array<{ tur: string; ad: string; son: string | null }> } | null | undefined} k @param {Yazici} e
  */
 export function kritikKarti(k, e) {
   if (!k) return '';
   const kalanlar = k.ogeler.filter((o) => o.son === 'K');
   const alt = kalanlar.length
-    ? `<span class="kotu fk">✗ son koşusunda kaldı:</span> <span class="kucuk">${kalanlar.slice(0, 3).map((o) => e(o.ad)).join(', ')}${kalanlar.length > 3 ? ` ve ${kalanlar.length - 3} diğer` : ''}</span>`
+    ? `<span class="kotu fk">✗ son koşusunda başarısız oldu:</span> <span class="kucuk">${kalanlar.slice(0, 3).map((o) => e(o.ad)).join(', ')}${kalanlar.length > 3 ? ` ve ${kalanlar.length - 3} diğer` : ''}</span>`
     : `<span class="iyi fk">✓ hepsi son koşusunda geçti</span> <span class="notr">${k.ogeler.filter((o) => o.son === null).length ? `${k.ogeler.filter((o) => o.son === null).length} koşmadı` : ''}</span>`;
   return kart('Kritik akış', `${sy(k.kalan)} / ${sy(k.toplam)}`, alt, k.kalan ? 'kotu' : 'iyi');
 }

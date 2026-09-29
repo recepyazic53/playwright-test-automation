@@ -552,7 +552,7 @@ function durumKoduUyar(kod, ifade) {
 
 /**
  * Dosya kontrolü: yanıt gövdesi (baytları) dosya olarak okunur (dosyalar/dosya-icerigi.mjs); adı Content-Disposition'dan ya da adresten,
- * biçimi içerik türünden / imzadan. Sonuç: her beklenti bir alt sonuç (geçti / kaldı, Beklenen / Görülen; gizliler maskeli).
+ * biçimi içerik türünden / imzadan. Sonuç: her beklenti bir alt sonuç (geçti / başarısız, Beklenen / Görülen; gizliler maskeli).
  * @param {{ govde: string; ham?: Buffer; basliklar?: Record<string, string> }} yanit @param {ServisKontrolu} k @param {string} ad
  * @param {DosyaKontrolSecenekleri} s @returns {KontrolSonucu}
  */

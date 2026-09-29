@@ -104,7 +104,7 @@ function servisOzeti(vt, s) {
 
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const SERVIS_GET_UCLARI = [
-  // Servis koşusunda "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): kalan çalıştırmalar ve o koşudan bu yana değişen satırlar.
+  // Servis koşusunda "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): başarısız çalıştırmalar ve o koşudan bu yana değişen satırlar.
   ['/platform/servis-sonuclari/tekrar-plani', (db, q) => {
     const p = servisTekrarPlani(db, kimlik(q.get('projeId'), 'projeId'), String(q.get('id') ?? ''));
     const ekler = ekGizliAdlar(db);
@@ -353,7 +353,7 @@ export const SERVIS_POST_UCLARI = [
     if (g.taslak && typeof g.taslak === 'object') {
       return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), taslak: { baslik: metin(g.taslak.baslik) || 'Taslak', icerik: g.taslak.icerik } }) };
     }
-    // Başarısızları tekrar çalıştır: { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — kalan çalıştırmalar sunucunun kaydından kurulur.
+    // Başarısızları tekrar çalıştır: { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — başarısız çalıştırmalar sunucunun kaydından kurulur.
     if (g.tekrar !== undefined && g.tekrar !== null) {
       const t = /** @type {Record<string, unknown>} */ (g.tekrar && typeof g.tekrar === 'object' ? g.tekrar : {});
       if (typeof t.kaynakKosuId !== 'string' || !/^s-[A-Za-z0-9_-]{1,100}$/.test(t.kaynakKosuId)) throw new DepoHatasi('"tekrar.kaynakKosuId" geçersiz.');

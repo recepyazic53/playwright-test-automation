@@ -1,5 +1,5 @@
 // UÇTAN UCA (yerel) — PDF RAPORU A3 arayüzü: genel rapor. Geçici veritabanına iki dönemlik sahte ekran / servis / akış koşuları
-// ve zamanlanmış kural geçmişi yazılır (gerçek koşu, dış istek YOK; zamanlanmış kurallar sunucu başlamadan devre dışı bırakılır),
+// ve planlı koşu kuralı geçmişi yazılır (gerçek koşu, dış istek YOK; planlı koşu kuralları sunucu başlamadan devre dışı bırakılır),
 // ayrı bir Nöbetçi (127.0.0.1) başlatılır. Denetlenenler: POST /platform/rapor/pdf (kapsam genel; seçim gerekmez), önizleme
 // maskeli; diyalogda "Genel" etkin, seçildiğinde öğe seçimi gizlenir ve açıklama görünür; önizleme ve PDF indir + Raporlar'a kaydet;
 // Sonuçlar > Raporlar'da tür adı "Genel" ve o günkü öğe sayıları, Aynı seçimlerle yeniden oluştur (seçim saklanmaz), Sil;
@@ -82,7 +82,7 @@ test('uç: genel kapsamda application/pdf ve güvenli dosya adı (seçim gerekme
   const o = await nobetciApi(nobetci, '/platform/rapor/onizle', genelGirdi(f, { donem: DONEM }));
   expect(o.basarili).toBe(true);
   expect(String(o.html)).toContain('Genel Rapor — Tüm Proje');
-  expect(String(o.html)).toContain('Zamanlanmış koşular');
+  expect(String(o.html)).toContain('Planlı koşular');
   for (const s of [...SIZINTILAR, KUPON_GIZLISI]) expect(String(o.html), s).not.toContain(s);
 });
 

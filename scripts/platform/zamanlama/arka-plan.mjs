@@ -1,5 +1,5 @@
 // ZAMANLANMIŞ KOŞULAR — kilitliyken / açılışta çalışma tercihleri (Planlı koşular; üçü de varsayılan KAPALI):
-//   A) kilitliyken  : "Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)" — anahtar-emaneti.mjs
+//   A) kilitliyken  : "Kasa kilitlense de planlı koşular çalışsın (anahtar yalnız bellekte)" — anahtar-emaneti.mjs
 //   B) dpapi        : "Windows oturumuna bağlı otomatik açma (DPAPI)" — dpapi.mjs (yalnız Windows)
 //   C) oturumAcilisi: "Bilgisayar açılınca Nöbetçi arka planda başlasın" — oturum-gorevi.mjs (yalnız Windows)
 // Tercihler kasada şifreli ayar olarak saklanır ('zamanlama_tercihleri'). Kasa KİLİTLİYKEN (sunucu açılışı) okunabilen tek şey
@@ -98,7 +98,7 @@ export function arkaPlanYoneticisi(bag) {
   /**
    * Kilitleme: tamamen=false ve tercih (A ya da B) açıksa arayüz kilitlenir, anahtar yalnız zamanlayıcının emanetinde kalır;
    * aksi hâlde (ya da "Tamamen kilitle") emanet de açık anahtar da HER KOŞULDA hemen silinir — süren bir arka plan işi olsa
-   * bile beklenmez (iş kasa kilitli görünce kalan adımları atlar; zamanlayici.mjs > devamMi). Süren iş varsa sonuçta
+   * bile beklenmez (iş kasa kilitli görünce başarısız adımları atlar; zamanlayici.mjs > devamMi). Süren iş varsa sonuçta
    * surenIs: true döner (arayüz kullanıcıyı açıkça uyarır). Başlamış bir DPAPI açılış yüklemesi bu kilitten sonra
    * anahtarı emanete geri koyamaz (tamamenKilitNesli).
    * @param {Veritabani} db @param {{ tamamen?: boolean }} [secenekler]
@@ -175,7 +175,7 @@ export function arkaPlanYoneticisi(bag) {
         return false;
       }
       anahtariEmanetEt(db, anahtar);
-      log('[zamanlama] Windows oturumuna bağlı otomatik açma: zamanlanmış koşular kasa kilitliyken çalışabilir (anahtar yalnız bellekte, arayüz kilitli).');
+      log('[zamanlama] Windows oturumuna bağlı otomatik açma: planlı koşular kasa kilitliyken çalışabilir (anahtar yalnız bellekte, arayüz kilitli).');
       return true;
     } catch (hata) {
       const kod = /** @type {{ kod?: string }} */ (hata).kod;
@@ -183,7 +183,7 @@ export function arkaPlanYoneticisi(bag) {
         try { dosyayiGuvenliSil(yol); } catch { /* yok sayılır */ }
         uyari = 'Windows oturumuna bağlı otomatik açma dosyası bu kasaya artık uymuyordu (parola değişmiş ya da yedek yüklenmiş); silindi. Tercihi yeniden açabilirsiniz.';
       } else {
-        uyari = 'Windows oturumuna bağlı otomatik açma dosyası çözülemedi (başka bir Windows kullanıcısı ya da bozuk dosya olabilir); zamanlanmış koşular kasa açılana kadar çalışmaz.';
+        uyari = 'Windows oturumuna bağlı otomatik açma dosyası çözülemedi (başka bir Windows kullanıcısı ya da bozuk dosya olabilir); planlı koşular kasa açılana kadar çalışmaz.';
       }
       log('[zamanlama] Windows oturumuna bağlı otomatik açma kullanılamadı; ayrıntı Planlı koşular sayfasında.');
       return false;

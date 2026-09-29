@@ -1,5 +1,5 @@
 // UÇTAN UCA (yerel) — PDF RAPORU A4 arayüzü: raporlar için yeni veriler. Geçici veritabanına genel rapor fikstürü yazılır (gerçek
-// koşu, dış istek YOK; zamanlanmış kural sunucu başlamadan devre dışı), ayrı bir Nöbetçi (127.0.0.1) başlatılır. Denetlenenler:
+// koşu, dış istek YOK; planlı koşu kuralı sunucu başlamadan devre dışı), ayrı bir Nöbetçi (127.0.0.1) başlatılır. Denetlenenler:
 // Ayarlar > Raporlar (ekip ekle / yeniden adlandır / sil, kritik anahtarı, ekip seçimi, süre eşiği, servis metot eşikleri — her
 // değişiklik kasaya yazılır ve rapora yansır), ortam formundaki "Uygulama sürümü", koşu diyaloğundaki isteğe bağlı sürüm alanı (ön
 // değer ortamın sürümü; hiçbir koşu başlatılmaz), PDF diyaloğunda Ayarlar > Raporlar bağlantısı, 390 px'te yatay taşma olmaması.
