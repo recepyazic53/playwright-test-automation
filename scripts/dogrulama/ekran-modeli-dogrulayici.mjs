@@ -827,6 +827,33 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
 }
 
 /**
+ * BAĞSIZ KOŞULLAR (uyarı; modeli değiştirmez): "kosullar" içinde tanımlı olup hiçbir yerde adıyla kullanılmayan koşullar —
+ * adım / bölüm / alan (alt alanlar dahil, tüm akışlar, senaryo düzeyi, bağlam) görünürlüğü, iş kuralı geçerliliği, varyant
+ * seçeneği ya da başka bir koşul (ifadedeki "kosul" adı). Ör. akış diyagramından kaydederken bölüm görünürlüğü kaybolmuşsa
+ * koşulu kalır ama bağsızdır. Dönen: [{ yer: "kosullar.<ad>", mesaj }].
+ * @param {unknown} model @returns {Array<{ yer: string; mesaj: string }>}
+ */
+export function bagsizKosulUyarilari(model) {
+  if (!nesneMi(model) || !nesneMi(model.kosullar)) return [];
+  const kullanilan = new Set();
+  const gez = (d) => {
+    if (Array.isArray(d)) { d.forEach(gez); return; }
+    if (!nesneMi(d)) return;
+    for (const anahtar of ['gorunurluk', 'gecerlilik']) if (nesneMi(d[anahtar]) && metinMi(d[anahtar].kosul)) kullanilan.add(d[anahtar].kosul);
+    // Varyant seçeneği ve koşul ifadesi içindeki adlı koşul başvurusu.
+    if (metinMi(d.kosul) && (metinMi(d.deger) || Object.keys(d).length === 1)) kullanilan.add(d.kosul);
+    for (const v of Object.values(d)) gez(v);
+  };
+  for (const [anahtar, deger] of Object.entries(model)) if (anahtar !== 'kosullar') gez(deger);
+  for (const k of Object.values(model.kosullar)) if (nesneMi(k)) { gez(k.ifade); gez(k.hedefIfade); }
+  return Object.keys(model.kosullar).filter((ad) => !kullanilan.has(ad)).map((ad) => {
+    const k = model.kosullar[ad];
+    const aciklama = nesneMi(k) && metinMi(k.aciklama) ? ` (${k.aciklama})` : '';
+    return { yer: `kosullar.${ad}`, mesaj: `“${ad}” koşulu${aciklama}: Bu koşul hiçbir yere bağlı değil — hiçbir adım, bölüm ya da alan görünürlüğünde kullanılmıyor. Görünürlüğü kaybolmuş bir bölüme / alana yeniden bağlayın ya da gerekmiyorsa silin.` };
+  });
+}
+
+/**
  * Akışın modeli (import yok: model-formu.mjs > akisModeli ile AYNI kural): adımlar akışın adımları, akışta olmayan
  * adımlara bağlı iş kuralları ve olmayan alanlara bağlı bağlam görünürlüğü / ürün düzeyi başvuruları çıkarılır.
  */

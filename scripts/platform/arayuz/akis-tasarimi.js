@@ -198,6 +198,7 @@ export async function akisTasarimi(icerik, s) {
     const sinirVar = Boolean(kaynak && kaynak.sinirlar && Object.prototype.hasOwnProperty.call(kaynak.sinirlar, anahtar));
     const sinir = sinirVar ? kaynak.sinirlar[anahtar] : undefined;
     const korunanKosul = kaynak && kaynak.korunanKosullar ? kaynak.korunanKosullar[anahtar] : undefined;
+    const bolumNotu = kaynak && kaynak.bolumNotlari ? kaynak.bolumNotlari[anahtar] : undefined;
     const tusVar = Boolean(kaynak && kaynak.tuslar && Object.prototype.hasOwnProperty.call(kaynak.tuslar, anahtar));
     const tus = tusVar ? kaynak.tuslar[anahtar] : undefined;
     for (const x of bloklar) {
@@ -208,6 +209,7 @@ export async function akisTasarimi(icerik, s) {
       if (x.sinirlar) delete x.sinirlar[anahtar];
       if (x.tuslar) delete x.tuslar[anahtar];
       if (x.korunanKosullar) delete x.korunanKosullar[anahtar];
+      if (x.bolumNotlari) delete x.bolumNotlari[anahtar];
     }
     const yer = onune ? b.alanlar.indexOf(onune) : -1;
     if (yer >= 0) b.alanlar.splice(yer, 0, anahtar); else b.alanlar.push(anahtar);
@@ -217,6 +219,8 @@ export async function akisTasarimi(icerik, s) {
     if (tusVar) b.tuslar = { ...(b.tuslar || {}), [anahtar]: tus };
     // Diyagramda düzenlenemeyen koşul (alanın tanımıyla aynen korunur) de alanla gider.
     if (korunanKosul) b.korunanKosullar = { ...(b.korunanKosullar || {}), [anahtar]: korunanKosul };
+    // Bölüm özellikleri (bölümün görünürlük koşulu…) bölümle korunur; notu da alanla gider.
+    if (bolumNotu) b.bolumNotlari = { ...(b.bolumNotlari || {}), [anahtar]: bolumNotu };
     // Taşınan alan ayarını korur; yeni eklenen, sayfanın zorunluluğuyla gelir.
     if (baska ? zorunluydu : alanBilgisi.get(anahtar)?.zorunlu) b.zorunlu.push(anahtar);
     etkin = hedef;
@@ -345,6 +349,12 @@ export async function akisTasarimi(icerik, s) {
       title: kosulYazisi ? `Görünür: ${kosulYazisi}. Değiştirmek için tıklayın.` : 'Her zaman görünür. Seçime bağlıysa koşul ekleyin.',
       onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; ciz(); }
     }, ikon('isaret'), kosulYazisi || 'Koşul'), cip.querySelector('.zorunluluk'));
+    // Alanın bölümünün diyagramda düzenlenmeyen özellikleri (ör. bölümün görünürlük koşulu): salt okunur; bölümle birlikte korunur.
+    const bolumNotu = bloklar[i].bolumNotlari ? bloklar[i].bolumNotlari[anahtar] : null;
+    if (bolumNotu) cip.insertBefore(h('span', {
+      class: 'kosul-dugmesi var kilitli bolum-notu', role: 'note', 'aria-label': `${etiket}: bölüm (diyagramda düzenlenemez)`,
+      title: `${bolumNotu.ozet}. Diyagramda düzenlenemez; kaydederken bölümle birlikte aynen korunur.`
+    }, ikon('kilit'), bolumNotu.kosullu ? 'koşullu bölüm' : 'bölüm ayarı'), cip.querySelector('.zorunluluk'));
     // Sınırlar (sayı / metin / tarih alanı; ekranın akışında): senaryo tasarım yardımcısının sınır değer önerileri bundan üretilir.
     const sinirTipi = ekranKipi && a ? SINIR_TIPLERI[a.tur] : null;
     if (sinirTipi) {

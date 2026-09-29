@@ -682,8 +682,8 @@ export function sabitGostergeMetni(m) {
 
 /**
  * Korunan parçanın ('ek': akış diyagramında düzenlenemeyen) özelliklerini kurulan adıma AYNEN yazar: adım özellikleri
- * (görünürlük, kod yöntemi), bölüm özellikleri (aynı kimlikli bölüme) ve gösterilemeyen alanlar (aynı kimlikli bölüme — yoksa
- * aynı başlıklıya, o da yoksa yeni bölüme — önceki alanın ardına; önceki alan yoksa bölümün başına).
+ * (görünürlük, kod yöntemi) ve gösterilemeyen alanlar (aynı kimlikli bölüme — yoksa aynı başlıklıya, o da yoksa yeni bölüme —
+ * önceki alanın ardına; önceki alan yoksa bölümün başına). Bölüm özellikleri adıma değil bölüme bağlıdır: bolumOzellikleriniTasi.
  * @param {Record<string, any>} adim @param {Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>} k @param {Set<string>} bolumIdleri
  */
 function korunanlariYaz(adim, k, bolumIdleri) {
@@ -703,9 +703,40 @@ function korunanlariYaz(adim, k, bolumIdleri) {
     const yer = ka.onceki === null ? 0 : b.alanlar.findIndex((x) => x.id === ka.onceki) + 1;
     b.alanlar.splice(yer > 0 || ka.onceki === null ? yer : b.alanlar.length, 0, kopya(ka.alan));
   }
-  for (const [id, ozellik] of Object.entries(k.bolumEk ?? {})) {
-    const b = bolumler.find((x) => x.id === id);
-    if (b) Object.assign(b, kopya(ozellik));
+}
+
+/** Bölümün kimlik / başlık / alanlar dışındaki her anahtarı (görünürlük koşulu, kod yöntemi ve ileride eklenecekler). */
+const BOLUM_TEMEL_ANAHTARLARI = ['id', 'baslik', 'alanlar'];
+
+/**
+ * Bölüm özellikleri BÖLÜMLE birlikte taşınır: kurulan bölümün (mevcut modelde de olan) alanlarının hepsi mevcut modelde aynı
+ * bölümdeyse o bölümün id / baslik / alanlar dışındaki HER özelliği (verilmemişse) aynen yazılır; kimliği boştaysa o da
+ * alınır. Böylece adımı değişen (ör. akış diyagramında gruplar birleştirildi), başlığı farklı yazılan ya da adımının korunan
+ * parçası silinen bölüm koşulunu kaybetmez. Bölümün tüm alanları akıştan çıkarılırsa bölüm (özellikleriyle) kalkar.
+ * @param {Array<Record<string, any>>} adimlar kurulan adımlar @param {Array<Record<string, any>>} eskiAdimlar mevcut modelin adımları
+ */
+function bolumOzellikleriniTasi(adimlar, eskiAdimlar) {
+  /** Alan kimliği → mevcut modeldeki bölümü (ilk görülen). @type {Map<string, Record<string, any>>} */
+  const eskiBolum = new Map();
+  for (const adim of eskiAdimlar) {
+    for (const b of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      if (!nesneMi(b)) continue;
+      for (const a of Array.isArray(b.alanlar) ? b.alanlar : []) if (nesneMi(a) && typeof a.id === 'string' && !eskiBolum.has(a.id)) eskiBolum.set(a.id, b);
+    }
+  }
+  /** @type {Array<Record<string, any>>} */
+  const bolumler = adimlar.flatMap((a) => (Array.isArray(a.bolumler) ? a.bolumler : []));
+  const idler = new Set(bolumler.map((b) => String(b.id)));
+  for (const b of bolumler) {
+    const kaynaklar = new Set((Array.isArray(b.alanlar) ? b.alanlar : []).map((a) => (nesneMi(a) ? eskiBolum.get(String(a.id)) : undefined)).filter(Boolean));
+    if (kaynaklar.size !== 1) continue;
+    const e = /** @type {Record<string, any>} */ ([...kaynaklar][0]);
+    for (const [k, v] of Object.entries(e)) if (!BOLUM_TEMEL_ANAHTARLARI.includes(k) && b[k] === undefined) b[k] = kopya(v);
+    if (typeof e.id === 'string' && b.id !== e.id && !idler.has(e.id)) {
+      idler.delete(String(b.id));
+      idler.add(e.id);
+      b.id = e.id;
+    }
   }
 }
 
@@ -1151,6 +1182,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (k) korunanlariYaz(adim, k, bolumIdleri);
     return adim;
   });
+  // Bölüm özellikleri (görünürlük koşulu, kod yöntemi…) bölümle birlikte (adımın korunan parçasından bağımsız).
+  if (mevcut) bolumOzellikleriniTasi(adimlar, [.../** @type {Array<Record<string, any>>} */ (mevcut.adimlar), ...digerAdimlar]);
   // Seçime göre görünen alanlar (akış kaydının ekran okumaları): alan adımın bazı okumalarında görünüp
   // bazılarında görünmüyorsa ve bu okumalar arasında değeri AYRIŞAN tek bir seçim alanı (select/radyo) varsa, alan o seçimin
   // görüldüğü değerlerde görünür — adlandırılmış koşul (otomatik taramanın seçim keşfiyle aynı biçim). Birden çok aday varsa
@@ -1247,7 +1280,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     model.kosullar = { ...kosullar, ...yeniKosullar };
     for (const adim of adimlar) {
       if (nesneMi(adim.gorunurluk) && typeof adim.gorunurluk.kosul === 'string' && !(adim.gorunurluk.kosul in model.kosullar)) delete adim.gorunurluk;
-      for (const b of /** @type {Array<{ alanlar: Array<Record<string, any>> }>} */ (adim.bolumler ?? [])) {
+      for (const b of /** @type {Array<{ gorunurluk?: Record<string, any>; alanlar: Array<Record<string, any>> }>} */ (adim.bolumler ?? [])) {
+        if (nesneMi(b.gorunurluk) && typeof b.gorunurluk.kosul === 'string' && !(b.gorunurluk.kosul in model.kosullar)) delete b.gorunurluk;
         for (const a of b.alanlar) if (nesneMi(a.gorunurluk) && typeof a.gorunurluk.kosul === 'string' && !(a.gorunurluk.kosul in model.kosullar)) delete a.gorunurluk;
       }
     }

@@ -363,8 +363,14 @@ async function ekranAyrintisi(icerik, s) {
     }));
     return;
   }
+  // Model uyarıları (yalnız bilgi; model kendiliğinden değişmez): ör. hiçbir yere bağlı olmayan koşullar.
+  const uyarilar = Array.isArray(d.uyarilar) ? d.uyarilar : [];
   yerlestir(sekmeAlani, h('div', { class: 'form-duzeni' },
-    h('div', { class: 'form-sutunu' }, modelAgaciCiz(agac)),
+    h('div', { class: 'form-sutunu' },
+      uyarilar.length ? h('div', { class: 'not-kutusu uyari model-uyarilari', role: 'note', 'aria-label': 'Model uyarıları' },
+        h('b', {}, `${uyarilar.length} model uyarısı`),
+        h('ul', {}, uyarilar.map((u) => h('li', {}, u.mesaj)))) : null,
+      modelAgaciCiz(agac)),
     h('aside', { class: 'ozet-sutunu', 'aria-label': 'Model özeti' }, modelOzetKarti(agac, d))));
 }
 
