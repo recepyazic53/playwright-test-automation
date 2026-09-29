@@ -811,7 +811,7 @@ dialog.gorsel-diyalog { width: min(92rem, calc(100vw - 2rem)); padding: 14px 16p
 .medya-notlari li { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
 .medya-notlari .ikon { flex: none; margin-top: 2px; color: var(--atlanan); }
 /* Akış tasarımı: "Ekran görüntüsü al" işareti; Ayarlar: açık / kapalı ayarı. */
-.goruntu-isareti .ikon { color: var(--soluk, inherit); }
+.goruntu-isareti .ikon, .tekrar-isareti .ikon { color: var(--soluk, inherit); }
 .onay-alani .secenek { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
 .onay-alani .secenek input { margin-top: 3px; flex: none; }
 .goruntuleyici .medya-yedek-disi { margin: 14px; background: rgba(255, 255, 255, .04); color: #c7d0dc; border-color: rgba(148, 163, 184, .3); }
@@ -4135,3 +4135,22 @@ a.ozet-kutusu:focus-visible { outline: 2px solid var(--odak); outline-offset: 2p
 @media (max-width: 860px) {
   .sonuc-kartlari.ozet-kutulari { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- Ayarlar > Proje ve ortamlar > Kurtarma kuralları (kurtarma-kurallari.js) ------------------------------------------------- */
+.kurtarma-kurallari { margin-top: 18px; }
+.kurtarma-aciklama { max-width: 72ch; }
+.kurtarma-listesi li { min-width: 0; }
+.kurtarma-listesi .kayit-ana { min-width: 0; overflow-wrap: anywhere; }
+.kurtarma-ozeti { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.kurtarma-satiri.kapali .kayit-ana > strong { opacity: .7; }
+.kurtarma-sayaci { font-variant-numeric: tabular-nums; color: var(--soluk, inherit); }
+.kurtarma-acik { white-space: nowrap; }
+dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
+.kurtarma-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
+.kurtarma-diyalogu fieldset { min-width: 0; margin: 10px 0; }
+.kurtarma-diyalogu .alan input, .kurtarma-diyalogu .alan select { width: 100%; max-width: 100%; box-sizing: border-box; }
+.kurtarma-diyalogu .alan-izgarasi { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
+.kurtarma-secim-listesi { list-style: none; margin: 6px 0 0; padding: 0; max-height: 14rem; overflow: auto; }
+.kurtarma-secim-listesi li.alt { padding-left: 1.4rem; }
+.kurtarma-bekle { align-items: end; flex-wrap: wrap; }
+@media (max-width: 520px) { .kurtarma-diyalogu .diyalog-alt { flex-wrap: wrap; } .kurtarma-diyalogu .diyalog-alt > button { flex: 1 1 auto; justify-content: center; } }

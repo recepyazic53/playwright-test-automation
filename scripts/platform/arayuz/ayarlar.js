@@ -13,6 +13,7 @@ import { veriKlasoruKarti, yedekKlasoruBolumu } from './veri-klasoru.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 import { tablolarBolumu } from './tablolar.js';
 import { tabanAdresleriBolumu } from './taban-adresler.js';
+import { kurtarmaKurallariBolumu } from './kurtarma-kurallari.js';
 import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 import { entegrasyonlarBolumu } from './entegrasyonlar.js';
 import { kasayiKilitleSecimli, kilitBildirimi, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
@@ -336,7 +337,8 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
-    tabanAdresleriBolumu(proje));
+    tabanAdresleriBolumu(proje),
+    kurtarmaKurallariBolumu(proje));
 }
 
 // ---------------------------------------------------------------------------------------

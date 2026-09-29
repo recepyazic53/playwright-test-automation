@@ -415,6 +415,8 @@ export function servisSonucSenaryosu(vt, q) {
       akis: s.akis && typeof s.akis === 'object' ? { akisId: s.akis.akisId ?? null, akisBaslik: String(s.akis.akisBaslik ?? ''), adimNo: Number(s.akis.adimNo) || null, adimAd: String(s.akis.adimAd ?? '') } : null,
       oturum: s.oturum && typeof s.oturum === 'object' ? { akis: String(s.oturum.akis ?? ''), durum: String(s.oturum.durum ?? '') } : null,
       yetkiTekrari: s.yetkiTekrari && typeof s.yetkiTekrari === 'object' ? { not: String(s.yetkiTekrari.not ?? '') } : null,
+      // Çalışan kurtarma kuralının notu (kurtarılan çağrı başarılı sayılır; not görünür kalır).
+      kurtarma: s.kurtarma && typeof s.kurtarma === 'object' ? { kural: String(s.kurtarma.kural ?? ''), durum: String(s.kurtarma.durum ?? ''), not: raporMetniniMaskele(String(s.kurtarma.not ?? ''), ekler) ?? '' } : null,
       // Doğrulanan dosyaların özeti (içerik dönmez; saklandıysa /platform/servis-sonuclari/dosya ile alınır).
       dosyalar: Array.isArray(s.dosyalar) ? s.dosyalar.map((/** @type {any} */ d, /** @type {number} */ sira) => ({
         sira, ad: String(d.ad ?? 'dosya'), bicim: String(d.bicim ?? ''), boyut: Number(d.boyut) || 0, gecti: d.gecti === true, saklandi: typeof d.icerikBase64 === 'string'

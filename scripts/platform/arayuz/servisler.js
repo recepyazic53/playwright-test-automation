@@ -974,6 +974,7 @@ function sonucGovdesi(r) {
     h('div', { class: 'baslik-satiri' }, rozet(etiket, sinif), r.durumKodu ? rozet(`HTTP ${r.durumKodu}`) : null, h('span', { class: 'soluk kucuk' }, `${r.sureMs} ms · ${r.ortam || ''}`)),
     r.hata ? h('div', { class: 'not-kutusu hata', role: 'alert' }, r.hata) : null,
     r.yetkiTekrari ? h('p', { class: 'not-kutusu bilgi yetki-notu' }, ikon('yenile'), ' ', r.yetkiTekrari.not) : null,
+    r.kurtarma ? h('p', { class: 'not-kutusu bilgi kurtarma-notu' }, ikon('yenile'), ' ', r.kurtarma.not) : null,
     r.ozet ? h('p', {}, h('b', {}, 'Yanıt: '), r.ozet) : null,
     r.kontroller && r.kontroller.length ? kontrolSonuclari(r.kontroller) : null,
     r.istek ? h('details', {}, h('summary', {}, 'İstek (gizli değerler maskeli)'), h('pre', { class: 'hata-mesaji kod-blogu' }, r.istek)) : null,
@@ -1792,6 +1793,8 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
     const c = h('input', { type: 'checkbox', id: yeniKimlik('op'), checked: (s.ayarlar.yalnizTestOperasyonlari || []).includes(op.ad) });
     return { op, c };
   });
+  // "Tekrar denenebilir" (kurtarma kuralları): kural yalnız işaretli metodun isteğini tekrar gönderir. Varsayılan işaretsiz.
+  const tekrarli = (s.ayarlar.operasyonlar || []).map((op) => ({ op, c: h('input', { type: 'checkbox', id: yeniKimlik('tekrar'), checked: (s.ayarlar.tekrarDenenebilirOperasyonlar || []).includes(op.ad) }) }));
   let erisim = null;
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
@@ -1848,7 +1851,8 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
         projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: ad.value.trim(), yol: yol.value.trim(), soapSurumu: surum.value, tlsDogrulama: tls.checked,
         durum: durum.checked ? 'etkin' : 'devre_disi', tabanlar: tabanDegerleri(), tabanGrubu: tabanSecimi.value || null,
-        yalnizTestOperasyonlari: yalnizTest.filter(({ c }) => c.checked).map(({ op }) => op.ad), erisimKimligi: erisim?.erisimKimligi
+        yalnizTestOperasyonlari: yalnizTest.filter(({ c }) => c.checked).map(({ op }) => op.ad), erisimKimligi: erisim?.erisimKimligi,
+        tekrarDenenebilirOperasyonlar: tekrarli.filter(({ c }) => c.checked).map(({ op }) => op.ad)
       } }));
       bildir('Servis kaydedildi.');
       window.dispatchEvent(new HashChangeEvent('hashchange'));
@@ -1877,6 +1881,9 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
       yalnizTest.length && s.tur !== 'rest' ? h('fieldset', {}, h('legend', {}, 'Yalnız TEST\'te koşan operasyonlar'),
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
+      tekrarli.length ? h('fieldset', { class: 'tekrar-denenebilir' }, h('legend', {}, 'Tekrar denenebilir metotlar'),
+        h('p', { class: 'soluk kucuk' }, 'Kurtarma kuralı (Ayarlar > Proje ve ortamlar) yalnız işaretli metodun isteğini tekrar gönderir. Kayıt oluşturan / değiştiren metotları işaretlemeyin: tekrar, çift kayıt yaratabilir.'),
+        ...tekrarli.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       s.tur === 'rest' ? null : kontrol, h('div', { class: 'dugmeler' }, kaydet)),
     s.tur === 'rest' ? restUclariKarti(proje, s, ortamlar) : semaKarti(proje, s, ortamlar),
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('cop'), 'Tehlikeli bölge')), sil));

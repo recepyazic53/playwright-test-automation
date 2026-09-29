@@ -42,6 +42,7 @@ import { YAVASLAMA_EN_AZ } from './yuzdelik.mjs';
 import { akisAdimSatirlari } from './servis-sonuclari.mjs';
 import { donemRaporuVerisi, servisMetodu } from './donem-raporu.mjs';
 import { gosterimMaskesi } from './gosterim-maskesi.mjs';
+import { calisanKurallar } from '../ayarlar/kurtarma-kurallari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -331,6 +332,17 @@ async function hesapla(vt, projeId, x) {
         ayrinti: `Zamanlanmış koşu · ${[...nedenler.entries()].sort((a, b) => b[1] - a[1]).map(([n, s]) => `${s} ${n}`).join(', ')}`,
         adres: '#/ayarlar/kosu'
       });
+    }
+  }, undefined);
+
+  // 5) Çalışan kurtarma kuralları (Ayarlar > Proje ve ortamlar > Kurtarma kuralları): kurtarılan sonuç başarılı sayılır ama kuralın
+  //    ne kadar çalıştığı burada görünür kalır (sorun gizlenmez). Yalnız kural adı ve sayılar.
+  dene('Kurtarma kuralları', () => {
+    if (!donemBilgisi) return;
+    for (const k of calisanKurallar(vt, projeId, { bas: donemBilgisi.bas, bit: donemBilgisi.bit })) {
+      const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine kaldı` : '',
+        k.tekrarlanmadi ? `${k.tekrarlanmadi} tekrar denenmedi` : ''].filter(Boolean);
+      dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/proje' });
     }
   }, undefined);
 

@@ -226,6 +226,7 @@ import {
 } from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
+import { KURTARMA_GET_UCLARI, KURTARMA_POST_UCLARI } from './ayarlar/kurtarma-kurallari.mjs';
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI, tabloKosuDenetimiAyarla } from './tablolar/tablo-uclari.mjs';
 import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
 import { goreliTarihDonusumu } from './senaryolar/tarih-donusumu.mjs';
@@ -1456,6 +1457,8 @@ function sonYedekZamani(db) {
   return [dosya, disaAktarma].filter((z) => typeof z === 'string').sort().pop() ?? null;
 }
 for (const [yol, islem] of SERVIS_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// Ayarlar > Proje ve ortamlar > Kurtarma kuralları (dış istek yok; yalnız kasaya yazılır).
+for (const [yol, islem] of KURTARMA_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of TABLO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // SQL adımları: veritabanı bağlantısı seçim listesi (sql/sorgu-bagdastirici.mjs).
 for (const [yol, islem] of SQL_GET_UCLARI) GET_UCLARI.set(yol, islem);
@@ -1858,6 +1861,7 @@ const POST_UCLARI = new Map([
 ]);
 // Servis testleri (servisler/servis-uclari.mjs): ekran uçlarından ayrı; aynı belirteç / kasa kuralları.
 for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
+for (const [yol, islem] of KURTARMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of AKIS_SENARYO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of UCTAN_UCA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Test verisi tabloları (tablolar/tablo-uclari.mjs).

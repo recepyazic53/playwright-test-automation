@@ -36,15 +36,16 @@ export type AkisEnvanteri = {
 export type SonSayfa = { yol: string; cikisMetni: string | null };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
+  /** tekrarDenenebilir: "Tekrar denenebilir" işareti (kurtarma kuralı adımı tekrar deneyebilir; adımın kosu.tekrarDenenebilir). */
   /** ekranGoruntusu: "Ekran görüntüsü al" işareti (alan grubu / aksiyon; adımın kosu.ekranGoruntusu — "Seçili adımlarda" kaydında). sinirlar: alanın değer kuralları. */
   /** korunan: adımın diyagramda gösterilemeyen, aynen korunan parçalarının anahtarı; korunanOzet / korunanKosullar yalnız gösterim (sunucu verir). */
   /** tuslar: alan doldurulduktan sonra basılacak tuş ("Tab" / "Enter"; null = yok) — model alan.doldurucuParametreleri.tus. */
-  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; tuslar?: Record<string, string | null>; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[]; korunanKosullar?: Record<string, string> }
+  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; tuslar?: Record<string, string | null>; ekranGoruntusu?: boolean; tekrarDenenebilir?: boolean; korunan?: string; korunanOzet?: string[]; korunanKosullar?: Record<string, string> }
   /** Süreli bekleme (saniye). */
   | { tur: 'bekle'; saniye: number }
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
   /** gorunurse: "Yalnız görünürse bas" — ilerleme düğmesinden sonra, kısa sürede görünmezse atlanır (zamanAsimiSn: o kısa bekleme). */
-  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; gorunurse?: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[] }
+  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; gorunurse?: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; tekrarDenenebilir?: boolean; korunan?: string; korunanOzet?: string[] }
   /** uyari: kabul edilen iş kuralı uyarısı (başarı değil; senaryo "uyarı bekleniyor" derken seçer). */
   /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
   | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }

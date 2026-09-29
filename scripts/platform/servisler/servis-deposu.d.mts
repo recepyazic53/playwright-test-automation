@@ -15,6 +15,8 @@ export interface ServisHttpTanimi { metot: string; yol: string; icerikTuru?: str
 export interface ServisAyarlari {
   yol?: string; tabanlar?: Record<string, string>; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
   adresler?: Record<string, string>; yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean;
+  /** Kurtarma kuralının tekrar gönderebileceği operasyonlar (varsayılan boş: hiçbiri tekrar gönderilmez). */
+  tekrarDenenebilirOperasyonlar?: string[];
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
@@ -86,6 +88,8 @@ export declare function servisKosusuKaydet(vt: Veritabani, girdi: {
   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown>;
   /** Test edilen uygulamanın sürümü (PDF rapor A4; isteğe bağlı). */
   uygulamaSurumu?: string | null;
+  /** Çalışan kurtarma kuralları (düz kurtarma_json; yalnız kimlik / durum / deneme). */
+  kurtarma?: Array<{ kuralId: string; durum: string; deneme?: number }>;
 }): string;
 export declare function servisKosulariniListele(vt: Veritabani, filtre: { servisId: string; senaryoId?: string; sinir?: number }): ServisKosusu[];
 export declare function servisKosusuGetir(vt: Veritabani, id: string): ServisKosusu | undefined;

@@ -162,4 +162,6 @@ export type PlatformModelVerisi = {
   sqlBaglantiAdlari?: Record<string, string>;
   /** Ayarlar > İzinler durumu (izin anahtarı → açık mı). Koşucu kasayı açmaz; yoksa hepsi kapalı sayılır. */
   izinler?: Record<string, boolean>;
+  /** Kurtarma kuralları (Ayarlar > Proje ve ortamlar): açık, türü ekran, bu ortamı kapsayan kullanıcı kuralları (ekran kapsamı koşucuda süzülür). */
+  kurtarmaKurallari?: import('../../scripts/platform/ayarlar/kurtarma-kurallari.mjs').EkranKurali[];
 };

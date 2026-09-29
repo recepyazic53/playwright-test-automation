@@ -120,6 +120,7 @@ export function kosuTanimiMetni(k) {
   if (uyarilar.length) parcalar.push(`uyarı: ${uyarilar.map((u) => `"${u.metin}"`).join(', ')}`);
   if (k.zamanAsimiSn !== undefined) parcalar.push(`bekleme ${k.zamanAsimiSn} sn`);
   if (k.ekranGoruntusu === true) parcalar.push('ekran görüntüsü');
+  if (k.tekrarDenenebilir === true) parcalar.push('tekrar denenebilir');
   if (typeof k.not === 'string' && k.not) parcalar.push(`not: "${k.not}"`);
   return parcalar.join(' · ') || 'boş';
 }
@@ -163,8 +164,9 @@ export function kosuTanimiFarki(eski, yeni) {
     ok('bekleme', m(eski.zamanAsimiSn), m(yeni.zamanAsimiSn));
   }
   if ((eski.ekranGoruntusu === true) !== (yeni.ekranGoruntusu === true)) ok('ekran görüntüsü', eski.ekranGoruntusu === true ? 'açık' : 'kapalı', yeni.ekranGoruntusu === true ? 'açık' : 'kapalı');
+  if ((eski.tekrarDenenebilir === true) !== (yeni.tekrarDenenebilir === true)) ok('tekrar denenebilir', eski.tekrarDenenebilir === true ? 'açık' : 'kapalı', yeni.tekrarDenenebilir === true ? 'açık' : 'kapalı');
   if ((eski.not || '') !== (yeni.not || '')) ok('not', eski.not ? `"${eski.not}"` : 'yok', yeni.not ? `"${yeni.not}"` : 'yok');
-  const bilinen = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
+  const bilinen = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'tekrarDenenebilir', 'not']);
   const digerleri = [...new Set([...Object.keys(eski), ...Object.keys(yeni)])].filter((k) => !bilinen.has(k) && !esit(eski[k] ?? null, yeni[k] ?? null));
   if (digerleri.length) farklar.push(`değişen: ${digerleri.join(', ')}`);
   return farklar;

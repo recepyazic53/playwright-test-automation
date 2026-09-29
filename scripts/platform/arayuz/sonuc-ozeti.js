@@ -19,7 +19,7 @@ const KUTULAR = [
   ['uctanUca', 'Uçtan uca', 'katman', '#/sonuclar/uctan-uca']
 ];
 const KARTLAR = [
-  ['dikkat', 'Dikkat', 'uyari', 'Kritik, P1 ya da uzun süredir kırmızı öğeler, yavaşlayan servisler, kaçan planlı koşular'],
+  ['dikkat', 'Dikkat', 'uyari', 'Kritik, P1 ya da uzun süredir kırmızı öğeler, yavaşlayan servisler, kaçan planlı koşular, çalışan kurtarma kuralları'],
   ['bakim', 'Bakım', 'duzenle', 'Eskiyen tarihler, koşmayan senaryolar, bekleyen bulgular, test verisi sağlığı'],
   ['kapsam', 'Kapsam ve güvenlik', 'kalkan', 'Senaryosuz metotlar, denenmemiş koşul dalları, yedek, riskli izinler, ortam türü']
 ];

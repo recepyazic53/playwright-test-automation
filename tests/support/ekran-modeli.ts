@@ -220,6 +220,11 @@ export type AdimKosuTanimi = {
   zamanAsimiSn?: number;
   /** "Ekran görüntüsü al" işareti: adım görüntüleri "Seçili adımlarda" iken yalnız bu adımların görüntüsü alınır. */
   ekranGoruntusu?: boolean;
+  /**
+   * "Tekrar denenebilir" işareti (akış tasarımı): kurtarma kuralı bu adımı tekrar deneyebilir, sayfayı yenileyebilir ya da senaryoyu
+   * baştan başlatabilir. Varsayılan işaretsiz (çift kayıt koruması: kayıt oluşturan adım tekrar edilmez).
+   */
+  tekrarDenenebilir?: boolean;
   not?: string;
 };
 

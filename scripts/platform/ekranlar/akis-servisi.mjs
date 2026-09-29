@@ -647,6 +647,11 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
       const hedef = bloklar.slice(ilkBlok).find((x) => x.tur === 'alanlar') ?? bloklar.slice(ilkBlok).find((x) => x.tur === 'aksiyon' && !x.istegeBagli);
       if (hedef && (hedef.tur === 'alanlar' || hedef.tur === 'aksiyon')) hedef.ekranGoruntusu = true;
     }
+    // "Tekrar denenebilir" (kosu.tekrarDenenebilir): aynı yerde (alan grubu, yoksa isteğe bağlı olmayan aksiyon).
+    if (kosu.tekrarDenenebilir === true) {
+      const hedef = bloklar.slice(ilkBlok).find((x) => x.tur === 'alanlar') ?? bloklar.slice(ilkBlok).find((x) => x.tur === 'aksiyon' && !x.istegeBagli);
+      if (hedef && (hedef.tur === 'alanlar' || hedef.tur === 'aksiyon')) hedef.tekrarDenenebilir = true;
+    }
   }
   bloklar.push({ tur: 'bitir' });
   return bloklar;

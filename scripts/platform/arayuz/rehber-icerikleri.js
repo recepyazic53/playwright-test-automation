@@ -491,6 +491,15 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Taban adresi', alt: 'ortam başına', ikon: 'ag' }, { baslik: 'Etki', alt: 'servisler, senaryolar', ikon: 'liste' }, { baslik: 'Onay', ikon: 'onay' }] },
         ipucu: 'Servis sayfasında (İşlemler) taban adresi bu listeden seçilir; "Ayarlar\'da yönet" buraya getirir. "Servis bazında" görünüm servislerin adreslerini tek tek ve toplu düzenler. Hiçbir adrese istek atılmaz.'
       },
+      {
+        baslik: 'Kurtarma kuralları',
+        metin: ['Beklenmeyen bir pencere, oturum düşmesi ya da geçici bir hata bütün senaryoları tek tek düşürmesin diye proje düzeyinde "şu olursa şunu yap" kuralları tanımlarsınız. Kural yalnız başarısız bir adımda ya da servis sonucunda devreye girer; kodda hazır kural yoktur.',
+          'Ekran kuralı: metin / öğe görünürse, giriş sayfasına düşülürse ya da uyarı penceresi açılırsa → sayfayı yenile, tıkla, girişi yenile, bekle ya da pencereyi kapat → adımı tekrar dene, devam et ya da senaryoyu baştan başlat.',
+          'Servis kuralı: yanıttaki bir alanın değeri (ör. sonuç kodu), HTTP kodu, SOAP Fault ya da bağlantı hatası → bekle, token\'ı yenile ya da isteği tekrar gönder (en çok N deneme, isteğe bağlı artan bekleme). İsterseniz yalnız istekte belirli bir parametre belirli değerdeyken uygulanır.',
+          'Kayıt oluşturan adım ve metotlar siz "Tekrar denenebilir" işaretlemedikçe tekrar denenmez (ekranda akış tasarımında adım bloğunda, serviste servis ayarlarında). Kurtarılan test başarılı sayılır ama sonucunda "kurtarıldı" notu kalır; kaç kez çalıştığı kural satırında ve Sonuçlar > Özet\'te görünür.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Koşul', alt: 'görünürse / yanıt', ikon: 'uyari' }, { baslik: 'Yapılacak', alt: 'yenile, bekle, tıkla', ikon: 'simsek' }, { baslik: 'Sonra', alt: 'tekrar / devam', ikon: 'oynat' }, { baslik: 'Not', alt: 'kurtarıldı', ikon: 'liste' }] },
+        ipucu: '"Hazır" rozetli 401 / 403 kuralı bugünkü "yetki hatasında token\'ı yenile, bir kez tekrar dene" davranışıdır; silinemez, kapatılabilir.'
+      },
       { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (ekran listeleri, kişi ve kayıt tabloları) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },
