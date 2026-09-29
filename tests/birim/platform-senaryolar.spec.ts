@@ -399,7 +399,7 @@ test.describe('Senaryo servisi (nötr proje)', () => {
 
       const gecmis = senaryoGecmisi(vt, id);
       expect(gecmis.map((g) => g.islem)).toEqual(['guncelle', 'guncelle', 'olustur']);
-      expect(gecmis[0].degisenler).toEqual(['Koşuda: açık → kapalı']);
+      expect(gecmis[0].degisenler).toEqual(['Toplu koşuya dahil: açık → kapalı']);
       expect(gecmis[1].degisenler).toEqual(['Başlık: "Yeni senaryo" → "Yeni ad"']);
       expect(JSON.stringify(gecmis)).not.toContain(TC);
 
@@ -458,7 +458,7 @@ test.describe('Senaryo servisi (nötr proje)', () => {
       expect(eski && 'ortamlar' in eski).toBe(false);
       expect(senaryoListesi(vt, projeId, ortamId).senaryolar.find((s) => s.id === id)?.kosuyaDahil).toBe(true);
       expect(senaryoDetayi(vt, id, null).kosuyaDahil).toBe(true); // genel: en az bir ortamda koşuda
-      expect(senaryoGecmisi(vt, id)[0].degisenler).toEqual(['Koşuda (IKINCI): açık → kapalı']);
+      expect(senaryoGecmisi(vt, id)[0].degisenler).toEqual(['Toplu koşuya dahil (IKINCI): açık → kapalı']);
       // Başlık değişikliği (Koşuda değişmeden) ortam başına değeri korur; tüm ortamlar için ayar hepsini eşitler.
       senaryoKaydet(vt, { id, projeId, baslik: 'İki ortamlı 2', kosuyaDahil: true });
       expect(senaryoListesi(vt, projeId, digerOrtamId).senaryolar.find((s) => s.id === id)?.kosuyaDahil).toBe(false);

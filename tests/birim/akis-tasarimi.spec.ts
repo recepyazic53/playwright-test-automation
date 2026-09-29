@@ -345,7 +345,7 @@ test('elle koşul: otomatik bulunanın yerine geçer, null koşulsuz yapar; seç
   // Hatalar: seçim alanı akışta değil / seçim alanı değil / geçersiz seçenek.
   const hatali = (kosul: { secim: string; degerler: string[] }) => akistanKayitEnvanteri(env, [{ tur: 'alanlar', ad: 'A', alanlar: ['#ad', '#tc'], zorunlu: [], kosullar: { '#tc': kosul } }, { tur: 'bitir' }]).hatalar;
   expect(hatali({ secim: '@tip', degerler: ['b'] })).toEqual([{ blok: 0, mesaj: '“TC kimlik no” alanının koşulundaki seçim alanı akışta yok; seçim alanını bir gruba ekleyin ya da koşulu kaldırın.' }]);
-  expect(hatali({ secim: '#ad', degerler: ['x'] })).toEqual([{ blok: 0, mesaj: '“TC kimlik no” alanının koşulu bir seçim alanına (açılır liste / radyo) bağlanmalı.' }]);
+  expect(hatali({ secim: '#ad', degerler: ['x'] })).toEqual([{ blok: 0, mesaj: '“TC kimlik no” alanının koşulu bir seçim alanına (açılır liste / radyo) ya da onay kutusuna bağlanmalı.' }]);
   expect(akistanKayitEnvanteri(env, [{ tur: 'alanlar', ad: 'A', alanlar: ['@tip', '#tc'], zorunlu: [], kosullar: { '#tc': { secim: '@tip', degerler: ['z'] } } }, { tur: 'bitir' }]).hatalar)
     .toEqual([{ blok: 0, mesaj: '“TC kimlik no” alanının koşulunda “Müşteri tipi” için en az bir geçerli seçenek seçin.' }]);
   // Sağ liste seçim alanlarının seçeneklerini verir (koşul düzenleyicisi için).

@@ -160,7 +160,7 @@ export function servislerEkrani(main, parcalar, baglam) {
   }
   const servisId = tur === 's' && kimlik ? decodeURIComponent(kimlik) : null;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve servisler' }, iskelet('liste'));
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Servisler'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' },
@@ -671,8 +671,8 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     sel.addEventListener('change', () => { liste[anahtar] = sel.value; kutu.classList.toggle('etkin', Boolean(sel.value)); ciz(); });
     return { kap: kutu, sel };
   };
-  const kosudaSecimi = secimKutusu('Koşuda', 'kosuda', [['', 'Tümü'], ['evet', 'Koşuda'], ['hayir', 'Hariç']]);
-  kosudaSecimi.sel.title = 'Koşuda: en az bir ortamda koşuda · Hariç: hiçbir ortamda koşuda değil';
+  const kosudaSecimi = secimKutusu('Toplu koşuya dahil', 'kosuda', [['', 'Tümü'], ['evet', 'Dahil'], ['hayir', 'Hariç']]);
+  kosudaSecimi.sel.title = 'Dahil: en az bir ortamda toplu koşuya dahil · Hariç: hiçbir ortamda dahil değil';
   const operasyonSecimi = secimKutusu('Metot', 'operasyon', [['', 'Tümü'], ...operasyonlar.map((o) => [o, o])]);
   const sonSecimi = secimKutusu('Son durum', 'son', [['', 'Tümü'], ['basarili', 'Başarılı'], ['basarisiz', 'Başarısız'], ['hata', 'Hata'], ['yok', 'Koşulmadı']]);
   const kapsamSecimi = secimKutusu('Kapsam', 'kapsam', [['', 'Tümü'], ...kapsamSecenekleri.map((k) => [k, k])]);
@@ -756,7 +756,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
         x.kosuyaDahil = Array.isArray(x.ortamlar) ? x.ortamlar.some((k) => k.kosuyaDahil) : dahil;
       }
       const yer = ortam ? `${ortam.ad} ortamında ` : '';
-      bildir(hedef.length > 1 ? `${hedef.length} senaryo ${yer}${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.` : `Senaryo ${yer}${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.`);
+      bildir(hedef.length > 1 ? `${hedef.length} senaryo ${yer}${dahil ? 'toplu koşuya eklendi' : 'toplu koşudan çıkarıldı'}.` : `Senaryo ${yer}${dahil ? 'toplu koşuya eklendi' : 'toplu koşudan çıkarıldı'}.`);
     } catch (e) {
       if (anahtar) anahtar.checked = !dahil;
       bildir(`Koşu listesi güncellenemedi: ${e.message}`, 'hata');
@@ -773,7 +773,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     let ortam = null;
     if (ilgili.length > 1) {
       const secim = await secenekIste({
-        baslik: dahil ? 'Hangi ortamda koşuya eklensin?' : 'Hangi ortamda koşudan çıkarılsın?',
+        baslik: dahil ? 'Hangi ortamda toplu koşuya eklensin?' : 'Hangi ortamda toplu koşudan çıkarılsın?',
         metin: `${secilenler.length} seçili senaryo. Senaryo seçilen ortamda koşmuyorsa (kapsam / taban adres) atlanır.`,
         ikonAd: dahil ? 'onay' : 'eksi',
         secenekler: [
@@ -808,7 +808,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     const { kosuOrtamlari: _ortamlar, ...icerik } = x.icerik;
     try {
       await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik } });
-      bildir(`Kopya oluşturuldu: "${baslik}" (Koşuda kapalı).`);
+      bildir(`Kopya oluşturuldu: "${baslik}" ("Toplu koşuya dahil" kapalı).`);
     } catch (e) { bildir(e.message, 'hata'); }
     yenile();
   };
@@ -843,8 +843,8 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
       h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !secilenler.length, onclick: (o) => calistir(secilenler, false, o.currentTarget) },
         ikon('oynat'), `Seçilenleri çalıştır (${secilenler.length})`),
       h('span', { class: 'ayrac', 'aria-hidden': 'true' }),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !eklenebilir, onclick: () => topluKosuyaDahil(secilenler, true) }, ikon('onay'), 'Koşuya ekle'),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !cikarilabilir, onclick: () => topluKosuyaDahil(secilenler, false) }, ikon('eksi'), 'Koşudan çıkar'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !eklenebilir, onclick: () => topluKosuyaDahil(secilenler, true) }, ikon('onay'), 'Toplu koşuya ekle'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !cikarilabilir, onclick: () => topluKosuyaDahil(secilenler, false) }, ikon('eksi'), 'Toplu koşudan çıkar'),
       h('button', { type: 'button', class: 'kucuk-dugme tehlike', disabled: !secilenler.length, onclick: () => sil(secilenler) }, ikon('cop'), 'Sil'),
       h('span', { class: 'sag' }, h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { liste.secim.clear(); ciz(); } }, 'Seçimi temizle'))));
   }
@@ -880,7 +880,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
           h('th', { scope: 'col', class: 'beklenen-sutunu' }, 'Beklenen'),
           h('th', { scope: 'col', class: 'kapsam-sutunu', 'data-sirala': 'metin' }, 'Kapsam'),
           h('th', { scope: 'col' }, 'Son sonuç'),
-          h('th', { scope: 'col', class: 'kosuda' }, 'Koşuda'),
+          h('th', { scope: 'col', class: 'kosuda' }, 'Toplu koşuya dahil'),
           h('th', { scope: 'col', class: 'eylemler' }, h('span', { class: 'gorunmez' }, 'Eylemler')))),
         h('tbody', {}, gorunen.map((x) => satir(x)))))));
   }
@@ -913,7 +913,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     const kosan = kosanOrtamlar.get(x.id) || [];
     // Koşuda: ORTAM BAŞINA ayrı anahtar (ortam adıyla etiketli; ekran senaryolarındaki gibi).
     const kosuda = kosan.length ? h('div', { class: 'ortam-anahtarlari' }, kosan.map((o) => {
-      const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: ortamdaDahil(s, x, o), 'aria-label': `Koşuda (${o.ad}): ${x.baslik}` });
+      const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: ortamdaDahil(s, x, o), 'aria-label': `Toplu koşuya dahil (${o.ad}): ${x.baslik}` });
       kutu.addEventListener('change', () => kosuyaDahilEt([x], kutu.checked, kutu, o));
       return h('label', { class: 'ortam-anahtari', title: `${o.ad} ortamında koşuda` }, kutu, h('span', { class: 'ortam-adi', 'aria-hidden': 'true' }, o.ad));
     })) : h('span', { class: 'cok-soluk', title: 'Senaryo hiçbir ortamda koşmaz (kapsam / taban adres)' }, '—');
@@ -1617,7 +1617,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     alan('Başlık', baslik, { zorunlu: true }),
     talep.el,
     h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' })),
-    h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),
+    h('label', { class: 'secenek', for: dahil.id }, dahil, 'Toplu koşuya dahil'),
     i.aciklama ? h('div', { class: 'not-kutusu uyari' }, i.aciklama) : null,
     h('fieldset', {}, h('legend', {}, 'İstek'),
       rest ? h('div', { class: 'satir-duzen' }, alan('HTTP metodu', httpMetot), alan('Yol', httpYol, { yardim: `Servis adresine (${s.ayarlar.yol || '/'}) eklenir; sorgu dahil. Değerler URL kodlanır.` })) : null,

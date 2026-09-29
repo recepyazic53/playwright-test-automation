@@ -62,7 +62,7 @@ Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapıla
 
 - **Ekranlar** — test edilecek ekranlar: ekran paketi yükleme, otomatik tarama, akış kaydı, akış diyagramı ve ortak
   akışlar, ekran modeli sürümleri.
-- **Senaryolar** — ekran modelinden üretilen formla senaryo oluşturma/düzenleme, "Koşuda" seçimi, **Dene** (taslak,
+- **Senaryolar** — ekran modelinden üretilen formla senaryo oluşturma/düzenleme, "Toplu koşuya dahil" seçimi, **Dene** (taslak,
   kaydetmeden) ve **Çalıştır** (canlı ekran görüntüsü, durdurma).
 - **Servisler** — SOAP/REST servis senaryoları, servis akışları (bir yanıttan okunan değeri sonraki isteğe taşıma,
   oturum/token akışları).

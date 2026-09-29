@@ -52,7 +52,7 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   const uctanUcaAkisIdleri = kural.kapsam.uctanUcaAkisIdleri ?? [];
   const secilen = kapsam === 'yok' ? [] : bag.senaryolar(vt, kural.projeId, kural.ortamId)
     .filter((s) => s.kosuyaDahil && s.ekranEtkin !== false && (kapsam === 'tum' || (s.ekranId !== null && ekranIdleri.includes(s.ekranId))));
-  if (!secilen.length && !servisAkisIdleri.length && !uctanUcaAkisIdleri.length) throw new DepoHatasi('Kapsama uyan "Koşuda" senaryo yok.');
+  if (!secilen.length && !servisAkisIdleri.length && !uctanUcaAkisIdleri.length) throw new DepoHatasi('Kapsama uyan, toplu koşuya dahil senaryo yok.');
   const tam = kapsam === 'tum';
   const ozet = { toplam: 0, basarili: 0, basarisiz: 0, atlanan: 0, hata: 0 };
   /** @type {YurutmeSonucu['akisKosulari']} */

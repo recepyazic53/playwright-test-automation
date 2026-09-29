@@ -185,7 +185,7 @@ test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Sen
 
   // Senaryolar: ekran ve senaryoları gizli; anahtarla görünür, ▷ açık (tek başına), Koşuyu başlat onları saymaz.
   await page.goto('/#/senaryolar');
-  const sNav = page.getByRole('navigation', { name: 'Ürünler', exact: true });
+  const sNav = page.getByRole('navigation', { name: 'Ekranlar ve servisler', exact: true });
   await expect(sNav.getByRole('link', { name: /Örnek Başvuru/ })).toHaveCount(0);
   await expect(page.locator('td.ekran-hucresi', { hasText: 'Örnek Başvuru' })).toHaveCount(0);
   await sNav.getByText('Devre dışı ekranları göster').click();
@@ -206,7 +206,7 @@ test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Sen
 
   // Sonuçlar: "devre dışı" etiketiyle görünür kalır.
   await page.goto('/#/sonuclar');
-  await expect(page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Örnek Başvuru/ })).toContainText('kapalı');
+  await expect(page.getByRole('navigation', { name: 'Ekranlar ve servisler' }).getByRole('link', { name: /Örnek Başvuru/ })).toContainText('kapalı');
 
   await page.goto('/#/ekranlar');
   await page.getByRole('navigation', { name: 'Ekranlar' }).getByText('Devre dışı ekranları göster').click();
@@ -265,7 +265,7 @@ test('kalıcı sil (sonuçlar korunur): "Silinmiş ekranlar" bölümü, Sonuçla
   await ekranGoruntusu(page, '10-silinmis-ekranlar', bolum);
 
   await page.goto('/#/sonuclar');
-  const urun = page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Şube Listesi/ });
+  const urun = page.getByRole('navigation', { name: 'Ekranlar ve servisler' }).getByRole('link', { name: /Şube Listesi/ });
   await expect(urun).toContainText('silinmiş');
   await urun.click();
   await expect(page.locator('.sayfa-basligi').getByText('silinmiş ekran')).toBeVisible();

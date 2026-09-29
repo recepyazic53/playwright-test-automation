@@ -54,7 +54,7 @@ export const REHBERLER = {
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Özet kartlar ve eğilim' }
       },
       {
-        baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav',
+        baslik: 'Ekran / servis seçimi', hedef: '.alt-nav',
         metin: ['"Genel" bütün projeyi gösterir. Altında her ekran, renkli sağlık noktası ve senaryo sayısıyla listelenir; bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir.',
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
@@ -133,7 +133,7 @@ export const REHBERLER = {
           'Kartlardaki her madde ilgili ekranı açar. Madde yoksa kart tek satırlık "Sorun yok" olur.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Özet kutuları', alt: 'dönem başarısı', ikon: 'grafik' }, { baslik: 'Dikkat', ikon: 'uyari' }, { baslik: 'Bakım', ikon: 'duzenle' }, { baslik: 'Kapsam ve güvenlik', ikon: 'kalkan' }] }
       },
-      { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
+      { baslik: 'Ekran / servis seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
       { baslik: 'Başlık ve "Rapor al (PDF)"', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. "Rapor al (PDF)" genel kapsamlı dönem raporunu hazırlar.' },
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar, Raporlar. Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
@@ -223,8 +223,8 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Ekran modeli', alt: 'alanlar, kurallar', ikon: 'katman' }, { baslik: 'Senaryo formu', alt: 'değerler', ikon: 'duzenle' }, { baslik: 'Dene / Çalıştır', alt: 'tarayıcıda', ikon: 'oynat' }, { baslik: 'Sonuç', ikon: 'grafik' }] }
       },
       { baslik: 'Ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçin; yalnızca onun senaryoları listelenir. Servisler de bu panelin altındadır.' },
-      { baslik: 'Arama ve süzgeçler', hedef: '.senaryo-arac-cubugu', metin: 'Başlıkta arayın; "Koşuda", beklenen sonuç ve son duruma göre süzün.', ipucu: 'Klavyede "/" tuşu doğrudan aramaya gider.' },
-      { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Senaryo ekle" ekran modelinden bir form açar. "Koşuyu başlat", "Koşuda" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
+      { baslik: 'Arama ve süzgeçler', hedef: '.senaryo-arac-cubugu', metin: 'Başlıkta arayın; "Toplu koşuya dahil", beklenen sonuç ve son duruma göre süzün.', ipucu: 'Klavyede "/" tuşu doğrudan aramaya gider.' },
+      { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Senaryo ekle" ekran modelinden bir form açar. "Koşuyu başlat", "Toplu koşuya dahil" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
       { baslik: 'Senaryo tablosu', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / Playwright koduna dışa aktarır / siler. Birden çok satır seçince toplu işlemler (ör. toplu değer atama) çıkar.' },
       {
         baslik: 'Playwright koduna dışa aktar',
@@ -236,13 +236,13 @@ export const REHBERLER = {
         baslik: 'Senaryo önerileri',
         hedef: '.senaryo-onerileri-dugmesi',
         metin: ['Bir ekran seçiliyken "Senaryo önerileri", ekranın modelinden, mevcut senaryolardan ve koşu geçmişinden AZ SAYIDA, gerekçeli öneri çıkarır. Sıra: risk (son dönemde hata veren değerler, test edilmemiş iş kuralı uyarıları) › hiç denenmemiş koşul dalları › eksik ikili kombinasyonlar (pairwise) › modeldeki kurallara göre sınır değerleri › zorunlu alan boş. Mevcut senaryoların zaten denediği şey önerilmez; sayfanın başındaki "Kapsam" ölçülerine tıklayınca eksikler listelenir.',
-          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). "Reddet" (neden isteğe bağlı) öneriyi gizler; kabul ve redleriniz benzer önerilerin sırasını değiştirir. Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.',
+          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). "Reddet" (neden isteğe bağlı) öneriyi gizler; kabul ve redleriniz benzer önerilerin sırasını değiştirir. Eklenenler "Toplu koşuya dahil" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.',
           'Servis senaryolarının önerileri de aynı düzende ayrı bir sayfadadır: servis sayfasının başlığındaki "Senaryo önerileri" düğmesiyle açılır.'],
         ipucu: 'Kişisel / gizli alanlarda değer üretilmez; mevcut senaryodaki değer ya da bağlı tablo kullanılır.'
       },
       {
         baslik: 'Önerilen çalışma sırası',
-        sira: ['Ekranlar\'dan ekranı ekleyin (ekran paketi, tarama ya da akış kaydı).', 'Bu ekranda "Senaryo ekle" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
+        sira: ['Ekranlar\'dan ekranı ekleyin (ekran paketi, tarama ya da akış kaydı).', 'Bu ekranda "Senaryo ekle" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Toplu koşuya dahil" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
         cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Senaryo ekle" ve "Koşuyu başlat" sağ üstte' }
       },
       {
@@ -357,8 +357,8 @@ export const REHBERLER = {
         metin: ['Başlıkta, "Senaryo ekle"nin yanındaki "Senaryo önerileri" ayrı bir sayfa açar (Senaryolar sekmesinin altındaki "Senaryo önerileri →" bağlantısı da aynı sayfaya gider); üstte metot ve ortamı seçersiniz, "Senaryolara dön" ya da kırıntıdaki servis adı servise geri götürür. Öneriler kural tabanlıdır (yapay zekâ yok), metot bazındadır ve her birinin gerekçesi yazar; mevcut senaryoların zaten denediği şey önerilmez. Varsayılan olarak en iyi 10 öneri görünür.',
           'Türler: senaryosu olmayan metoda başarılı akış; şemadan (WSDL / XSD ya da Sözleşme sekmesinden yüklenen OpenAPI) zorunlu alan eksik, sınır (alt / üst) ve negatif (sınır dışı, uzunluk + 1, liste dışı, desene uymayan, yanlış tip — alan başına yalnız en anlamlısı); liste alanlarının (şemadaki liste, evet / hayır, tablo listesi) eksik ikilileri (pairwise) ve hiç denenmemiş değerleri; geçmişten risk (son 14 günde başarısız olan senaryoların değerleri öne alınır, son 90 günde görülen ve beklenen olarak test edilmemiş hata mesajı).',
           'Negatif önerilerde beklenen "Hata beklenir"dir (SOAP Fault ya da HTTP 4xx / 5xx) ve mesaj boş gelir: mesajı siz yazın ya da ilk koşudan sonra "Son yanıttan kontrol öner" ile alın. Görülen mesaj önerisinde beklenen o mesajdır; mesajda maskelenmiş parça varsa önizlemede düzeltirsiniz. Hassas alanlarda (gizli adlar, gizli sütunlar) sınır / negatif değer ve kombinasyon üretilmez.',
-          'Öneri yalnız taslaktır: sayfa hiçbir istek atmaz. "Ekle" senaryoyu "Koşuda" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Şema + senaryolar', alt: 'kısıtlar, kapsam', ikon: 'katman' }, { baslik: 'Öneri', alt: 'gerekçeli', ikon: 'yildiz' }, { baslik: 'Ekle', alt: 'Koşuda kapalı', ikon: 'arti' }, { baslik: 'Koşu', alt: 'siz başlatınca', ikon: 'oynat' }] }
+          'Öneri yalnız taslaktır: sayfa hiçbir istek atmaz. "Ekle" senaryoyu "Toplu koşuya dahil" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Şema + senaryolar', alt: 'kısıtlar, kapsam', ikon: 'katman' }, { baslik: 'Öneri', alt: 'gerekçeli', ikon: 'yildiz' }, { baslik: 'Ekle', alt: 'toplu koşuya dahil değil', ikon: 'arti' }, { baslik: 'Koşu', alt: 'siz başlatınca', ikon: 'oynat' }] }
       },
       {
         baslik: 'Son yanıttan kontrol öner',
@@ -672,7 +672,7 @@ export const REHBERLER = {
       {
         baslik: 'Planlı koşular',
         metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Kural ekran senaryolarını, servis akışlarını ve uçtan uca akışları koşabilir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır. Varsayılan olarak kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır; kartın "Planlı koşu davranışı" bölümünden "Sonra bir kez koş" / "Bitince koş" seçebilirsiniz.',
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Zaman', alt: 'her gün 07:00', ikon: 'saat' }, { baslik: 'Kasa açık mı?', ikon: 'kilit' }, { baslik: 'Koşu', alt: '"Koşuda" senaryolar', ikon: 'oynat' }, { baslik: 'Bildirim', alt: 'isteğe bağlı', ikon: 'simsek' }] },
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Zaman', alt: 'her gün 07:00', ikon: 'saat' }, { baslik: 'Kasa açık mı?', ikon: 'kilit' }, { baslik: 'Koşu', alt: 'toplu koşuya dahil senaryolar', ikon: 'oynat' }, { baslik: 'Bildirim', alt: 'isteğe bağlı', ikon: 'simsek' }] },
         ipucu: 'Canlı ortam için ayrıca açık onay gerekir. Her kuralın son 20 çalışması ve sonuç bağlantıları "Geçmiş"te durur. '
           + '"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek (kilitliyken çalışma, Windows oturumuna bağlı açma, açılışta arka planda başlatma) varsayılan kapalıdır; her birinin ne yaptığı ve riski yanında yazar. '
           + 'Planlı koşular için Ayarlar > İzinler\'de "Arka plan çalışması" izni gerekir; Windows seçenekleri "Sistem değişikliği" izni ister.'

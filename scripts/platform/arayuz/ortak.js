@@ -764,7 +764,7 @@ export const rozet = (metin, tur = '', ek = {}) => {
   if (!kisalt) return h('span', { class: `rozet ${tur}`.trim(), ...diger }, metin);
   const tamMetin = typeof metin === 'string' ? metin : Array.isArray(metin) ? metin.filter((x) => typeof x === 'string').join('') : null;
   return h('span', {
-    class: `rozet rozet-kisalt ${tur}`.trim(), title: tamMetin, ...(typeof kisalt === 'string' ? { style: `max-width: ${kisalt}` } : {}), ...diger
+    class: `rozet rozet-kisalt ${tur}`.trim(), title: tamMetin, ...(typeof kisalt === 'string' ? { style: { 'max-width': kisalt } } : {}), ...diger
   }, h('span', { class: 'rozet-metni' }, metin));
 };
 

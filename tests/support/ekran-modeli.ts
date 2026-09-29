@@ -281,8 +281,10 @@ export type EkranModeli = {
   ad: string;
   aciklama: string;
   ekranUrl: string;
-  specDosyasi: string;
-  pageObject: string;
+  /** İsteğe bağlı (model koşucusu kullanmaz); pakette yazılmazsa Nöbetçi üretir. */
+  specDosyasi?: string;
+  /** İsteğe bağlı (model koşucusu kullanmaz); pakette yazılmazsa Nöbetçi "yok (model koşucusu)" yazar. */
+  pageObject?: string;
   veriKaynaklari: Record<string, string>;
   kosullar: Record<string, AdlandirilmisKosul>;
   adimlar: Adim[];

@@ -1160,7 +1160,7 @@ function genelBolumler(ic, x) {
   const aciklar = [
     ...metotlar.flatMap((m) => (m.k?.eksik ?? []).map((ad) => ({ tur: 'Senaryosu olmayan metot', yer: `${m.servis} › ${ad}`, oneri: 'Sihirbazdan senaryo oluşturun.' }))),
     ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.hicKosmadi).map((s) => ({
-      tur: 'Dönemde koşmayan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Koşuya dahil ama dönemde hiç koşmadı: planlı koşu kuralına ya da koşuya ekleyin.'
+      tur: 'Dönemde koşmayan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Toplu koşuya dahil ama dönemde hiç koşmadı: planlı koşu kuralına ya da toplu koşuya ekleyin.'
     }))),
     ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.hepAtlandi).map((s) => ({
       tur: 'Her koşuda atlanan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Atlanma nedenini (koşul, eksik test verisi) inceleyin.'

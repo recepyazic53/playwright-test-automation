@@ -115,9 +115,9 @@ test.describe('servis sayfası: ortam diyalogda, Koşuda ve Son sonuç ortam ba�
     await expect(page.getByRole('group', { name: 'Çalıştırma ortamı' })).toHaveCount(0);
     // Kapsam ve ortam başına Koşuda anahtarları (yalnız koştuğu ortamlarda).
     await expect(satir('İkisinde').locator('td.kapsam-hucresi')).toHaveText('CANLI + TEST');
-    await expect(page.getByRole('switch', { name: 'Koşuda (TEST): İkisinde' })).toBeChecked();
-    await expect(page.getByRole('switch', { name: 'Koşuda (CANLI): İkisinde' })).not.toBeChecked();
-    await expect(page.getByRole('switch', { name: 'Koşuda (CANLI): Yalnız test' })).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Toplu koşuya dahil (TEST): İkisinde' })).toBeChecked();
+    await expect(page.getByRole('switch', { name: 'Toplu koşuya dahil (CANLI): İkisinde' })).not.toBeChecked();
+    await expect(page.getByRole('switch', { name: 'Toplu koşuya dahil (CANLI): Yalnız test' })).toHaveCount(0);
     // Son sonuç: her koştuğu ortam için "koşulmadı".
     await expect(satir('İkisinde').locator('.son-sonuc')).toHaveCount(2);
     await expect(satir('İkisinde').getByLabel('TEST: koşulmadı')).toBeVisible();
@@ -167,7 +167,7 @@ test.describe('servis sayfası: ortam diyalogda, Koşuda ve Son sonuç ortam ba�
     await secili.getByRole('button', { name: 'Vazgeç' }).click();
     expect(soap.istekler.length - istekOnce).toBe(2);
     // Satırdaki ortam anahtarı yalnız o ortamı değiştirir.
-    await page.getByRole('switch', { name: 'Koşuda (CANLI): İkisinde' }).click();
+    await page.getByRole('switch', { name: 'Toplu koşuya dahil (CANLI): İkisinde' }).click();
     await expect.poll(async () => ortamKaydi(((await servis()).senaryolar as Nesne[]).find((x) => x.baslik === 'İkisinde') as Nesne, canli).kosuyaDahil).toBe(true);
     expect(hatalar).toEqual([]);
     await baglam.close();

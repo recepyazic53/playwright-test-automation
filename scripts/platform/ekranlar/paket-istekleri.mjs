@@ -60,9 +60,19 @@ export const MEVCUT_TABLO_KURALI = 'Dosyadaki testVerisi bölümü ekranın mevc
   + 'listeler (değer yok): paketinde bu tablo ve sütun adlarını AYNEN kullan; aynı listeyi başka adla yeni tablo olarak yazma.';
 
 /**
- * İstek metni ("İstek metnini kopyala": Ekranlar listesi ve Ekran ekle > "Yapay zekâ ile oluştur" kopyalatır).
+ * İstek metninin başındaki sade açıklama (kod bilmeyen kullanıcı da "Metni göster"de ne istendiğini anlasın): teknik anahtarlar
+ * (JSON adları) bunun altında, ayrıntılı kurallarda kalır.
+ */
+export const SADE_ACIKLAMA = 'Senden bir web sayfasını benimle birlikte, yalnızca okuyarak inceleyip bir test aracına yüklenecek "ekran paketi" dosyası '
+  + 'hazırlamanı istiyorum. Dosya sayfanın alanlarını (kutular, seçimler), düğmelerini, adımlarını, çıkan uyarıları ve önerilen birkaç test '
+  + 'senaryosunu anlatır. Kayıt oluşturan ya da ödeme yapan düğmelere basma, kişisel ya da gizli bilgi yazma; emin olmadığın her yerde bana sor. '
+  + 'Aşağıdaki teknik kurallar dosyanın biçimini anlatır.';
+
+/**
+ * İstek metni ("İstek metnini kopyala": Ekranlar listesi ve Ekran ekle > "Yapay zekâ ile oluştur" kopyalatır): önce sade açıklama,
+ * altında teknik istek (zarf ve inceleme kuralları).
  * @param {string} [adres] sayfa bağlantısı (yoksa yer tutucu)
  */
 export function paketIstekCumlesi(adres = '') {
-  return `${adres || '<sayfa bağlantısı>'} sayfasını incele ve ${BICIM_ATFI} bir ekran paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`;
+  return `${SADE_ACIKLAMA}\n\n${adres || '<sayfa bağlantısı>'} sayfasını incele ve ${BICIM_ATFI} bir ekran paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`;
 }

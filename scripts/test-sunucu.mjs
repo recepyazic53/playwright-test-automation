@@ -402,6 +402,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/veri-kosulari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'veri-kosulari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran paketi istek metinleri (inceleme kuralları + "Paket nasıl üretilir?" cümlesi): sunucunun istek dosyasıyla ORTAK.
   ['/arayuz/paket-istekleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ekranlar', 'paket-istekleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // "Paket nedir?" bağlantısı: ekran paketinin 2 sayfalık özeti (docs/sayfa-paketi-ozet.md; tarayıcıda düz metin olarak açılır).
+  ['/arayuz/sayfa-paketi-ozet.md', { yol: join(buDosyaninKlasoru, '..', 'docs', 'sayfa-paketi-ozet.md'), tur: 'text/plain; charset=utf-8' }],
   // İzin tanımları (Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) ve riskli ortam tanımı: sunucuyla ORTAK tek kaynak.
   ['/arayuz/izin-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortam-riski.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'ortam-riski.mjs'), tur: 'text/javascript; charset=utf-8' }],

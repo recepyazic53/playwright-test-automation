@@ -110,8 +110,8 @@ ${x.yakalanan.map((/** @type {any} */ y2) => `<tr><td class="kucuk">${kacis(KAYN
   h += `<div class="iki">${sonHata}${yakalanan}</div>`;
   const kp = x.kapsam;
   h += `${h2('Kapsam')}<table><tbody>
-<tr><td>Senaryo (koşuya dahil)</td><td class="s">${kp.senaryo} (${kp.kosuyaDahil})</td></tr>
-<tr><td>Dönemde hiç koşmayan senaryo (koşuya dahil)</td><td class="s ${kp.hicKosmayan ? 'kotu' : ''}">${kp.hicKosmayan}</td></tr>
+<tr><td>Senaryo (toplu koşuya dahil)</td><td class="s">${kp.senaryo} (${kp.kosuyaDahil})</td></tr>
+<tr><td>Dönemde hiç koşmayan senaryo (toplu koşuya dahil)</td><td class="s ${kp.hicKosmayan ? 'kotu' : ''}">${kp.hicKosmayan}</td></tr>
 <tr><td>Dönemde hep atlanan senaryo</td><td class="s ${kp.hepAtlanan ? 'kotu' : ''}">${kp.hepAtlanan}</td></tr>
 <tr><td>Model sürümü</td><td class="s">${kp.modelSurumu ? `v${kp.modelSurumu.surum} · ${kacis(tarihSaat(kp.modelSurumu.tarih).slice(0, 10))}` : '—'}</td></tr>
 </tbody></table><p class="kucuk">Model alan kapsamı ve senaryosu olmayan alan grupları sonraki sürümde eklenecek.</p>`;

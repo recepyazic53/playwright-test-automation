@@ -1323,11 +1323,15 @@ export function kayitPaketiOlustur(meta, envanter) {
     const secim = tumHamlar.get(c);
     const secimAlani = hamdanModel.get(c);
     if (!secim || !secimAlani) return false;
-    const metinler = degerler.map((dg) => temizMetin([...(secim.secenekler ?? []), ...(secim.radyolar ?? [])].find((s) => s.deger === dg)?.metin, sayac, 80) ?? dg);
+    // Onay kutusu (akış diyagramında elle): değer mantıksal — "true" işaretliyken, "false" işaretsizken görünür (taramanın biçimi).
+    const onay = secim.tur === 'checkbox';
+    if (onay && (degerler.length !== 1 || !['true', 'false'].includes(degerler[0]))) return false;
+    const metinler = degerler.map((dg) => (onay ? kesifDegerMetni(secim, dg)
+      : temizMetin([...(secim.secenekler ?? []), ...(secim.radyolar ?? [])].find((s) => s.deger === dg)?.metin, sayac, 80) ?? dg));
     // Aynı ifadeli koşul (mevcut modelde ya da bu kayıtta) varsa o kullanılır (her kayıtta yeni koşul adı birikmesin).
     const ayniMi = (/** @type {unknown} */ k) => {
       const i = nesneMi(k) && nesneMi(k.ifade) ? k.ifade : null;
-      const l = i ? (Array.isArray(i.icinde) ? i.icinde : [i.esit]) : null;
+      const l = i ? (Array.isArray(i.icinde) ? i.icinde : [i.esit]).map(String) : null;
       return Boolean(i && l && i.alan === String(secimAlani.id) && l.length === degerler.length && degerler.every((x) => l.includes(x)));
     };
     const ayni = Object.keys(yeniKosullar).find((ad) => ayniMi(yeniKosullar[ad]))
@@ -1338,7 +1342,10 @@ export function kayitPaketiOlustur(meta, envanter) {
       return true;
     }
     const ad = benzersiz(`${String(alan.id)}Gorunur`, kosulAdlari);
-    yeniKosullar[ad] = {
+    yeniKosullar[ad] = onay ? {
+      aciklama: `${temizMetin(secim.etiket, sayac, 120) || String(secimAlani.id)} ${metinler[0]} iken görünür (${kaynak}).`,
+      ifade: { alan: String(secimAlani.id), esit: degerler[0] === 'true' }
+    } : {
       aciklama: `${temizMetin(secim.etiket, sayac, 120) || String(secimAlani.id)} = ${metinler.join(' / ')} seçilince görünür (${kaynak}).`,
       ifade: degerler.length === 1 ? { alan: String(secimAlani.id), esit: degerler[0] } : { alan: String(secimAlani.id), icinde: degerler }
     };
@@ -1358,7 +1365,7 @@ export function kayitPaketiOlustur(meta, envanter) {
         // Modeldeki koşulla aynıysa korunur (her kayıtta yeni koşul adı birikmesin).
         if (elle && nesneMi(alan.gorunurluk) && typeof alan.gorunurluk.kosul === 'string' && mevcut && nesneMi(mevcut.kosullar)) {
           const ifade = mevcut.kosullar[alan.gorunurluk.kosul]?.ifade;
-          const eski = nesneMi(ifade) ? (Array.isArray(ifade.icinde) ? ifade.icinde : [ifade.esit]) : null;
+          const eski = nesneMi(ifade) ? (Array.isArray(ifade.icinde) ? ifade.icinde : [ifade.esit]).map(String) : null;
           if (eski && ifade.alan === hamdanModel.get(elle.secim)?.id && eski.length === elle.degerler.length && elle.degerler.every((x) => eski.includes(x))) continue;
         }
         delete alan.gorunurluk;

@@ -104,11 +104,11 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
   const form = h('form', { class: 'kart form-paneli model-yok-karti', novalidate: true },
     h('h3', {}, 'Senaryo özeti'),
     h('div', { class: 'not-kutusu bilgi' },
-      h('p', {}, 'Bu ekranın ekran modeli yok. Başlık ve Koşuda ayarı düzenlenebilir; alanların tam düzenlenmesi için ekran modeli gerekir.'),
+      h('p', {}, 'Bu ekranın ekran modeli yok. Başlık ve "Toplu koşuya dahil" ayarı düzenlenebilir; alanların tam düzenlenmesi için ekran modeli gerekir.'),
       h('p', { class: 'kucuk' }, 'Ekranın modelini Ekranlar > ekran > "Paket yükle" ya da "Ekranı tara" ile ekleyin.')),
     h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', { for: baslik.id }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslik, baslikHata),
     talep.el,
-    h('label', { class: 'onay-satiri', for: kosuda.id }, kosuda, 'Koşuda (Koşuyu başlat bu senaryoyu koşar)'),
+    h('label', { class: 'onay-satiri', for: kosuda.id }, kosuda, 'Toplu koşuya dahil (Koşuyu başlat bu senaryoyu koşar)'),
     h('dl', { class: 'ozet-satirlari' },
       h('dt', {}, 'Ekran'), h('dd', {}, baglam?.ekran?.ad || s.ekranAdi || '—'),
       h('dt', {}, 'Kimlik'), h('dd', { class: 'mono cok-soluk' }, senaryo.id),
@@ -1118,7 +1118,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   });
   const senaryoKarti = h('section', { class: 'kart', 'aria-labelledby': 'senaryo-karti-baslik' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-karti-baslik' }, ikon('liste'), 'Senaryo'),
-      h('span', { class: 'alt' }, 'Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.')),
+      h('span', { class: 'alt' }, 'Başlık, raporlarda görünen test adıdır; aynı ekranda tekil olmalıdır.')),
     h('div', { class: 'alan-izgarasi' },
       akisSecimi ? h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: akisSecimi.id }, 'Akış')), akisSecimi,
         h('div', { class: 'alan-notu' }, 'Senaryo bu akışın adımlarıyla koşar; form seçilen akışa göre değişir.')) : null,
@@ -1804,7 +1804,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         h('section', { class: 'kart form-paneli', 'aria-labelledby': 'kayit-baslik' },
           h('h3', { id: 'kayit-baslik' }, 'Kayıt'),
           h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', {}, 'Ortamlar')), ortamKutulari, ortamHata),
-          h('label', { class: 'onay-satiri', for: kosudaKutu.id }, kosudaKutu, 'Koşuda'),
+          h('label', { class: 'onay-satiri', for: kosudaKutu.id, title: '"Koşuyu başlat" ve planlı koşular bu senaryoyu koşar; kapalıysa yalnız tek başına (▷ ya da Dene) çalışır.' }, kosudaKutu, 'Toplu koşuya dahil'),
           h('div', { class: 'bolum-grubu' }, h('h4', {}, 'Akış'), akisOzeti),
           dogrulamaOzeti, genelHatalar,
           h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, vazgecDugmesi)),
@@ -1816,7 +1816,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (s.taslak?.oneri) {
     // Senaryo önerisinin önizlemesi (senaryo-onerileri.js): kaydedilmedi; oluşturmak kullanıcının kararı.
     icerik.querySelector('.form-duzeni')?.before(h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' },
-      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Koşuda" kapalı gelir.`)));
+      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Toplu koşuya dahil" kapalı gelir.`)));
   } else if (s.taslak) {
     // Akış değişti: yeni akışta olmayan değerler kaldırıldı mı?
     degisti = true;

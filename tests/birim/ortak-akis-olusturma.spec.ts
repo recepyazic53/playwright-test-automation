@@ -148,14 +148,14 @@ test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; önde tara
   await page.close();
 });
 
-test('paket yükle → Ortak akış: seçim adresi ve başlığı değiştirir, önde üçüncü kutu "Boş başla"; önizlemede senaryo / ortam yok, "Ortak akışı oluştur" Ortak akışlar altına yazar', async () => {
+test('paket yükle → Ortak akış: seçim adresi ve başlığı değiştirir, önde ilk kutu "Boş başla" (ad kutusunun görünür etiketi var); önizlemede senaryo / ortam yok, "Ortak akışı oluştur" Ortak akışlar altına yazar', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
   await page.getByRole('radiogroup', { name: 'Ne oluşturulsun?' }).getByText('Ortak akış', { exact: true }).click();
   await expect(page).toHaveURL(/#\/ekranlar\/yeni\/ortak-akis$/);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ortak akış ekle');
-  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet', 'Boş başla']);
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Boş başla', 'Ekranı tara', 'Akışı kaydet']);
   await expect(page.locator('details.ileri-duzey .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
   // Aynı adres (sol menü "Ortak akış ekle") yeniden açılınca seçim korunur.
   await page.reload();
