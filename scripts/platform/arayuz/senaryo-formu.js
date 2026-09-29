@@ -30,6 +30,7 @@ import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 import { tarihGirdisi } from './goreli-tarih-girdisi.js';
+import { talepAlani } from './talep-alani.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -98,6 +99,7 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
   const baslikHata = h('div', { class: 'alan-hatasi', role: 'alert', id: `${baslik.id}-hata` });
   baslik.setAttribute('aria-describedby', `${baslik.id}-hata`);
   const kosuda = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: senaryo.kosuyaDahil, id: yeniId('kosuda') });
+  const talep = talepAlani({ projeId: s.proje.id, degerler: senaryo.talepler || [], sinif: 'model-alani' });
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, ikon('onay'), 'Kaydet');
   const form = h('form', { class: 'kart form-paneli model-yok-karti', novalidate: true },
     h('h3', {}, 'Senaryo özeti'),
@@ -105,6 +107,7 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
       h('p', {}, 'Bu ekranın ekran modeli yok. Başlık ve Koşuda ayarı düzenlenebilir; alanların tam düzenlenmesi için ekran modeli gerekir.'),
       h('p', { class: 'kucuk' }, 'Ekranın modelini Ekranlar > ekran > "Paket yükle" ya da "Ekranı tara" ile ekleyin.')),
     h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', { for: baslik.id }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslik, baslikHata),
+    talep.el,
     h('label', { class: 'onay-satiri', for: kosuda.id }, kosuda, 'Koşuda (Koşuyu başlat bu senaryoyu koşar)'),
     h('dl', { class: 'ozet-satirlari' },
       h('dt', {}, 'Ekran'), h('dd', {}, baglam?.ekran?.ad || s.ekranAdi || '—'),
@@ -117,7 +120,7 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
     if (!baslik.value.trim()) { baslikHata.textContent = 'Başlık zorunludur.'; baslik.focus(); return; }
     kaydet.disabled = true;
     try {
-      await api('/platform/senaryo/kaydet', { govde: { id: senaryo.id, projeId: s.proje.id, baslik: baslik.value, kosuyaDahil: kosuda.checked } });
+      await api('/platform/senaryo/kaydet', { govde: { id: senaryo.id, projeId: s.proje.id, baslik: baslik.value, kosuyaDahil: kosuda.checked, talepler: talep.degerler() } });
       bildir('Senaryo kaydedildi.');
       s.geri();
     } catch (e) {
@@ -1022,6 +1025,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   baslikGirdisi.addEventListener('change', () => { dokunulan.add(sema.baslik); planla(); });
   const baslikHata = hataKutusuOlustur(baslikId);
   kontrolKaydet(sema.baslik, [baslikGirdisi], baslikHata, uyariKutusuOlustur(baslikId));
+  // Talep no (isteğe bağlı; birden çok): başlığın yanında. Akış değişince (s.taslak) kaydedilmemiş talepler taşınır.
+  const talep = talepAlani({ projeId: s.proje.id, degerler: s.taslak?.talepler ?? senaryo?.talepler ?? [], sinif: 'model-alani genis', degisti: () => { degisti = true; } });
   // Akış seçimi (birden çok akışlı ekranda).
   const akislar = Array.isArray(baglam.akislar) ? baglam.akislar : [];
   const akisSecimi = akislar.length > 1 ? h('select', { id: yeniId('akis') },
@@ -1029,7 +1034,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, adimGoruntusu: adimGoruntusuSecimi, tabloSecimleri, veriKosulari, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, adimGoruntusu: adimGoruntusuSecimi, tabloSecimleri, veriKosulari, talepler: talep.degerler(), sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
     });
   }
   // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
@@ -1084,6 +1089,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: adimGoruntusuGirdisi.id }, 'Adım ekran görüntüleri')), adimGoruntusuGirdisi,
         h('div', { class: 'alan-notu' }, 'Seçili adımlarda: ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar. Test sonu görüntüsü, video ve iz Ayarlar > Koşu > Kayıt\'tadır.')),
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
+      talep.el,
       kayitGrubuBasliklari(sema.senaryoAlanlari).map((x) => h('div', { class: 'genis' }, x)),
       sema.senaryoAlanlari.map(alanCiz)));
 
@@ -1397,7 +1403,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
           // Çalıştırma biçimi (tablodan çoklu satır; hepsi "Tek satır"sa kaldırılır). Tablolar okunamadıysa mevcut korunur.
           ...(kaydedilecekVeriKosulari() !== undefined ? { veriKosulari: kaydedilecekVeriKosulari() } : {}),
           // Yeni + "tabloya da ekle": grubun değerleri tabloya yeni satır (senaryoyla tek işlemde); senaryo o satırı kullanır.
-          ...(kaydedilecekTabloSatirlari().length ? { yeniTabloSatirlari: kaydedilecekTabloSatirlari() } : {})
+          ...(kaydedilecekTabloSatirlari().length ? { yeniTabloSatirlari: kaydedilecekTabloSatirlari() } : {}),
+          // Talep numaraları (boş liste kaldırır).
+          talepler: talep.degerler()
         }
       });
       degisti = false;

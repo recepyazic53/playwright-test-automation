@@ -111,6 +111,8 @@ export function kosuDurumu(senaryoId) {
 }
 /** Sürmekte olan bir toplu koşu var mı? */
 export const kosuSuruyorMu = () => Boolean(durum.oturum && !durum.oturum.bitti);
+/** Son koşu oturumu "Tümünü durdur" ile durduruldu mu (talep koşusu sonraki türleri başlatmaz). */
+export const kosuDurdurulduMu = () => Boolean(durum.oturum && durum.oturum.iptal);
 
 // ---------------------------------------------------------------------------------------
 // Onay penceresi

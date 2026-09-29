@@ -24,6 +24,7 @@ import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
 import { ekranlarGrubu, servisleriAl, servislerBolumu, uctanUcaBaglantisi, urunlerBasligi } from './urunler.js';
 import { veriyiSirala } from './tablo-siralama.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
+import { talebeUyar, talepKosuDugmesi, talepSecenekleri } from './talep-kosusu.js';
 
 /** Bir sayfadaki satır (Ayarlar > Arayüz > Senaryolar sayfa boyu; kullanıcı kararı). */
 let SAYFA_BOYU = 50;
@@ -42,7 +43,7 @@ const DURUM_SIMGESI = { basarili: '✓', basarisiz: '✗', atlanan: '↷', durdu
 const gunAy = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
 
 /** Oturum boyunca korunan liste durumu (filtreler, sayfa, sıralama). Seçim ekran değişince temizlenir. */
-const liste = { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kapsam: '', sayfa: 0, secim: new Set(), secimEkrani: null, siralama: { anahtar: null, yon: null } };
+const liste = { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kapsam: '', talep: '', sayfa: 0, secim: new Set(), secimEkrani: null, siralama: { anahtar: null, yon: null } };
 
 const birlesikListe = (proje) => api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}`);
 /** Satırın ortam kaydı ({ ortamId, tanimli, kosuyaDahil, sonSonuc }) ya da undefined. */
@@ -193,10 +194,14 @@ function listeGorunumu(icerik, s) {
   const beklenenSecimi = secimKutusu('Beklenen', 'beklenen', [['', 'Tümü'], ['basari', 'Başarılı akış'], ['hata', 'İş kuralı hatası'], ['yok', 'Tanımsız']]);
   const sonSecimi = secimKutusu('Son durum', 'son', [['', 'Tümü'], ['basarili', 'Başarılı'], ['basarisiz', 'Başarısız'], ['atlanan', 'Atlandı'], ['durduruldu', 'Durduruldu'], ['yok', 'Koşulmadı']]);
   sonSecimi.sel.title = 'Herhangi bir ortamdaki son sonuca göre';
+  // Talep: senaryolardaki talep numaraları (harf duyarsız tekil); seçiliyken "Bu talebin senaryolarını koş" görünür.
+  const talepSecimi = secimKutusu('Talep', 'talep', [['', 'Tümü'], ...talepSecenekleri(veri.senaryolar).map((t) => [t, t])]);
+  talepSecimi.kap.classList.add('talep-suzgeci');
+  const talepKosusu = talepKosuDugmesi(proje, () => liste.talep);
   const temizle = h('button', { type: 'button', class: 'kucuk-dugme hayalet filtre-temizle', onclick: () => {
-    Object.assign(liste, { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kapsam: '', sayfa: 0 });
+    Object.assign(liste, { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kapsam: '', talep: '', sayfa: 0 });
     arama.value = '';
-    for (const x of [ekranSecimi, kosudaSecimi, kapsamSecimi, beklenenSecimi, sonSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
+    for (const x of [ekranSecimi, kosudaSecimi, kapsamSecimi, beklenenSecimi, sonSecimi, talepSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
     ciz();
   } }, ikon('carpi'), 'Filtreleri temizle');
   let aramaZamanlayici = null;
@@ -205,7 +210,7 @@ function listeGorunumu(icerik, s) {
     aramaZamanlayici = setTimeout(() => { liste.arama = arama.value; liste.sayfa = 0; ciz(); }, 120);
   });
 
-  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.beklenen || liste.son || liste.kapsam || (!ekran && liste.ekran));
+  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.beklenen || liste.son || liste.kapsam || liste.talep || (!ekran && liste.ekran));
   const gorunenler = () => veri.senaryolar.filter((x) => {
     // Devre dışı ekranın senaryoları Genel listede gizli (anahtar açıksa ya da o ekran seçiliyse görünür).
     if (!ekran && x.ekranEtkin === false && !devreDisiGoster()) return false;
@@ -219,7 +224,8 @@ function listeGorunumu(icerik, s) {
     if (liste.kapsam && kapsamOf(x) !== liste.kapsam) return false;
     if (liste.son === 'yok' && ortamSonuclari(x).some(Boolean)) return false;
     if (liste.son && liste.son !== 'yok' && !ortamSonuclari(x).some((r) => r?.durum === liste.son)) return false;
-    return aramaEslesiyorMu(liste.arama, x.baslik, x.ekranAdi, x.baglamProfili?.ad, x.beklenenSonuc?.metin, x.kaynak?.dosya);
+    if (!talebeUyar(x, liste.talep)) return false;
+    return aramaEslesiyorMu(liste.arama, x.baslik, x.ekranAdi, x.baglamProfili?.ad, x.beklenenSonuc?.metin, x.kaynak?.dosya, (x.talepler || []).join(' '));
   });
   /** Görünenler, liste durumundaki sıralamayla (sayfalamadan önce). */
   const siraliGorunenler = () => {
@@ -250,7 +256,7 @@ function listeGorunumu(icerik, s) {
       h('div', { class: 'eylemler' }, oneriDugmesi, yeniDugmesi, kosuDugmesi)),
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama, h('kbd', { 'aria-hidden': 'true' }, '/')),
-      ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, kapsamSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
+      ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, kapsamSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, talepSecimi.kap, talepKosusu, temizle, ozetAlani),
     topluAlani,
     tabloAlani);
   const kisayol = (o) => {
@@ -295,8 +301,20 @@ function listeGorunumu(icerik, s) {
     kapsamSecimi.kap.classList.toggle('etkin', Boolean(liste.kapsam));
   }
 
+  /** Talep süzgecinin seçenekleri veriden (talep yoksa süzgeç gizli; geçersiz seçim sıfırlanır). */
+  function talepSecenekleriniGuncelle() {
+    const secenekler = talepSecenekleri(veri.senaryolar);
+    if (liste.talep && !secenekler.some((t) => talebeUyar({ talepler: [t] }, liste.talep))) liste.talep = '';
+    yerlestir(talepSecimi.sel, [['', 'Tümü'], ...secenekler.map((k) => [k, k])].map(([d, m]) => h('option', { value: d, selected: liste.talep === d }, m)));
+    talepSecimi.sel.value = liste.talep;
+    talepSecimi.kap.classList.toggle('etkin', Boolean(liste.talep));
+    talepSecimi.kap.hidden = !secenekler.length && !liste.talep;
+    talepKosusu.hidden = !liste.talep;
+  }
+
   function ciz() {
     kapsamSecenekleriniGuncelle();
+    talepSecenekleriniGuncelle();
     const liste2 = siraliGorunenler();
     const kapsam = ekran ? veri.senaryolar.filter((x) => x.ekranId === ekran.id) : veri.senaryolar.filter((x) => x.ekranEtkin !== false || devreDisiGoster());
     const dahil = kapsam.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false).length;
@@ -512,6 +530,7 @@ function listeGorunumu(icerik, s) {
       !ekran && x.ekranAdi ? h('span', { class: 'ekran-alt-bilgi' }, x.ekranAdi) : null,
       x.akis ? rozet(`akış: ${x.akis.ad}`, '', { kisalt: true, title: 'Senaryonun koştuğu akış (ekranın birden çok akışı var)' }) : null,
       x.paketten ? rozet('paketten', 'vurgu', { title: 'Ekran paketindeki öneriden eklendi' }) : null,
+      x.talepler?.length ? rozet([ikon('isaret'), x.talepler.join(', ')], 'talep-rozeti', { kisalt: true, title: `Talep: ${x.talepler.join(', ')}` }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo toplu koşulara girmez; ▷ ile tek başına çalıştırılabilir (Ekranlar > ⋯ > Etkinleştir)' }) : null,
       x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null,

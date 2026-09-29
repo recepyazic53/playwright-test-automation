@@ -239,7 +239,9 @@ export const AKIS_SENARYO_POST_UCLARI = [
     }
     const id = servisSenaryosuKaydet(db, {
       projeId, servisId, id: typeof g.id === 'string' && g.id ? kimlik(g.id, 'id') : undefined, baslik: g.baslik, kapsam: g.kapsam,
-      ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {}), icerik
+      ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {}),
+      // Talep numaraları içerik doğrulamasından ayrı (servisSenaryosuKaydet doğrular; verilmezse mevcut korunur).
+      icerik: { ...icerik, ...(g.icerik && typeof g.icerik === 'object' && g.icerik.talepler !== undefined ? { talepler: g.icerik.talepler } : {}) }
     });
     return { id };
   }]

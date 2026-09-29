@@ -8,7 +8,7 @@ export type DisaAktarmaGirdisi = {
   /** modelKosuPlani çıktısı (koşucunun kullandığı AYNI plan). */
   plan: ModelKosuPlani;
   /** Dosya başındaki kaynak bilgisi (üretim: ISO zaman). */
-  kaynak: { ekran: string; senaryo: string; modelSurumu: number | null; akis?: string | null; ortam: string; uretim: string };
+  kaynak: { ekran: string; senaryo: string; modelSurumu: number | null; akis?: string | null; ortam: string; uretim: string; talepler?: string[] };
   tabanUrl: string;
   /** Giriş yapılır mı (senaryonun giriş seçimi "Girişsiz" değil ve ekran giriş gerektiriyor). */
   girisGerekli: boolean;

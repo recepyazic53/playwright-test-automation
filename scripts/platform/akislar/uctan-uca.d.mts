@@ -17,6 +17,7 @@ export type UctanUcaOnDenetimi = {
   canliOnayGerekli: boolean;
   kosulabilir: boolean;
 };
+export declare function uctanUcaAkislari(vt: Veritabani, projeId: string): import('../servisler/servis-deposu.mjs').ServisAkisi[];
 export declare function uctanUcaOnDenetim(vt: Veritabani, projeId: string, g: UctanUcaGirdisi): UctanUcaOnDenetimi;
 export declare function uctanUcaCalistir(vt: Veritabani, projeId: string, g: UctanUcaGirdisi): Promise<{
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string; ortam: string; ortamTuru: 'test' | 'canli';

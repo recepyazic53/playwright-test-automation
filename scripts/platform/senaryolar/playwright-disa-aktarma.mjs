@@ -912,6 +912,7 @@ export function playwrightKoduUret(g) {
     '// Nöbetçi\'den dışa aktarılan Playwright testi.',
     `//   Ekran: ${yorum(k.ekran)}`,
     `//   Senaryo: ${yorum(k.senaryo)}`,
+    ...(k.talepler?.length ? [`//   Talep: ${yorum(k.talepler.join(', '))}`] : []),
     `//   Model sürümü: ${k.modelSurumu ?? '—'}${k.akis ? ` · akış: ${yorum(k.akis)}` : ''}`,
     `//   Ortam: ${yorum(k.ortam)}`,
     `//   Üretim zamanı: ${yorum(k.uretim)}`,

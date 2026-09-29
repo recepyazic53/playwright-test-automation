@@ -66,7 +66,7 @@ const gunMetni = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 /**
  * Tarayıcıda dosya indirir (sunucu diske yazmaz). @param {Blob} blob @param {string} ad
  */
-function indir(blob, ad) {
+export function indir(blob, ad) {
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: ad, hidden: true });
   document.body.append(a);
@@ -80,7 +80,7 @@ function indir(blob, ad) {
  * @param {string} yol @param {Record<string, unknown> | null} govde
  * @returns {Promise<{ blob: Blob; ad: string; raporId: string }>}
  */
-async function pdfAl(yol, govde) {
+export async function pdfAl(yol, govde) {
   const istek = govde
     ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Test-Sunucu-Token': TOKEN }, body: JSON.stringify({ ...govde, token: TOKEN }), cache: 'no-store' }
     : { headers: { 'X-Test-Sunucu-Token': TOKEN }, cache: 'no-store' };
@@ -281,7 +281,10 @@ export async function raporlarGorunumu(icerik, proje, ust = null) {
         h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Raporlar')),
       h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Raporlar')),
       h('p', { class: 'soluk' }, 'Kaydedilen PDF raporları. İndirilen dosya o gün üretilen PDF\'in aynısıdır; saklama süresi Ayarlar > Yedekleme\'dedir.')),
-    h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, {}, 'dugme birincil')));
+    h('div', { class: 'eylemler' },
+      // Kapsam matrisi (talep × senaryo × son sonuç; kapsam-matrisi.js).
+      h('a', { class: 'dugme kapsam-matrisi-baglantisi', href: '#/sonuclar/raporlar/kapsam' }, ikon('izgara'), 'Kapsam matrisi'),
+      pdfRaporDugmesi(proje, {}, 'dugme birincil')));
   yerlestir(icerik, baslik, ust, liste);
   const yenile = async () => {
     liste.setAttribute('aria-busy', 'true');

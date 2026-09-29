@@ -42,6 +42,7 @@ import { IZIN_TANIMLARI, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { adimIzinleri } from '../guvenlik/uc-denetimi.mjs';
 import { ezmeleriCoz } from './ekran-adimi.mjs';
+import { icerikTalepleri } from '../senaryolar/talepler.mjs';
 import {
   AKIS_ADIMI_DEGISKENI, AKIS_CIKTI_ANAHTARI_DEGISKENI, AKIS_CIKTI_DOSYASI_DEGISKENI, akisCiktisiOku, akisCiktisiniSil, ciktiAnahtariUret
 } from './uctan-uca-cikti.mjs';
@@ -308,7 +309,7 @@ export async function uctanUcaCalistir(vt, projeId, g) {
 // ---------------------------------------------------------------------------------------
 
 /** Projenin uçtan uca akışları. @param {Veritabani} vt @param {string} projeId */
-function uctanUcaAkislari(vt, projeId) {
+export function uctanUcaAkislari(vt, projeId) {
   return servisAkislariniListele(vt, projeId).filter((a) => a.tur === 'akis' && a.icerik.uctanUca === true);
 }
 
@@ -319,7 +320,9 @@ export const UCTAN_UCA_GET_UCLARI = [
     return {
       akislar: uctanUcaAkislari(db, projeId).map((a) => ({
         id: a.id, baslik: a.baslik, kapsam: a.kapsam, adimSayisi: a.icerik.adimlar.length,
-        adimTurleri: a.icerik.adimlar.map(adimTuru), sonKosu: servisAkisKosulariniListele(db, { projeId, akisId: a.id, sinir: 1 })[0] ?? null
+        adimTurleri: a.icerik.adimlar.map(adimTuru), sonKosu: servisAkisKosulariniListele(db, { projeId, akisId: a.id, sinir: 1 })[0] ?? null,
+        // Talep numaraları (listede süzme; senaryolar/talepler.mjs).
+        talepler: icerikTalepleri(a.icerik)
       }))
     };
   }],

@@ -36,6 +36,8 @@ import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { servisOnerileriPaneli } from './servis-onerileri.js';
 import { sonYanitliKosu, yanitKontrolPaneli } from './yanit-kontrol-paneli.js';
+import { talepAlani } from './talep-alani.js';
+import { talebeUyar, talepKosuDugmesi, talepSecenekleri } from './talep-kosusu.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -95,7 +97,7 @@ const q = encodeURIComponent;
 const iki = (n) => String(n).padStart(2, '0');
 const kisaTarih = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
 /** Senaryolar sekmesinin oturum boyunca korunan durumu (filtreler, seçim); servis değişince sıfırlanır. */
-const liste = { servisId: null, arama: '', kosuda: '', operasyon: '', son: '', secim: new Set() };
+const liste = { servisId: null, arama: '', kosuda: '', operasyon: '', son: '', talep: '', secim: new Set() };
 /**
  * Önerinin "Önizle"si: yeni senaryo düzenleyicisi bu taslakla (başlık + içerik) açılır; kaydedilmez. Bir kez kullanılır.
  * @type {{ servisId: string; baslik: string; icerik: any; not: string } | null}
@@ -607,8 +609,13 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     return;
   }
   // Servis değişince seçim ve filtreler sıfırlanır; aynı serviste yenilemeden sonra korunur.
-  if (liste.servisId !== s.id) Object.assign(liste, { servisId: s.id, arama: '', kosuda: '', operasyon: '', son: '', kapsam: '', secim: new Set() });
+  if (liste.servisId !== s.id) Object.assign(liste, { servisId: s.id, arama: '', kosuda: '', operasyon: '', son: '', kapsam: '', talep: '', secim: new Set() });
   liste.kapsam ??= '';
+  liste.talep ??= '';
+  /** Senaryonun talepleri (icerik.talepler; talep-kosusu.js süzgeci). */
+  const talepleri = (x) => ({ talepler: Array.isArray(x.icerik.talepler) ? x.icerik.talepler : [] });
+  const talepListesi = talepSecenekleri(senaryolar.map(talepleri));
+  if (liste.talep && !talepListesi.some((t) => talebeUyar({ talepler: [t] }, liste.talep))) liste.talep = '';
   /** Senaryonun koştuğu ortamlar ve kapsam etiketi (ör. "TEST + CANLI"). Tüm ortam seçimleri (Koşuda, Son sonuç, ▷) buna göre. */
   const kosanOrtamlar = new Map(senaryolar.map((x) => [x.id, kapsamOrtamlari(s, x, ortamlar)]));
   const kapsamlar = new Map(senaryolar.map((x) => [x.id, kapsamEtiketi(kosanOrtamlar.get(x.id))]));
@@ -647,11 +654,15 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
   const operasyonSecimi = secimKutusu('Metot', 'operasyon', [['', 'Tümü'], ...operasyonlar.map((o) => [o, o])]);
   const sonSecimi = secimKutusu('Son durum', 'son', [['', 'Tümü'], ['basarili', 'Başarılı'], ['basarisiz', 'Başarısız'], ['hata', 'Hata'], ['yok', 'Koşulmadı']]);
   const kapsamSecimi = secimKutusu('Kapsam', 'kapsam', [['', 'Tümü'], ...kapsamSecenekleri.map((k) => [k, k])]);
-  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.operasyon || liste.son || liste.kapsam);
+  // Talep (senaryolarda talep varsa): seçiliyken "Bu talebin senaryolarını koş" (ekran + servis + uçtan uca birlikte).
+  const talepSecimi = talepListesi.length || liste.talep ? secimKutusu('Talep', 'talep', [['', 'Tümü'], ...talepListesi.map((t) => [t, t])]) : null;
+  talepSecimi?.kap.classList.add('talep-suzgeci');
+  const talepKosusu = talepKosuDugmesi(proje, () => liste.talep);
+  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.operasyon || liste.son || liste.kapsam || liste.talep);
   const temizle = h('button', { type: 'button', class: 'kucuk-dugme hayalet filtre-temizle', onclick: () => {
-    Object.assign(liste, { arama: '', kosuda: '', operasyon: '', son: '', kapsam: '' });
+    Object.assign(liste, { arama: '', kosuda: '', operasyon: '', son: '', kapsam: '', talep: '' });
     arama.value = '';
-    for (const x of [kosudaSecimi, operasyonSecimi, sonSecimi, kapsamSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
+    for (const x of [kosudaSecimi, operasyonSecimi, sonSecimi, kapsamSecimi, talepSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
     ciz();
   } }, ikon('carpi'), 'Filtreleri temizle');
   let aramaZamanlayici = null;
@@ -666,7 +677,9 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     if (liste.son === 'yok' && sonDurumu(x)) return false;
     if (liste.son && liste.son !== 'yok' && sonDurumu(x) !== liste.son) return false;
     if (liste.kapsam && kapsamlar.get(x.id) !== liste.kapsam) return false;
-    return aramaEslesiyorMu(liste.arama, x.baslik, x.icerik.aciklama, x.icerik.operasyon, s.ayarlar.yol, beklenenOzeti(kontrolleri(x)), akisMi(x) ? `akış ${x.akisAdi || ''}` : '');
+    if (!talebeUyar(talepleri(x), liste.talep)) return false;
+    return aramaEslesiyorMu(liste.arama, x.baslik, x.icerik.aciklama, x.icerik.operasyon, s.ayarlar.yol, beklenenOzeti(kontrolleri(x)), akisMi(x) ? `akış ${x.akisAdi || ''}` : '',
+      talepleri(x).talepler.join(' '));
   });
 
   // --- Çalıştırma (▷ ve seçilenler): ortam DİYALOGDA seçilir ---
@@ -784,13 +797,14 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
   yerlestir(kap,
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama),
-      kosudaSecimi.kap, operasyonSecimi.kap, kapsamSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
+      kosudaSecimi.kap, operasyonSecimi.kap, kapsamSecimi.kap, sonSecimi.kap, talepSecimi ? talepSecimi.kap : null, talepKosusu, temizle, ozetAlani),
     topluAlani, tabloAlani, oneriPaneli);
 
   function ciz() {
     const gorunen = gorunenler();
     yerlestir(ozetAlani, gorunen.length !== senaryolar.length ? h('span', {}, h('b', {}, String(gorunen.length)), ` / ${senaryolar.length} gösteriliyor`) : '');
     temizle.hidden = !filtreliMi();
+    talepKosusu.hidden = !liste.talep;
     topluCubukCiz(gorunen);
     tabloCiz(gorunen);
   }
@@ -890,6 +904,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     const altBilgi = [
       !dahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.icerik.aciklama ? h('span', {}, x.icerik.aciklama) : null,
+      talepleri(x).talepler.length ? rozet([ikon('isaret'), talepleri(x).talepler.join(', ')], 'talep-rozeti', { kisalt: true, title: `Talep: ${talepleri(x).talepler.join(', ')}` }) : null,
       x.gecen ? h('span', { class: 'soluk' }, `${x.sahipServisAd || 'başka serviste'} kayıtlı`) : null
     ].filter(Boolean);
     const beklenen = beklenenOzeti(kontrolleri(x));
@@ -1015,6 +1030,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const semalar = s.ayarlar.operasyonSemalari || {};
   const varsayilanlar = JSON.parse(JSON.stringify(s.ayarlar.alanVarsayilanlari || {}));
   const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : taslak ? taslak.baslik : '' });
+  // Talep no (isteğe bağlı; birden çok): başlığın yanında.
+  const talep = talepAlani({ projeId: proje.id, degerler: Array.isArray(i.talepler) ? i.talepler : [] });
   const operasyonlar = (s.ayarlar.operasyonlar || []).map((o) => o.ad);
   if (i.operasyon && !operasyonlar.includes(i.operasyon)) operasyonlar.push(i.operasyon);
   const operasyon = h('select', {}, operasyonlar.map((o) => h('option', { value: o, selected: o === i.operasyon }, o)));
@@ -1496,6 +1513,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     veriKosulari: kaydedilecekVeriKosulari(veriKosulari, veriGruplari().map((g) => g.anahtar)) ?? undefined, operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value, basliklar: basliklarAl(),
     ...(rest ? { http: { ...(i.http || {}), metot: httpMetot.value, yol: httpYol.value.trim() } } : {}),
     sozlesmeDogrula: sozlesmeKutusu.checked,
+    talepler: talep.degerler(),
     kontroller: kontrolYapisi().map(function temiz(k) {
       const t = Object.fromEntries(Object.entries(k).filter(([a, v]) => a !== 'alt' && v !== '' && v !== false && v !== undefined));
       return k.tur === 'veya' ? { ...t, alt: (k.alt || []).map(temiz) } : t;
@@ -1531,6 +1549,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     h('h3', {}, senaryo ? 'Senaryoyu düzenle' : 'Yeni senaryo'), mesaj.kutu,
     taslak ? h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' }, h('b', {}, 'Öneriden açıldı (kaydedilmedi). '), taslak.not) : null,
     alan('Başlık', baslik, { zorunlu: true }),
+    talep.el,
     h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' })),
     h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),
     i.aciklama ? h('div', { class: 'not-kutusu uyari' }, i.aciklama) : null,

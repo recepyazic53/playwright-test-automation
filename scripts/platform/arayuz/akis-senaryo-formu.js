@@ -14,6 +14,7 @@ import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
 import { basvuru } from './tablo-secimi.mjs';
 import { dosyaKontroluFormu, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
+import { talepAlani } from './talep-alani.js';
 
 const q = encodeURIComponent;
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -82,6 +83,8 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
 
   const mesaj = mesajKutusu();
   const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : '' });
+  // Talep no (isteğe bağlı; birden çok): başlığın yanında; içerikte kaydedilir.
+  const talep = talepAlani({ projeId: proje.id, degerler: Array.isArray(senaryo?.icerik?.talepler) ? senaryo.icerik.talepler : [] });
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k, selected: (senaryo?.kapsam || 'test') === k }, m)));
   const kapsamNotu = h('div', { class: 'yardim' });
   const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : true });
@@ -271,7 +274,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
         ...(d.http ? { http: d.http } : {}), ...(d.basliklar ? { basliklar: d.basliklar } : {})
       };
     }
-    return { tur: 'akis', akisId, adimlar };
+    return { tur: 'akis', akisId, adimlar, talepler: talep.degerler() };
   }
 
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
@@ -313,6 +316,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     h('h3', {}, senaryo ? 'Akış senaryosunu düzenle' : 'Yeni akış senaryosu'), mesaj.kutu,
     senaryo && senaryo.servisId !== s.id ? h('p', { class: 'soluk kucuk' }, 'Bu senaryo başka bir serviste kayıtlı; akışı bu servisten geçtiği için burada da listelenir.') : null,
     alan('Başlık', baslik, { zorunlu: true }),
+    talep.el,
     h('div', { class: 'satir-duzen' },
       alan('Akış', akisSec, { yardim: 'Akış operasyonların sırasını ve adımlar arasında taşınan değerleri tanımlar (Akışlar sekmesi).' }),
       alan('Kapsam', kapsam, { icerik: h('div', {}, kapsam, kapsamNotu) })),

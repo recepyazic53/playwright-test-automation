@@ -1,0 +1,10 @@
+export declare const TALEP_EN_UZUN: number;
+export declare const TALEP_EN_COK: number;
+export declare function talepKucuk(t: string): string;
+export declare function talepAnahtari(t: string): string;
+export declare function talepTemizle(d: unknown): { talep: string | null; hata: string | null };
+export declare function talepleriAyikla(d: unknown): { talepler: string[]; hata: string | null };
+export declare function icerikTalepleri(icerik: unknown): string[];
+export declare function talepEslesir(talepler: readonly string[], talep: string): boolean;
+export declare function benzerTalep(yazilan: string, mevcutlar: readonly string[]): { tur: 'ayni' | 'benzer'; talep: string } | null;
+export declare function talepSirala(a: string, b: string): number;

@@ -174,6 +174,8 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         return import('./sonuc-ozeti.js').then((m) => m.sonucOzetiEkrani(icerik, proje, genelSekmeleri('ozet'), () => sonuclarEkrani(main, parcalar, baglam)));
       }
       // Genel > Raporlar: kaydedilmiş PDF raporları (pdf-rapor.js).
+      // Raporlar > Kapsam matrisi (#/sonuclar/raporlar/kapsam; kapsam-matrisi.js).
+      if (tur === 'raporlar' && kimlik === 'kapsam') return import('./kapsam-matrisi.js').then((m) => m.kapsamMatrisiGorunumu(icerik, proje, genelSekmeleri('raporlar')));
       if (tur === 'raporlar') return raporlarGorunumu(icerik, proje, genelSekmeleri('raporlar'));
       // Genel > Uçtan uca akışlar: servis + ekran + SQL akışlarının koşuları (uctan-uca.js).
       if (tur === 'uctan-uca') {

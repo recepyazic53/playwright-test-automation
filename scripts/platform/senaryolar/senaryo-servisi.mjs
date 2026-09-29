@@ -8,7 +8,8 @@
 //     kaynak: { dosya, ad },                 → sanal spec yolu + GÜNCEL başlık (başlık tekilliği ve sonuç anahtarı)
 //     veri: { dosya, yol },                  → senaryo verisinin grubu (ekran anahtarı)
 //     ortamlar: { <ortamId>: { sira?, veri? } },   → senaryonun var olduğu ortamlar (+ ortama göre veri)
-//     alanKurallari?: { mutlakaGorunmeli: [alanId] }, akis? }
+//     alanKurallari?: { mutlakaGorunmeli: [alanId] }, akis?,
+//     talepler?: [metin] }                 → talep numaraları (serbest metin; senaryolar/talepler.mjs)
 // Senaryo verisindeki hassas adlı alanlar (test verisi türlerinde hassas işaretli alan adları) kasa zarfı olarak yazılır.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: senaryo-servisi.d.mts.
 
@@ -28,6 +29,7 @@ import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
+import { icerikTalepleri, talepleriAyikla } from './talepler.mjs';
 
 /**
  * Ekranın seçim listeleri: tablo sütununa bağlı alanlar tablodan (Test verisi > Tablolar; aynı tablodaki alanlar birbirini
@@ -352,6 +354,8 @@ export function senaryoListesi(vt, projeId, ortamId) {
       // Tarihi geçmiş (ya da bugün koşulursa sınır dışında kalan) SABİT tarih değerleri: listede "tarih eskidi" rozeti.
       eskiyenTarihler: sema && veri ? eskiyenTarihAlanlari(tumFormAlanlari(sema), veri, new Date(), String(s.guncellenme)).map((e) => ({ anahtar: e.anahtar, etiket: e.etiket, deger: e.deger, mesaj: e.mesaj })) : [],
       guncellenme: String(s.guncellenme),
+      // Talep numaraları (listede süzme ve "Bu talebin senaryolarını koş").
+      talepler: icerikTalepleri(icerik),
       ...(ortamId ? {} : { ortamlar })
     });
   }
@@ -388,7 +392,9 @@ export function senaryoDetayi(vt, id, ortamId) {
     // Satır seçimleri ({ "<tabloId>|<etiket>": { Sütun: değer } }; ${Tablo.Sütun} değerleri koşuda bu satırdan çözülür).
     tabloSecimleri: nesneMi(icerik.tabloSecimleri) ? icerik.tabloSecimleri : null,
     // Çalıştırma biçimi (tablodan çoklu satır; yoksa null = her grup tek satır, bugünkü davranış).
-    veriKosulari: nesneMi(icerik.veriKosulari) ? icerik.veriKosulari : null
+    veriKosulari: nesneMi(icerik.veriKosulari) ? icerik.veriKosulari : null,
+    // Talep numaraları (serbest metin; yoksa boş liste).
+    talepler: icerikTalepleri(icerik)
   };
 }
 
@@ -777,7 +783,8 @@ function tabloSatirlariniEkle(vt, projeId, istek, veri, ortamIdleri) {
  * Satır seçimleri (tabloSecimleri; ekran-basvurulari.mjs): verilmezse mevcut korunur, null / {} kaldırır.
  * Çalıştırma biçimi (veriKosulari; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null kaldırır.
  * Kayıt grubunu tabloya da ekleme (yeniTabloSatirlari; tabloSatirlariniEkle): senaryo ve tablo satırı TEK işlemde yazılır.
- * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; yapan?: string }} girdi
+ * Talep numaraları (talepler; senaryolar/talepler.mjs): verilmezse mevcut korunur, null / [] kaldırır.
+ * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; talepler?: unknown; yapan?: string }} girdi
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
  * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }>; tabloSatirlari?: import('./senaryo-servisi.d.mts').TabloSatiriEklemesi[] }}
  */
@@ -904,6 +911,13 @@ function senaryoKaydetIslem(vt, girdi, secenekler = {}) {
     if (v.hatalar.length) throw new SenaryoDogrulamaHatasi(v.hatalar[0], v.hatalar.map((mesaj) => ({ alan: 'veriKosulari', mesaj })));
     if (v.ayar) icerik.veriKosulari = v.ayar;
     else delete icerik.veriKosulari;
+  }
+  // Talep numaraları: verilmezse mevcut korunur (kopya); boş liste içerikten kaldırır.
+  if (girdi.talepler !== undefined) {
+    const t = talepleriAyikla(girdi.talepler);
+    if (t.hata) throw new SenaryoDogrulamaHatasi(t.hata, [{ alan: 'talepler', mesaj: t.hata }]);
+    if (t.talepler.length) icerik.talepler = t.talepler;
+    else delete icerik.talepler;
   }
   // Tabloya eklenen kayıt grubu: satır seçimi o satıra; grubun çoklu satır ayarı (varsa) kalkar (tek satır).
   if (tabloEklemesi) {
