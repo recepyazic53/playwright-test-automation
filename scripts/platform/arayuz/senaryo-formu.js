@@ -1535,7 +1535,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     ortamSatiri.classList.toggle('tamam', Boolean(d && d.erisilebilir));
     ortamSatiri.classList.toggle('eksik', Boolean(d && !d.erisilebilir));
     ortamMetni.textContent = `${o.ad}: ${ortamDenetimiMetni(d)}`;
-    denetleDugmesi.setAttribute('aria-label', `Ortam bağlantısını denetle (${o.ad})`);
+    denetleDugmesi.setAttribute('aria-label', `Denetle — ortam bağlantısı (${o.ad})`);
   };
   async function ortamDenetiminiOku() {
     const o = hazirlikOrtami();
