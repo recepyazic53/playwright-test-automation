@@ -4321,3 +4321,10 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ekleme-kutulari.tekli { grid-template-columns: minmax(0, 1fr); }
 .ekleme-kutulari.tekli .ekleme-kutusu { min-height: 0; }
 @media (max-width: 900px) { .ekleme-kutulari.ikili { grid-template-columns: minmax(0, 1fr); } }
+
+/* v1.4 Sonuçlar (ku14-sonuclar): tıklanabilir koşu geçmişi satırı, özet kutusunda sarı eşik, dönem notu, boş koşu onayının nedeni. */
+.gecmis-tablosu tr.tiklanabilir-satir { cursor: pointer; }
+.gecmis-tablosu tr.tiklanabilir-satir:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; background: var(--panel-2); }
+.sonuc-karti.uyari { --k: var(--atlanan-dolgu); }
+.ozet-donem-notu { display: block; margin-top: 2px; }
+.kosu-bos-nedeni { margin: 0 0 10px; }
