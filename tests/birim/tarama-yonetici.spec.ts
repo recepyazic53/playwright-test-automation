@@ -15,6 +15,7 @@ import {
   baglamProfiliKaydet, girisProfiliKaydet, ortamKaydet, projeKaydet, veritabaniniHazirla
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { girisTarifiKaydet } from '../../scripts/platform/giris/tarif-deposu.mjs';
+import { tabanAdresiIslemi } from '../../scripts/platform/servisler/taban-adresleri.mjs';
 import { yasakAdresleriKaydet } from '../../scripts/platform/guvenlik/yasak-adresler.mjs';
 import { kosuAyarlariniKaydet } from '../../scripts/platform/ayarlar/kosu-ayarlari.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
@@ -277,9 +278,26 @@ test('yasaklı adres (ortam değişkeni ve Ayarlar > Güvenlik) ve geçersiz hed
     yasakAdresleriKaydet(vt, []);
   }
   const y3 = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Başka', ortamId: ortamlar.TEST, hedef: 'http://127.0.0.2:9/form', onay: true });
-  expect(y3).toMatchObject({ durum: 400, y: { kod: 'HEDEF' } });
+  // Kayıtsız başka site: 409 + köken; sorulmadan hiçbir istek atılmaz (kayıt / tarayıcı yok).
+  expect(y3).toMatchObject({ durum: 409, y: { kod: 'TABAN_KAYITLI_DEGIL', koken: 'http://127.0.0.2:9' } });
+  expect(y3.y.mesaj).toBe('Bu site adresi kayıtlı değil (http://127.0.0.2:9). Taban adres olarak kaydedeyim mi? (kaydedilirse yolu ayırırım)');
+  const y4 = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Bozuk', ortamId: ortamlar.TEST, hedef: 'ftp://127.0.0.2:9/form', onay: true });
+  expect(y4).toMatchObject({ durum: 400, y: { kod: 'HEDEF' } });
   expect((await api('/platform/tarama/aktif')).y.is).toBeNull();
   expect(fikstur.kayitlar.length).toBe(once);
+});
+
+test('kayıtlı taban adresi olan başka sitenin tam adresi kabul edilir: taban ve yol ayrılır, ekranın adresi yol olarak kalır', async () => {
+  test.setTimeout(120_000);
+  // Onay gelmeden (kayıtsız) reddedilir; onaydan sonra (taban adresi kaydı) aynı istek sürer.
+  const govde = { projeId, ekranAdi: 'Başka Site Formu', ortamId: ortamlar.TEST, hedef: `${fs2.adres}/basvuru/?adim=1`, kesif: false, onay: true, girissiz: true };
+  expect(await api('/platform/tarama/baslat', govde)).toMatchObject({ durum: 409, y: { kod: 'TABAN_KAYITLI_DEGIL', koken: fs2.adres } });
+  tabanAdresiIslemi(vt, projeId, { islem: 'ekle', ad: 'Başka Site', adresler: { [ortamlar.TEST]: fs2.adres }, onay: true });
+  const b = await api('/platform/tarama/baslat', govde);
+  expect(b.durum, JSON.stringify(b.y)).toBe(202);
+  const son = await bekle(String(b.y.isId), (d) => d.durum !== 'suruyor');
+  expect(son.hata, JSON.stringify(son.hata)).toBeNull();
+  expect(son).toMatchObject({ durum: 'tamam', hedefYol: '/basvuru/?adim=1' });
 });
 
 test('girişte giriş alanı beklemesi / oturum kontrolü: Ayarlar > Koşu > Tarama ve akış kaydı (koşudaki giriş ayarlarından ayrı) alt sürece gider', async () => {
