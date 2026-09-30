@@ -1,5 +1,7 @@
 // OTOMATİK TARAMA KORUMASI (genel, saf fonksiyonlar) — tarama işinin güvenlik kararları:
-//   hedefCoz              hedef yol/adres → ortamın kökeninde bir yol (başka köken, kullanıcı:parola@, javascript: … reddedilir)
+//   hedefCoz              hedef yol/adres → ortamın kökeninde (ya da ortamın KAYITLI taban adreslerinin kökeninde) bir yol; kayıtsız başka
+//                         köken HedefHatasi.bilinmeyenKoken ile reddedilir (arayüz "kaydedeyim mi?" diye sorar); kullanıcı:parola@, javascript: reddedilir
+//   ekKokenleri           ortamın kayıtlı taban adreslerinin (ayarlar.tabanAdlari) kökenleri (ortamın kendi kökeni hariç)
 //   taramaAdresleri       tarama başlamadan yasaklı adres denetimine giren TAM adresler (ortam, hedef, giriş tarifi,
 //                         bağlam adımlarının "git" adresleri — yer tutucular her profilin değerleriyle doldurulur)
 //   yasakliAdresBul       bu adreslerden yasaklı kalıba uyan ilki (tarama tarayıcı açılmadan REDDEDİLİR)
@@ -25,20 +27,45 @@ import { yerTutuculariDoldur } from '../giris/tarif.mjs';
 export const OKUMA_YONTEMLERI = Object.freeze(['GET', 'HEAD']);
 
 export class HedefHatasi extends Error {
-  /** @param {string} mesaj */
-  constructor(mesaj) {
+  /** @param {string} mesaj @param {string | null} [bilinmeyenKoken] kayıtlı olmayan başka sitenin kökeni (yoksa null) */
+  constructor(mesaj, bilinmeyenKoken = null) {
     super(mesaj);
     this.name = 'HedefHatasi';
+    this.bilinmeyenKoken = bilinmeyenKoken;
   }
 }
 
 /**
- * Hedefi ortamın taban adresine göre çözer. Kabul: "/" ile başlayan yol, göreli yol (taban adrese göre) ya da
- * ortamla AYNI kökende tam http(s) adresi.
- * @param {string} tabanUrl @param {unknown} hedef
- * @returns {{ adres: string; yol: string }} adres: tam adres; yol: pathname + search (paketin urlYolu)
+ * Ortamın kayıtlı taban adreslerinin kökenleri (ortam.ayarlar.tabanAdlari; ortamın kendi kökeni ve geçersiz adresler hariç).
+ * @param {{ tabanUrl?: string; ayarlar?: Record<string, unknown> } | null | undefined} ortam @returns {string[]}
  */
-export function hedefCoz(tabanUrl, hedef) {
+export function ekKokenleri(ortam) {
+  const x = ortam?.ayarlar?.tabanAdlari;
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return [];
+  /** @type {string | null} */
+  let kendi = null;
+  try { kendi = new URL(String(ortam?.tabanUrl ?? '')).origin; } catch { /* geçersiz: ek kökenler yine de döner */ }
+  /** @type {Set<string>} */
+  const kokenler = new Set();
+  for (const v of Object.values(x)) {
+    if (typeof v !== 'string' || !v.trim()) continue;
+    try {
+      const u = new URL(v.trim());
+      if ((u.protocol === 'http:' || u.protocol === 'https:') && u.origin !== kendi) kokenler.add(u.origin);
+    } catch { /* geçersiz adres yok sayılır */ }
+  }
+  return [...kokenler];
+}
+
+/**
+ * Hedefi ortamın taban adresine göre çözer. Kabul: "/" ile başlayan yol, göreli yol (taban adrese göre) ya da
+ * ortamla AYNI kökende (ya da ekKokenler: ortamın kayıtlı taban adreslerinin kökenlerinde) tam http(s) adresi. Kayıtsız başka
+ * köken reddedilir (HedefHatasi.bilinmeyenKoken doludur; hiçbir istek atılmaz).
+ * @param {string} tabanUrl @param {unknown} hedef @param {string[]} [ekKokenler]
+ * @returns {{ adres: string; yol: string; koken?: string }} adres: tam adres; yol: pathname + search (paketin urlYolu); koken: yalnız ortamdan
+ *   farklı (kayıtlı) sitede
+ */
+export function hedefCoz(tabanUrl, hedef, ekKokenler = []) {
   let taban;
   try { taban = new URL(tabanUrl); } catch { throw new HedefHatasi('Ortamın adresi geçerli bir http(s) adresi değil (Ayarlar > Ortamlar).'); }
   if (taban.protocol !== 'http:' && taban.protocol !== 'https:') throw new HedefHatasi('Ortamın adresi http(s) olmalı (Ayarlar > Ortamlar).');
@@ -49,17 +76,17 @@ export function hedefCoz(tabanUrl, hedef) {
   if (/^[a-z][a-z0-9+.-]*:/i.test(metin)) {
     try { u = new URL(metin); } catch { throw new HedefHatasi('Hedef adres geçersiz.'); }
     if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new HedefHatasi('Hedef yalnızca http(s) adresi ya da yol olabilir.');
-    if (u.origin !== taban.origin) {
-      throw new HedefHatasi(`Tam adres yalnızca ortamın adresiyle aynı kökende olabilir (${taban.origin}); başka bir siteye tarama yapılmaz. Yol yazın (ör. /satis/odeme/).`);
-    }
   } else {
     try { u = new URL(metin, taban); } catch { throw new HedefHatasi('Hedef yol geçersiz.'); }
-    if (u.origin !== taban.origin) throw new HedefHatasi(`Hedef ortamın kökeninde (${taban.origin}) olmalı.`);
   }
   if (u.username || u.password) throw new HedefHatasi('Adreste kullanıcı adı/parola yazılamaz.');
+  const baska = u.origin !== taban.origin;
+  if (baska && !ekKokenler.includes(u.origin)) {
+    throw new HedefHatasi(`Bu site adresi kayıtlı değil (${u.origin}). Taban adres olarak kaydedeyim mi? (kaydedilirse yolu ayırırım)`, u.origin);
+  }
   const yol = `${u.pathname}${u.search}`;
   if (!yol.startsWith('/') || yol.startsWith('//')) throw new HedefHatasi('Hedef yol "/" ile başlamalı.');
-  return { adres: `${u.origin}${yol}`, yol };
+  return baska ? { adres: `${u.origin}${yol}`, yol, koken: u.origin } : { adres: `${u.origin}${yol}`, yol };
 }
 
 /**

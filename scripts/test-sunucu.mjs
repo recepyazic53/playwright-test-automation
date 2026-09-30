@@ -454,6 +454,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/doldur.js', { dosya: 'doldur.js', tur: 'text/javascript; charset=utf-8' }],
   // Hızlı test sihirbazı (v1.5; #/hizli-test): sayfa ve kendi stil dosyası.
   ['/arayuz/hizli-test.js', { dosya: 'hizli-test.js', tur: 'text/javascript; charset=utf-8' }],
+  // Kayıtsız site adresi sorusu (Hızlı test ve Ekran ekle > tarama / kayıt; tam adresten taban ve yol ayırma).
+  ['/arayuz/adres-ayirma.js', { dosya: 'adres-ayirma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-hizli-test.css', { dosya: 'stil-hizli-test.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.

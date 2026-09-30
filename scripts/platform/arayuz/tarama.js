@@ -22,6 +22,7 @@ import { taranmisPaketAkisi } from './sayfa-paketi.js';
 import { akisTasarimi } from './akis-tasarimi.js';
 import { canliOnayEki, canliOnayIste, onayIste, ortamSecenekMetni } from './kosu-paneli.js';
 import { taramaIsaretlemeAdimi } from './oge-secme.js';
+import { adresliIstek } from './adres-ayirma.js';
 import { riskliOrtamMi } from './ortam-riski.mjs';
 
 const YOKLAMA_MS = 1000;
@@ -173,7 +174,7 @@ export async function taramaDiyalogu(s) {
       alan(yeniOrtak(s) ? 'Ortak akış anahtarı' : 'Ekran anahtarı', anahtar, { yardim: 'Küçük harf, rakam ve "-" (boş bırakılırsa addan üretilir).' })),
     h('div', { class: 'tarama-ikili' },
       alan('Ortam', ortamSecimi),
-      alan('Taranacak sayfa', hedef, { zorunlu: true, yardim: 'Ortam adresine göre yol (ör. /satis/odeme/). Tam adres yalnızca ortamın adresiyle aynı kökende olabilir.' })),
+      alan('Taranacak sayfa', hedef, { zorunlu: true, yardim: 'Ortam adresine göre yol (ör. /satis/odeme/) ya da tam adres. Başka bir sitenin adresi kayıtlı değilse kaydetmeyi size sorarım.' })),
     ortamBilgisi,
     girissizSatiri(girissiz, 'tarama-girissiz'),
     h('div', { class: 'ara-baslik' }, 'Bağlam profilleri'),
@@ -208,7 +209,7 @@ export async function taramaDiyalogu(s) {
     if (o && !(await canliOnayIste(o, 'Tarama'))) return;
     Object.assign(govdeVerisi, canliOnayEki(govdeVerisi.ortamId));
     try {
-      const r = await mesgulIken(baslat, 'Başlatılıyor…', () => api('/platform/tarama/baslat', { govde: govdeVerisi }));
+      const r = await mesgulIken(baslat, 'Başlatılıyor…', () => adresliIstek(() => api('/platform/tarama/baslat', { govde: govdeVerisi }), { projeId: s.proje.id, ortamId: govdeVerisi.ortamId, onayIste }));
       if (!s.ekran) yerelYaz(sonSecimAnahtari(s.proje.id), { ortamId: govdeVerisi.ortamId, hedef: govdeVerisi.hedef, baglamProfilleri: govdeVerisi.baglamProfilleri, kesif: govdeVerisi.kesif });
       diyalog.close();
       location.hash = taramaAdresi(r.isId);
@@ -339,7 +340,7 @@ export async function kayitDiyalogu(s) {
     if (o && !(await canliOnayIste(o, 'Akış kaydı'))) return;
     Object.assign(govdeVerisi, canliOnayEki(govdeVerisi.ortamId));
     try {
-      const r = await mesgulIken(baslat, 'Başlatılıyor…', () => api('/platform/tarama/baslat', { govde: govdeVerisi }));
+      const r = await mesgulIken(baslat, 'Başlatılıyor…', () => adresliIstek(() => api('/platform/tarama/baslat', { govde: govdeVerisi }), { projeId: s.proje.id, ortamId: govdeVerisi.ortamId, onayIste }));
       if (!s.ekran) yerelYaz(sonSecimAnahtari(s.proje.id), { ...(yerelOku(sonSecimAnahtari(s.proje.id)) || {}), ortamId: govdeVerisi.ortamId, hedef: govdeVerisi.hedef, baglamProfilleri: govdeVerisi.baglamProfilleri });
       diyalog.close();
       location.hash = taramaAdresi(r.isId);

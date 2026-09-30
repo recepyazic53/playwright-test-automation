@@ -121,17 +121,15 @@ test('saf: ekran paketi ortak akış paketine çevrilir (adres / spec / senaryo 
   expect(h.envanter).toBe(env);
 });
 
-test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; önde tara / kaydet, yapay zekâ İleri düzeyde; paket yeni EKRAN olur (senaryo önerileri ve ortamlar — bugünkü davranış)', async () => {
+test('varsayılan Ekran: "başlangıç adımı olarak da kullan" işaretsiz; önde tara / kaydet, yapay zekâ görünür bölümde; paket yeni EKRAN olur (senaryo önerileri ve ortamlar — bugünkü davranış)', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
-  const secim = page.getByRole('radiogroup', { name: 'Ne oluşturulsun?' });
-  await expect(secim.getByRole('radio', { name: 'Ekran' })).toBeChecked();
-  await expect(secim.getByRole('radio', { name: 'Ortak akış' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan' })).not.toBeChecked();
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ekran ekle');
-  // Önde tara / kaydet; yapay zekâ kutusu (ve paket yükleme) kapalı "İleri düzey"de.
-  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet']);
-  await expect(page.locator('details.ileri-duzey .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
+  // Önde tara / hızlı test ve kaydet; yapay zekâ kutusu (ve paket yükleme) görünür bölümde.
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet']);
+  await expect(page.locator('section.ileri-duzey-bolumu .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
   // Sunucu varsayılanı da ekran: seçim gönderilmezse paket ekran olarak önizlenir.
   const o = await basarili('/platform/sayfa-paketi/onizle', { projeId, paket: paket('ornek-basvuru', 'Örnek Başvuru') });
   expect((o.onizleme as Nesne).modelTuru).toBe('ekran');
@@ -148,18 +146,18 @@ test('varsayılan Ekran: "Ne oluşturulsun?" seçimi Ekran işaretli; önde tara
   await page.close();
 });
 
-test('paket yükle → Ortak akış: seçim adresi ve başlığı değiştirir, önde ilk kutu "Boş başla" (ad kutusunun görünür etiketi var); önizlemede senaryo / ortam yok, "Ortak akışı oluştur" Ortak akışlar altına yazar', async () => {
+test('paket yükle → başlangıç adımı olarak da kullan (ortak akış): seçim adresi ve başlığı değiştirir, önde ilk kutu "Boş başla" (ad kutusunun görünür etiketi var); önizlemede senaryo / ortam yok, "Ortak akışı oluştur" Ortak akışlar altına yazar', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
-  await page.getByRole('radiogroup', { name: 'Ne oluşturulsun?' }).getByText('Ortak akış', { exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan' }).check();
   await expect(page).toHaveURL(/#\/ekranlar\/yeni\/ortak-akis$/);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ortak akış ekle');
   await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Boş başla', 'Ekranı tara', 'Akışı kaydet']);
-  await expect(page.locator('details.ileri-duzey .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
+  await expect(page.locator('section.ileri-duzey-bolumu .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
   // Aynı adres (sol menü "Ortak akış ekle") yeniden açılınca seçim korunur.
   await page.reload();
-  await expect(page.getByRole('radiogroup', { name: 'Ne oluşturulsun?' }).getByRole('radio', { name: 'Ortak akış' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan' })).toBeChecked();
   await yukle(page, paket('paket-ortak', 'Paketten ortak'));
   const olustur = page.getByRole('button', { name: 'Ortak akışı oluştur' });
   await expect(olustur).toBeVisible();

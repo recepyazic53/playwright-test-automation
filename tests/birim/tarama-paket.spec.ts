@@ -6,7 +6,7 @@ import { girisTarifiniDogrula } from '../../scripts/platform/giris/tarif.mjs';
 import { yasakDesenleri } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import { modelFarki } from '../../scripts/platform/ekranlar/model-farki.mjs';
-import { adresOzeti, hedefCoz, istekKarari, taramaAdresleri, yasakliAdresBul } from '../../scripts/platform/tarama/koruma.mjs';
+import { HedefHatasi, adresOzeti, ekKokenleri, hedefCoz, istekKarari, taramaAdresleri, yasakliAdresBul } from '../../scripts/platform/tarama/koruma.mjs';
 import {
   AKSIYON_BILINMEYENI, ekranAnahtariOner, kimlikUret, taramaPaketiOlustur, type HamAlan, type PaketMetasi, type TaramaEnvanteri
 } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
@@ -32,8 +32,13 @@ test('hedef çözümü: yol, göreli yol, aynı köken; başka köken ve kullan�
   expect(hedefCoz('https://test.ornek.invalid/uygulama/', '/satis/odeme/?adim=1#x')).toEqual({ adres: 'https://test.ornek.invalid/satis/odeme/?adim=1', yol: '/satis/odeme/?adim=1' });
   expect(hedefCoz('https://test.ornek.invalid/uygulama/', 'form')).toEqual({ adres: 'https://test.ornek.invalid/uygulama/form', yol: '/uygulama/form' });
   expect(hedefCoz('https://test.ornek.invalid', 'https://test.ornek.invalid/a')).toMatchObject({ yol: '/a' });
-  expect(() => hedefCoz('https://test.ornek.invalid', 'https://baska.ornek.invalid/a')).toThrow(/aynı kökende/);
-  expect(() => hedefCoz('https://test.ornek.invalid', '//baska.ornek.invalid/a')).toThrow(/kökeninde/);
+  expect(() => hedefCoz('https://test.ornek.invalid', 'https://baska.ornek.invalid/a')).toThrow(/Bu site adresi kayıtlı değil.*Taban adres olarak kaydedeyim mi\?/);
+  expect(() => hedefCoz('https://test.ornek.invalid', '//baska.ornek.invalid/a')).toThrow(/kayıtlı değil/);
+  // Kayıtlı taban adresinin kökeni kabul edilir (taban ve yol ayrılır); başkası hâlâ sorulur.
+  expect(hedefCoz('https://test.ornek.invalid', 'https://baska.ornek.invalid/a/b?x=1', ['https://baska.ornek.invalid'])).toEqual({ adres: 'https://baska.ornek.invalid/a/b?x=1', yol: '/a/b?x=1', koken: 'https://baska.ornek.invalid' });
+  expect(() => hedefCoz('https://test.ornek.invalid', 'https://diger.ornek.invalid/a', ['https://baska.ornek.invalid'])).toThrow(HedefHatasi);
+  try { hedefCoz('https://test.ornek.invalid', 'https://diger.ornek.invalid:8443/a'); } catch (e) { expect((e as HedefHatasi).bilinmeyenKoken).toBe('https://diger.ornek.invalid:8443'); }
+  expect(ekKokenleri({ tabanUrl: 'https://test.ornek.invalid', ayarlar: { tabanAdlari: { A: 'https://baska.ornek.invalid/api', B: '', C: 'https://test.ornek.invalid/x', D: 'gecersiz' } } })).toEqual(['https://baska.ornek.invalid']);
   expect(() => hedefCoz('https://test.ornek.invalid', 'javascript:alert(1)')).toThrow(/http\(s\)/);
   expect(() => hedefCoz('https://test.ornek.invalid', 'https://k:p@test.ornek.invalid/a')).toThrow(/kullanıcı adı\/parola/);
   expect(() => hedefCoz('https://test.ornek.invalid', '  ')).toThrow(/yolunu yazın/);

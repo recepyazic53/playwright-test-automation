@@ -8,7 +8,7 @@
 //   Kartta ve ayrıntı başlığında ⋯ menüsü (ekran-yonetimi.js): yeniden adlandır, düzenle (URL yolu), yukarı/aşağı taşı,
 //   devre dışı bırak / etkinleştir, kalıcı sil. Devre dışı ekranlar sol listede varsayılan olarak gizlidir ("Devre dışı
 //   ekranları göster"); silinmiş ekranlar (mezar taşı) "Tüm ekranlar"ın altında listelenir (geri yükle / temizle).
-// "Ekran ekle"de "Ne oluşturulsun? ◉ Ekran ○ Ortak akış" (sayfa-paketi.js): ortak akış da aynı yollarla (paket yükle / tara / kaydet /
+// "Ekran ekle"de "Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan" onay kutusu (sayfa-paketi.js; eski "Ne oluşturulsun?" ayrımının yerine): ortak akış da aynı yollarla (paket yükle / tara / kaydet /
 // boş başla) oluşturulur; sayfası ekranla aynıdır (model, geçmiş, kanıtlar, Akışlar diyagramı, Test verisi), senaryosu yoktur,
 // "Kullanan ekranlar" ve "Ekranlara ekle…" vardır.
 // Adresler: #/ekranlar · #/ekranlar/yeni[/tara | /ortak-akis] ·#/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
@@ -68,7 +68,7 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Yeni ekran'), h('br', {}),
-          'Yeni ekranı "Ekran ekle"de ekleyin: Nöbetçi taratsın ("Ekranı tara") ya da akışı siz kaydedin. Hazır ekran paketi (ör. yapay zekâ aracından) "İleri düzey"de yüklenir. Aynı ekranı yeniden taramak = tekrar analiz.')),
+          'Yeni ekranı "Ekran ekle"de ekleyin: Nöbetçi taratsın ("Ekranı tara") ya da akışı siz kaydedin. Hazır ekran paketi (ör. yapay zekâ aracından) yine "Ekran ekle"de yüklenir. Aynı ekranı yeniden taramak = tekrar analiz.')),
       icerik));
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
@@ -79,8 +79,9 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler);
     yanCiz();
     if (tur === 'yeni') {
-      // "Ne oluşturulsun? ◉ Ekran ○ Ortak akış": varsayılan Ekran; #/ekranlar/yeni/ortak-akis Ortak akış seçili açar. Seçim
-      // değişince adres (geçmişe eklemeden) ve sayfa güncellenir; tara / kaydet / paket yükle seçilen türle çalışır.
+      // Tek seçenek "Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan" (eski Ekran / Ortak akış ayrımının yerine): varsayılan
+      // işaretsiz = ekran; #/ekranlar/yeni/ortak-akis (eski bağlantı) işaretli açar. Seçim değişince adres (geçmişe eklemeden) ve sayfa
+      // güncellenir; tara / kaydet / paket yükle seçime göre çalışır.
       const ciz = (/** @type {'ekran' | 'ortakAkis'} */ olusturulacak) => sayfaPaketiAkisi(icerik, {
         mod: 'yeni', proje, olusturulacak,
         secimDegisti: (t) => { history.replaceState(null, '', t === 'ortakAkis' ? '#/ekranlar/yeni/ortak-akis' : '#/ekranlar/yeni'); ciz(t); },
@@ -190,7 +191,7 @@ function listeGorunumu(icerik, proje, liste) {
         h('details', { class: 'ileri-duzey kesif-ileri' },
           h('summary', {}, ikon('simsek'), h('span', {}, 'İleri düzey: yapay zekâ ile paket'), ikon('asagi', 'ileri-duzey-ok')),
           h('div', { class: 'ileri-duzey-govdesi' },
-            h('p', { class: 'soluk kucuk paket-nedir' }, 'Ekran paketi, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır. İstek metnini sayfanın bağlantısıyla yapay zekâ aracınıza verin; ürettiği paketi "Ekran ekle" > İleri düzey\'den yükleyin. ', paketOzetiBaglantisi()),
+            h('p', { class: 'soluk kucuk paket-nedir' }, 'Ekran paketi, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır. İstek metnini sayfanın bağlantısıyla yapay zekâ aracınıza verin; ürettiği paketi "Ekran ekle"den yükleyin. ', paketOzetiBaglantisi()),
             istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
