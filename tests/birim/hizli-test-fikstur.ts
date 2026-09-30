@@ -3,7 +3,7 @@
 //
 //   /basvuru/        giriş gerektirmez. Alanlar: Ad soyad (zorunlu), Müşteri tipi (zorunlu; Kurumsal seçilince zorunlu "Vergi no" belirir).
 //                    "Hesapla" (form dışında, type=button): Ad soyad boşsa hata kutusu "Zorunlu alan: Ad soyad"; doluysa "Hesaplanıyor…"
-//                    göstergesi + GET /api/hesapla (sunucu gecikmeli) → "Prim: 1.250,00 TL" + yeni alan "Ödeme şekli" (HTML'de zorunlu işaretsiz; sayfa kendisi denetler) + "Onayla".
+//                    göstergesi + GET /api/hesapla (sunucu gecikmeli) → "Tutar: 1.250,00 TL" + yeni alan "Ödeme şekli" (HTML'de zorunlu işaretsiz; sayfa kendisi denetler) + "Onayla".
 //                    "Onayla": Ödeme şekli boşsa "Zorunlu alan: Ödeme şekli"; doluysa "Gönderiliyor…" + POST /api/onayla → "Başvurunuz alındı."
 //                    Ayrıca "Temizle" (reset) ve "Geri" düğmeleri (birden çok aday için).
 //   kip (testin değiştirdiği): 'normal' | 'hata' (onayla sunucu doğrulaması → "Zorunlu alan: Ödeme şekli (sunucu)") | 'sessiz' (onayla sonuç göstermez).
@@ -17,7 +17,7 @@ const html = (baslik: string, govde: string): FiksturYaniti => ({
 });
 
 export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
-<p>Bilgileri doldurup primi hesaplayın.</p>
+<p>Bilgileri doldurup tutarı hesaplayın.</p>
 <div id="form">
   <label for="adSoyad">Ad soyad</label><input id="adSoyad" name="adSoyad" required>
   <label for="musteriTipi">Müşteri tipi</label>
@@ -29,7 +29,7 @@ export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
 <div id="uyari" class="alert alert-danger" role="alert" hidden></div>
 <span id="bekleme" class="spinner-border" hidden>Hesaplanıyor…</span>
 <div id="sonuc" hidden>
-  <p id="prim"></p>
+  <p id="tutar"></p>
   <label for="odemeSekli">Ödeme şekli</label>
   <select id="odemeSekli" name="odemeSekli"><option value="">Seçin</option><option value="kart">Kredi kartı</option><option value="havale">Havale</option></select>
   <p><button type="button" id="onayla">Onayla</button></p>
@@ -47,7 +47,7 @@ export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
     fetch('/api/hesapla?tip=' + encodeURIComponent($('musteriTipi').value) + '&vergi=' + encodeURIComponent($('vergiNo').value))
       .then(function (r) { return r.json(); }).then(function (j) {
         $('bekleme').hidden = true;
-        $('prim').textContent = 'Prim: ' + j.prim + ' TL';
+        $('tutar').textContent = 'Tutar: ' + j.tutar + ' TL';
         $('sonuc').hidden = false;
       });
   });
@@ -78,7 +78,7 @@ export class HizliTestUygulamasi {
     if (i.yol === '/basvuru/' && i.yontem === 'GET') return html('Başvuru', HIZLI_BASVURU_SAYFASI);
     if (i.yol === '/api/hesapla' && i.yontem === 'GET') {
       this.hesaplamalar.push({ tip: i.sorgu.get('tip') ?? '', vergi: i.sorgu.get('vergi') ?? '' });
-      return { tur: 'application/json', govde: JSON.stringify({ prim: i.sorgu.get('tip') === 'kurumsal' ? '2.500,00' : '1.250,00' }), gecikmeMs: 1_200 };
+      return { tur: 'application/json', govde: JSON.stringify({ tutar: i.sorgu.get('tip') === 'kurumsal' ? '2.500,00' : '1.250,00' }), gecikmeMs: 1_200 };
     }
     if (i.yol === '/api/onayla' && i.yontem === 'POST') {
       this.onaylar.push(i.govde);

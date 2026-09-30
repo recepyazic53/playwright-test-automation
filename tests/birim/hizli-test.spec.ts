@@ -95,7 +95,7 @@ test.afterAll(async () => {
 
 test.describe('saf kurallar', () => {
   test('cümle kalıpla okunur (YZ yok): tırnaklı metin mesaj, "…e bas" düğme; anlaşılmayan yok sayılır', () => {
-    expect(cumleyiOku('Formu doldur, Hesapla\'ya bas, "Teklif hazır" mesajını doğrula.')).toEqual({ mesajlar: ['Teklif hazır'], dugmeler: ['Hesapla'] });
+    expect(cumleyiOku('Formu doldur, Hesapla\'ya bas, "İşlem hazır" mesajını doğrula.')).toEqual({ mesajlar: ['İşlem hazır'], dugmeler: ['Hesapla'] });
     expect(cumleyiOku('“Onayla” düğmesine tıkla; “Başvurunuz alındı” görünsün')).toEqual({ mesajlar: ['Başvurunuz alındı'], dugmeler: ['Onayla'] });
     expect(cumleyiOku('bir şeyler yap')).toEqual({ mesajlar: [], dugmeler: [] });
     expect(cumleyiOku(undefined)).toEqual({ mesajlar: [], dugmeler: [] });
@@ -109,17 +109,17 @@ test.describe('saf kurallar', () => {
     const adaylar = [{ secici: 'a', metin: 'Hesapla' }, { secici: 'b', metin: 'Temizle' }];
     expect(tekAday(adaylar, ['hesapla'])?.secici).toBe('a');
     expect(tekAday(adaylar, [])).toBeNull();
-    expect(canliOnayMetni('evet')).toBe('CANLI’da düğmelere basılacak, kayıt oluşabilir.');
+    expect(canliOnayMetni('evet')).toBe('CANLI ortamda düğmelere basılacak, kayıt oluşabilir.');
   });
   test('bitiş etiketlerinin varsayılanı: son basıştan sonraki metin Bitti, bekleme Devam, hata kutusu Hata', () => {
     expect(beklemeMetniMi('Hesaplanıyor…')).toBe(true);
     expect(beklemeMetniMi('Lütfen bekleyin')).toBe(true);
     expect(beklemeMetniMi('Başvurunuz alındı')).toBe(false);
     const e = varsayilanEtiketler([
-      { metin: 'Hesaplanıyor…', tur: 'normal', basis: 1 }, { metin: 'Prim: 1.250,00 TL', tur: 'normal', basis: 1 },
+      { metin: 'Hesaplanıyor…', tur: 'normal', basis: 1 }, { metin: 'Tutar: 1.250,00 TL', tur: 'normal', basis: 1 },
       { metin: 'Zorunlu alan: Ödeme şekli', tur: 'hata', basis: 2 }, { metin: 'Başvurunuz alındı. Başvuru no: 4701', tur: 'basari', basis: 2 }
     ], 2);
-    expect(e).toEqual({ 'Hesaplanıyor…': 'devam', 'Prim: 1.250,00 TL': null, 'Zorunlu alan: Ödeme şekli': 'hata', 'Başvurunuz alındı. Başvuru no: 4701': 'bitti' });
+    expect(e).toEqual({ 'Hesaplanıyor…': 'devam', 'Tutar: 1.250,00 TL': null, 'Zorunlu alan: Ödeme şekli': 'hata', 'Başvurunuz alındı. Başvuru no: 4701': 'bitti' });
     expect(sabitKisim('Başvurunuz alındı. Başvuru no: 4701')).toBe('Başvurunuz alındı. Başvuru no:');
     const b = bitisKosulu({ etiketler: e, adres: null });
     expect(b).toMatchObject({ bitti: ['Başvurunuz alındı. Başvuru no:'], hata: ['Zorunlu alan: Ödeme şekli'], devam: ['Hesaplanıyor…'], hatalar: [] });
@@ -138,7 +138,7 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   test.setTimeout(240_000);
   const once = { h: uygulama.hesaplamalar.length, o: uygulama.onaylar.length };
   const b = await basarili('/platform/hizli-test/baslat', {
-    projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Prim başvurusu', izin: 'evet', cumle: 'Formu doldur, Hesapla\'ya bas, "Başvurunuz alındı" görünsün'
+    projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Başvuru formu', izin: 'evet', cumle: 'Formu doldur, Hesapla\'ya bas, "Başvurunuz alındı" görünsün'
   });
   const id = String(b.id);
   let o = await bekle(id, ['veri']);
@@ -161,7 +161,7 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(uygulama.hesaplamalar.at(-1)).toEqual({ tip: 'kurumsal', vergi: '1111111111' });
   const fark = o.adimlar[0].fark;
   expect(fark.beklemeMetinleri).toContain('Hesaplanıyor…');
-  expect(fark.yeniMetinler.map((m: Nesne) => m.metin)).toContain('Prim: 2.500,00 TL');
+  expect(fark.yeniMetinler.map((m: Nesne) => m.metin)).toContain('Tutar: 2.500,00 TL');
   expect(fark.yeniAlanlar).toEqual(['Ödeme şekli']);
   expect(fark.yeniDugmeler).toContain('Onayla');
   expect(o.goruntu).toMatch(/^\/9j\//);
@@ -196,7 +196,7 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(et['Başvurunuz alındı. Başvuru no: 4701']).toBe('bitti');
   expect(et['Hesaplanıyor…']).toBe('devam');
   expect(et['Gönderiliyor…']).toBe('devam');
-  expect(et['Prim: 2.500,00 TL']).toBeNull();
+  expect(et['Tutar: 2.500,00 TL']).toBeNull();
   expect(et['Zorunlu alan: Ödeme şekli']).toBe('hata');
   // Görülmeyen metne etiket verilemez; Bitti olmadan kaydedilemez.
   expect(await api('/platform/hizli-test/bitis', { id, etiketler: { 'Uydurma mesaj': 'bitti' } })).toMatchObject({ basarili: false, kod: 'BITIS' });
@@ -209,7 +209,7 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   o = await bekle(id, ['kaydet'], 120);
   expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
   expect(uygulama.onaylar.length).toBe(once.o + 2);
-  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Prim başvurusu — kurumsal' });
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal' });
   expect(k).toMatchObject({ kaydedildi: true, dogrulandi: true });
   // Hazırlık kontrolü: tüm satırlar ✓ (çalıştırılabilir).
   expect(k.hazirlik).toMatchObject({ calistirilabilir: true, nedenler: [] });
@@ -286,7 +286,7 @@ test('Bana sor: her basıştan önce onay (Hayır → basılmaz); "Başka düğm
   test.setTimeout(300_000);
   await isBitsin();
   const once = { h: uygulama.hesaplamalar.length, o: uygulama.onaylar.length };
-  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Prim başvurusu eksik ödeme', izin: 'sor' })).id);
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Başvuru formu eksik ödeme', izin: 'sor' })).id);
   let o = await bekle(id, ['veri']);
   const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
   await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('Deneme Kişi'), [alan('Müşteri tipi')]: deger('bireysel') } });
@@ -351,21 +351,21 @@ test('Hayır izni: hiçbir düğmeye basılmaz (sayaçlar 0); düğme ve mesaj a
   await isBitsin();
   const once = { istek: uygulama.istekler.filter((x) => x.includes('/api/')).length, h: uygulama.hesaplamalar.length, o: uygulama.onaylar.length };
   const id = String((await basarili('/platform/hizli-test/baslat', {
-    projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Prim başvurusu basılmadan', izin: 'hayir', cumle: 'Hesapla\'ya bas, "Prim:" görünsün'
+    projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Başvuru formu basılmadan', izin: 'hayir', cumle: 'Hesapla\'ya bas, "Tutar:" görünsün'
   })).id);
   let o = await bekle(id, ['veri']);
   const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
   await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('Deneme Kişi'), [alan('Müşteri tipi')]: deger('bireysel') } });
   o = await bekle(id, ['hayirSecim']);
-  expect(o.soru.mesajlar).toEqual(expect.arrayContaining([{ metin: 'Prim:', tur: 'basari', kaynak: 'cumle' }]));
+  expect(o.soru.mesajlar).toEqual(expect.arrayContaining([{ metin: 'Tutar:', tur: 'basari', kaynak: 'cumle' }]));
   const hesapla = o.soru.adaylar.find((a: Nesne) => a.metin === 'Hesapla');
   expect(o.soru.oneri).toBe(hesapla.secici);
   expect(await api('/platform/hizli-test/karar', { id, karar: 'bas', secici: hesapla.secici })).toMatchObject({ basarili: false, kod: 'KARAR' });
   // Mesaj uydurulamaz: yalnız adaylardan.
   expect(await api('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: hesapla.secici, mesajlar: ['Uydurma'] })).toMatchObject({ basarili: false, kod: 'MESAJ' });
-  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: hesapla.secici, mesajlar: ['Prim:'] });
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: hesapla.secici, mesajlar: ['Tutar:'] });
   o = await bekle(id, ['bitis']);
-  expect(o.soru.etiketler).toMatchObject({ 'Prim:': 'bitti' });
+  expect(o.soru.etiketler).toMatchObject({ 'Tutar:': 'bitti' });
   await basarili('/platform/hizli-test/bitis', { id, etiketler: o.soru.etiketler });
   o = await bekle(id, ['kaydet']);
   expect(o.soru).toMatchObject({ dogrulanabilir: false, dogrulama: { durum: 'yapilmadi' } });
@@ -386,7 +386,7 @@ test('CANLI ortam: kilit yok, bir kez açık onay istenir (onaysız tarayıcı a
   await isBitsin();
   const once = uygulama.istekler.length;
   expect(await api('/platform/hizli-test/baslat', { projeId, ortamId: canliOrtamId, hedef: '/basvuru/', ekranAdi: 'Canlı deneme', izin: 'evet' }))
-    .toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI', mesaj: 'CANLI’da düğmelere basılacak, kayıt oluşabilir.' });
+    .toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI', mesaj: 'CANLI ortamda düğmelere basılacak, kayıt oluşabilir.' });
   expect(await api('/platform/hizli-test/baslat', { projeId, ortamId: canliOrtamId, hedef: '/basvuru/', ekranAdi: 'Canlı deneme', izin: 'hayir' }))
     .toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI', mesaj: 'CANLI ortama bağlanılacak (giriş dahil). Hiçbir düğmeye basılmaz.' });
   expect(uygulama.istekler.length).toBe(once);
@@ -403,24 +403,24 @@ test('düzenleme kipi (aynı ekran): yeni model sürümü; kaydetmeden önce far
   await isBitsin();
   expect(kayitli).not.toBeNull();
   const sec = await api(`/platform/hizli-test/secenekler?projeId=${projeId}&ekranId=${kayitli?.ekranId}`);
-  expect(sec.ekran).toMatchObject({ id: kayitli?.ekranId, ad: 'Prim başvurusu', urlYolu: '/basvuru/' });
-  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', cumle: '"Prim:"' })).id);
+  expect(sec.ekran).toMatchObject({ id: kayitli?.ekranId, ad: 'Başvuru formu', urlYolu: '/basvuru/' });
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', cumle: '"Tutar:"' })).id);
   let o = await bekle(id, ['veri']);
   expect(o.duzenleme).toBe(true);
   const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
   await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('Deneme Kişi'), [alan('Müşteri tipi')]: deger('bireysel') } });
   o = await bekle(id, ['hayirSecim']);
-  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: o.soru.adaylar.find((a: Nesne) => a.metin === 'Hesapla').secici, mesajlar: ['Prim:'] });
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: o.soru.adaylar.find((a: Nesne) => a.metin === 'Hesapla').secici, mesajlar: ['Tutar:'] });
   o = await bekle(id, ['bitis']);
   await basarili('/platform/hizli-test/bitis', { id, etiketler: o.soru.etiketler });
   await bekle(id, ['kaydet']);
   const surumOnce = ((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum;
-  const f = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Prim başvurusu — bireysel' });
+  const f = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — bireysel' });
   expect(f.onayGerekli).toBe(true);
-  expect((f.farklar as Nesne).senaryolar).toEqual(expect.arrayContaining(['Prim başvurusu — kurumsal']));
+  expect((f.farklar as Nesne).senaryolar).toEqual(expect.arrayContaining(['Başvuru formu — kurumsal']));
   expect((f.farklar as Nesne).ozet.toplam).toBeGreaterThan(0);
   expect(((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum).toBe(surumOnce);
-  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Prim başvurusu — bireysel', onay: true });
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — bireysel', onay: true });
   expect(k).toMatchObject({ kaydedildi: true, ekranId: kayitli?.ekranId });
   expect(((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum).toBe(Number(surumOnce) + 1);
   await isBitsin();

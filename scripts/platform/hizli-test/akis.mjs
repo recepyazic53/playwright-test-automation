@@ -38,7 +38,7 @@ const bosluk = (m) => (typeof m === 'string' ? m.replace(/\s+/g, ' ').trim() : '
 export function canliOnayMetni(izin) {
   return izin === 'hayir'
     ? 'CANLI ortama bağlanılacak (giriş dahil). Hiçbir düğmeye basılmaz.'
-    : 'CANLI’da düğmelere basılacak, kayıt oluşabilir.';
+    : 'CANLI ortamda düğmelere basılacak, kayıt oluşabilir.';
 }
 
 /**
@@ -119,7 +119,7 @@ export function varsayilanEtiketler(gorulenler, sonBasis) {
   return e;
 }
 
-/** Metnin değişken (rakamlı) kısmı atılmış sabit öneki: "Prim: 1.250 TL" → "Prim:" (en az 3 karakter; yoksa metnin kendisi). @param {string} m */
+/** Metnin değişken (rakamlı) kısmı atılmış sabit öneki: "Tutar: 1.250 TL" → "Tutar:" (en az 3 karakter; yoksa metnin kendisi). @param {string} m */
 export function sabitKisim(m) {
   const t = bosluk(m);
   const i = t.search(/\d/);
