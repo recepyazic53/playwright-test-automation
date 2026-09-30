@@ -932,13 +932,14 @@ function anaDuzen() {
   const hesap = alanMod && durum.sunucu && durum.sunucu.calismaAlani !== undefined ? alanMod.hesapMenusu({
     calismaAlani: durum.sunucu ? durum.sunucu.calismaAlani : null,
     kilitle: kilitleVeDon,
+    mod: { mod: durum.kullanimModu.mod, degistir: (hedef) => moduDegistir(hedef) },
     kapandi: () => { location.hash = ''; yonlendir(); },
     yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
   }) : null;
   const sunucu = sunucuDurumu();
   const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, ustSayfalar: UST_SAYFALAR });
   // Basit mod (basit-mod.js): menü yalnız Testlerim · Sonuçlar · Ayarlar, "Oluştur" yerine "+ Yeni test"; Gelişmiş'e ait sayfanın
-  // üstünde not. Basit / Gelişmiş anahtarı iki modda da üst çubukta (sağda), Ayarlar'ın yan panelinde ve Ayarlar > Arayüz'dedir.
+  // üstünde not; sağda Basit / Gelişmiş anahtarı. Kullanım modu iki modda da üst çubuktaki çalışma alanı menüsünde ("Basit moda geç" / "Gelişmiş moda geç"), Ayarlar'ın yan panelinde ve Ayarlar > Arayüz'dedir. Gelişmiş üst çubuğu dolu olduğu için orada ayrı anahtar yoktur.
   const basit = durum.kullanimModu.mod === 'basit';
   const navTestlerim = basit ? h('a', { href: '#/testlerim' }, ikon('liste'), 'Testlerim') : null;
   const navBasitSonuclar = basit ? h('a', { href: '#/basit-sonuclar' }, ikon('grafik'), 'Sonuçlar') : null;
@@ -949,7 +950,7 @@ function anaDuzen() {
     h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar]),
     basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
-    hizliAramaDugmesi(aramaBaglami), sunucu, modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef)), rehberDugmesi(), temaDugmesi(), kilitle, hesap);
+    hizliAramaDugmesi(aramaBaglami), sunucu, basit ? modAnahtari('basit', (hedef) => moduDegistir(hedef)) : null, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
   hizliAramaKisayolu(aramaBaglami);
   ekran(...[ust, gelismisNotu, main].filter(Boolean));
   // Sayfa rehberi bağlantısı (başlığın altında) ve boş durum rehberi için seçili proje.

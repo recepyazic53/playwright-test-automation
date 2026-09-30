@@ -152,7 +152,7 @@ test('kilit ekranı çalışma alanının adını ve "Başka çalışma alanı"n
   await page.getByRole('button', { name: 'Kilidi aç' }).click();
   await expect(page.locator('#proje-rozeti')).toHaveText(ornekProjeAdi);
   const menu = await hesapMenusu();
-  await expect(menu.getByRole('menuitem')).toHaveText(['Kilitle', 'Yeniden adlandır', 'Çalışma alanını kapat…']);
+  await expect(menu.getByRole('menuitem')).toHaveText(['Kilitle', 'Basit moda geç', 'Yeniden adlandır', 'Çalışma alanını kapat…']);
   await goruntu('02-hesap-menusu', undefined, { x: 560, y: 0, width: 800, height: 240 });
   await page.keyboard.press('Escape');
 });

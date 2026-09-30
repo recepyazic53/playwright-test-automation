@@ -309,6 +309,8 @@ export function hesapMenusu(s) {
     dugme, sinif: 'satir-menusu-kap hesap-menusu', baslik: 'Çalışma alanı',
     ogeler: [
       { ikon: 'kilit', metin: 'Kilitle', fn: () => { s.kilitle(); } },
+      // Kullanım modu her iki modda da bu menüden değişir (Basit ↔ Gelişmiş; Gelişmiş → Basit sorusuz).
+      s.mod ? { ikon: 'katman', metin: s.mod.mod === 'basit' ? 'Gelişmiş moda geç' : 'Basit moda geç', fn: () => { s.mod.degistir(s.mod.mod === 'basit' ? 'gelismis' : 'basit'); } } : null,
       alan && !alan.sabit ? { ikon: 'duzenle', metin: 'Yeniden adlandır', fn: () => alanYenidenAdlandirDiyalogu({ alan, sonra: s.yenile }) } : null,
       alan && !alan.sabit ? 'ayrac' : null,
       alan && !alan.sabit ? { ikon: 'cikis', metin: 'Çalışma alanını kapat…', fn: () => kapatDiyalogu({ alanAdi: alan.ad, kapandi: s.kapandi }) } : null
