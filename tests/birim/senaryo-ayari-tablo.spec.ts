@@ -5,7 +5,7 @@
 // değişmez.
 //  · saf: senaryo ayarı tespiti, tablo listesinin seçenekleri değiştirmemesi, koda çeviri (karşılık / kod / metin / eşleşmeyen),
 //    doğrulayıcıda tablodan gelen ayarın "bilinmiyor" sayılması, yedekten içe aktarmanın bağı / karşılığı / başvuruyu taşıması;
-//  · uçtan uca (127.0.0.1'deki sahte "Teslim" sayfası, ayrı Nöbetçi, geçici veritabanı; dış siteye istek yok): ortak akışta ve
+//  · uçtan uca (127.0.0.1'deki sahte "Teslim" sayfası, ayrı Nöbetçi, geçici veritabanı; dış siteye istek yok): genel senaryoda ve
 //    ekranda bağ, karşılıkların modelden dolması, bağsız / sabit senaryo, iki satırla "Uyan her satır ayrı test" (iki test, iki
 //    dal), eşleşmeyen değerde doğrulama hatası, arayüz (rozet, Tablodan, satır seçimi kartı; 1440 ve 390 px taşma yok).
 // Değerler SAHTEDİR.
@@ -46,7 +46,7 @@ const BASVURU = `\${${TABLO}.${SUTUN}}`;
 /** Dalın düğmesi (aksiyon alanı; senaryoda ayarlanmaz). */
 const dugme = (id: string, ad: string, secici: string): ModelAlani => ({ id, tip: 'buton', etiket: { ekran: ad }, yapilandirma: 'aksiyon', konum: { secici, kirilganlik: 'dusuk' } });
 
-/** Ortak akışın modeli: senaryo düzeyinde "Teslim şekli" (ekranda alan değil) ve ona bağlı iki dal (kargo / mağaza). */
+/** Genel senaryonun modeli: senaryo düzeyinde "Teslim şekli" (ekranda alan değil) ve ona bağlı iki dal (kargo / mağaza). */
 function ortakModel(): Model {
   return {
     semaSurumu: 2, tur: 'ortakAkis', id: ORTAK_ANAHTAR, ad: 'Teslim (ortak)', aciklama: 'Teslim dalları (nötr fikstür).',
@@ -76,10 +76,10 @@ function ortakModel(): Model {
   };
 }
 
-/** Ortak akışı kullanan ekran: ad soyad → Devam → ortak akış (kargo / mağaza dalı). */
+/** Genel senaryoyu kullanan ekran: ad soyad → Devam → genel senaryo (kargo / mağaza dalı). */
 function ekranModel(): Model {
   return {
-    semaSurumu: 2, tur: 'ekran', id: 'teslim-ekrani', ad: 'Teslim ekranı', aciklama: 'Ortak akışı kullanan ekran (nötr fikstür).', ekranUrl: '/teslim/', girisGerekmez: true,
+    semaSurumu: 2, tur: 'ekran', id: 'teslim-ekrani', ad: 'Teslim ekranı', aciklama: 'Genel senaryoyu kullanan ekran (nötr fikstür).', ekranUrl: '/teslim/', girisGerekmez: true,
     specDosyasi: 'tests/scenarios/teslim-ekrani/teslim-ekrani.spec.ts', pageObject: 'yok (model koşucusu)', veriKaynaklari: { senaryo: 'Nöbetçi > Senaryolar (teslim-ekrani)' },
     kosullar: {},
     adimlar: [
@@ -320,7 +320,7 @@ test.describe('senaryo ayarı tablo bağı (uçtan uca)', () => {
     expect(uygulama.kayitlar.at(-1)).toEqual({ ad: 'Sabit Kişi', yol: 'magaza' });
   });
 
-  test('ortak akışta bağ: alan Test verisi sekmesinde senaryo ayarı olarak listelenir; bağ kurulunca karşılıklar modelden dolar', async () => {
+  test('genel senaryoda bağ: alan Test verisi sekmesinde senaryo ayarı olarak listelenir; bağ kurulunca karşılıklar modelden dolar', async () => {
     tabloId = String(al(await basarili('/platform/tablo/kaydet', {
       projeId, ad: TABLO, sutunlar: [{ ad: SUTUN }],
       satirlar: [{ ad: 'Kargo ile', degerler: { [SUTUN]: 'Kargo ile' } }, { ad: 'Mağazadan teslim', degerler: { [SUTUN]: 'Mağazadan teslim' } }]
@@ -331,7 +331,7 @@ test.describe('senaryo ayarı tablo bağı (uçtan uca)', () => {
     const y = await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId: ortakId, baglar: { teslimSekli: { tablo: tabloId, sutun: SUTUN } } });
     expect(y.karsiliklar).toMatchObject({ eklenen: 2, tablolar: [TABLO] });
     expect(al(await tablo(), 'sutunlar', 0, 'karsiliklar')).toEqual({ 'Kargo ile': { sayfa: 'kargo' }, 'Mağazadan teslim': { sayfa: 'magaza' } });
-    // Kullanan ekranda ortak akıştan gelen bağla (ekranın kendi bağı yok) listelenir.
+    // Kullanan ekranda genel senaryodan gelen bağla (ekranın kendi bağı yok) listelenir.
     const e = await baglar(ekranId);
     expect((e.girdiler as Nesne[]).find((g) => g.id === 'teslimSekli')).toMatchObject({ senaryoAyari: true });
     expect(e.ortakBaglar).toMatchObject({ teslimSekli: { tablo: tabloId, sutun: SUTUN, ortakAkis: { id: ortakId } } });
@@ -368,7 +368,7 @@ test.describe('senaryo ayarı tablo bağı (uçtan uca)', () => {
 
   test('ekranda (kendi bağıyla) da bağlanır; karşılığı olmayan metin seçenek metniyle çevrilir', async () => {
     test.setTimeout(120_000);
-    // Karşılıkları sil; ekranın kendi bağı (ortak akışınkini ezer) → yeniden kaydedilince karşılıklar ekrandan da dolar.
+    // Karşılıkları sil; ekranın kendi bağı (genel senaryonunkini ezer) → yeniden kaydedilince karşılıklar ekrandan da dolar.
     await basarili('/platform/tablo/kaydet', { projeId, id: tabloId, ad: TABLO, sutunlar: [{ ad: SUTUN, eskiAd: SUTUN, karsiliklar: {} }] });
     expect(al(await tablo(), 'sutunlar', 0, 'karsiliklar')).toBeUndefined();
     const s = await basarili('/platform/senaryo/kaydet', {

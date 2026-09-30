@@ -57,7 +57,7 @@ async function gelismisAciklamasi() {
   const { onayIste } = await import('./kosu-paneli.js');
   return onayIste({
     baslik: 'Gelişmiş moda geç', ikonAd: 'katman', dugme: 'Gelişmiş\'e geç',
-    metin: 'Gelişmiş modda şunlar da görünür: ekran modeli ve sürümleri, akış diyagramı, ortak akışlar, test verisi tabloları ve alan bağlantıları, servisler ve servis akışları, uçtan uca akışlar, senaryo önerileri ve kapsam, planlı koşular, kurtarma kuralları ve paket yükleme.',
+    metin: 'Gelişmiş modda şunlar da görünür: ekran modeli ve sürümleri, akış diyagramı, genel senaryolar, test verisi tabloları ve alan bağlantıları, servisler ve servis akışları, uçtan uca akışlar, senaryo önerileri ve kapsam, planlı koşular, kurtarma kuralları ve paket yükleme.',
     ek: h('div', { class: 'not-kutusu bilgi', role: 'note' }, h('p', {}, h('strong', {}, 'Hiçbir veri değişmez. '), 'Basit moda üst çubuktaki anahtarla istediğiniz zaman dönebilirsiniz.'))
   });
 }

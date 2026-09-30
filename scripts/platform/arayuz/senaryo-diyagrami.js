@@ -173,7 +173,7 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
 
   let onceki = [];
   let oncekiKapali = false;
-  // Baştaki ortak akışlar koşuyorsa ekran onlardan SONRA açılır: "Ekran açılır" düğümü ilk ekran adımının önünde.
+  // Baştaki genel senaryolar koşuyorsa ekran onlardan SONRA açılır: "Ekran açılır" düğümü ilk ekran adımının önünde.
   let ekranAcildi = !d.ekranAcilisi;
   for (const a of d.adimlar) {
     if (!ekranAcildi && !a.ekranAcilmadan) {
@@ -182,7 +182,7 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
       ogeler.push({ el: h('li', { class: dugumSinifi(d.ekranAcilisi.sonuc, 'ekran-acilisi') },
         h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon('oynat')),
           h('h4', {}, d.ekranAcilisi.metin), durumCipi(d.ekranAcilisi.sonuc)),
-        h('p', { class: 'dugum-aciklamasi' }, 'Baştaki ortak akışlardan sonra ekranın sayfası açılır; ekran adımları burada başlar.'),
+        h('p', { class: 'dugum-aciklamasi' }, 'Baştaki genel senaryolardan sonra ekranın sayfası açılır; ekran adımları burada başlar.'),
         hataSatiri(d.ekranAcilisi.sonuc)), dugum: null });
       onceki = [];
       oncekiKapali = false;
@@ -194,8 +194,8 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
     const rozetler = [
       a.istegeBagli ? rozet(`isteğe bağlı: ${a.kapsamEtiketi}`, 'uyari', { title: 'Senaryoda bu anahtar açıksa adım koşulur.', 'data-ortak-durumu': a.ortakAkis ? 'istege-bagli' : null })
         : a.kapsamEtiketi ? rozet(`koşul: ${a.kapsamEtiketi}`, 'vurgu', { title: 'Adım yalnızca bu koşulda koşulur.' }) : null,
-      // Ortak akış her senaryoda çalışıyorsa bunu açıkça gösterir (isteğe bağlı olduğu sanılmasın).
-      a.ortakAkis && !a.istegeBagli ? rozet('ortak akış · her zaman', 'basari', { title: `“${a.ortakAkis}” bu akışı kullanan her senaryoda çalışır.`, 'data-ortak-durumu': 'her-zaman' }) : null,
+      // Genel senaryo her senaryoda çalışıyorsa bunu açıkça gösterir (isteğe bağlı olduğu sanılmasın).
+      a.ortakAkis && !a.istegeBagli ? rozet('genel senaryo · her zaman', 'basari', { title: `“${a.ortakAkis}” bu akışı kullanan her senaryoda çalışır.`, 'data-ortak-durumu': 'her-zaman' }) : null,
       disarida ? rozet('bu senaryoda koşulmaz') : a.kosulur === null ? rozet('koşulup koşulmayacağı bilinmiyor', 'atlanan') : null,
       a.hedef === 'hata' ? rozet('hata beklenir', 'hata') : null,
       p.rozetEl

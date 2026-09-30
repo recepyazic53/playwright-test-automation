@@ -1,4 +1,4 @@
-// KORUMA TESTİ — Her ekran başka bir akışın önceki / başlangıç adımı olabilir (ayrı "ortak akış" kaydı gerekmez): ortak akış
+// KORUMA TESTİ — Her ekran başka bir akışın önceki / başlangıç adımı olabilir (ayrı "genel senaryo" kaydı gerekmez): genel senaryo
 // açma (model-formu.mjs > ortakAkislariAc) başvurulan EKRANIN adımlarını da yerine yerleştirir; ekran kendini doğrudan ya da
 // dolaylı içeremez (yer tutucu adım + "donguler"; doğrulayıcı ve akış kaydı reddeder); akış tasarımının listesine tüm ekranlar
 // girer (düzenlenen ekran ve onu içeren ekranlar hariç); koşu planı önce başvurulan ekranın adımlarını çalıştırır.
@@ -78,7 +78,7 @@ test.describe('saf işlevler', () => {
     expect(dolayli.model.adimlar.some((a: Nesne) => typeof a.eksikOrtakAkis === 'string')).toBe(true);
   });
 
-  test('bulunamayan ekran: yer tutucu adım ve "eksikler" (mevcut ortak akış davranışı)', () => {
+  test('bulunamayan ekran: yer tutucu adım ve "eksikler" (mevcut genel senaryo davranışı)', () => {
     const sonuc = ortakAkislariAc(B, {});
     expect(sonuc.eksikler).toEqual([dosyasi('ekran-a')]);
     expect(sonuc.model.adimlar[0].eksikOrtakAkis).toBe(dosyasi('ekran-a'));

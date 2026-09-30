@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — PDF raporu A3: genel rapor (projenin tamamı; veritabanı fikstürüyle, ağ YOK).
-// Denetlenenler: seçimsiz kapsam (o anki tüm ekranlar ve servisler; ortak akış işaretli), toplamların çoklu raporla aynı hesaptan
+// Denetlenenler: seçimsiz kapsam (o anki tüm ekranlar ve servisler; genel senaryo işaretli), toplamların çoklu raporla aynı hesaptan
 // gelmesi, akışlar (servis + uçtan uca), planlı koşu güvenilirliği (kısıtlı geçmiş, devre dışı kural), kararsız testler, test
 // verisi sağlığı, kapsam ve açıklar, ortamlara göre; girdi doğrulama; maskeleme (gizli değer, gizli sütun, e-posta, uzun rakam,
 // ortam adresi, gövde HTML'de ve PDF'te yok); PDF (%PDF, sayfa > 1, dış istek yok); arşiv (kaydet → meta; yeniden oluşturma o
@@ -43,7 +43,7 @@ test.afterAll(async () => {
   if (klasor) rmSync(klasor, { recursive: true, force: true });
 });
 
-test('genel: tüm ekranlar ve servisler (seçimsiz), ortak akış işaretli, toplamlar çoklu hesapla aynı', async () => {
+test('genel: tüm ekranlar ve servisler (seçimsiz), genel senaryo işaretli, toplamlar çoklu hesapla aynı', async () => {
   const { veri: v, dosyaAdi } = await hazirla(genelGirdi(f));
   expect(v.tur).toBe('genel');
   expect(v.oge.ad).toBe('Tüm proje');
@@ -65,7 +65,7 @@ test('genel: tüm ekranlar ve servisler (seçimsiz), ortak akış işaretli, top
   expect(karma.sorunlar.map((s) => s.imza)).toEqual(v.sorunlar.map((s) => s.imza));
   expect(karma.rozet).toEqual(v.rozet);
   expect(v.ozet).toMatchObject({ taraf: 'ekran', baglantili: 1 });
-  // Ortak akış: ekran tablosunda işaretli; senaryosuz ekran açığına girmez.
+  // Genel senaryo: ekran tablosunda işaretli; senaryosuz ekran açığına girmez.
   expect(et.ogeler.find((o) => o.ad === 'Ortak Adım')?.ortakAkis).toBe(true);
   expect(et.ogeler.find((o) => o.ad === 'Başvuru')?.ortakAkis).toBe(false);
   expect(v.genel!.ozet).toEqual({ ekranSayisi: 3, ortakAkisSayisi: 1, servisSayisi: 3, akisSayisi: 1, uctanUcaSayisi: 1, kuralSayisi: 2 });
@@ -153,9 +153,9 @@ test('maskeleme: genel raporun HTML\'inde gizli değer, gizli sütun, e-posta, u
   expect(html).toContain('Genel Rapor — Tüm Proje');
   expect(html).toContain('Gece koşusu •••'); // kural adındaki gizli sütun değeri maskeli
   expect(html).toContain('parola=•••');
-  for (const bolum of ['Tek bakışta', 'Ele alınması gerekenler', 'Bağlantılı sorunlar (ekran ↔ servis)', 'Sorunlar ve eğilimleri', 'Eğilim', 'Ekranlar ve ortak akışlar',
+  for (const bolum of ['Tek bakışta', 'Ele alınması gerekenler', 'Bağlantılı sorunlar (ekran ↔ servis)', 'Sorunlar ve eğilimleri', 'Eğilim', 'Ekranlar ve genel senaryolar',
     'Servisler', 'Servis akışları ve uçtan uca akışlar', 'Planlı koşular', 'Kararsız testler', 'Test verisi sağlığı', 'Kapsam ve açıklar', 'Ortamlara göre',
-    'Yöntem', 'Gizlilik.', '(ortak akış)', 'Uçtan uca akış', 'Planlı koşu güvenilirliği', 'Sonraki aşama']) {
+    'Yöntem', 'Gizlilik.', '(genel senaryo)', 'Uçtan uca akış', 'Planlı koşu güvenilirliği', 'Sonraki aşama']) {
     expect(html, bolum).toContain(bolum);
   }
   // Tek ortam seçilince "Ortamlara göre" bölümü yok; karşılaştırma kapalıysa önceki dönem sütunları yok.

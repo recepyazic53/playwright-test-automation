@@ -1,4 +1,4 @@
-// KORUMA TESTİ — İsteğe bağlı ortak akış görünür ve yönetilebilir: akış diyagramında ortak akış bloğunun "Ne zaman çalışır?"
+// KORUMA TESTİ — İsteğe bağlı genel senaryo görünür ve yönetilebilir: akış diyagramında genel senaryo bloğunun "Ne zaman çalışır?"
 // seçimi (her senaryoda / isteğe bağlı + yeni senaryolarda dahil mi) ve durum rozeti; kaydetme ve "Ekranlara ekle" onay
 // pencerelerinin seçimi tekrarlaması; senaryo formunda her isteğe bağlı blok için "“<ad>” dahil" anahtarı (kapalıysa adımlar
 // "koşulmaz"), her senaryoda çalışan blok için yalnız bilgi; kapalı blok koşuda çalışmaz; eski (varsayilan'sız) "DahilKosulu"
@@ -28,7 +28,7 @@ const ORTAK_DOSYA = `${ORTAK_ANAHTAR}.model.json`;
 const DAHIL = 'kargoBlokuDahil';
 const DAHIL_ETIKETI = '“Kargo bloğu” dahil';
 
-/** Ortak akış: teslimat seçimi (her zaman) → "Hediye" (kendi koşulu: hediye paketi seçiliyse). */
+/** Genel senaryo: teslimat seçimi (her zaman) → "Hediye" (kendi koşulu: hediye paketi seçiliyse). */
 function ortakModel(): Nesne {
   return {
     semaSurumu: 2, tur: 'ortakAkis', id: ORTAK_ANAHTAR, ad: 'Kargo bloğu', aciklama: 'Kargo kısmı (nötr fikstür).',
@@ -59,7 +59,7 @@ function ortakModel(): Nesne {
 function ekranModel(anahtar: string, ad: string, blok: 'istege' | 'her' | 'yok'): Nesne {
   const dahil = blok === 'istege';
   return {
-    semaSurumu: 2, tur: 'ekran', id: anahtar, ad, aciklama: 'Ortak akış bloğu (nötr fikstür).', ekranUrl: '/acik-siparis/', girisGerekmez: true,
+    semaSurumu: 2, tur: 'ekran', id: anahtar, ad, aciklama: 'Genel senaryo bloğu (nötr fikstür).', ekranUrl: '/acik-siparis/', girisGerekmez: true,
     specDosyasi: `tests/scenarios/${anahtar}/${anahtar}.spec.ts`, pageObject: 'yok (model koşucusu)', veriKaynaklari: { senaryo: `Nöbetçi > Senaryolar (${anahtar})` },
     kosullar: dahil ? { [`${DAHIL}Kosulu`]: { ifade: { senaryoAyari: DAHIL, esit: true } } } : {},
     adimlar: [
@@ -330,7 +330,7 @@ test.describe('sunucu, koşu ve arayüz (sahte uygulama)', () => {
     await expect(onay).toContainText('“Kargo bloğu”: isteğe bağlı, yeni senaryolarda dahil.');
     await onay.getByRole('button', { name: 'Ekle' }).click();
     await expect(onay).toBeHidden();
-    await expect(page.getByText(/Ortak akış 1 ekrana eklendi/).first()).toBeVisible();
+    await expect(page.getByText(/Genel senaryo 1 ekrana eklendi/).first()).toBeVisible();
     const t = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekranlar['yalin-siparis']}&akisId=ana`) as Nesne;
     expect((t.bloklar as Nesne[]).find((b) => b.tur === 'ortak')).toEqual({ tur: 'ortak', dosya: ORTAK_DOSYA, ad: 'Kargo bloğu', istegeBagli: true, dahilVarsayilan: true });
     await bitir();

@@ -247,10 +247,10 @@ function urunListesi(nav, ekranlar, secili, servisler = [], seciliServis = null)
   nav.replaceChildren(
     baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
     ...urunlerBasligi(),
-    // Ortak akışlar ekranlardan ayrı grupta (ekran sayısına girmez); ortak akışı yoksa grup hiç çizilmez.
+    // Genel senaryolar ekranlardan ayrı grupta (ekran sayısına girmez); genel senaryoyu yoksa grup hiç çizilmez.
     ekranlarGrubu(ekranlar.filter((e) => !e.ortakAkis).map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu))),
     ekranlar.some((e) => e.ortakAkis)
-      ? navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: ekranlar.filter((e) => e.ortakAkis).map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)) })
+      ? navGrubu({ anahtar: 'ortak-akislar', baslik: 'Genel senaryolar', ogeler: ekranlar.filter((e) => e.ortakAkis).map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)) })
       : '',
     // Ekranlarla aynı davranış: servis bağlantısı Sonuçlar ekranında kalır ve Servis sonuçlarının o servise süzülmüş
     // görünümünü açar (#/sonuclar/s/<servisId>; servis sonuçları ekran sonuçlarına karışmaz).

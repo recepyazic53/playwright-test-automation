@@ -64,7 +64,7 @@ test.describe('hazırlık kuralları (saf)', () => {
     expect(hazirlikOzeti([g.gonderme, g.beklenen]).neden).toBe('Bu senaryo çalıştırılamıyor çünkü başarılı sonucun nasıl anlaşılacağı (başarı göstergesi) tanımlı değil.');
     const h = eylemDenetimi(model('t', 'Tam', TAM), { beklenen: { tur: 'hata', adim: 'bilgiler', mesaj: '' } });
     expect(h.beklenen).toMatchObject({ durum: 'eksik', neden: NEDENLER.hataMesajiYok, hedef: { tur: 'beklenen' } });
-    // Koşucunun planı (modelKosuPlani) aynı gerekçe parçalarını üretir (ör. eksik ortak akış); hata metni aynı cümledir.
+    // Koşucunun planı (modelKosuPlani) aynı gerekçe parçalarını üretir (ör. eksik genel senaryo); hata metni aynı cümledir.
     const m = model('t', 'Tam', TAM);
     (m.adimlar[0] as Json).eksikOrtakAkis = 'Ödeme';
     const plan = modelKosuPlani(m, { baslik: 'X', ad: 'a' }, {});

@@ -1,4 +1,4 @@
-// "YALNIZ GÖRÜNÜRSE BAS" (kosu.aksiyonlar'da { tur: 'tikla', kosul: 'gorunurse' }): ortak akış bazı ekranlarda onay düğmesinden
+// "YALNIZ GÖRÜNÜRSE BAS" (kosu.aksiyonlar'da { tur: 'tikla', kosul: 'gorunurse' }): genel senaryo bazı ekranlarda onay düğmesinden
 // sonra bir ARA PENCERE (yöntem seçimi) açar, bazılarında doğrudan sonraki pencereye geçer. Tek model ikisini de karşılar: ara
 // pencere düğmesi kısa sürede görünürse basılır, görünmezse atlanır (raporda "atlandı (görünmedi)" notu; hata değil). Testler:
 // doğrulayıcı (kabul / ret), koşucu (127.0.0.1'de iki sahte sayfa: A'da ara pencere var, B'de yok; aynı model ikisinde geçer),

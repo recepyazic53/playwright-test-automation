@@ -1,4 +1,4 @@
-// TESTLERİM (#/testlerim; Basit mod) — bir satır = bir ekran (ortak akışlar ve alt modeller listelenmez), altındaki senaryolar
+// TESTLERİM (#/testlerim; Basit mod) — bir satır = bir ekran (genel senaryolar ve alt modeller listelenmez), altındaki senaryolar
 // "N değişken". Satırda son sonuç rozeti, ▷ (o testi çalıştır), ⋯ (Düzenle → Hızlı test sihirbazının düzenleme kipi, Değişken ekle, Sil — onaylı).
 // Hazırlık bilgisi (sunucu: senaryolar/hazirlik-servisi.mjs; liste ucu ortam başına çalıştırılabilirlik taşır) varsa "Eksik" rozeti,
 // gerekçe cümlesi ve "Tamamla" (senaryo formu). Servis testleri ve uçtan uca akışlar Basit modda listelenmez: sayıları not olarak

@@ -231,7 +231,7 @@ export function baglamProfiliSecimi(s) {
 }
 
 /**
- * Ortak akışın BAŞLANGIÇ EKRANI seçimi ("Akışı kaydet" ve "Tekrar analiz et"): ortak akışı kullanan ekranlar önde ("… adımından
+ * Genel senaryonun BAŞLANGIÇ EKRANI seçimi ("Akışı kaydet" ve "Tekrar analiz et"): genel senaryoyu kullanan ekranlar önde ("… adımından
  * sonra başlar"), sonra adresi olan diğer ekranlar. Seçili gelen: son seçim, yoksa ilk aday.
  * @param {Array<{ id: string; ad: string; urlYolu: string; kullanir: boolean; oncekiAdim: string | null }>} adaylar
  * @param {string | null} sonId @param {string} kimlik
@@ -245,15 +245,15 @@ export function baslangicEkraniSecimi(adaylar, sonId, kimlik) {
   const diger = liste.filter((x) => !x.kullanir);
   const secim = /** @type {HTMLSelectElement} */ (h('select', { id: kimlik, disabled: !liste.length },
     liste.length ? null : h('option', { value: '' }, 'Adresi olan ekran yok'),
-    kullanan.length ? h('optgroup', { label: 'Bu ortak akışı kullanan ekranlar' }, kullanan.map(secenek)) : null,
+    kullanan.length ? h('optgroup', { label: 'Bu genel senaryoyu kullanan ekranlar' }, kullanan.map(secenek)) : null,
     diger.length ? h('optgroup', { label: kullanan.length ? 'Diğer ekranlar' : 'Ekranlar' }, diger.map(secenek)) : null));
   const bilgi = h('span', {});
   const secilen = () => liste.find((x) => x.id === secim.value);
   const yaz = () => {
     const b = secilen();
-    bilgi.textContent = !b ? 'Projede adresi olan bir ekran yok; önce ortak akışı kullanan ekranı ekleyin.'
-      : b.kullanir ? `Ortak akış bu ekranda ${b.oncekiAdim ? `“${b.oncekiAdim}” adımından sonra` : 'ekran açılınca'} başlar.`
-        : 'Bu ekran ortak akışı henüz kullanmıyor: ekranda gerekli adımları (ör. hesaplama) yaptıktan sonra ortak akış başlar.';
+    bilgi.textContent = !b ? 'Projede adresi olan bir ekran yok; önce genel senaryoyu kullanan ekranı ekleyin.'
+      : b.kullanir ? `Genel senaryo bu ekranda ${b.oncekiAdim ? `“${b.oncekiAdim}” adımından sonra` : 'ekran açılınca'} başlar.`
+        : 'Bu ekran genel senaryoyu henüz kullanmıyor: ekranda gerekli adımları (ör. hesaplama) yaptıktan sonra genel senaryo başlar.';
   };
   secim.addEventListener('change', yaz);
   yaz();
@@ -268,7 +268,7 @@ export function tekrarAnalizDiyalogu(s) {
   const guncelle = () => { sayac.textContent = profilVar ? `${secili.size} profil seçili` : 'bağlam profili yok'; olustur.disabled = profilVar && !secili.size; };
   const olustur = h('button', { type: 'button', class: 'birincil' }, ikon('dosya'), 'İstek dosyasını oluştur');
   const liste = baglamProfiliSecimi({ baglamProfilleri: s.baglamProfilleri, secili, degisti: guncelle });
-  // Ortak akış: kendi adresi yok; araç seçilen BAŞLANGIÇ EKRANININ adresinden başlar (istek metnine adres ve başlangıç adımı yazılır).
+  // Genel senaryo: kendi adresi yok; araç seçilen BAŞLANGIÇ EKRANININ adresinden başlar (istek metnine adres ve başlangıç adımı yazılır).
   const baslangic = s.ortakAkis ? baslangicEkraniSecimi(s.ortakAkis.baslangicEkranlari, s.ortakAkis.sonBaslangicEkranId, 'tekrar-analiz-baslangic') : null;
   const govde = h('div', {},
     h('p', { class: 'kucuk soluk' }, s.sonSecim.length ? 'Bu ekran için son seçiminiz işaretli geldi; değiştirebilirsiniz.' : 'Bu ekran için daha önce seçim yapılmadı.'),

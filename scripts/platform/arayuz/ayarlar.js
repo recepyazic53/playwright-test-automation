@@ -1469,7 +1469,7 @@ async function raporVerileriBolumu(govde, baglam, yenile) {
     h('div', { class: 'not-kutusu bilgi kucuk', role: 'note' },
       'Bu kararlar yalnız PDF raporlarını etkiler ve hepsi isteğe bağlıdır. Kritik işaretli öğe öncelik puanını artırır; son koşusunda kalırsa raporun durum rozeti Kritik olur. Ekip, aksiyonların "Sahip önerisi"dir (yoksa sınıfın varsayılan ekibi). Süre eşiği aşılırsa (p95 > eşik) raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür. Uygulama sürümü: Proje ve ortamlar > ortam > "Uygulama sürümü" ya da koşu başlatılırken.'),
     bolumBasligi('Ekipler', v.ekipler.length), ekipMesaj.kutu, ekipFormu, ekipFormAlani, kayitListesi(ekipSatirlari, 'Henüz ekip yok.', 'kullanici'),
-    ...liste('Ekranlar ve ortak akışlar', 'ekran', v.ekranlar, 'Projede ekran yok.', (x) => (x.ortakAkis ? 'Ortak akış' : x.devreDisi ? 'Devre dışı' : null)),
+    ...liste('Ekranlar ve genel senaryolar', 'ekran', v.ekranlar, 'Projede ekran yok.', (x) => (x.ortakAkis ? 'Genel senaryo' : x.devreDisi ? 'Devre dışı' : null)),
     ...liste('Servisler', 'servis', v.servisler, 'Projede servis yok.', (x) => String(x.tur || '').toUpperCase() || null),
     ...liste('Servis akışları ve uçtan uca akışlar', 'akis', v.akislar, 'Projede akış yok.', (x) => x.tur));
 }

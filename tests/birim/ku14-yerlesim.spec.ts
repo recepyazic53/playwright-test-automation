@@ -239,7 +239,7 @@ test('aksiyon tutarlılığı: "+ > Aksiyon" boş düğmeyle gelir; eklenen dü�
   const ikinci = aksiyonlar.nth(1);
   await expect(ikinci.getByRole('combobox', { name: 'Basılacak düğme' })).toHaveValue('-1');
   await expect(ikinci.getByRole('note')).toContainText('eklenen düğme bu bloğa yerleşir');
-  // Elle eklenen düğme yeni blok açmaz, düğmesiz aksiyona yerleşir (ortak akışta ve ekranda aynı kural).
+  // Elle eklenen düğme yeni blok açmaz, düğmesiz aksiyona yerleşir (genel senaryoda ve ekranda aynı kural).
   const palet = page.locator('aside[aria-label="Kayıtta yakalananlar"]');
   await palet.getByRole('tab', { name: /Düğmeler/ }).click();
   await palet.getByText('Listede olmayan düğmeyi elle ekle').click();
@@ -292,7 +292,7 @@ test('senaryo önerileri: CSP konsol ihlali yok; kapsam çubuğu CSS değişkeni
   await page.close();
 });
 
-test('Sonuçlar sol menüsü: "Ekranlar ve servisler"; ortak akış EKRANLAR altında değil, ayrı "Ortak akışlar" grubunda (ekran sayısına girmez)', async () => {
+test('Sonuçlar sol menüsü: "Ekranlar ve servisler"; genel senaryo EKRANLAR altında değil, ayrı "Genel senaryolar" grubunda (ekran sayısına girmez)', async () => {
   const ortak = String((await basarili('/platform/ortak-akis/olustur', { projeId, ad: 'Çıkış adımları' })).ekranId);
   const ozet = await api(`/platform/sonuclar/ozet?projeId=${projeId}`);
   expect((ozet.ekranlar as Nesne[]).map((e) => [e.ad, e.ortakAkis])).toEqual(expect.arrayContaining([['Çıkış adımları', true], ['Üyelik formu', false]]));
@@ -304,13 +304,13 @@ test('Sonuçlar sol menüsü: "Ekranlar ve servisler"; ortak akış EKRANLAR alt
   await expect(ekranlarGrubu.getByRole('link')).toHaveCount(2);
   await expect(ekranlarGrubu).not.toContainText('Çıkış adımları');
   await expect(nav.locator('[data-grup="ekranlar"] .nav-grup-baslik .adet')).toHaveText('2');
-  await expect(nav.getByRole('group', { name: 'Ortak akışlar' }).getByRole('link', { name: /Çıkış adımları/ })).toHaveAttribute('href', `#/sonuclar/u/${encodeURIComponent(ortak)}`);
+  await expect(nav.getByRole('group', { name: 'Genel senaryolar' }).getByRole('link', { name: /Çıkış adımları/ })).toHaveAttribute('href', `#/sonuclar/u/${encodeURIComponent(ortak)}`);
   expect(konsol).toEqual([]);
   expect(disari).toEqual([]);
   await page.close();
 });
 
-test('paket: "Paket yükle" açıklamasında özet bağlantısı yok (özet yerel olarak hâlâ sunulur); ortak akışta "Boş başla" önde ve ad kutusunun görünür etiketi var', async () => {
+test('paket: "Paket yükle" açıklamasında özet bağlantısı yok (özet yerel olarak hâlâ sunulur); yeni ekranda "Boş başla" (genel senaryo) dördüncü kutu ve ad kutusunun görünür etiketi var', async () => {
   const { page, konsol, disari } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
   await expect(page.locator('.paket-nedir').getByRole('link')).toHaveCount(0);
@@ -321,11 +321,11 @@ test('paket: "Paket yükle" açıklamasında özet bağlantısı yok (özet yere
   expect(metin).toContain('# Ekran paketi — kısa özet');
   expect(metin).toContain('isteğe bağlıdır');
   expect(metin.split('\n').length).toBeLessThan(140);
-  await page.goto('/#/ekranlar/yeni/ortak-akis');
-  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3').first()).toHaveText('Boş başla');
+  await page.goto('/#/ekranlar/yeni');
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3').last()).toHaveText('Boş başla');
   const kutuBos = page.locator('.bos-basla-kutusu');
-  await expect(kutuBos.locator('label', { hasText: 'Ortak akışın adı' })).toBeVisible();
-  await expect(kutuBos.getByLabel('Ortak akışın adı')).toBeEditable();
+  await expect(kutuBos.locator('label', { hasText: 'Genel senaryonun adı' })).toBeVisible();
+  await expect(kutuBos.getByLabel('Genel senaryonun adı')).toBeEditable();
   expect(konsol).toEqual([]);
   expect(disari).toEqual([]);
   await page.close();

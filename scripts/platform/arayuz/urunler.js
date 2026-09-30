@@ -1,7 +1,7 @@
 // Sol panel "EKRANLAR VE SERVİSLER" bölümü (Sonuçlar, Senaryolar, Ekranlar ve Servisler sayfalarında aynı düzen): açılır-kapanır gruplar
 //   EKRANLAR VE SERVİSLER     [+ Yeni]  → ekran mı servis mi, sorar
 //   ▾ Ekranlar              [+]       → sayfanın kendi ekran listesi
-//   ▾ Ortak akışlar / Alt modeller     (yalnız Ekranlar sayfasında)
+//   ▾ Genel senaryolar / Alt modeller     (yalnız Ekranlar sayfasında)
 //   ▾ Servisler             [+]       → servisler (bağlantının hedefi sayfaya göre)
 import { api, h, ikon } from './ortak.js';
 import { secenekIste } from './kosu-paneli.js';
@@ -59,7 +59,7 @@ export function uctanUcaBaglantisi() {
 }
 
 // ---------------------------------------------------------------------------------------
-// Açılır-kapanır gruplar (Ekranlar, Ortak akışlar, Alt modeller, Servisler)
+// Açılır-kapanır gruplar (Ekranlar, Genel senaryolar, Alt modeller, Servisler)
 // ---------------------------------------------------------------------------------------
 // Grubun açık/kapalı durumu bu tarayıcıda hatırlanır (yalnız görünüm kolaylığı; kasaya yazılmaz). Grubun başlığındaki "+"
 // o gruba yeni öğe ekler; grupların dışındaki "+ Yeni" ne ekleneceğini sorar.
@@ -119,7 +119,7 @@ export function yeniEkleDugmesi() {
       const secim = await secenekIste({
         baslik: 'Ne eklemek istiyorsunuz?', ikonAd: 'arti',
         secenekler: [
-          { deger: 'ekran', etiket: 'Ekran', aciklama: 'Test edilecek bir sayfa: ekran paketi, tarama ya da akış kaydıyla. Ortak akışlar da buradan (paket) eklenir.', ikonAd: 'ekran' },
+          { deger: 'ekran', etiket: 'Ekran', aciklama: 'Test edilecek bir sayfa: ekran paketi, tarama ya da akış kaydıyla. Genel senaryolar da buradan (paket) eklenir.', ikonAd: 'ekran' },
           { deger: 'servis', etiket: 'Servis', aciklama: 'SOAP / REST servis: WSDL (adresinden kendiliğinden okunur), SoapUI projesi, Postman koleksiyonu, cURL ya da elle.', ikonAd: 'ag' }
         ]
       });

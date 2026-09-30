@@ -260,7 +260,7 @@ test('Ayarlar > Giriş tarifi: "Analiz et" yalnızca onayla ve yalnızca ortam a
   agKontrol(istekler);
 });
 
-test('Giriş Ekranlar\'da listelenmez (ne sol menüde ne Ortak akışlar\'da); yalnız Ayarlar > Giriş profilleri > Giriş tarifi\'nden yönetilir', async () => {
+test('Giriş Ekranlar\'da listelenmez (ne sol menüde ne Genel senaryolar\'da); yalnız Ayarlar > Giriş profilleri > Giriş tarifi\'nden yönetilir', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');

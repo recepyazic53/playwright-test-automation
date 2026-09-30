@@ -2,7 +2,7 @@
 // karşılığı: koşu planı (varsayılanlar, koşullar, göreli tarih, hazır kimlik profili), tekrar analizde bağımlı liste, akış
 // düzenleyici gidiş-dönüşü, toleranslı mesaj eşleşmesi; gerçek tarayıcıyla koşucu davranışları (bağımlı liste, sorgu
 // beklemesi, sorgudan sonra yeniden doldurma, VEYA başarı + kabul edilen uyarılar, tarayıcı uyarısı, hata penceresi);
-// ortak akış, Dene, modeli değiştir ve ortak akış düzenleme. Uygulama 127.0.0.1'de sahte "Başvuru (akış)" ekranıdır
+// genel senaryo, Dene, modeli değiştir ve genel senaryo düzenleme. Uygulama 127.0.0.1'de sahte "Başvuru (akış)" ekranıdır
 // (model-kosucu-ozellikleri-fikstur.ts); ayrı Nöbetçi örneği geçici veritabanıyla çalışır. Dış siteye istek gitmez.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -68,7 +68,7 @@ async function kaydetVeKos(baslik: string, veri: Nesne, s: { ekran?: string; aki
 // bekleseydi en az o kadar sürerdi). Duvar saati kullanılmaz: senaryo kaydı + koşu sürecinin ve tarayıcının açılışı + sunucu
 // işini de içerir; paralel tam takımda yük altında tek başına 20 sn'yi aşabiliyordu.
 const HESAPLAMA_ZAMAN_ASIMI_MS = 20_000; // fikstür: hesaplama adımı zamanAsimiSn 20
-const ONAY_ZAMAN_ASIMI_MS = 60_000; // fikstür: ortak akışın onay adımı zamanAsimiSn 60
+const ONAY_ZAMAN_ASIMI_MS = 60_000; // fikstür: genel senaryonun onay adımı zamanAsimiSn 60
 function dusenAdiminSuresi(sonuc: Nesne): number {
   const dusen = ((sonuc.adimlar ?? []) as Nesne[]).filter((a) => a.durum === 'basarisiz');
   expect(dusen.length, `tek adım düşmeli: ${JSON.stringify(sonuc.adimlar)}`).toBe(1);
@@ -278,17 +278,17 @@ test('VEYA başarı + kabul edilen uyarılar: görülen seçenek raporda; başar
   expect(((uyarili.medya ?? []) as Nesne[]).map((x) => x.ad)).toContain(`04 - Tutar hesaplanır (görülen: uyarı "${PLAN_UYARISI}")`);
 });
 
-test('ortak akış: "+ > Ortak akış" bloğuyla akışa eklenir; "dahil" senaryoda profilden onaylanır, dahil değilse onay yok; canlıda atlanır; ret penceresi hızlı düşer', async () => {
+test('genel senaryo: "+ > Genel senaryo" bloğuyla akışa eklenir; "dahil" senaryoda profilden onaylanır, dahil değilse onay yok; canlıda atlanır; ret penceresi hızlı düşer', async () => {
   test.setTimeout(240_000);
   const onayTuru = String((await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: HAVUZLAR.onay, alanlar: [{ ad: 'kod', hassas: true }] })).id);
   await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: onayTuru, ad: 'ortak', degerler: { kod: '4321' } });
   await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: onayTuru, ad: 'red', degerler: { kod: '0000' } });
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: onayAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
-  // Ortak akış senaryo listesinde ekran olarak görünmez.
+  // Genel senaryo senaryo listesinde ekran olarak görünmez.
   const liste = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`) as { ekranlar: Nesne[] };
   expect(liste.ekranlar.some((e) => e.ad === 'Onay (ortak)')).toBe(false);
 
-  // Diyagram: ana akışın kopyasına hesaplamadan sonra ortak akış bloğu (isteğe bağlı) eklenir.
+  // Diyagram: ana akışın kopyasına hesaplamadan sonra genel senaryo bloğu (isteğe bağlı) eklenir.
   const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekranId}&kopya=ana`) as Nesne & { bloklar: Nesne[]; ortakAkislar: Nesne[] };
   expect(tasarim.basarili, String(tasarim.mesaj ?? '')).toBe(true);
   expect(tasarim.ortakAkislar).toEqual([{ dosya: ONAY_DOSYASI, ad: 'Onay (ortak)', adimlar: ['Onay formu açılır', 'Onay kodu girilir, onaylanır'], yalnizTest: true }]);
@@ -296,7 +296,7 @@ test('ortak akış: "+ > Ortak akış" bloğuyla akışa eklenir; "dahil" senary
   const akisId = String((await basarili('/platform/ekran/akis/kaydet', { projeId, ekranId, ad: 'Onaylı akış', bloklar, onay: true })).akisId);
   const geri = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekranId}&akisId=${akisId}`) as Nesne & { bloklar: Nesne[] };
   expect(geri.bloklar.at(-2)).toEqual({ tur: 'ortak', dosya: ONAY_DOSYASI, ad: 'Onay', istegeBagli: true });
-  // Senaryo formu: "“Onay” dahil" ayarı ve ortak akışın adımları akışın modelinde.
+  // Senaryo formu: "“Onay” dahil" ayarı ve genel senaryonun adımları akışın modelinde.
   const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}&akisId=${akisId}`) as Nesne & { model: Serbest };
   const dahil = (form.model.senaryoDuzeyi.alanlar as Nesne[]).find((a) => (a.etiket as Nesne)?.form === '“Onay” dahil') as Nesne;
   expect(dahil).toBeTruthy();
@@ -319,7 +319,7 @@ test('ortak akış: "+ > Ortak akış" bloğuyla akışa eklenir; "dahil" senary
   expect(dusenAdiminSuresi(red)).toBeLessThan(ONAY_ZAMAN_ASIMI_MS);
   expect(uygulama.onaylar).toHaveLength(1);
 
-  // Canlı işaretli ortam: ortak akışın "yalnızca test" adımları atlanır.
+  // Canlı işaretli ortam: genel senaryonun "yalnızca test" adımları atlanır.
   const canliOrtam = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Canlı (deneme)', tabanUrl: fikstur.adres, canli: true })).ortam as Nesne).id);
   const canlida = await kaydetVeKos('Onaylı / canlı', { ...veri, [String(dahil.id)]: true }, { akisId, ortam: canliOrtam });
   expect(canlida.durum, JSON.stringify(canlida.hataMesaji)).toBe('basarili');
@@ -389,7 +389,7 @@ test('modeli değiştir: mevcut ekrana paket yeni sürüm olarak yazılır; sena
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ gizliTur: '10', urun: 'U11' });
 });
 
-test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar korunur), kullanan ekranlar etki olarak gösterilir; "Ekranlara ekle" varsayılan akışa ekler', async () => {
+test('genel senaryo düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar korunur), kullanan ekranlar etki olarak gösterilir; "Ekranlara ekle" varsayılan akışa ekler', async () => {
   test.setTimeout(180_000);
   const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Nesne[];
   const ortakId = String((ekranlar.find((e) => e.modelTuru === 'ortakAkis') as Nesne).id);
@@ -399,7 +399,7 @@ test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar k
   expect(liste).toMatchObject({ duzenlenebilir: true, ortakAkis: true });
   expect(liste.akislar).toHaveLength(1);
   expect(liste.kullananlar).toEqual([expect.objectContaining({ id: ekranId, akislar: ['Onaylı akış'] })]);
-  // Yeni akış / kopya yok; içine ortak akış eklenmez.
+  // Yeni akış / kopya yok; içine genel senaryo eklenmez.
   expect(await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ortakId}&kopya=ana`)).toMatchObject({ basarili: false });
   const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ortakId}&akisId=ana`) as Nesne & { bloklar: Nesne[]; ortakAkislar: Nesne[] };
   expect(tasarim.ortakAkislar).toEqual([]);
@@ -438,7 +438,7 @@ test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar k
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
   expect(uygulama.onaylar).toHaveLength(onaySayisi + 1);
 
-  // Arayüz: ortak akışın Akışlar sekmesi (yeni akış yok; kullanan ekranlar; Ekranlara ekle… listesi; Düzenle'de ortak akış bloğu yok).
+  // Arayüz: genel senaryonun Akışlar sekmesi (yeni akış yok; kullanan ekranlar; Ekranlara ekle… listesi; Düzenle'de genel senaryo bloğu yok).
   const tarayici = await korumaliTarayici();
   try {
     const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1200 } })).newPage();
@@ -455,7 +455,7 @@ test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar k
     await page.getByRole('button', { name: 'Düzenle' }).click();
     await expect(page.getByRole('heading', { name: 'Akışı düzenle: Ana akış' })).toBeVisible();
     await page.getByRole('button', { name: 'Buraya blok ekle' }).first().click();
-    await expect(page.getByRole('group', { name: 'Eklenecek blok' }).getByRole('button', { name: 'Ortak akış' })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Eklenecek blok' }).getByRole('button', { name: 'Genel senaryo' })).toHaveCount(0);
   } finally {
     await tarayici.close();
   }
@@ -472,7 +472,7 @@ test('doğrulayıcı: "ekranaDon" aksiyonu seçicisiz geçer; seçici / metin / 
   }
 });
 
-test('ekrana dön ("Baştaki ortak akışlar: ekran açıldıktan sonra"): akışın başındaki ortak akış ekrandan başka sayfaya gidip "Ekrana dön" ile döner, ekran adımları yürür; dönmeyen akış ekranı bulamaz', async () => {
+test('ekrana dön ("Baştaki genel senaryolar: ekran açıldıktan sonra"): akışın başındaki genel senaryo ekrandan başka sayfaya gidip "Ekrana dön" ile döner, ekran adımları yürür; dönmeyen akış ekranı bulamaz', async () => {
   test.setTimeout(180_000);
   const DONMEDEN_ANAHTARI = 'donmeden-ortak-akis';
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: donusAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
@@ -482,7 +482,7 @@ test('ekrana dön ("Baştaki ortak akışlar: ekran açıldıktan sonra"): akı�
   const ekran = await ekranBul('Başvuru (dönüş)');
   const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekran}&kopya=ana`) as Nesne & { bloklar: Nesne[] };
   expect(tasarim.basarili, String(tasarim.mesaj ?? '')).toBe(true);
-  // Ortak akış akışın EN BAŞINDA (isteğe bağlı değil: her senaryoda koşar). Blok ekranın bağlantısını kullanır: "Ekran açılır"ın
+  // Genel senaryo akışın EN BAŞINDA (isteğe bağlı değil: her senaryoda koşar). Blok ekranın bağlantısını kullanır: "Ekran açılır"ın
   // ALTINDA (ekranAcilisSirasi 0 → "bastakiOrtakAkislar": "sonra"; ekran önce açılır — eski davranış).
   const akisKaydet = async (ad: string, anahtar: string): Promise<string> => String((await basarili('/platform/ekran/akis/kaydet', {
     projeId, ekranId: ekran, ad, onay: true, ekranAcilisSirasi: 0, bloklar: [{ tur: 'ortak', dosya: `${anahtar}.model.json`, ad: 'Başka sayfa', istegeBagli: false }, ...tasarim.bloklar]
