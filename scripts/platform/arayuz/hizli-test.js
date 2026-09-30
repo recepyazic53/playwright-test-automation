@@ -90,7 +90,7 @@ async function baslatEkrani(govde, proje, ekranId) {
     h('div', { class: 'alan' }, h('label', { for: 'hizli-ortam' }, 'Ortam'), ortam),
     girissizSatiri,
     h('div', { class: 'alan' }, h('label', { for: 'hizli-cumle' }, 'Ne yapılsın? ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), cumle,
-      h('div', { class: 'yardim' }, 'Kalıp gerekmez, normal yazın. Örnekler: “Hesapla butonuna tıklayacağım”; “Başvurunuz alındı yazısını görünce bitir”; “Prim tutarı yazısı gelmeli”. Anlaşılmayan kısım yok sayılır.')),
+      h('div', { class: 'yardim' }, 'Kalıp gerekmez, normal yazın. Örnekler: “Hesapla butonuna tıklayacağım”; “Başvurunuz alındı yazısını görünce bitir”; “Toplam tutarı yazısı gelmeli”. Anlaşılmayan kısım yok sayılır.')),
     h('fieldset', { class: 'hizli-izinler' }, h('legend', {}, 'Nöbetçi sayfadaki düğmelere basabilir mi?'), izinler.map((x) => x.el)),
     h('div', { class: 'dugmeler' }, baslat,
       h('a', { class: 'dugme hayalet', href: '#/testlerim' }, 'Vazgeç')));

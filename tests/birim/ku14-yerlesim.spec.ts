@@ -313,7 +313,6 @@ test('Sonuçlar sol menüsü: "Ekranlar ve servisler"; ortak akış EKRANLAR alt
 test('paket: "Paket nedir?" 2 sayfalık özete bağlanır (yerel); ortak akışta "Boş başla" önde ve ad kutusunun görünür etiketi var', async () => {
   const { page, konsol, disari } = await sayfa();
   await page.goto('/#/ekranlar/yeni');
-  await page.locator('details.ileri-duzey > summary').first().click();
   const baglanti = page.locator('.paket-nedir').getByRole('link', { name: 'Paket özetini oku (2 sayfa)' });
   await expect(baglanti).toHaveAttribute('href', '/arayuz/sayfa-paketi-ozet.md');
   const y = await page.request.get('/arayuz/sayfa-paketi-ozet.md');

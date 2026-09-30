@@ -44,7 +44,7 @@ export function canliOnayMetni(izin) {
 // --- "Ne yapılsın?" cümle çözümleyicisi (kural tabanlı, YZ YOK) ---------------------------------------------------------------
 // Kalıp gerekmez: normal Türkçe yazılır. Cümle ayraçlarla (. ; ! ? satır , "sonra" "ardından" "ve") parçalanır; her parçada
 //  - düğme: "<ad> düğmesine / butonuna / tuşuna tıkla | bas | tıklıyorum | basacağım | basınca …", "Hesapla'ya bas", "Hesaplaya bas",
-//    "Prim Hesapla düğmesi" (büyük harfle başlayan ardışık sözcükler ad olur; tırnaklıysa tırnak içi),
+//    "Toplam Hesapla düğmesi" (büyük harfle başlayan ardışık sözcükler ad olur; tırnaklıysa tırnak içi),
 //  - beklenen mesaj: tırnak içi metin; tırnaksız "<metin> yazısını / mesajını / metnini … görünce | görürsem | çıkınca | gelince bitir",
 //    "<metin> yazısı gelmeli | çıkmalı | görünmeli", "<metin> mesajını doğrula", "<metin> görünce bitir".
 // Anlaşılmayan parça yok sayılır (uydurma yok).
@@ -86,7 +86,7 @@ function dugmeAdi(parca, tirnaklar, cumleBasiMi) {
   let ad = noktalamaAt(son.split(/['’]/)[0]);
   if (!butonVar && !apostrof && /(?:ya|ye)$/iu.test(ad) && ad.length > 4) ad = ad.slice(0, -2);
   if (!ad || AD_DEGIL.has(kucuk(ad)) || BUTON_SOZCUGU.test(kucuk(ad))) return null;
-  // Büyük harfle başlayan ardışık sözcükler tek ad ("Prim Hesapla"); cümle başındaki ilk sözcük sayılmaz (büyük harf cümle başından olabilir).
+  // Büyük harfle başlayan ardışık sözcükler tek ad ("Toplam Hesapla"); cümle başındaki ilk sözcük sayılmaz (büyük harf cümle başından olabilir).
   if (buyukBasli(son)) {
     const adlar = [ad];
     for (let i = s.length - 2; i >= 0 && adlar.length < 3; i--) {
@@ -175,7 +175,7 @@ export function tekAday(adaylar, cumleDugmeleri = []) {
     const uyan = adaylar.filter((a) => a.metin && katla(a.metin) === katla(ad));
     if (uyan.length === 1) return uyan[0];
   }
-  // Tam eşleşme yoksa: yazılan ad aday metninin parçası (ya da tersi) ve tek aday ("Hesapla" → "Prim Hesapla"; "Devama" → "Devam").
+  // Tam eşleşme yoksa: yazılan ad aday metninin parçası (ya da tersi) ve tek aday ("Hesapla" → "Toplam Hesapla"; "Devama" → "Devam").
   for (const ad of cumleDugmeleri) {
     const k = katla(ad);
     if (k.length < 3) continue;

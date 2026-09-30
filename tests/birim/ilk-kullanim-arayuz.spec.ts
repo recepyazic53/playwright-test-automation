@@ -186,13 +186,11 @@ test.describe('Başlarken listesi (arayüz)', () => {
     await adim(page, 'ekran').getByRole('link', { name: 'Ekran ekle — İlk ekranı ekle' }).click();
     await expect(page).toHaveURL(/#\/ekranlar\/yeni$/);
     await expect(page.getByRole('heading', { level: 2, name: 'Ekran ekle' })).toBeVisible();
-    // Ekran ekle: önde tara / kaydet, "İleri düzey" kapalı.
-    await expect(page.locator('details.ileri-duzey')).not.toHaveAttribute('open', '');
-    await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara', 'Akışı kaydet']);
+    // Ekran ekle: önde tara / hızlı test ve kaydet; paket yükle / yapay zekâ bölümü görünür (açılır değil).
+    await expect(page.locator('section.ileri-duzey-bolumu')).toBeVisible();
+    await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet']);
     if (EKRAN_KLASORU) {
       await page.screenshot({ path: join(EKRAN_KLASORU, 'ekran-ekle-kapali.png'), fullPage: true });
-      await page.locator('details.ileri-duzey > summary').click();
-      await page.screenshot({ path: join(EKRAN_KLASORU, 'ekran-ekle-ileri-duzey-acik.png'), fullPage: true });
       await page.goto('/#/ekranlar');
       await expect(page.locator('.kesif-seridi')).toBeVisible();
       await page.screenshot({ path: join(EKRAN_KLASORU, 'ekranlar-bos.png'), fullPage: true });

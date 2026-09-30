@@ -4309,6 +4309,10 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ileri-duzey > summary .ileri-duzey-ok { margin-left: auto; transition: transform .15s ease; }
 .ileri-duzey[open] > summary .ileri-duzey-ok { transform: rotate(180deg); }
 .ileri-duzey > summary small { font-weight: 400; color: var(--metin-3); font-size: 12.5px; }
+.ileri-duzey-bolumu { margin-top: var(--b4); display: grid; gap: var(--b3, 12px); min-width: 0; }
+.ileri-duzey-bolumu > .ara-baslik { display: flex; align-items: center; gap: 8px; margin: 0; }
+.ileri-duzey-bolumu > .paket-nedir { margin: 0; }
+.ileri-duzey-bolumu .ileri-duzey-govdesi { padding: 0; }
 .ileri-duzey-govdesi { padding: 0 16px 16px; display: grid; gap: var(--b4); min-width: 0; }
 .ileri-duzey-govdesi > .kart { margin-bottom: 0; }
 .paket-nedir { margin: 0; max-width: 72ch; }
