@@ -201,6 +201,18 @@ test.describe('tüm ekranlar taşmasız', () => {
     await baglam.close();
   });
 
+  test('Oluştur menüsü: Servis testleri grubunda "Uçtan uca akış" → #/akislar/yeni', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/senaryolar');
+    await bekle(page);
+    await page.getByRole('button', { name: 'Oluştur menüsü' }).click();
+    const grup = page.getByRole('menu', { name: 'Oluştur' }).getByRole('group', { name: 'Servis testleri' });
+    await grup.getByRole('menuitem', { name: /^Uçtan uca akış/ }).click();
+    await expect(page).toHaveURL(/#\/akislar\/yeni$/);
+    await baglam.close();
+  });
+
   test('"Başarısız testler" kartı yalnız son sonucu başarısız olanları sayar; düzelenler ayrı kapalı bölümde', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 1000 } });
     const page = await baglam.newPage();
