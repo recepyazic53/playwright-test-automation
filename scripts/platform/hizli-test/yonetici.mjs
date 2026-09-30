@@ -214,13 +214,23 @@ export function hizliTestYoneticisiOlustur(s) {
       const adim = guncelAdim(o);
       const gorunen = new Set(e.anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar));
       // Koşullu alanlar: doldurunca beliren yeni alanlar aynı adıma; kaybolanlar adımdan çıkar (değerleri senaryoya yazılmaz).
-      let yeni = 0;
+      /** @type {string[]} */
+      const yeniler = [];
       for (const a of e.anlik.alanlar.filter(doldurulabilir)) {
-        if (!o.alanlar.has(a.anahtar)) { alanEkle(o, a, adim, true); yeni++; }
+        if (!o.alanlar.has(a.anahtar)) { alanEkle(o, a, adim, true); yeniler.push(a.anahtar); }
       }
+      const yeni = yeniler.length;
       adim.alanlar = adim.alanlar.filter((/** @type {Nesne} */ a) => gorunen.has(a.anahtar));
       const secimler = Object.fromEntries(adim.alanlar.filter((/** @type {Nesne} */ a) => ['select', 'radio'].includes(String(a.tur)) && typeof o.degerler[a.anahtar]?.deger === 'string'
         && !degerBasvurusu(o.degerler[a.anahtar].deger)).map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
+      // Koşullu alan: doldurmada YALNIZ BİR seçim alanı değiştiyse, beliren alan o seçimin bu değerinde görünür sayılır (gözlem; tek
+      // değişiklik yoksa koşul yazılmaz — akış kaydının okuma kuralı dener).
+      const onceki = adim.okumalar.length ? adim.okumalar[adim.okumalar.length - 1].secimler : {};
+      const degisen = Object.keys(secimler).filter((k) => onceki[k] !== secimler[k]);
+      if (yeniler.length && degisen.length === 1) {
+        adim.kosullar ??= {};
+        for (const k of yeniler) adim.kosullar[k] = { secim: degisen[0], degerler: [secimler[degisen[0]]] };
+      }
       adim.okumalar.push({ gorunen: [...gorunen], secimler });
       if (Object.keys(o.alanHatalari).length) { veriDuragi(o, 'Bazı alanlar doldurulamadı.'); return; }
       if (yeni) { veriDuragi(o, `${yeni} yeni alan belirdi; değerlerini girin.`); return; }

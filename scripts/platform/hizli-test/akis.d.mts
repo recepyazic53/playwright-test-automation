@@ -18,7 +18,7 @@ export declare function bitisKosulu(g: { etiketler: Record<string, string | null
   bitti: string[]; hata: string[]; devam: string[]; adres: string | null; olumsuz: { mesaj: string } | null; hatalar: string[];
 };
 export declare function kayitEnvanteriKur(
-  o: { adimlar: Array<{ alanlar: any[]; bas: { secici: string; metin: string | null } | null; okumalar?: Array<{ gorunen: string[]; secimler: Record<string, string> }> }>;
+  o: { adimlar: Array<{ alanlar: any[]; bas: { secici: string; metin: string | null } | null; okumalar?: Array<{ gorunen: string[]; secimler: Record<string, string> }>; kosullar?: Record<string, { secim: string; degerler: string[] }> }>;
     degerler: Record<string, unknown>; yol: string; baslik: string; profil: string | null },
   bitis: { bitti: string[]; hata: string[] }
 ): import('../tarama/paket-olusturucu.mjs').KayitEnvanteri;

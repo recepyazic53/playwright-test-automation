@@ -152,7 +152,7 @@ const kacis = (m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * Oturumun zinciri → akış kaydı envanteri (KayitEnvanteri). Son adımın göstergesi Bitti metinleri, tüm adımların uyarıları Hata metinleri.
  * Alanlar: değeri olan alanlar (değer DEĞİL, yapı). Boş kalan son adım (düğmesiz, alansız) atılır.
- * @param {{ adimlar: Array<{ alanlar: any[]; bas: { secici: string; metin: string | null } | null; okumalar?: Array<{ gorunen: string[]; secimler: Record<string, string> }> }>;
+ * @param {{ adimlar: Array<{ alanlar: any[]; bas: { secici: string; metin: string | null } | null; okumalar?: Array<{ gorunen: string[]; secimler: Record<string, string> }>; kosullar?: Record<string, { secim: string; degerler: string[] }> }>;
  *   degerler: Record<string, unknown>; yol: string; baslik: string; profil: string | null }} o
  * @param {{ bitti: string[]; hata: string[] }} bitis
  */
@@ -171,6 +171,9 @@ export function kayitEnvanteriKur(o, bitis) {
       ad: i === 0 ? 'Form' : `${bosluk(adimlar[i - 1].bas?.metin) || 'Önceki düğme'} sonrası`.slice(0, 80),
       yol: o.yol, baslik: o.baslik, alanlar: a.alanlar, ilerleme: a.bas ? { secici: a.bas.secici, metin: a.bas.metin } : null,
       ...(a.okumalar?.length ? { okumalar: a.okumalar } : {}),
+      // Veri durağında gözlenen koşullar (beliren alan → seçim + değer); yalnız bu adımdaki alanlar için.
+      ...(a.kosullar && Object.keys(a.kosullar).some((k) => a.alanlar.some((x) => x.anahtar === k))
+        ? { kosullar: Object.fromEntries(Object.entries(a.kosullar).filter(([k, v]) => a.alanlar.some((x) => x.anahtar === k) && a.alanlar.some((x) => x.anahtar === v.secim))) } : {}),
       gosterge: i === son ? gosterge(bitis.bitti) : null,
       ...(uyarilar.length ? { uyarilar } : {}), zamanAsimiSn: BITIS_BEKLEME_SN
     }))

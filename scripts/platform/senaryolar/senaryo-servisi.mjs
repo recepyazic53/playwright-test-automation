@@ -366,6 +366,8 @@ export function senaryoListesi(vt, projeId, ortamId) {
       guncellenme: String(s.guncellenme),
       // Talep numaraları (listede süzme ve "Bu talebin senaryolarını koş").
       talepler: icerikTalepleri(icerik),
+      // Hızlı testle oluşturulan ve henüz doğrulanmamış (Hayır izni) senaryo: listede "doğrulanmadı" rozeti için.
+      ...(nesneMi(icerik.hizliTest) ? { hizliTest: { izin: icerik.hizliTest.izin, dogrulandi: icerik.hizliTest.dogrulandi === true } } : {}),
       ...(ortamId ? {} : { ortamlar })
     });
   }
@@ -404,7 +406,9 @@ export function senaryoDetayi(vt, id, ortamId) {
     // Çalıştırma biçimi (tablodan çoklu satır; yoksa null = her grup tek satır, bugünkü davranış).
     veriKosulari: nesneMi(icerik.veriKosulari) ? icerik.veriKosulari : null,
     // Talep numaraları (serbest metin; yoksa boş liste).
-    talepler: icerikTalepleri(icerik)
+    talepler: icerikTalepleri(icerik),
+    // Hızlı testle oluşturulduysa: izin, bitiş koşulu, doğrulandı mı (yoksa null).
+    hizliTest: nesneMi(icerik.hizliTest) ? icerik.hizliTest : null
   };
 }
 
