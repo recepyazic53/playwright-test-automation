@@ -11,6 +11,7 @@ import { servisSenaryosuKosuyorMu } from '../servisler/servis-isleri.mjs';
 import { birlestirmeGecmisi, birlestirmeyiGeriAl, kaynaklariSil, tablolariBirlestir, veriSagligi } from './tablo-birlestirme.mjs';
 import { benzerTablolar } from './tablo-benzerligi.mjs';
 import { kisiAlanlariniBagla } from './kisi-baglama.mjs';
+import { otomatikEslestir, otomatikEslestirmeyiGeriAl } from './otomatik-eslestirme.mjs';
 import { otomatikYedekAl } from '../yedek.mjs';
 import { kismiMaske } from './tablo-secimi.mjs';
 
@@ -82,7 +83,11 @@ export const TABLO_GET_UCLARI = [
     return {
       baglar: ekranAlanBaglari(db, ekranId), ortakBaglar: ortakAkisBaglari(db, ekranId), ortakAkis: Boolean(model && model.model && model.model.tur === 'ortakAkis'),
       // senaryoAyari: ekranda karşılığı olmayan, akışı dallandıran seçim (rozetle gösterilir; tablodaki değer koda çevrilir).
-      girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}) })), tablolar: tablolariListele(db, projeId)
+      // modeldeSecenek: seçim alanının seçenekleri ekran modelinde zaten tanımlı (tabloya bağlamak gerekmez; "bağlı değil" uyarısı verilmez).
+      girdiler: girdiler.map((g) => ({
+        id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}),
+        ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { modeldeSecenek: true } : {})
+      })), tablolar: tablolariListele(db, projeId)
     };
   }]
 ];
@@ -147,5 +152,9 @@ export const TABLO_POST_UCLARI = [
     etiketler: g.etiketler && typeof g.etiketler === 'object' && !Array.isArray(g.etiketler) ? g.etiketler : undefined,
     onay: g.onay === true, secimler: g.secimler
   }, { kosuyorMu })],
+  // Otomatik eşleştirme (otomatik-eslestirme.mjs): onay yoksa yalnız öneri önizlemesi (değer dönmez); onayla seçilen alanların bağı yazılır
+  // (önceki bağlar yanıtta döner); geri-al yalnız o alanların bağını öncekine döndürür.
+  ['/platform/ekran/otomatik-eslestir', (db, g) => otomatikEslestir(db, kimlik(g.projeId, 'projeId'), { ekranId: kimlik(g.ekranId, 'ekranId'), onay: g.onay === true, secimler: g.secimler })],
+  ['/platform/ekran/otomatik-eslestir/geri-al', (db, g) => otomatikEslestirmeyiGeriAl(db, kimlik(g.projeId, 'projeId'), { ekranId: kimlik(g.ekranId, 'ekranId'), alanlar: g.alanlar, onceki: g.onceki })],
   ['/platform/tablo/sil', (db, g) => ({ silindi: tabloSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })]
 ];

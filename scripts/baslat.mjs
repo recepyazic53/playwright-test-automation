@@ -22,12 +22,19 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { acilisTercihiniOku } from './platform/ayarlar/acilis-tercihi.mjs';
+import { AYAR_DOSYASI_DEGISKENI, YENIDEN_BASLAT_KODU, YENIDEN_BASLATMA_DEGISKENI, varsayilanAyarDosyasi } from './platform/ayarlar/klasor-secimi.mjs';
 import { veriKoku } from './platform/calisma-alanlari.mjs';
 import { kurulumKimligi, saglikOku, sunucuYeriBildirimi, sunucuYeriniBul } from './platform/kurulum-kimligi.mjs';
 
 const klasor = dirname(fileURLToPath(import.meta.url));
 const KOK = join(klasor, '..');
 const ISTENEN_PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
+// Veri klasörü seçimi (açılış ekranı ve Ayarlar > Yedekleme): paketli başlatıcılar gibi kasa DIŞI bir ayar dosyası kullanılır; verilmemişse
+// varsayılan yer (bkz. klasor-secimi.mjs > varsayilanAyarDosyasi). Ortam değişkeni NOBETCI_VERI_KOKU verilmişse o önceliklidir ve seçim yapılamaz.
+if (!process.env[AYAR_DOSYASI_DEGISKENI]?.trim()) {
+  const ayar = varsayilanAyarDosyasi();
+  if (ayar) process.env[AYAR_DOSYASI_DEGISKENI] = ayar;
+}
 const VERI = veriKoku(KOK);
 const KIMLIK = kurulumKimligi(VERI);
 /** Bu kurulumun sunucusunun portu (başka bir kurulum istenen portu tutuyorsa sıradaki boş port; bkz. yerBul). */
@@ -60,7 +67,7 @@ async function yerBul() {
 }
 
 /** Sunucu sürecinin ortamı: seçilen port sunucuya (ve onun başlattığı koşulara) verilir. */
-const sunucuOrtami = () => ({ ...process.env, TEST_SUNUCU_PORT: String(PORT) });
+const sunucuOrtami = () => ({ ...process.env, TEST_SUNUCU_PORT: String(PORT), [YENIDEN_BASLATMA_DEGISKENI]: '1' });
 
 /** Playwright'ın kurulu Chromium'u (yoksa null; indirme yapılmaz). */
 async function chromiumYolu() {
@@ -160,9 +167,18 @@ if (ARKA_PLAN) {
   console.log(`Sunucu ${PORT} portunda zaten çalışıyor; arayüz açılıyor.`);
   await arayuzuAc();
 } else {
-  const sunucu = spawn(process.execPath, [join(klasor, 'test-sunucu.mjs')], { stdio: 'inherit', shell: false, env: sunucuOrtami() });
-  sunucu.on('exit', (kod) => process.exit(kod ?? 0));
-  const kapat = (/** @type {NodeJS.Signals} */ sinyal) => { if (!sunucu.killed) sunucu.kill(sinyal); };
+  /** Sunucu 75 koduyla çıkarsa (Ayarlar > Veri klasörü değişti: "yeniden başlat") aynı portta yeniden başlatılır; pencere açık kalır. */
+  let kapaniyor = false;
+  const baslatSunucu = () => {
+    const s = spawn(process.execPath, [join(klasor, 'test-sunucu.mjs')], { stdio: 'inherit', shell: false, env: sunucuOrtami() });
+    s.on('exit', (kod) => {
+      if (kod === YENIDEN_BASLAT_KODU && !kapaniyor) { console.log('Nöbetçi yeniden başlatılıyor (veri klasörü değişti)…'); sunucu = baslatSunucu(); return; }
+      process.exit(kod ?? 0);
+    });
+    return s;
+  };
+  let sunucu = baslatSunucu();
+  const kapat = (/** @type {NodeJS.Signals} */ sinyal) => { kapaniyor = true; if (!sunucu.killed) sunucu.kill(sinyal); };
   process.on('SIGINT', () => kapat('SIGINT'));
   process.on('SIGTERM', () => kapat('SIGTERM'));
   let hazir = false;

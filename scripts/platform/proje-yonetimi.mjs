@@ -6,6 +6,7 @@
 // medya dosyaları işlem bittikten sonra güvenle (ezilerek) silinir. Değişiklik geçmişi korunur. Yedeklere dokunulmaz
 // (sunucu silmeden önce ayrıca yeni bir yedek alır).
 // NOT: import.meta KULLANILMAZ (birim testleri CommonJS'e çevirerek yükler).
+import { kosuGruplariniTemizle } from './senaryolar/kosu-gruplari.mjs';
 import { ayarGetir, ayarYaz, DepoHatasi, ekranAyarlariniGetir, gecmisYaz, projeGetir } from './veritabani/depo.mjs';
 import { medyaDosyasiniGuvenliSil } from './medya.mjs';
 import { referanslariBul } from './dosyalar/senaryo-dosyalari.mjs';
@@ -172,6 +173,7 @@ export function projeyiSil(vt, projeId, secenekler) {
     if (Object.keys(kalan).length) {
       throw new DepoHatasi(`Proje silinemedi (hiçbir şey silinmedi): şu kayıtlar projeye bağlı kaldı — ${Object.entries(kalan).map(([t, n]) => `${t}: ${n}`).join(', ')}.`);
     }
+    kosuGruplariniTemizle(vt, projeId);
     const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(vt, PROJE_AYAR_ANAHTARI));
     if (ayar?.varsayilanId === projeId) ayarYaz(vt, PROJE_AYAR_ANAHTARI, { ...ayar, varsayilanId: null });
     gecmisYaz(vt, {

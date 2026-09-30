@@ -9,6 +9,8 @@ export declare function klasorYoluDogrula(yol: unknown, s?: { yasakKokler?: stri
 export declare function yazilabilirOlmali(klasor: string): void;
 export declare function veriKlasoruDurumu(klasor: string): 'yok' | 'bos' | 'nobetci' | 'dolu';
 export declare function ayarDosyasiYolu(): string | null;
+/** Geliştirme başlatıcısı için varsayılan ayar dosyası yolu (paketli başlatıcılarla aynı yer); ana klasör yoksa null. */
+export declare function varsayilanAyarDosyasi(ortam?: NodeJS.ProcessEnv, platform?: string): string | null;
 export declare function veriAyariniOku(): { veriKoku?: string };
 export declare function veriAyariniYaz(veriKoku: string | null): void;
 export declare function veriyiKopyalaVeDogrula(eski: string, yeni: string): { dosya: number; bayt: number };

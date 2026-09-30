@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — KİŞİ ALANLARINI TABLOYA BAĞLAMA (Ekran > Test verisi > "Kişi alanlarını tabloya bağla…"):
+// KORUMA TESTLERİ — KİŞİ ALANLARINI TABLOYA BAĞLAMA (Ekran > Test verisi > "Otomatik eşleştir…" > "Kişi satırlarını eşleştir…"):
 //  · saf: kişi alanı kategorisi (genel desenler + alan tipi; tahmin değil öneri).
 //  · uçtan uca (ayrı Nöbetçi, 127.0.0.1, geçici veritabanı; dış istek yok): sütun eşleme önerisi, satır eşleşmesi, yeni satır (ortama
 //    özel dahil), tutarsız kişi atlanır, önizlemede değer yok (gizli / hassas maskeli), onaysız hiçbir şey yazılmaz, onayla bağ + satır +
@@ -195,8 +195,9 @@ test.describe('uçtan uca: kişi alanlarını bağla (127.0.0.1)', () => {
         const page = await baglam.newPage();
         await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}`);
         await page.getByRole('tab', { name: 'Test verisi' }).or(page.getByRole('button', { name: 'Test verisi', exact: true })).first().click();
-        await page.getByRole('button', { name: 'Kişi alanlarını tabloya bağla…' }).click();
-        const d = page.getByRole('dialog', { name: 'Kişi alanlarını tabloya bağla' });
+        await page.getByRole('button', { name: 'Otomatik eşleştir…' }).click();
+        await page.getByRole('button', { name: 'Kişi satırlarını eşleştir…' }).click();
+        const d = page.getByRole('dialog', { name: 'Kişi satırlarını eşleştir' });
         await expect(d.getByRole('table', { name: 'Kişi alanı eşleme' })).toBeVisible();
         await expect(d.getByRole('combobox', { name: 'Cep telefonu sütunu' })).toHaveValue('Telefon');
         await expect(d.getByRole('table', { name: 'Kişi satırları' })).toContainText('atlandı');
