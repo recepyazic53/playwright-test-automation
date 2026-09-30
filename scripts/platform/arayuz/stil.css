@@ -4560,3 +4560,4 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 /* Kurtarma kuralı satırı: "Açık" kutusu ve yazısı Sil / Düzenle düğmeleriyle aynı hizada (dikey ortalı). */
 .onay-satiri.kurtarma-acik { align-items: center; min-height: 34px; }
 .onay-satiri.kurtarma-acik input { margin: 0; }
+.ayar-izgarasi.esit-boy { align-items: stretch; }

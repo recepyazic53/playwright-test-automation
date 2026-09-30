@@ -1345,7 +1345,7 @@ async function guvenlik(govde, baglam) {
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('kalkan'), 'Kasayı kilitle'),
       h('span', { class: 'alt' }, rozet([h('span', { class: 'nokta basari', 'aria-hidden': 'true' }), 'kasa açık'], 'basari')), h('div', { class: 'sag' }, kilitle)),
     h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
-    h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
+    h('div', { class: 'ayar-izgarasi esit-boy' }, kilitForm, saklamaForm),
     yasakForm,
     maskeleme,
     form);
