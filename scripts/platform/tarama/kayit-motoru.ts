@@ -22,14 +22,14 @@
 // her aşamada sürer. Alan DEĞERLERİ hiçbir zaman okunmaz; kayıtta EKRAN GÖRÜNTÜSÜ ALINMAZ (kullanıcının girdiği bilgileri
 // içerirdi). Oturum alt süreçte diske yazılmaz ("Koşunun saklanan oturumunu kullan" seçiliyse sunucu koşunun şifreli oturum
 // dosyasını okur / günceller; bkz. tarama-girisi.ts).
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, CDPSession, Page } from '@playwright/test';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import type { EngellenenIstek, HamAlan, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
-import type { AkisEnvanteri, AkisOkumasi, AkisOlayi, SonSayfa } from './akis-tasarimi.mjs';
+import type { AkisEnvanteri, AkisOkumasi, AkisOlayi, Gezinme, SonSayfa } from './akis-tasarimi.mjs';
 import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { acikListeSecenekleri, dokunulanlariBul, kayitPaneliniKur, secimDegerleri, type PanelDurumu } from './kayit-paneli';
@@ -59,6 +59,24 @@ async function sonSayfayiOku(page: Page): Promise<SonSayfa> {
     return null;
   }).catch(() => null);
   return { yol: yolu(page.url()), cikisMetni };
+}
+/** Adres çubuğuyla (yazarak, öneriden, yer imiyle) gidişi gösteren Chromium sayfa geçişi türleri. */
+const ADRES_CUBUGU_GECISLERI = ['typed', 'generated', 'auto_bookmark', 'keyword', 'keyword_generated', 'start_page'];
+/**
+ * Verilen adrese gidiş adres çubuğundan mı? Ölçüm geç kalabilir (sayfa bu arada başka yere gitmiş olabilir); bu yüzden "geçerli"
+ * kayıt değil, adresi eşleşen en son gezinme kaydı okunur. Kayıt bulunamaz / ölçülemezse null (çağıran sezgiye döner).
+ */
+async function adresCubuguMu(cdp: CDPSession | null, adres: string): Promise<boolean | null> {
+  if (!cdp) return null;
+  try {
+    const gecmis = await cdp.send('Page.getNavigationHistory');
+    for (let i = Math.min(gecmis.currentIndex, gecmis.entries.length - 1); i >= 0; i--) {
+      const kayit = gecmis.entries[i];
+      if (kayit.url !== adres) continue;
+      return typeof kayit.transitionType === 'string' ? ADRES_CUBUGU_GECISLERI.includes(kayit.transitionType) : null;
+    }
+    return null;
+  } catch { return null; }
 }
 const metin = (d: unknown, n: number): string | null => (typeof d === 'string' && d.trim() ? d.replace(/\s+/g, ' ').trim().slice(0, n) : null);
 /** Panelden gelen öğe (seçici zorunlu; metin düğmenin/öğenin görünen yazısı; cerceve: çerçevedeyse çerçeve seçicileri). */
@@ -121,6 +139,10 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   const dugmeler: KayitOgesi[] = [];
   const mesajlar: KayitOgesi[] = [];
   const olaylar: AkisOlayi[] = [];
+  // Ana sayfanın adres değişimleri (kayıt başladıktan sonra; giriş kaydında çok sayfalı girişi çıkarmak için).
+  const gezinmeler: Gezinme[] = [];
+  let gezinmeAktif = false;
+  let sonTikZamani = 0;
   // Seçenek gözlemleri (tekil; en çok 2000): alanın seçenekleri + o andaki diğer seçimler.
   const gozlemler: SecenekGozlemi[] = [];
   const gozlemImzalari = new Set<string>();
@@ -205,7 +227,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   const envanter = (profil: string | null): AkisEnvanteri => ({
     kip: 'kayit', bicim: 'akis', profil, baslik: ilkBaslik,
     alanlar: [...alanlar.values()].map(({ alan, secili }) => ({ alan, secili })), dugmeler, mesajlar, olaylar, engellenenler, notlar,
-    secenekGozlemleri: gozlemler, ...(sonSayfa ? { sonSayfa } : {})
+    secenekGozlemleri: gozlemler, ...(sonSayfa ? { sonSayfa } : {}), ...(gezinmeler.length ? { gezinmeler } : {})
   });
 
   try {
@@ -230,6 +252,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
             const oncesi = anligiIsle(veri.anlik) ?? { yol: '', gorunen: [], dokunulan: [], secimler: {} };
             let i = dugmeler.findIndex((x) => ayniOge(x, d));
             if (i < 0) i = dugmeler.push(d) - 1;
+            sonTikZamani = Date.now();
             olaylar.push({ tur: 'tik', dugme: i, oncesi });
             bildir({ tur: 'bilgi', mesaj: `Düğmeye basıldı: ${d.metin ?? d.secici}` });
             return panelDurumu();
@@ -278,6 +301,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
             dugmeler.splice(0);
             mesajlar.splice(0);
             olaylar.splice(0);
+            gezinmeler.splice(0);
             gozlemler.splice(0);
             gozlemImzalari.clear();
             sonGorunen = new Set();
@@ -311,7 +335,8 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
         }
         void (d.type() === 'prompt' ? d.dismiss() : d.accept()).catch(() => undefined);
       });
-      if (p !== islem) notlar.push('Akışta sayfa yeni bir sekme/pencere açtı; model tek sayfada koşar (gözden geçirin).');
+      // Giriş kaydında açılır pencere (yeni sekme) normaldir: oynatma pencereleri kendisi izler (giris-motoru.ts).
+      if (p !== islem && !g.girisKaydi) notlar.push('Akışta sayfa yeni bir sekme/pencere açtı; model tek sayfada koşar (gözden geçirin).');
     });
     islem.on('dialog', (d) => { void (d.type() === 'prompt' ? d.dismiss() : d.accept()).catch(() => undefined); });
     islem.on('close', () => reddet(new TaramaHatasi('IPTAL', 'Kayıt penceresi kapatıldı; kayıt iptal edildi.')));
@@ -359,7 +384,35 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
     await olay({ tur: 'adim', adim: 'kayit', durum: 'suruyor', mesaj: 'Tarayıcıda akışı yürütün; sayfadaki Nöbetçi paneli alanları ve düğmeleri toplar. Bitince “Bitir”e basın.' });
     await islem.bringToFront().catch(() => undefined);
 
+    // Adres değişimleri (adres çubuğuyla gitmek dahil): "elle" işareti yalnız kullanıcının adres çubuğundan gittiklerindedir.
+    // Başka köke gidilirse o adres alınmaz (ortamın dışına çıkılmaz).
+    let cdp: CDPSession | null = null;
+    try { cdp = await baglam.newCDPSession(islem); } catch { cdp = null; }
+    const tabanKoken = ((): string => { try { return new URL(g.tabanUrl).origin; } catch { return ''; } })();
+    // Gezinme SENKRON kaydedilir (sıra bozulmaz; "elle" önce sezgiyle), adres çubuğu ölçümü (CDP) sonradan kesinleştirir; kayıt bitmeden
+    // bekleyen ölçümler tamamlanır.
+    const bekleyenOlcumler = new Set<Promise<void>>();
+    islem.on('framenavigated', (cerceve) => {
+      if (!gezinmeAktif || cerceve !== islem.mainFrame()) return;
+      const adres = cerceve.url();
+      let koken = '';
+      try { koken = new URL(adres).origin; } catch { return; }
+      if (koken !== tabanKoken) {
+        const not = 'Kayıtta ortamın adresi dışındaki bir siteye gidildi; o adres tarife alınmadı.';
+        if (!notlar.includes(not)) notlar.push(not);
+        return;
+      }
+      if (gezinmeler.length >= 200) return;
+      const kayit: Gezinme = { sira: olaylar.length, yol: yolu(adres), elle: Date.now() - sonTikZamani >= 4000 };
+      gezinmeler.push(kayit);
+      const olcum = adresCubuguMu(cdp, adres).then((elle) => { if (elle !== null) kayit.elle = elle; });
+      bekleyenOlcumler.add(olcum);
+      void olcum.finally(() => bekleyenOlcumler.delete(olcum));
+    });
+    gezinmeAktif = true;
     await bitti;
+    gezinmeAktif = false;
+    await Promise.all([...bekleyenOlcumler]);
     const sonuc = envanter(profil.ad);
     await olay({ tur: 'adim', adim: 'kayit', durum: 'tamam', mesaj: `Kayıt bitti: ${sonuc.alanlar.filter((a) => a.secili).length} alan, ${dugmeler.length} düğme, ${mesajlar.length} mesaj.` });
     return sonuc;

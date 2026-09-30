@@ -30,7 +30,7 @@ import {
   type HizliAnlik, type HizliDoldurulan, type HizliDugme, type HizliFark, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
   type HizliTestSonucu, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi
 } from './protokol.mjs';
-import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
+import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { ogeBilgisi, type SeciciAdayi } from './oge-secme-paneli';
 import { adaySirasi } from './oge-secme-motoru';
 import { beklemeDurumu, hizliMetinleriTopla, hizliSecimSeridiKur } from './hizli-test-sayfasi';
@@ -143,6 +143,8 @@ export async function hizliTestiYurut(
     if (profil.degerler && g.tarif?.baglamDegistirme) {
       durum.asama = 'baglam';
       await baglamiDegistir(islem, g.tarif, profil.degerler);
+      // Yazma engeli açılmadan önce bağlam değiştirmenin son isteği bitsin (açılır penceredeki form gönderimi geç kalıp engellenmesin).
+      await isteklerBitsin(islem);
     }
     durum.asama = okumaAsamasi;
     const ac = async (): Promise<void> => {

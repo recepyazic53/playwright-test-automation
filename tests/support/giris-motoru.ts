@@ -10,7 +10,7 @@
 // göründü), iki aşamalı doğrulama başarısız, kod alınamadı, CAPTCHA, alan bulunamadı, zaman aşımı, bağlam
 // adımı, tarif geçersiz. GİZLİ DEĞER (parola, TOTP anahtarı/kodu, SMS kodu) hiçbir mesaja/loga yazılmaz;
 // mesajlarda adresin yalnızca yolu (pathname) geçer.
-import { expect, type Browser, type Locator, type Page } from '@playwright/test';
+import { expect, type Browser, type Frame, type Locator, type Page } from '@playwright/test';
 import { existsSync, mkdirSync, openSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -230,20 +230,22 @@ async function gozle(
   const son = Date.now() + sureMs;
   let tur = 0;
   for (;;) {
-    if (await basariGorunurMu(page, tarif)) return { tur: 'basari' };
-    for (const g of beklenen.hatalar) if (await hataGorunurMu(page, g)) return { tur: 'hata', gosterge: g };
+    // Asıl sayfa kapandıysa (site pencereyi değiştirdi) gözlem açık kalan en son sayfada sürer.
+    const sayfa = aktifSayfa(page);
+    if (await basariGorunurMu(sayfa, tarif)) return { tur: 'basari' };
+    for (const g of beklenen.hatalar) if (await hataGorunurMu(sayfa, g)) return { tur: 'hata', gosterge: g };
     if (beklenen.kodAlani === 'otomatik') {
-      const s = await kodAlaniniAlgila(page, beklenen.haric);
+      const s = await kodAlaniniAlgila(sayfa, beklenen.haric);
       if (s) return { tur: 'ikinciAdim', secici: s };
-    } else if (beklenen.kodAlani && (await gorunurMu(ilkOge(page, beklenen.kodAlani)))) {
+    } else if (beklenen.kodAlani && (await gorunurMu(ilkOge(sayfa, beklenen.kodAlani)))) {
       return { tur: 'ikinciAdim', secici: beklenen.kodAlani };
     }
     if (tur++ % 4 === 0) {
-      const kanit = await captchaAlgila(page);
+      const kanit = await captchaAlgila(sayfa);
       if (kanit.length) return { tur: 'captcha', kanit };
     }
     if (Date.now() >= son) return { tur: 'zamanAsimi' };
-    await page.waitForTimeout(YOKLAMA_ARALIGI_MS).catch(() => undefined);
+    await sayfa.waitForTimeout(YOKLAMA_ARALIGI_MS).catch(() => undefined);
   }
 }
 
@@ -272,9 +274,14 @@ async function sayfayaGit(page: Page, adres: string, neden: string): Promise<voi
 
 /** Sayfa izinli bir kökende değilse giriş bilgisi yazılmaz (KOKEN_UYUSMAZ). */
 function kokenDenetle(page: Page, izinli: readonly string[] | undefined, ne: string): void {
+  kokenAdresiDenetle(page.url(), izinli, ne);
+}
+
+/** Adres (sayfa ya da çerçeve) izinli bir kökende değilse KOKEN_UYUSMAZ. */
+function kokenAdresiDenetle(adres: string, izinli: readonly string[] | undefined, ne: string): void {
   if (!izinli) return;
   let koken = '';
-  try { koken = new URL(page.url()).origin; } catch { koken = ''; }
+  try { koken = new URL(adres).origin; } catch { koken = ''; }
   if (!izinli.includes(koken)) {
     throw new GirisHatasi('KOKEN_UYUSMAZ', `${ne} yazılmadı: sayfa ortamın adresinden farklı bir siteye (${koken || 'bilinmeyen adres'}) geçti. ` +
       'Giriş bilgisi yalnız ortamın taban adresinin ya da giriş tarifindeki giriş adresinin kökenine yazılır (Ayarlar > Ortamlar / Giriş tarifi).');
@@ -295,6 +302,25 @@ async function alaniBekle(page: Page, secici: string, ad: string, sureMs = alanB
     throw new GirisHatasi('ALAN_BULUNAMADI', `${ad} (${secici}) ${Math.round(sureMs / 1000)} sn içinde görünmedi (sayfa: ${yol(page)}). Giriş tarifindeki seçiciyi kontrol edin.`);
   }
   return l;
+}
+
+/**
+ * Giriş düğmesine basıldıktan sonra sayfa girişi işleyene kadar bekler (adres değişti, giriş formu kayboldu, başarı ya da hata
+ * göstergesi göründü ya da süre doldu). Sonraki adım (ör. başka bir sayfaya gitmek) girişi yarıda kesmesin.
+ */
+async function gonderdenSonrasiniBekle(page: Page, tarif: GirisTarifi, oncekiAdres: string, sureMs: number): Promise<void> {
+  const son = Date.now() + Math.max(1_000, sureMs);
+  for (;;) {
+    const sayfa = aktifSayfa(page);
+    if (sayfa !== page || sayfa.url() !== oncekiAdres) break;
+    if (!(await gorunurMu(ilkOge(sayfa, tarif.parolaAlani)))) break;
+    if (await basariGorunurMu(sayfa, tarif)) break;
+    let hata = false;
+    for (const g of tarif.hataGostergeleri) if (await hataGorunurMu(sayfa, g)) hata = true;
+    if (hata || Date.now() >= son) break;
+    await sayfa.waitForTimeout(YOKLAMA_ARALIGI_MS).catch(() => undefined);
+  }
+  await aktifSayfa(page).waitForLoadState('domcontentloaded', { timeout: 5_000 }).catch(() => undefined);
 }
 
 /**
@@ -323,6 +349,8 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
   const bekleme = secenekler.alanBeklemeMs;
   const adimlar = girisAdimlariniCoz(tarif);
   let gonderildi = false;
+  let gonderdenSonraBeklendi = false;
+  let gonderOncesiAdres = '';
   for (const [i, a] of adimlar.entries()) {
     const sure = a.zamanAsimiSn ? a.zamanAsimiSn * 1000 : bekleme;
     if (a.islem === 'kullaniciAdi') {
@@ -334,14 +362,24 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
       kokenDenetle(page, secenekler.izinliKokenler, 'Parola');
       await l.fill(kimlik.parola);
     } else if (a.islem === 'gonder') {
-      await (await alaniBekle(page, tarif.gonderDugmesi, 'Giriş düğmesi', sure)).click();
+      const dugme = await alaniBekle(page, tarif.gonderDugmesi, 'Giriş düğmesi', sure);
+      gonderOncesiAdres = page.url();
+      await dugme.click();
       gonderildi = true;
       secenekler.log?.('Kullanıcı adı ve parola gönderildi.');
     } else {
       try {
-        // Ek alan adımları da giriş profilinin (gizli olabilen) değerlerini yazar.
-        kokenDenetle(page, secenekler.izinliKokenler, 'Giriş adımı');
-        await adimiUygula(page, a, ekAlanlar, 'Giriş adımındaki sayfa');
+        // Giriş düğmesinden sonraki adımlar (ör. "kullanıcı değiştir" sayfasına gitmek) girişin tamamlanmasını bekler.
+        if (gonderildi && !gonderdenSonraBeklendi) {
+          gonderdenSonraBeklendi = true;
+          await gonderdenSonrasiniBekle(page, tarif, gonderOncesiAdres, sure ?? Math.min(tarif.zamanAsimiSn * 1000, 15_000));
+        }
+        // Ek alan adımları da giriş profilinin (gizli olabilen) değerlerini yazar. Hedefli adımlarda hedefin kendi (sayfa / çerçeve)
+        // adresi denetlenir: hedef açılır pencerede ya da çerçevede olabilir.
+        if (!('hedef' in a)) kokenDenetle(aktifSayfa(page), secenekler.izinliKokenler, 'Giriş adımı');
+        await adimiUygula(page, a, ekAlanlar, 'Giriş adımındaki sayfa', {
+          kokenDenetimi: (adres) => kokenAdresiDenetle(adres, secenekler.izinliKokenler, 'Giriş adımı'), log: secenekler.log
+        });
       } catch (hata) {
         if (hata instanceof GirisHatasi && hata.kod !== 'SITE_ERISILEMEDI') throw hata;
         // Gönderden sonraki adım başarısızsa önce "kullanıcı adı/parola hatalı" göstergesine bakılır.
@@ -482,11 +520,14 @@ export async function oturumuKapat(page: Page): Promise<void> {
 // Bağlam değiştirme
 // ---------------------------------------------------------------------------------------
 
-function hedefLocator(page: Page, hedef: Hedef, degerler: Record<string, unknown>): Locator {
+/** Hedefin arandığı yer: sayfa ya da çerçeve (ikisinde de getByRole / locator vardır). */
+type Kapsam = Pick<Page, 'getByRole' | 'locator'>;
+
+function hedefLocator(kapsam: Kapsam, hedef: Hedef, degerler: Record<string, unknown>): Locator {
   if ('rol' in hedef) {
-    return page.getByRole(hedef.rol as Parameters<Page['getByRole']>[0], { name: yerTutuculariDoldur(hedef.ad, degerler) }).first();
+    return kapsam.getByRole(hedef.rol as Parameters<Page['getByRole']>[0], { name: yerTutuculariDoldur(hedef.ad, degerler) }).first();
   }
-  let l = page.locator(yerTutuculariDoldur(hedef.secici, degerler));
+  let l = kapsam.locator(yerTutuculariDoldur(hedef.secici, degerler));
   if (hedef.metin !== undefined) {
     const metin = yerTutuculariDoldur(hedef.metin, degerler);
     l = l.filter({ hasText: hedef.tamMetin ? new RegExp(`^${regexKacis(metin)}$`) : metin });
@@ -501,58 +542,201 @@ export function gizliMaskele(metin: string, gizliler: readonly string[]): string
   return sonuc;
 }
 
-async function adimiUygula(page: Page, a: BaglamAdimi, degerler: Record<string, unknown>, sayfaAdi = 'Bağlam sayfası'): Promise<void> {
+// ---------------------------------------------------------------------------------------
+// Dayanıklı adım oynatma: açılır pencere (yeni sekme), çerçeve (iframe), seçimden sonra yeniden yüklenen ya da kapanan sayfa
+// ---------------------------------------------------------------------------------------
+
+/** Adım süresi belirtilmediğinde hedefin bulunması için beklenen süre: eylemlerde Playwright'ın eylem, doğrulamalarda beklenti varsayılanı. */
+const VARSAYILAN_EYLEM_SURESI_MS = 30_000;
+const VARSAYILAN_DOGRULAMA_SURESI_MS = 5_000;
+const KAPANMA_HATASI = /has been closed|Target closed|Target page, context or browser/i;
+const kapanmaHatasiMi = (hata: unknown): boolean => KAPANMA_HATASI.test(String(hata instanceof Error ? hata.message : hata));
+
+/**
+ * Bağlamdaki açık sayfalar: asıl sayfa (hâlâ açıksa) önce, sonra en son açılandan eskiye. Site giriş sonrası pencereyi
+ * kapatıp yenisini açarsa ya da bir açılır pencere (kullanıcı değiştir, bölge seçimi…) açarsa adımlar oralarda sürer.
+ */
+function acikSayfalar(page: Page): Page[] {
+  let hepsi: Page[] = [];
+  try { hepsi = page.context().pages(); } catch { hepsi = []; }
+  const acik = hepsi.filter((p) => !p.isClosed());
+  return [...acik.filter((p) => p === page), ...acik.filter((p) => p !== page).reverse()];
+}
+/** Adımların şu an uygulanacağı sayfa: asıl sayfa açıksa o, değilse en son açılan sayfa. */
+const aktifSayfa = (page: Page): Page => acikSayfalar(page)[0] ?? page;
+
+type BulunanHedef = { l: Locator; sayfa: Page; cerceve: Frame; gorunur: boolean };
+
+/**
+ * Hedefi tüm açık sayfaların tüm çerçevelerinde arar (asıl sayfanın ana çerçevesi önce). Görünen ilk eşleşme hemen döner;
+ * yalnız gizli bir eşleşme varsa (ör. aramalı liste bileşeninin gizli <select>'i) gizliBeklemeMs kadar görünmesi beklenir, sonra
+ * o döner (null: gizliyi hemen kabul etme, süre sonunda dön). Süre dolunca yalnız gizli eşleşme varsa o, hiç yoksa null.
+ */
+async function hedefiBul(page: Page, hedef: Hedef, degerler: Record<string, unknown>, sureMs: number, gizliBeklemeMs: number | null): Promise<BulunanHedef | null> {
+  const son = Date.now() + sureMs;
+  let gizli: BulunanHedef | null = null;
+  let gizliSon = 0;
+  for (;;) {
+    for (const sayfa of acikSayfalar(page)) {
+      for (const cerceve of sayfa.frames()) {
+        const l = hedefLocator(cerceve, hedef, degerler);
+        try {
+          if ((await l.count()) === 0) continue;
+          if (await l.isVisible()) return { l, sayfa, cerceve, gorunur: true };
+          if (!gizli) { gizli = { l, sayfa, cerceve, gorunur: false }; gizliSon = Date.now() + (gizliBeklemeMs ?? sureMs); }
+        } catch { /* sayfa / çerçeve kapandı ya da yükleniyor: sonraki yoklamada yeniden bakılır */ }
+      }
+    }
+    if (gizli && gizliBeklemeMs !== null && Date.now() >= gizliSon) return gizli;
+    if (Date.now() >= son) return gizli;
+    await new Promise((c) => setTimeout(c, YOKLAMA_ARALIGI_MS));
+  }
+}
+
+/** Seçim ya da tıklamadan sonra sayfa yeniden yükleniyorsa (ör. seçince kendiliğinden gönderen form) yüklenmesini bekler. */
+async function sayfaSakinlessin(sayfa: Page): Promise<void> {
+  if (sayfa.isClosed()) return;
+  await sayfa.waitForTimeout(150).catch(() => undefined);
+  await sayfa.waitForLoadState('domcontentloaded', { timeout: 5_000 }).catch(() => undefined);
+}
+
+/** Adım uygulanırken kullanılan ek bilgiler (hepsi isteğe bağlı). */
+type AdimBaglami = {
+  /** Değer yazılacak hedefin (çerçevenin) adresi denetlenir; uygun değilse GirisHatasi fırlatır. */
+  kokenDenetimi?: (adres: string) => void;
+  /** İlerleme günlüğü (gizli değer içermez). */
+  log?: (mesaj: string) => void;
+};
+
+/** Seçenek listesinde değeri ya da görünen metni verilen değerle başlayan / onu içeren ilk seçeneğin değeri ("kod - ad" gibi). */
+async function seceneginDegeri(l: Locator, deger: string): Promise<string | null> {
+  return l.evaluate((e, aranan) => {
+    if (!(e instanceof HTMLSelectElement)) return null;
+    const norm = (m: string): string => m.replace(/\s+/g, ' ').trim().toLocaleLowerCase('tr');
+    const a = norm(aranan);
+    const secenekler = Array.from(e.options).filter((o) => o.value !== '');
+    const secilen = secenekler.find((o) => norm(o.text) === a) ?? secenekler.find((o) => norm(o.text).startsWith(a)) ?? secenekler.find((o) => norm(o.text).includes(a));
+    return secilen ? secilen.value : null;
+  }, deger).catch(() => null);
+}
+
+/**
+ * Hedefli adımı (tıkla, doldur, seç, bekle…) dayanıklı uygular: hedef açık tüm sayfalarda / çerçevelerde aranır; seçimden sonra
+ * sayfanın yeniden yüklenmesi beklenir; adımı yürüten pencere kapanırsa (seçince kendiliğinden kaydedip kapanan pencere, giriş
+ * sonrası kapanıp yenisi açılan pencere) adım açık kalan sayfalarda sürdürülür ya da — tıklama / seçimse ve hedef başka yerde
+ * yoksa — kapanan pencerenin işi sayılır.
+ */
+async function hedefAdimi(
+  page: Page, a: Extract<BaglamAdimi, { hedef: Hedef }>, degerler: Record<string, unknown>, sureMs: number, baglam: AdimBaglami
+): Promise<void> {
+  const doldur = (m: string): string => yerTutuculariDoldur(m, degerler);
+  const secim = a.islem === 'sec';
+  for (let deneme = 0; ; deneme++) {
+    const b = await hedefiBul(page, a.hedef, degerler, sureMs, secim ? 1_500 : null);
+    const sayfa = b?.sayfa ?? aktifSayfa(page);
+    const l = b ? b.l : hedefLocator(sayfa.mainFrame(), a.hedef, degerler);
+    // Hedef hiç bulunamadıysa (ya da görünmüyorsa) eylem kısa süreyle denenir: Playwright'ın olağan hata iletisi çıksın, süre ikiye katlanmasın.
+    const eylemMs = Math.max(sureMs, 1_000);
+    // Süre adımda belirtilmediyse Playwright'ın kendi varsayılanı geçerlidir.
+    const zaman = b && (b.gorunur || secim) ? (a.zamanAsimiSn ? { timeout: eylemMs } : {}) : { timeout: 1_500 };
+    try {
+      if (b && (a.islem === 'doldur' || secim)) baglam.kokenDenetimi?.(b.cerceve.url());
+      switch (a.islem) {
+        case 'tikla': {
+          const beklemeler: Array<Promise<unknown>> = [];
+          if (a.yanitBekle) {
+            const beklenenYol = doldur(a.yanitBekle.yol);
+            beklemeler.push(sayfa.waitForResponse((r) => new URL(r.url()).pathname === beklenenYol, zaman).then((r) => {
+              if (!r.ok()) throw new Error(`${beklenenYol} yanıtı başarısız (HTTP ${r.status()}).`);
+            }));
+          }
+          if (a.adresBekle) beklemeler.push(sayfa.waitForURL(new RegExp(yerTutuculariDoldur(a.adresBekle, degerler, { kacis: regexKacis })), zaman));
+          await Promise.all([...beklemeler, l.click(zaman)]);
+          return;
+        }
+        case 'doldur':
+          await l.fill(doldur(a.deger), zaman);
+          return;
+        case 'sec': {
+          const deger = doldur(a.deger);
+          // Gizli <select> (aramalı liste bileşenlerinin arkasındaki gerçek liste) görünmese de değeri yazılır.
+          const zorla = b ? !b.gorunur : false;
+          try {
+            await l.selectOption(deger, { timeout: Math.min(eylemMs, 2_000), force: zorla });
+          } catch (hata) {
+            if (kapanmaHatasiMi(hata)) throw hata;
+            // "kod - ad" gibi metnin bir parçası verilmiş olabilir: ona uyan ilk seçenek seçilir; yoksa (liste geç doluyor olabilir)
+            // kalan süre boyunca tam değer beklenir.
+            const bulunan = await seceneginDegeri(l, deger);
+            if (bulunan !== null) await l.selectOption(bulunan, { timeout: 5_000, force: zorla });
+            else await l.selectOption(deger, { timeout: Math.max(eylemMs - 2_000, 1_000), force: zorla });
+          }
+          await sayfaSakinlessin(sayfa);
+          return;
+        }
+        case 'gorunurBekle':
+          await expect(l).toBeVisible(zaman);
+          return;
+        case 'degerBekle':
+          await expect(l).toHaveValue(doldur(a.deger), zaman);
+          return;
+        case 'metinBekle':
+          await expect(l).toContainText(doldur(a.metin), zaman);
+          return;
+        default:
+          throw new GirisHatasi('TARIF_GECERSIZ', 'Bilinmeyen bağlam adımı.');
+      }
+    } catch (hata) {
+      if (!kapanmaHatasiMi(hata)) throw hata;
+      // Adımı yürüten sayfa / pencere kapandı. Açık sayfa hiç kalmadıysa tarayıcı ya da bağlam kapanmıştır: gerçek hata.
+      if (!acikSayfalar(page).length || deneme >= 3) throw hata;
+      baglam.log?.('Adımın çalıştığı pencere kapandı; adım açık kalan sayfalarda sürdürülüyor.');
+      if (a.islem === 'tikla' || secim) {
+        // Tıklama / seçim pencerenin kendiliğinden kapanmasına yol açmış olabilir: hedef başka bir sayfada yoksa iş yapılmış sayılır.
+        const yeni = await hedefiBul(page, a.hedef, degerler, Math.min(sureMs, 3_000), secim ? 500 : null);
+        if (!yeni) { baglam.log?.('Hedef başka pencerede yok: adım kapanan pencerede tamamlanmış sayıldı.'); return; }
+      }
+    }
+  }
+}
+
+async function adimiUygula(
+  page: Page, a: BaglamAdimi, degerler: Record<string, unknown>, sayfaAdi = 'Bağlam sayfası', baglam: AdimBaglami = {}
+): Promise<void> {
   const doldur = (m: string): string => yerTutuculariDoldur(m, degerler);
   const zaman = a.zamanAsimiSn ? { timeout: a.zamanAsimiSn * 1000 } : {};
+  const dogrulama = ['gorunurBekle', 'degerBekle', 'metinBekle', 'sayiBekle'].includes(a.islem);
+  const sureMs = a.zamanAsimiSn ? a.zamanAsimiSn * 1000 : dogrulama ? VARSAYILAN_DOGRULAMA_SURESI_MS : VARSAYILAN_EYLEM_SURESI_MS;
   switch (a.islem) {
     case 'git':
-      await sayfayaGit(page, doldur(a.adres), sayfaAdi);
+      await sayfayaGit(aktifSayfa(page), doldur(a.adres), sayfaAdi);
       return;
     case 'adresBekle':
-      await expect(page).toHaveURL(new RegExp(yerTutuculariDoldur(a.desen, degerler, { kacis: regexKacis })), zaman);
+      await expect(aktifSayfa(page)).toHaveURL(new RegExp(yerTutuculariDoldur(a.desen, degerler, { kacis: regexKacis })), zaman);
       return;
     case 'kosulBekle':
-      await page.waitForFunction(a.ifade, undefined, zaman);
+      await aktifSayfa(page).waitForFunction(a.ifade, undefined, zaman);
       return;
-    case 'tikla': {
-      const l = hedefLocator(page, a.hedef, degerler);
-      const beklemeler: Array<Promise<unknown>> = [];
-      if (a.yanitBekle) {
-        const beklenenYol = doldur(a.yanitBekle.yol);
-        beklemeler.push(page.waitForResponse((r) => new URL(r.url()).pathname === beklenenYol, zaman).then((r) => {
-          if (!r.ok()) throw new Error(`${beklenenYol} yanıtı başarısız (HTTP ${r.status()}).`);
-        }));
-      }
-      if (a.adresBekle) beklemeler.push(page.waitForURL(new RegExp(yerTutuculariDoldur(a.adresBekle, degerler, { kacis: regexKacis })), zaman));
-      await Promise.all([...beklemeler, l.click(zaman)]);
-      return;
-    }
+    case 'tikla':
     case 'doldur':
-      await hedefLocator(page, a.hedef, degerler).fill(doldur(a.deger), zaman);
-      return;
     case 'sec':
-      await hedefLocator(page, a.hedef, degerler).selectOption(doldur(a.deger), zaman);
-      return;
     case 'gorunurBekle':
-      await expect(hedefLocator(page, a.hedef, degerler)).toBeVisible(zaman);
-      return;
     case 'degerBekle':
-      await expect(hedefLocator(page, a.hedef, degerler)).toHaveValue(doldur(a.deger), zaman);
+    case 'metinBekle':
+      await hedefAdimi(page, a, degerler, sureMs, baglam);
       return;
     case 'sayiBekle': {
       // Sayı kontrolünde "ilk öğe" DEĞİL, seçicinin tüm eşleşmeleri sayılır.
       const h = a.hedef;
+      const sayfa = aktifSayfa(page);
       const l = 'rol' in h
-        ? page.getByRole(h.rol as Parameters<Page['getByRole']>[0], { name: doldur(h.ad) })
+        ? sayfa.getByRole(h.rol as Parameters<Page['getByRole']>[0], { name: doldur(h.ad) })
         : h.metin !== undefined
-          ? page.locator(doldur(h.secici)).filter({ hasText: h.tamMetin ? new RegExp(`^${regexKacis(doldur(h.metin))}$`) : doldur(h.metin) })
-          : page.locator(doldur(h.secici));
+          ? sayfa.locator(doldur(h.secici)).filter({ hasText: h.tamMetin ? new RegExp(`^${regexKacis(doldur(h.metin))}$`) : doldur(h.metin) })
+          : sayfa.locator(doldur(h.secici));
       await expect(l).toHaveCount(a.sayi, zaman);
       return;
     }
-    case 'metinBekle':
-      await expect(hedefLocator(page, a.hedef, degerler)).toContainText(doldur(a.metin), zaman);
-      return;
     default:
       throw new GirisHatasi('TARIF_GECERSIZ', 'Bilinmeyen bağlam adımı.');
   }

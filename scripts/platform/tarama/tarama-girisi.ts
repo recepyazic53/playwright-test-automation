@@ -15,6 +15,18 @@ import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, ty
 /** Başarılı girişin oturumunu sunucuya verir (yalnız saklanan oturum kipinde çağrılır). */
 export type OturumGonderici = (durum: Awaited<ReturnType<BrowserContext['storageState']>>) => Promise<void>;
 
+/**
+ * Giriş / bağlam değiştirme adımları bittikten sonra sayfanın kendi (yazma dahil) istekleri bitene kadar bekler. Aşama okuma kipine
+ * (yazma isteği engeli: tarama, öğe seçme, hızlı test) geçmeden ÖNCE çağrılır: son tıklamanın başlattığı istek (ör. "kullanıcı değiştir"
+ * penceresindeki çerçevenin form gönderimi) geç kalıp okuma kipinde yakalanırsa iptal edilir ve pencerede "Bu sayfa Chromium tarafından
+ * engellendi" görünür; kullanıcı değişmez.
+ */
+export async function isteklerBitsin(sayfa: Page, sureMs = 10_000): Promise<void> {
+  if (sayfa.isClosed()) return;
+  await sayfa.waitForTimeout(500).catch(() => undefined);
+  await sayfa.waitForLoadState('networkidle', { timeout: sureMs }).catch(() => undefined);
+}
+
 /** Saklanan oturum kipi mi (girdi sunucudan "oturum" alanıyla geldiyse)? */
 export const saklananOturumKipi = (g: TaramaGirdisi): boolean => Boolean(g.tarif && g.oturum);
 

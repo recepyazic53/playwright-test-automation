@@ -220,22 +220,41 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
     const eskiListe = kok.querySelector('.a');
     const kaydirma = eskiListe ? eskiListe.scrollTop : 0;
     const secili = durum.alanlar.filter((a) => a.secili).length;
+    const alanSatiri = (a: PanelDurumu['alanlar'][number]): HTMLElement => {
+      const k = el('input', { type: 'checkbox', 'aria-label': `${a.etiket || '(etiketsiz)'}: listeye al` }) as HTMLInputElement;
+      k.checked = a.secili;
+      k.addEventListener('change', () => { void islem({ tur: 'sec', anahtar: a.anahtar, secili: k.checked }); });
+      return el('label', a.gorunuyor ? {} : { class: 'soluk' }, k, el('span', {}, `${a.etiket || '(etiketsiz)'} `, el('small', { class: 'i' }, a.tur),
+        a.cercevede ? el('span', { class: 'e g2', title: 'Alan sayfanın içindeki bir çerçevede (iframe); koşucu o çerçevede çalışır.' }, 'çerçevede') : null,
+        a.dokunuldu ? el('span', { class: 'e' }, 'dokundunuz') : null,
+        a.yeni && !a.dokunuldu ? el('span', { class: 'e' }, 'yeni') : null,
+        a.gorunuyor ? null : el('span', { class: 'e g2' }, 'şu an görünmüyor')));
+    };
     const liste = durum.alanlar.length
-      ? el('div', { class: 'a', role: 'group', 'aria-label': 'Görülen alanlar' }, ...durum.alanlar.map((a) => {
-        const k = el('input', { type: 'checkbox', 'aria-label': `${a.etiket || '(etiketsiz)'}: listeye al` }) as HTMLInputElement;
-        k.checked = a.secili;
-        k.addEventListener('change', () => { void islem({ tur: 'sec', anahtar: a.anahtar, secili: k.checked }); });
-        return el('label', a.gorunuyor ? {} : { class: 'soluk' }, k, el('span', {}, `${a.etiket || '(etiketsiz)'} `, el('small', { class: 'i' }, a.tur),
-          a.cercevede ? el('span', { class: 'e g2', title: 'Alan sayfanın içindeki bir çerçevede (iframe); koşucu o çerçevede çalışır.' }, 'çerçevede') : null,
-          a.dokunuldu ? el('span', { class: 'e' }, 'dokundunuz') : null,
-          a.yeni && !a.dokunuldu ? el('span', { class: 'e' }, 'yeni') : null,
-          a.gorunuyor ? null : el('span', { class: 'e g2' }, 'şu an görünmüyor')));
-      }))
+      ? el('div', { class: 'a', role: 'group', 'aria-label': 'Görülen alanlar' }, ...durum.alanlar.map(alanSatiri))
       : el('div', { class: 'i' }, 'Henüz alan görülmedi. Sayfa yüklenince alanlar burada listelenir.');
+    // Giriş kaydı: alan SEÇTİRİLMEZ. Dokunulan alanlar kendiliğinden listededir; dokunulmayanlar kapalı bir bölümde işaretsiz durur
+    // (eklemek isteyen işaretler).
+    const dokunulanlar = durum.alanlar.filter((a) => a.dokunuldu || a.secili);
+    const digerleri = durum.alanlar.filter((a) => !(a.dokunuldu || a.secili));
+    const girisListesi = (): Array<HTMLElement | null> => {
+      const acik = (kok.querySelector('details.d') as HTMLDetailsElement | null)?.open ?? false;
+      const dis = el('details', { class: 'd' }, el('summary', {}, `Dokunmadığınız alanlar (${digerleri.length}) — eklemek için işaretleyin`),
+        el('div', { class: 'a', role: 'group', 'aria-label': 'Dokunulmayan alanlar' }, ...digerleri.map(alanSatiri))) as HTMLDetailsElement;
+      dis.open = acik;
+      return [
+        el('h4', {}, `Dokunduğunuz alanlar (${dokunulanlar.length})`),
+        dokunulanlar.length
+          ? el('div', { class: 'a', role: 'group', 'aria-label': 'Dokunulan alanlar' }, ...dokunulanlar.map(alanSatiri))
+          : el('div', { class: 'i' }, 'Henüz bir alana dokunmadınız. Kullanıcı adını, parolayı yazın; alanlar kendiliğinden buraya gelir.'),
+        digerleri.length ? dis : null
+      ];
+    };
     doldur(
-      el('div', { class: 'i' }, 'Akışı sayfada normal yürütün. Yeni alanlar açılınca “Ekranı yeniden oku”ya basın. Kullanılacak alanları işaretleyin (dokunduklarınız işaretli gelir). “Bitir”e bastıktan sonra akış diyagramını Nöbetçi’de kurarsınız.'),
-      el('h4', {}, `Görülen alanlar (${durum.alanlar.length}; listede ${secili})`),
-      liste,
+      el('div', { class: 'i' }, ayar.giris
+        ? 'Girişi sayfada normal yapın. Nöbetçi dokunduğunuz alanları ve bastığınız düğmeleri kendisi izler; alan seçmeniz gerekmez. Sayfa değiştirirseniz (adres çubuğu dahil) o sayfa da izlenir. Bitince “Bitir”e basın.'
+        : 'Akışı sayfada normal yürütün. Yeni alanlar açılınca “Ekranı yeniden oku”ya basın. Kullanılacak alanları işaretleyin (dokunduklarınız işaretli gelir). “Bitir”e bastıktan sonra akış diyagramını Nöbetçi’de kurarsınız.'),
+      ...(ayar.giris ? girisListesi() : [el('h4', {}, `Görülen alanlar (${durum.alanlar.length}; listede ${secili})`), liste]),
       durum.listeler ? el('div', { class: 'i' }, `Seçenekleri yakalanan liste: ${durum.listeler} (test verisine tablo olarak önerilir)`) : null,
       el('h4', {}, `Basılan düğmeler (${durum.dugmeler.length})`),
       durum.dugmeler.length ? el('ul', {}, ...durum.dugmeler.map((d) => el('li', {}, `“${d}”`))) : el('div', { class: 'i' }, 'Henüz düğmeye basılmadı.'),
@@ -307,6 +326,9 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
     const tur = t.tagName === 'INPUT' ? (t as HTMLInputElement).type : '';
     if (t.tagName === 'SELECT' || tur === 'radio' || tur === 'checkbox') sonraOku(400);
   };
+  // Metin alanına yazılıp başka yere geçilince (ya da adres çubuğuna odaklanılınca) ekran hemen okunur: sayfa terk edilmeden
+  // dokunulan alanlar kaydedilir (yazılan değer okunmaz).
+  const odakKaybi = (e: Event): void => { if (!panelIci(e)) sonraOku(120); };
   const tusBasildi = (e: Event): void => { if ((e as KeyboardEvent).key === 'Escape' && mesajModu) { mesajModu = false; anaGorunum(); } };
 
   // ---- Açılan listeler: alana tıklanınca / ok tuşuyla açılan listbox seçenekleri arka planda gönderilir (değer değil) ----
@@ -391,6 +413,8 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
   };
   const isleyiciler: Record<OlayTuru, (e: Event) => void> = { input: dokun, change: degisim, click: tiklandi, keyup: tusBirakildi, keydown: tusBasildi };
   for (const [tur, f] of Object.entries(isleyiciler)) window.addEventListener(tur, f, true);
+  window.addEventListener('blur', odakKaybi);
+  window.addEventListener('focusout', odakKaybi, true);
   const merkez: Merkez = { olay: (tur, e) => { try { isleyiciler[tur](e); } catch { /* çerçeve olayı işlenemedi: yok sayılır */ } } };
   pencere.__nobetciKayitMerkezi = merkez;
 

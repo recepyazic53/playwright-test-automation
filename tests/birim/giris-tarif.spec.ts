@@ -9,7 +9,7 @@ import {
   GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisAdimlariniCoz, girisAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula,
   girisTarifiOlmali, regexKacis, varsayilanGirisAdimlariMi, yerTutuculari, yerTutuculariDoldur, type GirisTarifi
 } from '../../scripts/platform/giris/tarif.mjs';
-import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../../scripts/platform/giris/giris-kaydi.mjs';
+import { ekAlanAdiOner, gezinmeYolu, girisKaydiTaslagi, kayittanTarif } from '../../scripts/platform/giris/giris-kaydi.mjs';
 import { AYNI_ADRES_UYARISI, basariAdresindenYol, oturumAdresiGirisleAyniMi, oturumAdresiOnerisi } from '../../scripts/platform/arayuz/oturum-kontrolu.mjs';
 import { KOD_DESENI, kodIstegiOku, kodIstegiYaz, kodYanitiniBekle, koduYanitla } from '../../scripts/platform/giris/elle-kod.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from '../../scripts/platform/giris/tarif-deposu.mjs';
@@ -268,7 +268,7 @@ test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanlar
       ]
     } as unknown as Parameters<typeof girisKaydiTaslagi>[0];
     const taslak = girisKaydiTaslagi(env);
-    expect(taslak.adimlar.map((a) => (a.tur === 'alan' ? a.anahtar : a.metin))).toEqual(['firma', 'kad', 'Devam', 'sif', 'pin', 'Giriş']);
+    expect(taslak.adimlar.map((a) => (a.tur === 'alan' ? a.anahtar : a.tur === 'dugme' ? a.metin : a.yol))).toEqual(['firma', 'kad', 'Devam', 'sif', 'pin', 'Giriş']);
     expect(taslak.adimlar.map((a) => a.oneri)).toEqual(['ek', 'kullaniciAdi', 'tikla', 'parola', 'ek', 'gonder']);
     expect(ekAlanAdiOner('Firma kodu')).toBe('firmaKodu');
     const isaretler = [{ rol: 'ek', ad: 'firmaKodu' }, { rol: 'kullaniciAdi' }, { rol: 'tikla' }, { rol: 'parola' }, { rol: 'ek', ad: 'pin', gizli: true }, { rol: 'gonder' }];
@@ -312,6 +312,59 @@ test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanlar
     expect(kayittanTarif(kodluTaslak, roller, null, '/giris', { kodKaynagi: 'baska' }).notlar.join(' ')).toMatch(/kodun türünü/);
     expect(kayittanTarif(taslak, [], null, null).hatalar.join(' ')).toMatch(/Kullanıcı adı alanını işaretleyin/);
     expect(kayittanTarif(taslak, [{ rol: 'ek', ad: 'firma kodu' }, ...isaretler.slice(1)], null, null).hatalar.join(' ')).toMatch(/ek alan adı/);
+  });
+
+  test('"Girişi kaydet": çok sayfalı kayıt — adres çubuğuyla gidilen sayfalar adım olur, her sayfanın alanları kendi yerinde kalır; bağlantı/yönlendirme sayfası, kaldırılan alan ve gizli sorgu ayıklanır', () => {
+    const alan = (anahtar: string, tur: string, etiket: string, secili = true) => ({ alan: { anahtar, tur, etiket, secici: `#${anahtar}`, adaySeciciler: [], bolum: { anahtar: 'b', baslik: '' } }, secili });
+    const okuma = (yol: string, dokunulan: string[]) => ({ yol, gorunen: dokunulan, dokunulan, secimler: {} });
+    // Sayfa 1 (/giris): kullanıcı + parola + Giriş → /panel (yönlendirme, adres çubuğu DEĞİL) → kullanıcı adres çubuğuyla /kullanici-degistir?dil=tr
+    // (aynı anahtarlı "kullanici" alanı bu sayfada da var) → seçimler + düğme → /kullanici-tamamlandi (yönlendirme) → adres çubuğuyla /?oturum=abc.
+    const env = {
+      kip: 'kayit', bicim: 'akis', profil: null, baslik: 'Giriş', engellenenler: [], notlar: [], mesajlar: [],
+      alanlar: [alan('kullanici', 'text', 'Kullanıcı'), alan('sif', 'password', 'Şifre'), alan('bolge', 'select', 'Bölge'), alan('gizli', 'text', 'Not', false)],
+      dugmeler: [{ secici: '#gir', metin: 'Giriş' }, { secici: '#degistir', metin: 'KULLANICI DEĞİŞTİR' }],
+      olaylar: [
+        { tur: 'okuma', elle: false, okuma: okuma('/giris', ['kullanici', 'sif']) },
+        { tur: 'tik', dugme: 0, oncesi: okuma('/giris', []) },
+        { tur: 'okuma', elle: false, okuma: okuma('/panel', []) },
+        { tur: 'okuma', elle: false, okuma: okuma('/kullanici-degistir?dil=tr', ['bolge', 'gizli']) },
+        { tur: 'tik', dugme: 1, oncesi: okuma('/kullanici-degistir?dil=tr', []) },
+        { tur: 'okuma', elle: false, okuma: okuma('/kullanici-tamamlandi', []) }
+      ],
+      gezinmeler: [
+        { sira: 2, yol: '/panel', elle: false },
+        { sira: 3, yol: '/kullanici-degistir?dil=tr#ust', elle: true },
+        { sira: 5, yol: '/kullanici-tamamlandi', elle: false },
+        { sira: 6, yol: '/?oturum=abc', elle: true }
+      ],
+      sonSayfa: { yol: '/', cikisMetni: 'Oturumu Kapat' }
+    } as unknown as Parameters<typeof girisKaydiTaslagi>[0];
+    const taslak = girisKaydiTaslagi(env);
+    // "gizli" alanına dokunuldu ama panelde işareti kaldırıldı (secili: false) → taslakta yok; gizli sorgu ("oturum") atılır, kısa sorgu korunur.
+    expect(taslak.adimlar.map((a) => (a.tur === 'alan' ? `alan:${a.anahtar}` : a.tur === 'dugme' ? `dugme:${a.metin}` : `sayfa:${a.yol}`))).toEqual([
+      'alan:kullanici', 'alan:sif', 'dugme:Giriş', 'sayfa:/kullanici-degistir?dil=tr', 'alan:bolge', 'dugme:KULLANICI DEĞİŞTİR', 'sayfa:/'
+    ]);
+    expect(taslak.adimlar.map((a) => a.oneri)).toEqual(['kullaniciAdi', 'parola', 'gonder', 'git', 'ek', 'tikla', 'git']);
+    const s = kayittanTarif(taslak, taslak.adimlar.map((a) => (a.tur === 'alan' && a.oneri === 'ek' ? { rol: 'ek', ad: 'bolge' } : { rol: a.oneri })), null, '/giris');
+    expect(s.hatalar).toEqual([]);
+    const t = girisTarifiOlmali(s.tarif);
+    expect(t.girisAdimlari).toEqual([
+      { islem: 'kullaniciAdi' }, { islem: 'parola' }, { islem: 'gonder' },
+      { islem: 'git', adres: '/kullanici-degistir?dil=tr', aciklama: '/kullanici-degistir?dil=tr sayfasına git' },
+      { islem: 'sec', hedef: { secici: '#bolge' }, deger: '{bolge}', aciklama: 'Bölge' },
+      { islem: 'tikla', hedef: { secici: '#degistir', metin: 'KULLANICI DEĞİŞTİR' }, aciklama: '“KULLANICI DEĞİŞTİR” düğmesine bas' },
+      { islem: 'git', adres: '/', aciklama: '/ sayfasına git' }
+    ]);
+    expect(girisAlanlari(t)).toEqual(['bolge']);
+    // Sayfa adımı "tarife alma" yapılırsa adım yazılmaz.
+    const yoksay = kayittanTarif(taslak, taslak.adimlar.map((a) => (a.tur === 'sayfa' ? { rol: 'yoksay' } : a.tur === 'alan' && a.oneri === 'ek' ? { rol: 'ek', ad: 'bolge' } : { rol: a.oneri })), null, '/giris');
+    expect((girisTarifiOlmali(yoksay.tarif).girisAdimlari ?? []).map((a) => a.islem)).toEqual(['kullaniciAdi', 'parola', 'gonder', 'sec', 'tikla']);
+    expect(kayittanTarif(taslak, taslak.adimlar.map((a) => ({ rol: a.tur === 'sayfa' ? 'baska' : a.oneri })), null, '/giris').hatalar.join(' ')).toMatch(/geçersiz seçim/);
+    // Başka sayfadaki metin alanı, girişin kod alanı sanılmaz (kod yalnız giriş düğmesiyle aynı sayfada aranır).
+    const kodsuz = girisKaydiTaslagi({ ...env, alanlar: [...env.alanlar, alan('metin2', 'text', 'Açıklama')], olaylar: [...env.olaylar.slice(0, 3), { tur: 'okuma', elle: false, okuma: okuma('/kullanici-degistir?dil=tr', ['metin2']) }, ...env.olaylar.slice(3)] } as typeof env);
+    expect(kodsuz.adimlar.some((a) => a.oneri === 'kod')).toBe(false);
+    // Gezinme yolu: parça atılır, gizli sorgu ve uzun sorgu atılır, "/" ile başlamayan / "//" adres geçersiz.
+    expect([gezinmeYolu('/a?x=1#p'), gezinmeYolu('/a?token=1'), gezinmeYolu(`/a?x=${'y'.repeat(120)}`), gezinmeYolu('http://x/a'), gezinmeYolu('//x/a'), gezinmeYolu(5)]).toEqual(['/a?x=1', '/a', '/a', '', '', '']);
   });
 
   test('"Girişi kaydet": girişten sonraki sayfa oturum kontrol adresi / başarı göstergesi olarak ÖNERİLİR; mevcut tarif onaysız değişmez', () => {
