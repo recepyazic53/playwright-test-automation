@@ -390,8 +390,15 @@ function veriDuragi(o, s, kart, m, gonder) {
       yerlestir(kap, girdi, doldur);
     };
     ciz();
+    // Doldurma sırası: alanlar sayfadaki sırayla listelenir ve bu sırayla doldurulur; kullanıcı yukarı / aşağı taşıyabilir.
+    // Düğme adı genel ("Yukarı taşı"); hangi alan olduğu aria-describedby ile alanın etiketinden okunur (alan etiketiyle karışmaz).
+    const sira = h('span', { class: 'hizli-sira', role: 'group', 'aria-label': 'Doldurma sırası' },
+      h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-sira-yukari', 'aria-label': 'Yukarı taşı', 'aria-describedby': `${id}-etiket`, title: 'Yukarı taşı (daha önce doldurulur)', onclick: () => tasi(a, -1) }, h('span', { 'aria-hidden': 'true' }, '↑')),
+      h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-sira-asagi', 'aria-label': 'Aşağı taşı', 'aria-describedby': `${id}-etiket`, title: 'Aşağı taşı (daha sonra doldurulur)', onclick: () => tasi(a, 1) }, h('span', { 'aria-hidden': 'true' }, '↓')));
     return h('div', { class: `alan hizli-alan${a.yeni ? ' yeni' : ''}` },
-      h('label', { for: id, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null }, a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
+      h('div', { class: 'hizli-alan-baslik' },
+        h('label', { for: id, id: `${id}-etiket`, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null }, a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
+        sira),
       kap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
   };
   // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir.
@@ -402,9 +409,30 @@ function veriDuragi(o, s, kart, m, gonder) {
   const satir = (/** @type {any} */ a) => { if (!satirlari.has(a.anahtar)) satirlari.set(a.anahtar, satirYap(a)); return /** @type {HTMLElement} */ (satirlari.get(a.anahtar)); };
   const satirlarKap = h('div', { class: 'hizli-alanlar' });
   const hazirKap = h('details', { class: 'hizli-hazir' });
+  // Doldurma sırası (anahtarlar): başlangıçta sayfadaki sıra; "Devam et"te sunucuya gider, motor bu sırayla doldurur.
+  const siralama = s.alanlar.map((a) => a.anahtar);
+  const alanlarSirali = () => siralama.map((k) => s.alanlar.find((a) => a.anahtar === k)).filter(Boolean);
+  const sorulanlar = () => alanlarSirali().filter((a) => !hazirlar.includes(a) || acilan.has(a.anahtar));
+  const tasi = (/** @type {any} */ a, /** @type {number} */ yon) => {
+    const gorunen = sorulanlar();
+    const j = gorunen.indexOf(a) + yon;
+    if (j < 0 || j >= gorunen.length) return;
+    const x = siralama.indexOf(a.anahtar);
+    const y = siralama.indexOf(gorunen[j].anahtar);
+    [siralama[x], siralama[y]] = [siralama[y], siralama[x]];
+    listeyiCiz();
+    const dugmeler = satir(a).querySelectorAll('.hizli-sira button');
+    const hedef = /** @type {HTMLButtonElement} */ (dugmeler[yon < 0 ? 0 : 1]);
+    (hedef.disabled ? /** @type {HTMLButtonElement} */ (dugmeler[yon < 0 ? 1 : 0]) : hedef).focus();
+  };
   const listeyiCiz = () => {
-    const sorulan = s.alanlar.filter((a) => !hazirlar.includes(a) || acilan.has(a.anahtar));
+    const sorulan = sorulanlar();
     yerlestir(satirlarKap, ...(sorulan.length ? sorulan.map(satir) : [h('p', { class: 'soluk' }, 'Sayfa hazır: sizden doldurmanızı isteyeceğim boş alan yok. Devam edebilirsiniz.')]));
+    sorulan.forEach((a, i) => {
+      const d = satir(a).querySelectorAll('.hizli-sira button');
+      /** @type {HTMLButtonElement} */ (d[0]).disabled = i === 0;
+      /** @type {HTMLButtonElement} */ (d[1]).disabled = i === sorulan.length - 1;
+    });
     const kalan = hazirlar.filter((a) => !acilan.has(a.anahtar));
     hazirKap.hidden = !kalan.length;
     yerlestir(hazirKap, h('summary', {}, `Sayfada hazır gelen ${kalan.length} değer (olduğu gibi kullanılacak)`),
@@ -419,7 +447,7 @@ function veriDuragi(o, s, kart, m, gonder) {
       : { deger: d.deger, kaynak: d.kaynak || 'elle', ...(d.tabloSecimi ? { tabloSecimi: d.tabloSecimi } : {}) }]));
     const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar]).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
-    void gonder(devam, 'veri', { degerler }, m);
+    void gonder(devam, 'veri', { degerler, sira: siralama }, m);
   });
   const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && (a.deger === null || a.deger === '')).length;
   return kart(o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
