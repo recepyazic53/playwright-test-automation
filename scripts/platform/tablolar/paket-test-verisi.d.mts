@@ -18,3 +18,9 @@ export declare function paketTestVerisiniYaz(vt: Veritabani, projeId: string, ek
   tablolar: Array<{ ad: string; id: string; islem: TabloIslemi; eklenenSatir: number; eklenenSutun: number }>; baglanan: number;
   ertelenen: Record<string, { tablo: string; sutun: string; etiket?: string }>;
 };
+
+/** Mevcut tablo ile yeni tablonun birleştirme planı: sütun eşleşmesi (paket sütunu → mevcut sütun adı), eklenecek sütunlar ve satırlar. */
+export declare function birlestirmePlani(
+  mevcut: { sutunlar: Array<{ ad: string }>; satirlar: Array<{ degerler: Record<string, string | null> }> },
+  t: { sutunlar: Array<{ ad: string; gizli?: boolean; karsiliklar?: Record<string, { sayfa?: string; servis?: string }> }>; satirlar: Array<Record<string, string | null>> }
+): { eslesme: Map<string, string>; yeniSutunlar: Array<{ ad: string; gizli?: boolean; karsiliklar?: Record<string, { sayfa?: string; servis?: string }> }>; eklenecek: Array<Record<string, string | null>> };

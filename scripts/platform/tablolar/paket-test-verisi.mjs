@@ -39,7 +39,7 @@ export function paketKaynakTuru(meta) {
  * Mevcut tablo ile paketin tablosu: sütun eşleşmesi (ad, büyük/küçük harf yok sayılır) ve eklenecek satırlar.
  * @param {import('./tablo-deposu.mjs').Tablo} mevcut @param {import('./paket-tablolari.mjs').PaketTablosu} t
  */
-function birlestirmePlani(mevcut, t) {
+export function birlestirmePlani(mevcut, t) {
   /** @type {Map<string, string>} paket sütunu → mevcut sütun adı */
   const eslesme = new Map();
   for (const s of t.sutunlar) {

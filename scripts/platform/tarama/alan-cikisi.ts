@@ -50,3 +50,34 @@ export async function alanZatenDolu(alan: Locator, deger: string): Promise<boole
   const mevcut = await alan.inputValue({ timeout: 1_000 }).catch(() => null);
   return mevcut !== null && sade(mevcut) === istenen;
 }
+
+/**
+ * Metin alanına değer yazar ve alandan çıkar; sayfa değeri geri alırsa (maske eklentisi: tuş olayı olmadan yazılan ham değer alandan
+ * çıkınca silinir; doğrulama; yeniden çizim) GERÇEK TUŞLARLA yeniden yazar. Sıra: (1) yaz (tuşlayarak istenmişse en baştan tuşlayarak),
+ * (2) boş kaldıysa tuşlayarak, (3) alandan çık (+ sonra: sayfanın sakinleşmesi), (4) çıkınca silindiyse tuşlayarak yeniden yaz ve yeniden çık.
+ * @returns 'tamam' ya da 'silindi' (tuşlanarak yazılan değer de alandan çıkınca silindi)
+ */
+export async function alanaYaz(
+  alan: Locator, deger: string, secenek: { tuslayarak?: boolean; zamanAsimiMs: number; sonra?: () => Promise<void> }
+): Promise<'tamam' | 'silindi'> {
+  const bos = async (): Promise<boolean> => !(await alan.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
+  const tuslaYaz = async (): Promise<void> => {
+    await alan.fill('', { timeout: 2_000 }).catch(() => undefined);
+    await alan.pressSequentially(deger, { delay: 35, timeout: secenek.zamanAsimiMs });
+  };
+  if (secenek.tuslayarak) await tuslaYaz();
+  else {
+    await alan.fill(deger, { timeout: secenek.zamanAsimiMs });
+    if (await bos()) await tuslaYaz();
+  }
+  await alandanCik(alan);
+  await secenek.sonra?.();
+  if (await bos()) {
+    await alan.click({ timeout: 3_000 }).catch(() => undefined);
+    await tuslaYaz();
+    await alandanCik(alan);
+    await secenek.sonra?.();
+    if (await bos()) return 'silindi';
+  }
+  return 'tamam';
+}

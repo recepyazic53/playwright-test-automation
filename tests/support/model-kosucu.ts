@@ -529,8 +529,15 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       } else {
         await l.fill(metin);
       }
-      // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
+      // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir. Sayfa değeri alandan çıkınca silerse
+      // (ör. tuş olayı bekleyen maske) gerçek tuşlarla yeniden yazılır.
       await alandanCik(l);
+      if (!(await l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim() && metin.trim()) {
+        await l.click({ timeout: 3_000 }).catch(() => undefined);
+        await l.fill('');
+        await l.pressSequentially(metin, { delay: 35 });
+        await alandanCik(l);
+      }
     }
   }
 }

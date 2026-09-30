@@ -253,8 +253,21 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   o = await bekle(id, ['kaydet'], 120);
   expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
   expect(uygulama.onaylar.length).toBe(once.o + 2);
-  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal' });
+  // ÖZET (yazmadan): tablolar, birleştirme kararı (yeni tablo → "yeni"), bağlantılar ve senaryo önerileri.
+  const oz = (await basarili('/platform/hizli-test/ozet', { id, baslik: 'Başvuru formu — kurumsal' })).ozet as Nesne;
+  const ozTablolar = (oz.onizleme.tablolar as Nesne[]).map((t) => t.ad).sort();
+  expect(ozTablolar).toEqual(['Kanal', 'Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  expect(oz.secim.tablolar['Kişi bilgileri']).toEqual({ islem: 'yeni' });
+  expect((oz.onizleme.tablolar as Nesne[]).every((t) => t.mevcut === null)).toBe(true);
+  expect(oz.onizleme.baglantilar.length).toBeGreaterThanOrEqual(3);
+  expect(oz.senaryolar[0]).toMatchObject({ indeks: 0, baslik: 'Başvuru formu — kurumsal', varsayilanSecili: true });
+  const alternatif = (oz.senaryolar as Nesne[]).find((x) => x.alt?.planAdi === 'Müşteri tipi');
+  expect(alternatif?.alt).toMatchObject({ deger: 'Bireysel' });
+  // Özet hiçbir şey yazmaz.
+  expect(((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).some((t) => t.ad === 'Kişi bilgileri')).toBe(false);
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal', secim: oz.secim, senaryoIndeksleri: [alternatif?.indeks] });
   expect(k).toMatchObject({ kaydedildi: true, dogrulandi: true });
+  expect((k.ekSenaryolar as Nesne[]).map((x) => x.baslik)).toEqual([alternatif?.baslik]);
   // Hazırlık kontrolü: tüm satırlar ✓ (çalıştırılabilir).
   expect(k.hazirlik).toMatchObject({ calistirilabilir: true, nedenler: [] });
   expect((k.hazirlik as Nesne).maddeler.filter((m: Nesne) => m.durum === 'eksik')).toEqual([]);
@@ -278,8 +291,8 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   // Elle yazılan değerler test verisi tablolarına, anlamlı gruplara ayrılarak alındı (tek tablo değil): kişi alanı "Kişi bilgileri",
   // diğer her alan kendi başlığıyla kendi tablosunda; alanlar ekranın Test verisi bölümünde ilgili tabloya bağlandı.
   const kTablo = k.tablo as { tablolar: Array<{ tablo: string; sutunSayisi: number; yeni: boolean }>; baglanan: number };
-  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
-  expect(kTablo.baglanan).toBe(3);
+  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kanal', 'Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  expect(kTablo.baglanan).toBeGreaterThanOrEqual(3);
   const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
   const kisiTablosu = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri');
   expect(kisiTablosu?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Vergi no']);
@@ -395,6 +408,97 @@ test('seçim keşfi: varsayılan seçili radyonun diğer değerinde beliren alan
     expect(durum).toEqual({ ana: 'x', gx: true, gy: false });
   } finally { await tarayici.tarayici.close(); }
   await basarili('/platform/hizli-test/iptal', { id });
+});
+
+/**
+ * Kayıt formu (/kayit/: tuş bekleyen telefon maskesi, alandan çıkınca silen sayfa, takvim penceresi, TC sorgusu) için baştan sona hızlı test:
+ * veri durağı (verilen sırayla) → Nöbetçi doldurur ve "Hesapla"ya basar → bitiş → doğrulama koşusu → kaydet.
+ */
+async function kayitHizliTesti(ekranAdi: string, baslik: string, degerler: Record<string, string>, sira: string[] | null): Promise<{ ekranId: string; senaryoId: string; kayit: Nesne }> {
+  const once = uygulama.kayitlar.length;
+  const id = String((await basarili('/platform/hizli-test/baslat', {
+    projeId, ortamId, hedef: '/kayit/?sifirla=tc', ekranAdi, izin: 'evet', cumle: 'Hesapla\'ya bas, "Kayıt alındı" görünsün'
+  })).id);
+  let o = await bekle(id, ['veri']);
+  const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
+  // Sayfa sırası: ülke, D.TARİHİ, telefon, TC (Ödeyen radyosu sayfada hazır: sorulmaz).
+  expect(o.soru.alanlar.filter((a: Nesne) => !a.hazir).map((a: Nesne) => a.etiket)).toEqual(['Gidilecek ülke', 'D.TARİHİ', 'TELEFON', 'TC KİMLİK NO']);
+  await basarili('/platform/hizli-test/veri', {
+    id, degerler: Object.fromEntries(Object.entries(degerler).map(([e, v]) => [alan(e), deger(v)])), ...(sira ? { sira: sira.map(alan) } : {})
+  });
+  // Evet + cümlede "Hesapla": doldurulur ve basılır; sayfa telefonu sildiyse yeniden yazılır (aksi halde "Telefon numarası zorunludur").
+  o = await bekle(id, ['karar', 'hataSorusu', 'veri'], 120);
+  expect(o.durum, JSON.stringify({ soru: o.soru, hatalar: o.alanHatalari, gunluk: o.gunluk })).toBe('karar');
+  expect(uygulama.kayitlar.length).toBe(once + 1);
+  const kayit = uygulama.kayitlar.at(-1) as Nesne;
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir' });
+  o = await bekle(id, ['bitis']);
+  await basarili('/platform/hizli-test/bitis', { id, etiketler: { ...o.soru.etiketler, 'Kayıt alındı': 'bitti' } });
+  o = await bekle(id, ['kaydet']);
+  await basarili('/platform/hizli-test/dogrula', { id });
+  o = await bekle(id, ['kaydet'], 120);
+  expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
+  expect(uygulama.kayitlar.length).toBe(once + 2); // doğrulama koşusu da kaydı gönderdi
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik });
+  return { ekranId: String(k.ekranId), senaryoId: String(k.senaryoId), kayit };
+}
+
+const tabloAdlari = async (): Promise<Nesne[]> => (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
+
+test('kayıt formu: telefon maskesi + alandan çıkınca silen sayfa + sonradan sıfırlanan alan; varsayılan (sayfa) sırasıyla doldurulur, değerler doğru gider', async () => {
+  test.setTimeout(300_000);
+  await isBitsin();
+  const r = await kayitHizliTesti('Kayıt formu bir', 'Kayıt bir', { 'Gidilecek ülke': 'FR', 'D.TARİHİ': '13.04.1998', TELEFON: '5426502153', 'TC KİMLİK NO': '45520772518' }, null);
+  // Telefon tuşlanarak yazıldı (maske biçimledi), TC sorgusu telefonu sildiyse yeniden yazıldı; hiçbir değer eksik / hatalı değil.
+  expect(r.kayit).toMatchObject({ ulke: 'FR', odeyen: 'kendisi', dogum: '13.04.1998', tel: '(542) 650-2153', tc: '45520772518' });
+  // Alanlar sayfa sırasıyla dolduruldu.
+  expect(r.kayit.sira).toEqual(['ulke', 'dogum', 'tel', 'tc']);
+  // Test verisi tabloları: kişi alanları tek tabloda, seçim alanı kendi liste tablosunda (TÜM seçenekler), her alan ekranda bağlı.
+  const tablolar = await tabloAdlari();
+  const kisi = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri') as Nesne;
+  // ("Kişi bilgileri" önceki testlerden varsa birleşir: kendi sütunları ve satırı eklenir.)
+  expect(kisi.sutunlar.map((x: Nesne) => x.ad)).toEqual(expect.arrayContaining(['Doğum tarihi', 'Telefon', 'Kimlik no']));
+  expect(kisi.satirlar.map((x: Nesne) => x.ad)).toContain('Kayıt bir');
+  const ulke = tablolar.find((t: Nesne) => t.ad === 'Gidilecek ülke') as Nesne;
+  expect(ulke.satirlar.map((x: Nesne) => x.degerler['Gidilecek ülke'])).toEqual(['A.B.D', 'Fransa', 'Almanya']);
+  const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${r.ekranId}`)) as Nesne;
+  expect(Object.values(bag.baglar as Record<string, Nesne>).map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort())
+    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon']);
+  // Senaryolardan yeniden başlat ("Testi koş"): aynı değerler, tablodan çözülerek, telefon dahil.
+  const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: r.senaryoId, ortamId });
+  expect(y.basarili, y.mesaj).toBe(true);
+  const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
+  expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
+  expect(uygulama.kayitlar.at(-1)).toMatchObject({ ulke: 'FR', odeyen: 'kendisi', dogum: '13.04.1998', tel: '(542) 650-2153', tc: '45520772518' });
+});
+
+test('kayıt formu: kullanıcının verdiği doldurma sırası izlenir (telefon en sonda); aynı adlı tablolar birleşir (yeni tablo açılmaz), satır eklenir, senaryolar kendi satırını kullanır', async () => {
+  test.setTimeout(400_000);
+  await isBitsin();
+  const onceTablolar = await tabloAdlari();
+  expect(onceTablolar.filter((t: Nesne) => t.ad === 'Kişi bilgileri')).toHaveLength(1); // önceki testten
+  const onceKisiSatirSayisi = (onceTablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri') as Nesne).satirlar.length;
+  const r = await kayitHizliTesti('Kayıt formu iki', 'Kayıt iki', { 'Gidilecek ülke': 'DE', 'D.TARİHİ': '01.02.1990', TELEFON: '5551112233', 'TC KİMLİK NO': '10000000146' },
+    ['TC KİMLİK NO', 'Gidilecek ülke', 'D.TARİHİ', 'TELEFON']);
+  expect(r.kayit).toMatchObject({ ulke: 'DE', dogum: '01.02.1990', tel: '(555) 111-2233', tc: '10000000146' });
+  // Sıra: TC, ülke, D.TARİHİ, telefon (kullanıcının sırası; telefon en son ve TC sorgusundan etkilenmedi).
+  expect(r.kayit.sira).toEqual(['tc', 'ulke', 'dogum', 'tel']);
+  // Tablolar: aynı adlı tablo var → birleşti (yeni tablo açılmadı): sütunlar aynı, satırlar 2; seçim listesi yeniden yazılmadı (3 seçenek).
+  const tablolar = await tabloAdlari();
+  expect(tablolar.filter((t: Nesne) => t.ad === 'Kişi bilgileri')).toHaveLength(1);
+  expect(tablolar.filter((t: Nesne) => t.ad === 'Gidilecek ülke')).toHaveLength(1);
+  expect(tablolar.length).toBe(onceTablolar.length);
+  const kisi = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri') as Nesne;
+  expect(kisi.sutunlar.map((x: Nesne) => x.ad)).toEqual(expect.arrayContaining(['Doğum tarihi', 'Telefon', 'Kimlik no']));
+  expect(new Set(kisi.sutunlar.map((x: Nesne) => x.ad)).size).toBe(kisi.sutunlar.length); // tekrar eden sütun yok
+  expect(kisi.satirlar).toHaveLength(onceKisiSatirSayisi + 1); // yalnız bu senaryonun satırı eklendi
+  expect(kisi.satirlar.map((x: Nesne) => x.ad)).toEqual(expect.arrayContaining(['Kayıt bir', 'Kayıt iki']));
+  const ulke = tablolar.find((t: Nesne) => t.ad === 'Gidilecek ülke') as Nesne;
+  expect(ulke.satirlar).toHaveLength(3);
+  // Kaydedilen senaryo da bu sırayla doldurur ve KENDİ satırını kullanır (ilk senaryo hâlâ ilk satırını).
+  const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: r.senaryoId, ortamId });
+  expect(y.basarili, y.mesaj).toBe(true);
+  expect(uygulama.kayitlar.at(-1)).toMatchObject({ ulke: 'DE', dogum: '01.02.1990', tel: '(555) 111-2233', tc: '10000000146', sira: ['tc', 'ulke', 'dogum', 'tel'] });
 });
 
 test('Bana sor: her basıştan önce onay (Hayır → basılmaz); "Başka düğmeye bas" sayfada seçilir (tıklama iletilmez); beklenen uyarı → olumsuz senaryo', async () => {
@@ -671,6 +775,16 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(soru).toContainText('Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı?');
     await tasmaYok(page, 'Kaydet');
     await soru.getByRole('button', { name: 'Hayır, kaydet' }).click();
+    // Özet ekranı: hiçbir şey yazılmadan tablolar, senaryo önerileri; onay olmadan kaydedilmez.
+    await expect(soru.getByRole('heading', { name: /Özet/ })).toBeVisible();
+    await expect(soru.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();
+    await tasmaYok(page, 'Özet');
+    // Önceki testlerden aynı adlı tablolar var: karar verilmeden onaylanamaz; "Birleştir" seçilince açılır.
+    await expect(soru.getByRole('button', { name: 'Onayla ve kaydet' })).toBeDisabled();
+    await expect(soru).toContainText('karar bekleniyor');
+    for (const r of await soru.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
+    await expect(soru.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
+    await soru.getByRole('button', { name: 'Onayla ve kaydet' }).click();
     await expect(page.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.hizli-hazirlik li.eksik')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Akış diyagramında aç' })).toBeVisible();
