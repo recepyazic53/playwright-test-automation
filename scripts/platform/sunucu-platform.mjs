@@ -1150,10 +1150,12 @@ function ortamSec(db, projeId, d) {
 function girisTarifiGorunumu(db, projeId, o) {
   const etkin = etkinGirisTarifi(db, projeId, o.id);
   return {
-    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar
+    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar,
+    // Ortamın kayıtlı taban adresleri (asıl adres + sonradan eklenenler): tam adres yazılınca kökenin kayıtlı olup olmadığı bundan anlaşılır.
+    tabanAdresleri: [o.tabanUrl, ...(Array.isArray(o.ayarlar.tabanAdresleri) ? o.ayarlar.tabanAdresleri.filter((/** @type {unknown} */ x) => typeof x === 'string') : [])]
   };
 }
-/** "Varsayılanları öner" aynı anda tek bir tarayıcı açsın. */
+/** "Analiz et" aynı anda tek bir tarayıcı açsın. */
 let girisOnerisiSuruyor = false;
 
 // ---------------------------------------------------------------------------------------
@@ -1839,6 +1841,28 @@ const POST_UCLARI = new Map([
     girisTarifiKaydet(db, projeId, ortamId, g.tarif);
     return { tarif: girisTarifiGorunumu(db, projeId, /** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, ortamId))) };
   }],
+  // Giriş tarifi formunda başka bir kökenin tam adresi yazılınca: kullanıcı onaylarsa kök, ortamın taban adresleri listesine EKLENİR
+  // (ortamın asıl adresi değişmez; servis / ekran eklerken seçilebilir). Yasaklı adres kalıbına uyan kök eklenmez.
+  ['/platform/giris-tarifi/taban-adresi-ekle', (db, g) => {
+    const projeId = kimlikAl(g.projeId, 'projeId');
+    const ortam = ortamGetir(db, kimlikAl(g.ortamId, 'ortamId'));
+    if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
+    let koken;
+    try {
+      const u = new URL(metinAl(g.adres).trim());
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('protokol');
+      if (u.username || u.password) throw new Error('kimlik');
+      koken = u.origin;
+    } catch { throw new DepoHatasi('Taban adres geçerli bir http(s) adresi olmalıdır (kullanıcı adı / parola içermemeli).'); }
+    const yasak = adresYasakliMi(koken, etkinYasakDesenleri(db));
+    if (yasak) throw new DepoHatasi(`Bu adres yasaklı adres kalıbına ("${yasak}") uyuyor; taban adres olarak eklenmedi (Ayarlar > Güvenlik > Yasak adresler).`);
+    const ekler = Array.isArray(ortam.ayarlar.tabanAdresleri) ? /** @type {string[]} */ (ortam.ayarlar.tabanAdresleri) : [];
+    const ayni = (/** @type {string} */ x) => x.replace(/\/+$/, '') === koken;
+    if (!ayni(ortam.tabanUrl) && !ekler.some(ayni)) {
+      ortamKaydet(db, { id: ortam.id, projeId, ad: ortam.ad, tabanUrl: ortam.tabanUrl, varsayilan: ortam.varsayilan, ayarlar: { ...ortam.ayarlar, tabanAdresleri: [...ekler, koken] } });
+    }
+    return { ortam: ortamGorunumu(/** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, ortam.id))) };
+  }],
   ['/platform/giris-tarifi/dogrula', (_db, g) => {
     const d = girisTarifiniDogrula(g.tarif);
     return { gecerli: d.gecerli, hatalar: d.hatalar };
@@ -2402,7 +2426,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
 
     switch (yol) {
       case '/platform/giris-tarifi/oner': {
-        // YALNIZCA kullanıcı "Varsayılanları öner"e açıkça basınca: ortamın giriş sayfası başsız tarayıcıda
+        // YALNIZCA kullanıcı "Analiz et"e açıkça basınca: ortamın giriş sayfası başsız tarayıcıda
         // açılır, form ALGILANIR (hiçbir alan doldurulmaz/gönderilmez). Adres ortamın taban adresi + tarifteki
         // (ya da formdaki) giriş yolu.
         const db = await acikVeritabani();

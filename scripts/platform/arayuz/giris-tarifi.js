@@ -1,13 +1,16 @@
-// Ayarlar > Giriş profilleri > "Giriş tarifi" (genel): ortam başına giriş sayfasının tarifi — giriş adımları (kullanıcı
-// adı / parola / giriş düğmesi ve aralarına eklenen doldur / seç / tıkla / bekle adımları), başarı/hata göstergeleri,
-// iki aşamalı doğrulama adımı ve isteğe bağlı bağlam değiştirme adımları. Adımlar önce OKUNUR özetle gösterilir
-// (giris-ozeti.mjs); teknik seçiciler "Gelişmiş" altındadır.
-// Tarifte gizli değer yoktur (parola/anahtar/kod ve ek alan değerleri giriş profilindedir). "Varsayılanları öner" YALNIZCA
+// Ayarlar > Giriş profilleri > "Giriş tarifi" (genel): ortam başına giriş sayfasının tarifi. Form ZORUNLU olanlarla başlar (giriş
+// sayfasının adresi, kullanıcı adı / parola alanı, giriş düğmesi, girişin başarılı olduğunu gösteren yazı; "Analiz et" bunları
+// kendisi bulur, her alanın altında örnekli tek cümlelik yardım vardır); gerisi (oturum kontrolü, giriş adımları, hata göstergeleri,
+// iki aşamalı doğrulama, bağlam değiştirme) kapalı "Gelişmiş ayarlar" altındadır. Adımlar önce OKUNUR özetle gösterilir
+// (giris-ozeti.mjs). Adres alanlarına yol ya da TAM adres yazılabilir (taban adres + yol olarak ayrılır; adres-ayirma.mjs).
+// Tarifte gizli değer yoktur (parola/anahtar/kod ve ek alan değerleri giriş profilindedir). "Analiz et" YALNIZCA
 // kullanıcı açıkça isteyip onaylayınca ortamın giriş sayfasını sunucuda görünmez bir tarayıcıda açar
-// (alan doldurmaz, göndermez). "Girişi kaydet" YALNIZCA kullanıcı onaylayınca görünür tarayıcıda giriş sayfasını açar;
+// (alan doldurmaz, göndermez, düğmeye basmaz). "Girişi kaydet" YALNIZCA kullanıcı onaylayınca görünür tarayıcıda giriş sayfasını açar;
 // kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez. Ardından TEK onay ekranı: adımların rolü önerilmiş gelir,
 // yalnız gerekenler sorulur (kod kaynağı; başarı yazısı kayıttan çıkmadıysa), tarif doğrudan kaydedilir (tüm ayrıntılar
-// isteğe bağlı olarak formda). Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
+// isteğe bağlı olarak formda). Kaydedince, ortamın giriş profili yoksa kayıttan çıkan alanlarla profil oluşturulması önerilir
+// (yalnız hangi alanların gerektiği bilinir; DEĞERLER kayıtta okunmaz, kullanıcı bir kez girer, kasada şifreli saklanır).
+// Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
 // #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (giriş yalnız buradan yönetilir; Ekranlar'da listelenmez).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
@@ -16,10 +19,10 @@ import { girisiDeneDugmesi } from './giris-denemesi.js';
 import {
   AYNI_ADRES_UYARISI, basariAdresindenYol, girisSonrasiSayfasiniHatirla, hatirlananGirisSonrasiSayfasi, oturumAdresiGirisleAyniMi, oturumAdresiOnerisi
 } from './oturum-kontrolu.mjs';
+import { adresiAyir, kokenKayitliMi } from './adres-ayirma.mjs';
 
-const OTURUM_ADRESI_YARDIMI = 'Girişten sonra açılan bir sayfa (ör. /panel). Nöbetçi her testten önce bu sayfayı açar: başarı göstergesi '
-  + 'görünürse önceki giriş hâlâ geçerlidir ve yeniden giriş yapılmaz. Giriş sayfasını yazmayın; orada gösterge görünmediği için '
-  + 'her testte giriş beklenir. Boş bırakılırsa giriş adresi kullanılır.';
+const OTURUM_ADRESI_YARDIMI = 'İsteğe bağlı. Girişten sonra açılan bir sayfa (ör. /panel): giriş yapılmış mı diye Nöbetçi her testten önce bu sayfaya bakar '
+  + '(yalnız giriş yapan kullanıcıya açık olmalı; giriş sayfası olmaz). Boş bırakırsanız Nöbetçi giriş sonrası açılan sayfayı kendisi bulur.';
 /**
  * Oturum kontrol adresinin yardımı + Koşu ayarındaki "Oturum kontrolü (sn)" ile ilişkisi (bağlantı ayarı açıp odaklar;
  * karşı tarafta ayarın altında buraya bağlantı vardır: ayarlar/kosu-ayarlari.mjs > baglanti).
@@ -44,7 +47,7 @@ const HEDEFLI = ['tikla', 'doldur', 'sec', 'gorunurBekle', 'degerBekle', 'sayiBe
 
 /** Boş tarif iskeleti (yeni tarif). */
 const bosTarif = () => ({
-  girisAdresi: '/', oturumKontrolAdresi: '/', kullaniciAlani: '', parolaAlani: '', gonderDugmesi: '',
+  girisAdresi: '/', oturumKontrolAdresi: '', kullaniciAlani: '', parolaAlani: '', gonderDugmesi: '',
   basariGostergesi: { tur: 'metin', deger: '' }, hataGostergeleri: [], ikinciAdim: { tur: 'yok' }, zamanAsimiSn: 45, baglamDegistirme: null
 });
 
@@ -227,8 +230,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
   const tarifFormu = (o, on = {}) => {
     const t = JSON.parse(JSON.stringify(on.tarif || o.tarif || bosTarif()));
     const mesaj = mesajKutusu();
-    const girisAdresi = monoGirdi(t.girisAdresi);
-    const oturumAdresi = monoGirdi(t.oturumKontrolAdresi);
+    const girisAdresi = monoGirdi(t.girisAdresi, { placeholder: '/giris' });
+    const oturumAdresi = monoGirdi(t.oturumKontrolAdresi, { placeholder: 'Boş: giriş sonrası açılan sayfa otomatik bulunur' });
     // Oturum kontrol adresi giriş sayfasıyla aynıysa açık uyarı; önerilen adres (girişten sonra görülen sayfa) varsa tek tıkla geçilir.
     // Öneri kaynağı: kayıttan gelen öneri > bu oturumda "Girişi dene"/"Girişi kaydet"te görülen sayfa > adres deseni başarı göstergesi.
     const oturumUyarisi = h('div', { class: 'not-kutusu uyari oturum-adresi-uyarisi', role: 'status', hidden: true });
@@ -237,24 +240,66 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const parola = monoGirdi(t.parolaAlani);
     const gonder = monoGirdi(t.gonderDugmesi);
 
-    // --- Varsayılanları öner (yalnızca açık istek + onay) ---------------------------------
+    // --- Adres alanları: yol ya da TAM adres (ortamın kökeniyle aynıysa taban adres + yol olarak ayrılır) ------------------
+    const adresNotu = h('div', { role: 'status', 'aria-live': 'polite' });
+    const tabanAdresleri = () => (o.tabanAdresleri && o.tabanAdresleri.length ? o.tabanAdresleri : [o.tabanUrl]);
+    /** Alandaki değerin tarife yazılacak biçimi: ortamın kökenindeyse yol, başka kökse tam adres, geçersizse yazıldığı gibi (sunucu doğrular). */
+    const adresDegeri = (girdi) => { const s = adresiAyir(girdi.value, o.tabanUrl); return s.tur === 'hata' ? girdi.value.trim() : s.adres; };
+    /** Girişten sonra açılan sayfa (kayıttan / bu oturumdaki denemeden / adres deseni başarı göstergesinden) → boş oturum kontrol adresinin otomatik değeri. */
+    const otomatikOturum = () => {
+      const adresler = { girisAdresi: adresDegeri(girisAdresi) || '/', oturumKontrolAdresi: '' };
+      return [on.oturumOnerisi, hatirlananGirisSonrasiSayfasi(o.ortamId), basariAdresindenYol({ tur: basariTur.value, deger: basariDeger.value })]
+        .map((y) => oturumAdresiOnerisi(adresler, y, o.tabanUrl)).find(Boolean) || '';
+    };
+    const tabanAdresiniOner = async (koken) => {
+      const tamam = await onayIste({
+        baslik: 'Bu adresi yeni taban adres olarak kaydedeyim mi?',
+        metin: `${koken} adresi bu ortamın taban adresinden (${o.tabanUrl}) farklı bir sitede. Kaydedersem ortamın taban adresleri listesine eklenir (ekran ve servis eklerken seçilebilir; ortamın asıl adresi değişmez). Kaydetmezsem adres yalnız burada tam adres olarak kalır.`,
+        dugme: 'Evet, kaydet', ikonAd: 'ag'
+      });
+      if (!tamam) { adresNotu.replaceChildren(h('div', { class: 'not-kutusu uyari' }, `${koken} taban adres olarak kaydedilmedi; adres tam adres olarak kalır.`)); return; }
+      try {
+        const { ortam } = await api('/platform/giris-tarifi/taban-adresi-ekle', { govde: { projeId: proje.id, ortamId: o.ortamId, adres: koken } });
+        o.tabanAdresleri = ortam.tabanAdresleri;
+        adresNotu.replaceChildren(h('div', { class: 'not-kutusu basari', role: 'status' }, `${koken} taban adres olarak kaydedildi.`));
+      } catch (hata) { adresNotu.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); }
+    };
+    const adresiIsle = async (girdi) => {
+      const s = adresiAyir(girdi.value, o.tabanUrl);
+      alanHatasi(girdi, s.tur === 'hata' ? s.mesaj : '');
+      if (s.tur === 'yol' && s.yol && s.yol !== girdi.value.trim()) girdi.value = s.yol;
+      if (s.tur === 'ayni') {
+        girdi.value = s.yol;
+        adresNotu.replaceChildren(h('div', { class: 'not-kutusu bilgi' }, `Tam adres ayrıldı: taban adres ${o.tabanUrl} + yol ${s.yol}.`));
+      } else if (s.tur === 'baska') {
+        girdi.value = s.adres;
+        if (kokenKayitliMi(s.koken, tabanAdresleri())) adresNotu.replaceChildren(h('div', { class: 'not-kutusu bilgi' }, `${s.koken} ortamın kayıtlı taban adreslerinden; tam adres olarak kalır.`));
+        else await tabanAdresiniOner(s.koken);
+      } else adresNotu.replaceChildren();
+      ozetiCiz();
+      oturumUyarisiniGuncelle();
+    };
+    girisAdresi.addEventListener('change', () => { void adresiIsle(girisAdresi); });
+    oturumAdresi.addEventListener('change', () => { void adresiIsle(oturumAdresi); });
+
+    // --- Analiz et (yalnızca açık istek + onay): giriş sayfasını açar, alanları BULUR; hiçbir şey doldurmaz, göndermez, düğmeye basmaz ------
     const oneriNotu = h('div', { role: 'status' });
-    const oner = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('simsek'), 'Varsayılanları öner');
+    const oner = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('simsek'), 'Analiz et');
     oner.addEventListener('click', async () => {
-      const yol = girisAdresi.value.trim() || '/';
+      const yol = adresDegeri(girisAdresi) || '/';
       let adres = yol;
       try { adres = new URL(yol, o.tabanUrl).toString(); } catch { /* sunucu doğrular */ }
       const tamam = await onayIste({
-        baslik: 'Giriş sayfası açılsın mı?',
-        metin: `Nöbetçi, ${adres} adresini bu bilgisayarda görünmez bir tarayıcıda açıp sayfadaki giriş formunu inceleyecek. Hiçbir alan doldurulmaz, hiçbir şey gönderilmez; yine de sitenin sunucusuna bir sayfa isteği gider.`,
-        dugme: 'Sayfayı aç ve öner', ikonAd: 'ag'
+        baslik: 'Giriş sayfası analiz edilsin mi?',
+        metin: `Nöbetçi, ${adres} adresini bu bilgisayarda görünmez bir tarayıcıda açıp sayfadaki kullanıcı adı, parola ve giriş düğmesini bulacak. Hiçbir alan doldurulmaz, hiçbir düğmeye basılmaz, hiçbir şey gönderilmez; yine de sitenin sunucusuna bir sayfa isteği gider.`,
+        dugme: 'Sayfayı aç ve analiz et', ikonAd: 'ag'
       });
       if (!tamam) return;
-      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş sayfası önerisi'))) return;
+      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş sayfası analizi'))) return;
       oneriNotu.replaceChildren();
       try {
         const { oneri } = await mesgulIken(oner, 'Sayfa inceleniyor…', () => api('/platform/giris-tarifi/oner', {
-          govde: { projeId: proje.id, ortamId: o.ortamId, girisAdresi: girisAdresi.value.trim(), onay: true, ...canliOnayEki(o.ortamId) }
+          govde: { projeId: proje.id, ortamId: o.ortamId, girisAdresi: adresDegeri(girisAdresi), onay: true, ...canliOnayEki(o.ortamId) }
         }));
         if (oneri.captcha && oneri.captcha.length) {
           oneriNotu.replaceChildren(h('div', { class: 'not-kutusu hata' }, 'Sayfada CAPTCHA algılandı. Test ortamında CAPTCHA kapatılmalı; otomasyon CAPTCHA çözmez.'));
@@ -268,7 +313,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         if (oneri.gonderDugmesi) gonder.value = oneri.gonderDugmesi;
         ozetiCiz();
         oneriNotu.append(h('div', { class: 'not-kutusu basari' },
-          h('p', {}, 'Öneriler alanlara yazıldı; kaydetmeden önce kontrol edin. Başarı göstergesini (giriş sonrası görünen metin/öğe) siz belirleyin.'),
+          h('p', {}, 'Analiz bitti: kullanıcı adı, parola ve giriş düğmesi alanlara yazıldı; kaydetmeden önce kontrol edin. Girişten sonra görünen yazıyı siz belirleyin (ya da “Girişi kaydet” ile Nöbetçi görsün).'),
           oneri.notlar && oneri.notlar.length ? h('ul', {}, oneri.notlar.map((n) => h('li', {}, n))) : null));
       } catch (hata) {
         oneriNotu.replaceChildren(h('div', { class: 'not-kutusu hata' }, hata.message));
@@ -311,8 +356,11 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
 
     let sonUyariDurumu = '';
     oturumUyarisiniGuncelle = () => {
-      const adresler = { girisAdresi: girisAdresi.value.trim() || '/', oturumKontrolAdresi: oturumAdresi.value.trim() };
-      const ayni = oturumAdresiGirisleAyniMi(adresler, o.tabanUrl);
+      const adresler = { girisAdresi: adresDegeri(girisAdresi) || '/', oturumKontrolAdresi: adresDegeri(oturumAdresi) };
+      const otomatik = otomatikOturum();
+      oturumAdresi.placeholder = otomatik ? `Boş: otomatik (${otomatik})` : 'Boş: giriş sonrası açılan sayfa otomatik bulunur (“Girişi dene” ile)';
+      // Boş alan hata değildir: kaydederken giriş sonrası açılan sayfa (biliniyorsa) otomatik yazılır.
+      const ayni = oturumAdresiGirisleAyniMi(adresler, o.tabanUrl) && (Boolean(oturumAdresi.value.trim()) || Boolean(o.tarif && !otomatik));
       const oneri = ayni ? [on.oturumOnerisi, hatirlananGirisSonrasiSayfasi(o.ortamId), basariAdresindenYol({ tur: basariTur.value, deger: basariDeger.value })]
         .map((y) => oturumAdresiOnerisi(adresler, y, o.tabanUrl)).find(Boolean) || null : null;
       const durum = ayni ? `ayni:${oneri ?? ''}` : '';
@@ -320,6 +368,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       sonUyariDurumu = durum;
       oturumUyarisi.hidden = !ayni;
       if (!ayni) { oturumUyarisi.replaceChildren(); return; }
+      gelismisAyarlar.open = true;
       oturumUyarisi.replaceChildren(
         h('p', {}, h('strong', {}, AYNI_ADRES_UYARISI)),
         oneri
@@ -411,8 +460,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       const tur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
       const giris = adimlariTemizle(girisAdimlari);
       const sonuc = {
-        girisAdresi: girisAdresi.value.trim() || '/',
-        oturumKontrolAdresi: oturumAdresi.value.trim(),
+        girisAdresi: adresDegeri(girisAdresi) || '/',
+        oturumKontrolAdresi: oturumAdresi.value.trim() ? adresDegeri(oturumAdresi) : otomatikOturum(),
         kullaniciAlani: kullanici.value.trim(),
         parolaAlani: parola.value.trim(),
         gonderDugmesi: gonder.value.trim(),
@@ -441,47 +490,55 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const sifirla = o.kaynak === 'kayitli'
       ? h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Kayıtlı tarifi sil')
       : null;
-    // Seçiciler "Gelişmiş" altında; boşsa (yeni tarif) açık gelir.
-    const gelismis = h('details', { class: 'tarif-adim-kutusu giris-gelismis', open: !t.kullaniciAlani || !t.parolaAlani || !t.gonderDugmesi },
-      h('summary', {}, 'Gelişmiş: giriş formunun seçicileri'),
-      alan('Kullanıcı adı alanı', kullanici, { zorunlu: true, yardim: SECICI_YARDIMI }),
-      alan('Parola alanı', parola, { zorunlu: true }),
-      alan('Giriş düğmesi', gonder, { zorunlu: true, yardim: 'Form düğmesi, input[type=submit] ya da görüntü düğmesi (input[type=image]).' }));
-    const form = h('form', { class: 'kart form-paneli tarif-formu', novalidate: true, 'data-ortam': o.ortamId },
-      h('h3', {}, `Giriş tarifi: ${o.ortamAd}`),
-      h('p', { class: 'soluk kucuk' }, h('span', { class: 'mono' }, o.tabanUrl), ' — tarifte parola ya da kod yoktur; onlar giriş profilinde şifreli durur.'),
-      on.not ? h('div', { class: 'not-kutusu uyari', role: 'status' }, on.not) : null,
-      mesaj.kutu,
-      h('fieldset', {}, h('legend', {}, 'Giriş sayfası'),
-        h('div', { class: 'iki-sutun' },
-          alan('Giriş adresi', girisAdresi, { yardim: 'Taban adrese göre yol (ör. / ya da /giris) veya tam http(s) adresi.' }),
-          alan('Oturum kontrol adresi', oturumAdresi, { yardim: oturumAdresiYardimi() })),
-        oturumUyarisi,
-        h('div', { class: 'oneri-satiri' }, oner,
-          h('span', { class: 'soluk kucuk' }, ikon('uyari'), ' Ortamın adresini bu bilgisayarda açar; yalnızca siz basınca çalışır.')),
-        oneriNotu,
-        gelismis),
+    // Önce ZORUNLU olanlar (adres, kullanıcı adı / parola alanı, giriş düğmesi, başarı göstergesi); gerisi kapalı "Gelişmiş ayarlar".
+    const zorunluBolum = h('fieldset', { class: 'giris-zorunlu' }, h('legend', {}, 'Giriş sayfası'),
+      h('p', { class: 'soluk kucuk' }, 'Yalnız bu bölüm zorunludur. “Analiz et” kullanıcı adı, parola ve giriş düğmesini sizin yerinize bulur.'),
+      alan('Giriş sayfasının adresi', girisAdresi, { yardim: 'Ortamın adresinden sonraki yol (ör. /giris) ya da tam adres; tam adresi Nöbetçi taban adres + yol olarak ayırır.' }),
+      adresNotu,
+      h('div', { class: 'oneri-satiri' }, oner,
+        h('span', { class: 'soluk kucuk' }, ikon('uyari'), ' Giriş sayfasını bu bilgisayarda açıp alanları bulur; hiçbir şey doldurmaz ya da göndermez. Yalnızca siz basınca çalışır.')),
+      oneriNotu,
+      alan('Kullanıcı adı alanı', kullanici, { zorunlu: true, yardim: 'Kullanıcı adının yazıldığı kutu. Örnek: #kullanici ya da input[name="kullanici"].' }),
+      alan('Parola alanı', parola, { zorunlu: true, yardim: 'Parolanın yazıldığı kutu. Örnek: #parola ya da input[type="password"].' }),
+      alan('Giriş düğmesi', gonder, { zorunlu: true, yardim: 'Girişi gönderen düğme. Örnek: button[type="submit"] ya da #giris.' }),
+      h('div', { class: 'iki-sutun' },
+        alan('Başarı göstergesi türü', basariTur, { yardim: 'Girişin başarılı olduğunu neyin gösterdiği; çoğu zaman “Sayfada görünen metin”.' }),
+        alan('Başarı göstergesi', basariDeger, { zorunlu: true, yardim: 'Girişten sonra ekranda görünen yazı. Örnek: Oturumu Kapat.' })));
+    const gelismisAcik = Boolean(t.baglamDegistirme) || (ikinci.tur && ikinci.tur !== 'yok') || !varsayilanMi(girisAdimlari) || hataSatirlari.length > 0
+      || (Boolean(t.oturumKontrolAdresi) && t.oturumKontrolAdresi !== t.girisAdresi);
+    const gelismisAyarlar = h('details', { class: 'tarif-adim-kutusu giris-gelismis', open: gelismisAcik },
+      h('summary', {}, 'Gelişmiş ayarlar (isteğe bağlı)'),
+      h('fieldset', {}, h('legend', {}, 'Oturum kontrolü'),
+        alan('Oturum kontrol adresi (isteğe bağlı)', oturumAdresi, { yardim: oturumAdresiYardimi() }),
+        oturumUyarisi),
       h('fieldset', { class: 'giris-adimlari-bolumu' }, h('legend', {}, 'Giriş adımları'),
         ozetKutusu,
         h('details', { class: 'tarif-adim-kutusu', open: !varsayilanMi(girisAdimlari) },
           h('summary', {}, girisAdimSayisi),
-          h('p', { class: 'soluk kucuk' }, 'Kullanıcı adı, parola ve giriş düğmesinin önüne, arasına ya da arkasına adım ekleyin: ek alan (Doldur / Seçenek seç), onay kutusu ya da “Devam” (Tıkla), bekleme. İki sayfalı girişte: Kullanıcı adı → “Devam”a tıkla → Parola → Giriş.'),
+          h('p', { class: 'soluk kucuk' }, 'Kullanıcı adı, parola ve giriş düğmesinin önüne, arasına ya da arkasına adım ekleyin: ek alan (Doldur / Seçenek seç), onay kutusu ya da “Devam” (Tıkla), bekleme, başka bir sayfaya gitme. İki sayfalı girişte: Kullanıcı adı → “Devam”a tıkla → Parola → Giriş.'),
           ekAlanCipleri,
           girisDuzenleyici.liste, h('div', { class: 'dugmeler' }, girisAdimEkle))),
-      h('fieldset', {}, h('legend', {}, 'Sonuç göstergeleri'),
-        h('div', { class: 'iki-sutun' }, alan('Başarı göstergesi türü', basariTur), alan('Başarı göstergesi', basariDeger, { zorunlu: true, yardim: 'Girişten sonra görünen metin (ör. "Oturumu Kapat"), adres deseni ya da öğe.' })),
+      h('fieldset', {}, h('legend', {}, 'Hata göstergeleri ve süre'),
         h('div', { class: 'alan' }, h('label', {}, 'Hata göstergeleri'),
-          h('div', { class: 'yardim' }, 'Görünürse “kullanıcı adı veya parola hatalı” sayılır ve giriş beklemeden durur (ör. hata penceresindeki metin).'),
+          h('div', { class: 'yardim' }, 'Görünürse “kullanıcı adı veya parola hatalı” sayılır ve giriş beklemeden durur. Örnek: hata penceresindeki “Kullanıcı adı veya parola hatalı” yazısı.'),
           hataKutusu, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => hataEkle() }, ikon('arti'), 'Hata göstergesi ekle')),
-        alan('Giriş bekleme süresi (sn)', zamanAsimi, { yardim: 'Giriş düğmesinden sonra başarı/hata göstergesi için beklenen süre (5–600).' })),
+        alan('Giriş bekleme süresi (sn)', zamanAsimi, { yardim: 'Giriş düğmesinden sonra başarı ya da hata göstergesi için beklenen süre (5–600). Örnek: 45.' })),
       h('fieldset', {}, h('legend', {}, 'İki aşamalı doğrulama'),
         h('div', { role: 'radiogroup', 'aria-label': 'İkinci adım türü' }, rYok.etiket, rTotp.etiket, rSms.etiket),
         totpNotu, smsNotu, kodAlanlari),
       h('fieldset', {}, h('legend', {}, 'Bağlam değiştirme (isteğe bağlı)'),
         h('label', { class: 'secenek', for: baglamVar.id }, baglamVar, 'Girişten sonra bağlam seç (rol, şube…)'),
-        baglamAlani),
+        baglamAlani));
+    const form = h('form', { class: 'kart form-paneli tarif-formu', novalidate: true, 'data-ortam': o.ortamId },
+      h('h3', {}, `Giriş tarifi: ${o.ortamAd}`),
+      h('p', { class: 'soluk kucuk' }, h('span', { class: 'mono' }, o.tabanUrl), ' — tarifte parola ya da kod yoktur; onlar giriş profilinde şifreli durur.'),
+      on.not ? h('div', { class: 'not-kutusu uyari', role: 'status' }, on.not) : null,
+      mesaj.kutu,
+      zorunluBolum,
+      gelismisAyarlar,
       h('div', { class: 'dugmeler' }, kaydet, sifirla, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     ikinciGorunum();
+    baglamGorunum();    ikinciGorunum();
     baglamGorunum();
     adimOzetMetni.textContent = `Adımlar (${adimlar.length})`;
     form.addEventListener('input', () => { ozetiCiz(); oturumUyarisiniGuncelle(); });
@@ -494,7 +551,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       [kullanici, parola, gonder, basariDeger].forEach((g) => alanHatasi(g, ''));
       const zorunlu = [[kullanici, 'Kullanıcı adı alanı boş olamaz.'], [parola, 'Parola alanı boş olamaz.'], [gonder, 'Giriş düğmesi boş olamaz.'], [basariDeger, 'Başarı göstergesi boş olamaz.']];
       for (const [g, m] of zorunlu) {
-        if (!g.value.trim()) { if (gelismis.contains(g)) gelismis.open = true; alanHatasi(g, m); g.focus(); return; }
+        if (!g.value.trim()) { alanHatasi(g, m); g.focus(); return; }
       }
       try {
         const { tarif } = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/giris-tarifi/kaydet', { govde: { projeId: proje.id, ortamId: o.ortamId, tarif: topla() } }));
@@ -575,13 +632,87 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     taslakIsaretle(o, kutu, isId, v);
   };
 
+  /**
+   * Tarif kaydedildikten sonra: ortamın giriş profili yoksa kayıttan çıkan alanlarla oluşturulması önerilir. Kayıtta yazılan değerler
+   * OKUNMADI (parola, kod, PIN saklanmaz); Nöbetçi yalnız hangi alanların gerektiğini bilir. Kullanıcı değerleri burada bir kez girer,
+   * kasada şifreli saklanır; ayrıca Ayarlar'a gitmesi gerekmez. Profil zaten varsa yalnız eksik ek alanlar hatırlatılır.
+   * @param {any} o ortam satırı @param {any} r kayıttan çıkan tarif sonucu @param {string | null} kod doğrulama kodunun kaynağı
+   */
+  const profilOnerisiSun = async (o, r, kod) => {
+    let mevcut = null;
+    try {
+      const { profiller } = await api(`/platform/giris-profilleri?projeId=${encodeURIComponent(proje.id)}`);
+      mevcut = (profiller || []).find((p) => !p.ortamId || p.ortamId === o.ortamId) || null;
+    } catch { /* liste alınamadı: profil yine önerilir */ }
+    const kutu = h('div', { class: 'kart form-paneli giris-kaydi', 'data-ortam': o.ortamId, role: 'region', 'aria-label': `Giriş kaydı: ${o.ortamAd}` });
+    const kapat = () => formAlani.replaceChildren();
+    const ustBolum = [h('h3', {}, `Giriş kaydı: ${o.ortamAd}`), h('div', { class: 'not-kutusu basari', role: 'status' }, `${o.ortamAd} girişi kaydedildi.`)];
+    const profilDugmesi = () => h('button', { type: 'button', class: 'birincil', onclick: () => { kapat(); profiliAc(o.ortamAd); } }, ikon('kullanici'), 'Giriş profilini aç');
+    if (mevcut) {
+      const eksik = r.ekAlanlar.filter((e) => !(mevcut.ekAlanlar || []).some((x) => x.ad === e.ad));
+      kutu.replaceChildren(...ustBolum,
+        h('p', {}, `Bu ortamın giriş profili (“${mevcut.ad}”) zaten var; kayıtta yazdığınız değerler saklanmadığı için profildeki değerler kullanılır.`),
+        eksik.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, h('p', {}, 'Profilde şu ek alanların değeri eksik:'), h('ul', {}, eksik.map((e) => h('li', {}, e.etiket, ' ', h('code', {}, `{${e.ad}}`), e.gizli ? ' (gizli)' : '')))) : null,
+        h('div', { class: 'dugmeler' }, eksik.length ? profilDugmesi() : null, h('button', { type: 'button', class: 'hayalet', onclick: kapat }, 'Kapat')));
+      formAlani.replaceChildren(kutu);
+      return;
+    }
+    const girdi = (tur, ek = {}) => h('input', { type: tur, autocomplete: tur === 'password' ? 'new-password' : 'off', spellcheck: 'false', ...ek });
+    const ad = girdi('text', { value: `${o.ortamAd} kullanıcısı` });
+    const kullaniciAdi = girdi('text');
+    const parolaGirdisi = girdi('password');
+    const ekler = r.ekAlanlar.map((e) => ({ e, girdi: girdi(e.gizli ? 'password' : 'text') }));
+    const totp = kod === 'totp' ? girdi('password') : null;
+    const sabit = kod === 'sabit' ? girdi('text', { inputmode: 'numeric' }) : null;
+    const mesaj = mesajKutusu();
+    const olustur = h('button', { type: 'submit', class: 'birincil' }, ikon('onay'), 'Profili oluştur');
+    const form = h('form', { novalidate: true, class: 'giris-profili-onerisi' },
+      h('p', {}, h('strong', {}, 'Bu ortam için giriş profili oluşturulsun mu?')),
+      h('p', { class: 'soluk kucuk' }, 'Kayıtta yazdığınız değerler (kullanıcı adı, parola, kod) saklanmadı; Nöbetçi yalnız hangi alanların gerektiğini kayıttan çıkardı. Değerleri burada bir kez girin: kasada şifreli saklanır, ayrıca ayar yapmanız gerekmez.'),
+      mesaj.kutu,
+      alan('Profil adı', ad, { zorunlu: true, yardim: 'Örnek: Test kullanıcısı.' }),
+      alan('Kullanıcı adı', kullaniciAdi, { zorunlu: true, yardim: 'Girişte yazdığınız kullanıcı adı.' }),
+      alan('Parola', parolaGirdisi, { zorunlu: true, yardim: 'Girişte yazdığınız parola; ekranda ve kayıtlarda düz görünmez.' }),
+      ...ekler.map(({ e, girdi: g }) => alan(e.etiket, g, { zorunlu: true, yardim: `Giriş adımlarında {${e.ad}} olarak kullanılır${e.gizli ? '; gizli (maskeli, şifreli)' : ''}.` })),
+      totp ? alan('Authenticator gizli anahtarı', totp, { zorunlu: true, yardim: 'İki aşamalı doğrulama kurulumunda “elle gir” bağlantısının gösterdiği metin.' }) : null,
+      sabit ? alan('SMS sabit test kodu', sabit, { zorunlu: true, yardim: 'Test ortamında her seferinde geçerli olan kod.' }) : null,
+      kod === 'elle' ? h('p', { class: 'soluk kucuk' }, 'SMS kodu koşu sırasında elle girilir; profilde kod saklanmaz.') : null,
+      h('div', { class: 'dugmeler' }, olustur, h('button', { type: 'button', class: 'hayalet', onclick: kapat }, 'Şimdi değil')));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      mesaj.temizle();
+      const bos = [[ad, ad.value], [kullaniciAdi, kullaniciAdi.value], [parolaGirdisi, parolaGirdisi.value], ...ekler.map((x) => [x.girdi, x.girdi.value]),
+        ...(totp ? [[totp, totp.value]] : []), ...(sabit ? [[sabit, sabit.value]] : [])].find(([, d]) => !String(d).trim());
+      if (bos) { mesaj.goster('Bütün alanları doldurun.'); bos[0].focus(); return; }
+      try {
+        await mesgulIken(olustur, 'Oluşturuluyor…', () => api('/platform/giris-profili/kaydet', {
+          govde: {
+            projeId: proje.id, ortamId: o.ortamId, ad: ad.value.trim(), kullaniciAdi: kullaniciAdi.value.trim(), parola: parolaGirdisi.value,
+            ikiAsamaliTur: kod === 'totp' ? 'totp' : kod ? 'sms' : 'yok',
+            ...(totp ? { totpGizli: totp.value.trim() } : {}),
+            ...(kod === 'sabit' ? { sms: { yontem: 'sabit', kod: sabit.value.trim() } } : kod === 'elle' ? { sms: { yontem: 'elle' } } : {}),
+            ekAlanlar: ekler.map(({ e, girdi: g }) => ({ ad: e.ad, gizli: e.gizli, deger: g.value }))
+          }
+        }));
+      } catch (hata) { mesaj.goster(hata.message); return; }
+      for (const g of [parolaGirdisi, totp, ...ekler.map((x) => x.girdi)]) if (g) g.value = '';
+      bildir('Giriş profili oluşturuldu.');
+      kutu.replaceChildren(...ustBolum, h('div', { class: 'not-kutusu basari', role: 'status' }, `“${ad.value.trim()}” giriş profili oluşturuldu. Girişi “Girişi dene” ile deneyebilirsiniz.`),
+        h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'birincil', onclick: kapat }, 'Kapat')));
+    });
+    kutu.replaceChildren(...ustBolum, form);
+    formAlani.replaceChildren(kutu);
+    kullaniciAdi.focus();
+  };
+
   /** Kayıttan gelen adımlar: kullanıcı her birinin ne olduğunu işaretler → önizleme → tarif formu. */
   const taslakIsaretle = (o, kutu, isId, v) => {
     const ALAN_SECENEKLERI = [['kullaniciAdi', 'Kullanıcı adı'], ['parola', 'Parola'], ['kod', 'Doğrulama kodu (2FA)'], ['ek', 'Ek alan (değeri giriş profilinde)'], ['yoksay', 'Tarife alma']];
     const DUGME_SECENEKLERI = [['gonder', 'Giriş düğmesi'], ['tikla', 'Ara tıklama (ör. Devam, sekme, onay)'], ['kodGonder', 'Kodu gönder (2FA)'], ['yoksay', 'Tarife alma']];
+    const SAYFA_SECENEKLERI = [['git', 'Bu sayfaya git'], ['yoksay', 'Tarife alma']];
     const satirlar = v.taslak.adimlar.map((a, i) => {
       const secim = h('select', { 'aria-label': `Kayıt adımı ${i + 1}: ne?` },
-        (a.tur === 'alan' ? ALAN_SECENEKLERI : DUGME_SECENEKLERI).map(([d, m]) => h('option', { value: d, selected: a.oneri === d }, m)));
+        (a.tur === 'alan' ? ALAN_SECENEKLERI : a.tur === 'sayfa' ? SAYFA_SECENEKLERI : DUGME_SECENEKLERI).map(([d, m]) => h('option', { value: d, selected: a.oneri === d }, m)));
       const adGirdi = monoGirdi(v.oneriler[i] || '', { 'aria-label': `Kayıt adımı ${i + 1}: ek alan adı`, placeholder: 'ör. firmaKodu' });
       const gizli = h('input', { type: 'checkbox', id: yeniKimlik('gizli') });
       const ekKutusu = h('div', { class: 'giris-kaydi-ek' }, h('label', { class: 'mini-alan' }, h('span', {}, 'Ek alan adı'), adGirdi),
@@ -592,8 +723,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       return {
         el: h('li', { class: 'giris-kaydi-adimi' },
           h('span', { class: 'tarif-adim-no sayi', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')),
-          h('div', {}, h('strong', {}, a.tur === 'alan' ? `Alan: ${a.etiket}` : `Düğme: ${a.metin || a.secici}`),
-            h('div', { class: 'kucuk soluk' }, a.tur === 'alan' ? `tür: ${a.alanTuru}` : 'basıldı')),
+          h('div', {}, h('strong', {}, a.tur === 'alan' ? `Alan: ${a.etiket}` : a.tur === 'sayfa' ? `Sayfa: ${a.yol}` : `Düğme: ${a.metin || a.secici}`),
+            h('div', { class: 'kucuk soluk' }, a.tur === 'alan' ? `tür: ${a.alanTuru}` : a.tur === 'sayfa' ? 'adres çubuğuyla gidildi' : 'basıldı')),
           secim, ekKutusu),
         isaret: () => ({ rol: secim.value, ad: adGirdi.value.trim(), gizli: gizli.checked })
       };
@@ -709,22 +840,13 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       } catch (hata) { ozetAlani.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); return; }
       bildir('Giriş tarifi kaydedildi.');
       guncelle(kayitli);
-      // Sıradaki adım: giriş profilinde olması gerekenler (değerler kasada; tarifte değer yok).
+      // Sıradaki adım: giriş profili (değerler kasada şifreli; tarifte ve kayıtta değer yok).
       const kod = r.tarif.ikinciAdim && r.tarif.ikinciAdim.tur !== 'yok' ? kodKaynagi() : null;
-      const gerekenler = ['Kullanıcı adı ve parola', ...r.ekAlanlar.map((e) => `${e.etiket} (ek alan adı: ${e.ad}${e.gizli ? ', gizli' : ''})`),
-        ...(kod === 'totp' ? ['Authenticator gizli anahtarı'] : kod === 'sabit' ? ['SMS sabit test kodu'] : [])];
-      formAlani.replaceChildren(h('div', { class: 'kart form-paneli giris-kaydi', 'data-ortam': o.ortamId, role: 'region', 'aria-label': `Giriş kaydı: ${o.ortamAd}` },
-        h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
-        h('div', { class: 'not-kutusu basari', role: 'status' }, `${o.ortamAd} girişi kaydedildi.`),
-        h('p', {}, 'Sıradaki adım: bu ortamın giriş profilinde şunlar olmalı:'),
-        h('ul', {}, gerekenler.map((x) => h('li', {}, x))),
-        h('div', { class: 'dugmeler' },
-          h('button', { type: 'button', class: 'birincil', onclick: () => { formAlani.replaceChildren(); profiliAc(o.ortamAd); } }, ikon('kullanici'), 'Giriş profilini aç'),
-          h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Kapat'))));
+      void profilOnerisiSun(o, r, kod);
     });
     kutu.replaceChildren(
       h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
-      h('p', { class: 'soluk kucuk' }, 'Nöbetçi girişi böyle anladı. Yanlış tanınan bir adım varsa yanındaki seçimi değiştirin. Kayıtta değer yok; yalnızca dokunduğunuz alanlar ve bastığınız düğmeler var.'),
+      h('p', { class: 'soluk kucuk' }, 'Nöbetçi girişi böyle anladı: dokunduğunuz alanlar, bastığınız düğmeler ve gittiğiniz sayfalar sırasıyla listelendi (alan seçmeniz gerekmedi). Yanlış tanınan bir adım varsa yanındaki seçimi değiştirin. Kayıtta değer yok.'),
       h('ol', { class: 'giris-kaydi-listesi' }, satirlar.map((s) => s.el)),
       kodKutusu, basariKutusu, sayfaOneriKutusu, ozetAlani,
       h('div', { class: 'dugmeler' }, kaydet, gelismis, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));

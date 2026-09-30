@@ -158,7 +158,27 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
   await expect(kaydet).toBeEnabled();
   await kaydet.click();
   await expect(kutu.getByText('Deneme girişi kaydedildi.')).toBeVisible();
-  await expect(kutu.getByRole('listitem')).toHaveText(['Kullanıcı adı ve parola', 'Authenticator gizli anahtarı']);
+  // Ortamın giriş profili yok: kayıttan çıkan alanlarla oluşturulması önerilir (kayıtta değer okunmadı; kullanıcı bir kez girer).
+  await expect(kutu.getByText('Bu ortam için giriş profili oluşturulsun mu?')).toBeVisible();
+  await expect(kutu.getByText(/Kayıtta yazdığınız değerler .* saklanmadı/)).toBeVisible();
+  const profilFormu = kutu.locator('form.giris-profili-onerisi');
+  await expect(profilFormu.getByLabel('Kullanıcı adı')).toHaveValue('');
+  await expect(profilFormu.getByLabel('Parola')).toHaveAttribute('type', 'password');
+  await expect(profilFormu.getByLabel('Authenticator gizli anahtarı')).toHaveAttribute('type', 'password');
+  await profilFormu.getByRole('button', { name: 'Profili oluştur' }).click();
+  await expect(profilFormu.getByRole('alert')).toContainText('Bütün alanları doldurun.');
+  await profilFormu.getByLabel('Profil adı').fill('Kayıttan profil');
+  await profilFormu.getByLabel('Kullanıcı adı').fill(ORNEK_KULLANICI);
+  await profilFormu.getByLabel('Parola').fill(ORNEK_PAROLA);
+  await profilFormu.getByLabel('Authenticator gizli anahtarı').fill(ORNEK_TOTP_ANAHTARI);
+  await profilFormu.getByRole('button', { name: 'Profili oluştur' }).click();
+  await expect(kutu.getByText('“Kayıttan profil” giriş profili oluşturuldu.')).toBeVisible();
+  // Değerler kasada şifreli: yanıtta parola / anahtar düz görünmez. Sonraki testler kendi profilini kurar: bu profil silinir.
+  const olusan = ((await api(`/platform/giris-profilleri?projeId=${projeId}`)).profiller as Nesne[]).find((p) => p.ad === 'Kayıttan profil') as Nesne;
+  expect(olusan).toMatchObject({ ortamId, ikiAsamaliTur: 'totp' });
+  expect(JSON.stringify(olusan)).not.toContain(ORNEK_PAROLA);
+  expect(JSON.stringify(olusan)).not.toContain(ORNEK_TOTP_ANAHTARI);
+  await basarili('/platform/giris-profili/sil', { id: olusan.id });
   await expect(satir).toContainText('Kaydedilmiş');
   await expect(satir.getByRole('button', { name: 'Yeniden kaydet — Deneme girişi' })).toHaveText('Yeniden kaydet');
   await expect(page.locator('form.tarif-formu')).toHaveCount(0);

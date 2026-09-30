@@ -606,7 +606,7 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Giriş profili', metin: 'Testlerin uygulamaya hangi kullanıcıyla gireceği. Parola, doğrulama (TOTP) anahtarı ve sabit SMS kodu kasada şifreli saklanır; burada gösterilmez.', cizim: { tur: 'form', alanlar: ['Kullanıcı adı', 'Parola', 'Doğrulama'], dugme: 'Giriş' } },
       { baslik: 'Giriş tarifi', metin: 'Her ortam için giriş sayfasının tarifi: kullanıcı / parola alanı, giriş düğmesi, başarı ve hata göstergeleri, iki aşamalı doğrulama ve girişten sonra bağlam seçimi (rol, şube…). Tüm senaryolar bu tarifle giriş yapar; giriş değişirse tek yerde düzeltirsiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş sayfası', ikon: 'ekran' }, { baslik: 'Kimlik', alt: 'kasadan', ikon: 'anahtar' }, { baslik: 'Doğrulama', alt: 'varsa', ikon: 'kalkan' }, { baslik: 'Bağlam', alt: 'rol / şube', ikon: 'kullanici' }] } },
-      { baslik: 'Sıra', sira: ['Giriş profilini ekleyin.', 'Ortamın giriş tarifinde "Varsayılanları öner" ile alanları algılatın (yalnızca siz basınca).', 'Önerileri kontrol edip kaydedin.'] }
+      { baslik: 'Sıra', sira: ['Giriş profilini ekleyin.', 'Ortamın giriş tarifinde "Analiz et" ile alanları algılatın (yalnızca siz basınca).', 'Önerileri kontrol edip kaydedin.'] }
     ]
   },
   veri: {
@@ -721,7 +721,7 @@ export const REHBERLER = {
     baslik: 'Güvenlik',
     adimlar: [
       { baslik: 'Kasa', metin: 'Kasa kilitlenince şifreli bilgiler okunamaz. İşlem yapılmazsa kasa ayarladığınız sürede kendiliğinden kilitlenir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'kilitli / açık' }, { baslik: 'Otomatik kilit', alt: 'boşta kalınca' }] } },
-      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu, tarama, servis istekleri (WSDL / şema dahil), entegrasyonlar ve "Varsayılanları öner" hiç bağlanmaz.', ipucu: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler ayrıca Ayarlar > İzinler\'e bağlıdır (varsayılan kapalı).' },
+      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu, tarama, servis istekleri (WSDL / şema dahil), entegrasyonlar ve giriş sayfası analizi ("Analiz et") hiç bağlanmaz.', ipucu: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler ayrıca Ayarlar > İzinler\'e bağlıdır (varsayılan kapalı).' },
       { baslik: 'Maskeleme', metin: 'Raporlarda ve yanıtlarda maskelenecek ek gizli alan adları.' }
     ]
   },

@@ -5,7 +5,7 @@
 // - kodAlaniniAlgila(page): OTP'ye benzeyen görünür alan (autocomplete=one-time-code, ad/etiket "kod/otp/sms…",
 //   sayısal ve 4–8 karakter sınırlı).
 // - captchaAlgila(page): reCAPTCHA / hCaptcha / Turnstile iframe/öğe/betik izleri.
-// - girisSayfasiniOner(adres): Nöbetçi > Ayarlar > "Varsayılanları öner" için: başsız tarayıcıda adresi açar,
+// - girisSayfasiniOner(adres): Nöbetçi > Ayarlar > "Analiz et" için: başsız tarayıcıda adresi açar,
 //   hiçbir alanı DOLDURMAZ/GÖNDERMEZ, yalnızca DOM'a bakar. YALNIZCA kullanıcı açıkça isteyince çağrılır.
 // Sayfa içinde çalışan fonksiyonlar (page.evaluate) kendi içinde bağımsızdır (dış değişkene erişmez).
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
@@ -202,7 +202,7 @@ export async function captchaAlgila(page) {
 export const CAPTCHA_MESAJI = 'Giriş sayfasında CAPTCHA algılandı. Test ortamında CAPTCHA kapatılmalı (ya da test kullanıcısı/IP için devre dışı bırakılmalı); otomasyon CAPTCHA çözmez.';
 
 /**
- * Nöbetçi > Ayarlar > "Varsayılanları öner": adresi başsız tarayıcıda açar, formu ALGILAR (doldurmaz,
+ * Nöbetçi > Ayarlar > "Analiz et": adresi başsız tarayıcıda açar, formu ALGILAR (doldurmaz,
  * göndermez) ve tarif alanları için öneri döner. Yalnızca kullanıcı açıkça isteyince çağrılır.
  * @param {string} adres tam http(s) adresi
  * @param {{ zamanAsimiSn?: number; tarayiciSecenekleri?: import("@playwright/test").LaunchOptions; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }> }} [secenekler]
