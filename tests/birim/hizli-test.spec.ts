@@ -179,7 +179,10 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(uygulama.hesaplamalar.length).toBe(once.h);
   expect(o.cumle).toEqual({ mesajlar: ['Başvurunuz alındı'], dugmeler: ['Hesapla'] });
   // Kanal sayfada hazır (Web seçili) gelir: listede vardır ama hazır işaretli (arayüz sormaz, sunucu zorunlu-eksik saymaz).
-  expect(o.soru.alanlar.map((a: Nesne) => [a.etiket, a.zorunlu, a.hazir])).toEqual([['Ad soyad', true, false], ['Müşteri tipi', true, false], ['Kanal', false, true]]);
+  expect(o.soru.alanlar.map((a: Nesne) => [a.etiket, a.zorunlu, a.hazir])).toEqual([['Ad soyad', true, false], ['Müşteri tipi', true, false], ['Vergi no', true, false], ['Kanal', false, true]]);
+  // Seçim keşfi: ilk açılışta alanlar boşken seçimler tek tek denendi; "Vergi no" yalnız Müşteri tipi = kurumsal olunca görünen koşullu alan
+  // olarak (kontrol alanının hemen sonrasında) listelenir. Keşif sayfayı ilk durumuna geri getirdi (Kanal hâlâ Web).
+  expect(o.soru.alanlar.find((a: Nesne) => a.etiket === 'Vergi no')).toMatchObject({ kosul: { secim: o.soru.alanlar.find((a: Nesne) => a.etiket === 'Müşteri tipi').anahtar, degerler: ['kurumsal'], metin: 'Müşteri tipi: Kurumsal' } });
   expect(o.soru.alanlar.find((a: Nesne) => a.etiket === 'Kanal')).toMatchObject({ mevcut: 'Web', etiketBulundu: true });
   // Zorunlu alan boşken ilerlenmez (akış tamamlanmadan bitmez).
   expect(await api('/platform/hizli-test/veri', { id, degerler: { '#adSoyad': deger('${Kişi.Ad soyad}', 'tablo') } })).toMatchObject({ basarili: false, kod: 'EKSIK' });
@@ -189,13 +192,8 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   o = await bekle(id, ['veri']);
   expect(o.soru.alanlar.map((a: Nesne) => String(a.anahtar))).toEqual([...anahtarlar].reverse());
   const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
-  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('${Kişi.Ad soyad}', 'tablo'), [alan('Müşteri tipi')]: deger('kurumsal') } });
-  // Kurumsal seçilince koşullu "Vergi no" belirir: veri durağı yeniden (yeni alan işaretli).
-  o = await bekle(id, ['veri']);
-  const vergi = o.soru.alanlar.find((a: Nesne) => a.etiket === 'Vergi no');
-  expect(vergi).toMatchObject({ zorunlu: true, yeni: true });
-  expect(o.soru.alanlar.find((a: Nesne) => a.etiket === 'Ad soyad')).toMatchObject({ deger: '${Kişi.Ad soyad}', kaynak: 'tablo' });
-  await basarili('/platform/hizli-test/veri', { id, degerler: { [vergi.anahtar]: deger('1111111111') } });
+  // Koşullu "Vergi no" keşifle zaten biliniyor: Kurumsal seçilecekse aynı veri durağında sorulur (yeni alan turu gerekmez).
+  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('${Kişi.Ad soyad}', 'tablo'), [alan('Müşteri tipi')]: deger('kurumsal'), [alan('Vergi no')]: deger('1111111111') } });
   // Evet + cümlede "Hesapla" → tek aday: basılır; sonra fark ve "Şimdi ne yapayım?".
   o = await bekle(id, ['veri']);
   expect(uygulama.hesaplamalar.at(-1)).toEqual({ tip: 'kurumsal', vergi: '1111111111' });
@@ -288,7 +286,9 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(kisiTablosu?.satirlar).toHaveLength(1);
   const musteriTablosu = tablolar.find((t: Nesne) => t.ad === 'Müşteri tipi');
   expect(musteriTablosu?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Müşteri tipi']);
-  expect(musteriTablosu?.satirlar[0].degerler['Müşteri tipi']).toBe('Kurumsal');
+  // Seçim alanı: tabloya seçilen değil TÜM seçenekler yazıldı (liste tablosu); senaryo seçilen satıra sabitlenir (koşuda Kurumsal).
+  expect(musteriTablosu?.satirlar.map((r: Nesne) => r.degerler['Müşteri tipi'])).toEqual(['Bireysel', 'Kurumsal']);
+  expect(tablolar.find((t: Nesne) => t.ad === 'Ödeme şekli')?.satirlar.map((r: Nesne) => r.degerler['Ödeme şekli'])).toEqual(['Kredi kartı', 'Havale']);
   expect(JSON.stringify(s)).toContain('${Kişi bilgileri.Vergi no}');
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${kayitli.ekranId}`)) as Nesne;
   const baglar = Object.values(bag.baglar as Record<string, Nesne>);
@@ -327,7 +327,7 @@ test('normal koşu: Hata metni görünürse başarısız, hiçbir bitiş mesajı
 });
 
 /** Hızlı test tarayıcısına (başsız, alt süreç) bağlanıp başvuru sayfasını bulur. */
-async function hizliSayfa(): Promise<{ tarayici: Browser; sayfa: Page }> {
+async function hizliSayfa(yol = '/basvuru/'): Promise<{ tarayici: Browser; sayfa: Page }> {
   const son = Date.now() + 60_000;
   let tarayici: Browser | null = null;
   while (!tarayici) {
@@ -337,7 +337,7 @@ async function hizliSayfa(): Promise<{ tarayici: Browser; sayfa: Page }> {
     }
   }
   for (;;) {
-    const sayfa = tarayici.contexts().flatMap((b) => b.pages()).find((p) => p.url().includes('/basvuru/'));
+    const sayfa = tarayici.contexts().flatMap((b) => b.pages()).find((p) => p.url().includes(yol));
     if (sayfa) return { tarayici, sayfa };
     if (Date.now() > son) throw new Error('başvuru sayfası bulunamadı');
     await new Promise((c) => setTimeout(c, 250));
@@ -371,6 +371,29 @@ test('sayfa doldurulan alanı sonradan silerse (yeniden çizim) boş kalan alan 
   o = await bekle(id, ['veri', 'hataSorusu']);
   expect(o.durum, JSON.stringify(o.soru)).toBe('veri');
   expect(uygulama.hesaplamalar.length).toBe(once + 1);
+  await basarili('/platform/hizli-test/iptal', { id });
+});
+
+test('seçim keşfi: varsayılan seçili radyonun diğer değerinde beliren alanlar ve onun içindeki (iç içe) koşullu alan ilk açılışta bulunur; sayfa ilk durumuna döner', async () => {
+  test.setTimeout(200_000);
+  await isBitsin();
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/kosullu/', ekranAdi: 'Koşullu alanlar', izin: 'sor' })).id);
+  const o = await bekle(id, ['veri']);
+  const alanlar = o.soru.alanlar as Nesne[];
+  const bul = (etiket: string): Nesne => alanlar.find((a) => a.etiket === etiket) as Nesne;
+  const ana = alanlar.find((a) => a.tur === 'radio') as Nesne;
+  expect(ana, JSON.stringify(alanlar.map((a) => a.etiket))).toBeTruthy();
+  // X (varsayılan) altında A, B; Y altında C, D ve "Ek bilgi"; "Ek bilgi" işaretlenince F (2. düzey).
+  for (const e of ['Alan A', 'Alan B']) expect(bul(e).kosul, e).toMatchObject({ secim: ana.anahtar, degerler: ['x'] });
+  for (const e of ['Alan C', 'Alan D', 'Ek bilgi']) expect(bul(e).kosul, e).toMatchObject({ secim: ana.anahtar, degerler: ['y'] });
+  expect(bul('Alan F').kosul).toMatchObject({ secim: bul('Ek bilgi').anahtar, degerler: ['true'] });
+  expect(bul('Alan A').kosul.metin).toBe('Ana seçim: X');
+  // Sayfa ilk durumuna döndü: radyo X seçili, Alan A / B görünür (mevcut değer korunur), Y'nin alanları gizli.
+  const tarayici = await hizliSayfa('/kosullu/');
+  try {
+    const durum = await tarayici.sayfa.evaluate(() => ({ ana: (document.querySelector('input[name=ana]:checked') as HTMLInputElement).value, gx: !(document.getElementById('gx') as HTMLElement).hidden, gy: !(document.getElementById('gy') as HTMLElement).hidden }));
+    expect(durum).toEqual({ ana: 'x', gx: true, gy: false });
+  } finally { await tarayici.tarayici.close(); }
   await basarili('/platform/hizli-test/iptal', { id });
 });
 
@@ -615,6 +638,11 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     // Önceki testlerin kaydettiği otomatik tablolar da adı uyan sütunla listelenir: "Kişi" tablosunun satırı seçilir.
     await adAlani.getByRole('button', { name: 'Deneme — Deneme Kişi' }).click();
     await expect(adAlani.locator('.hizli-tablo-degeri')).toHaveText('${Kişi.Ad soyad}');
+    // Seçim keşfi: koşullu "Vergi no" yalnız Müşteri tipi = Kurumsal seçilince açılır (anında, Nöbetçi'de); Bireysel'de kapanır.
+    await soru.getByLabel('Müşteri tipi').selectOption('kurumsal');
+    await expect(soru.locator('.hizli-alan').filter({ hasText: 'Vergi no' })).toContainText('Müşteri tipi: Kurumsal olunca görünür');
+    await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
+    await expect(soru.locator('.hizli-alan').filter({ hasText: 'Vergi no' })).toHaveCount(0);
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
     await soru.getByRole('button', { name: 'Devam et' }).click();
     // Evet + cümlede "Hesapla": basılır; yeni alan için veri durağı.

@@ -72,6 +72,23 @@ export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
   });
 </script>`;
 
+/** /kosullu/: radyo (Ana seçim: X varsayılan, Y) — X'te "Alan A/B", Y'de "Alan C/D" ve onay kutusu "Ek bilgi" (işaretlenince "Alan F"). */
+export const HIZLI_KOSULLU_SAYFASI = `<h1>Koşullu</h1>
+<fieldset><legend>Ana seçim</legend>
+  <label><input type="radio" name="ana" value="x" checked> X</label> <label><input type="radio" name="ana" value="y"> Y</label></fieldset>
+<div id="gx"><label for="a">Alan A</label><input id="a" name="a"><label for="b">Alan B</label><input id="b" name="b"></div>
+<div id="gy" hidden><label for="c">Alan C</label><input id="c" name="c"><label for="d">Alan D</label><input id="d" name="d">
+  <label><input type="checkbox" id="ek" name="ek"> Ek bilgi</label><div id="gf" hidden><label for="f">Alan F</label><input id="f" name="f"></div></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  function goster() {
+    var y = document.querySelector('input[name=ana]:checked').value === 'y';
+    $('gx').hidden = y; $('gy').hidden = !y; $('gf').hidden = !(y && $('ek').checked);
+  }
+  document.querySelectorAll('input[name=ana]').forEach(function (r) { r.addEventListener('change', goster); });
+  $('ek').addEventListener('change', goster);
+</script>`;
+
 export class HizliTestUygulamasi {
   readonly istekler: string[] = [];
   readonly hesaplamalar: Array<{ tip: string; vergi: string }> = [];
@@ -82,6 +99,7 @@ export class HizliTestUygulamasi {
   readonly isle: FiksturUygulamasi = (i: FiksturIstegi) => {
     this.istekler.push(`${i.yontem} ${i.yol}`);
     if (i.yol === '/basvuru/' && i.yontem === 'GET') return html('Başvuru', HIZLI_BASVURU_SAYFASI);
+    if (i.yol === '/kosullu/' && i.yontem === 'GET') return html('Koşullu', HIZLI_KOSULLU_SAYFASI);
     if (i.yol === '/api/hesapla' && i.yontem === 'GET') {
       this.hesaplamalar.push({ tip: i.sorgu.get('tip') ?? '', vergi: i.sorgu.get('vergi') ?? '' });
       return { tur: 'application/json', govde: JSON.stringify({ tutar: i.sorgu.get('tip') === 'kurumsal' ? '2.500,00' : '1.250,00' }), gecikmeMs: 1_200 };

@@ -141,6 +141,89 @@ export function hizliTestYoneticisiOlustur(s) {
     o.alanlar.set(alan.anahtar, { alan, yeni });
     adim.alanlar.push(alan);
   };
+  // ---- Koşullu alanlar (seçim keşfi): bir seçimin belirli değerinde beliren alanlar ----
+  /**
+   * Koşullu alan şu an geçerli mi? Alanın koşulu: "<secim> alanı şu değerlerden biri olunca görünür". Seçimin değeri: kullanıcının yazdığı,
+   * yoksa sayfanın ilk değeri (keşif). Seçimin kendisi de koşulluysa ve geçerli değilse alan geçerli değildir. Değer tablo başvurusuysa
+   * (çözülmemiş) bilinmez: geçerli sayılır. @param {Nesne} o @param {Nesne} alan @param {Set<string>} [gorulen]
+   * @returns {boolean}
+   */
+  const kosulAktif = (o, alan, gorulen = new Set()) => {
+    const kz = alan.kosul;
+    if (!kz || gorulen.has(alan.anahtar)) return true;
+    gorulen.add(alan.anahtar);
+    const kontrol = o.alanlar.get(kz.secim)?.alan;
+    if (kontrol && !kosulAktif(o, kontrol, gorulen)) return false;
+    const v = o.degerler[kz.secim];
+    if (v && degerBasvurusu(v.deger)) return true;
+    const simdi = v ? v.deger : o.kesifIlk?.[kz.secim] ?? null;
+    if (simdi === null || simdi === undefined) return true;
+    return kz.degerler.includes(String(simdi));
+  };
+  /** Geçerli olmayan koşullu alanların değerleri kaydedilmez / gönderilmez. @param {Nesne} o */
+  const aktifDegerler = (o) => Object.fromEntries(Object.entries(o.degerler).filter(([k]) => { const a = o.alanlar.get(k)?.alan; return !a || kosulAktif(o, a); }));
+  /** Doldurma sırası: kullanıcının sırası korunur; koşullu alan her zaman kendi seçiminden SONRA doldurulur. @param {Nesne[]} liste @returns {Nesne[]} */
+  const bagimliSirala = (liste) => {
+    const s = [...liste];
+    for (let tur = 0; tur < s.length; tur++) {
+      let degisti = false;
+      for (let i = 0; i < s.length; i++) {
+        const kz = s[i].kosul;
+        if (!kz) continue;
+        const j = s.findIndex((x) => x.anahtar === kz.secim);
+        if (j > i) { const [x] = s.splice(i, 1); s.splice(j, 0, x); degisti = true; break; }
+      }
+      if (!degisti) break;
+    }
+    return s;
+  };
+  /**
+   * Seçim keşfinin sonuçlarını ilk adıma işler: her değerde beliren alan koşullu alan olarak eklenir (kontrol alanının hemen sonrasına);
+   * koşul "seçim şu değerlerden biri" biçiminde adımın koşullarına yazılır (modelde görünürlük koşulu olur).
+   * @param {Nesne} o @param {Nesne} adim @param {Nesne[]} kesifler
+   */
+  const kosulluAlanlariEkle = (o, adim, kesifler) => {
+    o.kesifIlk ??= {};
+    for (const k of kesifler) if (typeof k.secim === 'string' && !(k.secim in o.kesifIlk)) o.kesifIlk[k.secim] = k.ilkDeger ?? null;
+    adim.kosullar ??= {};
+    for (const k of kesifler) {
+      for (const d of Array.isArray(k.degerler) ? k.degerler : []) {
+        for (const g of Array.isArray(d.gorunenler) ? d.gorunenler : []) {
+          if (!nesneMi(g) || typeof g.anahtar !== 'string' || !doldurulabilir(g)) continue;
+          const var_ = o.alanlar.get(g.anahtar)?.alan;
+          if (var_) {
+            if (var_.kosul && var_.kosul.secim === k.secim && !var_.kosul.degerler.includes(String(d.deger))) var_.kosul.degerler.push(String(d.deger));
+            continue;
+          }
+          const alan = { ...g, kosul: { secim: String(k.secim), degerler: [String(d.deger)] } };
+          o.alanlar.set(alan.anahtar, { alan, yeni: false });
+          // Kontrol alanının (ve onun önceki koşullu alanlarının) hemen sonrasına.
+          let konum = adim.alanlar.findIndex((/** @type {Nesne} */ x) => x.anahtar === k.secim);
+          if (konum >= 0) { while (konum + 1 < adim.alanlar.length && adim.alanlar[konum + 1].kosul?.secim === k.secim) konum++; adim.alanlar.splice(konum + 1, 0, alan); }
+          else adim.alanlar.push(alan);
+        }
+      }
+    }
+    // Bir seçimin belirli değerinde KAYBOLAN alanlar (ör. varsayılan seçenekte görünen alanlar): alan seçimin denenen diğer değerlerinde görünür.
+    for (const k of kesifler) {
+      const denenen = (Array.isArray(k.degerler) ? k.degerler : []).map((/** @type {Nesne} */ d) => String(d.deger));
+      const tumu = [...new Set([...(k.ilkDeger === null || k.ilkDeger === undefined ? [] : [String(k.ilkDeger)]), ...denenen])];
+      /** @type {Map<string, Set<string>>} */
+      const gizli = new Map();
+      for (const d of Array.isArray(k.degerler) ? k.degerler : []) for (const x of Array.isArray(d.kaybolanlar) ? d.kaybolanlar : []) {
+        if (typeof x !== 'string' || x === k.secim) continue;
+        (gizli.get(x) ?? gizli.set(x, new Set()).get(x))?.add(String(d.deger));
+      }
+      for (const [anahtar, gizliDegerler] of gizli) {
+        const alan = o.alanlar.get(anahtar)?.alan;
+        if (!alan || alan.kosul) continue;
+        const gorunur = tumu.filter((x) => !gizliDegerler.has(x));
+        if (!gorunur.length || gorunur.length >= tumu.length) continue;
+        alan.kosul = { secim: String(k.secim), degerler: gorunur };
+      }
+    }
+    for (const a of adim.alanlar) if (a.kosul) adim.kosullar[a.anahtar] = a.kosul;
+  };
   /** Zorunlu boş alan var mı / gösterilecek alan var mı → veri durağı. @param {Nesne} o @param {string | null} [not] */
   const veriDuragi = (o, not = null) => {
     o.durum = 'veri';
@@ -173,6 +256,8 @@ export function hizliTestYoneticisiOlustur(s) {
     const adim = { alanlar: [], bas: null, okumalar: [] };
     o.adimlar.push(adim);
     for (const a of f.yeniAlanlar.filter(doldurulabilir)) alanEkle(o, a, adim, true);
+    // Basıştan sonra beliren seçim alanlarının keşfi: içlerindeki koşullu alanlar bu adıma eklenir.
+    if (Array.isArray(o.sonKesif) && o.sonKesif.length) { kosulluAlanlariEkle(o, adim, o.sonKesif); o.sonKesif = []; }
     adim.okumalar.push({ gorunen: f.anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar), secimler: {} });
     if (adim.alanlar.length) veriDuragi(o, `${adim.alanlar.length} yeni alan belirdi; değerlerini girin.`);
     else o.durum = 'karar';
@@ -204,7 +289,10 @@ export function hizliTestYoneticisiOlustur(s) {
       const adim = { alanlar: [], bas: null, okumalar: [{ gorunen: anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar), secimler: {} }] };
       o.adimlar = [adim];
       for (const a of anlik.alanlar.filter(doldurulabilir)) alanEkle(o, a, adim, false);
-      gunluk(o, `Keşif: ${adim.alanlar.length} alan, ${anlik.dugmeler.length} düğme adayı; hiçbir düğmeye basılmadı.`);
+      const tabanSayisi = adim.alanlar.length;
+      kosulluAlanlariEkle(o, adim, Array.isArray(e.kesifler) ? e.kesifler : []);
+      const kosullu = adim.alanlar.length - tabanSayisi;
+      gunluk(o, `Keşif: ${tabanSayisi} alan${kosullu ? ` + seçimlere bağlı ${kosullu} alan` : ''}, ${anlik.dugmeler.length} düğme adayı; hiçbir düğmeye basılmadı.`);
       if (adim.alanlar.length) veriDuragi(o); else verilerTamam(o);
       return;
     }
@@ -233,7 +321,7 @@ export function hizliTestYoneticisiOlustur(s) {
         if (!o.alanlar.has(a.anahtar)) { alanEkle(o, a, adim, true); yeniler.push(a.anahtar); }
       }
       const yeni = yeniler.length;
-      adim.alanlar = adim.alanlar.filter((/** @type {Nesne} */ a) => gorunen.has(a.anahtar));
+      adim.alanlar = adim.alanlar.filter((/** @type {Nesne} */ a) => a.kosul || gorunen.has(a.anahtar));
       const secimler = Object.fromEntries(adim.alanlar.filter((/** @type {Nesne} */ a) => ['select', 'radio'].includes(String(a.tur)) && typeof o.degerler[a.anahtar]?.deger === 'string'
         && !degerBasvurusu(o.degerler[a.anahtar].deger)).map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
       // Koşullu alan: doldurmada YALNIZ BİR seçim alanı değiştiyse, beliren alan o seçimin bu değerinde görünür sayılır (gözlem; tek
@@ -251,13 +339,14 @@ export function hizliTestYoneticisiOlustur(s) {
       const sayfaHatalari = (e.yeniMetinler ?? []).filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
       if (sayfaHatalari.length) { o.hataSorusu = { metinler: sayfaHatalari, kaynak: 'doldur' }; o.durum = 'hataSorusu'; return; }
       if (yeni) { veriDuragi(o, `${yeni} yeni alan belirdi; değerlerini girin.`); return; }
-      const eksik = eksikAlanlar(adim.alanlar, Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger])));
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
       if (eksik.length) { veriDuragi(o, `${eksik.length} zorunlu alan boş.`); return; }
       verilerTamam(o);
       return;
     }
     if (e.olay === 'basildi') {
       const f = e.fark;
+      o.sonKesif = Array.isArray(e.kesifler) ? e.kesifler : [];
       o.basisNo++;
       const adim = guncelAdim(o);
       adim.bas = { ...o.basiliyor };
@@ -329,6 +418,13 @@ export function hizliTestYoneticisiOlustur(s) {
   function gorunum(o) {
     const d = tarama().isler.get(o.isId);
     const is = d ? tarama().durum(o.isId) : null;
+    /** "Müşteri tipi: Kurumsal" biçiminde koşul metni (seçim alanının görünen etiketi + değerlerin görünen metni). */
+    const kosulMetni = (/** @type {Nesne} */ o2, /** @type {{ secim: string; degerler: string[] }} */ kz) => {
+      const kontrol = o2.alanlar.get(kz.secim)?.alan;
+      const liste = kontrol ? (kontrol.tur === 'radio' ? (kontrol.radyolar ?? []) : (kontrol.secenekler ?? [])) : [];
+      const ad = (/** @type {string} */ d) => (kontrol?.tur === 'checkbox' ? (d === 'true' ? 'işaretli' : 'işaretsiz') : (liste.find((/** @type {Nesne} */ x) => String(x.deger) === d)?.metin ?? d));
+      return `${kontrol?.etiket ?? kz.secim}: ${kz.degerler.map(ad).join(' / ')}`;
+    };
     const alanGorunumu = (/** @type {Nesne} */ a) => {
       const v = o.degerler[a.anahtar];
       return {
@@ -337,6 +433,8 @@ export function hizliTestYoneticisiOlustur(s) {
         hazir: a.hazir === true, mevcut: gizliAlan(a) ? null : a.mevcut ?? null,
         secenekler: a.tur === 'radio' ? (a.radyolar ?? []).map((/** @type {Nesne} */ r) => ({ deger: r.deger, metin: r.metin ?? r.deger })) : a.secenekler ?? null,
         yeni: o.alanlar.get(a.anahtar)?.yeni === true, hata: o.alanHatalari?.[a.anahtar] ?? null,
+        // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa koşul (görünen metinle) ve seçim alanlarının ilk değeri.
+        kosul: a.kosul ? { secim: a.kosul.secim, degerler: a.kosul.degerler, metin: kosulMetni(o, a.kosul), ilk: o.kesifIlk?.[a.kosul.secim] ?? null } : null, ilk: o.kesifIlk?.[a.anahtar] ?? null,
         deger: v ? (gizliAlan(a) && v.kaynak === 'elle' ? '••••••' : v.deger) : null, kaynak: v?.kaynak ?? null, gizli: gizliAlan(a)
       };
     };
@@ -517,13 +615,13 @@ export function hizliTestYoneticisiOlustur(s) {
       }
     }
     for (const [k, v] of Object.entries(yeni)) { if (v) o.degerler[k] = v; else delete o.degerler[k]; }
-    const eksik = eksikAlanlar(adim.alanlar, Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger])));
+    const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
     if (eksik.length) {
       throw new HizliTestHatasi('EKSIK', `Zorunlu alanlar boş: ${eksik.slice(0, 5).map((a) => a.etiket ?? a.anahtar).join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`, 400,
         { eksikler: eksik.map((a) => a.anahtar) });
     }
     // Tarayıcıya gidecek değerler: tablo başvuruları bu ortamda çözülür (değer üretilmez; çözülemezse açık hata).
-    const gidecek = adim.alanlar.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar]);
+    const gidecek = bagimliSirala(adim.alanlar.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar] && kosulAktif(o, a)));
     const cozulecek = Object.fromEntries(gidecek.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar].kaynak === 'tablo').map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
     /** @type {Record<string, unknown>} */
     let cozulmus = {};
@@ -670,7 +768,7 @@ export function hizliTestYoneticisiOlustur(s) {
     // Doldururken çıkan uyarı önemsiz: veri durağının devamı (henüz basış yok).
     if (dolduranKaynak) {
       const adim = guncelAdim(o);
-      const eksik = eksikAlanlar(adim.alanlar, Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger])));
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
       if (eksik.length) veriDuragi(o, `${eksik.length} zorunlu alan boş.`); else verilerTamam(o);
       return { tamam: true };
     }
@@ -710,7 +808,7 @@ export function hizliTestYoneticisiOlustur(s) {
     durumda(o, ['kaydet']);
     if (o.izin === 'hayir') throw new HizliTestHatasi('IZIN', 'Hayır izninde doğrulama koşusu yapılmaz (düğmeye basılmaz).');
     const adimlar = o.adimlar.filter((/** @type {Nesne} */ a) => a.alanlar.length || a.bas).map((/** @type {Nesne} */ a) => ({
-      alanlar: a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar]).map((/** @type {Nesne} */ x) => ({ anahtar: x.anahtar, alan: x, deger: o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger })),
+      alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x))).map((/** @type {Nesne} */ x) => ({ anahtar: x.anahtar, alan: x, deger: o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger })),
       bas: a.bas ? { secici: a.bas.secici, metin: a.bas.metin } : null
     }));
     if (o.bitis.olumsuz) {
@@ -738,8 +836,8 @@ export function hizliTestYoneticisiOlustur(s) {
       girisGerekli: Boolean(tarif), girissiz: !tarif, ikiAsamali: tarif ? tarif.ikinciAdim.tur : 'yok', baglamTuru: tarif?.baglamDegistirme?.baglamTuru ?? null,
       mevcutModel: mevcut && nesneMi(mevcut.model) ? mevcut.model : null
     };
-    const degerler = Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger]));
-    const envanter = kayitEnvanteriKur({ adimlar: o.adimlar, degerler, yol: o.hedefYol.startsWith('/') ? o.hedefYol : `/${o.hedefYol}`, baslik: o.baslik, profil: null }, o.bitis);
+    const degerler = Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger]));
+    const envanter = kayitEnvanteriKur({ adimlar: o.adimlar.map((/** @type {Nesne} */ x) => ({ ...x, alanlar: bagimliSirala(x.alanlar) })), degerler, yol: o.hedefYol.startsWith('/') ? o.hedefYol : `/${o.hedefYol}`, baslik: o.baslik, profil: null }, o.bitis);
     const { paket } = kayitPaketiOlustur(/** @type {any} */ (meta), /** @type {any} */ (envanter));
     const model = bitisiUygula(/** @type {Nesne} */ (paket).model, o.bitis);
     /** @type {Nesne} */ (paket).meta.olusturan = 'Nöbetçi hızlı test';
@@ -757,12 +855,12 @@ export function hizliTestYoneticisiOlustur(s) {
    * ve her diğer alan için kendi tablosu — bkz. test-verisi-tablosu.mjs) ve senaryo alanlarını tablo başvurusuna çevirir ("${Tablo.Sütun}").
    * Aynı adlı tablo varsa sütunlar birleşir; satır senaryo adıyla eklenir / güncellenir. Senaryo kendi satırına sabitlenir (tabloSecimleri).
    * @param {Veritabani} vt @param {Nesne} o @param {string} baslik
-   * @returns {{ tablolar: Array<{ tablo: string; tabloId: string; sutunSayisi: number; yeni: boolean;
+   * @returns {{ tablolar: Array<{ tablo: string; tabloId: string; sutunSayisi: number; yeni: boolean; secenekSayisi: number;
    *   baglar: Record<string, { tablo: string; sutun: string; gizli: boolean }> }>; baglanan?: number } | null}
    */
   function degerleriTabloyaKaydet(vt, o, baslik) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
-    const t = tabloTaslagiKur({ baslik, alanlar, degerler: o.degerler });
+    const t = tabloTaslagiKur({ baslik, alanlar, degerler: aktifDegerler(o) });
     if (!t) return null;
     const kucuk = (/** @type {string} */ m) => m.toLocaleLowerCase('tr');
     /** @type {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>['tablolar']} */
@@ -781,9 +879,14 @@ export function hizliTestYoneticisiOlustur(s) {
       const eskiSatir = mevcut?.satirlar.find((r) => kucuk(r.ad) === kucuk(t.satirAdi));
       // Mevcut satır güncellenirken bu kayıtta verilmeyen (gizli olmayan) eski değerler korunur.
       const eskiDegerler = eskiSatir ? Object.fromEntries(Object.entries(eskiSatir.degerler).filter(([k, v]) => v !== null && v !== '' && !(mevcut?.sutunlar.find((x) => x.ad === k)?.gizli))) : {};
+      // Tek başına duran seçim alanı: liste tablosu; seçilen değer değil TÜM seçenekler satır olarak yazılır (var olan satırlar korunur).
+      const varOlanSatirlar = new Set((mevcut?.satirlar ?? []).map((r) => kucuk(r.ad)));
+      const eklenecekSatirlar = g.liste
+        ? g.liste.secenekler.filter((x) => !varOlanSatirlar.has(kucuk(x.metin))).map((x) => ({ ad: x.metin, ortamId: null, degerler: { [/** @type {string} */ (g.liste?.sutun)]: x.metin } }))
+        : [{ ...(eskiSatir ? { id: eskiSatir.id } : {}), ad: t.satirAdi, ortamId: null, degerler: { ...eskiDegerler, ...g.satir } }];
       const tabloId = tabloKaydet(vt, {
-        projeId: o.projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: g.tabloAdi, tur: 'kayit', sutunlar: [...eskiSutunlar.map((x) => ({ ...x, ...karsilikli(x) })), ...yeniSutunlar.map((x) => ({ ...x, ...karsilikli(x) }))],
-        satirlar: [{ ...(eskiSatir ? { id: eskiSatir.id } : {}), ad: t.satirAdi, ortamId: null, degerler: { ...eskiDegerler, ...g.satir } }]
+        projeId: o.projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: g.tabloAdi, ...(g.liste ? (mevcut ? {} : { tur: 'liste' }) : { tur: 'kayit' }), sutunlar: [...eskiSutunlar.map((x) => ({ ...x, ...karsilikli(x) })), ...yeniSutunlar.map((x) => ({ ...x, ...karsilikli(x) }))],
+        satirlar: eklenecekSatirlar
       });
       // Senaryo kendi satırına sabitlenir: bu kayıttaki (gizli olmayan) değerler satırı ayırt eder.
       const gizli = new Map(g.sutunlar.map((x) => [x.ad, x.gizli]));
@@ -791,7 +894,7 @@ export function hizliTestYoneticisiOlustur(s) {
       if (Object.keys(kosul).length) o.tabloSecimleri[grupAnahtari(tabloId, '')] = kosul;
       for (const [anahtar, b] of Object.entries(g.baglar)) o.degerler[anahtar] = { deger: b.basvuru, kaynak: 'tablo' };
       sonuc.push({
-        tablo: g.tabloAdi, tabloId, sutunSayisi: g.sutunlar.length, yeni: !mevcut,
+        tablo: g.tabloAdi, tabloId, sutunSayisi: g.sutunlar.length, yeni: !mevcut, secenekSayisi: g.liste ? g.liste.secenekler.length : 0,
         baglar: Object.fromEntries(Object.entries(g.baglar).map(([k, b]) => [k, { tablo: g.tabloAdi, sutun: b.sutun, gizli: gizli.get(b.sutun) === true }]))
       });
     }
