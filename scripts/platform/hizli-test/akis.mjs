@@ -1,7 +1,7 @@
 // HIZLI TEST — SAF KURALLAR (DOM yok, veritabanı yok; sunucu ve birim testleri ortak). Genel: ürün / şirket adı, kurala özgü sabit yok.
 //
-//  - cumleyiOku: "Ne yapılsın?" cümlesi YZ OLMADAN kalıpla okunur: tırnak içindeki metin beklenen mesaj adayı, "…'e bas / …'a tıkla /
-//    …'yı seç" düğme adayı. Anlaşılmayan kısım yok sayılır.
+//  - cumleyiOku: "Ne yapılsın?" cümlesi YZ OLMADAN, kalıp gerektirmeden okunur (normal Türkçe: "Hesapla butonuna basıyorum", "Başvurunuz
+//    alındı yazısını görünce bitir"; tırnak içi metin de beklenen mesaj adayı). Anlaşılmayan kısım yok sayılır.
 //  - basmaKarari: izin (evet / sor / hayir) + aday sayısı → bas / sor / basma.
 //  - metinTuru / varsayilanEtiketler: bitiş etiketleri önerisi (H2): son basıştan sonra görülen metin Bitti, bekleme metinleri
 //    ("…ıyor", "Lütfen bekleyin", eylem keşfinin bekleme adayları) Devam, uyarı / hata kutusu metinleri Hata. Kullanıcı değiştirir.
@@ -41,9 +41,96 @@ export function canliOnayMetni(izin) {
     : 'CANLI ortamda düğmelere basılacak, kayıt oluşabilir.';
 }
 
+// --- "Ne yapılsın?" cümle çözümleyicisi (kural tabanlı, YZ YOK) ---------------------------------------------------------------
+// Kalıp gerekmez: normal Türkçe yazılır. Cümle ayraçlarla (. ; ! ? satır , "sonra" "ardından" "ve") parçalanır; her parçada
+//  - düğme: "<ad> düğmesine / butonuna / tuşuna tıkla | bas | tıklıyorum | basacağım | basınca …", "Hesapla'ya bas", "Hesaplaya bas",
+//    "Toplam Hesapla düğmesi" (büyük harfle başlayan ardışık sözcükler ad olur; tırnaklıysa tırnak içi),
+//  - beklenen mesaj: tırnak içi metin; tırnaksız "<metin> yazısını / mesajını / metnini … görünce | görürsem | çıkınca | gelince bitir",
+//    "<metin> yazısı gelmeli | çıkmalı | görünmeli", "<metin> mesajını doğrula", "<metin> görünce bitir".
+// Anlaşılmayan parça yok sayılır (uydurma yok).
+const FIIL = /^(?:bas(?:ıyor(?:um|uz)?|acağ(?:ım|ız)|ar(?:ım|ız|sam)|ay(?:ım)|al(?:ım)|ın|ınca|sın|mal[ıi](?:y[ıi]m)?|t[ıi]ktan|t[ıi][ğg][ıi]mda|t[ıi]m)?|t[ıi]kl[ıi]yor(?:um|uz)?|t[ıi]kla(?:yor(?:um|uz)?|yacağ(?:ım|ız)|r(?:ım|ız|sam)|yay(?:ım)|yal(?:ım)|y[ıi]n|y[ıi]nca|s[ıi]n|mal[ıi](?:y[ıi]m)?|d[ıi]ktan|d[ıi][ğg][ıi]mda|d[ıi]m)?)$/u;
+const BUTON_SOZCUGU = /^(?:buton|düğme|tuş|link|bağlantı)\p{L}*$/u;
+/** Ad olamayacak sözcükler (zamirler, dolgu). */
+const AD_DEGIL = new Set(['bu', 'şu', 'o', 'her', 'ilk', 'son', 'buna', 'şuna', 'ona', 'bunu', 'şunu', 'onu', 'ilgili', 'tekrar', 'yine', 'bir', 'sonra', 'önce', 'artık', 'sadece', 'yalnız', 'hemen', 'gerekirse']);
+/** Mesaj öbeğinin başından atılan dolgu sözcükleri. */
+const MESAJ_DOLGU = new Set(['ekranda', 'sayfada', 'şu', 'şöyle', 'bir', 'eğer', 've', 'sonra', 'ardından', 'en', 'sonunda', 'artık', 'ayrıca', 'olan', 'denen', 'yazan', 'adlı', 'ile', 'da', 'de', 'ki', 'önce', 'ama', 'sonuç', 'olarak', 'yani', 'mesela', 'örneğin']);
+const MESAJ_ISIM = /^(?:yaz[ıi]s[ıi]|mesaj[ıi]|metni|ifades[ıi]|bildirimi|uyar[ıi]s[ıi]|ba[şs]l[ıi][ğg][ıi])\p{L}*$/u;
+const MESAJ_TETIK = /^(?:gör[üu]n(?:ce|ür(?:se)?|sün|meli|d[üu][ğg][üu]nde)|gör(?:ürsem|d[üu][ğg][üu]mde|meliyim|d[üu]kten)|görül(?:ünce|ürse|meli|d[üu][ğg][üu]nde)|çık(?:ınca|arsa|sın|malı|t[ıi][ğg][ıi]nda)|gel(?:ince|irse|sin|meli|di[ğg]inde)|belir(?:ince|irse|sin|meli|di[ğg]inde)|ol(?:unca|ursa|sun|malı)|yaz(?:ınca|arsa|ılsın|ılmalı)|doğrula\p{L}*|kontrol|bekle(?:r(?:im)?|nir|nmeli|yor(?:um)?)|beklenen)$/u;
+const MESAJ_BITIRICI = /^(?:bitir\p{L}*|dur\p{L}*|bitmiş|tamam|başarılı|test\p{L}*|geç\p{L}*|say\p{L}*|kabul|kaydet\p{L}*)$/u;
+/** Tetiğin kendisi "olsun / gelsin" gibi bir beklentiyse bitirici gerekmez. */
+const MESAJ_BEKLENTI = /^(?:gel|çık|görün|belir|ol|yaz|doğrula|kontrol|bekle)\p{L}*$/u;
+
+/** Sözcüğün başındaki / sonundaki noktalamayı atar. @param {string} t */
+const noktalamaAt = (t) => t.replace(/^[^\p{L}\p{N}\u0001]+|[^\p{L}\p{N}\u0001]+$/gu, '');
+/** @param {string} t */
+const kucuk = (t) => t.toLocaleLowerCase('tr');
+/** @param {string} t */
+const buyukBasli = (t) => /^\p{Lu}/u.test(t);
+
 /**
- * "Ne yapılsın?" cümlesi (YZ YOK). Tırnak içindeki metinler ("…", “…”, '…', «…») beklenen mesaj adayı; "X'e bas", "X'a tıkla",
- * "X düğmesine bas" düğme adayı (X tırnaklıysa tırnak içi). Anlaşılmayan kısımlar yok sayılır.
+ * Düğme adı: fiilden önceki sözcüklerden. @param {string[]} parca fiilden önceki sözcükler @param {string[]} tirnaklar
+ * @param {boolean} cumleBasiMi parçanın ilk sözcüğü cümle başı mı (büyük harf ayırt etmez)
+ * @returns {string | null}
+ */
+function dugmeAdi(parca, tirnaklar, cumleBasiMi) {
+  const s = [...parca];
+  let butonVar = false;
+  // "X butonuna", "X butonunu görünce" gibi: son düğme sözcüğünden sonrası (durum eki, tetik) adın parçası değildir.
+  const butonSirasi = s.map((x) => BUTON_SOZCUGU.test(kucuk(noktalamaAt(x)))).lastIndexOf(true);
+  if (butonSirasi >= 0) { s.length = butonSirasi; butonVar = true; }
+  if (!s.length) return null;
+  const son = s[s.length - 1];
+  const tirnakli = /^\u0001(\d+)\u0001/.exec(son);
+  if (tirnakli) return bosluk(tirnaklar[Number(tirnakli[1])]) || null;
+  const apostrof = /['’]/.test(son);
+  let ad = noktalamaAt(son.split(/['’]/)[0]);
+  if (!butonVar && !apostrof && /(?:ya|ye)$/iu.test(ad) && ad.length > 4) ad = ad.slice(0, -2);
+  if (!ad || AD_DEGIL.has(kucuk(ad)) || BUTON_SOZCUGU.test(kucuk(ad))) return null;
+  // Büyük harfle başlayan ardışık sözcükler tek ad ("Toplam Hesapla"); cümle başındaki ilk sözcük sayılmaz (büyük harf cümle başından olabilir).
+  if (buyukBasli(son)) {
+    const adlar = [ad];
+    for (let i = s.length - 2; i >= 0 && adlar.length < 3; i--) {
+      const t = noktalamaAt(s[i]);
+      if (!t || !buyukBasli(t) || t.startsWith('\u0001') || (cumleBasiMi && i === 0) || AD_DEGIL.has(kucuk(t))) break;
+      adlar.unshift(t);
+    }
+    ad = adlar.join(' ');
+  }
+  return ad.length >= 2 && ad.length <= 60 ? ad : null;
+}
+
+/**
+ * Beklenen mesaj (tırnaksız): parçanın (fiil varsa fiilden sonraki) sözcüklerinden. @param {string[]} sozcukler
+ * @returns {string | null}
+ */
+function mesajObegi(sozcukler) {
+  const t = sozcukler.map(noktalamaAt).filter(Boolean);
+  if (!t.length || t.some((x) => x.startsWith('\u0001'))) return null;
+  const l = t.map(kucuk);
+  let bitis = -1;
+  const isim = l.findIndex((x) => MESAJ_ISIM.test(x));
+  if (isim > 0 && (l.slice(isim + 1).some((x) => MESAJ_TETIK.test(x)) || isim === l.length - 1)) bitis = isim;
+  if (bitis < 0) {
+    // İsimsiz: "<metin> görünce bitir" / "<metin> gelmeli" (tetik sözcüğü + bitirici ya da beklenti fiili).
+    const i = l.findIndex((x, k) => k > 0 && MESAJ_TETIK.test(x));
+    if (i < 0) return null;
+    if (!l.slice(i + 1).some((x) => MESAJ_BITIRICI.test(x)) && !MESAJ_BEKLENTI.test(l[i])) return null;
+    bitis = i;
+  }
+  let onu = t.slice(0, bitis);
+  // Son dolgu sözcüğünden sonrası ("Ekranda Başvurunuz alındı" → "Başvurunuz alındı").
+  let ilk = 0;
+  onu.forEach((x, k) => { if (MESAJ_DOLGU.has(kucuk(x))) ilk = k + 1; });
+  onu = onu.slice(ilk);
+  if (!onu.length || onu.length > 12 || onu.some((x) => BUTON_SOZCUGU.test(kucuk(x)))) return null;
+  const m = bosluk(onu.join(' '));
+  return m.length >= 2 && m.length <= 120 ? m : null;
+}
+
+/**
+ * "Ne yapılsın?" cümlesi (YZ YOK; kalıp gerekmez). Tırnak içindeki metinler ("…", “…”, '…', «…») beklenen mesaj adayı; tırnaksız
+ * "X yazısını görünce bitir", "X mesajı gelmeli" de mesaj; "X'e bas", "X düğmesine tıkla", "Hesapla butonuna basıyorum" düğme adayı
+ * (X tırnaklıysa tırnak içi). Anlaşılmayan kısımlar yok sayılır.
  * @param {unknown} cumle
  * @returns {{ mesajlar: string[]; dugmeler: string[] }}
  */
@@ -54,15 +141,28 @@ export function cumleyiOku(cumle) {
   /** @type {string[]} */
   const tirnaklar = [];
   const TIRNAK = /["“”«»]([^"“”«»]{1,120})["“”«»]|'([^']{1,120})'(?![a-zçğıöşü])/giu;
-  for (const x of m.matchAll(TIRNAK)) tirnaklar.push(bosluk(x[1] ?? x[2]));
-  // Düğme: "<ad>['’](y)?(a|e|ya|ye|na|ne) bas/tıkla" ya da "<ad> düğmesine bas". Ad tırnaklıysa tırnak içi, değilse tek sözcük.
-  const EYLEM = /(?:["“”«»]([^"“”«»]{1,60})["“”«»]|'([^']{1,60})'|([\p{L}\p{N}]+))\s*(?:['’]?\s*(?:y|n)?[ae]\s+|\s+düğmesine\s+|\s+butonuna\s+)(?:bas|tıkla|tikla|basın|tıklayın|basin|tiklayin)\b/giu;
-  for (const x of m.matchAll(EYLEM)) {
-    const ad = bosluk(x[1] ?? x[2] ?? x[3]);
-    if (ad && !dugmeler.includes(ad)) dugmeler.push(ad);
+  // Tırnaklı metinler yer tutucuyla maskelenir (ayraç / fiil aramasına girmez).
+  const maskeli = m.replace(TIRNAK, (_t, a, b) => { tirnaklar.push(bosluk(a ?? b)); return ` \u0001${tirnaklar.length - 1}\u0001 `; });
+  /** @type {string[]} */
+  const tirnaksizMesajlar = [];
+  const parcalar = maskeli.split(/[.;!?\n]+|,|(?<![\p{L}\p{N}])(?:sonra(?:sında)?|ardından|akabinde|ve)(?![\p{L}\p{N}])/iu);
+  for (const parca of parcalar) {
+    const ham = parca.trim().split(/\s+/).filter(Boolean);
+    if (!ham.length) continue;
+    let onceki = 0;
+    let sonFiil = -1;
+    for (let i = 0; i < ham.length; i++) {
+      if (!FIIL.test(kucuk(noktalamaAt(ham[i])))) continue;
+      const ad = dugmeAdi(ham.slice(onceki, i), tirnaklar, onceki === 0);
+      if (ad && !dugmeler.some((d) => katla(d) === katla(ad))) dugmeler.push(ad);
+      onceki = i + 1;
+      sonFiil = i;
+    }
+    const mesaj = mesajObegi(sonFiil >= 0 ? ham.slice(sonFiil + 1) : ham);
+    if (mesaj) tirnaksizMesajlar.push(mesaj);
   }
   // Düğme adı olarak geçen tırnak içi mesaj adayı sayılmaz.
-  const mesajlar = [...new Set(tirnaklar.filter((t) => t && !dugmeler.some((d) => katla(d) === katla(t))))];
+  const mesajlar = [...new Map([...tirnaklar, ...tirnaksizMesajlar].filter((t) => t && !dugmeler.some((d) => katla(d) === katla(t))).map((t) => [katla(t), t])).values()];
   return { mesajlar: mesajlar.slice(0, 10), dugmeler: dugmeler.slice(0, 5) };
 }
 
@@ -73,6 +173,13 @@ export function cumleyiOku(cumle) {
 export function tekAday(adaylar, cumleDugmeleri = []) {
   for (const ad of cumleDugmeleri) {
     const uyan = adaylar.filter((a) => a.metin && katla(a.metin) === katla(ad));
+    if (uyan.length === 1) return uyan[0];
+  }
+  // Tam eşleşme yoksa: yazılan ad aday metninin parçası (ya da tersi) ve tek aday ("Hesapla" → "Toplam Hesapla"; "Devama" → "Devam").
+  for (const ad of cumleDugmeleri) {
+    const k = katla(ad);
+    if (k.length < 3) continue;
+    const uyan = adaylar.filter((x) => x.metin && katla(x.metin).length >= 3 && (katla(x.metin).includes(k) || k.includes(katla(x.metin))));
     if (uyan.length === 1) return uyan[0];
   }
   return adaylar.length === 1 ? adaylar[0] : null;

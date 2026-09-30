@@ -32,7 +32,13 @@ export type AkisEnvanteri = {
   secenekGozlemleri?: SecenekGozlemi[];
   /** "Bitir"e basıldığı andaki sayfa: yol ve görünen çıkış bağlantısının yazısı (giriş kaydında başarı göstergesi önerisi). */
   sonSayfa?: SonSayfa;
+  /**
+   * Ana sayfanın adres değişimleri (yalnız yol; olay sırasına göre: sira = o ana kadarki olay sayısı). elle: kullanıcı adres
+   * çubuğuna yazarak gitti (bağlantı / düğme / yönlendirme değil). Giriş kaydında çok sayfalı girişi çıkarmak için.
+   */
+  gezinmeler?: Gezinme[];
 };
+export type Gezinme = { sira: number; yol: string; elle: boolean };
 export type SonSayfa = { yol: string; cikisMetni: string | null };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */

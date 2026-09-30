@@ -100,6 +100,32 @@ test.describe('saf kurallar', () => {
     expect(cumleyiOku('bir şeyler yap')).toEqual({ mesajlar: [], dugmeler: [] });
     expect(cumleyiOku(undefined)).toEqual({ mesajlar: [], dugmeler: [] });
   });
+  test('cümle normal Türkçeyle okunur: çekim ekleri, düğme sözcükleri, tırnaksız mesaj, çoklu cümle (YZ yok, uydurma yok)', () => {
+    // Düğme: fiil çekimleri ve ekler.
+    for (const c of ['Hesapla butonuna tıkla', 'Hesapla düğmesine basıyorum', "Hesapla'ya bas", 'Hesaplaya basacağım', 'Hesapla tuşuna tıklayacağım', 'Hesapla butonunu görünce tıkla']) {
+      expect(cumleyiOku(c).dugmeler, c).toEqual(['Hesapla']);
+    }
+    expect(cumleyiOku('Toplam Hesapla düğmesine tıkla').dugmeler).toEqual(['Hesapla']);
+    expect(cumleyiOku('Doldur Hesapla\'ya bas').dugmeler).toEqual(['Hesapla']);
+    expect(cumleyiOku('"Toplam Hesapla" düğmesine tıklıyorum').dugmeler).toEqual(['Toplam Hesapla']);
+    // Mesaj: tırnaksız ifadeler.
+    expect(cumleyiOku('Başvurunuz alındı yazısını görünce bitir').mesajlar).toEqual(['Başvurunuz alındı']);
+    expect(cumleyiOku('Başvurunuz alındı mesajını görürsem testi bitir').mesajlar).toEqual(['Başvurunuz alındı']);
+    expect(cumleyiOku('Ekranda Toplam tutarı hesaplandı yazısı gelmeli').mesajlar).toEqual(['Toplam tutarı hesaplandı']);
+    expect(cumleyiOku('teşekkürler görünce bitir').mesajlar).toEqual(['teşekkürler']);
+    // Çoklu cümle: ".", ",", "sonra", "ardından", "ve" ile ayrılır.
+    expect(cumleyiOku('Formu doldur ve Hesapla\'ya bas sonra Toplam tutarı hesaplandı mesajı gelmeli')).toEqual({ mesajlar: ['Toplam tutarı hesaplandı'], dugmeler: ['Hesapla'] });
+    expect(cumleyiOku('Hesapla düğmesine basacağım, ardından Başvurunuz alındı yazısı çıkınca bitir.')).toEqual({ mesajlar: ['Başvurunuz alındı'], dugmeler: ['Hesapla'] });
+    expect(cumleyiOku('Formu doldur. Kaydet butonuna bas. Başarıyla kaydedildi yazısı gelmeli')).toEqual({ mesajlar: ['Başarıyla kaydedildi'], dugmeler: ['Kaydet'] });
+    // Anlaşılmayan yok sayılır; düğme adı mesaj sayılmaz.
+    expect(cumleyiOku('Formu doldur ve bir bakalım')).toEqual({ mesajlar: [], dugmeler: [] });
+    expect(cumleyiOku('Bu butona bas').dugmeler).toEqual([]);
+    expect(cumleyiOku('"Onayla" düğmesine tıkla').mesajlar).toEqual([]);
+    // Aday adı yazılandan uzunsa (ya da kısaysa) tek aday eşleşir; belirsizse eşleşmez.
+    const adaylar = [{ secici: 'a', metin: 'Toplam Hesapla' }, { secici: 'b', metin: 'Temizle' }];
+    expect(tekAday(adaylar, ['Hesapla'])?.secici).toBe('a');
+    expect(tekAday([...adaylar, { secici: 'c', metin: 'Yeniden Hesapla' }], ['Hesapla'])).toBeNull();
+  });
   test('basma kararı: Hayır basmaz, Bana sor her zaman sorar, Evet tek adayda basar / çok adayda sorar', () => {
     expect(basmaKarari({ izin: 'hayir', adaySayisi: 1, kullaniciSecti: true })).toBe('basma');
     expect(basmaKarari({ izin: 'sor', adaySayisi: 1, kullaniciSecti: true })).toBe('sor');
@@ -397,6 +423,23 @@ test('CANLI ortam: kilit yok, bir kez açık onay istenir (onaysız tarayıcı a
   expect(o.ortam).toMatchObject({ canli: true });
   await basarili('/platform/hizli-test/iptal', { id });
   expect((await oturum(id)).durum).toBe('iptal');
+  await isBitsin();
+});
+
+test('başka sitenin tam adresi: kayıtsızsa sorulur (409, hiçbir istek / tarayıcı yok); aynı kökteki tam adres yola ayrılır ve başlar', async () => {
+  test.setTimeout(120_000);
+  await isBitsin();
+  const once = uygulama.istekler.length;
+  const y = await api('/platform/hizli-test/baslat', { projeId, ortamId, hedef: 'http://127.0.0.2:9/basvuru/', ekranAdi: 'Başka site', izin: 'sor' });
+  expect(y).toMatchObject({ basarili: false, kod: 'TABAN_KAYITLI_DEGIL', koken: 'http://127.0.0.2:9' });
+  expect(String(y.mesaj)).toContain('Bu site adresi kayıtlı değil');
+  expect((await api('/platform/tarama/aktif')).is ?? null).toBeNull();
+  expect(uygulama.istekler.length).toBe(once);
+  // Ortamın kendi kökeninde tam adres: yol ayrılır ("/" ile başlayan yol olarak saklanır).
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: `${fikstur.adres}/basvuru/`, ekranAdi: 'Tam adresli', izin: 'sor' })).id);
+  const o = await bekle(id, ['veri']);
+  expect(o.hedef).toBe('/basvuru/');
+  await basarili('/platform/hizli-test/iptal', { id });
   await isBitsin();
 });
 

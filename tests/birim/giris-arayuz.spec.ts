@@ -2,7 +2,7 @@
 // SMS kodu formu. Geçici bir veritabanı (depo işlevleriyle kurulan nötr örnek proje) ile AYRI bir Nöbetçi sunucusu
 // örneği boş bir portta başlatılır (TEST_SUNUCU_KOSU_KAPALI=1: hiçbir test koşusu başlatamaz; kendi log
 // dosyası). TEST ortamının taban adresi 127.0.0.1'deki SAHTE giriş sayfalarıdır (giris-fikstur.ts > girisSayfalari):
-// "Varsayılanları öner" yalnızca ona gider. CANLI ortamın adresi .invalid'dir ve hiç istek almaz. Arayüz sayfasının
+// "Analiz et" yalnızca ona gider. CANLI ortamın adresi .invalid'dir ve hiç istek almaz. Arayüz sayfasının
 // ve sunucunun tüm istekleri 127.0.0.1'dedir.
 // GIRIS_EKRAN_KLASORU verilirse tarif formunun ve kod formunun koyu/açık tema ekran görüntüleri oraya yazılır.
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -182,7 +182,7 @@ test('API: tarif listesi, doğrulama hataları, kaydet/sıfırla; elle kod uçla
   expect(gonder.status).toBe(404);
 });
 
-test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yalnızca ortam adresine gider; kayıt adımları korur', async () => {
+test('Ayarlar > Giriş tarifi: "Analiz et" yalnızca onayla ve yalnızca ortam adresine gider; kayıt adımları korur', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ayarlar/giris');
@@ -210,16 +210,16 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   await expect(bolum.locator('li[data-ortam]').filter({ hasText: 'CANLI' }).locator('.duzenleniyor-rozeti')).toHaveCount(0);
 
   // Vazgeç → hiçbir istek gitmez.
-  await form.getByRole('button', { name: 'Varsayılanları öner' }).click();
+  await form.getByRole('button', { name: 'Analiz et' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Vazgeç' }).click();
   expect(site.istekler).toEqual([]);
 
-  await form.getByRole('button', { name: 'Varsayılanları öner' }).click();
+  await form.getByRole('button', { name: 'Analiz et' }).click();
   const diyalog = page.getByRole('dialog');
   await expect(diyalog).toContainText(`${site.adres}/klasik adresini bu bilgisayarda görünmez bir tarayıcıda açıp`);
   await ekranGoruntusu(page, '02-oner-onay-penceresi', diyalog);
-  await diyalog.getByRole('button', { name: 'Sayfayı aç ve öner' }).click();
-  await expect(form.getByText('Öneriler alanlara yazıldı')).toBeVisible({ timeout: 30_000 });
+  await diyalog.getByRole('button', { name: 'Sayfayı aç ve analiz et' }).click();
+  await expect(form.getByText('Analiz bitti')).toBeVisible({ timeout: 30_000 });
   await expect(form.getByLabel('Kullanıcı adı alanı')).toHaveValue('#eposta');
   await expect(form.getByLabel('Parola alanı')).toHaveValue('#parola');
   const onerilenGonder = await form.getByLabel('Giriş düğmesi').inputValue();

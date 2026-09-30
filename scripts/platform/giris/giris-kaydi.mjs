@@ -13,12 +13,18 @@
 //                                  KAYDEDİLMEZ: arayüz önizletir, kullanıcı tarif formunda kontrol edip kaydeder.
 //                                  Girişten sonra açılan sayfa oturum kontrol adresi (ve çıkış yazısı başarı göstergesi)
 //                                  olarak ÖNERİLİR (sayfaOnerileri); mevcut tarifte yalnız kullanıcı onaylarsa yazılır.
+// ÇOK SAYFALI KAYIT: kullanıcı adres çubuğuyla başka sayfaya giderse (envanter.gezinmeler; kayıt motoru yakalar) taslağa "sayfa"
+// adımı girer (önerisi: o adrese git); adımlar olay sırasındadır, oynatmada her adım kendi sayfasında uygulanır. Kullanıcının
+// dokunduğu alanlar kendiliğinden listededir (kullanıcı ayrıca alan SEÇMEZ); dokunmadığı alanları ayrıca ekleyebilir.
 // NOT: import.meta KULLANILMAZ. Tipler: giris-kaydi.d.mts.
 
 import { regexKacis, varsayilanGirisAdimlariMi } from './tarif.mjs';
 
 export const ALAN_ROLLERI = Object.freeze(['kullaniciAdi', 'parola', 'kod', 'ek', 'yoksay']);
 export const DUGME_ROLLERI = Object.freeze(['gonder', 'tikla', 'kodGonder', 'yoksay']);
+/** Kayıtta adres çubuğuyla gidilen sayfa: oynatmada o adrese gidilir ya da alınmaz. */
+export const SAYFA_ROLLERI = Object.freeze(['git', 'yoksay']);
+const GIZLI_SORGU = /(token|jeton|key|anahtar|sid|session|oturum|pass|parola|sifre|şifre|pwd|auth|code|kod|jwt|ticket|secret)/i;
 /** Doğrulama kodunun kaynağı: Authenticator (TOTP), SMS sabit test kodu, SMS koşu sırasında elle girilir. */
 export const KOD_KAYNAKLARI = Object.freeze(['totp', 'sabit', 'elle']);
 const EK_ALAN_ADI = /^[\p{L}\p{N}_.-]{1,60}$/u;
@@ -39,6 +45,23 @@ export function ekAlanAdiOner(etiket) {
 }
 
 /**
+ * Kaydedilen sayfa adresi (tarife yazılacak yol): yalnız "/" ile başlayan yol; parça atılır; sorgu dizisi kısa ve gizli değer
+ * çağrıştıran parametre (jeton, oturum, parola…) içermiyorsa korunur, aksi hâlde atılır. Geçersizse ''.
+ * @param {unknown} yol
+ */
+export function gezinmeYolu(yol) {
+  if (typeof yol !== 'string') return '';
+  const temiz = yol.trim().split('#')[0];
+  if (!temiz.startsWith('/') || temiz.startsWith('//')) return '';
+  const i = temiz.indexOf('?');
+  if (i < 0) return temiz.slice(0, 300);
+  const sorgu = temiz.slice(i + 1);
+  const gizli = sorgu.split('&').some((p) => GIZLI_SORGU.test(p.split('=')[0]));
+  return gizli || sorgu.length > 100 ? temiz.slice(0, i) : temiz.slice(0, 300);
+}
+const yolSorgusuz = (/** @type {string} */ y) => y.split('?')[0];
+
+/**
  * Kayıttan taslak adımlar. @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env
  * @returns {import('./giris-kaydi.d.mts').GirisTaslagi}
  */
@@ -51,27 +74,55 @@ export function girisKaydiTaslagi(env) {
   const eklenen = new Set();
   /** @type {string[]} */
   const yollar = [];
-  const alanEkle = (/** @type {string[]} */ anahtarlar) => {
+  // Kullanıcının panelde işaretini açıkça kaldırdığı alan taslağa girmez (dokunulan alanlar varsayılan işaretlidir).
+  const kaldirilan = new Set(env.alanlar.filter((a) => nesneMi(a) && a.secili === false && nesneMi(a.alan)).map((a) => a.alan.anahtar));
+  // Sayfa değişimleri (adres çubuğu dahil): olay sırasına göre araya girer; her sayfada dokunulan alanlar ayrı sayılır.
+  const gezinmeler = (Array.isArray(env.gezinmeler) ? env.gezinmeler : [])
+    .filter((g) => nesneMi(g) && Number.isFinite(g.sira) && typeof g.yol === 'string')
+    .map((g) => ({ sira: Number(g.sira), yol: gezinmeYolu(g.yol), elle: g.elle === true }))
+    .filter((g) => g.yol).sort((a, b) => a.sira - b.sira).slice(0, 200);
+  let gezinSirasi = 0;
+  let bolum = 0;
+  /** @type {string | null} */
+  let sayfaYolu = null;
+  const gezinmeleriIsle = (/** @type {number} */ sira) => {
+    while (gezinSirasi < gezinmeler.length && gezinmeler[gezinSirasi].sira <= sira) {
+      const g = gezinmeler[gezinSirasi++];
+      const onceki = sayfaYolu ?? (yollar[0] ? yolSorgusuz(yollar[0]) : null);
+      sayfaYolu = g.yol;
+      // Aynı sayfanın yenilenmesi ya da kaydın başladığı sayfa yeni bir sayfa sayılmaz.
+      if (onceki !== null && yolSorgusuz(onceki) === yolSorgusuz(g.yol)) continue;
+      bolum++;
+      if (g.elle) adimlar.push({ tur: 'sayfa', yol: g.yol, oneri: 'git' });
+    }
+  };
+  /** Herhangi bir sayfada listelenmiş alanlar (kayıt sonunda listeye alınanlar bir daha eklenmesin). */
+  const listelenenAlan = new Set();
+  const alanEkle = (/** @type {string[]} */ anahtarlar, /** @type {boolean} */ dokunulan = false, /** @type {boolean} */ sonEkleme = false) => {
     for (const k of anahtarlar) {
       const alan = alanlar.get(k);
-      if (!alan || eklenen.has(k)) continue;
-      eklenen.add(k);
+      const kayit = `${bolum}|${k}`;
+      if (!alan || eklenen.has(kayit) || (dokunulan && kaldirilan.has(k)) || (sonEkleme && listelenenAlan.has(k))) continue;
+      eklenen.add(kayit);
+      listelenenAlan.add(k);
       adimlar.push({
         tur: 'alan', anahtar: k, etiket: metin(alan.etiket ?? alan.ad ?? '', 120) || k, alanTuru: alan.tur, secici: alan.secici, oneri: 'ek'
       });
     }
   };
-  for (const o of env.olaylar) {
-    if (o.tur === 'okuma') { alanEkle(o.okuma.dokunulan); if (o.okuma.yol) yollar.push(o.okuma.yol); }
+  env.olaylar.forEach((o, i) => {
+    gezinmeleriIsle(i);
+    if (o.tur === 'okuma') { alanEkle(o.okuma.dokunulan, true); if (o.okuma.yol) yollar.push(o.okuma.yol); }
     else if (o.tur === 'tik') {
-      alanEkle(o.oncesi.dokunulan);
+      alanEkle(o.oncesi.dokunulan, true);
       if (o.oncesi.yol) yollar.push(o.oncesi.yol);
       const d = env.dugmeler[o.dugme];
       if (d && typeof d.secici === 'string') adimlar.push({ tur: 'dugme', sira: o.dugme, metin: metin(d.metin, 120), secici: d.secici, oneri: 'tikla' });
     }
-  }
+  });
+  gezinmeleriIsle(Number.POSITIVE_INFINITY);
   // Panelde listeye alınmış ama dokunulduğu görülmemiş alanlar sona (kullanıcı çıkarabilir).
-  alanEkle(env.alanlar.filter((a) => a.secili).map((a) => a.alan.anahtar));
+  alanEkle(env.alanlar.filter((a) => a.secili).map((a) => a.alan.anahtar), false, true);
   oneriVer(adimlar);
   const son = nesneMi(env.sonSayfa) ? env.sonSayfa : null;
   return {
@@ -94,10 +145,13 @@ function oneriVer(adimlar) {
     if (g >= 0) {
       adimlar[g].oneri = 'gonder';
       // Gönderden sonraki ilk metin/parola alanı doğrulama kodu, ondan sonraki ilk düğme kod gönder.
-      const k = adimlar.findIndex((a, i) => i > g && a.tur === 'alan' && (metinAlani(a.alanTuru) || a.alanTuru === 'password' || a.alanTuru === 'number'));
+      // Kod alanı girişin kendi sayfasındadır: sonradan başka bir sayfaya geçildiyse (adres çubuğu) oradaki alanlar kod sayılmaz.
+      const sonrakiSayfa = adimlar.findIndex((a, i) => i > g && a.tur === 'sayfa');
+      const sinir = sonrakiSayfa < 0 ? adimlar.length : sonrakiSayfa;
+      const k = adimlar.findIndex((a, i) => i > g && i < sinir && a.tur === 'alan' && (metinAlani(a.alanTuru) || a.alanTuru === 'password' || a.alanTuru === 'number'));
       if (k >= 0) {
         adimlar[k].oneri = 'kod';
-        const kg = adimlar.findIndex((a, i) => i > k && a.tur === 'dugme');
+        const kg = adimlar.findIndex((a, i) => i > k && i < sinir && a.tur === 'dugme');
         if (kg >= 0) adimlar[kg].oneri = 'kodGonder';
       }
     }
@@ -133,7 +187,14 @@ export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu, secimlerH
   taslak.adimlar.forEach((a, i) => {
     const s = nesneMi(isaretler[i]) ? isaretler[i] : {};
     const rol = typeof s.rol === 'string' ? s.rol : 'yoksay';
-    const ad = `${i + 1}. adım (${a.tur === 'alan' ? a.etiket : a.metin || 'düğme'})`;
+    const ad = `${i + 1}. adım (${a.tur === 'alan' ? a.etiket : a.tur === 'sayfa' ? `${a.yol} sayfası` : a.metin || 'düğme'})`;
+    if (a.tur === 'sayfa') {
+      if (!SAYFA_ROLLERI.includes(rol)) { hatalar.push(`${ad}: geçersiz seçim.`); return; }
+      if (rol === 'yoksay') return;
+      if (kodSonrasi) { notlar.push(`${ad} doğrulama kodundan sonra geldiği için tarife alınmadı.`); return; }
+      adimlar.push({ islem: 'git', adres: a.yol, aciklama: `${a.yol} sayfasına git` });
+      return;
+    }
     if (a.tur === 'alan') {
       if (!ALAN_ROLLERI.includes(rol)) { hatalar.push(`${ad}: geçersiz seçim.`); return; }
       if (rol === 'yoksay') return;

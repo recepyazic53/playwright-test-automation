@@ -44,7 +44,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Senaryoları tarayıcıda koşmak: ekranları açmak, alanlara veri yazmak, düğmelere basmak.',
       'Senaryo formundaki taslağı "Dene" ile tarayıcıda denemek.',
       'Ekranı otomatik taramak; akış kaydı ve giriş kaydı için tarayıcı açmak.',
-      'Giriş sayfasını açıp alanlarını önermek ("Varsayılanları öner").'
+      'Giriş sayfasını açıp alanlarını önermek ("Analiz et").'
     ],
     yerler: [
       'Senaryolar > Koşuyu başlat, ▷ Çalıştır, Seçilenleri çalıştır',
@@ -53,14 +53,14 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Uçtan uca akışlar > Koş (ekran adımı)',
       'Sonuçlar > Başarısızları tekrar çalıştır',
       'Ekranlar > Ekranı tara, Akışı kaydet',
-      'Ayarlar > Giriş profilleri > Giriş tarifi > Varsayılanları öner, Girişi kaydet',
+      'Ayarlar > Giriş profilleri > Giriş tarifi > Analiz et, Girişi kaydet',
       'Komut satırı koşusu (npm run kos) ve planlı koşular'
     ],
     islemler: [
       { ad: 'Ekran senaryosu koşusu', uclar: ['/platform/senaryolar/calistir'] },
       { ad: 'Ekran senaryosu denemesi (Dene)', uclar: ['/platform/senaryo/dene'] },
       { ad: 'Ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi', uclar: ['/platform/tarama/baslat'] },
-      { ad: 'Giriş sayfası önerisi (Varsayılanları öner)', uclar: ['/platform/giris-tarifi/oner'] },
+      { ad: 'Giriş sayfası analizi (Analiz et)', uclar: ['/platform/giris-tarifi/oner'] },
       { ad: 'Ortam bağlantısı denetimi (Hazırlık kontrolü > Denetle; tek istek)', uclar: ['/platform/ortam/denetle'], kosul: 'ekran senaryosunda' },
       { ad: 'Uçtan uca akışta ekran adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta ekran adımı varsa' },
       { ad: 'Planlı koşudaki ekran senaryoları', uclar: [] }

@@ -20,7 +20,7 @@ import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaram
 import { ALAN_TURLERI, OGE_TURLERI, OGE_TUR_ADLARI, secilenOgeleriAyikla, type OgeSecmeSonucu, type SecilenOge, type SecilenOgeTuru } from './oge-isaretleri.mjs';
 import type { EngellenenIstek } from './paket-olusturucu.mjs';
 import { SECIM_KOPRUSU, SECIM_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi } from './protokol.mjs';
-import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
+import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { ogeBilgisi, ogeSecmePaneliniKur, type SeciciAdayi, type SecimPaneliDurumu } from './oge-secme-paneli';
 import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 import { TaramaHatasi, alanKapsami, hataBilgisi, type OlayGonderici } from './tarama-motoru';
@@ -205,6 +205,8 @@ export async function ogeleriSec(browser: Browser, g: TaramaGirdisi, olay: OlayG
     if (profil.degerler && g.tarif?.baglamDegistirme) {
       durum.asama = 'baglam';
       await baglamiDegistir(islem, g.tarif, profil.degerler);
+      // Yazma engeli açılmadan önce bağlam değiştirmenin son isteği bitsin (açılır penceredeki form gönderimi geç kalıp engellenmesin).
+      await isteklerBitsin(islem);
     }
     durum.asama = 'secme';
     await paneliKur();

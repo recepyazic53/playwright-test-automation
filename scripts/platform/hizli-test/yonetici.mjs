@@ -37,6 +37,7 @@ import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
 import { TaramaHatasi, taramaYoneticisiAl } from '../tarama/yonetici.mjs';
+import { HedefHatasi, ekKokenleri, hedefCoz } from '../tarama/koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturucu.mjs';
 import { katla } from '../tarama/eylem-kesfi.mjs';
 import { modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
@@ -398,8 +399,21 @@ export function hizliTestYoneticisiOlustur(s) {
     if (!ortam) throw new DepoHatasi('Ortam bulunamadı.');
     const izin = String(g.izin);
     if (!IZINLER.includes(izin)) throw new HizliTestHatasi('IZIN', 'Nöbetçi’nin düğmelere basıp basamayacağını seçin (Evet / Bana sor / Hayır).');
-    const hedef = metin(g.hedef, 2000);
-    if (!hedef) throw new HizliTestHatasi('HEDEF', 'Sayfa adresini yazın (ör. /basvuru).');
+    const hedefHam = metin(g.hedef, 2000);
+    if (!hedefHam) throw new HizliTestHatasi('HEDEF', 'Sayfa adresini yazın (ör. /basvuru).');
+    // Tam adres yazıldıysa taban ve yol ayrılır; kayıtsız başka site sorulmadan (onaysız) hiçbir istek atılmaz.
+    // Diğer adres hataları taramanın kendi denetiminde (aynı mesajla) verilir.
+    let hedef = hedefHam;
+    /** @type {string | null} */
+    let hedefKoken = null;
+    try {
+      const c = hedefCoz(ortam.tabanUrl, hedefHam, ekKokenleri(ortam));
+      hedefKoken = c.koken ?? null;
+      if (/^[a-z][a-z0-9+.-]*:/i.test(hedefHam) || hedefKoken) hedef = c.yol;
+    } catch (e) {
+      if (e instanceof HedefHatasi && e.bilinmeyenKoken) throw new HizliTestHatasi('TABAN_KAYITLI_DEGIL', e.message, 409, { koken: e.bilinmeyenKoken });
+      if (!(e instanceof HedefHatasi)) throw e;
+    }
     /** @type {{ id: string | null; ad: string; anahtar: string }} */
     let ekran;
     if (g.ekranId) {
@@ -416,7 +430,7 @@ export function hizliTestYoneticisiOlustur(s) {
       ekran = ayni ? { id: ekranModeliGetir(vt, ayni.id) ? ayni.id : null, ad: ayni.ad, anahtar } : { id: null, ad, anahtar };
     }
     // İzinler ve CANLI onayı: taramayla AYNI denetim (tarayıcı açılmadan). CANLI'da kilit yok; onay bir kez istenir.
-    const govde = { kip: 'hizliTest', projeId, ortamId, hedef, izin, onay: true, girissiz: g.girissiz === true, baglamProfilleri: [], ...(g.canliOnay === true ? { canliOnay: true } : {}) };
+    const govde = { kip: 'hizliTest', projeId, ortamId, hedef: hedefKoken ? `${hedefKoken}${hedef}` : hedef, izin, onay: true, girissiz: g.girissiz === true, baglamProfilleri: [], ...(g.canliOnay === true ? { canliOnay: true } : {}) };
     if (riskliOrtamMi(ortam) && g.canliOnay !== true) {
       throw new HizliTestHatasi('CANLI_ONAY_GEREKLI', canliOnayMetni(izin), 409, { ortamAdi: ortam.ad });
     }
@@ -653,7 +667,7 @@ export function hizliTestYoneticisiOlustur(s) {
       mevcutModel: mevcut && nesneMi(mevcut.model) ? mevcut.model : null
     };
     const degerler = Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger]));
-    const envanter = kayitEnvanteriKur({ adimlar: o.adimlar, degerler, yol: meta.urlYolu, baslik: o.baslik, profil: null }, o.bitis);
+    const envanter = kayitEnvanteriKur({ adimlar: o.adimlar, degerler, yol: o.hedefYol.startsWith('/') ? o.hedefYol : `/${o.hedefYol}`, baslik: o.baslik, profil: null }, o.bitis);
     const { paket } = kayitPaketiOlustur(/** @type {any} */ (meta), /** @type {any} */ (envanter));
     const model = bitisiUygula(/** @type {Nesne} */ (paket).model, o.bitis);
     /** @type {Nesne} */ (paket).meta.olusturan = 'Nöbetçi hızlı test';

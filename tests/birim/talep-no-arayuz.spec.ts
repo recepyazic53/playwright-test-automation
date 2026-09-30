@@ -194,7 +194,7 @@ test.describe('talep no ve kapsam matrisi arayüzü', () => {
     // Senaryo tablosunda "Talep no" ilk veri sütunudur (seçim kutusundan hemen sonra); "Bağlam profili" (senaryoda profil seçimi varsa
     // görünür) başlığı tek cümleyle açıklanır.
     await expect(page.locator('.senaryo-tablosu thead th').nth(1)).toHaveText('Talep no');
-    await expect(page.getByRole('columnheader', { name: 'Bağlam profili' })).toHaveAttribute('title', /acente ya da şube/);
+    await expect(page.getByRole('columnheader', { name: 'Bağlam profili' })).toHaveAttribute('title', /şube ya da bölüm/);
     await expect(page.locator('.senaryo-tablosu tbody td.talep-hucresi', { hasText: 'TALEP-101' })).not.toHaveCount(0);
     const kos = page.getByRole('button', { name: 'Bu talebin senaryolarını koş' });
     await expect(kos).toBeHidden();
