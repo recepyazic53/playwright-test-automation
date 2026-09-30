@@ -15,7 +15,7 @@
 // henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
-  degisiklikleriBirak, kasaDurumunuBildir, parolaAlani, rozet, s, temaDugmesi, yerlestir
+  degisiklikleriBirak, kaydirmaKenarlariniIzle, kasaDurumunuBildir, parolaAlani, rozet, s, temaDugmesi, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberBaglaminiAyarla, rehberDugmesi, rehberOtomatikDene, sayfaRehberiBaglantisiKur } from './rehber.js';
@@ -909,7 +909,7 @@ function anaDuzen() {
   const ust = h('header', { class: `ust-cubuk${basit ? ' basit-mod' : ''}` },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar]),
+    kaydirmaKenarlariniIzle(h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar])),
     basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
     hizliAramaDugmesi(aramaBaglami), sunucu, basit ? modAnahtari('basit', (hedef) => moduDegistir(hedef)) : null, rehberDugmesi(), temaDugmesi(), kilitle, hesap);

@@ -751,6 +751,34 @@ export function yatayKaydirmaIpucu(kap, secenek = {}) {
   return sarmal;
 }
 
+/**
+ * Yana kaydırılan şerit (dar ekranda üst menü): taşan kenara sol-tasma / sag-tasma sınıfı (CSS kenarı soldurur: orada devamı olduğu
+ * görülür); etkin bağlantı (aria-current) görünür alana kaydırılır. Taşma yoksa sınıf yok.
+ * @template {HTMLElement} T @param {T} el @returns {T}
+ */
+export function kaydirmaKenarlariniIzle(el) {
+  let bekleyen = 0;
+  const guncelle = () => {
+    const fazla = el.scrollWidth - el.clientWidth;
+    el.classList.toggle('sol-tasma', fazla > 2 && el.scrollLeft > 2);
+    el.classList.toggle('sag-tasma', fazla > 2 && el.scrollLeft < fazla - 2);
+  };
+  const planla = () => { cancelAnimationFrame(bekleyen); bekleyen = requestAnimationFrame(guncelle); };
+  el.addEventListener('scroll', planla, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(planla).observe(el);
+  // Etkin bağlantı değişince (sayfa geçişi) görünür alana getirilir; yalnız şeridin kendisi kayar (sayfa kaydırılmaz).
+  new MutationObserver(() => {
+    const etkin = /** @type {HTMLElement | null} */ (el.querySelector('[aria-current="page"]'));
+    if (etkin && el.scrollWidth > el.clientWidth + 2) {
+      const e = etkin.getBoundingClientRect(); const k = el.getBoundingClientRect();
+      if (e.left < k.left) el.scrollLeft -= k.left - e.left + 8; else if (e.right > k.right) el.scrollLeft += e.right - k.right + 8;
+    }
+    planla();
+  }).observe(el, { subtree: true, attributes: true, attributeFilter: ['aria-current'] });
+  planla();
+  return el;
+}
+
 /** Bu uzunluktan uzun alan açıklamaları ? düğmesinin içinde durur. */
 const YARDIM_ESIGI = 60;
 

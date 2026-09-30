@@ -215,6 +215,25 @@ test.describe('tüm ekranlar taşmasız', () => {
     await baglam.close();
   });
 
+  test('390 px üst menü: taşan kenar işaretli (kaydırılabilir); etkin sayfanın bağlantısı görünür alana kayar', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 390, height: 844 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/senaryolar');
+    await bekle(page);
+    const nav = page.getByRole('navigation', { name: 'Ana menü' });
+    await expect(nav).toHaveClass(/sag-tasma/);
+    await page.goto('/#/ayarlar/proje');
+    await bekle(page);
+    const ayarlar = nav.getByRole('link', { name: 'Ayarlar' });
+    await expect(ayarlar).toHaveAttribute('aria-current', 'page');
+    await expect.poll(async () => {
+      const [n, a] = [await nav.boundingBox(), await ayarlar.boundingBox()];
+      return Boolean(n && a && a.x >= n.x - 1 && a.x + a.width <= n.x + n.width + 1);
+    }).toBe(true);
+    await expect(nav).toHaveClass(/sol-tasma/);
+    await baglam.close();
+  });
+
   test('Oluştur menüsü: Servis testleri grubunda "Uçtan uca akış" → #/akislar/yeni', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
     const page = await baglam.newPage();
