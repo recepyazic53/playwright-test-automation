@@ -442,7 +442,7 @@ function bitisDuragi(o, s, kart, m, gonder) {
   return kart('Bitiş koşulu: ne görülünce biter?', 'hedef',
     h('p', {}, 'Akış boyunca görülen metinler. Her birine bir etiket verin:'),
     h('ul', { class: 'hizli-bitis', 'aria-label': 'Görülen metinler' }, satirlar),
-    h('p', { class: 'soluk kucuk' }, 'Koşuda: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
+    h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
     olumsuzKutusu,
     m.kutu, h('div', { class: 'dugmeler' }, devam));
