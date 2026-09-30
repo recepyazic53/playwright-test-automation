@@ -12,6 +12,7 @@
 import { alan, api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { diyalogAc } from './ekran-ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste, ortamSecenekMetni } from './kosu-paneli.js';
+import { eylemAdaylariKarti, ogeleriBirlestir } from './eylem-adaylari.js';
 
 const YOKLAMA_MS = 1000;
 export const OGE_TUR_ADLARI = { dugme: 'Düğme (aksiyon)', sonuc: 'Sonuç (çıktı)', alan: 'Alan', basari: 'Başarı göstergesi', hata: 'Hata göstergesi' };
@@ -145,15 +146,18 @@ export async function taramaIsaretlemeAdimi(icerik, s) {
     return h('li', { class: 'kesif-bulgusu' }, h('label', { class: 'onay-satiri' }, k,
       h('span', {}, rozet(b.tur === 'gorunurluk' ? 'koşullu alan' : 'bağımlı liste', b.tur === 'gorunurluk' ? 'vurgu' : 'durdu'), ' ', h('b', {}, b.etiket), ' — ', b.aciklama)));
   };
+  // Nöbetçi'nin basmadan bulduğu adaylar (en olası işaretli); seçilen aday "Sayfada seç"le birleşir (aynı türde Sayfada seçilen önce gelir).
+  const adaylar = eylemAdaylariKarti(v.eylemAdaylari, { eylemSecimi: v.eylemSecimi, isaretlendi: v.isaretlendi, kosuVar: v.kosuVar, degisti: () => ozetCiz() });
+  const tumOgeler = () => ogeleriBirlestir(adaylar.secilenler(), secme.ogeler());
   const secme = ogeSecmeKarti({
-    proje: s.proje, ogeler: v.ogeler, degisti: () => ozetCiz(), dugmeMetni: 'Sayfada seç',
+    proje: s.proje, ogeler: v.sayfadaSecilenler ?? v.ogeler, degisti: () => ozetCiz(), dugmeMetni: 'Sayfada seç',
     hedef: () => ({ ortam: v.ortam, hedef: v.hedefYol, girissiz: v.girissiz, ekranId: v.ekran.id, ekranAdi: v.ekran.ad, baglamProfili: v.baglamProfili })
   });
   const ozetAlani = h('div', { class: 'isaret-ozeti' });
   const devam = h('button', { type: 'button', class: 'birincil' }, ikon('ok'), 'Önizlemeye geç');
   const hataAlani = h('div', {});
   function ozetCiz() {
-    const o = secme.ogeler();
+    const o = tumOgeler();
     const say = (t) => o.filter((x) => x.tur === t).length;
     yerlestir(ozetAlani, h('ul', { class: 'duz-liste kucuk' },
       h('li', {}, ikon('simsek'), `${say('dugme')} düğme`), h('li', {}, ikon('hedef'), `${say('sonuc')} sonuç, ${say('basari')} başarı, ${say('hata')} hata göstergesi`),
@@ -167,7 +171,7 @@ export async function taramaIsaretlemeAdimi(icerik, s) {
   devam.addEventListener('click', async () => {
     yerlestir(hataAlani);
     try {
-      await mesgulIken(devam, 'Uygulanıyor…', () => api('/platform/tarama/isaretle', { govde: { id: s.isId, ogeler: secme.ogeler(), reddedilenler: [...reddedilen] } }));
+      await mesgulIken(devam, 'Uygulanıyor…', () => api('/platform/tarama/isaretle', { govde: { id: s.isId, ogeler: tumOgeler(), reddedilenler: [...reddedilen], sayfadaSecilenler: secme.ogeler(), eylemSecimi: adaylar.secim() } }));
       await s.devam();
     } catch (e) {
       if (e.durum === 423) return;
@@ -195,7 +199,7 @@ export async function taramaIsaretlemeAdimi(icerik, s) {
         h('section', { class: 'kart', 'aria-labelledby': 'isaret-dugme' },
           h('div', { class: 'kart-basligi' }, h('h3', { id: 'isaret-dugme' }, ikon('hedef'), '2. Düğmeyi ve sonucu işaretle')),
           h('p', { class: 'soluk kucuk' }, 'Tarama düğmelere basmadığı için testin hangi düğmeye basacağını (ör. “Hesapla”) ve hangi sonucu kontrol edeceğini bilmez. “Sayfada seç” ile sayfayı açın, düğmeye ve sonuç yazısına tıklayarak seçin; seçiciyi Nöbetçi üretir.'),
-          secme.kart)),
+          adaylar.kart, secme.kart)),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Devam' },
         h('section', { class: 'kart form-paneli' }, h('h3', {}, 'Özet'), ozetAlani, hataAlani, devam,
           h('p', { class: 'soluk kucuk' }, 'Önizlemede modeli inceleyip kabul edene kadar hiçbir şey kaydedilmez.')))));

@@ -373,6 +373,15 @@ Ekran paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ek
    yoksa boş olmayan metin), başarı / hata göstergesi → `kosu.basariGostergesi` / `kosu.hataGostergesi`, alan →
    "Sayfada seçilen alanlar" bölümü; koşu tanımı eklenince model `semaSurumu: 2` olur. Akış diyagramında da "Listede
    olmayan alanı / düğmeyi elle ekle"nin (ileri düzey: CSS seçici) yanında aynı **Sayfada seç** vardır.
+   **Eylem adayları** (Sayfada seç'in üstünde, "Nöbetçi'nin önerileri"): tarama, hiçbir düğmeye basmadan sayfadaki izlerden
+   gönderim düğmesi (form içindeki submit güçlü; form dışında Hesapla / Gönder / Devam… gibi eylem metinli düğme olası;
+   onclick'li ya da Temizle / Geri gibi düğme tahmin; "kayıt oluşturabilir" ipucu), başarı mesajı (gizli `.alert-success`,
+   `role=status` / `aria-live`, gizli "…alındı / …başarılı / …hazır" metni), hata alanları (`.invalid-feedback` gibi grup
+   seçicisi + adet, `role=alert`, `aria-describedby`, `aria-invalid`), yönlendirme tahmini (form action, bağlantı; yalnız yol)
+   ve bekleme göstergesi (spinner, `role=progressbar`, `aria-busy`) adaylarını güven düzeyiyle çıkarır (`tarama/eylem-kesfi.mjs`,
+   `eylem-kesfi-motoru.ts > eylemAdaylariniCikar(page)`). Adaylar `GET …/isaretler` ve `GET …/paket` yanıtında
+   `eylemAdaylari` olarak döner, pakete / modele yazılmaz. Her türün en olası adayı işaretli gelir (başarı / hata yalnız
+   "tahmin" değilse); seçilen aday seçilen öğe gibi uygulanır. Sayfada seç ile aynı türde öğe seçilirse o öğe adayın yerine geçer.
 
 Üretilen paket:
 

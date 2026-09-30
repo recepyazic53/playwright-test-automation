@@ -96,6 +96,8 @@ export type ProfilEnvanteri = {
   /** base64 PNG (görünür alan). */
   ekranGoruntusu: string | null;
   notlar: string[];
+  /** Eylem ve doğrulama keşfi (basmadan; öneri — modele yazılmaz, "Düğmeyi ve sonucu işaretle"de seçenek olur). */
+  eylemAdaylari?: import('./eylem-kesfi.mjs').EylemAdaylari;
 };
 
 export type EngellenenIstek = { yontem: string; adres: string; asama: string; neden: 'yazma' | 'yasakli' | 'izinsiz-koken' | 'websocket' };

@@ -40,7 +40,8 @@
 // ekranId? / ekranAdi?, hedef (yoksa ekranın modelindeki adres), ogeTurleri? (ör. akış diyagramında düğme / alan / başarı). CANLI
 // ortamda canliOnay gerekir (uç denetimi). Sonuç iş durumunda "ogeler" (canlı liste; bitince doğrulanmış).
 //   GET  /platform/tarama/isaretler?id=  (tamamlanan TARAMA işi) "Düğmeyi ve sonucu işaretle" adımı: keşif bulguları (görünürlük
-//        koşulları, bağımlı listeler — onaya sunulur), işaretlenenler, öğe seçme için ortam / sayfa
+//        koşulları, bağımlı listeler — onaya sunulur), işaretlenenler, öğe seçme için ortam / sayfa, eylemAdaylari (basmadan çıkarılan
+//        gönderim / başarı / hata / yönlendirme / bekleme adayları; tarama/eylem-kesfi.mjs — öneri, pakete yazılmaz; …/paket de döner)
 //   POST /platform/tarama/isaretle { id, ogeler, reddedilenler }  seçilen öğeleri (düğme → aksiyon, sonuç → çıktı + başarı…) ve
 //        reddedilen bulguları taramanın İLK paketine uygular (tekrar uygulanabilir); paket doğrulanır (tarama/oge-isaretleri.mjs)
 // KEŞİF (tarama): varsayılan açık; CANLI ortamda keşif açıksa gövdede kesifCanliOnay: true gerekir (yoksa 409 KESIF_CANLI_ONAY).
@@ -83,6 +84,7 @@ import { EKRAN_ANAHTARI_DESENI, ortakAkisPaketineCevir, sayfaPaketiniDogrula } f
 import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
 import { OGE_TURLERI, kesifBulgulari, secilenOgeleriAyikla, taramaIsaretleriniUygula } from './oge-isaretleri.mjs';
+import { eylemAdaylariniAyikla } from './eylem-kesfi.mjs';
 import { akisEnvanteriMi, akisPaleti, akisTaslagi, akistanKayitEnvanteri, bloklariAyikla } from './akis-tasarimi.mjs';
 import { akisDuzenlenebilirMi, akisKaydet as ekranAkisiKaydet, akislariListele } from '../ekranlar/akis-servisi.mjs';
 import { ortakAkisBaslangicEkranlari } from '../ekranlar/ekran-servisi.mjs';
@@ -759,6 +761,8 @@ export function taramaYoneticisiOlustur(secenekler) {
       is.paket = paket;
       is.ozet = ozet;
       is.uyarilar = d.uyarilar;
+      // Eylem adayları (basmadan; öneri): adayı olan ilk profilinki. Pakete / modele yazılmaz.
+      is.eylemAdaylari = eylemAdaylariniAyikla(envanter.profiller.find((/** @type {Nesne} */ p) => nesneMi(p.eylemAdaylari))?.eylemAdaylari);
       is.adimlar.paket = { durum: 'tamam' };
       bitir(is, 'tamam');
     } catch (e) {
@@ -890,7 +894,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     return {
       bulgular: kesifBulgulari(model), kosuVar, ogeler: is.isaretler?.ogeler ?? [], reddedilenler: is.isaretler?.reddedilenler ?? [],
       ortam: is.ortam, hedefYol: is.hedefYol, girissiz: is.meta.girissiz === true, ekran: is.ekran, projeId: is.projeId, mod: is.mod,
-      baglamProfili: is.profiller.length === 1 && is.profiller[0].ad !== 'Varsayılan bağlam' ? is.profiller[0].ad : null, ozet: is.ozet
+      baglamProfili: is.profiller.length === 1 && is.profiller[0].ad !== 'Varsayılan bağlam' ? is.profiller[0].ad : null, ozet: is.ozet,
+      eylemAdaylari: is.eylemAdaylari ?? null, isaretlendi: Boolean(is.isaretler),
+      sayfadaSecilenler: is.isaretler?.sayfadaSecilenler ?? null, eylemSecimi: is.isaretler?.eylemSecimi ?? null
     };
   }
 
@@ -913,7 +919,12 @@ export function taramaYoneticisiOlustur(secenekler) {
     is.hamPaket = ham;
     is.paket = paket;
     is.uyarilar = d.uyarilar;
-    is.isaretler = { ogeler, reddedilenler };
+    // Arayüzün geri dönüşü için (pakete etkisi yok): "Sayfada seç" listesi ve eylem adaylarının seçimi ayrı saklanır.
+    const sayfadaSecilenler = Array.isArray(g.sayfadaSecilenler) ? secilenOgeleriAyikla(g.sayfadaSecilenler).ogeler : null;
+    const eylemSecimi = nesneMi(g.eylemSecimi) ? Object.fromEntries(['gonderim', 'basari', 'hata']
+      .map((t) => [t, typeof g.eylemSecimi[t] === 'string' ? g.eylemSecimi[t].slice(0, 600) : '']))
+      : null;
+    is.isaretler = { ogeler, reddedilenler, sayfadaSecilenler, eylemSecimi };
     is.isaretOzeti = ozet;
     return { isaretOzeti: ozet, ozet: is.ozet };
   }
@@ -1034,7 +1045,10 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (!is.paket) throw new TaramaHatasi('PAKET_YOK', 'Bu taramanın paketi yok (tarama bitmedi ya da başarısız oldu).', 409);
       // "Ne oluşturulsun? ○ Ortak akış": paket ortak akış paketine çevrilmiş verilir (önizleme / kabul "Ortak akışlar" altına yazar).
       const ortak = is.olusturulacak === 'ortakAkis';
-      return { paket: ortak ? ortakAkisPaketineCevir(is.paket) : is.paket, mod: is.mod, olusturulacak: ortak ? 'ortakAkis' : 'ekran', ekran: is.ekran, ozet: is.ozet };
+      return {
+        paket: ortak ? ortakAkisPaketineCevir(is.paket) : is.paket, mod: is.mod, olusturulacak: ortak ? 'ortakAkis' : 'ekran', ekran: is.ekran, ozet: is.ozet,
+        eylemAdaylari: is.eylemAdaylari ?? null
+      };
     },
     aktif: () => { temizle(); const c = calisan(); return c ? { id: c.id, ekran: c.ekran, projeId: c.projeId } : null; },
     iptal,

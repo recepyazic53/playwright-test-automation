@@ -62,7 +62,11 @@ export type TaramaYoneticisi = {
   secenekler(vt: Veritabani, projeId: string, ekranId: string | null): Record<string, unknown>;
   baslat(vt: Veritabani, govde: Record<string, unknown>, s: { sunucuAdresi: string }): { isId: string };
   durum(id: string): IsGorunumu;
-  paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
+  paket(id: string): {
+    paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'];
+    /** Eylem ve doğrulama keşfi (basmadan; öneri). Tarama dışı işlerde / eski sonuçta null. */
+    eylemAdaylari: import('./eylem-kesfi.mjs').EylemAdaylari | null;
+  };
   akis(id: string): {
     bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; paketHazir: boolean;
     projeId: string; akisaYazildi: { akisId: string; surum: number } | null; girissiz: boolean; ortakAkis: OrtakAkisKaydi | null;
@@ -80,6 +84,10 @@ export type TaramaYoneticisi = {
     bulgular: import('./oge-isaretleri.mjs').KesifBulgusu[]; kosuVar: boolean; ogeler: import('./oge-isaretleri.mjs').SecilenOge[]; reddedilenler: string[];
     ortam: IsGorunumu['ortam'] & { canli?: boolean }; hedefYol: string; girissiz: boolean; ekran: IsGorunumu['ekran']; projeId: string; mod: 'yeni' | 'analiz';
     baglamProfili: string | null; ozet: IsGorunumu['ozet'];
+    /** Eylem ve doğrulama keşfi (seçenek olarak sunulur); isaretlendi: işaretler daha önce uygulandı (geri dönüş). */
+    eylemAdaylari: import('./eylem-kesfi.mjs').EylemAdaylari | null; isaretlendi: boolean;
+    /** Geri dönüş: "Sayfada seç" listesi ve adayların seçimi (tür → aday anahtarı; '' = Hiçbiri); işaretlenmediyse null. */
+    sayfadaSecilenler: import('./oge-isaretleri.mjs').SecilenOge[] | null; eylemSecimi: Record<'gonderim' | 'basari' | 'hata', string> | null;
   };
   /** İşaretlenenleri ve reddedilen bulguları taramanın paketine uygular (paket doğrulanır). */
   isaretle(id: string, govde: Record<string, unknown>): { isaretOzeti: import('./oge-isaretleri.mjs').IsaretOzeti; ozet: IsGorunumu['ozet'] };
