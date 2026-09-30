@@ -241,9 +241,14 @@ function eklemeKutulari(s, secenek) {
   ].filter(Boolean);
   const duzen = kutular.length > 3 ? ' dortlu' : kutular.length === 2 ? ' ikili' : kutular.length === 1 ? ' tekli' : '';
   const izgara = h('div', { class: `ekleme-kutulari${duzen}` }, kutular);
-  if (!secenek.baslik) return h('div', { class: 'ekleme-secenekleri' }, izgara);
+  // Yeni ekranda Hızlı test sihirbazı (#/hizli-test): adres + izin; Nöbetçi adım adım sorarak ekranı ve senaryoyu birlikte kurar.
+  const hizli = !analiz && !ortakMi(s) && !yalnizYz && s.tara
+    ? h('p', { class: 'hizli-test-baglantisi' }, ikon('simsek'), 'Ya da: ', h('a', { href: '#/hizli-test' }, 'Hızlı test'),
+      ' — adresi verin; Nöbetçi alanları bulur, eksik veriyi sorar, düğmelere yalnız izin verdiğiniz kadar basar, ekranı ve senaryoyu birlikte kaydeder.')
+    : null;
+  if (!secenek.baslik) return h('div', { class: 'ekleme-secenekleri' }, izgara, hizli);
   return h('section', { class: 'ekleme-secenekleri', 'aria-labelledby': 'ekleme-secenekleri-baslik' },
-    h('h3', { id: 'ekleme-secenekleri-baslik', class: 'ara-baslik' }, secenek.baslik), izgara);
+    h('h3', { id: 'ekleme-secenekleri-baslik', class: 'ara-baslik' }, secenek.baslik), izgara, hizli);
 }
 
 /**

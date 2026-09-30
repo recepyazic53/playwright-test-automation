@@ -75,7 +75,7 @@ test.beforeAll(async () => {
   vt.kapat();
   cdpPortu = await bosPort();
   nobetci = await nobetciBaslat(klasor, vtYolu, {
-    NOBETCI_KAYIT_BASSIZ: '1', NOBETCI_KAYIT_CDP_PORTU: String(cdpPortu), NOBETCI_TARAMA_IZINLI_KOKENLER: fikstur.adres, NOBETCI_KAYIT_ZAMAN_ASIMI_SN: '300'
+    NOBETCI_KAYIT_BASSIZ: '1', NOBETCI_KAYIT_CDP_PORTU: String(cdpPortu), NOBETCI_TARAMA_IZINLI_KOKENLER: fikstur.adres, NOBETCI_KAYIT_ZAMAN_ASIMI_SN: '300', NOBETCI_REHBER_OTOMATIK: '0'
   });
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Hızlı Test Projesi' })).proje as Nesne).id);
@@ -423,5 +423,102 @@ test('düzenleme kipi (aynı ekran): yeni model sürümü; kaydetmeden önce far
   const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — bireysel', onay: true });
   expect(k).toMatchObject({ kaydedildi: true, ekranId: kayitli?.ekranId });
   expect(((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum).toBe(Number(surumOnce) + 1);
+  await isBitsin();
+});
+
+/** Sayfa yatay kaymıyor. */
+const tasma = (page: Page): Promise<number> => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+/** 1440 ve 390 px'te taşma yok. */
+async function tasmaYok(page: Page, ad: string): Promise<void> {
+  for (const genislik of [1440, 390]) {
+    await page.setViewportSize({ width: genislik, height: 900 });
+    await page.waitForTimeout(150);
+    expect(await tasma(page), `${ad} ${genislik}px`).toBeLessThanOrEqual(0);
+    // HIZLI_TEST_EKRAN_KLASORU verilirse görüntüler oraya yazılır (inceleme için; üründe yok).
+    if (process.env.HIZLI_TEST_EKRAN_KLASORU) await page.screenshot({ path: join(process.env.HIZLI_TEST_EKRAN_KLASORU, `${ad}-${genislik}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI onayı, Doldur, Şimdi ne yapayım, bitiş etiketleri, doğrulama sorusu, kaydet); 1440 / 390 px taşma yok', async () => {
+  test.setTimeout(300_000);
+  await isBitsin();
+  const tarayici = await korumaliTarayici();
+  try {
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/sonuclar');
+    // Gelişmiş modda Oluştur menüsünden.
+    await page.getByRole('button', { name: 'Oluştur menüsü' }).click();
+    await page.getByRole('menuitem', { name: /Hızlı test/ }).click();
+    await expect(page).toHaveURL(/#\/hizli-test$/);
+    await expect(page.getByRole('heading', { name: 'Hızlı test', exact: true })).toBeVisible();
+    const form = page.locator('form.hizli-baslat');
+    await tasmaYok(page, 'Başlat');
+    // İzin seçilmeden başlamaz.
+    await form.getByLabel('Testin adı').fill('Arayüz başvurusu');
+    await form.getByLabel('Sayfa adresi').fill('/basvuru/');
+    await form.getByRole('button', { name: 'Başlat' }).click();
+    await expect(form.getByRole('alert')).toHaveText('Nöbetçi’nin düğmelere basıp basamayacağını seçin.');
+    // CANLI ortam: bir kez onay; Vazgeç → istek yok.
+    const once = uygulama.istekler.length;
+    await form.getByLabel('Ortam', { exact: true }).selectOption({ label: 'Canlı kopya — CANLI ortam' });
+    await form.getByRole('radio', { name: /^Evet/ }).check();
+    await form.getByRole('button', { name: 'Başlat' }).click();
+    const onay = page.locator('dialog[open]');
+    await expect(onay).toContainText('CANLI ortamda düğmelere basılacak, kayıt oluşabilir.');
+    await onay.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(page).toHaveURL(/#\/hizli-test$/);
+    expect(uygulama.istekler.length).toBe(once);
+    await form.getByLabel('Ortam', { exact: true }).selectOption({ label: 'Deneme' });
+    await form.getByLabel(/Ne yapılsın/).fill('Hesapla\'ya bas, "Başvurunuz alındı" görünsün');
+    await form.getByRole('button', { name: 'Başlat' }).click();
+    await expect(page).toHaveURL(/#\/hizli-test\/o\//);
+    // Veri durağı: Doldur (tablodan) + elle.
+    const soru = page.locator('.hizli-soru');
+    await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 60_000 });
+    await tasmaYok(page, 'Veri durağı');
+    const adAlani = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
+    await adAlani.getByRole('button', { name: 'Doldur', exact: true }).click();
+    await expect(adAlani.locator('.hizli-tablo-degeri')).toHaveText('${Kişi.Ad soyad}');
+    await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
+    await soru.getByRole('button', { name: 'Devam et' }).click();
+    // Evet + cümlede "Hesapla": basılır; yeni alan için veri durağı.
+    await expect(soru.getByRole('heading', { name: 'Adım 2: veri gerekli' })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.hizli-yan img.hizli-goruntu')).toBeVisible();
+    await soru.getByLabel('Ödeme şekli').selectOption('havale');
+    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
+    await expect(soru.locator('.hizli-fark')).toContainText('Tutar: 1.250,00 TL');
+    await expect(soru.getByLabel('Basılacak düğme')).toHaveValue(/Onayla/);
+    await tasmaYok(page, 'Şimdi ne yapayım');
+    await soru.getByRole('button', { name: 'Uygula' }).click();
+    await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
+    await expect(soru.locator('.hizli-fark')).toContainText('Başvurunuz alındı');
+    await expect(soru.getByRole('radio', { name: /Burada bitir/ })).toBeChecked();
+    await soru.getByRole('button', { name: 'Uygula' }).click();
+    // Bitiş koşulu: varsayılan etiketler.
+    await expect(soru.getByRole('heading', { name: 'Bitiş koşulu: ne görülünce biter?' })).toBeVisible();
+    const satir = (m: string) => soru.locator('.hizli-bitis-satiri').filter({ hasText: m });
+    await expect(satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' })).toHaveAttribute('aria-checked', 'true');
+    await expect(satir('Hesaplanıyor…').getByRole('radio', { name: 'Devam' })).toHaveAttribute('aria-checked', 'true');
+    await tasmaYok(page, 'Bitiş koşulu');
+    await soru.getByRole('button', { name: 'Devam et' }).click();
+    // Kaydet: H3 sorusu.
+    await expect(soru.getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible();
+    await expect(soru).toContainText('Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı?');
+    await tasmaYok(page, 'Kaydet');
+    await soru.getByRole('button', { name: 'Hayır, kaydet' }).click();
+    await expect(page.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.hizli-hazirlik li.eksik')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Akış diyagramında aç' })).toBeVisible();
+    await tasmaYok(page, 'Kaydedildi');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  } finally {
+    await tarayici.close();
+  }
   await isBitsin();
 });

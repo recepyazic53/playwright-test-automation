@@ -17,6 +17,19 @@ export const BASIT_MOD_REHBERLERI = {
       { baslik: 'Yeni test', hedef: '.yeni-test-dugmesi', metin: '"Yeni test" yeni bir ekranı test etmeye başlatır: sayfanın adresini verirsiniz, alanları Nöbetçi bulur.' }
     ]
   },
+  'hizli-test': {
+    baslik: 'Hızlı test',
+    adimlar: [
+      {
+        baslik: 'Hızlı test',
+        metin: ['Sayfanın adresini verin; Nöbetçi alanları bulur, eksik veriyi size sorar ve testi sizinle birlikte kurar. Altı durak vardır: Başlat, Keşfet, Veri durağı, Adım adım, Bitiş koşulu, Kaydet.',
+          'Değer uydurulmaz: her alanı siz yazarsınız ya da “Doldur” ile test verisi tablosundan seçersiniz.']
+      },
+      { baslik: 'Düğmelere basma izni', hedef: '.hizli-izinler', metin: '“Evet”: gereken düğmelere basar, birden çok aday varsa sorar. “Bana sor”: her basıştan önce onay ister. “Hayır”: hiç basmaz; düğmeyi ve mesajı siz seçersiniz, test “doğrulanmadı” kaydedilir. CANLI ortamda bir kez ayrıca onay istenir.' },
+      { baslik: 'Adım adım', hedef: '.hizli-duraklar', metin: 'Her basıştan sonra sayfada ne değiştiği gösterilir (yeni metinler, alanlar, düğmeler). “Şimdi ne yapayım?” sorusuyla bitirir ya da sonraki düğmeye geçersiniz; zincir istediğiniz kadar uzar.' },
+      { baslik: 'Bitiş koşulu', metin: 'Görülen metinlerin her biri Bitti, Devam ya da Hata etiketlenir. Koşuda Bitti görülünce test başarılı, Hata görülünce başarısız biter; hiçbiri görünmezse “Bitiş mesajı görülmedi”.' }
+    ]
+  },
   'basit-sonuclar': {
     baslik: 'Sonuçlar',
     adimlar: [

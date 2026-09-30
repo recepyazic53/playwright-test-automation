@@ -451,6 +451,9 @@ const ARAYUZ_DOSYALARI = new Map([
   // Doldur (boş alanın değeri yalnız tablodan; değer üretilmez): saf eşleme sunucu testleriyle ORTAK + bileşen.
   ['/arayuz/doldur-onerisi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'doldur-onerisi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/doldur.js', { dosya: 'doldur.js', tur: 'text/javascript; charset=utf-8' }],
+  // Hızlı test sihirbazı (v1.5; #/hizli-test): sayfa ve kendi stil dosyası.
+  ['/arayuz/hizli-test.js', { dosya: 'hizli-test.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-hizli-test.css', { dosya: 'stil-hizli-test.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.
   ['/arayuz/ekran-modeli-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'ekran-modeli-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],

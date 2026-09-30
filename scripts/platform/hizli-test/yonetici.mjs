@@ -188,6 +188,7 @@ export function hizliTestYoneticisiOlustur(s) {
       o.sonAnlik = anlik;
       o.sonGoruntu = anlik.goruntu ?? null;
       o.baslik = anlik.baslik ?? '';
+      o.calisiyor = null;
       const adim = { alanlar: [], bas: null, okumalar: [{ gorunen: anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar), secimler: {} }] };
       o.adimlar = [adim];
       for (const a of anlik.alanlar.filter(doldurulabilir)) alanEkle(o, a, adim, false);
@@ -266,6 +267,8 @@ export function hizliTestYoneticisiOlustur(s) {
       return;
     }
     if (e.olay === 'secimIptal') { o.durum = 'karar'; return; }
+    // Sayfayı yeniden okuma (seçimden vazgeçince de gönderilir): adaylar tazelenir.
+    if (e.olay === 'okundu') { o.sonAnlik = e.anlik; o.sonGoruntu = e.anlik.goruntu ?? o.sonGoruntu; o.durum = 'karar'; return; }
     if (e.olay === 'dogrulandi') {
       o.dogrulama = { durum: e.sonuc, mesaj: String(e.mesaj ?? ''), gorulen: Array.isArray(e.gorulen) ? e.gorulen.slice(0, 20) : [] };
       gunluk(o, `Doğrulama koşusu: ${e.sonuc === 'basarili' ? 'başarılı' : 'başarısız'} — ${o.dogrulama.mesaj}`);
@@ -310,7 +313,14 @@ export function hizliTestYoneticisiOlustur(s) {
     /** @type {Nesne | null} */
     let soru = null;
     if (o.durum === 'veri' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null };
-    else if (o.durum === 'karar') soru = { tur: 'karar', adaylar, oneri: tekAday(adaylar, o.cumle.dugmeler)?.secici ?? adaylar.find((/** @type {Nesne} */ x) => x.enOlasi)?.secici ?? null, bitirilebilir: o.basisNo > 0 };
+    else if (o.durum === 'karar') {
+      // Öneri: son basışta beliren düğme (zincirin devamı), yoksa cümlenin adını verdiği / tek aday, yoksa en olası aday.
+      const yeniDugme = (o.sonFark?.yeniDugmeler ?? []).find((/** @type {Nesne} */ d) => adaylar.some((/** @type {Nesne} */ x) => x.secici === d.secici));
+      soru = {
+        tur: 'karar', adaylar, bitirilebilir: o.basisNo > 0,
+        oneri: yeniDugme?.secici ?? tekAday(adaylar, o.cumle.dugmeler)?.secici ?? adaylar.find((/** @type {Nesne} */ x) => x.enOlasi)?.secici ?? null
+      };
+    }
     else if (o.durum === 'onay') soru = { tur: 'onay', dugme: o.onayBekleyen };
     else if (o.durum === 'hataSorusu') soru = { tur: 'hata', metinler: o.hataSorusu?.metinler ?? [] };
     else if (o.durum === 'secim') soru = { tur: 'secim' };
@@ -363,7 +373,11 @@ export function hizliTestYoneticisiOlustur(s) {
       ekran = { id: e.id, ad: e.ad, urlYolu: m && nesneMi(m.model) && typeof m.model.ekranUrl === 'string' ? m.model.ekranUrl : null };
     }
     const suren = [...oturumlar.values()].find((x) => x.projeId === projeId && !['kaydedildi', 'iptal', 'hata'].includes(x.durum));
-    return { ortamlar, ekran, surenOturum: suren ? { id: suren.id, ekranAdi: suren.ekran.ad } : null };
+    return {
+      ortamlar, ekran, surenOturum: suren ? { id: suren.id, ekranAdi: suren.ekran.ad } : null,
+      // CANLI ortamda bir kez sorulan onayın metni (izne göre; tek kaynak: akis.mjs).
+      canliOnayMetinleri: Object.fromEntries(IZINLER.map((i) => [i, canliOnayMetni(i)]))
+    };
   }
 
   /** @param {Veritabani} vt @param {Nesne} g @param {{ sunucuAdresi: string }} baglam */
@@ -494,6 +508,14 @@ export function hizliTestYoneticisiOlustur(s) {
       o.basisNo = 1;
       o.etiketler = Object.fromEntries(adayMetinleri.map((x) => [x.metin, secilen.includes(x) ? 'bitti' : x.tur === 'hata' ? 'hata' : x.tur === 'bekleme' ? 'devam' : null]));
       o.durum = 'bitis';
+      return { tamam: true };
+    }
+    // Sayfada seçmekten vazgeç: şerit kapanır, sayfa yeniden okunur (motor seçimi iptal edip okur).
+    if (k === 'vazgec') {
+      durumda(o, ['secim']);
+      o.durum = 'calisiyor';
+      o.calisiyor = 'Seçim kapatılıyor…';
+      gonder(o, { tur: 'oku' });
       return { tamam: true };
     }
     durumda(o, ['karar']);

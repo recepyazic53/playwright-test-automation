@@ -1,5 +1,5 @@
 // TESTLERİM (#/testlerim; Basit mod) — bir satır = bir ekran (ortak akışlar ve alt modeller listelenmez), altındaki senaryolar
-// "N değişken". Satırda son sonuç rozeti, ▷ (o testi çalıştır), ⋯ (Düzenle → ekranın senaryo sayfası, Değişken ekle, Sil — onaylı).
+// "N değişken". Satırda son sonuç rozeti, ▷ (o testi çalıştır), ⋯ (Düzenle → Hızlı test sihirbazının düzenleme kipi, Değişken ekle, Sil — onaylı).
 // Hazırlık bilgisi (sunucu: senaryolar/hazirlik-servisi.mjs; liste ucu ortam başına çalıştırılabilirlik taşır) varsa "Eksik" rozeti,
 // gerekçe cümlesi ve "Tamamla" (senaryo formu). Servis testleri ve uçtan uca akışlar Basit modda listelenmez: sayıları not olarak
 // ve "Gelişmiş'te göster" bağlantısıyla görünür. Boş durumda beş adımlık şerit + "İlk testi oluştur".
@@ -184,7 +184,8 @@ export async function testlerimEkrani(icerik, baglam) {
     const kapat = () => { menu.hidden = true; dugme.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', disari, true); };
     const oge = (ikonAd, metin, fn) => h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); fn(); } }, ikon(ikonAd), metin);
     const menu = h('div', { class: 'acilir-menu test-menusu', role: 'menu', hidden: true, 'aria-label': `${e.ad} işlemleri` },
-      oge('duzenle', 'Düzenle', () => { location.hash = `#/senaryolar/u/${encodeURIComponent(e.id)}`; }),
+      // Düzenle: Hızlı test sihirbazının düzenleme kipi (ekranın adresiyle başlar; kayıt yeni model sürümü, farklar onaya).
+      oge('duzenle', 'Düzenle', () => { location.hash = `#/hizli-test/duzenle/${encodeURIComponent(e.id)}`; }),
       oge('arti', 'Değişken ekle', () => { location.hash = `#/senaryolar/yeni/${encodeURIComponent(e.id)}`; }),
       oge('cop', 'Sil', async () => {
         const { silDiyalogu } = await import('./ekran-yonetimi.js');

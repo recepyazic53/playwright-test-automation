@@ -1,8 +1,8 @@
 // BASİT MOD — kabuğun (uygulama.js) Basit / Gelişmiş parçaları. Mod çalışma alanının ayarıdır (sunucu: ayarlar/kullanim-modu.mjs;
 // kayıt yoksa Gelişmiş). Gelişmiş = bugünkü arayüz; Basit modda üst menü yalnız Testlerim · Sonuçlar · Ayarlar, "Oluştur" yerine
 // "+ Yeni test". Hiçbir veri gizlenmez ya da silinmez: Gelişmiş'e ait bir adres Basit modda da açılır, üstte not görünür.
-//   Sayfalar: #/testlerim (testlerim.js), #/basit-sonuclar[/kosu/<id>] (basit-sonuclar.js), #/hizli-test (yer tutucu: yeni testi
-//   bugünkü "Ekran ekle > Ekranı tara" yolundan oluşturur).
+//   Sayfalar: #/testlerim (testlerim.js), #/basit-sonuclar[/kosu/<id>] (basit-sonuclar.js), #/hizli-test (Hızlı test sihirbazı:
+//   hizli-test.js; Gelişmiş modda da açılır — Oluştur menüsü ve Ekran ekle sayfası).
 //   Geçiş: Basit → Gelişmiş ilk seferde açıklamalı onayla (bir kez; işaret kasada), Gelişmiş → Basit sorusuz. Kaydedilmemiş
 //   değişiklik varsa önce çıkış onayı sorulur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
@@ -47,7 +47,8 @@ export function gecisAdresi(hedef, hash) {
   if (hedef === 'basit') return BASIT_SAYFALAR.includes(bolum) ? hash : '#/testlerim';
   if (bolum === 'testlerim') return '#/senaryolar';
   if (bolum === 'basit-sonuclar') return '#/sonuclar/ozet';
-  if (bolum === 'hizli-test') return '#/ekranlar/yeni/tara';
+  // Hızlı test sihirbazı iki modda da aynıdır: yerinde kalır (süren sihirbaz kesilmez).
+  if (bolum === 'hizli-test') return hash;
   return hash || modunAnaSayfasi(hedef);
 }
 
@@ -136,34 +137,15 @@ export function basitSayfaEkrani(main, bolum, parcalar, baglam) {
     if (e && e.durum === 423) return;
     icerik.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, `${baslik} yüklenemedi (${e && e.message ? e.message : String(e)}). Sunucuyu yeniden başlatın (npm run baslat).`));
   };
-  if (bolum === 'hizli-test') { yeniTestSayfasi(icerik); return; }
+  if (bolum === 'hizli-test') {
+    import('./hizli-test.js').then((m) => m.hizliTestEkrani(icerik, parcalar, baglam)).catch(hata);
+    return;
+  }
   if (bolum === 'basit-sonuclar') {
     import('./basit-sonuclar.js').then((m) => m.basitSonuclarEkrani(icerik, parcalar, baglam)).catch(hata);
     return;
   }
   import('./testlerim.js').then((m) => m.testlerimEkrani(icerik, baglam)).catch(hata);
-}
-
-/**
- * "+ Yeni test" (#/hizli-test): Hızlı test sihirbazı gelene kadar yeni test bugünkü yoldan oluşturulur — Ekran ekle > Ekranı tara
- * (Nöbetçi sayfayı okur, alanları bulur), sonra değişkenler (senaryolar) eklenir. @param {HTMLElement} icerik
- */
-function yeniTestSayfasi(icerik) {
-  icerik.replaceChildren(
-    h('div', { class: 'sayfa-basligi' }, h('div', {},
-      h('h2', { id: 'bolum-basligi', tabindex: '-1' }, 'Yeni test'),
-      h('p', { class: 'soluk' }, 'Test etmek istediğiniz sayfanın adresini verin; alanları Nöbetçi bulur, eksik kalanları size sorar.'))),
-    h('div', { class: 'kart yeni-test-karti' },
-      adimSeridi(1),
-      h('ol', { class: 'yeni-test-yolu' },
-        h('li', {}, h('b', {}, 'Ekranı tara: '), 'sayfanın adresini yazın; Nöbetçi sayfayı açar, alanları ve düğmeleri bulur.'),
-        h('li', {}, h('b', {}, 'Eksikleri tamamlayın: '), 'Nöbetçi\'nin emin olamadığı yerleri (ör. gönderme düğmesi, başarı mesajı) siz işaretlersiniz.'),
-        h('li', {}, h('b', {}, 'Değişken ekleyin: '), 'testin hangi değerlerle deneneceğini yazın; her değişken ayrı denenir.'),
-        h('li', {}, h('b', {}, 'Çalıştırın: '), 'Testlerim\'de ▷ ya da "Hepsini çalıştır"; sonucu Sonuçlar\'da görürsünüz.')),
-      h('div', { class: 'dugmeler' },
-        h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni/tara' }, ikon('ara'), 'Ekranı tara'),
-        h('a', { class: 'dugme hayalet', href: '#/testlerim' }, ikon('geri'), 'Testlerim\'e dön')),
-      h('p', { class: 'soluk kucuk' }, 'Ekranı tara sayfası Gelişmiş moda aittir; açıldığında üstte bir not görünür, Basit modda kalırsınız.')));
 }
 
 /**
