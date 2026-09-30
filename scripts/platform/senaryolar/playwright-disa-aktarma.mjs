@@ -278,6 +278,26 @@ async function secimYap(page: Page, l: Locator, deger: string, metin: string, ge
   await page.getByText(metin, { exact: true }).filter({ visible: true }).first().click();
 }`
   },
+  yenidenSec: {
+    kod: `/**
+ * Sonraki bir alanın sorgusu / sayfanın yeniden çizimi açılır listeyi ilk seçeneğine ("SEÇİNİZ") döndürmüş olabilir: değeri artık
+ * istenen değer değilse bir kez yeniden seçilir (Nöbetçi koşucusuyla aynı kural). Liste görünmüyorsa dokunulmaz.
+ */
+async function yenidenSec(page: Page, secici: string, deger: string, metin: string, cerceve: string[] = []): Promise<void> {
+  let k: Page | FrameLocator = page;
+  for (const c of cerceve) k = k.frameLocator(c);
+  const l = k.locator(secici).filter({ visible: true }).first();
+  const simdi = await l.evaluate((e) => (e instanceof HTMLSelectElement ? { deger: e.value, metin: (e.selectedOptions[0]?.text ?? '').trim() } : null), undefined, { timeout: 2_000 }).catch(() => null);
+  if (!simdi || simdi.deger === deger || simdi.metin === metin) return;
+  const baslangic = Date.now();
+  try {
+    await l.selectOption({ value: deger }, { timeout: 5_000 });
+  } catch {
+    await l.selectOption({ label: metin }, { timeout: 5_000 });
+  }
+  await arkaPlanBekle(page, baslangic);
+}`
+  },
   degerJs: {
     kod: `/** Değer betikle yazılır (gizli ya da özel çizimli alanlar); input / change olayları tetiklenir. */
 async function degerJsIleYaz(l: Locator, deger: string, metin: string): Promise<void> {
@@ -366,7 +386,7 @@ function totpKodu(anahtar: string, zaman = Date.now()): string {
 }`
   }
 };
-const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge', 'okluSec', 'secimYap', 'degerJs', 'zorla', 'doluBekle', 'maske', 'regexKacis', 'goreliTarih', 'totp'];
+const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge', 'okluSec', 'secimYap', 'yenidenSec', 'degerJs', 'zorla', 'doluBekle', 'maske', 'regexKacis', 'goreliTarih', 'totp'];
 
 // ---------------------------------------------------------------------------------------
 // Üretici
@@ -911,6 +931,20 @@ export function playwrightKoduUret(g) {
       const gizli = gizliNedeni(a);
       govde.push(`${ic}// ${yorum(a.etiket)} (${yorum(a.doldurucu ?? a.tip)})${gizli ? ` — değer ortam değişkeninden (${gizli})` : ''}`);
       govde.push(`${ic}await alan(page, ${s(a.secici)}, ${etiket}, async (l) => {`, ...doldurmaSatirlari(a, adim.baslik), `${ic}}${ek});`);
+    }
+    // Alanlar bittikten sonra: sonraki alanın sorgusu açılır listeyi sıfırladıysa ("SEÇİNİZ") liste bir kez yeniden seçilir
+    // (Nöbetçi koşucusu model-kosucu.ts ile aynı davranış; metin alanlarındaki yeniden doldurmanın liste karşılığı).
+    const secimler = adim.alanlar.filter((a) => a.tip === 'secim' && !a.atla && !a.yalnizTus && !a.yalnizGorunurluk
+      && a.doldurucu !== 'degerJs' && a.doldurucu !== 'ozelSecim');
+    if (secimler.length) {
+      yardimcilar.add('yenidenSec');
+      govde.push(`${ic}// Sonraki alanların sorgusu açılır listeyi sıfırlamış olabilir: seçili değer istenen değilse bir kez yeniden seçilir.`);
+      for (const a of secimler) {
+        const cerceve = a.cerceve?.length ? `, [${a.cerceve.map(s).join(', ')}]` : '';
+        if (gizliNedeni(a)) { const v = degerIfadesi(a).ifade; govde.push(`${ic}await yenidenSec(page, ${s(a.secici)}, ${v}, ${v}${cerceve});`); continue; }
+        const sb = secenekBul(a.secenekler, a.deger);
+        govde.push(`${ic}await yenidenSec(page, ${s(a.secici)}, ${s(sb?.deger ?? a.deger)}, ${s(sb?.metin ?? a.deger)}${cerceve});`);
+      }
     }
     govde.push(...aksiyonSatirlari(adim.kosu, sureSn));
     govde.push(...sonucSatirlari(adim));
