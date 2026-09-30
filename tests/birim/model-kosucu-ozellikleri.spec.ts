@@ -352,6 +352,11 @@ test('Dene (model senaryosu): kaydedilmemiş taslak koşar; senaryo yazılmaz; a
   expect(d2.durum, JSON.stringify(d2.hataMesaji)).toBe('passed');
   expect(uygulama.onaylar.length).toBe(onayOnce + 1);
   expect(await say()).toBe(once);
+  // Dene koşuları koşu geçmişinde "deneme" işaretli (arayüzde varsayılan gizli).
+  const gecmis = (await api(`/platform/sonuclar/ozet?projeId=${projeId}`)).kosuGecmisi as Nesne[];
+  const denemeler = gecmis.filter((k) => k.denemeKosusu === true);
+  expect(denemeler.length).toBeGreaterThanOrEqual(2);
+  expect(denemeler.every((k) => k.tur === 'tekil')).toBe(true);
   // Geçersiz taslak (zorunlu ürün yok): koşmadan doğrulama hatası.
   const hatali = await api('/platform/senaryo/dene', { projeId, ekranId, ortamId, kosuId: `kosu-${randomUUID()}`, veri: { kategori: 'K1' } });
   expect(hatali.basarili).toBe(false);

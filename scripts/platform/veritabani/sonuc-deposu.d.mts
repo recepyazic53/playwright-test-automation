@@ -50,6 +50,8 @@ export interface SonucDetayi {
 }
 export interface KosuGecmisiSatiri extends Sayilar {
   id: string; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; urunSayisi: number;
+  /** Senaryo formundaki "Dene" koşusu (koşu geçmişinde varsayılan gizli; kartlar / trend tam koşulardan). */
+  denemeKosusu: boolean;
 }
 export interface KartOzeti extends Sayilar { kosuId?: string; z?: number; kapsam?: string | null }
 
@@ -57,14 +59,16 @@ export declare const SONUC_DURUMLARI: readonly SonucDurumu[];
 export declare const KOSU_DURUMLARI: readonly string[];
 export declare const MEDYA_TURLERI: readonly string[];
 export declare function kosuKaydet(vt: Veritabani, girdi: { id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null;
-  uygulamaSurumu?: string | null }): string;
+  uygulamaSurumu?: string | null; denemeKosusu?: boolean }): string;
+/** Koşu "Dene" koşusu mu (ozet_json.denemeKosusu)? */
+export declare function denemeKosusuMu(ozetJson: unknown): boolean;
 /** Koşu özetindeki uygulama sürümü etiketi (ozet_json.uygulamaSurumu; yoksa null). */
 export declare function uygulamaSurumuOku(ozetJson: unknown): string | null;
 export declare function kosuyuBitir(vt: Veritabani, id: string, girdi: { durum: string; bitis?: string }): void;
 export declare function sonucKaydet(vt: Veritabani, g: SonucGirdisi): { id: string; silinecekMedyaDosyalari: string[] };
 export declare function kosulariHesapIcinOku(vt: Veritabani, projeId: string): Array<{
   id: string; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; ortamId: string | null;
-  z: number; urunler: Record<string, Sayilar>;
+  z: number; urunler: Record<string, Sayilar>; denemeKosusu: boolean;
 }>;
 export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { urun?: string | null; baslangic?: string | null; bitis?: string | null }): {
   ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number; ekranDurumu: string | null; ortakAkis: boolean; son: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number } | null }>;
@@ -75,7 +79,7 @@ export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { ur
   kosuGecmisi: KosuGecmisiSatiri[];
 };
 export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
-  kosu: Sayilar & { id: string; projeId: string | null; ortamId: string | null; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string;
+  kosu: Sayilar & { id: string; projeId: string | null; ortamId: string | null; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; denemeKosusu: boolean;
     tekrarKaynagi: { id: string; baslangic: string | null; bitis: string | null; var: boolean } | null; tekrarlar: Array<{ id: string; baslangic: string; bitis: string | null; durum: string }> };
   sonuclar: Array<{
     id: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; durum: string; hamDurum: string | null; sureMs: number | null;

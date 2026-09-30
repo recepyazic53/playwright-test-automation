@@ -1174,7 +1174,8 @@ platformKosucusunuAyarla({
     const denemeYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}model-${Date.now()}-${randomBytes(6).toString('hex')}.json`);
     try {
       writeFileSync(denemeYolu, JSON.stringify(istek.denemeSenaryosu), { encoding: 'utf-8', mode: 0o600 });
-      const ekOrtamDegiskenleri = { TEST_SUNUCU_MODEL_DENEME_DOSYASI: denemeYolu };
+      // TEST_SUNUCU_DENEME: raporlayıcı koşuyu "Dene" koşusu olarak işaretler (koşu geçmişinde varsayılan gizli).
+      const ekOrtamDegiskenleri = { TEST_SUNUCU_MODEL_DENEME_DOSYASI: denemeYolu, TEST_SUNUCU_DENEME: '1' };
       const liste = await senaryolariListele(istek.ortam, [], undefined, ekOrtamDegiskenleri, istek.genel);
       const eslesen = liste.filter((s) => s.dosya === istek.dosya && Array.isArray(s.etiketler) && s.etiketler.includes(istek.etiket));
       if (eslesen.length !== 1) {
