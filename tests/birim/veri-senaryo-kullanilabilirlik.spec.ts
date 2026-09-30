@@ -376,6 +376,15 @@ test.describe('arayüz ve koşu (127.0.0.1)', () => {
     // Yatay kaydırma: kap kayar, ekle düğmeleri kabın görünen alanında (kesilmez).
     const kap = duz.locator('.veri-tablosu-kap');
     expect(await kap.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+    // Kaydırma ipucu: sağ kenarda gölge + "N sütundan M'si tam görünüyor"; sona kaydırınca sol gölge, sağ gölge yok.
+    const sarmal = duz.locator('.yatay-kaydirma-sarmali');
+    await expect(sarmal.locator('.kaydirma-bilgisi')).toHaveText(/^5 sütundan \d tanesi tam görünüyor · diğerleri için yana kaydırın$/);
+    await expect(sarmal).toHaveClass(/sag-tasma/);
+    await expect(sarmal).not.toHaveClass(/sol-tasma/);
+    await kap.evaluate((e) => { e.scrollLeft = e.scrollWidth; });
+    await expect(sarmal).toHaveClass(/sol-tasma/);
+    await expect(sarmal).not.toHaveClass(/sag-tasma/);
+    await kap.evaluate((e) => { e.scrollLeft = 0; });
     const ekle = duz.locator('th.ekle-sutunu');
     for (const ad of ['Sütun', 'Satır']) {
       const d = ekle.getByRole('button', { name: ad, exact: true });

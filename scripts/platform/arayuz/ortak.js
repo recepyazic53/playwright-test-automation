@@ -717,6 +717,40 @@ export function bolumAciklamalariniSimgeye(kap) {
   uygula();
 }
 
+/**
+ * Yana kaydırılan kap (geniş tablo) için ipucu: taşan kenarda gölge (sol / sağ; kaydırdıkça güncellenir) ve altta "N sütundan M'si
+ * görünüyor · yana kaydırın" satırı. Kap bir sarmalın içine alınır; sarmal döner. Taşma yoksa ipucu görünmez.
+ * @param {HTMLElement} kap overflow-x: auto olan kap @param {{ sutunSecici?: string }} [secenek] sayılacak sütun başlıkları
+ * @returns {HTMLElement}
+ */
+export function yatayKaydirmaIpucu(kap, secenek = {}) {
+  const bilgi = h('div', { class: 'kaydirma-bilgisi kucuk soluk', role: 'status', hidden: true });
+  const sarmal = h('div', { class: 'yatay-kaydirma-sarmali' }, kap, bilgi);
+  let bekleyen = 0;
+  const guncelle = () => {
+    const fazla = kap.scrollWidth - kap.clientWidth;
+    const tasiyor = fazla > 2;
+    sarmal.classList.toggle('sol-tasma', tasiyor && kap.scrollLeft > 2);
+    sarmal.classList.toggle('sag-tasma', tasiyor && kap.scrollLeft < fazla - 2);
+    if (!tasiyor) { bilgi.hidden = true; return; }
+    const k = kap.getBoundingClientRect();
+    const sutunlar = secenek.sutunSecici ? [...kap.querySelectorAll(secenek.sutunSecici)] : [];
+    const gorunen = sutunlar.filter((s) => { const r = s.getBoundingClientRect(); return r.left >= k.left - 1 && r.right <= k.right + 1; }).length;
+    bilgi.hidden = false;
+    bilgi.textContent = sutunlar.length ? `${sutunlar.length} sütundan ${gorunen} tanesi tam görünüyor · diğerleri için yana kaydırın` : 'Tablo yana kaydırılabilir';
+  };
+  const planla = () => { cancelAnimationFrame(bekleyen); bekleyen = requestAnimationFrame(guncelle); };
+  kap.addEventListener('scroll', planla, { passive: true });
+  if (typeof ResizeObserver === 'function') {
+    const g = new ResizeObserver(() => { if (!sarmal.isConnected && !document.contains(kap)) return; planla(); });
+    g.observe(kap);
+    if (kap.firstElementChild) g.observe(kap.firstElementChild);
+  }
+  new MutationObserver(planla).observe(kap, { childList: true, subtree: true });
+  planla();
+  return sarmal;
+}
+
 /** Bu uzunluktan uzun alan açıklamaları ? düğmesinin içinde durur. */
 const YARDIM_ESIGI = 60;
 

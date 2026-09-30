@@ -8,7 +8,7 @@
 //   · Sütun başlığındaki "Karşılıklar": sütundaki her değerin sayfadaki (seçenek değeri) ve servisteki karşılığı. Ekran koşusu
 //     seçeneği sayfa değeriyle seçer, servise servis değeri gider; boşsa tablodaki değer kullanılır.
 //   · Kaydet yalnız değişen satırları gönderir. Kaydedilmemiş değişiklik varken başka tabloya geçmek onay ister.
-import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, yerlestir } from './ortak.js';
+import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, yatayKaydirmaIpucu, yerlestir } from './ortak.js';
 import { onayIste, secenekIste } from './kosu-paneli.js';
 import { tabloOku } from './parametre-tanimi-formu.js';
 import { veriSagligiKarti } from './veri-sagligi.js';
@@ -886,7 +886,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           is.satirlar = []; ciz();
         } }, 'Tüm satırları kaldır') : null),
       yapistirKutusu,
-      h('div', { class: 'tablo-kaydirma veri-tablosu-kap' }, tablo), altBilgi,
+      yatayKaydirmaIpucu(h('div', { class: 'tablo-kaydirma veri-tablosu-kap', tabindex: '0', 'aria-label': 'Tablo (yana kaydırılabilir)' }, tablo), { sutunSecici: 'thead th.veri-sutunu' }), altBilgi,
       h('div', { class: 'dugmeler' }, geriAl, kaydetD)));
     govdeCiz();
     durumCiz();

@@ -2431,10 +2431,20 @@ a.son-sonuc { text-decoration: none; }
 .yapistir-kutusu { margin: 0 0 10px; }
 .yapistir-kutusu textarea { width: 100%; margin: 8px 0; font-family: var(--yazi-mono); }
 .veri-tablosu-kap { min-height: 320px; max-height: calc(100vh - 330px); overflow: auto; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); }
+/* Yana kaydırma ipucu (ortak.js > yatayKaydirmaIpucu): taşan kenarda gölge; altta "N sütundan M'si görünüyor". */
+.yatay-kaydirma-sarmali { position: relative; min-width: 0; }
+.yatay-kaydirma-sarmali::before, .yatay-kaydirma-sarmali::after {
+  content: ''; position: absolute; top: 1px; bottom: 1px; width: 28px; pointer-events: none; z-index: 3; opacity: 0; transition: opacity .15s;
+}
+.yatay-kaydirma-sarmali::before { left: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--metin) 22%, transparent), transparent); border-radius: var(--yaricap-m) 0 0 var(--yaricap-m); }
+.yatay-kaydirma-sarmali::after { right: 1px; background: linear-gradient(270deg, color-mix(in srgb, var(--metin) 22%, transparent), transparent); border-radius: 0 var(--yaricap-m) var(--yaricap-m) 0; }
+.yatay-kaydirma-sarmali.sol-tasma::before, .yatay-kaydirma-sarmali.sag-tasma::after { opacity: 1; }
+.yatay-kaydirma-sarmali:has(> .kaydirma-bilgisi:not([hidden]))::before, .yatay-kaydirma-sarmali:has(> .kaydirma-bilgisi:not([hidden]))::after { bottom: 24px; }
+.kaydirma-bilgisi { margin-top: 4px; }
 .veri-tablosu { border-collapse: collapse; width: 100%; }
 .veri-tablosu th, .veri-tablosu td { border-bottom: 1px solid var(--cizgi); padding: 4px 6px; vertical-align: middle; }
 .veri-tablosu thead th { position: sticky; top: 0; z-index: 1; background: var(--panel-kati); text-align: left; }
-.veri-tablosu td input, .veri-tablosu td select { min-width: 150px; min-height: 36px; padding: 6px 10px; font-family: var(--yazi-mono); font-size: 13px; }
+.veri-tablosu td input, .veri-tablosu td select { min-width: 130px; min-height: 36px; padding: 6px 10px; font-family: var(--yazi-mono); font-size: 13px; }
 .veri-tablosu th.sira, .veri-tablosu td.sira { width: 40px; color: var(--metin-3); font: 500 11.5px var(--yazi-mono); text-align: right; }
 .veri-tablosu td.eylem, .veri-tablosu th.eylem { width: 1%; white-space: nowrap; }
 .veri-tablosu .ortam-sutunu { width: 130px; }
@@ -2442,7 +2452,7 @@ a.son-sonuc { text-decoration: none; }
 .tablo-listesi .kucuk-rozet { margin-left: 6px; font-size: 10.5px; padding: 1px 6px; }
 .veri-tablosu tr.degisti td.sira { color: var(--vurgu); }
 /* Sütun başlığı: üstte ad + sil (×), altta Gizli + Karşılıklar. Başlık hücresi büyük harf / tek satır kuralını devralmaz. */
-.veri-tablosu thead th.veri-sutunu { text-transform: none; letter-spacing: 0; font: 500 12px var(--yazi); white-space: normal; min-width: 180px; vertical-align: top; }
+.veri-tablosu thead th.veri-sutunu { text-transform: none; letter-spacing: 0; font: 500 12px var(--yazi); white-space: normal; min-width: 150px; vertical-align: top; }
 .sutun-basligi { display: grid; gap: 4px; min-width: 0; }
 .sutun-basligi-ust { display: flex; gap: 4px; align-items: center; min-width: 0; }
 .sutun-basligi-ust input[type="text"] { flex: 1 1 auto; min-width: 0; width: 100%; font-weight: 600; min-height: 34px; padding: 4px 8px; font-family: var(--yazi); text-transform: none; }
