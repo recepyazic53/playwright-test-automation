@@ -162,9 +162,10 @@ export function adayOgesi(a) {
 /**
  * Sayfadaki izleri puanlar, güven düzeyi verir ve sıralar (en olası başta; eşitlikte sayfa sırası). Her türün ilki "enOlasi"dır.
  * @param {import('./eylem-kesfi.d.mts').HamEylemIzleri} ham
+ * @param {{ gonderim?: number }} [sinir] tür başına en çok aday (varsayılan ADAY_EN_COK; hızlı test tüm düğmeleri listelemek için yükseltir)
  * @returns {import('./eylem-kesfi.d.mts').EylemAdaylari}
  */
-export function eylemAdaylariniDegerlendir(ham) {
+export function eylemAdaylariniDegerlendir(ham, sinir = {}) {
   const izler = Array.isArray(ham?.izler) ? ham.izler : [];
   /** @param {'gonderim' | 'basari' | 'hata' | 'bekleme'} tur @param {(iz: import('./eylem-kesfi.d.mts').HamEylemIzi) => { puan: number; guven: 'guclu' | 'olasi' | 'tahmin'; gerekce: string[] }} puanla */
   const grup = (tur, puanla) => {
@@ -183,7 +184,7 @@ export function eylemAdaylariniDegerlendir(ham) {
       return { a, sira };
     });
     const sonuc = liste.sort((x, y) => GUVEN_DUZEYLERI.indexOf(x.a.guven) - GUVEN_DUZEYLERI.indexOf(y.a.guven) || y.a.puan - x.a.puan || x.sira - y.sira)
-      .map((x) => x.a).slice(0, ADAY_EN_COK[tur]);
+      .map((x) => x.a).slice(0, (tur === 'gonderim' ? sinir.gonderim : undefined) ?? ADAY_EN_COK[tur]);
     if (sonuc[0]) sonuc[0].enOlasi = true;
     return sonuc;
   };

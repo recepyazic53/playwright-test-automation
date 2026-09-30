@@ -44,6 +44,20 @@ table.kisi{border-collapse:collapse}table.kisi th{font-size:12px;text-align:left
     <input name="dogum" data-x="d"><input name="insurers-1-tel"><input name="insurer-1-textbox"><input name="insurer-1-ad">
   </div>
 </div>
+<div class="kutu" id="dort">
+  <table><tr height="50px">
+    <td align="left" width="130">Kart üzerindeki isim
+    </td>
+    <td align="center" width="20">:
+    </td>
+    <td align="left" width="150"><input type="text" name="isim" id="isim" style="width:110px" maxlength="30"></td>
+    <td align="left" width="130">Kart üzerindeki soyisim
+    </td>
+    <td align="center" width="20">:
+    </td>
+    <td align="left" width="150"><input type="text" name="soyisim" id="soyisim" style="width:110px" maxlength="30"></td>
+  </tr></table>
+</div>
 <div class="kutu" id="uc">
   <table class="kisi"><thead><tr><th>Ad</th><th>Soyad</th><th>Pasaport No</th></tr></thead>
     <tbody><tr><td><input name="t_ad"></td><td><input name="t_soyad"></td><td><input name="t_pasaport"></td></tr></tbody></table>
@@ -78,6 +92,12 @@ test.describe('Hızlı test: alan etiketleri ve hazır değerler (127.0.0.1)', (
     expect(a.t_ad.etiket).toBe('Ad');
     expect(a.t_soyad.etiket).toBe('Soyad');
     expect(a.t_pasaport.etiket).toBe('Pasaport No');
+  });
+
+  test('tablo hücresinde "Etiket : [alan]": araya giren ":" hücresi etiket sayılmaz, alan solundaki metni alır', async () => {
+    const a = await oku();
+    expect(a.isim.etiket).toBe('Kart üzerindeki isim');
+    expect(a.soyisim.etiket).toBe('Kart üzerindeki soyisim');
   });
 
   test('sütun ve satır başlıkları sayfadaki yakın metinden gelir; teknik ad etiket olmaz', async () => {

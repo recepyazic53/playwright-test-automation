@@ -107,7 +107,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
         if (o instanceof Element && kaplar.includes(o as HTMLElement)) { o = o.previousSibling; continue; }
         if (o instanceof Element && o.querySelector('input,select,textarea')) return null;
         const t = o.nodeType === Node.TEXT_NODE ? bosluk(o.textContent) : o instanceof Element && !o.matches(KONTROLLER) && gorunurMu(o) ? saltMetin(o) : '';
-        if (t) return t.length <= 80 ? t : null;
+        // Yalnız ayraç olan metin (":", "*", "-") etiket değildir: atlanıp bir öncekine bakılır ("Ad : [input]" tabloları).
+        if (t && /[\p{L}\p{N}]/u.test(t)) return t.length <= 80 ? t : null;
         o = o.previousSibling;
       }
       d = d.parentElement;

@@ -74,6 +74,6 @@ export declare const KALIPLAR: Readonly<Record<
 export declare function katla(m: unknown): string;
 export declare function kalipVar(ad: keyof typeof KALIPLAR, m: unknown): boolean;
 export declare function adayOgesi(a: { tur: string; secici: string; kirilganlik: string; seciciTuru: string; metin: string | null }): SecilenOge | null;
-export declare function eylemAdaylariniDegerlendir(ham: HamEylemIzleri): EylemAdaylari;
+export declare function eylemAdaylariniDegerlendir(ham: HamEylemIzleri, sinir?: { gonderim?: number }): EylemAdaylari;
 export declare function bosEylemAdaylari(): EylemAdaylari;
 export declare function eylemAdaylariniAyikla(ham: unknown): EylemAdaylari | null;

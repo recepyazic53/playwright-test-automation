@@ -179,7 +179,8 @@ export async function hizliTestiYurut(
     async function anlikOku(page: Page, goruntu: boolean): Promise<HizliAnlik> {
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
       const envanter = await envanterOku(page, { degerOku: true }).catch(() => ({ alanlar: [] as HamAlan[], baslik: '' }));
-      const eylem = await eylemAdaylariniCikar(page);
+      // "Devam et" listesi: sayfadaki tüm görünür düğmeler (sonradan beliren düğmeler puan sınırına takılmasın).
+      const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
       const metinler = (await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[];
       const dugmeler: HizliDugme[] = eylem.gonderim.map((a) => ({
         secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi
