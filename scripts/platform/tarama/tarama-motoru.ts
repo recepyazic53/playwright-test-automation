@@ -26,7 +26,7 @@ import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { KESIF_TURLERI, adresOzeti, istekKarari, kesifGuvenligi, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
 import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
-import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
+import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
 
@@ -186,6 +186,8 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
           await olay({ tur: 'profil', sira, durum: 'hata', adim: 'baglam', mesaj: b.mesaj });
           continue;
         }
+        // Yazma engeli açılmadan önce bağlam değiştirmenin son isteği bitsin (açılır penceredeki form gönderimi geç kalıp engellenmesin).
+        await isteklerBitsin(islem);
       }
       durum.asama = 'tarama';
       await olay({ tur: 'profil', sira, durum: 'suruyor', adim: 'tarama' });
