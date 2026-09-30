@@ -169,7 +169,7 @@ export type HizliKomut =
 /** Alt süreç → sunucu (POST …/hizli). */
 export type HizliOlay =
   | { olay: 'kesif'; anlik: HizliAnlik }
-  | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik }
+  | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik; yeniMetinler?: HizliMetin[] }
   | { olay: 'basildi'; no: number; fark: HizliFark }
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }

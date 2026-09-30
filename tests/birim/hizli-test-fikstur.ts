@@ -40,6 +40,8 @@ export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
 <div id="tamam" class="alert alert-success" role="status" hidden></div>
 <script>
   var $ = function (id) { return document.getElementById(id); };
+  // Alandan çıkınca gelen sayfa doğrulaması (ör. geçersiz değer): doldurma sırasında hata mesajı belirir.
+  $('adSoyad').addEventListener('change', function () { if (this.value === 'HATALI') uyar('Zorunlu alan: Ad soyad geçersiz'); });
   $('musteriTipi').addEventListener('change', function () { $('vergiKutusu').className = this.value === 'kurumsal' ? '' : 'gizli'; });
   function uyar(m) { $('uyari').textContent = m; $('uyari').hidden = false; }
   $('hesapla').addEventListener('click', function () {

@@ -179,7 +179,8 @@ export async function hizliTestiYurut(
     async function anlikOku(page: Page, goruntu: boolean): Promise<HizliAnlik> {
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
       const envanter = await envanterOku(page, { degerOku: true }).catch(() => ({ alanlar: [] as HamAlan[], baslik: '' }));
-      const eylem = await eylemAdaylariniCikar(page);
+      // "Devam et" listesi: sayfadaki tüm görünür düğmeler (sonradan beliren düğmeler puan sınırına takılmasın).
+      const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
       const metinler = (await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[];
       const dugmeler: HizliDugme[] = eylem.gonderim.map((a) => ({
         secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi
@@ -225,6 +226,12 @@ export async function hizliTestiYurut(
         // Aynı değer sayfada zaten varsa (önceki turda girildi; site alanı sorgudan sonra kilitlemiş olabilir) yeniden yazılmaz.
         if (await alanZatenDolu(l, String(deger))) return null;
         await l.fill(String(deger), { timeout: bekleMs });
+        // Sayfa yazılanı geri almış / maske kabul etmemiş olabilir (alan boş kaldı): tuşlayarak bir kez daha denenir.
+        if (!(await l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) {
+          await l.fill('', { timeout: 2_000 }).catch(() => undefined);
+          await l.pressSequentially(String(deger), { delay: 30, timeout: bekleMs });
+          if (!(await l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) return 'Değer yazıldı ama sayfa kabul etmedi (alan boş kaldı).';
+        }
         // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
         await alandanCik(l);
         return null;
@@ -397,14 +404,21 @@ export async function hizliTestiYurut(
           sonAnlik = await anlikOku(islem, true);
           await gonder({ olay: 'okundu', no: k.no, anlik: sonAnlik });
         } else if (k.tur === 'doldur') {
+          diyaloglar.length = 0;
           const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
           for (const d of k.alanlar) {
             const h = await alaniDoldur(islem, d);
             if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
           }
           await sakinles(islem, 5_000);
+          const once = new Set(sonAnlik.metinler.map((m) => m.metin));
           sonAnlik = await anlikOku(islem, false);
-          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik });
+          // Doldururken sayfanın gösterdiği yeni mesajlar (ör. alandan çıkınca gelen doğrulama uyarısı): kullanıcıya sorulur.
+          const yeniMetinler: HizliMetin[] = [
+            ...sonAnlik.metinler.filter((m) => !once.has(m.metin)),
+            ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
+          ];
+          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
           const fark = await bas(islem, k.secici, k.metin, sonAnlik);

@@ -188,12 +188,13 @@ function sirala(adaylar: SeciciAdayi[], cikti: boolean): SeciciAdayi[] {
  * Açık sayfadan eylem adaylarını çıkarır — BASMAZ. Sayfa (Page) olduğu gibi kalır: yalnız geçici işaret öznitelikleri eklenip
  * kaldırılır. Sayfa kapanırsa / okunamazsa boş küme ve not döner (hata fırlatmaz).
  */
-export async function eylemAdaylariniCikar(page: Page): Promise<EylemAdaylari> {
+export async function eylemAdaylariniCikar(page: Page, secenek: { dugmeSiniri?: number } = {}): Promise<EylemAdaylari> {
+  const dugmeSiniri = secenek.dugmeSiniri ?? 25;
   let ham: SayfaIzleri;
   try {
     // Seçici üreticisi ("Sayfada seç"le aynı) sayfaya verilir; init betiği gerekmez.
     await page.evaluate(`window.__nobetciOgeBilgisi = ${ogeBilgisi.toString()}; 0`);
-    ham = await page.evaluate(eylemIzleriniTopla, { kaliplar: { ...KALIPLAR }, enCok: { dugme: 25, basari: 12, hata: 10, bekleme: 8 }, onek: ISARET_ONEKI });
+    ham = await page.evaluate(eylemIzleriniTopla, { kaliplar: { ...KALIPLAR }, enCok: { dugme: dugmeSiniri, basari: 12, hata: 10, bekleme: 8 }, onek: ISARET_ONEKI });
   } catch (hata) {
     return eylemAdaylariniDegerlendir({ sayfaYolu: '', izler: [], yonlendirmeler: [], notlar: [`Eylem adayları okunamadı: ${String(hata instanceof Error ? hata.message : hata).split('\n')[0].slice(0, 200)}`] });
   }
@@ -223,5 +224,5 @@ export async function eylemAdaylariniCikar(page: Page): Promise<EylemAdaylari> {
       delete (window as unknown as Record<string, unknown>).__nobetciOgeBilgisi;
     }, ISARET_ONEKI).catch(() => undefined);
   }
-  return eylemAdaylariniDegerlendir({ sayfaYolu: ham.sayfaYolu, izler, yonlendirmeler: ham.yonlendirmeler, notlar: ham.notlar });
+  return eylemAdaylariniDegerlendir({ sayfaYolu: ham.sayfaYolu, izler, yonlendirmeler: ham.yonlendirmeler, notlar: ham.notlar }, secenek.dugmeSiniri ? { gonderim: secenek.dugmeSiniri } : {});
 }

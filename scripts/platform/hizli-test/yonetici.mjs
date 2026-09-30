@@ -243,6 +243,10 @@ export function hizliTestYoneticisiOlustur(s) {
       }
       adim.okumalar.push({ gorunen: [...gorunen], secimler });
       if (Object.keys(o.alanHatalari).length) { veriDuragi(o, 'Bazı alanlar doldurulamadı.'); return; }
+      for (const m of e.yeniMetinler ?? []) gorulenEkle(o, m.metin, m.tur);
+      // Doldururken sayfa hata gösterdiyse (ör. alandan çıkınca gelen doğrulama uyarısı) sessizce ilerlenmez: kullanıcıya sorulur.
+      const sayfaHatalari = (e.yeniMetinler ?? []).filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
+      if (sayfaHatalari.length) { o.hataSorusu = { metinler: sayfaHatalari, kaynak: 'doldur' }; o.durum = 'hataSorusu'; return; }
       if (yeni) { veriDuragi(o, `${yeni} yeni alan belirdi; değerlerini girin.`); return; }
       const eksik = eksikAlanlar(adim.alanlar, Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger])));
       if (eksik.length) { veriDuragi(o, `${eksik.length} zorunlu alan boş.`); return; }
@@ -263,7 +267,7 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const m of f.yeniMetinler ?? []) gorulenEkle(o, m.metin, m.tur);
       gunluk(o, `“${adim.bas.metin ?? adim.bas.secici}” basıldı (${Math.round(f.sureMs / 100) / 10} sn): ${f.yeniMetinler.length} yeni metin, ${f.yeniAlanlar.length} yeni alan${f.adres ? `, adres ${f.adres.sonra}` : ''}.`);
       const hatalar = f.yeniMetinler.filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
-      if (hatalar.length) { o.hataSorusu = { metinler: hatalar }; o.durum = 'hataSorusu'; return; }
+      if (hatalar.length) { o.hataSorusu = { metinler: hatalar, kaynak: 'bas' }; o.durum = 'hataSorusu'; return; }
       basistanSonra(o);
       return;
     }
@@ -586,6 +590,7 @@ export function hizliTestYoneticisiOlustur(s) {
     durumda(o, ['hataSorusu']);
     const c = String(g.cevap ?? '');
     const metinler = o.hataSorusu?.metinler ?? [];
+    const dolduranKaynak = o.hataSorusu?.kaynak === 'doldur';
     o.hataCevaplari ??= {};
     for (const m of metinler) o.hataCevaplari[m] = c;
     o.hataSorusu = null;
@@ -594,7 +599,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const adim = guncelAdim(o);
       adim.bas = null;
       adim.fark = null;
-      veriDuragi(o, 'Hata göründü: değerleri düzeltin, sonra düğmeye yeniden basın.');
+      veriDuragi(o, dolduranKaynak ? 'Sayfa hata gösterdi: değerleri düzeltip yeniden doldurun.' : 'Hata göründü: değerleri düzeltin, sonra düğmeye yeniden basın.');
       return { tamam: true };
     }
     if (c === 'uyari') {
@@ -603,6 +608,13 @@ export function hizliTestYoneticisiOlustur(s) {
       o.etiketler = varsayilanEtiketler(o.gorulenler, o.basisNo);
       for (const m of metinler) o.etiketler[m] = 'hata';
       o.durum = 'bitis';
+      return { tamam: true };
+    }
+    // Doldururken çıkan uyarı önemsiz: veri durağının devamı (henüz basış yok).
+    if (dolduranKaynak) {
+      const adim = guncelAdim(o);
+      const eksik = eksikAlanlar(adim.alanlar, Object.fromEntries(Object.entries(o.degerler).map(([k, v]) => [k, v.deger])));
+      if (eksik.length) veriDuragi(o, `${eksik.length} zorunlu alan boş.`); else verilerTamam(o);
       return { tamam: true };
     }
     basistanSonra(o);
