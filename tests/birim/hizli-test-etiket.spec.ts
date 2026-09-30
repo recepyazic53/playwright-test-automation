@@ -8,7 +8,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { envanterOku } from '../../scripts/platform/tarama/tarama-motoru';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 
-const SAYFA = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Yurt dışı teklif</title><style>
+const SAYFA = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Yurt dışı kayıt</title><style>
 body{font:14px Arial;margin:0;padding:24px;width:1100px}
 .kutu{border:2px solid #e9a92a;border-radius:10px;padding:14px;margin:10px 0}
 .sira{display:flex;gap:24px;align-items:flex-end}
@@ -20,13 +20,13 @@ body{font:14px Arial;margin:0;padding:24px;width:1100px}
 table.kisi{border-collapse:collapse}table.kisi th{font-size:12px;text-align:left;padding:2px 8px}table.kisi td{padding:2px 8px}
 </style></head><body>
 <div class="kutu" id="bir">
-  <div class="baslik-satiri" style="gap:12px"><span style="width:104px">BAŞLANGIÇ</span><span style="width:104px">BİTİŞ</span><span style="width:150px">KAPSAM</span><span style="width:150px">ALTERNATİF</span><span style="width:90px">SİGORTALI</span></div>
+  <div class="baslik-satiri" style="gap:12px"><span style="width:104px">BAŞLANGIÇ</span><span style="width:104px">BİTİŞ</span><span style="width:150px">KAPSAM</span><span style="width:150px">ALTERNATİF</span><span style="width:90px">KİŞİ SAYISI</span></div>
   <div class="giris-satiri" style="gap:12px;align-items:center">
     <div style="width:104px"><input name="from" value="30.09.2026"></div>
     <div style="width:104px"><input name="to" value="07.10.2026"></div>
     <div style="width:150px;text-align:center">◀ DÜNYA ▶</div>
-    <div style="width:150px;text-align:center">◀ VİZE TÜM DÜNYA ▶</div>
-    <div class="adet" style="width:90px"><button type="button">-</button><input name="sigortali_sayisi" value="1" size="2"><button type="button">+</button></div>
+    <div style="width:150px;text-align:center">◀ TÜM DÜNYA ▶</div>
+    <div class="adet" style="width:90px"><button type="button">-</button><input name="kisi_sayisi" value="1" size="2"><button type="button">+</button></div>
   </div>
   <div style="margin-top:8px;width:190px">
     <div style="font-size:12px">GİDECEK ÜLKE</div>
@@ -35,9 +35,9 @@ table.kisi{border-collapse:collapse}table.kisi th{font-size:12px;text-align:left
 </div>
 <div style="text-align:center"><select name="selectAllClientPolicy"><option value="1" selected>Tekli Sorgulama</option><option value="2">Toplu Sorgulama</option></select></div>
 <div class="kutu" id="iki">
-  <div>Sigorta Ettiren
-    <label><input type="radio" name="sigortaEttiren" value="kendisi" checked> Sigortalının Kendisi</label>
-    <label><input type="radio" name="sigortaEttiren" value="baska"> Farklı Kişi / Kurum</label></div>
+  <div>Ödeyen
+    <label><input type="radio" name="odeyen" value="kendisi" checked> Kişinin Kendisi</label>
+    <label><input type="radio" name="odeyen" value="baska"> Farklı Kişi / Kurum</label></div>
   <hr>
   <div class="baslik-satiri"><span>D.TARİHİ</span><span>TELEFON</span><span>TC KİMLİK NO</span><span>AD SOYAD</span></div>
   <div class="giris-satiri">
@@ -84,17 +84,17 @@ test.describe('Hızlı test: alan etiketleri ve hazır değerler (127.0.0.1)', (
     const a = await oku();
     expect(a.from.etiket).toBe('BAŞLANGIÇ');
     expect(a.to.etiket).toBe('BİTİŞ');
-    expect(a.sigortali_sayisi.etiket).toBe('SİGORTALI');
+    expect(a.kisi_sayisi.etiket).toBe('KİŞİ SAYISI');
     expect(a.cmbCountries.etiket).toBe('GİDECEK ÜLKE');
-    for (const x of Object.values(a)) expect(x.etiket ?? '', `${x.ad}`).not.toMatch(/^(to|from|cmb|select|insurer|sigortali_)/i);
+    for (const x of Object.values(a)) expect(x.etiket ?? '', `${x.ad}`).not.toMatch(/^(to|from|cmb|select|insurer|kisi_)/i);
   });
 
   test('hazır değerler: dolu alan ve seçili seçenek hazır; boş metin ve "SEÇİNİZ" boş', async () => {
     const a = await oku();
     expect(a.from).toMatchObject({ mevcut: '30.09.2026', hazir: true });
-    expect(a.sigortali_sayisi).toMatchObject({ mevcut: '1', hazir: true });
+    expect(a.kisi_sayisi).toMatchObject({ mevcut: '1', hazir: true });
     expect(a.selectAllClientPolicy).toMatchObject({ mevcut: 'Tekli Sorgulama', hazir: true });
-    expect(a.sigortaEttiren).toMatchObject({ mevcut: 'Sigortalının Kendisi', hazir: true });
+    expect(a.odeyen).toMatchObject({ mevcut: 'Kişinin Kendisi', hazir: true });
     expect(a.cmbCountries.hazir).toBe(false);
     expect(a.dogum.hazir).toBe(false);
     expect(a.t_ad.hazir).toBe(false);

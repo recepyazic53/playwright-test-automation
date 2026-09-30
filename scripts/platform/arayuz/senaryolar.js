@@ -495,7 +495,7 @@ function listeGorunumu(icerik, s) {
         sth('baslik', 'Senaryo'),
         ekran ? null : sth('ekran', 'Ekran', 'ekran-sutunu'),
         // Bağlam profili yalnız senaryolarda profil seçimi varsa gösterilir (yoksa boş bir sütun olurdu).
-        profilVar ? sth('profil', 'Bağlam profili', 'profil-sutunu', 'Senaryonun girişten sonra seçtiği bağlam (ör. acente ya da şube). Boşsa ortamın varsayılanı kullanılır.') : null,
+        profilVar ? sth('profil', 'Bağlam profili', 'profil-sutunu', 'Senaryonun girişten sonra seçtiği bağlam (ör. şube ya da bölüm). Boşsa ortamın varsayılanı kullanılır.') : null,
         sth('beklenen', 'Beklenen', 'beklenen-sutunu'),
         sth('kapsam', 'Kapsam', 'kapsam-sutunu'),
         sth('son', 'Son sonuç', 'son-sutunu'),
