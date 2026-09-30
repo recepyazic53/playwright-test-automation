@@ -153,7 +153,7 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(ileri.locator('label.yukleme-alani')).toContainText('Dosya seç');
   const yz = page.locator('.ekleme-kutusu.yapay-zeka-kutusu');
   await expect(yz.locator('h3')).toHaveText(['Yapay zekâ ile oluştur']);
-  await expect(yz.locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın', 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
+  await expect(yz.locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın ve "Paket biçimini indir" ile biçim dosyasını alın', 'İkisini de sayfanın bağlantısıyla birlikte yapay zekâ aracınıza verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
   await expect(yz.getByRole('button', { name: /yükle/i })).toHaveCount(0);
   await expect(yz.getByRole('button')).toHaveText(['İstek metnini kopyala']);
   await expect(yz.locator('.ekleme-notu')).toBeVisible();

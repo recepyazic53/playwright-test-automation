@@ -210,8 +210,8 @@ function eklemeKutulari(s, secenek) {
       analiz
         ? h('p', {}, 'Ekran sayfasındaki "Tekrar analiz et" bağlam profillerini sorar ve istek metnini hazırlar; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.')
         : h('ol', { class: 'ekleme-adimlari' },
-          h('li', {}, 'İstek metnini kopyalayın'),
-          h('li', {}, 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin'),
+          h('li', {}, 'İstek metnini kopyalayın ve "Paket biçimini indir" ile biçim dosyasını alın'),
+          h('li', {}, 'İkisini de sayfanın bağlantısıyla birlikte yapay zekâ aracınıza verin'),
           h('li', {}, 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin')),
       analiz ? h('a', { class: 'dugme birincil', href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, ikon('yenile'), 'Ekrana dön') : istekMetniKutusu(CUMLE, { birincil: true, ek: bicimIndirBaglantisi() }),
       'Araç: tarayıcıyı kullanabilen bir kodlama asistanı.')
