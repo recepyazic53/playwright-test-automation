@@ -89,7 +89,7 @@ test('uç: genel kapsamda application/pdf ve güvenli dosya adı (seçim gerekme
 test('diyalog: "Genel" etkin; seçildiğinde öğe seçimi gizlenir, açıklama görünür; önizleme ve PDF indir (Raporlar\'a kaydedilir)', async () => {
   test.setTimeout(120_000);
   const { page, hatalar, kapat } = await sayfaAc();
-  await git(page, '#/sonuclar');
+  await git(page, '#/sonuclar/raporlar');
   await page.getByRole('button', { name: 'Rapor al (PDF)' }).first().click();
   const d = page.getByRole('dialog', { name: 'Rapor al (PDF)' });
   const genel = d.getByRole('radio', { name: 'Genel' });

@@ -756,9 +756,9 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       alan('Ekran senaryosu', senaryoSec, { yardim: 'Senaryo, ekran modeliyle tarayıcıda koşar (giriş, bağlam ve adımlar senaryodaki gibi).' }),
       sn ? h('p', { class: 'soluk kucuk' }, `Tanımlı ortamlar: ${sn.ortamIdleri.map(ortamAdi).join(', ') || '—'}`, ' · ',
         h('a', { href: `#/senaryolar/duzenle/${q(sn.id)}` }, 'Senaryoyu aç')) : null,
-      // Ortak akışlar: ekran adımı senaryonun kendi "… dahil" seçimleriyle koşar (burada değiştirilmez; senaryo formunda).
-      sn && Array.isArray(sn.ortakBloklar) && sn.ortakBloklar.length ? h('div', { class: 'ortak-blok-ozeti', 'aria-label': `${n + 1}. adım ortak akışları` },
-        h('span', { class: 'soluk kucuk' }, 'Ortak akışlar (senaryonun seçimi):'),
+      // Genel senaryolar: ekran adımı senaryonun kendi "… dahil" seçimleriyle koşar (burada değiştirilmez; senaryo formunda).
+      sn && Array.isArray(sn.ortakBloklar) && sn.ortakBloklar.length ? h('div', { class: 'ortak-blok-ozeti', 'aria-label': `${n + 1}. adım genel senaryoları` },
+        h('span', { class: 'soluk kucuk' }, 'Genel senaryolar (senaryonun seçimi):'),
         h('ul', { class: 'duz-liste kucuk' }, sn.ortakBloklar.map((o) => h('li', {},
           `“${o.ad}”: `,
           !o.istegeBagli ? rozet('her senaryoda çalışır', 'basari')

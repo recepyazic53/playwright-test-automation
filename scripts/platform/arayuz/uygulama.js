@@ -580,7 +580,15 @@ async function sihirbazIzinler() {
     const mesaj = h('div', {});
     const devam = /** @type {HTMLButtonElement} */ (h('button', { type: 'button', class: 'birincil', disabled: true }, 'Devam', ikon('ok')));
     const secilenler = () => kutular.filter((k) => k.girdi.checked).flatMap((k) => k.is.izinler).filter((a, i, d) => d.indexOf(a) === i);
-    const guncelle = () => { devam.disabled = !kutular.some((k) => k.girdi.checked); };
+    // Seçimin açacağı izinler, seçimin altında (düğmelerin hemen üstünde) listelenir.
+    const IZIN_ADLARI = { 'web-erisimi': 'Web uygulamasına erişim', 'giris-bilgisi': 'Giriş bilgisi kullanımı', 'servis-istekleri': 'Servislere istek gönderme' };
+    const izinOzeti = h('div', { class: 'izin-ozeti not-kutusu bilgi', 'aria-live': 'polite', hidden: true });
+    const guncelle = () => {
+      devam.disabled = !kutular.some((k) => k.girdi.checked);
+      const liste = secilenler();
+      izinOzeti.hidden = !liste.length;
+      izinOzeti.replaceChildren(h('b', {}, 'Açılacak izinler'), h('ul', { class: 'kucuk' }, liste.map((a) => h('li', {}, `${IZIN_ADLARI[a] || a}${izinler[a] === true ? ' (zaten açık)' : ''}`))));
+    };
     for (const k of kutular) k.girdi.addEventListener('change', guncelle);
     devam.addEventListener('click', async () => {
       const istenen = secilenler();
@@ -599,6 +607,7 @@ async function sihirbazIzinler() {
       mesaj,
       h('fieldset', { class: 'profil-secimi izin-paketi-bolumu' }, h('legend', {}, 'Birini ya da ikisini seçin'), h('div', { class: 'profil-secenekleri' }, kutular.map((k) => k.etiket))),
       h('p', { class: 'soluk kucuk' }, 'Veritabanı okuma gibi ek izinler, akışınıza o adımı eklediğinizde o anda sorulur. Canlı ortamda çalıştırırken de ayrıca onayınız istenir.'),
+      izinOzeti,
       h('div', { class: 'dugmeler' }, atla, devam)));
   } catch (hata) {
     if (hata && hata.durum === 423) return;

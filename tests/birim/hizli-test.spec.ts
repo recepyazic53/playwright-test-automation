@@ -775,6 +775,8 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(soru).toContainText('Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı?');
     await tasmaYok(page, 'Kaydet');
     await soru.getByRole('button', { name: 'Hayır, kaydet' }).click();
+    // Özet ayrı sekmede açılır.
+    await expect(soru.getByRole('tab', { name: 'Özet' })).toHaveAttribute('aria-selected', 'true');
     // Özet ekranı: hiçbir şey yazılmadan tablolar, senaryo önerileri; onay olmadan kaydedilmez.
     await expect(soru.getByRole('heading', { name: /Özet/ })).toBeVisible();
     await expect(soru.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();

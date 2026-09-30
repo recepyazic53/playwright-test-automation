@@ -140,7 +140,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const sema = formSemasiOlustur(baglam.model, baglam.altModeller);
   // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
   const onceki = s.taslak?.veri || senaryo?.veri || undefined;
-  // Yeni senaryo: isteğe bağlı ortak akışların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
+  // Yeni senaryo: isteğe bağlı genel senaryoların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
   const degerler = formDegerleriniKur(sema, onceki || {}, { yeni: !onceki });
   let baslikDegeri = s.taslak ? s.taslak.baslik : senaryo ? senaryo.baslik : '';
   // Akış değişince (s.taslak) kaydedilmemiş ortam / koşuda / mutlaka görünmeli seçimleri de taşınır.
@@ -1162,7 +1162,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const adimAkisi = h('div', { class: 'adim-akisi' });
   sema.adimlar.forEach((adim, i) => {
     const alanSayisi = adim.bolumler.reduce((t, b) => t + b.alanlar.length, 0);
-    // Ortak akış adımı: isteğe bağlıysa anahtar (başlıkta), her senaryoda çalışıyorsa yalnız bilgi rozeti.
+    // Genel senaryo adımı: isteğe bağlıysa anahtar (başlıkta), her senaryoda çalışıyorsa yalnız bilgi rozeti.
     const ortakOnEki = adim.ortakAkis ? `“${adim.ortakAkis}” adımları · ` : '';
     const altMetin = adim.ayar ? `${ortakOnEki}İsteğe bağlı adım${alanSayisi ? ` · ${alanSayisi} alan` : ''}`
       : `${ortakOnEki}${alanSayisi ? `${alanSayisi} alan` : 'Bu adımda senaryoya özel alan yok'}`;

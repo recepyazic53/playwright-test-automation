@@ -6,7 +6,7 @@
 //   (testler CommonJS olarak yükler): depo kökü çağırandan gelir.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BICIM_DOSYASI_ADI } from './paket-istekleri.mjs';
+import { BICIM_DOSYASI_ADI, paketIstekCumlesi } from './paket-istekleri.mjs';
 
 /** Biçim dosyasının kaynakları (depo köküne göre). */
 export const BICIM_KAYNAKLARI = Object.freeze(['docs/sayfa-paketi.md', 'docs/sayfa-paketi.schema.json', 'tests/support/ekran-modeli.ts']);
@@ -15,7 +15,15 @@ export const BICIM_KAYNAKLARI = Object.freeze(['docs/sayfa-paketi.md', 'docs/say
 export function paketBicimiBelgesi(kok) {
   const [belge, sema, model] = BICIM_KAYNAKLARI.map((y) => readFileSync(join(kok, y), 'utf8').replace(/\r\n/g, '\n').trimEnd());
   return [
-    `<!-- ${BICIM_DOSYASI_ADI} — Nöbetçi ekran paketi biçimi (sürüm 1). Bu dosyayı istek metniyle birlikte yapay zekâ aracınıza verin. -->`,
+    `<!-- ${BICIM_DOSYASI_ADI} — Nöbetçi ekran paketi: İSTEK + BİÇİM (sürüm 1). Tek dosya: yalnız bunu yapay zekâ aracınıza verin. -->`,
+    '',
+    '# İstek (yapay zekâ aracı için)',
+    '',
+    'Bu dosya hem **isteği** hem paketin **biçimini** içerir; başka dosya gerekmez. Aşağıdaki istekteki "ekteki ' + BICIM_DOSYASI_ADI + ' dosyası" bu dosyanın kendisidir (istekten sonraki bölümler). Sayfa bağlantısını aracınıza ayrıca yazın.',
+    '',
+    '> ' + paketIstekCumlesi('<sayfa bağlantısı>').replace(/\n+/g, '\n> '),
+    '',
+    '---',
     '',
     belge,
     '',

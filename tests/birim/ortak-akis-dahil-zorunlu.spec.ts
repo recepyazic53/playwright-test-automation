@@ -1,7 +1,7 @@
-// KORUMA TESTİ — Akışa eklenmiş ortak akış bloğu ("dahil" anahtarıyla isteğe bağlı) ve ortak akışın EKRANDA ALANI OLMAYAN zorunlu
-// senaryo ayarı (ör. "Teslim şekli"; ortak akışın kendi koşulları kullanır). Blok dahil değilken bu alan formda gizlenir, değeri
+// KORUMA TESTİ — Akışa eklenmiş genel senaryo bloğu ("dahil" anahtarıyla isteğe bağlı) ve genel senaryonun EKRANDA ALANI OLMAYAN zorunlu
+// senaryo ayarı (ör. "Teslim şekli"; genel senaryonun kendi koşulları kullanır). Blok dahil değilken bu alan formda gizlenir, değeri
 // yazılmaz; doğrulayıcı (form, sunucu kaydı, Dene) onu zorunlu saymamalı, koşu bloğun adımlarını koşmamalı. Blok dahilken zorunludur.
-// Kök neden: ortak akışın senaryo düzeyi alanları açılan modele görünürlüksüz eklenirdi (model-formu.mjs > ortakAkislariAc); form
+// Kök neden: genel senaryonun senaryo düzeyi alanları açılan modele görünürlüksüz eklenirdi (model-formu.mjs > ortakAkislariAc); form
 // alanı bloğun adımında gösterip gizlerken doğrulayıcı "her zaman görünür" sayıyordu.
 // Güvenlik: yalnız 127.0.0.1 — örnek fikstürün GİRİŞSİZ sayfası (/acik-siparis/); ayrı Nöbetçi örneği, geçici veritabanı.
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -24,7 +24,7 @@ const ORTAK_ANAHTAR = 'kargo-ortak';
 const DAHIL = 'kargoBlokuDahil';
 const DAHIL_ETIKETI = '“Kargo bloğu” dahil';
 
-/** Ortak akış: teslimat seçimi; "Teslim şekli" = kaydet ise kaydetme adımı. Teslim şekli ekranda alanı olmayan zorunlu senaryo ayarı. */
+/** Genel senaryo: teslimat seçimi; "Teslim şekli" = kaydet ise kaydetme adımı. Teslim şekli ekranda alanı olmayan zorunlu senaryo ayarı. */
 function ortakModel(): Nesne {
   return {
     semaSurumu: 2, tur: 'ortakAkis', id: ORTAK_ANAHTAR, ad: 'Kargo bloğu', aciklama: 'Kargo kısmı (nötr fikstür).',
@@ -52,10 +52,10 @@ function ortakModel(): Nesne {
   };
 }
 
-/** Ortak akışı "dahil" anahtarıyla kullanan ekran (girişsiz sayfa): müşteri adı → Devam → (dahilse) kargo bloğu. */
+/** Genel senaryoyu "dahil" anahtarıyla kullanan ekran (girişsiz sayfa): müşteri adı → Devam → (dahilse) kargo bloğu. */
 function ekranModel(): Nesne {
   return {
-    semaSurumu: 2, tur: 'ekran', id: 'kargolu-siparis', ad: 'Kargolu Sipariş', aciklama: 'Ortak akış bloğu isteğe bağlı (nötr fikstür).', ekranUrl: '/acik-siparis/', girisGerekmez: true,
+    semaSurumu: 2, tur: 'ekran', id: 'kargolu-siparis', ad: 'Kargolu Sipariş', aciklama: 'Genel senaryo bloğu isteğe bağlı (nötr fikstür).', ekranUrl: '/acik-siparis/', girisGerekmez: true,
     specDosyasi: 'tests/scenarios/kargolu-siparis/kargolu-siparis.spec.ts', pageObject: 'yok (model koşucusu)', veriKaynaklari: { senaryo: 'Nöbetçi > Senaryolar (kargolu-siparis)' },
     kosullar: { [`${DAHIL}Kosulu`]: { ifade: { senaryoAyari: DAHIL, esit: true } } },
     adimlar: [
@@ -123,7 +123,7 @@ test.describe('saf işlevler', () => {
     expect(acik.adimlar.map((a) => [a.id, a.dahil])).toEqual([['musteri', true], ['kargoAdimi_teslimat', true], ['kargoAdimi_kaydet', true]]);
   });
 
-  test('açılım: alanın kendi koşulu korunur (VE); aynı ortak akış iki blokta ise herhangi biri dahilse (VEYA); koşulsuz blokta koşul eklenmez', () => {
+  test('açılım: alanın kendi koşulu korunur (VE); aynı genel senaryo iki blokta ise herhangi biri dahilse (VEYA); koşulsuz blokta koşul eklenmez', () => {
     const ortak = ortakModel();
     ortak.kosullar.gelismis = { ifade: { senaryoAyari: 'gelismisKargo', esit: true } };
     ortak.senaryoDuzeyi.alanlar[0].gorunurluk = { kosul: 'gelismis' };

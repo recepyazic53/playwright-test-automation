@@ -106,12 +106,8 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt akışı');
   await expect(kart(page, 'Dikkat')).toContainText('kritik · son koşusunda başarısız oldu');
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt Servisi › POST /kayit');
-  // Rapor al (PDF): genel kapsam seçili gelir.
-  await page.getByRole('button', { name: 'Rapor al (PDF)' }).click();
-  const diyalog = page.getByRole('dialog');
-  await expect(diyalog.getByRole('radio', { name: /^Genel/ })).toBeChecked();
-  await page.keyboard.press('Escape');
-  await expect(diyalog).toHaveCount(0);
+  // Özet sayfasında rapor düğmesi yok: rapor Raporlar sekmesinden alınır.
+  await expect(page.getByRole('button', { name: 'Rapor al (PDF)' })).toHaveCount(0);
   // Kutuya tıklayınca ilgili sekme.
   await kutular.nth(1).click();
   await expect(page).toHaveURL(/#\/sonuclar\/servisler$/);
@@ -189,7 +185,7 @@ test('Özet rehberi bölümleri ekrandaki sırayla anlatır ve vurgular; Sonuçl
   const { page, kapat } = await sayfaAc(1440, 1000);
   await git(page, '#/sonuclar/ozet');
   const bolumler: Array<[string, string]> = [
-    ['Ekran / servis seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık ve "Rapor al (PDF)"', '.sonuc-icerik > .sayfa-basligi'],
+    ['Ekran / servis seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık', '.sonuc-icerik > .sayfa-basligi'],
     ['Rapor sekmeleri', '.sonuc-sekmeleri'], ['Tarih aralığı', '.sonuc-araligi'], ['Özet kutuları', '.ozet-kutulari'],
     ['Dikkat', '.farkindalik-karti.dikkat'], ['Bakım', '.farkindalik-karti.bakim'], ['Kapsam ve güvenlik', '.farkindalik-karti.kapsam']
   ];

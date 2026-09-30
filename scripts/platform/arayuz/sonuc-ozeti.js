@@ -7,7 +7,6 @@
 // yazılır (h(); innerHTML yok). Eşikler Ayarlar > Arayüz > Sonuçlar özeti'ndedir.
 import { api, h, ikon, rozet } from './ortak.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
-import { pdfRaporDugmesi } from './pdf-rapor.js';
 import { farkHapi, oranSaglikSinifi } from './sonuclar.js';
 import { baslarkenKarti } from './baslarken.js';
 
@@ -60,8 +59,7 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
         h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar/ozet' }, 'Sonuçlar'),
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Genel')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Sonuçlar — '), 'Genel')),
-        h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), 'Dönem ', donemMetni), donemNotu)),
-      h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'genel' }))),
+        h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), 'Dönem ', donemMetni), donemNotu))),
     sekmeler,
     // Başlarken: ilk koşuya giden yol (tamamlanınca ya da gizlenince kaybolur; baslarken.js).
     baslarkenKarti(proje),

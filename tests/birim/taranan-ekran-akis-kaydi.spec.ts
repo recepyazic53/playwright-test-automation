@@ -166,7 +166,7 @@ test('taranan ekranda yeni akış açılıp kaydedilince de model sürüm 2 olur
   expect((m.akislar as Nesne[]).map((a) => a.ad)).toEqual(['Ana akış', 'Gönderimli akış']);
 });
 
-test('sürüm 1 model: koşu tanımı yoksa yükseltilmez; ortak akış / alt model / sürüm 2 dokunulmaz; v1 model geçerli kalır', () => {
+test('sürüm 1 model: koşu tanımı yoksa yükseltilmez; genel senaryo / alt model / sürüm 2 dokunulmaz; v1 model geçerli kalır', () => {
   const v1 = kopya(paket.model) as Nesne;
   expect(semaSurumunuYukselt(v1)).toBe(false);
   expect(v1.semaSurumu).toBe(1);

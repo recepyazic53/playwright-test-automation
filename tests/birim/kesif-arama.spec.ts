@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — Keşif ve arama (v1.4): hızlı arama (Ctrl+K) servisleri, metotları, servis akışlarını, uçtan uca akışları,
-// ortak akışları ve eylemleri ("Yedek al", "Yedek yükle", "Playwright koduna dışa aktar", "Kurtarma kuralı ekle", "Rapor al")
+// genel senaryoları ve eylemleri ("Yedek al", "Yedek yükle", "Playwright koduna dışa aktar", "Kurtarma kuralı ekle", "Rapor al")
 // Türkçe büyük/küçük harf ve aksan duyarsız bulur; Playwright'a dışa aktarma aramadan senaryo seçilip açıklamalı onayla indirilir;
 // Koşu > Gelişmiş > "Oturum kontrolü (sn)" ile giriş tarifindeki "Oturum kontrol adresi" birbirine bağlantı verir.
 // Yalnız 127.0.0.1'deki geçici Nöbetçi; ortam adresi kullanılmayan yerel bir porttur (hiçbir koşu / istek başlatılmaz).

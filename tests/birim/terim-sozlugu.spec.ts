@@ -97,7 +97,7 @@ test('tema: "Canlı" adı "Parlak" oldu; eski "canli" anahtarı "parlak"a eşlen
 
 test('Terimler sözlüğü: istenen her kavram tek cümleyle; sözlüğün kendisi de kurallara uyar', () => {
   const terimler = TERIMLER.map((t) => t.terim);
-  for (const t of ['Ekran', 'Ortak akış', 'Akış', 'Senaryo', 'Model', 'Paket', 'Bulgu', 'Test verisi tablosu (kayıt / liste)', 'Karşılık', 'Ortam türü', 'İzin', 'Planlı koşu', 'Dene / Koşu',
+  for (const t of ['Ekran', 'Genel senaryo', 'Akış', 'Senaryo', 'Model', 'Paket', 'Bulgu', 'Test verisi tablosu (kayıt / liste)', 'Karşılık', 'Ortam türü', 'İzin', 'Planlı koşu', 'Dene / Koşu',
     'Ekranlar ve servisler', 'Toplu koşuya dahil', 'Korunan parça', 'Alan bağlantısı', 'Kanıt']) {
     expect(terimler, t).toContain(t);
   }
@@ -143,9 +143,9 @@ test('v1.4 terimleri: sol menü "Ekranlar ve servisler" / "N ekran", senaryo for
   expect(arayuz('urunler.js')).toContain("'aria-hidden': 'true' }, 'Ekranlar ve servisler')");
   for (const ad of ['senaryolar.js', 'sonuclar.js', 'servisler.js', 'uctan-uca.js']) expect(arayuz(ad), ad).toContain("'aria-label': 'Ekranlar ve servisler'");
   expect(arayuz('senaryolar.js')).toMatch(/\.length\} ekran`/);
-  // Sonuçlar: ortak akış ekran sayısına girmez, ayrı grupta.
+  // Sonuçlar: genel senaryo ekran sayısına girmez, ayrı grupta.
   expect(arayuz('sonuclar.js')).toMatch(/ozet\.ekranlar\.filter\(\(e\) => !e\.ortakAkis\)\.length\} ekran`/);
-  expect(arayuz('sonuclar.js')).toContain("anahtar: 'ortak-akislar', baslik: 'Ortak akışlar'");
+  expect(arayuz('sonuclar.js')).toContain("anahtar: 'ortak-akislar', baslik: 'Genel senaryolar'");
   const form = arayuz('senaryo-formu.js');
   expect(form).toContain("kosudaKutu, 'Toplu koşuya dahil')");
   expect(form).not.toMatch(/kosudaKutu, 'Koşuda'\)/);

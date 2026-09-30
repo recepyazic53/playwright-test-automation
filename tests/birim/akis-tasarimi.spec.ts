@@ -247,7 +247,7 @@ test('akış düzenleyici: diyagramın gösteremediği adım özellikleri akış
   // Eskiden kilitleyenler artık düzenlenebilir (ayrıntı: akis-korunan.spec.ts).
   expect(bozuk((m) => { m.adimlar[0].kosu.aksiyonlar[0].metin = 'Devam'; })).toEqual({ duzenlenebilir: true, neden: null });
   expect(bozuk((m) => { m.adimlar[0].kosu.basariGostergesi = { tur: 'url', deger: '/tamam' }; })).toEqual({ duzenlenebilir: true, neden: null });
-  // Hata göstergesi (uyarısız) kaydederken adımdan korunur; ortak akış da düzenlenebilir.
+  // Hata göstergesi (uyarısız) kaydederken adımdan korunur; genel senaryo da düzenlenebilir.
   expect(bozuk((m) => { m.adimlar[0].kosu.hataGostergesi = { secici: '#hata' }; }).duzenlenebilir).toBe(true);
   expect(bozuk((m) => { m.tur = 'ortakAkis'; }).duzenlenebilir).toBe(true);
   // Korunan parça adıma kimliğiyle bağlanır: kimliksiz / aynı kimlikli adım korunamaz → kilit sürer (nedeniyle).

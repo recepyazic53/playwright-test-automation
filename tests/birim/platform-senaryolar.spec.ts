@@ -266,7 +266,7 @@ test.describe('Model tabanlı form — şema', () => {
     expect(beklenenSonucEtiketi(sema, { ...TEMEL, onayAdimiDahil: true })).toMatchObject({ tur: 'basari', metin: 'Ödeme' });
     expect(beklenenSonucEtiketi(sema, TEMEL)).toMatchObject({ tur: 'basari', metin: 'Tutar hesaplama' });
     expect(beklenenSonucEtiketi(sema, { ...TEMEL, beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'onay', mesaj: 'm' } })).toMatchObject({ tur: 'hata', metin: 'Hata: Onay' });
-    // Ortak akış: kapsam dışıysa ya da adımın kendi koşulu (ödeme şekli) sağlanmıyorsa son adım sayılmaz.
+    // Genel senaryo: kapsam dışıysa ya da adımın kendi koşulu (ödeme şekli) sağlanmıyorsa son adım sayılmaz.
     const ekran = {
       id: 'e', ad: 'E', kosullar: { odemeDahil: { ifade: { senaryoAyari: 'odemeDahil', esit: true } } },
       adimlar: [

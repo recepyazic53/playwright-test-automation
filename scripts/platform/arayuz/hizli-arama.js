@@ -1,5 +1,5 @@
 // HIZLI ARAMA (Ctrl+K / ⌘K ya da üst çubuktaki "Ara" düğmesi): eylemler (Yedek al, Yedek yükle, Playwright koduna dışa aktar,
-// Kurtarma kuralı ekle, Rapor al…), ekranlar, ortak akışlar, senaryolar, servisler, metotlar, servis akışları, uçtan uca akışlar,
+// Kurtarma kuralı ekle, Rapor al…), ekranlar, genel senaryolar, senaryolar, servisler, metotlar, servis akışları, uçtan uca akışlar,
 // Ayarlar bölümleri ve sık aranan ayarlar tek kutudan bulunur. Veriler pencere açılınca bir kez okunur (projenin kendi kayıtları;
 // hiçbir dış istek yok). Klavye: ↑ / ↓ gezinir, Enter açar, Esc kapatır; alt listede (ör. dışa aktarılacak senaryo) boş kutuda
 // Geri (Backspace) ana listeye döner. Arama Türkçe büyük/küçük harf, aksan ve noktalama duyarsızdır; tüm sözcükler geçmeli.
@@ -88,7 +88,7 @@ export async function ogeleriTopla(proje, ayarBolumleri, ustSayfalar = []) {
   for (const e of ekranlar) {
     const ortak = e.modelTuru === 'ortakAkis';
     if (e.modelTuru === 'altModel') continue;
-    ogeler.push({ tur: ortak ? 'Ortak akışlar' : 'Ekranlar', baslik: e.ad, alt: e.durum === 'devre_disi' ? 'devre dışı' : e.modelSurumu ? `model v${e.modelSurumu}` : undefined, ikonAd: ortak ? 'pusula' : 'ekran', hedef: `#/ekranlar/e/${q(e.id)}` });
+    ogeler.push({ tur: ortak ? 'Genel senaryolar' : 'Ekranlar', baslik: e.ad, alt: e.durum === 'devre_disi' ? 'devre dışı' : e.modelSurumu ? `model v${e.modelSurumu}` : undefined, ikonAd: ortak ? 'pusula' : 'ekran', hedef: `#/ekranlar/e/${q(e.id)}` });
   }
   for (const s of senaryolar) {
     ogeler.push({ tur: 'Senaryolar', baslik: s.baslik, alt: ekranAdi.get(s.ekranId) || s.ekranAdi || undefined, ikonAd: 'liste', hedef: `#/senaryolar/duzenle/${q(s.id)}` });
@@ -116,7 +116,7 @@ export async function ogeleriTopla(proje, ayarBolumleri, ustSayfalar = []) {
   return ogeler;
 }
 
-const GRUP_SIRASI = ['Eylemler', 'Ekranlar', 'Ortak akışlar', 'Senaryolar', 'Servisler', 'Metotlar', 'Servis akışları', 'Uçtan uca akışlar', 'Ayarlar'];
+const GRUP_SIRASI = ['Eylemler', 'Ekranlar', 'Genel senaryolar', 'Senaryolar', 'Servisler', 'Metotlar', 'Servis akışları', 'Uçtan uca akışlar', 'Ayarlar'];
 const GRUP_SINIRI = 8;
 
 /**

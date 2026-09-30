@@ -1,7 +1,7 @@
-// UÇTAN UCA (yerel) — Ortak akışın "Test verisi" sekmesi: alan → tablo sütunu bağı ortak akışta bir kez kurulur ve onu kullanan
-// ekranlara VARSAYILAN olarak geçer; ekran kendi bağıyla ezebilir, "Ortak akışa dön" ile varsayılana döner. Etkin bağ
+// UÇTAN UCA (yerel) — Genel senaryonun "Test verisi" sekmesi: alan → tablo sütunu bağı genel senaryoda bir kez kurulur ve onu kullanan
+// ekranlara VARSAYILAN olarak geçer; ekran kendi bağıyla ezebilir, "Genel senaryoya dön" ile varsayılana döner. Etkin bağ
 // (tablolar/ekran-baglari.mjs > etkinAlanBaglari) senaryo formunda ("Tablodan" seçenekleri) ve koşuda (${Tablo.Sütun} satır seçimi)
-// kullanılır. Ortak akış paketinin testVerisi bağları ortak akışın ayarlarına yazılır.
+// kullanılır. Genel senaryo paketinin testVerisi bağları genel senaryonun ayarlarına yazılır.
 // Güvenlik: uygulama 127.0.0.1'deki örnek fikstürün GİRİŞSİZ sayfasıdır (/acik-siparis/); ayrı Nöbetçi örneği, geçici veritabanı.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -39,7 +39,7 @@ async function basarili(yol: string, govde: Nesne): Promise<Nesne> {
 }
 const baglar = async (id: string): Promise<Nesne> => (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${id}`)) as Nesne;
 
-/** Ortak akış: teslimat seçimi + kaydet; paketinde kayıt tablosu ve teslimat alanının bağı. */
+/** Genel senaryo: teslimat seçimi + kaydet; paketinde kayıt tablosu ve teslimat alanının bağı. */
 function ortakPaketi(): Nesne {
   return {
     tur: 'sayfa-paketi', surum: 1,
@@ -64,13 +64,13 @@ function ortakPaketi(): Nesne {
   };
 }
 
-/** Ortak akışı kullanan ekran (girişsiz sayfa): müşteri adı → Devam → ortak akış (teslimat + kaydet). */
+/** Genel senaryoyu kullanan ekran (girişsiz sayfa): müşteri adı → Devam → genel senaryo (teslimat + kaydet). */
 function ekranPaketi(): Nesne {
   return {
     tur: 'sayfa-paketi', surum: 1,
     meta: { ekran: { anahtar: 'ortakli-siparis', ad: 'Ortaklı Sipariş', urlYolu: '/acik-siparis/' }, olusturan: 'test', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: [] },
     model: {
-      semaSurumu: 2, tur: 'ekran', id: 'ortakli-siparis', ad: 'Ortaklı Sipariş', aciklama: 'Ortak akışı kullanan ekran (nötr fikstür).', ekranUrl: '/acik-siparis/', girisGerekmez: true,
+      semaSurumu: 2, tur: 'ekran', id: 'ortakli-siparis', ad: 'Ortaklı Sipariş', aciklama: 'Genel senaryoyu kullanan ekran (nötr fikstür).', ekranUrl: '/acik-siparis/', girisGerekmez: true,
       specDosyasi: 'tests/scenarios/ortakli-siparis/ortakli-siparis.spec.ts', pageObject: 'yok (model koşucusu)', veriKaynaklari: { senaryo: 'Nöbetçi > Senaryolar (ortakli-siparis)' },
       kosullar: {},
       adimlar: [
@@ -131,7 +131,7 @@ function agKontrol(istekler: string[]): void {
   expect(istekler.filter((u) => !u.startsWith(nobetci.adres) && !u.startsWith('data:'))).toEqual([]);
 }
 
-test('ortak akış paketinin testVerisi bağı ortak akışın ayarlarına yazılır; kullanan ekrana varsayılan olarak geçer (ekranın kendi bağı yok)', async () => {
+test('genel senaryo paketinin testVerisi bağı genel senaryonun ayarlarına yazılır; kullanan ekrana varsayılan olarak geçer (ekranın kendi bağı yok)', async () => {
   await basarili('/platform/sayfa-paketi/ekle', {
     projeId, paket: ortakPaketi(), senaryoIndeksleri: [], ortamIdleri: [],
     testVerisi: { tablolar: { [TABLO]: { islem: 'yeni' } }, baglantilar: ['teslimatSecimi'] }
@@ -143,23 +143,23 @@ test('ortak akış paketinin testVerisi bağı ortak akışın ayarlarına yazı
   tabloId = String(((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).find((t) => t.ad === TABLO)?.id);
   const o = await baglar(ortakId);
   expect(o).toMatchObject({ ortakAkis: true, baglar: { teslimatSecimi: { tablo: tabloId, sutun: 'Teslimat' } }, ortakBaglar: {} });
-  // Ortak akışın kendi alanları listelenir (ortak akış kendi başına koşmaz ama bağlanır).
+  // Genel senaryonun kendi alanları listelenir (genel senaryo kendi başına koşmaz ama bağlanır).
   expect((o.girdiler as Nesne[]).map((g) => g.id)).toEqual(['teslimatSecimi']);
   const e = await baglar(ekranId);
   expect(e.ortakAkis).toBe(false);
   expect(e.baglar).toEqual({});
   expect(e.ortakBaglar).toEqual({ teslimatSecimi: { tablo: tabloId, sutun: 'Teslimat', ortakAkis: { id: ortakId, ad: 'Teslimat (ortak)' } } });
-  // Senaryo formu: ortak akıştan gelen bağla teslimat alanının seçenekleri tablodan ("Tablodan").
+  // Senaryo formu: genel senaryodan gelen bağla teslimat alanının seçenekleri tablodan ("Tablodan").
   const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`) as Nesne;
   const liste = (form.degerListeleri as Nesne[]).find((l) => l.hedef?.alan === 'teslimatSecimi');
   expect(liste, JSON.stringify(form.degerListeleri)).toBeTruthy();
   expect(liste?.baglanti).toMatchObject({ tablo: TABLO, sutun: 'Teslimat' });
-  // Tablolar ekranı: tablo, ortak akış bağıyla onu kullanan ekranda da kullanılıyor sayılır.
+  // Tablolar ekranı: tablo, genel senaryo bağıyla onu kullanan ekranda da kullanılıyor sayılır.
   const tv = await api(`/platform/tablolar?projeId=${projeId}&baglam=1`);
   expect((tv.ekranKullanimi as Nesne)[tabloId]).toEqual(expect.arrayContaining(['Teslimat (ortak)', 'Ortaklı Sipariş']));
 });
 
-test('koşu: ortak akışın bağı ${Tablo.Sütun} satır seçiminde kullanılır (teslimat "genis" → aynı satırın Ad\'ı)', async () => {
+test('koşu: genel senaryonun bağı ${Tablo.Sütun} satır seçiminde kullanılır (teslimat "genis" → aynı satırın Ad\'ı)', async () => {
   test.setTimeout(120_000);
   const yeni = await basarili('/platform/senaryo/kaydet', {
     projeId, ekranId, baslik: 'Ortak bağla satır', ortamIdleri: [ortamId],
@@ -169,14 +169,14 @@ test('koşu: ortak akışın bağı ${Tablo.Sütun} satır seçiminde kullanıl�
   expect(y.basarili, y.mesaj).toBe(true);
   const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
-  // Bağ olmasaydı ilk satır (Ayşe) seçilirdi; ortak akışın bağıyla teslimat değeri "genis" olan satır seçildi.
+  // Bağ olmasaydı ilk satır (Ayşe) seçilirdi; genel senaryonun bağıyla teslimat değeri "genis" olan satır seçildi.
   expect(uygulama.acikSiparisler.at(-1)).toMatchObject({ musteriAd: 'Ali Deneme', teslimat: 'genis' });
 });
 
-test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüşümleri yok); ekranda "Ortak akıştan" bölümü, ezme ve "Ortak akışa dön"', async () => {
+test('arayüz: genel senaryoda Test verisi sekmesi (bağ kaydı, senaryo dönüşümleri yok); ekranda "Genel senaryodan" bölümü, ezme ve "Genel senaryoya dön"', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
-  // Ortak akış sayfası.
+  // Genel senaryo sayfası.
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortakId)}`);
   await page.getByRole('tab', { name: 'Test verisi' }).click();
   const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
@@ -197,12 +197,12 @@ test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüş
   await expect(kart.getByText('✓ Kaydedildi')).toBeVisible();
   await expect.poll(async () => (await baglar(ortakId)).baglar).toEqual({ teslimatSecimi: { tablo: tabloId, sutun: 'Teslimat' } });
 
-  // Kullanan ekran: bağ ortak akıştan gelir; değiştirilince ekrana özel olur; "Ortak akışa dön" ekran bağını siler.
+  // Kullanan ekran: bağ genel senaryodan gelir; değiştirilince ekrana özel olur; "Genel senaryoya dön" ekran bağını siler.
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}/veri`);
   const ekranKarti = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
-  // Ortak akışın alanları ayrı, varsayılan kapalı "Ortak akıştan: <ad>" bölümünde: önce açılır.
-  const bolum = ekranKarti.getByRole('region', { name: /^Ortak akıştan: Teslimat \(ortak\)/ });
-  await bolum.getByRole('button', { name: /^Ortak akıştan: Teslimat \(ortak\)/ }).click();
+  // Genel senaryonun alanları ayrı, varsayılan kapalı "Genel senaryodan: <ad>" bölümünde: önce açılır.
+  const bolum = ekranKarti.getByRole('region', { name: /^Genel senaryodan: Teslimat \(ortak\)/ });
+  await bolum.getByRole('button', { name: /^Genel senaryodan: Teslimat \(ortak\)/ }).click();
   const secim = bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu' });
   await expect(secim.locator('option:checked')).toHaveText(`${TABLO} → Teslimat`);
   await expect(bolum.getByText('ekrana özel', { exact: true })).toHaveCount(0);
@@ -210,10 +210,10 @@ test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüş
   await expect(ekranKarti.getByText('✓ Kaydedildi')).toBeVisible();
   await expect.poll(async () => (await baglar(ekranId)).baglar).toEqual({ teslimatSecimi: { tablo: tabloId, sutun: 'Ad' } });
   await expect(bolum.getByText('ekrana özel', { exact: true })).toBeVisible();
-  // Ekrana özel bağ ortak akışınkini ezer (senaryo formunda da).
+  // Ekrana özel bağ genel senaryonunkini ezer (senaryo formunda da).
   const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`) as Nesne;
   expect((form.degerListeleri as Nesne[]).find((l) => l.hedef?.alan === 'teslimatSecimi')?.baglanti).toMatchObject({ tablo: TABLO, sutun: 'Ad' });
-  await ekranKarti.getByRole('button', { name: 'Teslimat: ortak akışa dön' }).click();
+  await ekranKarti.getByRole('button', { name: 'Teslimat: genel senaryoya dön' }).click();
   await expect.poll(async () => (await baglar(ekranId)).baglar).toEqual({});
   await expect(bolum.getByText('ekrana özel', { exact: true })).toHaveCount(0);
   await expect(secim.locator('option:checked')).toHaveText(`${TABLO} → Teslimat`);
@@ -221,7 +221,7 @@ test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüş
   await page.close();
 });
 
-/** İkinci ortak akış: tek alan (Şehir). */
+/** İkinci genel senaryo: tek alan (Şehir). */
 function adresPaketi(): Nesne {
   const p = ortakPaketi();
   delete p.testVerisi;
@@ -238,7 +238,7 @@ function adresPaketi(): Nesne {
   return p;
 }
 
-/** İki ortak akışı kullanan ekran (kendi alanı: Ad Soyad). */
+/** İki genel senaryoyu kullanan ekran (kendi alanı: Ad Soyad). */
 function ikiOrtakliEkranPaketi(): Nesne {
   const p = ekranPaketi();
   p.meta = { ...p.meta, ekran: { anahtar: 'iki-ortakli', ad: 'İki Ortaklı Sipariş', urlYolu: '/acik-siparis/' } };
@@ -257,40 +257,40 @@ async function tasmaYok(page: Page): Promise<void> {
   expect(tasma).toEqual({ sayfa: 0, bolumler: 0 });
 }
 
-test('arayüz: ortak akış alanları ekranın kendi alanlarının altında, ayrı ve kapalı bölümde; ekrana özel bağ bölümü açık getirir', async () => {
+test('arayüz: genel senaryo alanları ekranın kendi alanlarının altında, ayrı ve kapalı bölümde; ekrana özel bağ bölümü açık getirir', async () => {
   test.setTimeout(90_000);
   const { page, istekler } = await sayfa();
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}/veri`);
   const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
   const kendiAlan = kart.getByRole('combobox', { name: 'Ad Soyad tablo sütunu' });
   await expect(kendiAlan).toBeVisible();
-  await expect(kart.getByText(/Ortak akışlardan gelen alanlar altta/)).toBeVisible();
-  const bolum = kart.getByRole('region', { name: 'Ortak akıştan: Teslimat (ortak) (1 alan)' });
-  const dugme = bolum.getByRole('button', { name: 'Ortak akıştan: Teslimat (ortak) (1 alan)' });
+  await expect(kart.getByText(/Genel senaryolardan gelen alanlar altta/)).toBeVisible();
+  const bolum = kart.getByRole('region', { name: 'Genel senaryodan: Teslimat (ortak) (1 alan)' });
+  const dugme = bolum.getByRole('button', { name: 'Genel senaryodan: Teslimat (ortak) (1 alan)' });
   await expect(dugme).toHaveAttribute('aria-expanded', 'false');
   await expect(bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu' })).toBeHidden();
-  await expect(bolum.getByRole('link', { name: 'Ortak akış sayfasında düzenle →' })).toHaveAttribute('href', `#/ekranlar/e/${encodeURIComponent(ortakId)}/veri`);
-  // Ekranın kendi alanı üstte, ortak akış bölümü altta; ortak akış alanı ekranın kendi listesinde yok.
+  await expect(bolum.getByRole('link', { name: 'Genel senaryo sayfasında düzenle →' })).toHaveAttribute('href', `#/ekranlar/e/${encodeURIComponent(ortakId)}/veri`);
+  // Ekranın kendi alanı üstte, genel senaryo bölümü altta; genel senaryo alanı ekranın kendi listesinde yok.
   const [ustY, altY] = [(await kendiAlan.boundingBox())?.y ?? 0, (await bolum.boundingBox())?.y ?? 0];
   expect(ustY).toBeLessThan(altY);
   await expect(kart.getByRole('combobox', { name: 'Teslimat tablo sütunu', includeHidden: true })).toHaveCount(1);
   await expect(bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu', includeHidden: true })).toHaveCount(1);
   await dugme.click();
-  await expect(bolum.getByText(/Bu bağlar ortak akışta kurulur ve bu ekrana otomatik gelir/)).toBeVisible();
+  await expect(bolum.getByText(/Bu bağlar genel senaryoda kurulur ve bu ekrana otomatik gelir/)).toBeVisible();
   await expect(bolum.getByRole('combobox', { name: 'Teslimat tablo sütunu' })).toBeVisible();
 
-  // Ekrana özel bağ varken sayfa açılınca bölüm açık gelir, alanda "ekrana özel" rozeti; "Ortak akışa dön" rozeti kaldırır.
+  // Ekrana özel bağ varken sayfa açılınca bölüm açık gelir, alanda "ekrana özel" rozeti; "Genel senaryoya dön" rozeti kaldırır.
   await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId, baglar: { teslimatSecimi: { tablo: tabloId, sutun: 'Ad' } } });
   await page.reload();
   await expect(dugme).toHaveAttribute('aria-expanded', 'true');
   await expect(bolum.getByText('ekrana özel', { exact: true })).toBeVisible();
-  await bolum.getByRole('button', { name: 'Teslimat: ortak akışa dön' }).click();
+  await bolum.getByRole('button', { name: 'Teslimat: genel senaryoya dön' }).click();
   await expect.poll(async () => (await baglar(ekranId)).baglar).toEqual({});
   await expect(bolum.getByText('ekrana özel', { exact: true })).toHaveCount(0);
   await expect(dugme).toHaveAttribute('aria-expanded', 'true');
   await page.reload();
   await expect(dugme).toHaveAttribute('aria-expanded', 'false');
-  // Ortak akış bağı olmayan ekran: ortak akış bölümü yok.
+  // Genel senaryo bağı olmayan ekran: genel senaryo bölümü yok.
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortakId)}/veri`);
   await expect(page.getByRole('combobox', { name: 'Teslimat tablo sütunu' })).toBeVisible();
   await expect(page.locator('.ortak-bolum')).toHaveCount(0);
@@ -311,19 +311,19 @@ test('arayüz: iki ortak akışlı ekranda iki ayrı bölüm; 1440 ve 390 px\'te
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ikiliId)}/veri`);
   const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
   await expect(kart.getByRole('combobox', { name: 'Ad Soyad tablo sütunu' })).toBeVisible();
-  const teslimat = kart.getByRole('region', { name: 'Ortak akıştan: Teslimat (ortak) (1 alan)' });
-  const adres = kart.getByRole('region', { name: 'Ortak akıştan: Adres (ortak) (1 alan)' });
+  const teslimat = kart.getByRole('region', { name: 'Genel senaryodan: Teslimat (ortak) (1 alan)' });
+  const adres = kart.getByRole('region', { name: 'Genel senaryodan: Adres (ortak) (1 alan)' });
   await expect(teslimat).toBeVisible();
   await expect(adres).toBeVisible();
   await expect(kart.locator('.ortak-bolum')).toHaveCount(2);
-  await expect(adres.getByRole('link', { name: 'Ortak akış sayfasında düzenle →' })).toHaveAttribute('href', `#/ekranlar/e/${encodeURIComponent(adresId)}/veri`);
+  await expect(adres.getByRole('link', { name: 'Genel senaryo sayfasında düzenle →' })).toHaveAttribute('href', `#/ekranlar/e/${encodeURIComponent(adresId)}/veri`);
   // Yalnız Adres'te ekrana özel bağ: o bölüm açık, diğeri kapalı.
   await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId: ikiliId, baglar: { sehir: { tablo: tabloId, sutun: 'Teslimat' } } });
   await page.reload();
-  await expect(adres.getByRole('button', { name: /^Ortak akıştan: Adres/ })).toHaveAttribute('aria-expanded', 'true');
-  await expect(teslimat.getByRole('button', { name: /^Ortak akıştan: Teslimat/ })).toHaveAttribute('aria-expanded', 'false');
+  await expect(adres.getByRole('button', { name: /^Genel senaryodan: Adres/ })).toHaveAttribute('aria-expanded', 'true');
+  await expect(teslimat.getByRole('button', { name: /^Genel senaryodan: Teslimat/ })).toHaveAttribute('aria-expanded', 'false');
   await expect(adres.getByText('ekrana özel', { exact: true })).toBeVisible();
-  await teslimat.getByRole('button', { name: /^Ortak akıştan: Teslimat/ }).click();
+  await teslimat.getByRole('button', { name: /^Genel senaryodan: Teslimat/ }).click();
   await tasmaYok(page);
   await page.setViewportSize({ width: 390, height: 900 });
   await expect(adres.getByText('ekrana özel', { exact: true })).toBeVisible();

@@ -650,6 +650,53 @@ export function yardimIpucu(govde, konu) {
   return { dugme, panel };
 }
 
+/**
+ * Sayfa içeriğindeki BÖLÜM AÇIKLAMALARI ("Başlık" + altında düz açıklama paragrafı) ekranı doldurmasın: paragraf gizlenir, başlığın yanına
+ * "?" düğmesi konur; düğme paragrafı açar / kapatır (Esc kapatır). Bilgi kaybolmaz (paragraf DOM'da kalır). Sonradan (eşzamansız) çizilen
+ * bölümler de yakalanır; kap sayfadan kalkınca gözlem biter. Alınmaz: iletişim kutuları, uyarı / durum kutuları, kısa (< 40 karakter) metinler.
+ * @param {HTMLElement} kap
+ */
+export function bolumAciklamalariniSimgeye(kap) {
+  const AC_ESIGI = 40;
+  const uygula = () => {
+    for (const para of kap.querySelectorAll('p.soluk, p.yardim, p.bolum-aciklamasi')) {
+      if (para.dataset.simgede || para.hidden) continue;
+      if (para.closest('dialog, .not-kutusu, [role="alert"], [role="status"], .kayit-meta, .kisa-aciklama, .ayrinti-ipucu, .yardim-paneli, .alan, .sayfa-basligi, .bos-durum, label, fieldset, .izin-satiri, table, li')) continue;
+      if ((para.textContent || '').trim().length < AC_ESIGI) continue;
+      let onceki = para.previousElementSibling;
+      if (onceki && onceki.matches('.bolum-basligi, .kart-basligi, .baslik-satiri, .ara-baslik-satiri')) onceki = onceki.querySelector('h2, h3, h4') || onceki;
+      if (!onceki || !onceki.matches('h2, h3, h4')) continue;
+      if (onceki.querySelector('.ayrinti-dugmesi')) continue;
+      const baslik = onceki;
+      const panelId = yeniKimlik('bolum-aciklamasi');
+      para.id = para.id || panelId;
+      para.dataset.simgede = '1';
+      para.hidden = true;
+      const dugme = /** @type {HTMLButtonElement} */ (h('button', {
+        type: 'button', class: 'ikon-dugme hayalet ayrinti-dugmesi', 'aria-expanded': 'false', 'aria-controls': para.id,
+        'aria-label': `${(baslik.textContent || '').trim()}: açıklamayı göster`, title: 'Açıklama'
+      }, ikon('soru')));
+      const ac = (/** @type {boolean} */ goster) => { para.hidden = !goster; dugme.setAttribute('aria-expanded', String(goster)); };
+      dugme.addEventListener('click', () => ac(para.hidden));
+      const esc = (/** @type {KeyboardEvent} */ o) => { if (o.key === 'Escape' && !para.hidden) { o.preventDefault(); o.stopPropagation(); ac(false); dugme.focus(); } };
+      dugme.addEventListener('keydown', esc);
+      para.addEventListener('keydown', esc);
+      baslik.append(' ', dugme);
+    }
+  };
+  let bekleyen = 0;
+  const gozlemci = new MutationObserver(() => {
+    if (!kap.isConnected) { gozlemci.disconnect(); return; }
+    cancelAnimationFrame(bekleyen);
+    bekleyen = requestAnimationFrame(uygula);
+  });
+  gozlemci.observe(kap, { childList: true, subtree: true });
+  uygula();
+}
+
+/** Bu uzunluktan uzun alan açıklamaları ? düğmesinin içinde durur. */
+const YARDIM_ESIGI = 60;
+
 export function alan(etiket, girdi, secenekler = {}) {
   const id = girdi.id || yeniKimlik('alan');
   girdi.id = id;
@@ -657,8 +704,23 @@ export function alan(etiket, girdi, secenekler = {}) {
   const hataId = `${id}-hata`;
   const aciklamalar = [yardimId, hataId].filter(Boolean).join(' ');
   girdi.setAttribute('aria-describedby', aciklamalar);
+  const etiketi = h('label', { for: id }, etiket, secenekler.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null);
+  // Uzun açıklama ekranı doldurmasın: etiketin yanındaki "?" düğmesiyle açılır (kısa olanlar altta yazılı kalır).
+  if (yardimId && typeof secenekler.yardim === 'string' && secenekler.yardim.length > YARDIM_ESIGI) {
+    const { dugme, panel } = yardimIpucu(secenekler.yardim, String(etiket));
+    panel.id = yardimId;
+    dugme.setAttribute('aria-controls', yardimId);
+    // Ad alanın etiketini içermez (etiketle arama alanın kendisini bulsun).
+    dugme.setAttribute('aria-label', 'Açıklamayı göster');
+    dugme.title = `Açıklama: ${etiket}`;
+    return h('div', { class: 'alan' },
+      h('div', { class: 'alan-etiket-satiri' }, etiketi, dugme),
+      panel,
+      secenekler.icerik || girdi,
+      h('div', { class: 'alan-hatasi', id: hataId, role: 'alert' }));
+  }
   return h('div', { class: 'alan' },
-    h('label', { for: id }, etiket, secenekler.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null),
+    etiketi,
     secenekler.icerik || girdi,
     yardimId ? h('div', { class: 'yardim', id: yardimId }, secenekler.yardim) : null,
     h('div', { class: 'alan-hatasi', id: hataId, role: 'alert' }));

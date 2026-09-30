@@ -83,3 +83,12 @@
 
 /* Seçim keşfi: koşullu alanın hangi seçimde göründüğü. */
 .hizli-kosul { margin: 0 0 4px; }
+
+/* Kaydet / Özet sekmeleri */
+.hizli-sekmeler { display: flex; gap: 4px; border-bottom: 1px solid var(--cizgi, rgba(128, 128, 128, .35)); }
+.hizli-sekme { background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; font: inherit; color: inherit; cursor: pointer; }
+.hizli-sekme[aria-selected="true"] { border-bottom-color: var(--vurgu, currentColor); font-weight: 600; }
+.hizli-sekme:disabled { opacity: .5; cursor: not-allowed; }
+.hizli-sekme-paneli, .hizli-kayit-ozeti, .hizli-ozet-karti { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hizli-sekme-paneli[hidden], .hizli-kayit-ozeti[hidden] { display: none; }
+.tv-katlanir > summary { cursor: pointer; font-size: .9em; margin: 4px 0; }

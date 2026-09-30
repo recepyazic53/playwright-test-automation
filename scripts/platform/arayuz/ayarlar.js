@@ -4,7 +4,7 @@
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
   ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
-  kisaAciklama, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
+  kisaAciklama, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
 import { HIZ_ALANLARI, HIZ_PROFILLERI, KANIT_ALANLARI, KANIT_PROFILLERI, hizDegerleri, hizProfili, kanitDegerleri, kanitProfili } from './kosu-profilleri.mjs';
@@ -72,6 +72,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
     h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
   const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
+  bolumAciklamalariniSimgeye(govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
@@ -98,6 +99,7 @@ export function ustSayfaBolumu(kapsayici, ad, baglam) {
     h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
   const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
+  bolumAciklamalariniSimgeye(govde);
   const ciz = tanim.ad === 'planli-kosular' ? planliKosular : testVerisi;
   Promise.resolve(ciz(govde, baglam)).catch((hata) => {
     if (hata && hata.durum === 423) return;
@@ -205,8 +207,9 @@ function kosuHiziAlanlari(ortam, genel) {
   const guncelle = () => { uyari.hidden = !(ortam && ortam.girisTarifiVar && Number(ekranN.value || genel.ekranEszamanli || 1) > 1); };
   ekranN.addEventListener('input', guncelle);
   guncelle();
-  const bolum = h('fieldset', { class: 'kosu-hizi-alanlari' }, h('legend', {}, 'Koşu hızı'),
-    h('p', { class: 'soluk kucuk' }, 'Bu ortamda aynı anda kaç senaryo koşacağı ve beklemeler. Boş bırakılan değer Ayarlar > Koşu\'daki genel ayarı kullanır.'),
+  const hizIpucu = yardimIpucu('Bu ortamda aynı anda kaç senaryo koşacağı ve beklemeler. Boş bırakılan değer Ayarlar > Koşu\'daki genel ayarı kullanır.', 'Koşu hızı');
+  const bolum = h('fieldset', { class: 'kosu-hizi-alanlari' }, h('legend', {}, 'Koşu hızı ', hizIpucu.dugme),
+    hizIpucu.panel,
     h('div', { class: 'alan-izgarasi' }, ...satirlar), uyari);
   const deger = () => {
     /** @type {Record<string, string>} */
@@ -256,14 +259,16 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     const turTest = h('input', { type: 'radio', name: riskAdi, value: 'test', id: `${riskAdi}-test`, checked: oncekiRisk === false });
     const turCanli = h('input', { type: 'radio', name: riskAdi, value: 'canli', id: `${riskAdi}-canli`, checked: oncekiRisk === true });
     const turHatasi = h('p', { class: 'alan-hatasi', role: 'alert', hidden: true });
+    const turIpucu = yardimIpucu(`${RISKLI_ORTAM_TANIMI} Canlı ortamda ayrıca "Canlı ortamda çalıştırma" izni gerekir.`, 'Ortam türü');
+    turIpucu.panel.id = `${riskAdi}-aciklama`;
+    turIpucu.dugme.setAttribute('aria-controls', turIpucu.panel.id);
     const riskAlani = h('fieldset', { class: 'risk-secimi ortam-turu-secimi', 'aria-required': 'true', 'aria-describedby': `${riskAdi}-aciklama` },
-      h('legend', {}, 'Ortam türü', h('span', { class: 'zorunlu-isaret', 'aria-hidden': 'true' }, ' *')),
+      h('legend', {}, 'Ortam türü', h('span', { class: 'zorunlu-isaret', 'aria-hidden': 'true' }, ' *'), ' ', turIpucu.dugme),
+      turIpucu.panel,
       h('div', { class: 'secenekler-satiri' },
         h('label', { class: 'secenek', for: turTest.id }, turTest, 'Test'),
         h('label', { class: 'secenek', for: turCanli.id }, turCanli, 'Canlı')),
       turHatasi,
-      h('p', { class: 'soluk kucuk', id: `${riskAdi}-aciklama` }, RISKLI_ORTAM_TANIMI,
-        ' Canlı ortamda ayrıca "Canlı ortamda çalıştırma" izni gerekir.'),
       ortam && oncekiRisk === null ? riskBelirtinNotu() : null);
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
@@ -341,10 +346,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
-    tabanAdresleriBolumu(proje),
-    // Kurtarma kuralları kendi Ayarlar bölümüne taşındı; eski yerinden de bulunabilsin.
-    h('p', { class: 'not-kutusu bilgi tasindi-notu kurtarma-tasindi', role: 'note' }, 'Kurtarma kuralları artık Ayarlar menüsünde kendi bölümünde: ',
-      h('a', { href: '#/ayarlar/kurtarma' }, 'Kurtarma kuralları'), '.'));
+    tabanAdresleriBolumu(proje));
 }
 
 /**
@@ -1342,7 +1344,7 @@ async function guvenlik(govde, baglam) {
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('kalkan'), 'Kasayı kilitle'),
       h('span', { class: 'alt' }, rozet([h('span', { class: 'nokta basari', 'aria-hidden': 'true' }), 'kasa açık'], 'basari')), h('div', { class: 'sag' }, kilitle)),
     h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
-    h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
+    h('div', { class: 'ayar-izgarasi esit-boy' }, kilitForm, saklamaForm),
     yasakForm,
     maskeleme,
     form);
@@ -1467,7 +1469,7 @@ async function raporVerileriBolumu(govde, baglam, yenile) {
     h('div', { class: 'not-kutusu bilgi kucuk', role: 'note' },
       'Bu kararlar yalnız PDF raporlarını etkiler ve hepsi isteğe bağlıdır. Kritik işaretli öğe öncelik puanını artırır; son koşusunda kalırsa raporun durum rozeti Kritik olur. Ekip, aksiyonların "Sahip önerisi"dir (yoksa sınıfın varsayılan ekibi). Süre eşiği aşılırsa (p95 > eşik) raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür. Uygulama sürümü: Proje ve ortamlar > ortam > "Uygulama sürümü" ya da koşu başlatılırken.'),
     bolumBasligi('Ekipler', v.ekipler.length), ekipMesaj.kutu, ekipFormu, ekipFormAlani, kayitListesi(ekipSatirlari, 'Henüz ekip yok.', 'kullanici'),
-    ...liste('Ekranlar ve ortak akışlar', 'ekran', v.ekranlar, 'Projede ekran yok.', (x) => (x.ortakAkis ? 'Ortak akış' : x.devreDisi ? 'Devre dışı' : null)),
+    ...liste('Ekranlar ve genel senaryolar', 'ekran', v.ekranlar, 'Projede ekran yok.', (x) => (x.ortakAkis ? 'Genel senaryo' : x.devreDisi ? 'Devre dışı' : null)),
     ...liste('Servisler', 'servis', v.servisler, 'Projede servis yok.', (x) => String(x.tur || '').toUpperCase() || null),
     ...liste('Servis akışları ve uçtan uca akışlar', 'akis', v.akislar, 'Projede akış yok.', (x) => x.tur));
 }

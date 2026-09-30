@@ -1,6 +1,6 @@
-// BAŞTAKİ ORTAK AKIŞ — koşu sırası: Giriş → akışın başındaki ortak akış blokları (girişten sonra açılan sayfada; girişsizde
+// BAŞTAKİ ORTAK AKIŞ — koşu sırası: Giriş → akışın başındaki genel senaryo blokları (girişten sonra açılan sayfada; girişsizde
 // ortamın taban adresinde) → "Ekran açılır" → ekran adımları. Blok "Ekrana dön" ile biterse ekran ikinci kez açılmaz. Akış
-// ayarı "bastakiOrtakAkislar": "sonra" eski davranışı (ekran önce açılır) korur; akışın ortasındaki ortak akışlar değişmez.
+// ayarı "bastakiOrtakAkislar": "sonra" eski davranışı (ekran önce açılır) korur; akışın ortasındaki genel senaryolar değişmez.
 // Testler: koşu planı / senaryo diyagramı / dışa aktarma (saf), doğrulayıcı, gerçek koşu (127.0.0.1'deki sahte uygulama: ana
 // sayfada bağlantıyla açılan pencere + profil formu; istek kaydıyla ekran adresinin kaç kez ve ne zaman istendiği), akış
 // diyagramı ("Ekran açılır" düğümü; kaydetme gidiş-dönüşü, API ve arayüz). Nötr fikstür; değerler sahte; dışarıya istek yok.
@@ -36,7 +36,7 @@ const goreliDegil = (ad: string): boolean => !ad.startsWith('Göreli tarihler �
 
 // ---- Saf: plan, senaryo diyagramı, dışa aktarma, doğrulayıcı ------------------------------------------------------------------
 
-/** Ekran modeli: başta "Profil" ortak akışı, ortada (hesaplamadan sonra) "Onay" ortak akışı. */
+/** Ekran modeli: başta "Profil" genel senaryoyu, ortada (hesaplamadan sonra) "Onay" genel senaryoyu. */
 function ortakliModel(bastaki?: 'once' | 'sonra'): Serbest {
   const m = akisModeli() as Serbest;
   const [bilgiler, basvuran, hesaplama] = m.adimlar as Serbest[];
@@ -49,7 +49,7 @@ function ortakliModel(bastaki?: 'once' | 'sonra'): Serbest {
   return ortakAkislariAc(m, { [PROFIL_DOSYASI]: profilAkisPaketi().model, [ONAY_DOSYASI]: onayAkisPaketi().model }).model as Serbest;
 }
 
-test('plan: yalnız akışın başındaki ortak akış adımları "ekran açılmadan" işaretlenir; ortadaki ortak akış değişmez; "sonra" ayarında işaret yok', () => {
+test('plan: yalnız akışın başındaki genel senaryo adımları "ekran açılmadan" işaretlenir; ortadaki genel senaryo değişmez; "sonra" ayarında işaret yok', () => {
   const plan = modelKosuPlani(ortakliModel(), VERI);
   expect(plan.hatalar).toEqual([]);
   expect(plan.adimlar.map((a) => [a.baslik, a.ekranAcilmadan === true])).toEqual([
@@ -125,7 +125,7 @@ test.describe('koşu ve akış diyagramı', () => {
     return (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Serbest;
   }
   const tasarim = async (akisId: string): Promise<Serbest> => await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekranId}&akisId=${akisId}`) as Serbest;
-  /** Ekranın ana akışının blokları (baştaki ortak akış bloğu hariç). */
+  /** Ekranın ana akışının blokları (baştaki genel senaryo bloğu hariç). */
   let ekranBloklari: Serbest[] = [];
   const ortakBlok = (dosya: string, ad: string): Serbest => ({ tur: 'ortak', dosya, ad, istegeBagli: false });
   const akisKaydet = async (ad: string, bloklar: Serbest[], ek: Nesne = {}): Promise<Yanit> => api('/platform/ekran/akis/kaydet', { projeId, ekranId, ad, bloklar, ...ek });
@@ -196,7 +196,7 @@ test.describe('koşu ve akış diyagramı', () => {
     expect(istekler.indexOf(`GET ${AKIS_YOLU}`)).toBeGreaterThan(istekler.indexOf(`POST ${PROFIL_YOLU}`));
   });
 
-  test('koşu: "Baştaki ortak akışlar: ekran açıldıktan sonra" bugünkü sırayı korur (ekran önce açılır)', async () => {
+  test('koşu: "Baştaki genel senaryolar: ekran açıldıktan sonra" bugünkü sırayı korur (ekran önce açılır)', async () => {
     test.setTimeout(180_000);
     // Ekran önce açılır; blok ekrandan ana sayfaya gidip oradaki pencereyle profili değiştirir, "Ekrana dön" ile döner.
     const blok = ortakBlok(`${DONUSLU_ANAHTAR}.model.json`, 'Profil dönüşlü');
@@ -258,13 +258,13 @@ test.describe('koşu ve akış diyagramı', () => {
       await expect(isaret).toBeVisible();
       await expect(isaret.getByRole('button')).toHaveCount(0);
       expect(await ustte()).toBe(true);
-      await expect(isaret.getByRole('combobox', { name: 'Baştaki ortak akışlar' })).toHaveValue('once');
+      await expect(isaret.getByRole('combobox', { name: 'Baştaki genel senaryolar' })).toHaveValue('once');
       // Ekran adımı "Ekran açılır"ın üstüne çıkamaz.
       await expect(diyagram.getByRole('listitem', { name: /^2\. blok: / }).getByRole('button', { name: 'Yukarı taşı', exact: true })).toBeDisabled();
       // ↓: blok "Ekran açılır"ın altına geçer (ekran açıldıktan sonra).
       await blok.getByRole('button', { name: 'Aşağı taşı', exact: true }).click();
       expect(await ustte()).toBe(false);
-      await expect(isaret.getByRole('combobox', { name: 'Baştaki ortak akışlar' })).toHaveValue('sonra');
+      await expect(isaret.getByRole('combobox', { name: 'Baştaki genel senaryolar' })).toHaveValue('sonra');
       const kaydet = async (): Promise<void> => {
         await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
         const onay = page.locator('dialog.onay-diyalogu');

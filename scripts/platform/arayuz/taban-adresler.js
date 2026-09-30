@@ -80,7 +80,7 @@ const ortamBasligi = (o) => h('th', { scope: 'col', class: 'taban-ortam-sutunu',
 
 /** @param {{ id: string; ad: string }} proje @returns {HTMLElement} */
 export function tabanAdresleriBolumu(proje) {
-  const kap = h('section', { class: 'kart taban-adresleri', 'aria-labelledby': 'taban-adresleri-basligi' }, iskelet('liste'));
+  const kap = h('section', { class: 'taban-adresleri', 'aria-labelledby': 'taban-adresleri-basligi' }, iskelet('liste'));
   yukle(kap, proje).catch((e) => { if (!e || e.durum !== 423) yerlestir(kap, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message || String(e))); });
   return kap;
 }
@@ -99,7 +99,9 @@ async function yukle(kap, proje) {
   ], 'Servis taban adresleri');
   const baslik = h('div', { class: 'bolum-basligi' }, h('h3', { id: 'taban-adresleri-basligi' }, ikon('ag'), 'Servis taban adresleri', rozet(String(veri.tabanAdlari.length)), yardim.dugme));
   const gorunumSecimi = h('div', { class: 'segment taban-gorunum', role: 'radiogroup', 'aria-label': 'Taban adres görünümü' });
-  const icerik = h('div');
+  const icerik = h('div', { class: 'kart taban-kutusu' });
+  /** Sol üst: bu görünümün ekleme düğmesi (taban görünümünde). */
+  const sol = h('div', { class: 'taban-arac-sol' });
   // Görünüm anahtarı: yalnız listenin nasıl gösterildiğini değiştirir (veri aynı); seçilenin ne gösterdiği altında yazar.
   const GORUNUMLER = [
     ['taban', 'Taban adresleri', 'Her taban adresi ve onu kullanan servisler; adresi buradan değiştirince bağlı servislerin hepsi değişir.'],
@@ -110,10 +112,11 @@ async function yukle(kap, proje) {
       type: 'button', role: 'radio', title: ipucu, 'aria-checked': gorunum === d ? 'true' : 'false', 'aria-pressed': gorunum === d ? 'true' : 'false',
       onclick: () => { if (gorunum !== d) { gorunum = d; gorunumYaz(d); ciz(); } }
     }, m)));
-    yerlestir(icerik, gorunum === 'servis' ? servisGorunumu(proje, veri, yenile) : tabanGorunumu(proje, veri, yenile));
+    sol.replaceChildren();
+    yerlestir(icerik, gorunum === 'servis' ? servisGorunumu(proje, veri, yenile) : tabanGorunumu(proje, veri, yenile, sol));
   };
   yerlestir(kap, baslik, yardim.panel,
-    h('div', { class: 'satir-duzen taban-gorunum-satiri' }, h('span', { class: 'soluk kucuk' }, 'Listele:'), gorunumSecimi),
+    h('div', { class: 'taban-arac-cubugu' }, sol, gorunumSecimi),
     icerik);
   ciz();
 }
@@ -199,7 +202,7 @@ function etkiGovdesi(e) {
 
 // --- Taban adresleri (ana liste) ---------------------------------------------------------------------------------------------
 
-function tabanGorunumu(proje, veri, yenile) {
+function tabanGorunumu(proje, veri, yenile, sol) {
   const { ortamlar, satirlar, tabanAdlari } = veri;
   const servis = new Map(satirlar.map((s) => [s.servisId, s]));
   const acik = new Set();
@@ -374,15 +377,17 @@ function tabanGorunumu(proje, veri, yenile) {
           h('td', { class: 'taban-islem-hucresi' }, h('div', { class: 'dugmeler taban-satir-dugmeleri' }, duzenle, silDugmesi)));
         return acikMi ? [satir, uyeSatiri(t)] : [satir];
       })));
-    yerlestir(tabloKap, tabanAdlari.length ? tablo : h('p', { class: 'soluk kucuk' }, 'Henüz taban adresi yok. "Taban adresi ekle" ile ekleyip servisleri ona bağlayın.'));
+    // Tablo boş olsa da görünür (başlıklar + boş satır notu).
+    if (!tabanAdlari.length) tablo.querySelector('tbody')?.append(h('tr', {}, h('td', { class: 'soluk kucuk', colspan: String(ortamlar.length + 3) }, 'Henüz taban adresi yok. "Taban adresi ekle" ile ekleyip servisleri ona bağlayın.')));
+    yerlestir(tabloKap, tablo);
   };
 
   const adsizlar = satirlar.filter((s) => !s.grup).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
   const yeni = h('button', { type: 'button', class: 'birincil' }, ikon('arti'), 'Taban adresi ekle');
   yeni.addEventListener('click', () => tabanFormu(null));
   ciz();
+  sol.replaceChildren(yeni);
   return h('div', {},
-    h('div', { class: 'dugmeler' }, yeni),
     tabloKap,
     adsizlar.length ? h('details', { class: 'taban-adsizlar' },
       h('summary', {}, `Adlandırılmamış adres kullanan ${adsizlar.length} servis`),

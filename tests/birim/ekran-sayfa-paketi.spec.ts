@@ -397,7 +397,7 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     expect(ekranModeliGetir(vt, ek.ekranId)?.surum).toBe(1);
   });
 
-  test('önizlemedeki "Beklenen" rozeti ortak akış açılmış modelle: Senaryolar listesiyle aynı etiket', async () => {
+  test('önizlemedeki "Beklenen" rozeti genel senaryo açılmış modelle: Senaryolar listesiyle aynı etiket', async () => {
     const medya = join(klasor.yol, 'medya');
     const meta = (anahtar: string, ad: string, urlYolu?: string) => ({
       ekran: { anahtar, ad, ...(urlYolu ? { urlYolu } : {}) }, olusturan: 'test', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: []
@@ -409,7 +409,7 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     const bolum = (id: string) => [{ id: `${id}Bolumu`, baslik: id, alanlar: [{
       id: `${id}Notu`, tip: 'metin', etiket: { ekran: `${id} notu` }, yapilandirma: 'senaryo', eslesme: { senaryo: `${id}Notu` }, konum: { secici: `#${id}`, kirilganlik: 'dusuk' }
     }] }];
-    // Ortak akış: ödeme şekline göre iki koşullu adım (kartla / açık hesapla).
+    // Genel senaryo: ödeme şekline göre iki koşullu adım (kartla / açık hesapla).
     const ortak = {
       tur: 'sayfa-paketi', surum: 1, meta: meta('odeme-ortak', 'Ödeme (ortak)'),
       model: {
@@ -429,7 +429,7 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     const ekran = {
       tur: 'sayfa-paketi', surum: 1, meta: meta('ortakli-ekran', 'Ortaklı ekran', '/ortakli/'),
       model: {
-        semaSurumu: 2, tur: 'ekran', id: 'ortakli-ekran', ad: 'Ortaklı ekran', aciklama: 'Ortak akışı kullanan ekran (nötr fikstür).', ekranUrl: '/ortakli/',
+        semaSurumu: 2, tur: 'ekran', id: 'ortakli-ekran', ad: 'Ortaklı ekran', aciklama: 'Genel senaryoyu kullanan ekran (nötr fikstür).', ekranUrl: '/ortakli/',
         specDosyasi: 'tests/scenarios/ortakli-ekran/ortakli-ekran.spec.ts', pageObject: 'yok (model koşucusu)',
         kosullar: { odemeDahil: { ifade: { senaryoAyari: 'odemeDahil', esit: true } } },
         adimlar: [
@@ -454,13 +454,13 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     expect(o.hatalar).toEqual([]);
     const rozetMetni = (s: Nesne) => (s.rozet as { metin?: string } | null)?.metin;
     const rozetler = (o.onizleme?.senaryolar ?? []).map(rozetMetni);
-    // "Dahil": ortak akışın (koşulu sağlanan) son adımı; "dahil değil": ekranın son adımı (başvuru adımı "Ödeme" değil).
+    // "Dahil": genel senaryonun (koşulu sağlanan) son adımı; "dahil değil": ekranın son adımı (başvuru adımı "Ödeme" değil).
     expect(rozetler).toEqual(['Kartla öde', 'Açık hesapla tamamlanır', 'Giriş bilgileri']);
     const ek = await sayfaEkle(vt, projeId, ekran, { senaryoIndeksleri: [0, 1, 2], ortamIdleri: [ortamId], medyaKlasoru: medya });
     const liste = senaryoListesi(vt, projeId, null).senaryolar.filter((s) => s.ekranId === ek.ekranId);
     const listeRozeti = Object.fromEntries(liste.map((s) => [s.baslik, (s.beklenenSonuc as { metin?: string } | null)?.metin]));
     (o.onizleme?.senaryolar ?? []).forEach((s) => expect(listeRozeti[s.baslik], s.baslik).toBe(rozetMetni(s)));
-    // Yapay zekâ istek dosyasındaki senaryo özeti de aynı etiketi taşır (ortak akış açılmış modelle).
+    // Yapay zekâ istek dosyasındaki senaryo özeti de aynı etiketi taşır (genel senaryo açılmış modelle).
     const c = claudeDosyasiYaz(vt, projeId, ek.ekranId, { tur: 'yorumla', klasor: join(klasor.yol, 'analiz-ortak'), projeKoku: klasor.yol });
     const istek = JSON.parse(readFileSync(c.tamYol, 'utf-8')) as { senaryolar: Array<{ baslik: string; beklenenSonuc: string | null }> };
     istek.senaryolar.forEach((s) => expect(s.beklenenSonuc, s.baslik).toBe(listeRozeti[s.baslik]));
