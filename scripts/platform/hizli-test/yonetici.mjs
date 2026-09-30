@@ -44,12 +44,12 @@ import { modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
 import { senaryoKaydet } from '../senaryolar/senaryo-servisi.mjs';
 import { senaryoHazirligi } from '../senaryolar/hazirlik-servisi.mjs';
-import { tablolariListele, tabloKaydet } from '../tablolar/tablo-deposu.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
 import { karsiliklariEkrandanAl } from '../tablolar/karsiliklar.mjs';
-import { tabloTaslagiKur } from './test-verisi-tablosu.mjs';
+import { basvuruYaz, pinAnahtari, planKur, planOnizle, planYaz, senaryoOnerileri, varsayilanSecim } from './kayit-plani.mjs';
 import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
-import { degerBasvurusu, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
+import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku,
   eksikAlanlar, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
@@ -850,74 +850,83 @@ export function hizliTestYoneticisiOlustur(s) {
     return { paket, model, veri, mevcut: mevcut && nesneMi(mevcut.model) ? mevcut.model : null };
   }
 
-  /**
-   * Veri durağında ELLE yazılan değerleri test verisi TABLOLARINA kaydeder (tek tablo değil, gruplar: "Kişi bilgileri", "Kart bilgileri"
-   * ve her diğer alan için kendi tablosu — bkz. test-verisi-tablosu.mjs) ve senaryo alanlarını tablo başvurusuna çevirir ("${Tablo.Sütun}").
-   * Aynı adlı tablo varsa sütunlar birleşir; satır senaryo adıyla eklenir / güncellenir. Senaryo kendi satırına sabitlenir (tabloSecimleri).
-   * @param {Veritabani} vt @param {Nesne} o @param {string} baslik
-   * @returns {{ tablolar: Array<{ tablo: string; tabloId: string; sutunSayisi: number; yeni: boolean; secenekSayisi: number;
-   *   baglar: Record<string, { tablo: string; sutun: string; gizli: boolean }> }>; baglanan?: number } | null}
-   */
-  function degerleriTabloyaKaydet(vt, o, baslik) {
+  /** Kayıt planı: analiz + elle yazılan değerler → tablo planı (kayit-plani.mjs). @param {Nesne} o @param {string} baslik */
+  function planKurOturum(o, baslik) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
-    const t = tabloTaslagiKur({ baslik, alanlar, degerler: aktifDegerler(o) });
-    if (!t) return null;
-    const kucuk = (/** @type {string} */ m) => m.toLocaleLowerCase('tr');
-    /** @type {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>['tablolar']} */
-    const sonuc = [];
-    for (const g of t.tablolar) {
-      const mevcut = tablolariListele(vt, o.projeId).find((x) => kucuk(x.ad) === kucuk(g.tabloAdi));
-      const eskiSutunlar = (mevcut?.sutunlar ?? []).map((x) => ({ ad: x.ad, gizli: x.gizli }));
-      const yeniSutunlar = g.sutunlar.filter((x) => !eskiSutunlar.some((e) => kucuk(e.ad) === kucuk(x.ad)));
-      // Seçim alanı: tabloda okunur metin durur; "metin → seçenek değeri" sayfa karşılığı sütuna yazılır (mevcut karşılıklar korunur).
-      const karsilikli = (/** @type {{ ad: string; gizli: boolean }} */ x) => {
-        const yeniK = Object.entries(g.karsiliklar[x.ad] ?? {});
-        if (!yeniK.length || x.gizli) return {};
-        const eskiK = mevcut?.sutunlar.find((m) => kucuk(m.ad) === kucuk(x.ad))?.karsiliklar ?? {};
-        return { karsiliklar: { ...eskiK, ...Object.fromEntries(yeniK.map(([metin, kod]) => [metin, { ...(eskiK[metin] ?? {}), sayfa: kod }])) } };
-      };
-      const eskiSatir = mevcut?.satirlar.find((r) => kucuk(r.ad) === kucuk(t.satirAdi));
-      // Mevcut satır güncellenirken bu kayıtta verilmeyen (gizli olmayan) eski değerler korunur.
-      const eskiDegerler = eskiSatir ? Object.fromEntries(Object.entries(eskiSatir.degerler).filter(([k, v]) => v !== null && v !== '' && !(mevcut?.sutunlar.find((x) => x.ad === k)?.gizli))) : {};
-      // Tek başına duran seçim alanı: liste tablosu; seçilen değer değil TÜM seçenekler satır olarak yazılır (var olan satırlar korunur).
-      const varOlanSatirlar = new Set((mevcut?.satirlar ?? []).map((r) => kucuk(r.ad)));
-      const eklenecekSatirlar = g.liste
-        ? g.liste.secenekler.filter((x) => !varOlanSatirlar.has(kucuk(x.metin))).map((x) => ({ ad: x.metin, ortamId: null, degerler: { [/** @type {string} */ (g.liste?.sutun)]: x.metin } }))
-        : [{ ...(eskiSatir ? { id: eskiSatir.id } : {}), ad: t.satirAdi, ortamId: null, degerler: { ...eskiDegerler, ...g.satir } }];
-      const tabloId = tabloKaydet(vt, {
-        projeId: o.projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: g.tabloAdi, ...(g.liste ? (mevcut ? {} : { tur: 'liste' }) : { tur: 'kayit' }), sutunlar: [...eskiSutunlar.map((x) => ({ ...x, ...karsilikli(x) })), ...yeniSutunlar.map((x) => ({ ...x, ...karsilikli(x) }))],
-        satirlar: eklenecekSatirlar
-      });
-      // Senaryo kendi satırına sabitlenir: bu kayıttaki (gizli olmayan) değerler satırı ayırt eder.
-      const gizli = new Map(g.sutunlar.map((x) => [x.ad, x.gizli]));
-      const kosul = Object.fromEntries(Object.entries(g.satir).filter(([ad]) => gizli.get(ad) !== true).slice(0, 6).map(([ad, v]) => [ad, String(v).slice(0, 200)]));
-      if (Object.keys(kosul).length) o.tabloSecimleri[grupAnahtari(tabloId, '')] = kosul;
-      for (const [anahtar, b] of Object.entries(g.baglar)) o.degerler[anahtar] = { deger: b.basvuru, kaynak: 'tablo' };
-      sonuc.push({
-        tablo: g.tabloAdi, tabloId, sutunSayisi: g.sutunlar.length, yeni: !mevcut, secenekSayisi: g.liste ? g.liste.secenekler.length : 0,
-        baglar: Object.fromEntries(Object.entries(g.baglar).map(([k, b]) => [k, { tablo: g.tabloAdi, sutun: b.sutun, gizli: gizli.get(b.sutun) === true }]))
-      });
-    }
-    return { tablolar: sonuc };
+    return planKur({ baslik, alanlar, degerler: aktifDegerler(o) });
   }
 
   /**
-   * Ekranın test verisi bölümü: tabloya alınan her alan, ekranın alan bağlarında kendi tablosunun ilgili sütununa bağlanır
-   * (Ekran > Test verisi). Seçim alanına gizli sütun bağlanmaz (ekran-baglari kuralı). @param {Veritabani} vt @param {Nesne} o
-   * @param {string} ekranId @param {Nesne} paket @param {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>} sonuc @returns {number} bağlanan alan sayısı
+   * ÖZET: "Testimi kaydet"ten sonra kullanıcıya gösterilen ekran (yapay zekâ paketinin önizlemesiyle aynı sistem). Hiçbir şey yazılmaz:
+   * hangi tablolar yazılacak / aynı adlı ya da benzer tablo varsa birleştirme seçenekleri, hangi alan hangi sütuna bağlanacak,
+   * senaryo önerileri, (mevcut ekransa) model farkları.
+   * @param {Veritabani} vt @param {Nesne} g
    */
-  function alanlariTabloyaBagla(vt, o, ekranId, paket, sonuc) {
+  function kayitOzeti(vt, g) {
+    const o = oturumGetir(String(g.id ?? ''));
+    durumda(o, ['kaydet']);
+    const baslik = metin(g.baslik, 200) ?? o.senaryoBasligi;
+    const { paket, mevcut } = paketKur(vt, o);
+    const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
+    const anahtarlar = senaryoAnahtarlari(/** @type {Nesne} */ (paket).model, alanlar);
+    const plan = planKurOturum(o, baslik);
+    const onizleme = planOnizle(vt, o.projeId, plan, o.ekran.id ?? null, anahtarlar);
+    /** @type {Nesne | null} */
+    let farklar = null;
+    if (mevcut && o.ekran.id) {
+      const bulgular = modelFarki(mevcut, /** @type {Nesne} */ (paket).model);
+      farklar = { ozet: bulguOzeti(bulgular), maddeler: bulgular.slice(0, 30).map((/** @type {Nesne} */ b) => String(b.baslik ?? b.tur)) };
+    }
+    return {
+      ozet: {
+        baslik, ekran: { ad: o.ekran.ad, mevcut: Boolean(mevcut && o.ekran.id) }, ortam: { id: o.ortam.id, ad: o.ortam.ad },
+        dogrulandi: o.dogrulama?.durum === 'basarili', onizleme, secim: varsayilanSecim(onizleme), senaryolar: senaryoOnerileri(plan, baslik), farklar
+      }
+    };
+  }
+
+  /**
+   * Seçimle test verisini yazar (kayit-plani.mjs planYaz), senaryo alanlarını tablo başvurusuna çevirir ("${Tablo.Sütun}"), senaryoyu kendi
+   * satırına sabitler (tabloSecimleri). 'atla' denen tablonun alanları düz değerle kalır. Hata olursa oturum değerleri eski haline döner.
+   * @param {Veritabani} vt @param {Nesne} o @param {string} baslik @param {Nesne} secim
+   */
+  function planiUygula(vt, o, baslik, secim) {
+    const plan = planKurOturum(o, baslik);
+    if (!plan.tablolar.length) return null;
+    const yedekDegerler = structuredClone(o.degerler);
+    const yedekSecimler = structuredClone(o.tabloSecimleri);
+    try {
+      const yazilan = planYaz(vt, o.projeId, plan, secim, { ekranAdi: o.ekran.ad });
+      for (const y of yazilan) {
+        if (y.pin && Object.keys(y.pin).length) o.tabloSecimleri[pinAnahtari(y.id)] = Object.fromEntries(Object.entries(y.pin).map(([k, v]) => [k, String(v).slice(0, 200)]));
+        for (const a of y.plan.alanlar) if (a.degerli) o.degerler[a.oturumAnahtar] = { deger: basvuruYaz(y.ad, y.hedef(a.sutun)), kaynak: 'tablo' };
+      }
+      return { plan, yazilan };
+    } catch (h) {
+      o.degerler = yedekDegerler;
+      o.tabloSecimleri = yedekSecimler;
+      throw new HizliTestHatasi('TABLO', h instanceof Error ? h.message : String(h));
+    }
+  }
+
+  /**
+   * Ekranın test verisi bölümü: seçilen bağlantılarda alan → yazılan tablonun sütunu (Ekran > Test verisi). Seçim alanına gizli sütun
+   * bağlanmaz (ekran-baglari kuralı). @returns {number} bağlanan alan sayısı
+   * @param {Veritabani} vt @param {Nesne} o @param {string} ekranId @param {Nesne} paket @param {NonNullable<ReturnType<typeof planiUygula>>} sonuc @param {string[] | null} secilenAlanlar
+   */
+  function alanlariTabloyaBagla(vt, o, ekranId, paket, sonuc, secilenAlanlar) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
     const anahtarlar = senaryoAnahtarlari(paket.model, alanlar);
     /** @type {Record<string, { tablo: string; sutun: string }>} */
     const yeni = {};
-    for (const tb of sonuc.tablolar) {
-      for (const a of alanlar) {
-        const b = tb.baglar[a.anahtar];
-        const senaryoAnahtari = anahtarlar[a.anahtar];
-        if (!b || !senaryoAnahtari) continue;
-        if (b.gizli && ['select', 'radio'].includes(String(a.tur))) continue;
-        yeni[senaryoAnahtari] = { tablo: tb.tabloId, sutun: b.sutun };
+    for (const y of sonuc.yazilan) {
+      for (const a of y.plan.alanlar) {
+        const senaryoAnahtari = anahtarlar[a.oturumAnahtar];
+        if (!senaryoAnahtari || (secilenAlanlar && !secilenAlanlar.includes(senaryoAnahtari))) continue;
+        const gizli = y.plan.sutunlar.find((x) => x.ad === a.sutun)?.gizli === true;
+        const tur = String(alanlar.find((x) => x.anahtar === a.oturumAnahtar)?.tur ?? '');
+        if (gizli && ['select', 'radio'].includes(tur)) continue;
+        yeni[senaryoAnahtari] = { tablo: y.id, sutun: y.hedef(a.sutun) };
       }
     }
     if (!Object.keys(yeni).length) return 0;
@@ -944,11 +953,18 @@ export function hizliTestYoneticisiOlustur(s) {
       };
       return { onayGerekli: true, farklar: o.farklar };
     }
-    // Elle yazılan değerler test verisi tablosuna alınır; senaryo alanları tabloya bağlanır (paket / veri yeniden kurulur).
+    // Test verisi: özetteki seçimle (yoksa varsayılan: aynı adlı tablo varsa birleştir, yoksa yeni) yazılır; senaryo alanları tabloya bağlanır.
     let tablo = null;
+    /** @type {Nesne | null} */
+    let uygulanan = null;
     if (g.tabloOlustur !== false) {
-      tablo = degerleriTabloyaKaydet(vt, o, baslik);
-      if (tablo) ({ paket, veri, mevcut } = paketKur(vt, o));
+      let secim = nesneMi(g.secim) ? /** @type {Nesne} */ (g.secim) : null;
+      if (!secim) {
+        const alanlar0 = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
+        secim = varsayilanSecim(planOnizle(vt, o.projeId, planKurOturum(o, baslik), o.ekran.id ?? null, senaryoAnahtarlari(/** @type {Nesne} */ (paket).model, alanlar0)));
+      }
+      uygulanan = planiUygula(vt, o, baslik, secim);
+      if (uygulanan) ({ paket, veri, mevcut } = paketKur(vt, o));
     }
     let ekranId = o.ekran.id;
     if (mevcut && ekranId) {
@@ -958,18 +974,45 @@ export function hizliTestYoneticisiOlustur(s) {
       ekranId = r.ekranId;
     }
     const ayni = vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ? AND ekran_id = ? AND baslik = ?', [o.projeId, ekranId, baslik])[0];
-    if (tablo) {
-      try { tablo.baglanan = alanlariTabloyaBagla(vt, o, ekranId, paket, tablo); } catch (h) { gunluk(o, `Alanlar tabloya bağlanamadı: ${h instanceof Error ? h.message : String(h)}`); }
+    if (uygulanan) {
+      const secilen = Array.isArray(/** @type {Nesne} */ (g.secim)?.baglantilar) ? /** @type {string[]} */ (/** @type {Nesne} */ (g.secim).baglantilar).map(String) : null;
+      let baglanan = 0;
+      try { baglanan = alanlariTabloyaBagla(vt, o, ekranId, paket, uygulanan, secilen); } catch (h) { gunluk(o, `Alanlar tabloya bağlanamadı: ${h instanceof Error ? h.message : String(h)}`); }
+      tablo = {
+        baglanan,
+        tablolar: uygulanan.yazilan.map((/** @type {Nesne} */ y) => ({
+          tablo: y.ad, tabloId: y.id, sutunSayisi: y.plan.sutunlar.length, yeni: y.islem !== 'birlestir', islem: y.islem, eklenenSatir: y.eklenenSatir, eklenenSutun: y.eklenenSutun,
+          secenekSayisi: y.tur === 'liste' ? y.plan.satirlar.length : 0
+        })),
+        atlanan: uygulanan.plan.tablolar.map((/** @type {Nesne} */ t) => t.ad).filter((/** @type {string} */ ad) => !uygulanan?.yazilan.some((/** @type {Nesne} */ y) => y.planAdi === ad))
+      };
     }
     const hizli = { izin: o.izin, dogrulandi: o.dogrulama?.durum === 'basarili', bitis: { bitti: o.bitis.bitti, hata: o.bitis.hata, devam: o.bitis.devam, adres: o.bitis.adres }, olusturma: simdi() };
     const s2 = senaryoKaydet(vt, {
       ...(ayni ? { id: String(ayni.id) } : {}), projeId: o.projeId, ekranId, baslik, veri, ortamIdleri: [o.ortam.id], kosuyaDahil: g.kosuyaDahil !== false,
       tabloSecimleri: Object.keys(o.tabloSecimleri).length ? o.tabloSecimleri : undefined, hizliTest: hizli
     }, { kosuyorMu: c.kosuyorMu });
+    // Senaryo önerilerinden seçilenler: aynı değerler, liste alanı başka seçenekle (satır sabitlemesi o seçeneğe çevrilir).
+    /** @type {Array<{ id: string; baslik: string }>} */
+    const ek = [];
+    const istenen = Array.isArray(g.senaryoIndeksleri) ? g.senaryoIndeksleri.map(Number).filter((x) => Number.isInteger(x) && x > 0) : [];
+    if (uygulanan && istenen.length) {
+      const oneriler = senaryoOnerileri(uygulanan.plan, baslik);
+      for (const i of istenen) {
+        const oneri = oneriler.find((x) => x.indeks === i);
+        const y = oneri?.alt ? uygulanan.yazilan.find((/** @type {Nesne} */ k) => k.planAdi === oneri.alt?.planAdi) : null;
+        if (!oneri?.alt || !y) continue;
+        const pinler = structuredClone(o.tabloSecimleri);
+        pinler[pinAnahtari(y.id)] = { [y.hedef(oneri.alt.sutun)]: oneri.alt.deger.slice(0, 200) };
+        const varMi = vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ? AND ekran_id = ? AND baslik = ?', [o.projeId, ekranId, oneri.baslik])[0];
+        const e = senaryoKaydet(vt, { ...(varMi ? { id: String(varMi.id) } : {}), projeId: o.projeId, ekranId, baslik: oneri.baslik, veri, ortamIdleri: [o.ortam.id], kosuyaDahil: g.kosuyaDahil !== false, tabloSecimleri: pinler }, { kosuyorMu: c.kosuyorMu });
+        ek.push({ id: e.id, baslik: oneri.baslik });
+      }
+    }
     let hazirlik = null;
     try { hazirlik = senaryoHazirligi(vt, o.projeId, s2.id, o.ortam.id); } catch { hazirlik = null; }
     const senaryo = senaryoGetir(vt, s2.id);
-    o.kayit = { ekranId, senaryoId: s2.id, senaryoBasligi: senaryo?.baslik ?? baslik, dogrulandi: hizli.dogrulandi, hazirlik, uyarilar: s2.uyarilar, tablo };
+    o.kayit = { ekranId, senaryoId: s2.id, senaryoBasligi: senaryo?.baslik ?? baslik, dogrulandi: hizli.dogrulandi, hazirlik, uyarilar: s2.uyarilar, tablo, ekSenaryolar: ek };
     o.ekran = { ...o.ekran, id: ekranId };
     o.durum = 'kaydedildi';
     o.calisiyor = null;
@@ -1002,6 +1045,7 @@ export function hizliTestYoneticisiOlustur(s) {
     yenidenTara,
     bitis,
     dogrula,
+    ozet: kayitOzeti,
     kaydet,
     iptal
   };
@@ -1060,6 +1104,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
       '/platform/hizli-test/yeniden-tara': () => y.yenidenTara(govde),
       '/platform/hizli-test/bitis': () => y.bitis(govde),
       '/platform/hizli-test/dogrula': () => y.dogrula(govde),
+      '/platform/hizli-test/ozet': () => y.ozet(db, govde),
       '/platform/hizli-test/kaydet': () => y.kaydet(db, govde, { kosuyorMu: b.kosuyorMu, medyaKlasoru: b.medyaKlasoru() }),
       '/platform/hizli-test/iptal': () => y.iptal(govde)
     };

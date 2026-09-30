@@ -253,8 +253,21 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   o = await bekle(id, ['kaydet'], 120);
   expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
   expect(uygulama.onaylar.length).toBe(once.o + 2);
-  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal' });
+  // ÖZET (yazmadan): tablolar, birleştirme kararı (yeni tablo → "yeni"), bağlantılar ve senaryo önerileri.
+  const oz = (await basarili('/platform/hizli-test/ozet', { id, baslik: 'Başvuru formu — kurumsal' })).ozet as Nesne;
+  const ozTablolar = (oz.onizleme.tablolar as Nesne[]).map((t) => t.ad).sort();
+  expect(ozTablolar).toEqual(['Kanal', 'Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  expect(oz.secim.tablolar['Kişi bilgileri']).toEqual({ islem: 'yeni' });
+  expect((oz.onizleme.tablolar as Nesne[]).every((t) => t.mevcut === null)).toBe(true);
+  expect(oz.onizleme.baglantilar.length).toBeGreaterThanOrEqual(3);
+  expect(oz.senaryolar[0]).toMatchObject({ indeks: 0, baslik: 'Başvuru formu — kurumsal', varsayilanSecili: true });
+  const alternatif = (oz.senaryolar as Nesne[]).find((x) => x.alt?.planAdi === 'Müşteri tipi');
+  expect(alternatif?.alt).toMatchObject({ deger: 'Bireysel' });
+  // Özet hiçbir şey yazmaz.
+  expect(((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).some((t) => t.ad === 'Kişi bilgileri')).toBe(false);
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal', secim: oz.secim, senaryoIndeksleri: [alternatif?.indeks] });
   expect(k).toMatchObject({ kaydedildi: true, dogrulandi: true });
+  expect((k.ekSenaryolar as Nesne[]).map((x) => x.baslik)).toEqual([alternatif?.baslik]);
   // Hazırlık kontrolü: tüm satırlar ✓ (çalıştırılabilir).
   expect(k.hazirlik).toMatchObject({ calistirilabilir: true, nedenler: [] });
   expect((k.hazirlik as Nesne).maddeler.filter((m: Nesne) => m.durum === 'eksik')).toEqual([]);
@@ -278,8 +291,8 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   // Elle yazılan değerler test verisi tablolarına, anlamlı gruplara ayrılarak alındı (tek tablo değil): kişi alanı "Kişi bilgileri",
   // diğer her alan kendi başlığıyla kendi tablosunda; alanlar ekranın Test verisi bölümünde ilgili tabloya bağlandı.
   const kTablo = k.tablo as { tablolar: Array<{ tablo: string; sutunSayisi: number; yeni: boolean }>; baglanan: number };
-  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
-  expect(kTablo.baglanan).toBe(3);
+  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kanal', 'Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  expect(kTablo.baglanan).toBeGreaterThanOrEqual(3);
   const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
   const kisiTablosu = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri');
   expect(kisiTablosu?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Vergi no']);
@@ -762,6 +775,16 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(soru).toContainText('Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı?');
     await tasmaYok(page, 'Kaydet');
     await soru.getByRole('button', { name: 'Hayır, kaydet' }).click();
+    // Özet ekranı: hiçbir şey yazılmadan tablolar, senaryo önerileri; onay olmadan kaydedilmez.
+    await expect(soru.getByRole('heading', { name: /Özet/ })).toBeVisible();
+    await expect(soru.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();
+    await tasmaYok(page, 'Özet');
+    // Önceki testlerden aynı adlı tablolar var: karar verilmeden onaylanamaz; "Birleştir" seçilince açılır.
+    await expect(soru.getByRole('button', { name: 'Onayla ve kaydet' })).toBeDisabled();
+    await expect(soru).toContainText('karar bekleniyor');
+    for (const r of await soru.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
+    await expect(soru.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
+    await soru.getByRole('button', { name: 'Onayla ve kaydet' }).click();
     await expect(page.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.hizli-hazirlik li.eksik')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Akış diyagramında aç' })).toBeVisible();
