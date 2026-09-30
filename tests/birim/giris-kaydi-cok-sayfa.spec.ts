@@ -185,16 +185,8 @@ test('çok sayfalı giriş kaydı: adres çubuğuyla gidilen sayfalar algılanı
     await panel.getByText(/^Dokunmadığınız alanlar/).click();
     await expect(panel.getByRole('group', { name: 'Dokunulmayan alanlar' }).getByRole('checkbox', { name: 'Beni hatırla: listeye al' })).not.toBeChecked();
     await panel.getByRole('button', { name: 'Bitir', exact: true }).click();
-    const gonderildi = sayfa.waitForEvent('console', { predicate: (m) => m.text().startsWith('nobetci-test-paneli:'), timeout: 60_000 });
-    await panel.evaluate((host) => {
-      const kok = host.shadowRoot as ShadowRoot;
-      new MutationObserver(() => {
-        const metin = kok.textContent ?? '';
-        if (metin.includes('Kayıt Nöbetçi’ye gönderildi')) console.log(`nobetci-test-paneli:${metin}`);
-      }).observe(kok, { childList: true, subtree: true, characterData: true });
-    });
-    await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click();
-    await gonderildi;
+    // Gönderince kayıt süreci pencereyi HEMEN kapatır: tıklama "kapandı" hatası verebilir; sonuç Nöbetçi'deki onay ekranından doğrulanır.
+    await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click().catch(() => undefined);
   } finally {
     await kayit.close().catch(() => undefined);
   }

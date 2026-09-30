@@ -62,13 +62,20 @@ async function sonSayfayiOku(page: Page): Promise<SonSayfa> {
 }
 /** Adres çubuğuyla (yazarak, öneriden, yer imiyle) gidişi gösteren Chromium sayfa geçişi türleri. */
 const ADRES_CUBUGU_GECISLERI = ['typed', 'generated', 'auto_bookmark', 'keyword', 'keyword_generated', 'start_page'];
-/** Son gezinme adres çubuğundan mı? Ölçülemezse null (çağıran sezgiye döner). */
-async function adresCubuguMu(cdp: CDPSession | null): Promise<boolean | null> {
+/**
+ * Verilen adrese gidiş adres çubuğundan mı? Ölçüm geç kalabilir (sayfa bu arada başka yere gitmiş olabilir); bu yüzden "geçerli"
+ * kayıt değil, adresi eşleşen en son gezinme kaydı okunur. Kayıt bulunamaz / ölçülemezse null (çağıran sezgiye döner).
+ */
+async function adresCubuguMu(cdp: CDPSession | null, adres: string): Promise<boolean | null> {
   if (!cdp) return null;
   try {
     const gecmis = await cdp.send('Page.getNavigationHistory');
-    const tur = gecmis.entries[gecmis.currentIndex]?.transitionType;
-    return typeof tur === 'string' ? ADRES_CUBUGU_GECISLERI.includes(tur) : null;
+    for (let i = Math.min(gecmis.currentIndex, gecmis.entries.length - 1); i >= 0; i--) {
+      const kayit = gecmis.entries[i];
+      if (kayit.url !== adres) continue;
+      return typeof kayit.transitionType === 'string' ? ADRES_CUBUGU_GECISLERI.includes(kayit.transitionType) : null;
+    }
+    return null;
   } catch { return null; }
 }
 const metin = (d: unknown, n: number): string | null => (typeof d === 'string' && d.trim() ? d.replace(/\s+/g, ' ').trim().slice(0, n) : null);
@@ -382,27 +389,30 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
     let cdp: CDPSession | null = null;
     try { cdp = await baglam.newCDPSession(islem); } catch { cdp = null; }
     const tabanKoken = ((): string => { try { return new URL(g.tabanUrl).origin; } catch { return ''; } })();
+    // Gezinme SENKRON kaydedilir (sıra bozulmaz; "elle" önce sezgiyle), adres çubuğu ölçümü (CDP) sonradan kesinleştirir; kayıt bitmeden
+    // bekleyen ölçümler tamamlanır.
+    const bekleyenOlcumler = new Set<Promise<void>>();
     islem.on('framenavigated', (cerceve) => {
       if (!gezinmeAktif || cerceve !== islem.mainFrame()) return;
       const adres = cerceve.url();
-      const sira = olaylar.length;
-      const tikSonrasi = Date.now() - sonTikZamani < 4000;
-      void (async () => {
-        let koken = '';
-        try { koken = new URL(adres).origin; } catch { return; }
-        if (koken !== tabanKoken) {
-          const not = 'Kayıtta ortamın adresi dışındaki bir siteye gidildi; o adres tarife alınmadı.';
-          if (!notlar.includes(not)) notlar.push(not);
-          return;
-        }
-        const elle = (await adresCubuguMu(cdp)) ?? !tikSonrasi;
-        if (gezinmeler.length >= 200) return;
-        gezinmeler.push({ sira, yol: yolu(adres), elle });
-      })();
+      let koken = '';
+      try { koken = new URL(adres).origin; } catch { return; }
+      if (koken !== tabanKoken) {
+        const not = 'Kayıtta ortamın adresi dışındaki bir siteye gidildi; o adres tarife alınmadı.';
+        if (!notlar.includes(not)) notlar.push(not);
+        return;
+      }
+      if (gezinmeler.length >= 200) return;
+      const kayit: Gezinme = { sira: olaylar.length, yol: yolu(adres), elle: Date.now() - sonTikZamani >= 4000 };
+      gezinmeler.push(kayit);
+      const olcum = adresCubuguMu(cdp, adres).then((elle) => { if (elle !== null) kayit.elle = elle; });
+      bekleyenOlcumler.add(olcum);
+      void olcum.finally(() => bekleyenOlcumler.delete(olcum));
     });
     gezinmeAktif = true;
     await bitti;
     gezinmeAktif = false;
+    await Promise.all([...bekleyenOlcumler]);
     const sonuc = envanter(profil.ad);
     await olay({ tur: 'adim', adim: 'kayit', durum: 'tamam', mesaj: `Kayıt bitti: ${sonuc.alanlar.filter((a) => a.secili).length} alan, ${dugmeler.length} düğme, ${mesajlar.length} mesaj.` });
     return sonuc;
