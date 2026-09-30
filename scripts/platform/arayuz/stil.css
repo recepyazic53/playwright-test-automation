@@ -2947,11 +2947,6 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .entegrasyon-deneme { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 14px; overflow-wrap: anywhere; }
 .kayit-meta.entegrasyon-durum.hata { color: var(--hata); }
 .kayit-listesi > li.pasif-kayit .kayit-ana strong { color: var(--metin-2); }
-.entegrasyon-katalog-basligi { margin: var(--b4, 24px) 0 10px; }
-.entegrasyon-katalogu { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; }
-.entegrasyon-katalogu > li { display: grid; align-content: start; gap: 8px; padding: 14px 16px; }
-.entegrasyon-katalogu h4 { display: flex; align-items: center; gap: 8px; margin: 0; }
-.entegrasyon-katalogu .kucuk-dugme { justify-self: start; }
 .dbeaver-listesi { list-style: none; margin: 8px 0 12px; padding: 0; max-height: 50vh; overflow: auto; }
 .dbeaver-listesi .secenek { align-items: flex-start; }
 .hata-kaydi-formu textarea.hata-kaydi-aciklamasi { width: 100%; font: 12.5px/1.5 var(--yazi-mono); }
@@ -3384,8 +3379,6 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 @media (max-width: 860px) { .yan-panel { min-width: 0; max-width: 100%; overflow: hidden; } .yan-panel .alt-nav { max-width: 100%; } }
 
 /* Entegrasyon kataloğu: kartlar eşit yükseklikte, düğmeler hep kartın altında aynı hizada. */
-.entegrasyon-katalogu > li.kart { display: flex; flex-direction: column; }
-.entegrasyon-katalogu > li.kart > button { margin-top: auto; align-self: flex-start; }
 
 /* Kullanıcının verdiği adlar (çalışma alanı, proje) üst çubuğu taşırmaz: üst sınır + üç nokta. */
 .hesap-menusu .hesap-adi { display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
@@ -3788,7 +3781,6 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .sql-cevir-paneli[hidden] { display: none; }
 .sql-uyarilari summary { color: var(--hata); }
 .veritabani-tablosu td.eylem .kucuk-dugme + .kucuk-dugme { margin-left: 6px; }
-.veritabanlari-bolumu + .entegrasyon-katalog-basligi { margin-top: 22px; }
 
 /* Ayarlar > İzinler (izinler.js): izin satırları, "?" açıklaması, son değişiklikler; kapalı izin uyarısı (ortak.js). */
 .izin-listesi { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
