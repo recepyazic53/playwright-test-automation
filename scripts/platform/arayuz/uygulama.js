@@ -30,6 +30,11 @@ import { sonuclarEkrani } from './sonuclar.js';
 import { kasayiKilitleSecimli, kilitBildirimi } from './zamanlanmis-kosular.js';
 import { adCanliyiCagristiriyorMu, riskliSecimi } from './ortam-riski.mjs';
 import { veriKlasoruSatiri } from './veri-klasoru.js';
+// Basit / Gelişmiş mod (çalışma alanının ayarı; kayıt yoksa Gelişmiş = bugünkü arayüz): basit-mod.js.
+import {
+  BASIT_SAYFALAR, VARSAYILAN_MOD, basitSayfaEkrani, gecisAdresi, gelismisBolumuMu, gelismisSayfaNotu, kullanimModuSorusu, kullanimModunuAl,
+  modAnahtari, modaGec, modunAnaSayfasi, yeniTestDugmesi
+} from './basit-mod.js';
 
 // Çalışma alanı ve proje ⋯ modülleri DİNAMİK yüklenir: eski sürüm bir sunucu (yeniden başlatılmamış) bu dosyaları sunmuyorsa
 // kabuk yine açılır, yalnızca bu özellikler görünmez. (Eski sunucunun /platform/durum yanıtında "calismaAlani" alanı yoktur.)
@@ -43,7 +48,7 @@ async function modulleriYukle() {
 }
 
 const kok = document.getElementById('uygulama');
-const durum = { sunucu: null, proje: null, projeler: [], varsayilanProjeId: null, kilitMesaji: '' };
+const durum = { sunucu: null, proje: null, projeler: [], varsayilanProjeId: null, kilitMesaji: '', kullanimModu: VARSAYILAN_MOD };
 let ekranTemizle = () => {};
 
 function ekran(...icerik) {
@@ -113,6 +118,7 @@ export async function yonlendir() {
   const { projeler, varsayilanId } = await api('/platform/projeler');
   durum.projeler = projeler;
   durum.varsayilanProjeId = varsayilanId || null;
+  durum.kullanimModu = await kullanimModunuAl();
   if (!projeler.length) { sihirbaz('proje'); return; }
   let secili = null;
   try { secili = localStorage.getItem(seciliProjeAnahtari()); } catch { secili = null; }
@@ -333,7 +339,8 @@ function yedekYukleEkrani() {
 // kendi adımı olarak girer. Eski "Sizi tanıyalım" adımı kaldırıldı: tek sorusu (hangi ortamlar) Ortamlar adımında
 // satır eklenerek zaten cevaplanıyordu; cevabı yalnız bellekteydi (kalıcı bir kaydı yoktu).
 /** İsteğe bağlı soru adımları (sırayla; Ortamlar / İzinler'den sonra, Tamam'dan önce). */
-const SORU_ADIMLARI = [{ ad: 'girisSorusu', etiket: 'Giriş' }];
+// "Kullanım" (Basit / Gelişmiş) çalışma alanının ayarıdır: yalnız ilk kurulumda sorulur (aynı kasada yeni projede sorulmaz).
+const SORU_ADIMLARI = [{ ad: 'modSorusu', etiket: 'Kullanım' }, { ad: 'girisSorusu', etiket: 'Giriş' }];
 const ILK_ADIMLAR = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
@@ -343,9 +350,11 @@ const ILK_ADIMLAR = [
   { ad: 'tamam', etiket: 'Tamam' }
 ];
 // Aynı kasada yeni proje: kasa parolası ve izinler (kasa başına; zaten verilmiş kararlar) sorulmaz.
-const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa' && a.ad !== 'izinler');
+const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa' && a.ad !== 'izinler' && a.ad !== 'modSorusu');
 let sihirbazModu = 'ilk';
 const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
+/** Sıradaki soru adımı yalnız bu kipin adımlarından (ek kipte "Kullanım" sorulmaz). */
+const kiptekiSorular = () => SORU_ADIMLARI.filter((a) => sihirbazAdimlari().some((x) => x.ad === a.ad));
 
 function adimListesi(aktif) {
   const adimlar = sihirbazAdimlari();
@@ -385,25 +394,44 @@ export function sihirbaz(adim, mod) {
   if (adim === 'proje') return sihirbazProje();
   if (adim === 'ortamlar') return sihirbazOrtamlar();
   if (adim === 'izinler' && sihirbazModu === 'ilk') return sihirbazIzinler();
+  if (adim === 'modSorusu' && sihirbazModu === 'ilk') return sihirbazModSorusu();
   if (adim === 'girisSorusu') return sihirbazGirisSorusu();
   // Eski "giris" adımı kaldırıldı: bu adla gelen çağrı (eski yer imi / kayıtlı durum) hata vermeden özet sayfasına düşer.
   return sihirbazTamam();
 }
 
 /** Soru adımı adı → ekranı. */
-const SORU_EKRANLARI = { girisSorusu: () => sihirbazGirisSorusu() };
+const SORU_EKRANLARI = { modSorusu: () => sihirbazModSorusu(), girisSorusu: () => sihirbazGirisSorusu() };
 /**
  * Sıradaki isteğe bağlı soru adımı (onceki verilmezse ilk soru; Ortamlar / İzinler'den sonra çağrılır); soru kalmadıysa Tamam.
  * @param {string} [onceki]
  */
 function sorulardanSonra(onceki) {
-  const sonraki = SORU_ADIMLARI[onceki ? SORU_ADIMLARI.findIndex((a) => a.ad === onceki) + 1 : 0];
+  const sorular = kiptekiSorular();
+  const sonraki = sorular[onceki ? sorular.findIndex((a) => a.ad === onceki) + 1 : 0];
   const ekran = sonraki && SORU_EKRANLARI[sonraki.ad];
   return ekran ? ekran() : sihirbazTamam();
 }
 
 /** Sihirbazda verilen isteğe bağlı cevaplar (yalnız bu kurulum için; kalıcı karar Başlarken işaretinde / ilgili ekranda). */
-const sihirbazCevaplari = { giris: /** @type {'evet' | 'hayir' | 'sonra'} */ ('sonra') };
+const sihirbazCevaplari = { giris: /** @type {'evet' | 'hayir' | 'sonra'} */ ('sonra'), mod: /** @type {'basit' | 'gelismis'} */ ('basit') };
+
+/**
+ * KULLANIM (yalnız ilk kurulum): Basit — ilk kez kullanıyorum / Gelişmiş — tüm özellikler. Seçim çalışma alanının ayarı olarak kasaya
+ * yazılır (basit-mod.js > kullanimModuSorusu); Tamam'daki "Ana sayfaya geç" seçilen modun açılış sayfasına gider.
+ */
+function sihirbazModSorusu() {
+  const { form, odak } = kullanimModuSorusu({
+    secili: sihirbazCevaplari.mod,
+    devam: (mod) => {
+      sihirbazCevaplari.mod = mod;
+      durum.kullanimModu = { ...durum.kullanimModu, mod, kayitli: true };
+      sorulardanSonra('modSorusu');
+    }
+  });
+  sihirbazEkrani('modSorusu', sihirbazBasligi(), 'Nöbetçi\'yi ilk kez kullanıyorsanız Basit mod yalnız gerekenleri gösterir. Seçiminizi üst çubuktan her an değiştirebilirsiniz.', form);
+  odak.focus();
+}
 
 /**
  * GİRİŞ SORUSU (isteğe bağlı): "Uygulamanız giriş istiyor mu?" Evet → Tamam'da birincil düğme giriş tarifi sayfasını açar;
@@ -476,6 +504,7 @@ function sihirbazKasa() {
       await mesgulIken(gonder, 'Kasa oluşturuluyor…', () => api('/platform/kasa/olustur', { govde: { parola: p1.girdi.value } }));
       p1.girdi.value = ''; p2.girdi.value = '';
       if (durum.sunucu) durum.sunucu = { ...durum.sunucu, kasa: { ...(durum.sunucu.kasa || {}), olusturuldu: true, acik: true } };
+      durum.kullanimModu = VARSAYILAN_MOD;
       sihirbazProje();
     } catch (hata) {
       mesaj.goster(hata.message);
@@ -489,6 +518,8 @@ function sihirbazKasa() {
 
 function sihirbazProje() {
   sihirbazCevaplari.giris = 'sonra';
+  // Kullanım sorusunda önce seçili: kayıtlı mod (varsa), yoksa Basit (yeni çalışma alanı).
+  sihirbazCevaplari.mod = durum.kullanimModu.kayitli ? durum.kullanimModu.mod : 'basit';
   const ad = h('input', { type: 'text', autocomplete: 'off', required: true, maxlength: '120' });
   const aciklama = h('textarea', { rows: '3', maxlength: '1000' });
   const mesaj = mesajKutusu();
@@ -648,11 +679,12 @@ async function sihirbazIzinler() {
  */
 function sihirbazTamam() {
   sayfaBasligi('Proje hazır');
-  if (sihirbazModu === 'ilk') kurulumSonrasiTanitimIste();
+  // Basit modda rehberler kendiliğinden açılmaz (genel tanıtım Gelişmiş menüsünü anlatır; "?" her zaman açar).
+  if (sihirbazModu === 'ilk' && durum.kullanimModu.mod !== 'basit') kurulumSonrasiTanitimIste();
   const ozet = h('div', { class: 'proje-ozeti' }, iskelet('liste'));
   // Giriş sorusunun cevabı: Evet → birincil eylem giriş tarifi sayfası; Hayır → giriş notu yerine "gerek yok" bilgisi.
   const giris = sihirbazCevaplari.giris;
-  const anaSayfa = h('button', { type: 'button', class: giris === 'evet' ? 'hayalet' : 'birincil', onclick: () => { location.hash = '#/sonuclar/ozet'; yonlendir(); } }, 'Ana sayfaya geç', ikon('ok'));
+  const anaSayfa = h('button', { type: 'button', class: giris === 'evet' ? 'hayalet' : 'birincil', onclick: () => { location.hash = modunAnaSayfasi(durum.kullanimModu.mod); yonlendir(); } }, 'Ana sayfaya geç', ikon('ok'));
   const girisBaglantisi = h('a', { class: giris === 'evet' ? 'dugme birincil' : 'dugme', href: '#/ayarlar/giris', onclick: (o) => { o.preventDefault(); location.hash = girisBaglantisi.getAttribute('href'); yonlendir(); } },
     ikon('anahtar'), giris === 'evet' ? 'Giriş tarifine geç' : 'Girişi kaydet');
   const siradaki = giris === 'hayir'
@@ -905,21 +937,27 @@ function anaDuzen() {
   }) : null;
   const sunucu = sunucuDurumu();
   const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, ustSayfalar: UST_SAYFALAR });
-  const ust = h('header', { class: 'ust-cubuk' },
+  // Basit mod (basit-mod.js): menü yalnız Testlerim · Sonuçlar · Ayarlar, "Oluştur" yerine "+ Yeni test"; Gelişmiş'e ait sayfanın
+  // üstünde not; sağda Basit / Gelişmiş anahtarı. Gelişmiş = bugünkü üst çubuk (değişmez); Basit'e geçiş Ayarlar'ın yan panelinde.
+  const basit = durum.kullanimModu.mod === 'basit';
+  const navTestlerim = basit ? h('a', { href: '#/testlerim' }, ikon('liste'), 'Testlerim') : null;
+  const navBasitSonuclar = basit ? h('a', { href: '#/basit-sonuclar' }, ikon('grafik'), 'Sonuçlar') : null;
+  const gelismisNotu = basit ? gelismisSayfaNotu(() => moduDegistir('gelismis')) : null;
+  const ust = h('header', { class: `ust-cubuk${basit ? ' basit-mod' : ''}` },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar),
-    olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar]),
+    basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
-    hizliAramaDugmesi(aramaBaglami), sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
+    hizliAramaDugmesi(aramaBaglami), sunucu, basit ? modAnahtari('basit', (hedef) => moduDegistir(hedef)) : null, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
   hizliAramaKisayolu(aramaBaglami);
-  ekran(ust, main);
+  ekran(...[ust, gelismisNotu, main].filter(Boolean));
   // Sayfa rehberi bağlantısı (başlığın altında) ve boş durum rehberi için seçili proje.
   rehberBaglaminiAyarla({ projeKimligi: () => (durum.proje ? durum.proje.id : null) });
   sayfaRehberiBaglantisiKur(main);
 
   const ciz = () => {
-    const hash = location.hash || '#/sonuclar';
+    const hash = location.hash || (basit ? '#/testlerim' : '#/sonuclar');
     const [, bolum, alt, ...kalan] = hash.split('/');
     // Ayarlar'dan taşınan sayfaların eski adresleri (yer imleri, eski bağlantılar): geçmişe eklemeden yeni adrese.
     if (bolum === 'ayarlar' && alt && Object.hasOwn(ESKI_ADRESLER, alt)) {
@@ -929,12 +967,20 @@ function anaDuzen() {
     }
     // Sayfa değişince önceki sayfanın açık pencereleri (ör. geri düğmesiyle çıkılan rapor penceresi) kapanır.
     for (const d of document.querySelectorAll('dialog[open]')) d.close();
-    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar]) n.removeAttribute('aria-current');
+    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar, navTestlerim, navBasitSonuclar]) n?.removeAttribute('aria-current');
+    if (gelismisNotu) gelismisNotu.hidden = !gelismisBolumuMu(bolum);
+    if (basit && bolum === 'sonuclar') navBasitSonuclar?.setAttribute('aria-current', 'page');
     const altBolum = bolum === 'servisler' ? 'Servisler' : bolum === 'akislar' ? 'Uçtan uca' : '';
     navAltBolum.textContent = altBolum ? `› ${altBolum}` : '';
     navAltBolum.hidden = !altBolum;
     if (altBolum) navSenaryolar.title = `Senaryolar › ${altBolum}`; else navSenaryolar.removeAttribute('title');
-    if (bolum === 'senaryolar') {
+    if (BASIT_SAYFALAR.includes(bolum)) {
+      // Basit mod sayfaları (her iki modda da açılır; Gelişmiş menüsünde bağlantıları yoktur).
+      (bolum === 'basit-sonuclar' ? navBasitSonuclar : bolum === 'testlerim' ? navTestlerim : null)?.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi(bolum === 'basit-sonuclar' ? 'Sonuçlar' : bolum === 'hizli-test' ? 'Yeni test' : 'Testlerim');
+      basitSayfaEkrani(main, bolum, alt ? [alt, ...kalan].map((p) => decodeURIComponent(p)) : [], { durum, gelismiseGec: (adres) => moduDegistir('gelismis', adres) });
+    } else if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Senaryolar');
@@ -1000,9 +1046,31 @@ function anaDuzen() {
     } catch { sunucu.durumAyarla(false); /* bağlantı hatası: bir sonraki denemede */ }
   }, 15_000);
   ekranTemizle = () => { window.removeEventListener('hashchange', cizVeRehber); clearInterval(kilitKontrolu); };
+  if (basit && !location.hash) history.replaceState(null, '', '#/testlerim');
   cizVeRehber();
   // Ana sayfa (açılış / yeniden yükleme / kilit açma): yedekten yükleme izinleri değiştirdiyse bir kez uyarı penceresi.
   void yedekUyarisiniGoster({ izinlereGit: () => { location.hash = '#/ayarlar/izinler'; } });
+}
+
+/**
+ * Basit / Gelişmiş geçişi (üst çubuktaki anahtar, "Gelişmiş'e geç" notu, Testlerim'deki "Gelişmiş'te göster"): mod kasaya yazılır
+ * (basit-mod.js > modaGec; Gelişmiş'e ilk geçişte açıklamalı onay), ana düzen yeni modla yeniden çizilir. adres verilmezse
+ * gecisAdresi (Ayarlar yerinde kalır; diğer sayfalar hedef modun karşılığına gider).
+ * @param {'basit' | 'gelismis'} hedef @param {string} [adres]
+ */
+async function moduDegistir(hedef, adres) {
+  if (durum.kullanimModu.mod === hedef) { if (adres) location.hash = adres; return; }
+  const yeni = await modaGec(durum.kullanimModu, hedef);
+  if (!yeni) return;
+  durum.kullanimModu = yeni;
+  const hedefAdres = adres || gecisAdresi(hedef, location.hash);
+  // Eski düzenin çizimi durur; adres değişimi (çıkış korumasının izi de güncellenir) bitince yeni düzen bir kez çizilir.
+  ekranTemizle();
+  ekranTemizle = () => {};
+  if (hedefAdres !== location.hash) {
+    await new Promise((coz) => { window.addEventListener('hashchange', () => coz(undefined), { once: true }); location.hash = hedefAdres; });
+  }
+  anaDuzen();
 }
 
 /** Senaryolar modülü (bir kez yüklenir). */
@@ -1028,6 +1096,8 @@ function ayarlarEkrani(main, bolum, odak = null) {
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Ayarlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav, tasinan,
+        // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): Gelişmiş üst çubuğu değişmesin diye anahtar burada da durur.
+        h('div', { class: 'kullanim-modu-secimi' }, h('span', { class: 'kucuk soluk' }, 'Kullanım modu'), modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef))),
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });

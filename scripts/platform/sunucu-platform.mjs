@@ -151,6 +151,7 @@ import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } f
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
 import { ekipKaydet, ekipSil, ortamUygulamaSurumu, raporIsaretiKaydet, uygulamaSurumuTemizle } from './ayarlar/rapor-verileri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
+import { kullanimModunuKaydet, kullanimModunuOku } from './ayarlar/kullanim-modu.mjs';
 import { baslarkenDurumu, baslarkenIsaretle } from './ayarlar/baslarken.mjs';
 import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
@@ -1397,6 +1398,8 @@ const GET_UCLARI = new Map([
   ['/platform/rapor-verileri', (db, q) => raporVerileriEkrani(db, kimlikAl(q.get('projeId'), 'projeId'))],
   // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
   ['/platform/rehber', (db) => ({ rehber: rehberAyarlariniOku(db) })],
+  // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı, yedeğe girer; kayıt yoksa Gelişmiş — ayarlar/kullanim-modu.mjs).
+  ['/platform/kullanim-modu', (db) => ({ kullanimModu: kullanimModunuOku(db) })],
   // Sonuçlar > Genel > Özet: "Başlarken" kontrol listesi (adım durumları projenin verisinden; gizle ve işaretler kasada — ayarlar/baslarken.mjs).
   ['/platform/baslarken', (db, q) => ({ baslarken: baslarkenDurumu(db, kimlikAl(q.get('projeId'), 'projeId')) })],
   // Ayarlar > Arayüz > Nöbetçi nasıl açılsın (kendi penceresi / varsayılan tarayıcı; başlatıcı okur, bkz. ayarlar/acilis-tercihi.mjs).
@@ -1622,6 +1625,7 @@ const POST_UCLARI = new Map([
   ['/platform/yedek-uyarisi/kapat', (db) => ({ kapatildi: yedekUyarisiniKapat(db) })],
   ['/platform/acilis/kaydet', (db, g) => ({ acilis: acilisTercihiniKaydet(VERI_KOKU, g.bicim) })],
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
+  ['/platform/kullanim-modu/kaydet', (db, g) => ({ kullanimModu: kullanimModunuKaydet(db, { mod: g.mod, gelismisAciklamasiGoruldu: g.gelismisAciklamasiGoruldu }) })],
   // Başlarken: gizle / girişe gerek yok / incelendi işaretleri (yalnız kasaya yazılır; dış istek yok).
   ['/platform/baslarken/kaydet', (db, g) => {
     const projeId = kimlikAl(g.projeId, 'projeId');

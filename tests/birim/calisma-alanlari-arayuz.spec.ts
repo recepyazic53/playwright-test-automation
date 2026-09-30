@@ -418,6 +418,9 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   // İlk kurulumda izin paketi adımı (yeni çalışma alanı): Atla → hiçbir izin açılmaz.
   await page.getByRole('button', { name: 'Atla' }).click();
+  // Kullanım: Gelişmiş (sonraki testler bugünkü arayüzü kullanır).
+  await page.getByRole('radio', { name: /^Gelişmiş — tüm özellikler/ }).check();
+  await page.getByRole('button', { name: 'Devam' }).click();
   // İsteğe bağlı giriş sorusu: varsayılanla devam.
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
