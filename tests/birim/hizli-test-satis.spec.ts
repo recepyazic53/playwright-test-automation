@@ -344,6 +344,16 @@ test('1.22 Dene formdaki kaydedilmemiş değişiklikle koşar (satır seçimi de
     await expect(sonuc.locator('.rozet').first()).toHaveText(/Başarılı|Başarısız|Çalıştırılamadı/, { timeout: 240_000 });
     await expect(page.locator('#deneme-baslik').locator('..')).toContainText('formdaki kaydedilmemiş değişikliklerle denendi');
     await expect(sonuc.locator('.rozet').first()).toHaveText('Başarılı');
+    // Sonuç görünür alanda (yapışkan sağ sütunun kaydırılmış görünümünde ve pencerede); kullanıcı aramak zorunda kalmaz.
+    await expect.poll(() => page.evaluate(() => {
+      const e = document.querySelector('.deneme-sonucu');
+      if (!e) return false;
+      const r = e.getBoundingClientRect();
+      const kap = e.closest('.ozet-sutunu')?.getBoundingClientRect();
+      const ust = Math.max(0, kap ? kap.top : 0);
+      const alt = Math.min(window.innerHeight, kap ? kap.bottom : window.innerHeight);
+      return r.top < alt && r.bottom > ust;
+    })).toBe(true);
   });
   // Deneme A.B.D ile koştu (kayıtlı senaryo hâlâ LIBERYA).
   expect(uygulama.tutarlar.slice(once)).toEqual(['US']);

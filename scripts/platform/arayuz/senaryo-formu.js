@@ -1888,6 +1888,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
         y.hataMesaji || (!y.basarili && y.mesaj) ? h('div', { class: 'hata-ozeti' }, h('b', {}, 'Hata: '), String(y.hataMesaji || y.mesaj).split('\n').find((x) => x.trim()) || '') : null,
         y.basarisizAdim ? h('p', { class: 'soluk kucuk' }, `Başarısız adım: ${y.basarisizAdim}`) : null,
         oneri ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, `Görülen mesaj: “${oneri.mesaj}”`), kullan) : null));
+    // Sonuç yapışkan sağ sütunun (kendi kaydırması olan .ozet-sutunu) altında kalabilir: sonuç kartı görünür alana getirilir
+    // (sütun ve gerekirse sayfa kaydırılır); kullanıcı sonucu aramak zorunda kalmaz.
+    requestAnimationFrame(() => { if (denemeAlani.isConnected) denemeAlani.scrollIntoView({ block: 'nearest' }); });
   }
 
   // --- Akış diyagramı (sekme) -------------------------------------------------------------------
