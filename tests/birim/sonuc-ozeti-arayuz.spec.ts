@@ -108,6 +108,20 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt Servisi › POST /kayit');
   // Özet sayfasında rapor düğmesi yok: rapor Raporlar sekmesinden alınır.
   await expect(page.getByRole('button', { name: 'Rapor al (PDF)' })).toHaveCount(0);
+  // Tarih aralığı: hızlı seçimler açılır takvim panelindedir (üstte düğme); "Son 7 gün" seçilince Bitiş boş kalmaz.
+  const aralik = page.locator('.sonuc-araligi');
+  await expect(aralik.getByRole('button', { name: 'Son 7 gün' })).toBeHidden();
+  await aralik.locator('.tarih-tetik').click();
+  const panel = aralik.getByRole('dialog', { name: 'Tarih aralığı seç' });
+  await expect(panel.getByRole('button', { name: 'Son 7 gün' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Son 7 gün' }).click();
+  await expect(panel).toBeHidden();
+  await expect(aralik.locator('.tarih-tetik')).toContainText('Son 7 gün');
+  await aralik.locator('.tarih-tetik').click();
+  await expect(panel.getByLabel('Başlangıç')).not.toHaveValue('');
+  await expect(panel.getByLabel('Bitiş')).not.toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
   // Kutuya tıklayınca ilgili sekme.
   await kutular.nth(1).click();
   await expect(page).toHaveURL(/#\/sonuclar\/servisler$/);

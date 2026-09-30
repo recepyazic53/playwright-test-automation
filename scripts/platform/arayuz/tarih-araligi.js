@@ -99,15 +99,27 @@ export function tarihAraligiSecici(secenek) {
   const bas = h('input', { type: 'datetime-local', id: `${onEk}-bas` });
   const bit = h('input', { type: 'datetime-local', id: `${onEk}-bit` });
   let kok = null;
-  const hizli = h('div', { class: 'segment tarih-hizli', role: 'group', 'aria-label': 'Hızlı seçim' });
+  // Hızlı seçimler ve tarih alanları tek açılır takvim panelindedir (üstte yalnız seçili aralığı gösteren düğme durur).
+  const hizli = h('div', { class: 'tarih-hizli', role: 'group', 'aria-label': 'Hızlı seçim' });
+  const metin = h('span', { class: 'tarih-tetik-metni' });
+  const tetik = h('button', { type: 'button', class: 'tarih-tetik', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-controls': `${onEk}-panel` },
+    ikon('takvim'), metin, ikon('asagi'));
+  const panel = h('div', { class: 'tarih-paneli', id: `${onEk}-panel`, role: 'dialog', 'aria-label': 'Tarih aralığı seç', hidden: true });
   const alanlariDoldur = () => {
     const c = araligiCoz(deger);
     bas.value = yerelDeger(c.baslangic);
-    bit.value = yerelDeger(c.bitis);
+    // Hızlı seçimlerde bitiş "şimdi"dir (sınırsız çözülür); alanda güncel an gösterilir ki Bitiş boş kalmasın.
+    bit.value = c.bitis ? yerelDeger(c.bitis) : deger.hizli && deger.hizli !== 'tumu' ? yerelDeger(new Date().toISOString()) : '';
   };
-  // Düğmeler bir kez oluşturulur; seçimde yalnız aria-pressed güncellenir (odak düğmede kalır).
-  hizli.append(...HIZLI_SECIMLER.map(([a, metin]) => h('button', { type: 'button', 'data-aralik': a, onclick: () => sec({ hizli: a }) }, metin)));
+  const metniCiz = () => {
+    const c = araligiCoz(deger);
+    const ozet = deger.hizli && deger.hizli !== 'tumu' ? `${aralikMetni(deger)} · ${kisa(c.baslangic)} → şimdi` : aralikMetni(deger);
+    metin.textContent = ozet;
+  };
+  // Düğmeler bir kez oluşturulur; seçimde yalnız aria-pressed güncellenir.
+  hizli.append(...HIZLI_SECIMLER.map(([a, m]) => h('button', { type: 'button', 'data-aralik': a, onclick: () => sec({ hizli: a }) }, m)));
   const hizliCiz = () => { for (const d of hizli.children) d.setAttribute('aria-pressed', d.getAttribute('data-aralik') === deger.hizli ? 'true' : 'false'); };
+  const ac = (goster) => { panel.hidden = !goster; tetik.setAttribute('aria-expanded', String(goster)); if (goster) alanlariDoldur(); };
   const sec = (yeni, kaynak = 'hizli') => {
     bekleyenOdak = { kaynak, zaman: Date.now(), eski: kok };
     deger = temizle(yeni);
@@ -115,6 +127,8 @@ export function tarihAraligiSecici(secenek) {
     if (secenek.anahtar !== null) araligiKaydet(deger, secenek.anahtar || SONUC_ARALIGI);
     hizliCiz();
     alanlariDoldur();
+    metniCiz();
+    ac(false);
     secenek.degisti({ ...deger });
   };
   const uygula = () => {
@@ -125,13 +139,22 @@ export function tarihAraligiSecici(secenek) {
     sec(b || s ? { ...(b ? { baslangic: b } : {}), ...(s ? { bitis: s } : {}) } : TUMU, 'uygula');
   };
   for (const g of [bas, bit]) g.addEventListener('keydown', (o) => { if (o.key === 'Enter') { o.preventDefault(); uygula(); } });
+  tetik.addEventListener('click', () => ac(panel.hidden));
+  const escKapat = (o) => { if (o.key === 'Escape' && !panel.hidden) { o.preventDefault(); o.stopPropagation(); ac(false); tetik.focus(); } };
+  panel.addEventListener('keydown', escKapat);
+  tetik.addEventListener('keydown', escKapat);
+  const disTikla = (o) => {
+    if (!kok || !kok.isConnected) { document.removeEventListener('pointerdown', disTikla, true); return; }
+    if (!panel.hidden && !kok.contains(o.target)) ac(false);
+  };
+  document.addEventListener('pointerdown', disTikla, true);
   hizliCiz();
   alanlariDoldur();
-  const uygulaDugmesi = h('button', { type: 'button', class: 'kucuk-dugme', onclick: uygula }, ikon('takvim'), 'Uygula');
-  kok = h('div', { class: 'tarih-araligi', role: 'group', 'aria-label': secenek.etiket || 'Tarih aralığı' },
-    hizli,
-    h('div', { class: 'filtre-satiri tarih-alanlari' }, alan('Başlangıç', bas), alan('Bitiş', bit), uygulaDugmesi));
-  odagiGeriVer(kok, () => (bekleyenOdak && bekleyenOdak.kaynak === 'uygula' ? uygulaDugmesi : hizli.querySelector('[aria-pressed="true"]')));
+  metniCiz();
+  const uygulaDugmesi = h('button', { type: 'button', class: 'kucuk-dugme birincil', onclick: uygula }, ikon('takvim'), 'Uygula');
+  panel.append(hizli, h('div', { class: 'tarih-alanlari' }, alan('Başlangıç', bas), alan('Bitiş', bit), uygulaDugmesi));
+  kok = h('div', { class: 'tarih-araligi', role: 'group', 'aria-label': secenek.etiket || 'Tarih aralığı' }, tetik, panel);
+  odagiGeriVer(kok, () => tetik);
   return kok;
 }
 
