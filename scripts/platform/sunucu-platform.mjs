@@ -972,7 +972,11 @@ function hataYaniti(hata) {
   }
   if (hata instanceof SenaryoCakismaHatasi) return { durum: 409, govde: { basarili: false, kod: 'CAKISMA', mesaj: hata.message } };
   if (hata instanceof EkranDogrulamaHatasi) return { durum: 400, govde: { basarili: false, kod: 'DOGRULAMA', mesaj: hata.message, hatalar: hata.hatalar } };
-  if (hata instanceof DepoHatasi) return { durum: 400, govde: { basarili: false, kod: 'VERI', mesaj: hata.message } };
+  // Olmayan kayıt ("… bulunamadı."): 404 (istek biçimi doğru, kayıt yok); diğer veri hataları 400.
+  if (hata instanceof DepoHatasi) {
+    const bulunamadi = /bulunamad[ıi]\.?$/u.test(hata.message.trim());
+    return { durum: bulunamadi ? 404 : 400, govde: { basarili: false, kod: bulunamadi ? 'BULUNAMADI' : 'VERI', mesaj: hata.message } };
+  }
   if (hata instanceof CalismaAlaniHatasi) {
     const kodlar = { GECERSIZ: 400, BULUNAMADI: 404, AYNI_AD: 409, BOZUK: 500, ACIK: 409, ONAY: 400, MESGUL: 409, SABIT: 409, KAPALI: 409 };
     return { durum: kodlar[hata.kod] ?? 400, govde: { basarili: false, kod: hata.kod === 'KAPALI' ? 'CALISMA_ALANI_YOK' : hata.kod, mesaj: hata.message } };

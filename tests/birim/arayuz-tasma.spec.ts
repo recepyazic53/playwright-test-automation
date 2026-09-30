@@ -243,6 +243,10 @@ test.describe('tüm ekranlar taşmasız', () => {
     await page.goto(`/#/sonuclar/karsilastir/${z.kosuIdleri[1]}/${z.kosuIdleri[2]}`);
     await expect(page.getByRole('heading', { name: 'Koşu karşılaştırması' })).toBeVisible();
     await expect(page.locator('.kars-ortam-notu')).toHaveCount(0);
+    // Olmayan kayıt 404 (400 değil; istek biçimi doğru, kayıt yok).
+    const y = await fetch(`${z.nobetci.adres}/platform/servis?projeId=${z.projeId}&id=00000000-0000-4000-8000-000000000000`, { headers: { 'X-Test-Sunucu-Token': z.nobetci.token } });
+    expect(y.status).toBe(404);
+    expect(await y.json()).toMatchObject({ basarili: false, kod: 'BULUNAMADI' });
     // Olmayan kimlik: mesajın altında geri dönüş bağlantısı (çıkmaz sokak yok).
     for (const [adres, baglanti, hedef] of [
       ['/#/ekranlar/e/olmayan-kimlik', 'Ekranlara dön', '#/ekranlar'], ['/#/servisler/s/olmayan-kimlik', 'Servislere dön', '#/servisler'],
