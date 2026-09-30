@@ -347,32 +347,56 @@ export function secenekTablolariUret(girdi) {
     for (const s of [...a.secenekler, ...(gozlem.get(a.anahtar) ?? []).flatMap((g) => g.secenekler)]) if (s.deger !== '' && !m.has(s.deger)) m.set(s.deger, s);
     return [...m.values()];
   };
-  // 1) Üst alan: seçenek listesi yalnız ONUN değerine göre değişiyorsa (her değerde tek liste, en az iki farklı liste).
-  /** @type {Map<string, { ust: string; harita: Map<string, Secenek[]> }>} */
+  // 1) Üst alan: seçenek listesi yalnız ONUN değerine göre değişiyorsa (her değerde tek liste, en az iki farklı liste). Çok düzeyli
+  // zincirlerde (il → ilçe → belde → köy) üst değerin kendisi değil ÜST ZİNCİRİYLE birlikte yolu anahtardır (iki ilde de "Merkez"
+  // ilçesi olabilir); üst alan önce formda kendinden ÖNCEKİ alanlar arasında aranır (en yakın önce), ancak yoksa sonrakilerde.
+  /** @type {Map<string, { ust: string; basit: boolean; harita: Map<string, Secenek[]> }>} */
   const bagimli = new Map();
-  for (const a of alanlar) {
+  /** Alanın değerinin üst zincirle birlikte yolu (biri eksikse null). @param {string} k @param {(k: string) => string | undefined} deger @param {boolean} basit */
+  const yolAnahtari = (k, deger, basit) => {
+    /** @type {string[]} */
+    const parcalar = [];
+    const gorulen = new Set();
+    /** @type {string | undefined} */
+    let u = k;
+    while (u && !gorulen.has(u)) {
+      gorulen.add(u);
+      const v = deger(u);
+      if (v === undefined || v === '') return null;
+      parcalar.unshift(v);
+      if (basit) break;
+      u = bagimli.get(u)?.basit ? undefined : bagimli.get(u)?.ust;
+    }
+    return JSON.stringify(parcalar);
+  };
+  alanlar.forEach((a, sira) => {
     const liste = gozlem.get(a.anahtar) ?? [];
-    if (new Set(liste.map((g) => imzaOf(g.secenekler))).size < 2) continue;
-    /** @type {{ ust: string; harita: Map<string, Secenek[]>; puan: number } | null} */
+    if (new Set(liste.map((g) => imzaOf(g.secenekler))).size < 2) return;
+    /** @type {{ ust: string; basit: boolean; harita: Map<string, Secenek[]>; puan: number } | null} */
     let en = null;
-    for (const p of alanlar) {
-      if (p === a || bagimli.get(p.anahtar)?.ust === a.anahtar) continue;
+    // Önceki alanlarda uygun üst varsa sonrakiler hiç denenmez (alt alanın değeri üst alanın listesini "açıklıyormuş" gibi görünebilir).
+    const oncekiler = alanlar.slice(0, sira).reverse();
+    const sonrakiler = alanlar.slice(sira + 1);
+    for (const p of [...oncekiler, ...sonrakiler]) {
+      if (en && sonrakiler.includes(p)) break;
+      if (bagimli.get(p.anahtar)?.ust === a.anahtar) continue;
+      const basit = sonrakiler.includes(p);
       /** @type {Map<string, Secenek[]>} */
       const harita = new Map();
       let tutarli = true;
       for (const g of liste) {
-        const v = g.secimler[p.anahtar];
-        if (v === undefined || v === '') continue;
+        const v = yolAnahtari(p.anahtar, (k) => g.secimler[k], basit);
+        if (v === null) continue;
         const onceki = harita.get(v);
         if (onceki && imzaOf(onceki) !== imzaOf(g.secenekler)) { tutarli = false; break; }
         harita.set(v, g.secenekler);
       }
       if (!tutarli || new Set([...harita.values()].map(imzaOf)).size < 2) continue;
-      if (!en || harita.size > en.puan) en = { ust: p.anahtar, harita, puan: harita.size };
+      if (!en || harita.size > en.puan) en = { ust: p.anahtar, basit, harita, puan: harita.size };
     }
-    if (en) bagimli.set(a.anahtar, { ust: en.ust, harita: en.harita });
+    if (en) bagimli.set(a.anahtar, { ust: en.ust, basit: en.basit, harita: en.harita });
     else notlar.push(`"${a.etiket}" alanının seçenekleri değişiyor ama bağlı olduğu seçim bulunamadı: test verisi tablosuna gözlenen tüm seçenekler yazıldı.`);
-  }
+  });
   // Döngü koruması: üst zinciri kendine dönen alan bağımsız sayılır.
   for (const a of [...bagimli.keys()]) {
     const gorulen = new Set([a]);
@@ -402,12 +426,12 @@ export function secenekTablolariUret(girdi) {
     let satirlar = kokSecenekleri.map((s) => ({ [kok.anahtar]: s }));
     let kesildi = false;
     for (const c of grup.slice(1)) {
-      const b = /** @type {{ ust: string; harita: Map<string, Secenek[]> }} */ (bagimli.get(c.anahtar));
+      const b = /** @type {{ ust: string; basit: boolean; harita: Map<string, Secenek[]> }} */ (bagimli.get(c.anahtar));
       /** @type {Array<Record<string, Secenek | null>>} */
       const yeni = [];
       for (const r of satirlar) {
-        const ust = r[b.ust];
-        const alt = ust ? b.harita.get(ust.deger)?.filter((s) => s.deger !== '') : undefined;
+        const yol = r[b.ust] ? yolAnahtari(b.ust, (k) => r[k]?.deger, b.basit) : null;
+        const alt = yol ? b.harita.get(yol)?.filter((s) => s.deger !== '') : undefined;
         if (!alt || !alt.length) yeni.push({ ...r, [c.anahtar]: null });
         else for (const s of alt) yeni.push({ ...r, [c.anahtar]: s });
         if (yeni.length >= PAKET_SATIR_EN_COK) { kesildi = true; break; }
