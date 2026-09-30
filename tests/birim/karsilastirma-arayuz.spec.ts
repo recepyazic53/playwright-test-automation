@@ -192,6 +192,8 @@ test('koşu ayrıntısından "Başka bir koşuyla karşılaştır…": aynı kap
 test('telefon genişliği: A / B alt alta, yatay taşma yok', async () => {
   const { page, hatalar, kapat } = await sayfaAc(390, 844);
   await git(page, `#/sonuclar/karsilastir/${f.kosuA}/${f.kosuB}`);
+  // Aynı ortamdaki koşular: ortam farkı notu yok.
+  await expect(page.locator('.kars-ortam-notu')).toHaveCount(0);
   const a = await page.getByRole('region', { name: 'Koşu A özeti' }).boundingBox();
   const b = await page.getByRole('region', { name: 'Koşu B özeti' }).boundingBox();
   expect(a && b && b.y >= a.y + a.height - 1).toBe(true);

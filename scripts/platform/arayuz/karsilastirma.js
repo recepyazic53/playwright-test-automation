@@ -224,7 +224,12 @@ export async function karsilastirmaEkrani(icerik, proje, s) {
       h('a', { class: 'dugme hayalet', href: karsilastirmaAdresi(s.tur, v.b.id, v.a.id), title: 'A ile B yer değiştirir' }, ikon('yenile'), 'Yer değiştir'),
       htmlRaporDugmesi({ tur: s.tur, projeId: proje.id, id: v.a.id, b: v.b.id }),
       h('a', { class: 'dugme hayalet', href: taban }, ikon('geri'), servis ? 'Servis sonuçları' : 'Sonuçlar')));
-  yerlestir(icerik, baslik, s.ust || null, ozetKartlari(v, servis), senaryoBolumu(v, proje, s, tabloAlani));
+  // Farklı ortamlardaki koşular (ör. TEST ↔ CANLI): farklar ortam farkından da gelebilir; açıkça söylenir.
+  const ortamNotu = v.a.ortam && v.b.ortam && v.a.ortam !== v.b.ortam
+    ? h('div', { class: 'not-kutusu uyari kars-ortam-notu', role: 'note' }, ikon('uyari'),
+      ` A ve B farklı ortamlarda koştu (${v.a.ortam} ↔ ${v.b.ortam}): farkların bir kısmı ortam farkından (veri, sürüm, ayar) kaynaklanabilir.`)
+    : null;
+  yerlestir(icerik, baslik, s.ust || null, ortamNotu, ozetKartlari(v, servis), senaryoBolumu(v, proje, s, tabloAlani));
 }
 
 /** A | B özet kartları (dar ekranda alt alta). */

@@ -103,7 +103,11 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     }
     if (tur === 'e' && kimlik) {
       const ekran = liste.ekranlar.find((e) => e.id === kimlik);
-      if (!ekran) { yerlestir(icerik, bosDurum('Ekran bulunamadı.', 'Silinmiş ya da başka bir projeye ait olabilir.', { ikon: 'ekran' })); return; }
+      if (!ekran) {
+        yerlestir(icerik, bosDurum('Ekran bulunamadı.', 'Silinmiş ya da başka bir projeye ait olabilir.',
+          { ikon: 'ekran', eylem: h('a', { class: 'dugme', href: '#/ekranlar' }, ikon('geri'), 'Ekranlara dön') }));
+        return;
+      }
       if (alt === 'yukle') {
         sayfaPaketiAkisi(icerik, {
           mod: ekran.modelSurumu ? 'analiz' : 'yeni', proje, ekran, tara: () => taramaBaslat(proje, ekran), kaydet: () => kayitBaslat(proje, ekran),

@@ -234,6 +234,26 @@ test.describe('tüm ekranlar taşmasız', () => {
     await baglam.close();
   });
 
+  test('Koşu karşılaştırma: farklı ortamlardaki koşularda ortam farkı notu; olmayan kimlikte geri dönüş bağlantısı', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    // Fikstürde 3. koşu CANLI, diğerleri TEST.
+    await page.goto(`/#/sonuclar/karsilastir/${z.kosuIdleri[2]}/${z.kosuIdleri[3]}`);
+    await expect(page.locator('.kars-ortam-notu')).toContainText('A ve B farklı ortamlarda koştu (TEST ↔ CANLI)');
+    await page.goto(`/#/sonuclar/karsilastir/${z.kosuIdleri[1]}/${z.kosuIdleri[2]}`);
+    await expect(page.getByRole('heading', { name: 'Koşu karşılaştırması' })).toBeVisible();
+    await expect(page.locator('.kars-ortam-notu')).toHaveCount(0);
+    // Olmayan kimlik: mesajın altında geri dönüş bağlantısı (çıkmaz sokak yok).
+    for (const [adres, baglanti, hedef] of [
+      ['/#/ekranlar/e/olmayan-kimlik', 'Ekranlara dön', '#/ekranlar'], ['/#/servisler/s/olmayan-kimlik', 'Servislere dön', '#/servisler'],
+      ['/#/senaryolar/duzenle/olmayan-kimlik', 'Senaryolara dön', '#/senaryolar']
+    ] as const) {
+      await page.goto(adres);
+      await expect(page.locator('main').getByRole('link', { name: baglanti }), adres).toHaveAttribute('href', hedef);
+    }
+    await baglam.close();
+  });
+
   test('Oluştur menüsü: Servis testleri grubunda "Uçtan uca akış" → #/akislar/yeni', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
     const page = await baglam.newPage();

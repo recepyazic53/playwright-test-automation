@@ -176,7 +176,11 @@ export function servislerEkrani(main, parcalar, baglam) {
           'Servis senaryoları ve raporları ekranlardan ayrıdır. Deneme ve erişim kontrolü seçilen ortamda yapılır; CANLI ortamda önce onay sorulur.')),
       icerik));
   urunlerPaneli(nav, proje, { servisId: servisId ?? (tur === 'yeni' ? 'yeni' : null) }).catch(() => undefined);
-  const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
+  // Hata (ör. olmayan servis kimliği): mesajın altında geri dönüş bağlantısı (sayfa çıkmaz sokak olmasın).
+  const hata = (e) => {
+    if (e && e.durum === 423) return;
+    yerlestir(icerik, hataKutusu(e), h('div', { class: 'dugmeler' }, h('a', { class: 'dugme', href: '#/servisler' }, ikon('geri'), 'Servislere dön')));
+  };
   if (tur === 'yeni') { servisEkleSayfasi(icerik, proje).catch(hata); return; }
   if (!servisId) { yerlestir(icerik, bosDurum('Servis seçin.', 'Soldaki listeden bir servis seçin ya da yeni servis ekleyin.', { ikon: 'ag', eylem: h('a', { class: 'dugme birincil', href: '#/servisler/yeni' }, ikon('arti'), 'Servis ekle') })); return; }
   // Senaryo önerileri ayrı sayfa (#/servisler/s/<id>/oneriler; ekran önerileri sayfasının karşılığı).

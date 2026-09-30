@@ -77,7 +77,8 @@ export async function senaryoFormu(icerik, s) {
     modelFormu(icerik, s, senaryo, { ...baglam, dosyaBilgileri });
   } catch (hata) {
     if (hata && hata.durum === 423) return;
-    yerlestir(icerik, sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : 'Senaryoyu düzenle', null), hataKutusu(hata));
+    yerlestir(icerik, sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : 'Senaryoyu düzenle', null), hataKutusu(hata),
+      h('div', { class: 'dugmeler' }, h('a', { class: 'dugme', href: '#/senaryolar' }, ikon('geri'), 'Senaryolara dön')));
   }
 }
 
