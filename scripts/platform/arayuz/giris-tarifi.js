@@ -78,6 +78,7 @@ function adimlariTemizle(adimlar) {
     if (kalan.aciklama !== undefined && !String(kalan.aciklama).trim()) delete kalan.aciklama;
     if (kalan.hedef && 'metin' in kalan.hedef && !String(kalan.hedef.metin).trim()) delete kalan.hedef.metin;
     if (a.islem === 'sayiBekle') kalan.sayi = Number(kalan.sayi);
+    if (a.islem === 'bekle') kalan.saniye = Number(kalan.saniye);
     return kalan;
   });
 }
@@ -99,6 +100,7 @@ function adimDuzenleyici(s) {
     islem.addEventListener('change', () => {
       const yeni = { islem: islem.value };
       if (a.aciklama) yeni.aciklama = a.aciklama;
+      if (islem.value === 'bekle') yeni.saniye = 5;
       if (HEDEFLI.includes(islem.value)) yeni.hedef = a.hedef || { secici: '' };
       adimlar[i] = yeni;
       ciz();
@@ -132,6 +134,7 @@ function adimDuzenleyici(s) {
         break;
       case 'git': govde.append(girdi('Adres', 'adres', '/yol ya da tam adres')); break;
       case 'adresBekle': govde.append(girdi('Adres deseni', 'desen', 'Düzenli ifade')); break;
+      case 'bekle': govde.append(girdi('Saniye', 'saniye', '1–300 arası. Sayfa bir şey göstermeden önce sabit süre bekler; mümkünse "Görünmesini bekle" ya da "Adresi bekle" daha güvenilirdir.')); break;
       case 'kosulBekle': govde.append(girdi('Sayfa koşulu (JavaScript)', 'ifade', 'ör. window.hazir === true — yer tutucu içeremez')); break;
       case 'tikla':
         govde.append(...hedefAlanlari());

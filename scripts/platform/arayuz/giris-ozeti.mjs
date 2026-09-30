@@ -44,6 +44,7 @@ export function adimCumlesi(a, tarif) {
     case 'git': return `Sayfaya git: ${a.adres}`;
     case 'adresBekle': return 'Adresin değişmesini bekle';
     case 'kosulBekle': return not || 'Sayfanın hazır olmasını bekle';
+    case 'bekle': return not || `${a.saniye} saniye bekle`;
     case 'tikla': return not || `“${hedefAdi(a.hedef)}” öğesine tıkla`;
     case 'doldur': return `${not || hedefAdi(a.hedef)} alanına ${a.deger} yaz`;
     case 'sec': return `${not || hedefAdi(a.hedef)} listesinden ${a.deger} seç`;

@@ -28,7 +28,7 @@
 //                        işaretli ek alan kasada şifreli durur, loga/hataya yazılmaz). Her özel adım tam bir kez olur;
 //                        kullaniciAdi ve parola gonder'den önce gelir. ALAN YOKSA (eski tarifler) adımlar
 //                        [kullaniciAdi, parola, gonder] sayılır (girisAdimlariniCoz) — kayıtlı tarif yeniden yazılmaz.
-// Bağlam adımları (islem): git {adres} · adresBekle {desen} · kosulBekle {ifade} · tikla {hedef, yanitBekle?,
+// Bağlam adımları (islem): git {adres} · adresBekle {desen} · kosulBekle {ifade} · bekle {saniye: 1–300, sabit süre} · tikla {hedef, yanitBekle?,
 //   adresBekle?} · doldur {hedef, deger} · sec {hedef, deger} · gorunurBekle {hedef} · degerBekle {hedef, deger}
 //   · sayiBekle {hedef, sayi} · metinBekle {hedef, metin}
 //   hedef = { secici, metin?, tamMetin? } (metin: öğe bu metni içermeli; tamMetin: metin birebir) ya da
@@ -44,7 +44,7 @@ export const SMS_KIPLERI = Object.freeze(['sabit', 'elle']);
 export const BASARI_GOSTERGE_TURLERI = Object.freeze(['metin', 'url', 'eleman']);
 export const HATA_GOSTERGE_TURLERI = Object.freeze(['metin', 'eleman']);
 export const ADIM_ISLEMLERI = Object.freeze([
-  'git', 'adresBekle', 'kosulBekle', 'tikla', 'doldur', 'sec', 'gorunurBekle', 'degerBekle', 'sayiBekle', 'metinBekle'
+  'git', 'adresBekle', 'kosulBekle', 'bekle', 'tikla', 'doldur', 'sec', 'gorunurBekle', 'degerBekle', 'sayiBekle', 'metinBekle'
 ]);
 /** Giriş adımlarına özel işlemler (tarifin kullaniciAlani / parolaAlani / gonderDugmesi seçicilerini kullanır). */
 export const OZEL_GIRIS_ISLEMLERI = Object.freeze(['kullaniciAdi', 'parola', 'gonder']);
@@ -56,7 +56,7 @@ export const VARSAYILAN_GIRIS_ADIMLARI = Object.freeze([
 ]);
 /** Adım işlemlerinin arayüzdeki adları. */
 export const ADIM_ETIKETLERI = Object.freeze({
-  git: 'Sayfaya git', adresBekle: 'Adresi bekle', kosulBekle: 'Sayfa koşulunu bekle', tikla: 'Tıkla', doldur: 'Doldur',
+  git: 'Sayfaya git', adresBekle: 'Adresi bekle', kosulBekle: 'Sayfa koşulunu bekle', bekle: 'Bekle (saniye)', tikla: 'Tıkla', doldur: 'Doldur',
   sec: 'Seçenek seç', gorunurBekle: 'Görünmesini bekle', degerBekle: 'Değerini doğrula', sayiBekle: 'Sayısını doğrula',
   metinBekle: 'Metni doğrula', kullaniciAdi: 'Kullanıcı adını yaz', parola: 'Parolayı yaz', gonder: 'Giriş düğmesine bas'
 });
@@ -332,6 +332,12 @@ function adimiDogrula(a, sira, hatalar) {
       }
       return { islem, ifade, ...aciklama, ...zaman };
     }
+    case 'bekle': {
+      // Sabit süre (sayfa bir şey göstermeden önce beklemek için); olay bekleyen adımlar (adres / koşul / görünme) tercih edilir.
+      const saniye = Number(a.saniye);
+      if (!Number.isInteger(saniye) || saniye < 1 || saniye > 300) hatalar.push(`${ad}: bekleme süresi 1 ile 300 saniye arasında tam sayı olmalıdır.`);
+      return { islem, saniye: Number.isInteger(saniye) && saniye >= 1 && saniye <= 300 ? saniye : 1, ...aciklama };
+    }
     case 'tikla': {
       /** @type {Record<string, unknown>} */
       const sonuc = { islem, hedef: hedef(a.hedef), ...aciklama, ...zaman };
@@ -373,7 +379,7 @@ export function adimOzeti(a, sira) {
   if (a.aciklama) return `Adım ${sira} (${a.aciklama})`;
   if (a.islem === 'kullaniciAdi' || a.islem === 'parola' || a.islem === 'gonder') return `Adım ${sira} (${ADIM_ETIKETLERI[a.islem]})`;
   const h = 'hedef' in a && a.hedef ? ('rol' in a.hedef ? `${a.hedef.rol} "${a.hedef.ad}"` : a.hedef.secici) : '';
-  const ek = a.islem === 'git' ? a.adres : a.islem === 'adresBekle' ? a.desen : a.islem === 'kosulBekle' ? a.ifade : h;
+  const ek = a.islem === 'git' ? a.adres : a.islem === 'adresBekle' ? a.desen : a.islem === 'kosulBekle' ? a.ifade : a.islem === 'bekle' ? `${a.saniye} sn` : h;
   return `Adım ${sira} (${ADIM_ETIKETLERI[a.islem]}: ${ek})`;
 }
 

@@ -46,6 +46,19 @@ test.describe('Giriş tarifi — model ve doğrulama', () => {
     expect(baglamAlanlari(t)).toEqual(['subeKodu']);
   });
 
+  test('bekle adımı: 1–300 saniye tam sayı; giriş adımlarında da geçerli; özet ve dışa aktarma metni', async () => {
+    const gecerli = girisTarifiniDogrula({ ...gecerliTarif(), girisAdimlari: [{ islem: 'kullaniciAdi' }, { islem: 'parola' }, { islem: 'bekle', saniye: 10 }, { islem: 'gonder' }] });
+    expect(gecerli.hatalar).toEqual([]);
+    expect(gecerli.tarif?.girisAdimlari?.[2]).toEqual({ islem: 'bekle', saniye: 10 });
+    for (const kotu of [0, 301, 2.5, 'on', null]) {
+      const d = girisTarifiniDogrula({ ...gecerliTarif(), baglamDegistirme: { baglamTuru: 'Şube', adimlar: [{ islem: 'bekle', saniye: kotu }] } });
+      expect(d.hatalar.join('\n'), String(kotu)).toMatch(/Adım 1: bekleme süresi 1 ile 300 saniye arasında/);
+    }
+    expect(adimOzeti({ islem: 'bekle', saniye: 10 }, 3)).toBe('Adım 3 (Bekle (saniye): 10 sn)');
+    const { adimCumlesi } = await import('../../scripts/platform/arayuz/giris-ozeti.mjs');
+    expect(adimCumlesi({ islem: 'bekle', saniye: 10 })).toBe('10 saniye bekle');
+  });
+
   test('geçersiz tarif: tüm hatalar Türkçe ve alan adıyla listelenir', () => {
     const d = girisTarifiniDogrula({
       girisAdresi: 'ftp://x', kullaniciAlani: ' ', parolaAlani: 5, basariGostergesi: { tur: 'url', deger: '(' },

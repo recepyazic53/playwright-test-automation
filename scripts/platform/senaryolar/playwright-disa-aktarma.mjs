@@ -476,6 +476,7 @@ export function playwrightKoduUret(g) {
       case 'git': satirlar.push(`${ic}await page.goto(${metinIfadesi(a.adres, coz)}, { waitUntil: 'domcontentloaded' });`); break;
       case 'adresBekle': satirlar.push(`${ic}await expect(page).toHaveURL(new RegExp(${metinIfadesi(a.desen, coz, true)})${z});`); break;
       case 'kosulBekle': satirlar.push(`${ic}await page.waitForFunction(${s(a.ifade)}, undefined${z});`); break;
+      case 'bekle': satirlar.push(`${ic}await page.waitForTimeout(${Number(a.saniye) * 1000});`); break;
       case 'tikla': {
         const bekle = [];
         if (a.yanitBekle) bekle.push(`page.waitForResponse((r) => new URL(r.url()).pathname === ${metinIfadesi(a.yanitBekle.yol, coz)}${z})`);
@@ -1015,6 +1016,7 @@ function girisGenelAdimi(a, metin) {
     case 'git': return [`${ic}await page.goto(${metin(a.adres)}, { waitUntil: 'domcontentloaded' });`];
     case 'adresBekle': return [`${ic}await expect(page).toHaveURL(new RegExp(${metin(a.desen, true)})${z});`];
     case 'kosulBekle': return [`${ic}await page.waitForFunction(${s(a.ifade)}, undefined${z});`];
+    case 'bekle': return [`${ic}await page.waitForTimeout(${Number(a.saniye) * 1000});`];
     case 'tikla': {
       const bekle = [];
       if (a.yanitBekle) bekle.push(`page.waitForResponse((r) => new URL(r.url()).pathname === ${metin(a.yanitBekle.yol)}${z})`);

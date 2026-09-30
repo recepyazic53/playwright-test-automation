@@ -717,6 +717,10 @@ async function adimiUygula(
     case 'kosulBekle':
       await aktifSayfa(page).waitForFunction(a.ifade, undefined, zaman);
       return;
+    case 'bekle':
+      // Sabit süre: sayfaya bağlı değil (bekleme sırasında pencere kapanıp açılsa da sürer).
+      await new Promise<void>((coz) => { setTimeout(coz, a.saniye * 1000); });
+      return;
     case 'tikla':
     case 'doldur':
     case 'sec':

@@ -27,6 +27,7 @@ export type BaglamAdimi = AdimOrtak & (
   | { islem: 'git'; adres: string }
   | { islem: 'adresBekle'; desen: string }
   | { islem: 'kosulBekle'; ifade: string }
+  | { islem: 'bekle'; saniye: number }
   | { islem: 'tikla'; hedef: Hedef; yanitBekle?: { yol: string }; adresBekle?: string }
   | { islem: 'doldur' | 'sec' | 'degerBekle'; hedef: Hedef; deger: string }
   | { islem: 'gorunurBekle'; hedef: Hedef }
