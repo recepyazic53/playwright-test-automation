@@ -277,18 +277,22 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(vergiAlani?.gorunurluk).toBeTruthy();
   const s = (await api(`/platform/senaryo?id=${kayitli.senaryoId}&ortamId=${ortamId}`)) as Nesne;
   expect(JSON.stringify(s)).toContain('${Kişi.Ad soyad}');
-  // Elle yazılan değer (Vergi no) test verisi tablosuna alındı ve senaryo alanı tabloya bağlandı.
-  const kTablo = k.tablo as { tablo: string; sutunSayisi: number };
-  expect(kTablo).toMatchObject({ tablo: expect.stringContaining('Başvuru formu'), sutunSayisi: 3 });
-  const tablo = ((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).find((t: Nesne) => t.ad === kTablo.tablo);
-  expect(tablo?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Müşteri tipi', 'Vergi no', 'Ödeme şekli']);
-  expect(tablo?.satirlar).toHaveLength(1);
-  expect(JSON.stringify(s)).toContain(`\${${kTablo.tablo}.Vergi no}`);
-  // Ekranın Test verisi bölümü: tabloya alınan alanlar ilgili tablo sütununa bağlandı.
+  // Elle yazılan değerler test verisi tablolarına, anlamlı gruplara ayrılarak alındı (tek tablo değil): kişi alanı "Kişi bilgileri",
+  // diğer her alan kendi başlığıyla kendi tablosunda; alanlar ekranın Test verisi bölümünde ilgili tabloya bağlandı.
+  const kTablo = k.tablo as { tablolar: Array<{ tablo: string; sutunSayisi: number; yeni: boolean }>; baglanan: number };
+  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  expect(kTablo.baglanan).toBe(3);
+  const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
+  const kisiTablosu = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri');
+  expect(kisiTablosu?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Vergi no']);
+  expect(kisiTablosu?.satirlar).toHaveLength(1);
+  const musteriTablosu = tablolar.find((t: Nesne) => t.ad === 'Müşteri tipi');
+  expect(musteriTablosu?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Müşteri tipi']);
+  expect(musteriTablosu?.satirlar[0].degerler['Müşteri tipi']).toBe('Kurumsal');
+  expect(JSON.stringify(s)).toContain('${Kişi bilgileri.Vergi no}');
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${kayitli.ekranId}`)) as Nesne;
-  expect(Object.values(bag.baglar as Record<string, Nesne>).map((b) => b.sutun).sort()).toEqual(['Müşteri tipi', 'Vergi no', 'Ödeme şekli']);
-  expect(new Set(Object.values(bag.baglar as Record<string, Nesne>).map((b) => b.tablo))).toEqual(new Set([tablo?.id]));
-  expect((k.tablo as { baglanan?: number }).baglanan).toBe(3);
+  const baglar = Object.values(bag.baglar as Record<string, Nesne>);
+  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
 });
 
 test('kaydedilen senaryo normal koşuda (model-senaryolari.spec.ts) aynı zinciri yürütür ve Bitti\'de başarılı olur', async () => {

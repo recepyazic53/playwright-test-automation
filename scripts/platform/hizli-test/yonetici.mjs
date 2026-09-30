@@ -49,7 +49,7 @@ import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-ba
 import { karsiliklariEkrandanAl } from '../tablolar/karsiliklar.mjs';
 import { tabloTaslagiKur } from './test-verisi-tablosu.mjs';
 import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
-import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
+import { degerBasvurusu, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku,
   eksikAlanlar, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
@@ -753,44 +753,69 @@ export function hizliTestYoneticisiOlustur(s) {
   }
 
   /**
-   * Veri durağında ELLE yazılan değerleri test verisi tablosuna kaydeder ve senaryo alanlarını tablo başvurusuna çevirir
-   * ("${Tablo.Sütun}"): ekranın test verisi bölümünde görünür. Aynı ekran + senaryo adı yeniden kaydedilirse tablo ve satır güncellenir.
+   * Veri durağında ELLE yazılan değerleri test verisi TABLOLARINA kaydeder (tek tablo değil, gruplar: "Kişi bilgileri", "Kart bilgileri"
+   * ve her diğer alan için kendi tablosu — bkz. test-verisi-tablosu.mjs) ve senaryo alanlarını tablo başvurusuna çevirir ("${Tablo.Sütun}").
+   * Aynı adlı tablo varsa sütunlar birleşir; satır senaryo adıyla eklenir / güncellenir. Senaryo kendi satırına sabitlenir (tabloSecimleri).
    * @param {Veritabani} vt @param {Nesne} o @param {string} baslik
-   * @returns {{ tablo: string; tabloId: string; sutunSayisi: number; baglar: Record<string, { sutun: string; gizli: boolean }>; baglanan?: number } | null}
+   * @returns {{ tablolar: Array<{ tablo: string; tabloId: string; sutunSayisi: number; yeni: boolean;
+   *   baglar: Record<string, { tablo: string; sutun: string; gizli: boolean }> }>; baglanan?: number } | null}
    */
   function degerleriTabloyaKaydet(vt, o, baslik) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
-    const t = tabloTaslagiKur({ ekranAdi: o.ekran.ad, baslik, alanlar, degerler: o.degerler });
+    const t = tabloTaslagiKur({ baslik, alanlar, degerler: o.degerler });
     if (!t) return null;
-    const mevcut = tablolariListele(vt, o.projeId).find((x) => x.ad.toLocaleLowerCase('tr') === t.tabloAdi.toLocaleLowerCase('tr'));
-    const eskiSutunlar = (mevcut?.sutunlar ?? []).map((x) => ({ ad: x.ad, gizli: x.gizli }));
-    const yeniSutunlar = t.sutunlar.filter((x) => !eskiSutunlar.some((e) => e.ad.toLocaleLowerCase('tr') === x.ad.toLocaleLowerCase('tr')));
-    const eskiSatir = mevcut?.satirlar.find((s) => s.ad.toLocaleLowerCase('tr') === t.satirAdi.toLocaleLowerCase('tr'));
-    const tabloId = tabloKaydet(vt, {
-      projeId: o.projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: t.tabloAdi, tur: 'kayit', sutunlar: [...eskiSutunlar, ...yeniSutunlar],
-      satirlar: [{ ...(eskiSatir ? { id: eskiSatir.id } : {}), ad: t.satirAdi, ortamId: null, degerler: t.satir }]
-    });
-    for (const [anahtar, b] of Object.entries(t.baglar)) o.degerler[anahtar] = { deger: b.basvuru, kaynak: 'tablo' };
-    const gizli = new Map(t.sutunlar.map((x) => [x.ad, x.gizli]));
-    return { tablo: t.tabloAdi, tabloId, sutunSayisi: t.sutunlar.length, baglar: Object.fromEntries(Object.entries(t.baglar).map(([k, b]) => [k, { sutun: b.sutun, gizli: gizli.get(b.sutun) === true }])) };
+    const kucuk = (/** @type {string} */ m) => m.toLocaleLowerCase('tr');
+    /** @type {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>['tablolar']} */
+    const sonuc = [];
+    for (const g of t.tablolar) {
+      const mevcut = tablolariListele(vt, o.projeId).find((x) => kucuk(x.ad) === kucuk(g.tabloAdi));
+      const eskiSutunlar = (mevcut?.sutunlar ?? []).map((x) => ({ ad: x.ad, gizli: x.gizli }));
+      const yeniSutunlar = g.sutunlar.filter((x) => !eskiSutunlar.some((e) => kucuk(e.ad) === kucuk(x.ad)));
+      // Seçim alanı: tabloda okunur metin durur; "metin → seçenek değeri" sayfa karşılığı sütuna yazılır (mevcut karşılıklar korunur).
+      const karsilikli = (/** @type {{ ad: string; gizli: boolean }} */ x) => {
+        const yeniK = Object.entries(g.karsiliklar[x.ad] ?? {});
+        if (!yeniK.length || x.gizli) return {};
+        const eskiK = mevcut?.sutunlar.find((m) => kucuk(m.ad) === kucuk(x.ad))?.karsiliklar ?? {};
+        return { karsiliklar: { ...eskiK, ...Object.fromEntries(yeniK.map(([metin, kod]) => [metin, { ...(eskiK[metin] ?? {}), sayfa: kod }])) } };
+      };
+      const eskiSatir = mevcut?.satirlar.find((r) => kucuk(r.ad) === kucuk(t.satirAdi));
+      // Mevcut satır güncellenirken bu kayıtta verilmeyen (gizli olmayan) eski değerler korunur.
+      const eskiDegerler = eskiSatir ? Object.fromEntries(Object.entries(eskiSatir.degerler).filter(([k, v]) => v !== null && v !== '' && !(mevcut?.sutunlar.find((x) => x.ad === k)?.gizli))) : {};
+      const tabloId = tabloKaydet(vt, {
+        projeId: o.projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: g.tabloAdi, tur: 'kayit', sutunlar: [...eskiSutunlar.map((x) => ({ ...x, ...karsilikli(x) })), ...yeniSutunlar.map((x) => ({ ...x, ...karsilikli(x) }))],
+        satirlar: [{ ...(eskiSatir ? { id: eskiSatir.id } : {}), ad: t.satirAdi, ortamId: null, degerler: { ...eskiDegerler, ...g.satir } }]
+      });
+      // Senaryo kendi satırına sabitlenir: bu kayıttaki (gizli olmayan) değerler satırı ayırt eder.
+      const gizli = new Map(g.sutunlar.map((x) => [x.ad, x.gizli]));
+      const kosul = Object.fromEntries(Object.entries(g.satir).filter(([ad]) => gizli.get(ad) !== true).slice(0, 6).map(([ad, v]) => [ad, String(v).slice(0, 200)]));
+      if (Object.keys(kosul).length) o.tabloSecimleri[grupAnahtari(tabloId, '')] = kosul;
+      for (const [anahtar, b] of Object.entries(g.baglar)) o.degerler[anahtar] = { deger: b.basvuru, kaynak: 'tablo' };
+      sonuc.push({
+        tablo: g.tabloAdi, tabloId, sutunSayisi: g.sutunlar.length, yeni: !mevcut,
+        baglar: Object.fromEntries(Object.entries(g.baglar).map(([k, b]) => [k, { tablo: g.tabloAdi, sutun: b.sutun, gizli: gizli.get(b.sutun) === true }]))
+      });
+    }
+    return { tablolar: sonuc };
   }
 
   /**
-   * Ekranın test verisi bölümü: tabloya alınan her alan, ekranın alan bağlarında ilgili tablo sütununa bağlanır (Ekran > Test verisi).
-   * Seçim alanına gizli sütun bağlanmaz (ekran-baglari kuralı). @param {Veritabani} vt @param {Nesne} o @param {string} ekranId
-   * @param {Nesne} paket @param {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>} tablo @returns {number} bağlanan alan sayısı
+   * Ekranın test verisi bölümü: tabloya alınan her alan, ekranın alan bağlarında kendi tablosunun ilgili sütununa bağlanır
+   * (Ekran > Test verisi). Seçim alanına gizli sütun bağlanmaz (ekran-baglari kuralı). @param {Veritabani} vt @param {Nesne} o
+   * @param {string} ekranId @param {Nesne} paket @param {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>} sonuc @returns {number} bağlanan alan sayısı
    */
-  function alanlariTabloyaBagla(vt, o, ekranId, paket, tablo) {
+  function alanlariTabloyaBagla(vt, o, ekranId, paket, sonuc) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
     const anahtarlar = senaryoAnahtarlari(paket.model, alanlar);
     /** @type {Record<string, { tablo: string; sutun: string }>} */
     const yeni = {};
-    for (const a of alanlar) {
-      const b = tablo.baglar[a.anahtar];
-      const senaryoAnahtari = anahtarlar[a.anahtar];
-      if (!b || !senaryoAnahtari) continue;
-      if (b.gizli && ['select', 'radio'].includes(String(a.tur))) continue;
-      yeni[senaryoAnahtari] = { tablo: tablo.tabloId, sutun: b.sutun };
+    for (const tb of sonuc.tablolar) {
+      for (const a of alanlar) {
+        const b = tb.baglar[a.anahtar];
+        const senaryoAnahtari = anahtarlar[a.anahtar];
+        if (!b || !senaryoAnahtari) continue;
+        if (b.gizli && ['select', 'radio'].includes(String(a.tur))) continue;
+        yeni[senaryoAnahtari] = { tablo: tb.tabloId, sutun: b.sutun };
+      }
     }
     if (!Object.keys(yeni).length) return 0;
     ekranAlanBaglariniKaydet(vt, o.projeId, ekranId, { ...ekranAlanBaglari(vt, ekranId), ...yeni });
