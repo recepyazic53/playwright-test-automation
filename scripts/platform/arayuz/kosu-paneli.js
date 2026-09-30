@@ -10,7 +10,7 @@
 // - Elle doğrulama kodu (giriş tarifinde SMS "elle" kipi): çalışan satırlar için /kod-istegi yoklanır; kod
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, canliOnayPenceresi, kapaliDugmeNedenleri, kullaniciAyarlari, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { api, canliKareAl, canliOnayPenceresi, kapaliDugmeNedenleri, kullaniciAyarlari, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
 import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
 import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
 import { HAZIRLIK_BASLIKLARI, kosuSayimMetni, ortamDenetimiMetni } from './hazirlik.mjs';
@@ -701,19 +701,21 @@ function izlemeAlani(oturum) {
     alan.append(adimKap);
     const adimlariYukle = async () => {
       try {
-        const y = await fetch(`/adim-durumu?token=${encodeURIComponent(TOKEN)}&kosuId=${encodeURIComponent(satir.kosuId)}`, { cache: 'no-store' }).then((r) => r.json());
+        const y = await fetch(`/adim-durumu?kosuId=${encodeURIComponent(satir.kosuId)}`, { headers: { 'X-Test-Sunucu-Token': TOKEN }, cache: 'no-store' }).then((r) => r.json());
         if (Array.isArray(y.adimlar)) { satir.canliAdimlar = y.adimlar; if (adimKap.isConnected) yerlestir(adimKap, adimListesi(y.adimlar, true)); }
       } catch { /* bir sonraki tikte yeniden denenir */ }
     };
     canliYukle = () => {
       void adimlariYukle();
-      const on = new Image();
-      on.onload = () => {
-        sonCanliKare = { kosuId: satir.kosuId, src: on.src };
-        img.src = on.src;
+      // Kare fetch ile (token başlıkta); kare yoksa (204) bir sonraki tikte yeniden sorulur. Eski blob adresi bırakılır.
+      void canliKareAl(satir.kosuId).then((src) => {
+        if (!src) return;
+        const onceki = sonCanliKare ? sonCanliKare.src : null;
+        sonCanliKare = { kosuId: satir.kosuId, src };
+        img.src = src;
         if (bos.isConnected) bos.replaceWith(img);
-      };
-      on.src = `/canli?token=${encodeURIComponent(TOKEN)}&kosuId=${encodeURIComponent(satir.kosuId)}&t=${Date.now()}`;
+        if (onceki && onceki !== src) setTimeout(() => URL.revokeObjectURL(onceki), 1000);
+      });
     };
     canliYukle();
     if (!canliZamanlayici) canliZamanlayici = setInterval(() => { if (canliYukle) canliYukle(); }, CANLI_ARALIK_MS);

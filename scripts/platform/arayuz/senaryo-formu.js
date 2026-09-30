@@ -15,7 +15,7 @@
 // Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
 // değişince form o akışın modeliyle yeniden çizilir, girilen değerler korunur (yeni akışta olmayanlar uyarıyla kaldırılır).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
+import { api, canliKareAl, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
 import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle, kabulListesi } from './dosya-yukleme.js';
 import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
@@ -1839,10 +1839,15 @@ function modelFormu(icerik, s, senaryo, baglam) {
         durdur.textContent = 'Durduruluyor…';
         try { await api('/durdur', { govde: { kosuId: d.kosuId } }); } catch (e) { bildir(e.message, 'hata'); }
       });
+      // Kare fetch ile (token başlıkta, adreste değil); ilk kare gelmeden sunucu 204 döner (konsolda hata yok).
       const yukle = () => {
-        const on = new Image();
-        on.onload = () => { img.src = on.src; if (bos.isConnected) bos.replaceWith(img); };
-        on.src = `/canli?token=${encodeURIComponent(TOKEN)}&kosuId=${encodeURIComponent(d.kosuId)}&t=${Date.now()}`;
+        void canliKareAl(d.kosuId).then((src) => {
+          if (!src) return;
+          const onceki = img.src && img.src.startsWith('blob:') ? img.src : null;
+          img.src = src;
+          if (bos.isConnected) bos.replaceWith(img);
+          if (onceki) setTimeout(() => URL.revokeObjectURL(onceki), 1000);
+        });
       };
       canliZamanlayici = setInterval(() => { if (!denemeAlani.isConnected || deneme?.bitti) { clearInterval(canliZamanlayici); return; } yukle(); }, 1200);
       yukle();

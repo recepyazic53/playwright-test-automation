@@ -9,6 +9,23 @@ const IZIN_ANAHTAR_SAYISI = IZIN_TANIMLARI.length;
 const tokenMeta = document.querySelector('meta[name="oturum-tokeni"]');
 /** Sunucunun bu yanıta enjekte ettiği oturum token'ı (yalnızca bellekte tutulur). */
 export const TOKEN = tokenMeta ? tokenMeta.getAttribute('content') || '' : '';
+
+/**
+ * Çalışan koşunun canlı ekran karesi. Token BAŞLIKTA gider (img src'de sorgu dizesi olsaydı adres geçmişine / günlüklere düşerdi);
+ * kare henüz yoksa sunucu 204 döner (konsolda hata yok) ve null döner. Dönen blob: adresini çağıran, yenisini koyunca
+ * URL.revokeObjectURL ile bırakır.
+ * @param {string} kosuId @returns {Promise<string | null>}
+ */
+export async function canliKareAl(kosuId) {
+  try {
+    const r = await fetch(`/canli?kosuId=${encodeURIComponent(kosuId)}`, { headers: { 'X-Test-Sunucu-Token': TOKEN }, cache: 'no-store' });
+    if (r.status !== 200) return null;
+    const b = await r.blob();
+    return b.size ? URL.createObjectURL(b) : null;
+  } catch {
+    return null;
+  }
+}
 if (tokenMeta) tokenMeta.remove();
 
 // ---------------------------------------------------------------------------------------
