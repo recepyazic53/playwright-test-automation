@@ -105,10 +105,17 @@ function altModelKaynagi(/** @type {Veritabani} */ vt, /** @type {string} */ pro
 function ortakAkisModelleri(model, kaynak) {
   /** @type {Record<string, Nesne>} */
   const sonuc = {};
-  for (const a of Array.isArray(model.adimlar) ? /** @type {unknown[]} */ (model.adimlar) : []) {
-    if (!nesneMi(a) || !nesneMi(a.ortakAkis) || typeof a.ortakAkis.dosya !== 'string' || a.ortakAkis.dosya in sonuc) continue;
-    const m = kaynak(a.ortakAkis.dosya);
-    if (nesneMi(m)) sonuc[a.ortakAkis.dosya] = /** @type {Nesne} */ (m);
+  const basvurular = (/** @type {Nesne} */ m) => (Array.isArray(m.adimlar) ? /** @type {unknown[]} */ (m.adimlar) : [])
+    .filter((a) => nesneMi(a) && nesneMi(a.ortakAkis) && typeof a.ortakAkis.dosya === 'string').map((a) => String(/** @type {Nesne} */ (/** @type {Nesne} */ (a).ortakAkis).dosya));
+  // Başvurulan ekran başka ekranlara da başvurabilir (ekran = ortak akış): varsayılan akışları izlenir; döngüde her dosya bir kez.
+  const kuyruk = basvurular(model);
+  for (let i = 0; i < kuyruk.length; i++) {
+    const dosya = kuyruk[i];
+    if (dosya in sonuc) continue;
+    const m = kaynak(dosya);
+    if (!nesneMi(m)) continue;
+    sonuc[dosya] = /** @type {Nesne} */ (m);
+    if (m.tur !== 'ortakAkis' && m.tur !== 'altModel') kuyruk.push(...basvurular(/** @type {Nesne} */ (akisModeli(m, null))));
   }
   return sonuc;
 }

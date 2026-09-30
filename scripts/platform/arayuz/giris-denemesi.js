@@ -59,13 +59,17 @@ function oturumAdresiOneriKutusu(o, projeId, yol, secenekler) {
 
 /** @param {any} o @param {string} projeId @param {DenemeSecenekleri} [secenekler] */
 export async function girisiDene(o, projeId, secenekler = {}) {
-  const gorunur = h('input', { type: 'checkbox', id: `giris-denemesi-gorunur-${o.ortamId}` });
+  // "Tarayıcıyı göster" seçimi hatırlanır (yalnız bu tarayıcıda; her seferinde yeniden işaretlemek gerekmez).
+  const GORUNUR_ANAHTARI = 'nobetci.girisDenemesi.gorunur';
+  const oncekiSecim = (() => { try { return localStorage.getItem(GORUNUR_ANAHTARI) === '1'; } catch { return false; } })();
+  const gorunur = h('input', { type: 'checkbox', id: `giris-denemesi-gorunur-${o.ortamId}`, checked: oncekiSecim });
   const tamam = await onayIste({
     baslik: `${o.ortamAd}: giriş denensin mi?`, ikonAd: 'ag', dugme: 'Girişi dene',
     metin: `Nöbetçi, ${o.ortamAd} ortamının giriş tarifi ve giriş profiliyle yalnızca giriş yapar. Siteye gerçek bir giriş isteği gider (dış siteye istek). Kayıtlı oturum kullanılmaz ve saklanmaz.`,
     ek: h('label', { class: 'secenek', for: gorunur.id }, gorunur, 'Tarayıcıyı göster (girişi izleyin)')
   });
   if (!tamam) return;
+  try { localStorage.setItem(GORUNUR_ANAHTARI, gorunur.checked ? '1' : '0'); } catch { /* depolama kapalı: seçim hatırlanmaz */ }
   if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş denemesi'))) return;
   let isId;
   try {

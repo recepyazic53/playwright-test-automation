@@ -169,7 +169,7 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     await baglam.close();
   });
 
-  test('ilk kurulum sihirbazı: İzinler adımı (Hiçbir izin açma varsayılan); paket seçilip tek onayla açılır, canlı kapalı kalır; 390 px taşmasız', async () => {
+  test('ilk kurulum sihirbazı: İşleriniz adımı (Ekran / Servis testleri; seçim yokken Devam kapalı); seçilen işin izinleri açılır, canlı kapalı kalır; 390 px taşmasız', async () => {
     test.setTimeout(120_000);
     const k2 = mkdtempSync(join(tmpdir(), 'izin-paketi-sihirbaz-'));
     const n = await nobetciBaslat(k2, join(k2, 'platform.db'), { NOBETCI_REHBER_OTOMATIK: '0', TEST_SUNUCU_KOSU_KAPALI: '1' });
@@ -187,13 +187,14 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
       await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
       await page.getByLabel('Proje adı').fill('Sihirbaz projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
-      await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('İzinler');
-      await expect(page.getByRole('radio', { name: /^Hiçbir izin açma/ })).toBeChecked();
-      await expect(page.getByRole('button', { name: 'Devam' })).toBeVisible();
-      await page.getByRole('radio', { name: /^Ekran ve servis testleri(?! \+)/ }).check();
-      await expect(page.getByRole('list', { name: 'Açılacak izinler' }).locator('li[data-izin]')).toHaveCount(3);
+      await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('İşleriniz');
+      await expect(page.getByRole('heading', { name: 'Nöbetçi\'yi hangi işleriniz için kullanacaksınız?' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Devam' })).toBeDisabled();
+      await page.getByRole('checkbox', { name: /^Ekran testleri/ }).check();
+      await page.getByRole('checkbox', { name: /^Servis testleri/ }).check();
+      await expect(page.getByRole('button', { name: 'Devam' })).toBeEnabled();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-      await page.getByRole('button', { name: 'Bu 3 izni aç ve devam et' }).click();
+      await page.getByRole('button', { name: 'Devam' }).click();
       // Kullanım (Basit / Gelişmiş) adımı: varsayılanla devam.
       await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('Kullanım');
       await page.getByRole('button', { name: 'Devam' }).click();

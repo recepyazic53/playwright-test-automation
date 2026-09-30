@@ -7,9 +7,9 @@ import type { KorunanParca } from '../tarama/paket-olusturucu.mjs';
 type AkisSatiri = { id: string; ad: string; varsayilan: boolean; adimSayisi: number; senaryoSayisi: number };
 export declare function akisDuzenlenebilirMi(model: Record<string, unknown>): { duzenlenebilir: boolean; neden: string | null };
 export declare function modeldenAkisEnvanteri(model: Record<string, unknown>): AkisEnvanteri;
-/** Projenin ortak akışı (akış tasarımında "+ > Ortak akış" listesi). */
-export type OrtakAkisOzeti = { dosya: string; ad: string; adimlar: string[]; yalnizTest: boolean };
-export declare function ortakAkislariListele(vt: Veritabani, projeId: string): OrtakAkisOzeti[];
+/** Akış tasarımında "Önce şu ekrana gidilsin" listesi öğesi: projenin ortak akışı ya da ekranı. */
+export type OrtakAkisOzeti = { dosya: string; ad: string; tur: 'ortakAkis' | 'ekran'; adimlar: string[]; yalnizTest: boolean };
+export declare function ortakAkislariListele(vt: Veritabani, projeId: string, haricEkranId?: string): OrtakAkisOzeti[];
 export declare function adimlardanBloklar(model: Record<string, unknown>, adimlar: Record<string, unknown>[], env: AkisEnvanteri, akisId?: string): AkisBlogu[];
 /** Modelin tüm akışlarının diyagramda düzenlenemeyen (aynen korunan) parçaları: blok anahtarı → parça; özetler; alanların gösterilemeyen koşulları. */
 export declare function korunanParcalari(model: Record<string, unknown>): {

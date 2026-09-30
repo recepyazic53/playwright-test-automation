@@ -350,7 +350,7 @@ test.describe('sunucu, koşu ve arayüz (sahte uygulama)', () => {
       await tasmaYok(page, `form kapalı ${genislik}`);
       await anahtarlar.first().check();
       await expect(anahtarlar.nth(1)).toBeChecked();
-      await expect(kart).toContainText('“Kargo bloğu” ortak akışı · İsteğe bağlı adım');
+      await expect(kart).toContainText('“Kargo bloğu” adımları · İsteğe bağlı adım');
       await tasmaYok(page, `form açık ${genislik}`);
       await bitir();
 

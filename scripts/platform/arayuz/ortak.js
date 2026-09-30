@@ -629,6 +629,27 @@ export function kisaAciklama(metin, konu = '') {
   return h('span', { class: 'kisa-aciklama' }, kisa, ' ', soru, panel);
 }
 
+/**
+ * Başlık yanı "?" ipucu: uzun açıklama ekranda sürekli yer kaplamaz; "?" düğmesiyle açılır / kapanır (Esc kapatır). Bilgi kaybolmaz.
+ * Düğme başlığın yanına, panel başlığın altına konur.
+ * @param {Node | Array<Node | string>} govde @param {string} konu düğmenin erişilebilir adı için (ör. bölüm başlığı)
+ * @returns {{ dugme: HTMLButtonElement; panel: HTMLElement }}
+ */
+export function yardimIpucu(govde, konu) {
+  const panelId = yeniKimlik('yardim-paneli');
+  const panel = h('div', { id: panelId, class: 'yardim-paneli soluk kucuk', hidden: true }, ...(Array.isArray(govde) ? govde : [govde]));
+  const dugme = /** @type {HTMLButtonElement} */ (h('button', {
+    type: 'button', class: 'ikon-dugme hayalet ayrinti-dugmesi', 'aria-expanded': 'false', 'aria-controls': panelId,
+    'aria-label': `${konu}: açıklamayı göster`, title: 'Açıklama'
+  }, ikon('soru')));
+  const ac = (/** @type {boolean} */ goster) => { panel.hidden = !goster; dugme.setAttribute('aria-expanded', String(goster)); };
+  dugme.addEventListener('click', () => ac(panel.hidden));
+  const esc = (/** @type {KeyboardEvent} */ o) => { if (o.key === 'Escape' && !panel.hidden) { o.preventDefault(); o.stopPropagation(); ac(false); dugme.focus(); } };
+  dugme.addEventListener('keydown', esc);
+  panel.addEventListener('keydown', esc);
+  return { dugme, panel };
+}
+
 export function alan(etiket, girdi, secenekler = {}) {
   const id = girdi.id || yeniKimlik('alan');
   girdi.id = id;

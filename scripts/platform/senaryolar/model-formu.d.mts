@@ -88,7 +88,7 @@ export declare function akisListesi(model: unknown): AkisOzeti[];
 export declare function varsayilanAkisId(model: unknown): string;
 export declare function akisModeli<T>(model: T, akisId?: string | null): T;
 /** Ortak akış adımlarını (adim.ortakAkis) ortak akışın adımlarıyla açar; bulunamayan dosyalar eksikler. */
-export declare function ortakAkislariAc(model: any, ortakAkislar: Record<string, any>): { model: any; eksikler: string[] };
+export declare function ortakAkislariAc(model: any, ortakAkislar: Record<string, any>): { model: any; eksikler: string[]; donguler: string[] };
 export declare function akislariEsitle<T>(model: T): T;
 export declare function formSemasiOlustur(model: unknown, altModeller?: Record<string, unknown>): FormSemasi;
 export declare function tumFormAlanlari(sema: FormSemasi): FormAlani[];

@@ -1163,7 +1163,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   sema.adimlar.forEach((adim, i) => {
     const alanSayisi = adim.bolumler.reduce((t, b) => t + b.alanlar.length, 0);
     // Ortak akış adımı: isteğe bağlıysa anahtar (başlıkta), her senaryoda çalışıyorsa yalnız bilgi rozeti.
-    const ortakOnEki = adim.ortakAkis ? `“${adim.ortakAkis}” ortak akışı · ` : '';
+    const ortakOnEki = adim.ortakAkis ? `“${adim.ortakAkis}” adımları · ` : '';
     const altMetin = adim.ayar ? `${ortakOnEki}İsteğe bağlı adım${alanSayisi ? ` · ${alanSayisi} alan` : ''}`
       : `${ortakOnEki}${alanSayisi ? `${alanSayisi} alan` : 'Bu adımda senaryoya özel alan yok'}`;
     const alt = h('small', {}, altMetin);
@@ -1185,7 +1185,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       h('div', { class: 'adim-basligi' }, h('span', { class: 'adim-no', 'aria-hidden': 'true' }, String(i + 1)),
         h('div', {}, h('h3', { id: `adim-${adim.id}` }, adim.baslik), alt),
         adim.ayar ? h('div', { class: 'sag' }, kapsamAnahtari(adim))
-          : adim.ortakAkis ? h('div', { class: 'sag' }, rozet('her senaryoda çalışır', 'basari', { title: `“${adim.ortakAkis}” ortak akışı bu akışta her senaryoda çalışır (akış diyagramında “İsteğe bağlı” seçilirse burada “… dahil” anahtarı çıkar).`, 'data-ortak-durumu': 'her-zaman' })) : null),
+          : adim.ortakAkis ? h('div', { class: 'sag' }, rozet('her senaryoda çalışır', 'basari', { title: `“${adim.ortakAkis}” adımları bu akışta her senaryoda çalışır (akış diyagramında “İsteğe bağlı” seçilirse burada “… dahil” anahtarı çıkar).`, 'data-ortak-durumu': 'her-zaman' })) : null),
       govde);
     adimKartlari.set(adim.id, { el, alt, altMetin, govde, alanSayisi });
     adimAkisi.append(el);

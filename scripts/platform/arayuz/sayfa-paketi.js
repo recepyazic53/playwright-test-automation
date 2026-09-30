@@ -8,11 +8,8 @@
 // yüklenen JSON dosyası (yapay zekâ aracınızın ürettiği). Yeni eklemede paket yükleme ve "Yapay zekâ ile oluştur" kapalı gelen
 // görünür "Paket yükle ya da yapay zekâ ile oluştur" bölümündedir (ileriDuzey); tekrar analizde yükleme alanı üstte kalır.
 // Tarama/kayıt bitince paket taranmisPaketAkisi ile AYNI önizleme adımına girer.
-// "Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan" (yalnız yeni ekleme; eski "Ne oluşturulsun? Ekran / Ortak akış"
-// ayrımının yerine tek onay kutusu): varsayılan işaretsiz = ekran (bugünkü davranış). İşaretlenince aynı
-// yollar (paket yükle / tara / kaydet) çalışır, sonuç ortak akış olarak "Ortak akışlar" altına kaydedilir (sunucu paketi çevirir:
-// sayfa-paketi.mjs > ortakAkisPaketineCevir); ayrıca dördüncü kutu "Boş başla": adımsız ortak akış, adımları Akışlar sekmesinde
-// diyagramdan eklenir. Ortak akışın senaryosu yoktur (önizlemede senaryo / ortam seçimi yok); ekranlara ekleme otomatik yapılmaz.
+// Ekran ekleme her zaman yalnız EKRAN oluşturur; her ekran başka bir senaryonun önceki adımı olarak da kullanılabilir (akış tasarımında
+// "Önce şu ekrana git"). Var olan ortak akış kayıtları ve eski çağıranlar (olusturulacak: 'ortakAkis') geriye uyum için çalışır.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
 import { api, bildir, dosyaSecimi, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
@@ -25,11 +22,10 @@ const PAKET_EN_BUYUK = 16 * 1024 * 1024;
 const CUMLE = paketIstekCumlesi();
 
 /**
- * olusturulacak: "Ne oluşturulsun?" ('ekran' varsayılan; 'ortakAkis' yalnız yeni eklemede). secimDegisti verilirse (Ekran ekle)
- * seçim gösterilir ve değişince sayfa seçilen türle yeniden çizilir.
+ * olusturulacak: 'ekran' (varsayılan; ekran ekleme her zaman ekran oluşturur). 'ortakAkis' yalnız eski çağıranlar için korunur.
  * @typedef {{ mod: 'yeni' | 'analiz'; proje: { id: string; ad: string }; ekran?: { id: string; ad: string; anahtar: string } | null;
  *   bitti: (ekranId: string, analiz?: boolean) => void; tara?: () => void; kaydet?: () => void;
- *   olusturulacak?: 'ekran' | 'ortakAkis'; secimDegisti?: (tur: 'ekran' | 'ortakAkis') => void }} AkisSecenekleri
+ *   olusturulacak?: 'ekran' | 'ortakAkis' }} AkisSecenekleri
  */
 /** Ortak akış mı oluşturuluyor? @param {AkisSecenekleri} s */
 const ortakMi = (s) => s.olusturulacak === 'ortakAkis' && s.mod !== 'analiz' && !s.ekran;
@@ -149,13 +145,11 @@ function yuklemeAdimi(govde, s, onceki = null, ileriAcik = false) {
       eklemeKutulari(s, { yapayZeka: true, baslik: 'Paketiniz yoksa' })));
     return;
   }
-  // Yeni ekran (ya da "başlangıç adımı" işaretliyse ortak akış): ana yollar (Ekranı tara / hızlı test, Akışı kaydet; ortak akışta Boş
-  // başla) ve görünür "Paket yükle ya da yapay zekâ ile oluştur" bölümü; en altta tek seçenek (başlangıç adımı olarak da kullan).
-  const secim = olusturmaSecimi(s);
+  // Yeni ekran: ana yollar (Ekranı tara / hızlı test, Akışı kaydet) ve görünür "Paket yükle ya da yapay zekâ ile oluştur" bölümü.
+  // Her ekran başka bir senaryonun önceki adımı olarak da kullanılabilir; bunun için ayrı bir seçim yoktur.
   yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
     eklemeKutulari(s, { yapayZeka: false, baslik: 'Nasıl eklensin?' }),
-    ileriDuzey(s, h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, dosyaSec.not, durumAlani, onceki)),
-    secim ? h('section', { class: 'kart' }, secim) : null));
+    ileriDuzey(s, h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, dosyaSec.not, durumAlani, onceki))));
 }
 
 /** Paketin 2 sayfalık özeti (docs/sayfa-paketi-ozet.md; yerel sunucu düz metin olarak verir; yeni sekmede açılır). */
@@ -178,23 +172,6 @@ function ileriDuzey(s, yukleme) {
     h('div', { class: 'ileri-duzey-govdesi' },
       yukleme,
       eklemeKutulari(s, { yapayZeka: true, yalnizYapayZeka: true, baslik: null })));
-}
-
-/**
- * Ekran ekle'de tek seçenek: "Bu ekranı başka senaryolarda başlangıç ya da ara adım olarak da kullan" (eski "Ne oluşturulsun? Ekran /
- * Ortak akış" ayrımının yerine; veri modelindeki ortak akış aynen durur). İşaretlenirse sonuç, başka ekranların akışına adım olarak
- * eklenebilen ortak akış biçiminde kaydedilir (kendi senaryosu olmaz); işaretsizse yeni ekran olur. Seçim alttaki bütün yollara uygulanır.
- * @param {AkisSecenekleri} s
- */
-function olusturmaSecimi(s) {
-  if (s.mod === 'analiz' || s.ekran || !s.secimDegisti) return null;
-  const kutu = h('input', { type: 'checkbox', id: 'baslangic-adimi-olarak', checked: ortakMi(s) });
-  kutu.addEventListener('change', () => s.secimDegisti(kutu.checked ? 'ortakAkis' : 'ekran'));
-  return h('div', { class: 'olusturma-secimi' },
-    h('label', { class: 'onay-satiri', for: kutu.id }, kutu, h('span', {}, 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan')),
-    h('p', { class: 'kucuk soluk olusturma-aciklamasi' }, ortakMi(s)
-      ? 'İşaretli: sonuç “Ortak akışlar” altına kaydedilir; başka ekranların akışına adım olarak eklenir (kendi senaryosu olmaz).'
-      : 'Örneğin önce bu ekrana gidip sonra başka bir ekrana geçen senaryolar için. İşaretlemezseniz yalnız ekran olarak eklenir.'));
 }
 
 /**
