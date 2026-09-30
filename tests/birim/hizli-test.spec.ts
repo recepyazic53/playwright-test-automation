@@ -933,8 +933,12 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(page.locator('.hizli-hazirlik li.eksik')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Akış diyagramında aç' })).toBeVisible();
     await tasmaYok(page, 'Kaydedildi');
+    // Gelişmiş modda Basit mod sayfası ("Testlerim") bağlantısı yok; "Senaryolara git" Senaryolar'ı açar.
+    await expect(page.getByRole('link', { name: 'Testlerim' })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Senaryolara git' }).click();
+    await expect(page).toHaveURL(/#\/senaryolar$/);
     // Testlerim: Hayır izniyle (basılmadan) kaydedilen, henüz çalışmamış test "Doğrulanmadı" rozetiyle.
-    await page.getByRole('link', { name: 'Testlerim' }).click();
+    await page.goto('/#/testlerim');
     await expect(page.locator('.test-satiri').filter({ hasText: 'Başvuru formu basılmadan' }).locator('.rozet').filter({ hasText: 'Doğrulanmadı' })).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();

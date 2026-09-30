@@ -34,3 +34,5 @@ export declare function adayMesajlari(
 ): Array<{ metin: string; tur: 'basari' | 'hata' | 'bekleme'; kaynak: 'aday' | 'cumle' }>;
 export declare function eksikAlanlar<T extends { anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean }>(alanlar: T[], degerler: Record<string, unknown>): T[];
 export declare function sayfaUyarisi(hedefYol: string, anlikYol: string): string | null;
+/** Hızlı testin önerdiği senaryo başlığı: ekran adı zaten "hızlı test" içeriyorsa ek konmaz. */
+export declare function hizliSenaryoBasligi(ekranAdi: string): string;

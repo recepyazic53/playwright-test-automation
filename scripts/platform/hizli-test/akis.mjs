@@ -419,6 +419,15 @@ export function eksikAlanlar(alanlar, degerler) {
 }
 
 /**
+ * Hızlı testin önerdiği senaryo başlığı: "<ekran adı> — hızlı test"; ad zaten "hızlı test" içeriyorsa ek konmaz ("Başvuru hızlı
+ * testi — hızlı test" olmasın). @param {string} ekranAdi @returns {string}
+ */
+export function hizliSenaryoBasligi(ekranAdi) {
+  const ad = String(ekranAdi || '').trim();
+  return ad.toLocaleLowerCase('tr').includes('hızlı test') ? ad : `${ad} — hızlı test`;
+}
+
+/**
  * İstenen sayfa (hedefYol) yerine site başka bir sayfa açtıysa (giriş sonrası ana sayfaya yönlendirme, kullanıcı ya da bağlam seçimi ya da yetki
  * gerekmesi) kullanıcıya gösterilecek uyarı; aynı yolsa null. Yol karşılaştırılır (sondaki "/" ve sorgu dizisi yok sayılır).
  * @param {string} hedefYol @param {string} anlikYol

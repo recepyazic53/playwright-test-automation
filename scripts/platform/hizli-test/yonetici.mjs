@@ -57,7 +57,7 @@ import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
 import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku,
-  eksikAlanlar, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
+  eksikAlanlar, hizliSenaryoBasligi, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
 } from './akis.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -611,7 +611,7 @@ export function hizliTestYoneticisiOlustur(s) {
       durum: 'kesif', baslangic: simdi(), sonErisim: simdi(), komutNo: 0, bekleyen: null, calisiyor: 'Sayfa açılıyor ve keşfediliyor… (hiçbir düğmeye basılmaz)',
       adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
       basisNo: 0, sonAnlik: null, kesifAnlik: null, sonFark: null, sonGoruntu: null, gunluk: [], dogrulama: null, bitis: null, hata: null, sonHata: null,
-      senaryoBasligi: `${ekran.ad} — hızlı test`, baslik: ''
+      senaryoBasligi: hizliSenaryoBasligi(String(ekran.ad)), baslik: ''
     };
     oturumlar.set(id, o);
     tarama().hizliDinle(isId, (e) => olayIsle(o, e));

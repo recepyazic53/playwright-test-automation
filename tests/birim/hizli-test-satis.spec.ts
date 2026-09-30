@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
-import { beklemeMetniMi, bitisKosulu, degiskenMetinMi, sabitKisim, varsayilanEtiketler } from '../../scripts/platform/hizli-test/akis.mjs';
+import { beklemeMetniMi, bitisKosulu, degiskenMetinMi, hizliSenaryoBasligi, sabitKisim, varsayilanEtiketler } from '../../scripts/platform/hizli-test/akis.mjs';
 import { hassasAlanMi, tabloTaslagiKur } from '../../scripts/platform/hizli-test/test-verisi-tablosu.mjs';
 import { yerTutucuSecenekMi } from '../../scripts/platform/tarama/yer-tutucu-secenek.mjs';
 import { benzerAdMi, doldurAdaylari, tekAnlamliSecim } from '../../scripts/platform/tablolar/doldur-onerisi.mjs';
@@ -102,6 +102,11 @@ test.afterAll(async () => {
 });
 
 test.describe('saf kurallar', () => {
+  test('senaryo başlığı: ad "hızlı test" içeriyorsa ek konmaz (büyük / küçük harf, Türkçe)', () => {
+    expect(hizliSenaryoBasligi('Başvuru')).toBe('Başvuru — hızlı test');
+    expect(hizliSenaryoBasligi('Başvuru hızlı testi')).toBe('Başvuru hızlı testi');
+    expect(hizliSenaryoBasligi('BAŞVURU HIZLI TEST')).toBe('BAŞVURU HIZLI TEST');
+  });
   test('1.12 yer tutucu seçenek: SEÇİNİZ / Seçiniz / Lütfen seçin / -- / ilk seçenek ""/"0"/"-1"; gerçek değerler değil', () => {
     for (const [m, d] of [['SEÇİNİZ', '0'], ['Seçiniz', 'x'], ['-- Lütfen seçin --', ''], ['Ülke seçiniz', '5'], ['--', 'a'], ['Please select', 'p'], ['Ay', '0'], ['Yıl', '-1']]) {
       expect(yerTutucuSecenekMi(m, d, true), `${m}/${d}`).toBe(true);

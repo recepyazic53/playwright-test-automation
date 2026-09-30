@@ -17,6 +17,10 @@ const IZIN_SECENEKLERI = [
   { deger: 'hayir', baslik: 'Hayır', aciklama: 'Hiçbir düğmeye basmam; düğmeyi ve mesajı siz seçersiniz, test “doğrulanmadı” olarak kaydedilir.' }
 ];
 const ETIKETLER = [['bitti', 'Bitti'], ['devam', 'Devam'], ['hata', 'Hata']];
+/** Kullanım modu Basit mi (hızlı test iki modda da açılır): kayıt sonrası / vazgeç bağlantısı moda göre. */
+let basitMod = false;
+/** Basit'te "Testlerim" (Basit mod sayfası), Gelişmiş'te "Senaryolar". */
+const listeHedefi = () => (basitMod ? { adres: '#/testlerim', ad: 'Testlerim' } : { adres: '#/senaryolar', ad: 'Senaryolara git' });
 /** Bitiş durağındaki radyo seçenekleri: üç etiket + "Etiketsiz" (seçili radyoya tıklamak seçimi kaldırmaz; etiketi kaldırmak için bu seçilir). */
 const ETIKET_SECENEKLERI = [...ETIKETLER, [null, 'Etiketsiz']];
 /** Süren işlerde yoklama aralığı (ms). */
@@ -39,6 +43,7 @@ function durakSeridi(etkin) {
  */
 export function hizliTestEkrani(icerik, parcalar, baglam) {
   const proje = baglam.durum && baglam.durum.proje;
+  basitMod = Boolean(baglam.durum && baglam.durum.kullanimModu && baglam.durum.kullanimModu.mod === 'basit');
   const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
     h('h2', { id: 'bolum-basligi', tabindex: '-1' }, 'Hızlı test'),
     h('p', { class: 'soluk' }, 'Sayfanın adresini verin: Nöbetçi alanları bulur, eksik veriyi size sorar, düğmelere yalnız izin verdiğiniz kadar basar ve sonunda testi kaydeder.')));
@@ -98,7 +103,7 @@ async function baslatEkrani(govde, proje, ekranId) {
       h('div', { class: 'yardim' }, 'Kalıp gerekmez, normal yazın. Örnekler: “Hesapla butonuna tıklayacağım”; “Başvurunuz alındı yazısını görünce bitir”; “Toplam tutarı yazısı gelmeli”. Anlaşılmayan kısım yok sayılır.')),
     h('fieldset', { class: 'hizli-izinler' }, h('legend', {}, 'Nöbetçi sayfadaki düğmelere basabilir mi?'), izinler.map((x) => x.el)),
     h('div', { class: 'dugmeler' }, baslat,
-      h('a', { class: 'dugme hayalet', href: '#/testlerim' }, 'Vazgeç')));
+      h('a', { class: 'dugme hayalet', href: listeHedefi().adres }, 'Vazgeç')));
   form.addEventListener('submit', async (olay) => {
     olay.preventDefault();
     mesaj.temizle();
@@ -341,7 +346,7 @@ function soruCiz(o, y) {
         h('span', { 'aria-hidden': 'true' }, x.durum === 'tamam' ? '✓' : x.durum === 'yok' ? '–' : '!'), ` ${x.baslik}: ${x.ayrinti}`))) : null,
       s.hazirlik && s.hazirlik.neden ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.hazirlik.neden) : null,
       h('div', { class: 'dugmeler' },
-        h('a', { class: 'dugme birincil', href: '#/testlerim' }, ikon('liste'), 'Testlerim'),
+        h('a', { class: 'dugme birincil', href: listeHedefi().adres }, ikon('liste'), listeHedefi().ad),
         h('a', { class: 'dugme', href: `#/ekranlar/e/${encodeURIComponent(s.ekranId)}/akis` }, ikon('katman'), 'Akış diyagramında aç'),
         h('a', { class: 'dugme hayalet', href: '#/hizli-test' }, ikon('artiYalin'), 'Yeni hızlı test')));
   }
@@ -655,7 +660,7 @@ async function ozetEkrani(govde, id) {
   };
   const baslikSatiri = h('b', {}, baslik);
   const senaryoListesi = h('ul', { class: 'hizli-oneriler' },
-    h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': 'Yaptığınız senaryo' }), ' ', baslikSatiri, h('span', { class: 'kucuk soluk' }, ' — hızlı testte yaptığınız akış'))),
+    h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': 'Yaptığınız senaryo' }), ' ', baslikSatiri, h('span', { class: 'kucuk soluk' }, String(baslik).toLocaleLowerCase('tr').includes('hızlı test') ? ' — yaptığınız akış' : ' — hızlı testte yaptığınız akış'))),
     oneriler.map((x) => {
       const k = h('input', { type: 'checkbox', checked: secili.has(x.indeks), 'aria-label': `${x.baslik} senaryosunu ekle` });
       k.addEventListener('change', () => { if (k.checked) secili.add(x.indeks); else secili.delete(x.indeks); guncelle(); });
@@ -689,7 +694,7 @@ async function ozetEkrani(govde, id) {
           h('span', { class: 'sag' }, rozet(r.dogrulandi ? 'Doğrulandı' : 'Doğrulanmadı', r.dogrulandi ? 'basari' : 'uyari'))),
         h('p', {}, `Ekran “${oz.ekran.ad}” ve senaryo “${r.senaryoBasligi || baslik}” kaydedildi. Bu sekmeyi kapatabilirsiniz.`),
         h('div', { class: 'dugmeler' },
-          h('a', { class: 'dugme birincil', href: '#/testlerim' }, ikon('liste'), 'Testlerim'),
+          h('a', { class: 'dugme birincil', href: listeHedefi().adres }, ikon('liste'), listeHedefi().ad),
           h('a', { class: 'dugme', href: `#/ekranlar/e/${encodeURIComponent(String(r.ekranId))}/akis` }, ikon('katman'), 'Akış diyagramında aç'),
           h('a', { class: 'dugme hayalet', href: oturumAdresi }, 'Hızlı teste dön'))));
       const odak = govde.querySelector('[data-odak]');
