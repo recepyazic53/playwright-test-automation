@@ -4,11 +4,14 @@ import type { GirisTarifi } from './tarif.mjs';
 
 export type AlanRolu = 'kullaniciAdi' | 'parola' | 'kod' | 'ek' | 'yoksay';
 export type DugmeRolu = 'gonder' | 'tikla' | 'kodGonder' | 'yoksay';
+export type SayfaRolu = 'git' | 'yoksay';
 
 /** Kayıttan çıkan adım (değer YOK): dokunulan alan ya da basılan düğme; oneri başlangıç seçimidir. */
 export type TaslakAdimi =
   | { tur: 'alan'; anahtar: string; etiket: string; alanTuru: string; secici: string; oneri: AlanRolu }
-  | { tur: 'dugme'; sira: number; metin: string; secici: string; oneri: DugmeRolu };
+  | { tur: 'dugme'; sira: number; metin: string; secici: string; oneri: DugmeRolu }
+  /** Kullanıcının adres çubuğuyla gittiği sayfa (yol); oynatmada o adrese gidilir. */
+  | { tur: 'sayfa'; yol: string; oneri: SayfaRolu };
 
 export type GirisTaslagi = {
   adimlar: TaslakAdimi[]; ilkYol: string | null; sonYol: string | null;
@@ -31,7 +34,7 @@ export type SayfaOnerileri = {
 };
 
 /** isaretler[i]: rol (alan/düğme rolü), ek alanda ad + gizli. */
-export type TaslakIsareti = { rol: AlanRolu | DugmeRolu; ad?: string; gizli?: boolean };
+export type TaslakIsareti = { rol: AlanRolu | DugmeRolu | SayfaRolu; ad?: string; gizli?: boolean };
 
 export type KayittanTarifSonucu = {
   /** Ham (doğrulanmamış) tarif; kaydedilmez. */
@@ -45,6 +48,8 @@ export type KayittanTarifSonucu = {
 
 export declare const ALAN_ROLLERI: readonly AlanRolu[];
 export declare const DUGME_ROLLERI: readonly DugmeRolu[];
+export declare const SAYFA_ROLLERI: readonly SayfaRolu[];
+export declare function gezinmeYolu(yol: unknown): string;
 export declare const KOD_KAYNAKLARI: readonly KodKaynagi[];
 export declare function ekAlanAdiOner(etiket: string): string;
 export declare function girisKaydiTaslagi(env: AkisEnvanteri): GirisTaslagi;
