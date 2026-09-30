@@ -216,6 +216,35 @@ function kosulariTopla(vt, projeId, f) {
   return { kosular, servisler, akislar, ortamlar };
 }
 
+/**
+ * "Son durum": her kaynağın (servis / akış) SON koşusunun toplamı — ekran sonuçlarındaki "her ekranın son tam koşusu" ile aynı
+ * mantık. Tek koşudan (en yenisinden) hesaplanan özet, o an başka servislerin başarısız son durumunu gizler ("hepsi geçti").
+ * seri: her koşudan SONRAKİ son durum (eskiden yeniye; kıvılcım ve "önceki" farkı için). Tek servise / akışa süzülmüş görünümde
+ * tek kaynak olduğundan sonuç o kaynağın son koşusudur.
+ * @param {ReadonlyArray<KosuOzeti>} kosular eskiden yeniye
+ */
+export function sonDurumOzeti(kosular) {
+  /** @type {Map<string, KosuOzeti>} */
+  const sonlar = new Map();
+  const topla = () => {
+    const t = { ...bosSayilar(), toplam: 0, sureMs: 0, kaynak: sonlar.size, basarisizKaynak: 0, servis: 0, akis: 0 };
+    for (const k of sonlar.values()) {
+      t.basarili += k.basarili; t.basarisiz += k.basarisiz; t.hata += k.hata; t.atlanan += k.atlanan; t.durduruldu += k.durduruldu;
+      t.toplam += k.toplam; t.sureMs += k.sureMs;
+      if (k.basarisiz + k.hata) t.basarisizKaynak++;
+      if (k.tur === 'akis') t.akis++; else t.servis++;
+    }
+    return t;
+  };
+  /** @type {Array<ReturnType<typeof topla>>} */
+  const seri = [];
+  for (const k of kosular) {
+    sonlar.set(`${k.tur}:${k.kaynakId ?? k.baslik}`, k);
+    seri.push(topla());
+  }
+  return { simdi: seri.at(-1) ?? null, onceki: seri.at(-2) ?? null, seri: seri.slice(-30) };
+}
+
 /** Koşu sonucu metinden kısa özet (kartlar / trend). @param {KosuOzeti} k */
 const disSayilar = (k) => ({ basarili: k.basarili, basarisiz: k.basarisiz, hata: k.hata, atlanan: k.atlanan, durduruldu: k.durduruldu });
 
@@ -334,7 +363,10 @@ export function servisSonucOzeti(vt, q) {
   for (const k of tumu.kosular) if (k.kaynakId) sonlar.set(`${k.tur}:${k.kaynakId}`, k);
   const sonDurum = (/** @type {KosuOzeti | undefined} */ k) => (k ? { ...disSayilar(k), toplam: k.toplam, baslangic: k.baslangic } : null);
   const kaliplar = hataKaliplari(vt, kosular);
+  // Başlık rozeti ve kartlar: aralıktaki koşulardan her kaynağın son koşusu (en yeni tek koşu değil).
+  const sonDurumToplami = sonDurumOzeti(kosular);
   return {
+    sonDurum: sonDurumToplami,
     servisler: servisler.map((s) => ({ id: s.id, ad: s.ad, durum: s.durum, son: sonDurum(sonlar.get(`servis:${s.id}`)) })),
     akislar: akislar.map((a) => ({ id: a.id, baslik: a.baslik, tur: a.tur, son: sonDurum(sonlar.get(`akis:${a.id}`)) })),
     ortamlar: ortamlar.map((o) => ({ id: o.id, ad: o.ad, riskli: riskliSecimi(o), canli: riskliOrtamMi(o) })),

@@ -137,7 +137,7 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
     }
     const genel = !secenek.servisId && !secenek.akisId;
     yerlestir(govde,
-      kartlar(veri.kosular),
+      kartlar(veri.kosular, veri.sonDurum, genel),
       trendKarti(veri.kosular.slice().reverse().map((k) => ({ z: k.baslangic, kosuId: k.id, kapsam: k.baslik, ...sayilar(k) })), null, {
         altYazi: `${genel ? 'Servis ve akış koşuları' : 'Bu kaynağın koşuları'} · ${aralikMetni(aralik)}`,
         aciklama: 'Servis ve akış koşularının durum dağılımı; kırmızı dilim başarısız (kontrolü tutmayan ya da hata veren) senaryolardır.',
@@ -148,6 +148,12 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
   };
   yerlestir(icerik, baslikAlani, secenek.ust || null, suzgec, govde);
   ciz();
+}
+
+/** Son durum rozeti: "N başarısız" ya da "hepsi geçti" (hiç koşu yoksa yok). */
+function durumRozetiOzet(d) {
+  if (!d) return null;
+  return kalan(d) ? rozet([ikon('uyari'), `${kalan(d)} başarısız`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari');
 }
 
 function sayfaBasligi(veri, proje, secenek, ad) {
@@ -167,7 +173,8 @@ function sayfaBasligi(veri, proje, secenek, ad) {
         h('span', { class: 'simdiki' }, !secenek.servisId && !secenek.akisId ? 'Servisler' : ad)),
       h('div', { class: 'baslik-satiri' },
         h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Servis sonuçları — '), ad),
-        son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} başarısız`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
+        // Rozet her kaynağın SON koşusundan (sonDurum): en yeni tek koşu başka servislerin başarısızlığını gizlemez.
+        durumRozetiOzet(veri.sonDurum && veri.sonDurum.simdi)),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
       // Dönem raporu (PDF): yalnız tek servisin sayfasında (kapsam dolu gelir); Genel görünümde yok (Raporlar üst menüde).
@@ -179,9 +186,16 @@ function sayfaBasligi(veri, proje, secenek, ad) {
       }, ikon('oynat'), 'Koşuyu başlat')));
 }
 
-function kartlar(kosular) {
-  const [son, onceki] = kosular;
-  const seri = kosular.slice(0, 30).reverse();
+/**
+ * Özet kartlar: her kaynağın (servis / akış) SON koşusunun toplamı (sunucudaki sonDurum; ekran sonuçlarındaki "her ekranın son
+ * tam koşusu" ile aynı). "Önceki" = en yeni koşudan önceki son durum. Tek servis / akış görünümünde bu, o kaynağın son koşusudur.
+ * @param {any[]} kosular yeniden eskiye @param {{ simdi: any; onceki: any; seri: any[] } | undefined} sonDurum @param {boolean} genel
+ */
+function kartlar(kosular, sonDurum, genel) {
+  const [enYeni] = kosular;
+  const son = (sonDurum && sonDurum.simdi) || enYeni;
+  const onceki = sonDurum ? sonDurum.onceki : kosular[1];
+  const seri = sonDurum ? sonDurum.seri : kosular.slice(0, 30).reverse();
   const fark = (a, b, artisIyi, birim = '') => (b === null || b === undefined || a === null
     ? h('span', { class: 'fark notr' }, onceki ? '—' : 'ilk koşu') : farkHapi(a - b, artisIyi ? a > b : a < b, birim));
   const kart = (sinif, etiket, deger, ek, altMetin, farkOgesi, degerler) => h('div', { class: `sonuc-karti ${sinif}` },
@@ -209,10 +223,16 @@ function kartlar(kosular) {
         h('div', { class: 'kart-alt' }, o !== null && oo !== null ? fark(o, oo, true, ' puan') : h('span', { class: 'fark notr' }, '—'),
           h('span', {}, oo !== null ? `önceki %${oo}` : 'önceki yok')),
         dagilimCubugu(sayilar(son), '100%'))),
-    h('p', { class: 'kart-kaynak' }, 'Son koşu: ', h('span', { class: 'mono' }, kisaTarih(son.baslangic)), ' · ', son.baslik, ' · ', son.ortam,
-      son.calistirma === 'dene' ? [' ', rozet('deneme')] : null,
-      onceki ? '' : ' · Önceki koşu olmadığı için fark gösterilmiyor.',
-      son.tur === 'servis' ? ' · Not: servis koşularında ortama uymayan (atlanan) senaryolar kayda geçmez; atlanan sayısı akış adımlarından gelir.' : ''));
+    genel && sonDurum && sonDurum.simdi
+      ? h('p', { class: 'kart-kaynak' }, 'Her servisin ve akışın son koşusu: ',
+        `${son.servis} servis · ${son.akis} akış`, son.basarisizKaynak ? ` (${son.basarisizKaynak} tanesinde başarısız)` : ' (hepsi geçti)',
+        ' · En yeni koşu: ', h('span', { class: 'mono' }, kisaTarih(enYeni.baslangic)), ' · ', enYeni.baslik, ' · ', enYeni.ortam,
+        enYeni.calistirma === 'dene' ? [' ', rozet('deneme')] : null,
+        onceki ? '' : ' · Önceki koşu olmadığı için fark gösterilmiyor.')
+      : h('p', { class: 'kart-kaynak' }, 'Son koşu: ', h('span', { class: 'mono' }, kisaTarih(enYeni.baslangic)), ' · ', enYeni.baslik, ' · ', enYeni.ortam,
+        enYeni.calistirma === 'dene' ? [' ', rozet('deneme')] : null,
+        onceki ? '' : ' · Önceki koşu olmadığı için fark gösterilmiyor.',
+        enYeni.tur === 'servis' ? ' · Not: servis koşularında ortama uymayan (atlanan) senaryolar kayda geçmez; atlanan sayısı akış adımlarından gelir.' : ''));
 }
 
 function kosuNoktasi(k) {
