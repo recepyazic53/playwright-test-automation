@@ -4552,3 +4552,11 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .acilir-menu { background-color: var(--panel-kati); opacity: 1; }
 .alan-etiket-satiri { display: flex; align-items: center; gap: 6px; }
 .alan-etiket-satiri label { margin: 0; }
+
+/* Servis taban adresleri: başlık kutunun dışında; araç çubuğu: sol üst "Taban adresi ekle", sağ üst görünüm anahtarı. */
+.taban-arac-cubugu { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
+.taban-arac-sol { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+
+/* Kurtarma kuralı satırı: "Açık" kutusu ve yazısı Sil / Düzenle düğmeleriyle aynı hizada (dikey ortalı). */
+.onay-satiri.kurtarma-acik { align-items: center; min-height: 34px; }
+.onay-satiri.kurtarma-acik input { margin: 0; }
