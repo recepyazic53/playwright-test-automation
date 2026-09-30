@@ -41,3 +41,12 @@ async function bosNokta(sayfa: Page): Promise<{ x: number; y: number } | null> {
     return null;
   }).catch(() => null);
 }
+
+/** Alanın sayfadaki değeri istenen değerle aynı mı (biçim farkları yok sayılır: boşluk, tire, parantez, büyük/küçük harf). */
+export async function alanZatenDolu(alan: Locator, deger: string): Promise<boolean> {
+  const sade = (m: string): string => m.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+  const istenen = sade(deger);
+  if (!istenen) return false;
+  const mevcut = await alan.inputValue({ timeout: 1_000 }).catch(() => null);
+  return mevcut !== null && sade(mevcut) === istenen;
+}
