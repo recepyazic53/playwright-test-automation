@@ -127,9 +127,9 @@ test('varsayılan Ekran: onay kutusu / ortak akış seçimi yok; önde tara / ka
   await page.goto('/#/ekranlar/yeni');
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ekran ekle');
-  // Önde tara / hızlı test ve kaydet; yapay zekâ kutusu (ve paket yükleme) görünür bölümde.
-  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet']);
-  await expect(page.locator('section.ileri-duzey-bolumu .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
+  // En üstte paket yükleme; altında tek satırda tara / hızlı test, kaydet ve yapay zekâ kutusu.
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
+  await expect(page.locator('section.ileri-duzey-bolumu')).toBeVisible();
   // Sunucu varsayılanı da ekran: seçim gönderilmezse paket ekran olarak önizlenir.
   const o = await basarili('/platform/sayfa-paketi/onizle', { projeId, paket: paket('ornek-basvuru', 'Örnek Başvuru') });
   expect((o.onizleme as Nesne).modelTuru).toBe('ekran');
@@ -152,8 +152,7 @@ test('paket yükle → eski ortak akış bağlantısı (geriye uyum; arayüzde b
   await page.goto('/#/ekranlar/yeni/ortak-akis');
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ortak akış ekle');
-  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Boş başla', 'Ekranı tara', 'Akışı kaydet']);
-  await expect(page.locator('section.ileri-duzey-bolumu .ekleme-kutusu h3')).toHaveText(['Yapay zekâ ile oluştur']);
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Boş başla', 'Ekranı tara', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
   // Aynı adres yeniden açılınca yine ortak akış eklenir (sol menüde artık "Ortak akış ekle" bağlantısı yoktur).
   await page.reload();
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ortak akış ekle');

@@ -4,9 +4,9 @@
 //                  yaz / birleştir / yeni ad / atla + alan bağlantıları], bilinmeyenler, kanıtlar) →
 //                  kabul: ekran + model v1 + seçilen senaryolar (Koşuda KAPALI) → bildirim + ekrana git.
 //   mod 'analiz' — mevcut ekran için yeni paket (tekrar analiz): yükle → doğrula/önizle → "Bulguları hesapla".
-// Paketin kaynakları: "Ekranı tara" / "Akışı kaydet" (tarama.js; yeni eklemede ÖNDE, yan yana kutular — eklemeKutulari) ya da
-// yüklenen JSON dosyası (yapay zekâ aracınızın ürettiği). Yeni eklemede paket yükleme ve "Yapay zekâ ile oluştur" kapalı gelen
-// görünür "Paket yükle ya da yapay zekâ ile oluştur" bölümündedir (ileriDuzey); tekrar analizde yükleme alanı üstte kalır.
+// Paketin kaynakları: yüklenen JSON dosyası (yapay zekâ aracınızın ürettiği; yeni eklemede sayfanın EN ÜSTÜNDE "Paket yükle", sürükle bırak)
+// ya da "Ekranı tara" / "Akışı kaydet" / "Yapay zekâ ile oluştur" (tarama.js; yeni eklemede altta TEK satırda eşit boyutlu üç kutu — eklemeKutulari);
+// tekrar analizde yükleme alanı üstte, kutular altta kalır.
 // Tarama/kayıt bitince paket taranmisPaketAkisi ile AYNI önizleme adımına girer.
 // Ekran ekleme her zaman yalnız EKRAN oluşturur; her ekran başka bir senaryonun önceki adımı olarak da kullanılabilir (akış tasarımında
 // "Önce şu ekrana git"). Var olan ortak akış kayıtları ve eski çağıranlar (olusturulacak: 'ortakAkis') geriye uyum için çalışır.
@@ -145,11 +145,11 @@ function yuklemeAdimi(govde, s, onceki = null, ileriAcik = false) {
       eklemeKutulari(s, { yapayZeka: true, baslik: 'Paketiniz yoksa' })));
     return;
   }
-  // Yeni ekran: ana yollar (Ekranı tara / hızlı test, Akışı kaydet) ve görünür "Paket yükle ya da yapay zekâ ile oluştur" bölümü.
-  // Her ekran başka bir senaryonun önceki adımı olarak da kullanılabilir; bunun için ayrı bir seçim yoktur.
+  // Yeni ekran: en üstte paket yükleme (sürükle bırak); altında TEK satırda eşit boyutlu yollar (Ekranı tara / hızlı test,
+  // Akışı kaydet, Yapay zekâ ile oluştur). Her ekran başka bir senaryonun önceki adımı olarak da kullanılabilir; ayrı seçim yoktur.
   yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
-    eklemeKutulari(s, { yapayZeka: false, baslik: 'Nasıl eklensin?' }),
-    ileriDuzey(s, h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, dosyaSec.not, durumAlani, onceki))));
+    paketYukleme(h('section', { class: 'kart', 'aria-label': 'Paket yükle' }, girdi, alan, dosyaSec.not, durumAlani, onceki)),
+    eklemeKutulari(s, { yapayZeka: true, baslik: 'Ya da başka bir yolla ekleyin' })));
 }
 
 /** Paketin 2 sayfalık özeti (docs/sayfa-paketi-ozet.md; yerel sunucu düz metin olarak verir; yeni sekmede açılır). */
@@ -159,25 +159,23 @@ export function paketOzetiBaglantisi() {
 }
 
 /**
- * "Paket yükle ya da yapay zekâ ile oluştur" (görünür bölüm; açılır değil): "Paket nedir?" kısa açıklaması, paket yükleme alanı ve
- * "Yapay zekâ ile oluştur" kutusu. (Sınıf adı geriye uyum için "ileri-duzey-bolumu".)
- * @param {AkisSecenekleri} s @param {HTMLElement} yukleme
+ * "Paket yükle" (görünür bölüm; açılır değil; sayfanın en üstünde): "Paket nedir?" kısa açıklaması ve paket yükleme alanı
+ * (sürükle bırak / "Dosya seç"). (Sınıf adı geriye uyum için "ileri-duzey-bolumu".)
+ * @param {HTMLElement} yukleme
  */
-function ileriDuzey(s, yukleme) {
+function paketYukleme(yukleme) {
   return h('section', { class: 'ileri-duzey-bolumu', 'aria-labelledby': 'paket-bolumu-baslik' },
-    h('h3', { id: 'paket-bolumu-baslik', class: 'ara-baslik' }, ikon('dosya'), 'Paket yükle ya da yapay zekâ ile oluştur'),
+    h('h3', { id: 'paket-bolumu-baslik', class: 'ara-baslik' }, ikon('dosya'), 'Paket yükle'),
     h('p', { class: 'soluk kucuk paket-nedir' }, h('b', {}, 'Elinizde ekran paketi varsa. '),
       'Ekran paketi, bir sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json); yapay zekâ aracınızla da üretebilirsiniz. ',
       paketOzetiBaglantisi()),
-    h('div', { class: 'ileri-duzey-govdesi' },
-      yukleme,
-      eklemeKutulari(s, { yapayZeka: true, yalnizYapayZeka: true, baslik: null })));
+    h('div', { class: 'ileri-duzey-govdesi' }, yukleme));
 }
 
 /**
  * Modeli oluşturma yolları: yan yana eşit kutular (dar ekranda alt alta). Her kutu: büyük ikon, başlık, kısa açıklama,
  * TEK ana eylem, altta tek satır küçük not (izin / güvenlik). Yeni eklemede ana yollar Ekranı tara / Akışı kaydet (ortak akışta ayrıca
- * Boş başla); "Yapay zekâ ile oluştur" yalnız "İleri düzey" içinde (yalnizYapayZeka) durur. O kutu yalnızca istek metnini kopyalatır
+ * Boş başla); "Yapay zekâ ile oluştur" da aynı satırda üçüncü kutudur. O kutu yalnızca istek metnini kopyalatır
  * (ve biçim dosyasını indirtir); paket yukarıdaki yükleme alanıyla ("Dosya seç") yüklenir — kutuda yükleme düğmesi YOK.
  * Tekrar analizde (s.mod 'analiz') tarama / kayıt / yapay zekâ kutuları yükleme alanının altında birliktedir; yapay zekâ kutusu
  * "Tekrar analiz et"e yönlendirir.

@@ -116,15 +116,15 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(page.locator('.sayfa-basligi .eylemler').getByRole('link', { name: 'Ekran ekle' })).toBeVisible();
   await expect(page.getByText('Sayfa ekle')).toHaveCount(0);
   await page.goto('/#/ekranlar/yeni');
-  // Sıra: ana yollar (Ekranı tara / hızlı test, Akışı kaydet) → görünür "Paket yükle ya da yapay zekâ ile oluştur". Eski "Ne oluşturulsun?",
+  // Sıra: en üstte "Paket yükle" (sürükle bırak) → tek satırda eşit boyutlu üç yol (Ekranı tara / hızlı test, Akışı kaydet, Yapay zekâ ile oluştur). Eski "Ne oluşturulsun?",
   // "Ya da: Hızlı test", üst notlar ve ortak akış / başlangıç adımı seçimi yok.
   const ana = page.locator('section.ekleme-secenekleri .ekleme-kutusu');
   const ileri = page.locator('section.ileri-duzey-bolumu');
-  await expect(page.getByRole('heading', { name: 'Nasıl eklensin?' })).toBeVisible();
-  await expect(ana.locator('h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet']);
+  await expect(page.getByRole('heading', { name: 'Ya da başka bir yolla ekleyin' })).toBeVisible();
+  await expect(ana.locator('h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
   await expect(page.locator('details.ileri-duzey')).toHaveCount(0);
   await expect(ileri).toBeVisible();
-  await expect(ileri.getByRole('heading', { name: 'Paket yükle ya da yapay zekâ ile oluştur' })).toBeVisible();
+  await expect(ileri.getByRole('heading', { name: 'Paket yükle', exact: true })).toBeVisible();
   await expect(page.getByText('Ne oluşturulsun?')).toHaveCount(0);
   await expect(page.getByText('Ya da: ')).toHaveCount(0);
   await expect(page.getByText('gizli değer içeren paket reddedilir')).toHaveCount(0);
@@ -133,13 +133,13 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(page.locator('.olusturma-secimi')).toHaveCount(0);
   const anaY = (await ana.first().boundingBox())!.y;
   const ileriY = (await ileri.boundingBox())!.y;
-  expect(anaY).toBeLessThan(ileriY);
+  expect(ileriY).toBeLessThan(anaY);
   await expect(ana.nth(0)).toContainText('Adresi verin, gerisini Nöbetçi yapsın: alanları bulur, eksik veriyi sorar, ekranı ve senaryoyu kaydeder. Basit ve tek adımlı sayfalar için.');
   await expect(ana.nth(1)).toContainText('Ekranda işlemi kendiniz yaparsınız, Nöbetçi adımları ve alanları kaydeder. Çok adımlı ya da koşullu formlar için.');
   // Hızlı test artık "Ekranı tara"nın akıllı yolu: kartın eylemi hızlı test sihirbazına (eski #/hizli-test adresi) götürür.
   await expect(ana.nth(0).getByRole('link', { name: 'Adresi ver ve başla' })).toHaveAttribute('href', '#/hizli-test');
   await expect(ana.nth(1).getByRole('button')).toHaveCount(1);
-  for (const i of [0, 1]) await expect(ana.nth(i).locator('.ekleme-notu')).toBeVisible();
+  for (const i of [0, 1, 2]) await expect(ana.nth(i).locator('.ekleme-notu')).toBeVisible();
   // Ekran / Ortak akış ayrımı yok: ne seçim ne onay kutusu (her ekran başka senaryoda önceki adım olabilir).
   await expect(page.getByRole('radiogroup')).toHaveCount(0);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
@@ -148,10 +148,10 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   expect(Math.max(...b.map((x) => x.height)) - Math.min(...b.map((x) => x.height))).toBeLessThanOrEqual(1);
   expect(Math.max(...b.map((x) => x.width)) - Math.min(...b.map((x) => x.width))).toBeLessThanOrEqual(1);
   expect(new Set(b.map((x) => Math.round(x.y))).size).toBe(1);
-  // Görünür bölümde: kısa açıklama, yükleme alanı ("Dosya seç") ve yapay zekâ kutusu (yükleme düğmesi YOK, tek eylem kopyalama).
+  // En üstteki bölümde: kısa açıklama ve yükleme alanı ("Dosya seç"); yapay zekâ kutusunda yükleme düğmesi YOK, tek eylem kopyalama.
   await expect(ileri.locator('.paket-nedir')).toContainText('Elinizde ekran paketi varsa.');
   await expect(ileri.locator('label.yukleme-alani')).toContainText('Dosya seç');
-  const yz = ileri.locator('.ekleme-kutusu');
+  const yz = page.locator('.ekleme-kutusu.yapay-zeka-kutusu');
   await expect(yz.locator('h3')).toHaveText(['Yapay zekâ ile oluştur']);
   await expect(yz.locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın', 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
   await expect(yz.getByRole('button', { name: /yükle/i })).toHaveCount(0);
@@ -189,9 +189,10 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await page.setViewportSize({ width: 390, height: 900 });
   await page.waitForTimeout(200);
   const d = await kutular(ana);
-  expect(d).toHaveLength(2);
+  expect(d).toHaveLength(3);
   expect(new Set(d.map((x) => Math.round(x.x))).size).toBe(1);
   expect(d[1].y).toBeGreaterThan(d[0].y + d[0].height - 1);
+  expect(d[2].y).toBeGreaterThan(d[1].y + d[1].height - 1);
   await tasmaYok(page);
   agKontrol(istekler);
   await page.close();
