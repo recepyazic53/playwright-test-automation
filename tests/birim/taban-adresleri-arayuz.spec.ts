@@ -232,14 +232,20 @@ test.describe('servis taban adresleri arayüzü', () => {
 
   test('servis bazında görünüm (seçim hatırlanır); 390px taşma yok', async ({}, testInfo) => {
     const { page, hatalar, kapat } = await sayfaAc();
-    // Açıklama örnekli; anahtarın her seçeneği ne gösterdiğini ipucunda ve seçilince yanında söyler.
+    // Açıklamalar sürekli görünmez: başlık yanındaki "?" ile açılır (örnek + iki görünümün farkı); Esc kapatır.
     const bolum = page.locator('section.taban-adresleri');
-    await expect(bolum.locator('.taban-aciklama')).toContainText('TEST: https://test.ornek.local');
-    await expect(bolum.locator('.taban-aciklama')).toContainText('servisler adresin geri kalanını (yolu) kendileri ekler');
+    const panel = bolum.locator('.yardim-paneli');
+    await expect(panel).toBeHidden();
+    await bolum.getByRole('button', { name: 'Servis taban adresleri: açıklamayı göster' }).click();
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('TEST: https://test.ornek.local');
+    await expect(panel).toContainText('servisler adresin geri kalanını (yolu) kendileri ekler');
+    await expect(panel).toContainText('her taban adresi ve onu kullanan servisler');
+    await expect(panel).toContainText('her servisin her ortamdaki adresi tek tabloda');
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
     await expect(page.getByRole('radio', { name: 'Servis bazında' })).toHaveAttribute('title', /Her servisin her ortamdaki adresi/);
-    await expect(bolum.locator('.taban-gorunum-ipucu')).toContainText('Her taban adresi ve onu kullanan servisler');
     await page.getByRole('radio', { name: 'Servis bazında' }).click();
-    await expect(bolum.locator('.taban-gorunum-ipucu')).toContainText('Her servisin her ortamdaki adresi tek tabloda');
     const t = page.getByRole('table', { name: 'Servis taban adresleri', exact: true });
     await expect(t.locator('tbody > tr')).toHaveCount(7);
     await expect(page.getByLabel('Sipariş: taban adres adı')).toHaveValue('Çekirdek');

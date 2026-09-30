@@ -3840,9 +3840,6 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 @media (max-width: 520px) { .izin-uyarisi .diyalog-alt > button { flex: 1 1 100%; justify-content: center; } }
 /* === Servis taban adresleri: adlandırılmış taban adresleri (ana liste) ve pencereler === */
 .taban-gorunum-satiri { align-items: center; justify-content: flex-start; gap: var(--b2); margin: var(--b2) 0; flex-wrap: wrap; }
-.taban-gorunum-ipucu { flex: 1 1 240px; min-width: 0; }
-.taban-aciklama p { margin: 0 0 4px; }
-.taban-aciklama code { overflow-wrap: anywhere; }
 .taban-satir-dugmeleri { margin: 0; flex-wrap: nowrap; }
 .taban-yok-notu { color: var(--atlanan); }
 .taban-kullanan { white-space: nowrap; }
@@ -4519,3 +4516,12 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .izin-bolumu > p { margin: 0 0 var(--b2); }
 .izin-bolumu .izin-listesi { margin-top: 0; }
 .izin-bolumu.canli { padding: 10px 12px; border-radius: var(--yaricap-m); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlanan) 45%, var(--cizgi)); }
+
+/* "?" ipucu paneli (ortak.js > yardimIpucu): uzun açıklama sürekli görünmez; "?" ile açılır. */
+.yardim-paneli { margin: var(--b2) 0 var(--b3); padding: var(--b3); border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel-kati); }
+.yardim-paneli[hidden] { display: none; }
+.yardim-paneli p { margin: 0 0 4px; }
+.yardim-paneli p:last-child { margin-bottom: 0; }
+.yardim-paneli code { overflow-wrap: anywhere; }
+.kart.taban-adresleri { margin-top: var(--b5); }
+.kart.taban-adresleri > .bolum-basligi h3 { display: flex; align-items: center; gap: var(--b2); flex-wrap: wrap; }
