@@ -358,6 +358,21 @@ export async function hizliTestiYurut(
       return await komutBekle.then(() => bekleyenKomut);
     }
 
+    /** Doldurulan metin alanlarından değeri sayfa tarafından silinmiş / geri alınmış (boş kalmış) olanları bir kez yeniden doldurur. */
+    async function bosKalanlariYenile(page: Page, alanlar: HizliDoldurulan[], atla: string[]): Promise<Array<{ anahtar: string; mesaj: string }>> {
+      const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
+      await page.waitForTimeout(500); // sayfanın gecikmeli sıfırlaması (zamanlayıcı) gerçekleşsin
+      for (const d of alanlar) {
+        if (typeof d.deger !== 'string' || !d.deger.trim() || atla.includes(d.anahtar)) continue;
+        if (['radio', 'checkbox', 'select', 'select-one', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen) continue;
+        const yer = alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first();
+        if ((await yer.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) continue;
+        const h = await alaniDoldur(page, d);
+        if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
+      }
+      return hatalar;
+    }
+
     /** Doğrulama koşusu: sayfayı yeniden açar, zinciri uygular, bitiş koşulunu bekler. */
     async function dogrula(page: Page, plan: HizliPlan): Promise<{ sonuc: 'basarili' | 'basarisiz'; mesaj: string; gorulen: string[] }> {
       await ac();
@@ -367,9 +382,27 @@ export async function hizliTestiYurut(
         return plan.bitis.hata.find((h) => iceriyor(govde, h)) ?? null;
       };
       for (const [i, adim] of plan.adimlar.entries()) {
+        const once = new Set((await anlikOku(page, false)).metinler.map((m) => m.metin));
+        diyaloglar.length = 0;
         for (const d of adim.alanlar) {
           const h = await alaniDoldur(page, d);
           if (h) return { sonuc: 'basarisiz', mesaj: `${i + 1}. adımda “${d.alan.etiket ?? d.anahtar}” alanı: ${h}`, gorulen: [...gorulen] };
+        }
+        if (adim.alanlar.length) {
+          // Sayfa doldururken alanı silmiş olabilir: sakinleşince boş kalanlar yeniden doldurulur.
+          await sakinles(page, 5_000);
+          const yenile = await bosKalanlariYenile(page, adim.alanlar, []);
+          if (yenile[0]) {
+            const d = adim.alanlar.find((x) => x.anahtar === yenile[0].anahtar);
+            return { sonuc: 'basarisiz', mesaj: `${i + 1}. adımda “${d?.alan.etiket ?? yenile[0].anahtar}” alanı: ${yenile[0].mesaj}`, gorulen: [...gorulen] };
+          }
+          // Doldururken sayfa hata gösterdiyse (ör. zorunlu alan uyarısı) düğmeye basılmaz: neden açıkça söylenir.
+          const sonra = await anlikOku(page, false);
+          const yeniHata = [
+            ...sonra.metinler.filter((m) => m.tur === 'hata' && !once.has(m.metin)).map((m) => m.metin),
+            ...diyaloglar.filter((m) => /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)))
+          ];
+          if (yeniHata.length) return { sonuc: 'basarisiz', mesaj: `${i + 1}. adımda alanlar doldurulurken sayfa hata gösterdi: “${yeniHata[0]}”. Alan sırasını ya da değerleri kontrol edin.`, gorulen: [...gorulen, ...yeniHata] };
         }
         await page.waitForTimeout(200);
         if (!adim.bas) continue;
@@ -430,14 +463,7 @@ export async function hizliTestiYurut(
           }
           // Sonradan silinen / geri alınan alan (sayfa arka planda satırı yeniden çizmiş olabilir): boş kalanlar bir kez yeniden doldurulur.
           await sakinles(islem, 5_000);
-          for (const d of k.alanlar) {
-            if (typeof d.deger !== 'string' || !d.deger.trim() || ['radio', 'checkbox', 'select', 'select-one', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen) continue;
-            if (hatalar.some((x) => x.anahtar === d.anahtar)) continue;
-            const yer = alanKapsami(islem, d.alan.cerceve).locator(d.alan.secici).first();
-            if ((await yer.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) continue;
-            const h = await alaniDoldur(islem, d);
-            if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
-          }
+          hatalar.push(...await bosKalanlariYenile(islem, k.alanlar, hatalar.map((x) => x.anahtar)));
           await sakinles(islem, 5_000);
           const once = new Set(sonAnlik.metinler.map((m) => m.metin));
           sonAnlik = await anlikOku(islem, false);
