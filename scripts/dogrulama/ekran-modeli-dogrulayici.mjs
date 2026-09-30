@@ -783,7 +783,7 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
     }
   }
 
-  // Ortak akış başvuruları: aynı projede "tur": "ortakAkis" modeli olmalı.
+  // Ortak akış / ekran başvuruları: aynı projede "tur": "ortakAkis" ya da bir ekran modeli olmalı.
   for (const [bYer, dosya] of b.ortakAkislar) {
     let ortak;
     try {
@@ -792,7 +792,11 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
       h.ekle(bYer, `ortak akış "${dosya}" yüklenemedi: ${hata instanceof Error ? hata.message : String(hata)}`);
       continue;
     }
-    if (!nesneMi(ortak) || ortak.tur !== 'ortakAkis') h.ekle(bYer, `"${dosya}" bir ortak akış değil`);
+    // Başvurulan model bir ortak akış ya da adımları olan herhangi bir ekran olabilir (alt model olamaz).
+    if (!nesneMi(ortak) || ortak.tur === 'altModel' || !Array.isArray(ortak.adimlar)) { h.ekle(bYer, `"${dosya}" bir ortak akış ya da ekran değil`); continue; }
+    // Ekran kendini doğrudan ya da dolaylı içeremez.
+    const kendi = typeof ham.id === 'string' ? `${ham.id}.model.json` : null;
+    if (kendi && ortakZincirindeMi(dosya, kendi, altModelKaynagi)) h.ekle(bYer, `"${dosya}" bu ekranı kendi içinde kullanıyor (bir ekran kendini içeremez)`);
   }
 
   // Benzersizlik
@@ -933,6 +937,25 @@ function akisAltModeli(ham, akis) {
     sonuc.kosullar = Object.fromEntries(Object.entries(ham.kosullar).filter(([, k]) => ![...ayarlar(nesneMi(k) ? k.ifade : null, new Set())].some((a) => !buAkis.has(a))));
   }
   return sonuc;
+}
+
+
+/** dosya modelinden başlayan ortak akış / ekran başvuru zinciri hedef dosyaya varıyor mu (döngü koruması; kaynak hata verirse yok sayılır). */
+function ortakZincirindeMi(dosya, hedef, kaynak) {
+  const ziyaret = new Set();
+  const kuyruk = [dosya];
+  for (let i = 0; i < kuyruk.length; i++) {
+    const d = kuyruk[i];
+    if (d === hedef) return true;
+    if (ziyaret.has(d)) continue;
+    ziyaret.add(d);
+    let m;
+    try { m = kaynak(d); } catch { continue; }
+    if (!nesneMi(m)) continue;
+    const listeler = [m.adimlar, ...(Array.isArray(m.akislar) ? m.akislar.map((a) => (nesneMi(a) ? a.adimlar : null)) : [])];
+    for (const l of listeler) for (const a of Array.isArray(l) ? l : []) if (nesneMi(a) && nesneMi(a.ortakAkis) && typeof a.ortakAkis.dosya === 'string') kuyruk.push(a.ortakAkis.dosya);
+  }
+  return false;
 }
 
 /** model.akislar: tekil kimlik, tek varsayılan (adımları model.adimlar ile aynı), her akış geçerli bir akış modeli. */

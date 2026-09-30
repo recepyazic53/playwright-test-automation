@@ -59,19 +59,33 @@ export const ANA_AKIS_ID = 'ana';
 // koşulları çakışmasın diye "<ortak akış id>_<ad>" adıyla taşınır. Ortak akış "yalnizTestOrtami" ise açılan adımlar
 // "yalnizTest" işaretlenir (koşucu canlı ortamda atlar). Ortak akışın senaryo düzeyi alanları da başvuru adımının görünürlüğünü
 // alır: blok dahil değilken gizli ve zorunlu değildir.
+// Başvurulan model bir EKRAN modeli de olabilir (adımları olan herhangi bir ekran): ekranın varsayılan akışı aynı kurallarla
+// açılır; ekran kendini doğrudan ya da dolaylı içeremez (döngü: yer tutucu adım + "donguler"), iç içe derinlik OZ_DERINLIK ile sınırlıdır.
+
+/** Ortak akış / ekran başvurularının en fazla iç içe derinliği. */
+export const ORTAK_AKIS_DERINLIGI = 8;
 
 /**
- * @param {any} model ekran modeli (bir akışın) @param {Record<string, any>} ortakAkislar dosya → ortak akış modeli
- * @returns {{ model: any; eksikler: string[] }} açılmış model (girdi değişmez) ve bulunamayan ortak akış dosyaları
+ * @param {any} model ekran modeli (bir akışın) @param {Record<string, any>} ortakAkislar dosya → ortak akış ya da ekran modeli
+ * @returns {{ model: any; eksikler: string[]; donguler: string[] }} açılmış model (girdi değişmez), bulunamayan ortak akış / ekran
+ * dosyaları ve döngü ya da derinlik yüzünden açılmayan başvurular
  */
 export function ortakAkislariAc(model, ortakAkislar) {
+  const kendi = nesneMi(model) && typeof model.id === 'string' && model.id ? [`${model.id}.model.json`] : [];
+  return ortakAkislariAcIc(model, ortakAkislar, kendi);
+}
+
+/** @param {any} model @param {Record<string, any>} ortakAkislar @param {string[]} yigin şu ana kadar açılmakta olan dosyalar */
+function ortakAkislariAcIc(model, ortakAkislar, yigin) {
   const adimlar = nesneMi(model) && Array.isArray(model.adimlar) ? model.adimlar : [];
-  if (!adimlar.some((a) => nesneMi(a) && nesneMi(a.ortakAkis))) return { model, eksikler: [] };
+  if (!adimlar.some((a) => nesneMi(a) && nesneMi(a.ortakAkis))) return { model, eksikler: [], donguler: [] };
   const yeni = kopya(model);
   yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};
   const sdAlanlar = nesneMi(yeni.senaryoDuzeyi) && Array.isArray(yeni.senaryoDuzeyi.alanlar) ? yeni.senaryoDuzeyi.alanlar : [];
   /** @type {string[]} */
   const eksikler = [];
+  /** @type {string[]} */
+  const donguler = [];
   /** @type {any[]} */
   const sonuc = [];
   /** Ortak akışlardan eklenen senaryo düzeyi alanları → alan ve onu getiren blokların görünürlük ifadeleri (null: koşulsuz). @type {Map<string, { alan: any; basvurular: any[] }>} */
@@ -80,10 +94,23 @@ export function ortakAkislariAc(model, ortakAkislar) {
   const ifadesi = (g, kosullar) => (!nesneMi(g) ? null : typeof g.kosul === 'string' ? (nesneMi(kosullar[g.kosul]) ? kosullar[g.kosul].ifade : null) : g.ifade ?? null);
   for (const adim of yeni.adimlar) {
     if (!nesneMi(adim) || !nesneMi(adim.ortakAkis)) { sonuc.push(adim); continue; }
-    const ortak = ortakAkislar ? ortakAkislar[adim.ortakAkis.dosya] : undefined;
-    if (!nesneMi(ortak) || ortak.tur !== 'ortakAkis' || !Array.isArray(ortak.adimlar)) {
-      // Bulunamayan ortak akış: yer tutucu adım kalır (koşu planı açık hatayla durur; sessizce atlanmaz).
-      eksikler.push(String(adim.ortakAkis.dosya));
+    const dosya = String(adim.ortakAkis.dosya);
+    let ortak = ortakAkislar ? ortakAkislar[dosya] : undefined;
+    const donguMu = yigin.includes(dosya) || yigin.length > ORTAK_AKIS_DERINLIGI;
+    // Ekran modeli (ortak akış olmayan): varsayılan akışı açılır (kendi ortak akış / ekran başvuruları da yinelemeyle).
+    if (!donguMu && nesneMi(ortak) && ortak.tur !== 'ortakAkis' && ortak.tur !== 'altModel' && Array.isArray(ortak.adimlar)) {
+      const ic = ortakAkislariAcIc(akisModeli(ortak, null), ortakAkislar, [...yigin, dosya]);
+      ortak = ic.model;
+      for (const e of ic.eksikler) if (!eksikler.includes(e)) eksikler.push(e);
+      for (const d of ic.donguler) if (!donguler.includes(d)) donguler.push(d);
+    }
+    if (donguMu) {
+      if (!donguler.includes(dosya)) donguler.push(dosya);
+      ortak = undefined;
+    }
+    if (!nesneMi(ortak) || (ortak.tur === 'altModel') || !Array.isArray(ortak.adimlar)) {
+      // Bulunamayan ortak akış (ya da döngü): yer tutucu adım kalır (koşu planı açık hatayla durur; sessizce atlanmaz).
+      if (!donguMu) eksikler.push(dosya);
       sonuc.push({ id: adim.id, sira: 0, baslik: adim.baslik || 'Ortak akış', eksikOrtakAkis: String(adim.ortakAkis.dosya), ...(adim.gorunurluk ? { gorunurluk: adim.gorunurluk } : {}), bolumler: [] });
       continue;
     }
@@ -150,7 +177,7 @@ export function ortakAkislariAc(model, ortakAkislar) {
     }
   }
   yeni.senaryoDuzeyi = { ...(nesneMi(yeni.senaryoDuzeyi) ? yeni.senaryoDuzeyi : {}), alanlar: sdAlanlar };
-  return { model: yeni, eksikler };
+  return { model: yeni, eksikler, donguler };
 }
 
 /** Ekranın akışları: [{ id, ad, varsayilan, adimSayisi }] (varsayılan önce). */

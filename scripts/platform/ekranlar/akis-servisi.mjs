@@ -829,7 +829,7 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
     // "Ekran açılır" düğümünün yeri (salt görünüm): üstündeki bloklar (baştaki ortak akışlar) ekran açılmadan önce koşar. Her
     // ortak akış adımı tek bloktur; "sonra" ayarında düğüm girişin hemen altındadır. Ortak akışın kendi diyagramında yoktur.
     ekranAcilisSirasi: ortakAkis ? null : !akm || akm.bastakiOrtakAkislar === 'sonra' ? 0 : bastakiOrtakAdimSayisi(akm.adimlar),
-    ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkis ? [] : ortakAkislariListele(vt, projeId), ortakAkis,
+    ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkis ? [] : ortakAkislariListele(vt, projeId, ekranId), ortakAkis,
     ...(ortakAkis ? { kullananlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}),
     akis: s.akisId && kaynak ? { id: kaynak.id, ad: kaynak.ad, varsayilan: kaynak.varsayilan } : null,
     kopyaKaynagi: s.kopya && kaynak ? kaynak.ad : null,
@@ -865,18 +865,49 @@ export function bosOrtakAkisOlustur(vt, projeId, g) {
 }
 
 /**
- * Projenin ortak akışları (akış tasarımında "+ > Ortak akış" listesi): dosya ("<anahtar>.model.json"), ad, adım başlıkları.
- * @param {Veritabani} vt @param {string} projeId
+ * Bir model dosyasından başlayan ortak akış / ekran başvuru zinciri hedef dosyaya varıyor mu (ekran kendini içeremez).
+ * @param {Veritabani} vt @param {string} projeId @param {string} baslangic @param {string} hedef
  */
-export function ortakAkislariListele(vt, projeId) {
-  /** @type {Array<{ dosya: string; ad: string; adimlar: string[]; yalnizTest: boolean }>} */
+function basvuruZincirindeMi(vt, projeId, baslangic, hedef) {
+  /** @type {Set<string>} */
+  const ziyaret = new Set();
+  const kuyruk = [baslangic];
+  for (let i = 0; i < kuyruk.length; i++) {
+    const d = kuyruk[i];
+    if (d === hedef) return true;
+    if (ziyaret.has(d)) continue;
+    ziyaret.add(d);
+    const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ? AND durum <> ? ORDER BY rowid', [projeId, d.replace(/\.model\.json$/, ''), 'silindi']);
+    const k = e ? ekranModeliGetir(vt, String(e.id)) : undefined;
+    if (!k || !nesneMi(k.model)) continue;
+    const m = /** @type {Nesne} */ (k.model);
+    const listeler = [m.adimlar, ...(Array.isArray(m.akislar) ? m.akislar.map((/** @type {Nesne} */ a) => (nesneMi(a) ? a.adimlar : null)) : [])];
+    for (const l of listeler) for (const a of Array.isArray(l) ? l : []) if (nesneMi(a) && nesneMi(a.ortakAkis) && typeof a.ortakAkis.dosya === 'string') kuyruk.push(a.ortakAkis.dosya);
+  }
+  return false;
+}
+
+/**
+ * Akış tasarımında "Önce şu ekrana gidilsin" listesi: projenin ortak akışları VE tüm ekranları (her ekran başka bir akışın önceki
+ * adımı olabilir): dosya ("<anahtar>.model.json"), ad, tur ('ortakAkis' | 'ekran'), adım başlıkları. haricEkranId: düzenlenen ekran
+ * (kendini ya da kendini içeren bir ekranı içeremez; listede görünmez).
+ * @param {Veritabani} vt @param {string} projeId @param {string} [haricEkranId]
+ */
+export function ortakAkislariListele(vt, projeId, haricEkranId) {
+  /** @type {Array<{ dosya: string; ad: string; tur: 'ortakAkis' | 'ekran'; adimlar: string[]; yalnizTest: boolean }>} */
   const liste = [];
+  const haric = haricEkranId ? vt.tek('SELECT anahtar FROM ekranlar WHERE id = ?', [haricEkranId]) : undefined;
+  const haricDosya = haric ? `${String(haric.anahtar)}.model.json` : null;
   for (const e of vt.tumu("SELECT id, anahtar, ad FROM ekranlar WHERE proje_id = ? AND durum <> 'silindi' ORDER BY ad", [projeId])) {
+    if (haricEkranId && String(e.id) === haricEkranId) continue;
     const k = ekranModeliGetir(vt, String(e.id));
-    if (!k || !nesneMi(k.model) || k.model.tur !== 'ortakAkis') continue;
+    if (!k || !nesneMi(k.model) || k.model.tur === 'altModel' || !Array.isArray(k.model.adimlar)) continue;
+    const ortak = k.model.tur === 'ortakAkis';
+    const dosya = `${String(e.anahtar)}.model.json`;
+    if (!ortak && (!k.model.adimlar.length || (haricDosya && basvuruZincirindeMi(vt, projeId, dosya, haricDosya)))) continue;
     liste.push({
-      dosya: `${String(e.anahtar)}.model.json`, ad: String(e.ad),
-      adimlar: (Array.isArray(k.model.adimlar) ? k.model.adimlar : []).filter(nesneMi).map((/** @type {Nesne} */ a) => String(a.baslik || a.id)),
+      dosya, ad: String(e.ad), tur: ortak ? 'ortakAkis' : 'ekran',
+      adimlar: (/** @type {unknown[]} */ (k.model.adimlar)).filter(nesneMi).map((/** @type {Nesne} */ a) => String(a.baslik || a.id)),
       yalnizTest: k.model.yalnizTestOrtami === true
     });
   }
@@ -1071,6 +1102,8 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const ayik = bloklariAyikla(g.bloklar);
   hatalar.push(...ayik.hatalar);
   if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Ortak akışın içine ortak akış eklenemez.' }); });
+  // Ekran kendini (doğrudan ya da başka bir ekran üzerinden) içeremez.
+  if (!ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak' && basvuruZincirindeMi(vt, projeId, b.dosya, `${ekran.anahtar}.model.json`)) hatalar.push({ blok: i, mesaj: 'Bir ekran kendi içine (ya da kendini kullanan bir ekrana) eklenemez.' }); });
   // Alanların değer kuralları ("Sınırlar"): yalnız sayı / tarih / metin alanında; ekran modeli doğrulayıcısının kurallarıyla.
   /** @type {Map<string, Nesne>} */
   const modelAlanlari = new Map();
