@@ -94,6 +94,12 @@ export type TaramaYoneticisi = {
   aktif(): { id: string; ekran: IsGorunumu['ekran']; projeId: string } | null;
   iptal(id: string): { iptal: true };
   kodGonder(id: string, kod: unknown): { iletildi: true };
+  /** Hızlı test (kip 'hizliTest'): alt sürece komut, alt sürecin uzun yoklaması, komut sonucu, sonuç dinleyicisi. */
+  komutGonder(id: string, komut: import('./protokol.mjs').HizliKomut): { gonderildi: true };
+  komutAl(id: string, token: string): Promise<{ komut: Record<string, unknown> | null }>;
+  hizliOlayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
+  /** Dinleyici alt sürecin olaylarını (HizliOlay) ve iş bitince { olay: 'isBitti', durum, hata } alır. */
+  hizliDinle(id: string, fn: (olay: Record<string, any>) => void): void;
   girdiVer(id: string, token: string): unknown;
   olayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
   oturumAl(id: string, token: string, durum: unknown): { kaydedildi: boolean };
@@ -120,4 +126,6 @@ export type TaramaIstekBaglami = {
 
 export declare function taramaIsteginiIsle(req: IncomingMessage, res: ServerResponse, b: TaramaIstekBaglami): Promise<boolean>;
 export declare function taramalariKapat(): void;
+/** Varsayılan (sunucudaki tek) tarama yöneticisi; hızlı test uçları da bunu kullanır. */
+export declare function taramaYoneticisiAl(projeKoku: string): TaramaYoneticisi;
 export declare function taramaSuruyorMu(): boolean;

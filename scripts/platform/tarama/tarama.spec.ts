@@ -8,6 +8,8 @@ import { TARAMA_ADRES_DEGISKENI, TARAMA_TOKEN_BASLIGI, TARAMA_TOKEN_DEGISKENI, t
 import { akisiKaydet } from './kayit-motoru';
 import { girisiDene } from './giris-denemesi';
 import { ogeleriSec } from './oge-secme-motoru';
+import { hizliTestiYurut } from './hizli-test-motoru';
+import type { HizliKomut, HizliOlay } from './protokol.mjs';
 import { hataBilgisi, taramayiYurut } from './tarama-motoru';
 
 const ADRES = process.env[TARAMA_ADRES_DEGISKENI] ?? '';
@@ -30,11 +32,18 @@ test('Nöbetçi otomatik ekran taraması', async ({ browser }) => {
   const olay = async (o: TaramaOlayi): Promise<void> => { await istek('/olay', o).catch(() => undefined); };
   // "Koşunun saklanan oturumunu kullan": başarılı girişin oturumu sunucuya (sunucu koşunun şifreli dosyasına yazar).
   const oturumGonder = async (durum: unknown): Promise<void> => { await istek('/oturum', durum); };
+  // Hızlı test: komut uzun yoklaması ve komut sonuçları (ağ hatasında kısa bekleyip yeniden sorulur).
+  const komutAl = async (): Promise<HizliKomut | null> => {
+    try { return ((await (await istek('/komut')).json()) as { komut: HizliKomut | null }).komut; } catch { await new Promise((c) => setTimeout(c, 1_000)); return null; }
+  };
+  const hizliGonder = async (o: HizliOlay): Promise<void> => { await istek('/hizli', o).catch(() => undefined); };
   let sonuc: TaramaSonucu;
   try {
     sonuc = { basarili: true, envanter: girdi.kip === 'kayit' ? await akisiKaydet(browser, girdi, olay, oturumGonder)
       : girdi.kip === 'girisDenemesi' ? await girisiDene(browser, girdi, olay)
-        : girdi.kip === 'ogeSecme' ? await ogeleriSec(browser, girdi, olay, oturumGonder) : await taramayiYurut(browser, girdi, olay, oturumGonder) };
+        : girdi.kip === 'ogeSecme' ? await ogeleriSec(browser, girdi, olay, oturumGonder)
+          : girdi.kip === 'hizliTest' ? await hizliTestiYurut(browser, girdi, olay, komutAl, hizliGonder, oturumGonder)
+            : await taramayiYurut(browser, girdi, olay, oturumGonder) };
   } catch (hata) {
     sonuc = { basarili: false, hata: hataBilgisi(hata) };
   }

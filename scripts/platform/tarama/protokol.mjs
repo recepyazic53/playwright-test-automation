@@ -56,6 +56,21 @@ export const KAYIT_PANELI_KIMLIGI = 'nobetci-kayit-paneli';
 export const SECIM_KOPRUSU = '__nobetciSecim';
 /** Öğe seçme panelinin kök öğesinin kimliği. */
 export const SECIM_PANELI_KIMLIGI = 'nobetci-secim-paneli';
+// ---- HIZLI TEST (girdi.kip = 'hizliTest'; ETKİLEŞİMLİ iş — hizli-test/yonetici.mjs sürer) ----
+// Alt süreç görünür tarayıcıda sayfayı açar, keşfeder (hiçbir düğmeye basmadan) ve sunucudan KOMUT bekler: GET <adres>/komut
+// (uzun yoklama; en çok HIZLI_KOMUT_BEKLEME_MS sonra { komut: null } döner, alt süreç yeniden sorar). Komutun sonucu POST
+// <adres>/hizli ile gider (ekran görüntüsü taşıyabilir: HIZLI_OLAY_GOVDE_SINIRI). Düğmeye YALNIZ "bas" komutuyla basılır; sunucu bu
+// komutu kullanıcının izni / onayı olmadan göndermez, alt süreç de "Hayır" izninde reddeder (iki katmanlı).
+/** Komut uzun yoklamasının en uzun süresi. */
+export const HIZLI_KOMUT_BEKLEME_MS = 20_000;
+/** Hızlı test sonuç gövdesi sınırı (anlık + JPEG ekran görüntüsü). */
+export const HIZLI_OLAY_GOVDE_SINIRI = 8 * 1024 * 1024;
+/** Basıştan sonra bekleme göstergesinin kaybolmasını en çok bekleme (ms). */
+export const HIZLI_BASIS_BEKLEME_EN_COK_MS = 60_000;
+/** Sayfaya açılan köprü ("Başka düğmeye bas": sayfada tıklayarak seçme). */
+export const HIZLI_SECIM_KOPRUSU = '__nobetciHizliSecim';
+/** Seçme şeridinin kök öğesinin kimliği (metin / düğme okumalarına girmez: "nobetci" önekli). */
+export const HIZLI_SECIM_KIMLIGI = 'nobetci-hizli-secim';
 /** Sonuç gövdesi sınırı (envanter + en fazla 12 × 4 MB ekran görüntüsünün base64'ü). */
 export const SONUC_GOVDE_SINIRI = 72 * 1024 * 1024;
 /** Olay gövdesi sınırı. */
