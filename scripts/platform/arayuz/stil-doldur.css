@@ -9,6 +9,11 @@
   box-shadow: var(--golge-yuksek); text-align: left; white-space: normal;
 }
 .doldur-paneli[hidden] { display: none; }
+/* Dar ekranda panel düğmenin altında akışa girer; sağa hizalı mutlak konum sol kenardan taşabiliyordu. */
+@media (max-width: 480px) {
+  .doldur-kap { display: flex; }
+  .doldur-paneli { position: static; flex: 1 0 100%; width: auto; max-width: none; margin-top: 4px; }
+}
 .doldur-baslik { margin: 0 0 6px; color: var(--metin-2); }
 .doldur-aday + .doldur-aday { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--cizgi); }
 .doldur-aday-basligi { display: flex; align-items: center; gap: 4px; font-weight: 600; overflow-wrap: anywhere; }

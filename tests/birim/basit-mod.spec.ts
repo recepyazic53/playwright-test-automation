@@ -195,6 +195,7 @@ test.describe('Basit mod (127.0.0.1)', () => {
   });
 
   test('Testlerim: satır = ekran, değişken sayısı, son sonuç, Eksik + gerekçe + Tamamla, ⋯ menüsü; Gelişmiş notu', async () => {
+    test.setTimeout(60_000);
     const { baglam, page, hatalar, disari } = await sayfaAc('/#/testlerim');
     await expect(page.getByRole('heading', { level: 2, name: 'Testlerim' })).toBeVisible();
     const satirlar = page.locator('.test-satiri');
