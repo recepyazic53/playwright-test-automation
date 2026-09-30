@@ -2,18 +2,18 @@
 // sunucusunda (giris-fikstur.ts > yerelSunucu) çalışır; tüm adlar, metinler ve değerler UYDURMADIR, hiçbir gerçek siteye bağlanılmaz.
 //
 //   /satis/  üst çubuk (header: menü + oturum açmış kullanıcının adı bir <h5> başlıkta), altbilgi (telif satırı), form:
-//     "Seyahat bilgileri" (başlık öğesi olmayan blok): BAŞLANGIÇ / BİTİŞ (metin), ALTERNATİF (<select>, hazır seçili), GİDİLECEK ÜLKE (<select id=cmbCountries>,
+//     "Başvuru bilgileri" (başlık öğesi olmayan blok): BAŞLANGIÇ / BİTİŞ (metin), ALTERNATİF (<select>, hazır seçili), GİDİLECEK ÜLKE (<select id=cmbCountries>,
 //       ilk seçenek value="0" "SEÇİNİZ" + 300 ülke),
-//     "Sigortalı bilgileri" (fieldset): D.TARİHİ, TELEFON (tuş maskesi), T.C. (keyup'ta 11 hane → GET /api/kimlik → AD SOYAD dolar ve
+//     "Başvuran bilgileri" (fieldset): D.TARİHİ, TELEFON (tuş maskesi), T.C. (keyup'ta 11 hane → GET /api/kimlik → AD SOYAD dolar ve
 //       blok yeniden çizilir: GİDİLECEK ÜLKE yeniden "SEÇİNİZ" olur — önce seçilen liste sonradan sıfırlanır),
-//     "Prim Hesapla": <a role="link"> (href yok, dinleyiciyle) → ülke seçilmemişse "Lütfen seyahat edilecek ülkeyi seçiniz"; değilse
-//       "Hesaplanıyor..." + GET /api/prim → "6.78 EUR" + "Poliçeleştir" (href'siz <a role="link">) + "Listeden Çıkar",
-//     "Poliçeleştir" → pencere (role=dialog): "Kapat" hemen; metin ve "KREDİ KARTI İLE POLİÇELEŞTİR" bağlantısı 1,8 sn sonra (ağ yok),
-//     "KREDİ KARTI İLE POLİÇELEŞTİR" → kart alanları: Kart sahibi adı (#isim), Kart sahibi soyadı (#soyisim), Kart numarası (#kartno),
+//     "Tutar Hesapla": <a role="link"> (href yok, dinleyiciyle) → ülke seçilmemişse "Lütfen gidilecek ülkeyi seçiniz"; değilse
+//       "Hesaplanıyor..." + GET /api/tutar → "6.78 EUR" + "Onaya gönder" (href'siz <a role="link">) + "Listeden Çıkar",
+//     "Onaya gönder" → pencere (role=dialog): "Kapat" hemen; metin ve "KREDİ KARTI İLE ÖDE" bağlantısı 1,8 sn sonra (ağ yok),
+//     "KREDİ KARTI İLE ÖDE" → kart alanları: Kart sahibi adı (#isim), Kart sahibi soyadı (#soyisim), Kart numarası (#kartno),
 //       CVV (#cvv), Son kullanma ay / yıl (<select> #ay, #yil; ilk seçenek "Ay" / "Yıl" value="") + "Ödemeyi tamamla",
-//     "Ödemeyi tamamla" → 0,3 sn sonra ilerleme ekranı ("Teklifleriniz onaylanırken lütfen bekleyiniz…", "0%", "Onaylanıyor 0 / 1"; ağ yok,
-//       4 sn sürer) → POST /api/odeme → "Poliçeniz oluşturuldu. Poliçe no: 9001".
-//   Sayaçlar: primler (GET /api/prim; ülke kodu), odemeler (POST /api/odeme gövdesi).
+//     "Ödemeyi tamamla" → 0,3 sn sonra ilerleme ekranı ("İşleminiz onaylanırken lütfen bekleyiniz…", "0%", "Onaylanıyor 0 / 1"; ağ yok,
+//       4 sn sürer) → POST /api/odeme → "Kaydınız oluşturuldu. Kayıt no: 9001".
+//   Sayaçlar: tutarlar (GET /api/tutar; ülke kodu), odemeler (POST /api/odeme gövdesi).
 import type { FiksturIstegi, FiksturUygulamasi, FiksturYaniti } from './giris-fikstur';
 
 const html = (baslik: string, govde: string): FiksturYaniti => ({
@@ -30,23 +30,23 @@ export const ULKELER: Array<{ kod: string; ad: string }> = [
   ...Array.from({ length: 298 }, (_, i) => ({ kod: `U${String(i + 1).padStart(3, '0')}`, ad: `ÜLKE ${String(i + 1).padStart(3, '0')}` }))
 ];
 
-export const SATIS_SAYFASI = String.raw`<header role="banner"><nav><a href="/satis/">Ana sayfa</a> <a href="/satis/?liste=1">Tekliflerim</a></nav>
+export const SATIS_SAYFASI = String.raw`<header role="banner"><nav><a href="/satis/">Ana sayfa</a> <a href="/satis/?liste=1">Kayıtlarım</a></nav>
 <h5 class="kullanici">DENEME KULLANICISI</h5></header>
 <main>
 <form id="f" onsubmit="return false">
-<div class="blok"><div class="blok-baslik">Seyahat bilgileri</div>
+<div class="blok"><div class="blok-baslik">Başvuru bilgileri</div>
   <div class="satir"><div><div>BAŞLANGIÇ</div><input id="baslangic" autocomplete="off"></div><div><div>BİTİŞ</div><input id="bitis" autocomplete="off"></div></div>
   <div class="satir"><div><div>ALTERNATİF</div><select id="alternatif"><option value="1" selected>Standart</option><option value="2">Geniş</option></select></div>
   <div><div>GİDİLECEK ÜLKE</div><select id="cmbCountries"><option value="0">SEÇİNİZ</option>__ULKELER__</select></div></div>
 </div>
-<fieldset><legend>Sigortalı bilgileri</legend>
+<fieldset><legend>Başvuran bilgileri</legend>
   <div class="satir"><div><div>D.TARİHİ</div><input id="dogum" autocomplete="off"></div><div><div>TELEFON</div><input id="tel" autocomplete="off"></div>
   <div><div>T.C.</div><input id="tc" autocomplete="off"></div><div><div>AD SOYAD</div><span id="adSoyad"></span></div></div>
 </fieldset>
-<p><a role="link" id="primHesapla" class="btn">Prim Hesapla</a></p>
+<p><a role="link" id="tutarHesapla" class="btn">Tutar Hesapla</a></p>
 <div id="uyari" class="alert alert-danger" role="alert" hidden></div>
 <div id="hesaplaniyor" hidden>Hesaplanıyor...</div>
-<div id="prim" hidden><span id="tutar"></span> <a role="link" id="policelestir" class="btn">Poliçeleştir</a> <a role="link" id="cikar" class="btn">Listeden Çıkar</a></div>
+<div id="tutarKutusu" hidden><span id="tutar"></span> <a role="link" id="onayaGonder" class="btn">Onaya gönder</a> <a role="link" id="cikar" class="btn">Listeden Çıkar</a></div>
 </form>
 <div id="pencere" class="modal" role="dialog" hidden><button type="button" id="kapat">Kapat</button><div id="pencereIcerik"></div></div>
 <div id="kart" hidden>
@@ -60,7 +60,7 @@ export const SATIS_SAYFASI = String.raw`<header role="banner"><nav><a href="/sat
   </fieldset>
   <p><button type="button" id="odeme">Ödemeyi tamamla</button></p>
 </div>
-<div id="ilerleme" hidden><p>Teklifleriniz onaylanırken lütfen bekleyiniz…</p><p id="yuzde">0%</p><p id="onay">Onaylanıyor 0 / 1</p></div>
+<div id="ilerleme" hidden><p>İşleminiz onaylanırken lütfen bekleyiniz…</p><p id="yuzde">0%</p><p id="onay">Onaylanıyor 0 / 1</p></div>
 <div id="sonuc" role="status"></div>
 </main>
 <footer>© 2026 Tüm hakları saklıdır.</footer>
@@ -79,18 +79,18 @@ export const SATIS_SAYFASI = String.raw`<header role="banner"><nav><a href="/sat
     if (!/^\d{11}$/.test($('tc').value) || $('adSoyad').textContent) return;
     fetch('/api/kimlik?tc=' + encodeURIComponent($('tc').value)).then(function (r) { return r.json(); }).then(function (j) { $('adSoyad').textContent = j.ad; $('cmbCountries').outerHTML = ulkeHtml; });
   });
-  $('primHesapla').addEventListener('click', function () {
+  $('tutarHesapla').addEventListener('click', function () {
     $('uyari').hidden = true;
-    if ($('cmbCountries').value === '0') { uyar('Lütfen seyahat edilecek ülkeyi seçiniz'); return; }
+    if ($('cmbCountries').value === '0') { uyar('Lütfen gidilecek ülkeyi seçiniz'); return; }
     $('hesaplaniyor').hidden = false;
-    fetch('/api/prim?ulke=' + encodeURIComponent($('cmbCountries').value)).then(function (r) { return r.json(); }).then(function (j) {
-      $('hesaplaniyor').hidden = true; $('tutar').textContent = j.tutar; $('prim').hidden = false;
+    fetch('/api/tutar?ulke=' + encodeURIComponent($('cmbCountries').value)).then(function (r) { return r.json(); }).then(function (j) {
+      $('hesaplaniyor').hidden = true; $('tutar').textContent = j.tutar; $('tutarKutusu').hidden = false;
     });
   });
-  $('policelestir').addEventListener('click', function () {
+  $('onayaGonder').addEventListener('click', function () {
     $('pencere').hidden = false;
     setTimeout(function () {
-      $('pencereIcerik').innerHTML = '<p>Ödeme yöntemini seçiniz</p><p><a role="link" id="kkIle" class="btn">KREDİ KARTI İLE POLİÇELEŞTİR</a></p>';
+      $('pencereIcerik').innerHTML = '<p>Ödeme yöntemini seçiniz</p><p><a role="link" id="kkIle" class="btn">KREDİ KARTI İLE ÖDE</a></p>';
       $('kkIle').addEventListener('click', function () { $('pencere').hidden = true; $('kart').hidden = false; });
     }, 1800);
   });
@@ -108,7 +108,7 @@ export const SATIS_SAYFASI = String.raw`<header role="banner"><nav><a href="/sat
           isim: $('isim').value, soyisim: $('soyisim').value, kartno: $('kartno').value, cvv: $('cvv').value, ay: $('ay').value, yil: $('yil').value }) })
           .then(function (r) { return r.json(); }).then(function (j) {
             $('onay').textContent = 'Onaylanıyor 1 / 1'; $('yuzde').textContent = '100%';
-            setTimeout(function () { $('ilerleme').hidden = true; $('sonuc').textContent = 'Poliçeniz oluşturuldu. Poliçe no: ' + j.no; }, 300);
+            setTimeout(function () { $('ilerleme').hidden = true; $('sonuc').textContent = 'Kaydınız oluşturuldu. Kayıt no: ' + j.no; }, 300);
           });
       }, 400);
     }, 300);
@@ -121,15 +121,15 @@ const sayfa = (): string => SATIS_SAYFASI
   .replace('__YILLAR__', Array.from({ length: 10 }, (_, i) => `<option value="${2026 + i}">${2026 + i}</option>`).join(''));
 
 export class SatisUygulamasi {
-  readonly primler: string[] = [];
+  readonly tutarlar: string[] = [];
   readonly odemeler: Array<Record<string, string>> = [];
   private no = 9000;
 
   readonly isle: FiksturUygulamasi = (i: FiksturIstegi) => {
     if (i.yol === '/satis/' && i.yontem === 'GET') return html('Satış', sayfa());
     if (i.yol === '/api/kimlik' && i.yontem === 'GET') return { tur: 'application/json', govde: JSON.stringify({ ad: 'D*** K***' }), gecikmeMs: 300 };
-    if (i.yol === '/api/prim' && i.yontem === 'GET') {
-      this.primler.push(i.sorgu.get('ulke') ?? '');
+    if (i.yol === '/api/tutar' && i.yontem === 'GET') {
+      this.tutarlar.push(i.sorgu.get('ulke') ?? '');
       return { tur: 'application/json', govde: JSON.stringify({ tutar: '6.78 EUR' }), gecikmeMs: 1_000 };
     }
     if (i.yol === '/api/odeme' && i.yontem === 'POST') {

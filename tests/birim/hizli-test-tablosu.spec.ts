@@ -46,7 +46,7 @@ test('taslak: gruplara ayrılır; yalnız elle yazılanlar; parola, dosya, boş 
   expect(kart.liste).toBeNull();
   expect(kisi.sutunlar.map((x) => x.ad)).toEqual(['Doğum tarihi', 'Telefon', 'Kimlik no']);
   expect(kisi.satir).toEqual({ 'Doğum tarihi': '13.04.1998', Telefon: '5426502153', 'Kimlik no': '45520772518' });
-  expect(kart.sutunlar.map((x) => [x.ad, x.gizli])).toEqual([['Kart üzerindeki isim', false], ['Kart numarası', true], ['Güvenlik kodu (CVV)', true]]);
+  expect(kart.sutunlar.map((x) => [x.ad, x.gizli])).toEqual([['Kart üzerindeki isim', true], ['Kart numarası', true], ['Güvenlik kodu (CVV)', true]]);
   expect(kisi.baglar.t.basvuru).toBe('${Kişi bilgileri.Telefon}');
   expect(ulke.baglar.u.basvuru).toBe('${GİDİLECEK ÜLKE.GİDİLECEK ÜLKE}');
   expect(Object.keys(kisi.baglar).concat(Object.keys(kart.baglar), Object.keys(ulke.baglar)).sort()).toEqual(['c', 'd', 'i', 'k', 'n', 't', 'u']);

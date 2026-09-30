@@ -1136,7 +1136,8 @@ export function kayitPaketiOlustur(meta, envanter) {
   const ilkSecici = (x) => {
     for (const h of x.alanlar) {
       // Özel açılır listenin gerçek <select>'i gizlidir (görünür beklenemez): sonraki alan aranır.
-      if (h.ozelBilesen) continue;
+      // Koşullu alan (bir seçimin belirli değerinde görünen; hızlı test keşfi) her koşuda görünmeyebilir: gösterge olmaz.
+      if (h.ozelBilesen || /** @type {any} */ (h).kosul) continue;
       if (!(h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:'))) return { secici: h.secici, ...cerceveEki(h.cerceve) };
       const e = mevcutAlanlar.find((a) => a.tip === 'kimlikProfili' && `kimlik:${a.id}` === h.anahtar);
       const alt = e && Array.isArray(e.altAlanlar) ? e.altAlanlar.find((/** @type {any} */ y) => nesneMi(y) && nesneMi(y.konum) && typeof y.konum.secici === 'string' && y.konum.secici) : undefined;

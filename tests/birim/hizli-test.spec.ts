@@ -305,7 +305,8 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(JSON.stringify(s)).toContain('${Kişi bilgileri.Vergi no}');
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${kayitli.ekranId}`)) as Nesne;
   const baglar = Object.values(bag.baglar as Record<string, Nesne>);
-  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
+  // Sayfada hazır gelen "Kanal" da modelde (değersiz) olduğu için kendi liste tablosuna bağlanır (yetim tablo kalmaz).
+  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kanal.Kanal', 'Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
 });
 
 test('kaydedilen senaryo normal koşuda (model-senaryolari.spec.ts) aynı zinciri yürütür ve Bitti\'de başarılı olur', async () => {
@@ -463,7 +464,7 @@ test('kayıt formu: telefon maskesi + alandan çıkınca silen sayfa + sonradan 
   expect(ulke.satirlar.map((x: Nesne) => x.degerler['Gidilecek ülke'])).toEqual(['A.B.D', 'Fransa', 'Almanya']);
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${r.ekranId}`)) as Nesne;
   expect(Object.values(bag.baglar as Record<string, Nesne>).map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort())
-    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon']);
+    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon', 'Ödeyen.Ödeyen']); // hazır gelen Ödeyen radyosu da bağlı
   // Senaryolardan yeniden başlat ("Testi koş"): aynı değerler, tablodan çözülerek, telefon dahil.
   const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: r.senaryoId, ortamId });
   expect(y.basarili, y.mesaj).toBe(true);
@@ -866,12 +867,12 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
     await expect(soru.locator('.hizli-alan').filter({ hasText: 'Vergi no' })).toHaveCount(0);
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
-    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     // Evet + cümlede "Hesapla": basılır; yeni alan için veri durağı.
     await expect(soru.getByRole('heading', { name: 'Adım 2: veri gerekli' })).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.hizli-yan img.hizli-goruntu')).toBeVisible();
     await soru.getByLabel('Ödeme şekli').selectOption('havale');
-    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
     await expect(soru.locator('.hizli-fark')).toContainText('Tutar: 1.250,00 TL');
     await expect(soru.getByLabel('Basılacak düğme')).toHaveValue(/Onayla/);
@@ -887,7 +888,7 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' })).toHaveAttribute('aria-checked', 'true');
     await expect(satir('Hesaplanıyor…').getByRole('radio', { name: 'Devam' })).toHaveAttribute('aria-checked', 'true');
     await tasmaYok(page, 'Bitiş koşulu');
-    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     // Kaydet: H3 sorusu.
     await expect(soru.getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible();
     await expect(soru).toContainText('Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı?');

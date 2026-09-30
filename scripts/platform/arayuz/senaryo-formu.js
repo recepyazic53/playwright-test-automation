@@ -1494,7 +1494,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const dogrulamaOzeti = h('div', { class: 'dogrulama-ozeti', role: 'status' });
   const genelHatalar = h('ul', { class: 'not-kutusu hata', hidden: true });
   const kaydetDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), s.mod === 'yeni' ? 'Senaryoyu oluştur' : 'Değişiklikleri kaydet');
-  const deneDugmesi = h('button', { type: 'button' }, ikon('oynat'), 'Dene');
+  const deneDugmesi = h('button', { type: 'button', title: 'Formdaki güncel değerlerle (kaydedilmemiş değişiklikler dahil) dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene');
   const vazgecDugmesi = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
   const denemeAlani = h('section', { class: 'kart', hidden: true, 'aria-labelledby': 'deneme-baslik', 'aria-live': 'polite' });
 
@@ -1779,7 +1779,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
     s.geri();
   });
 
-  // --- Dene (deneme koşusu; taslak kaydedilmez) -----------------------------------------------
+  // --- Dene (deneme koşusu) -------------------------------------------------------------------
+  // Dene FORMDAKİ GÜNCEL değerlerle (kaydedilmemiş değişiklikler dahil) koşar: veri, satır seçimleri, giriş ve adım görüntüsü seçimi
+  // istekte gider (sunucu kayıtlı senaryoyu okumaz); senaryo kaydedilmez. Sonuç kartı hangi hâliyle denendiğini açıkça yazar.
   let deneme = null;
   deneDugmesi.addEventListener('click', async () => {
     gonderildi = true;
@@ -1797,7 +1799,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     // Riskli ortam (tek tanım: ortam-riski.mjs): açık onay; sunucu istekte canliOnay: true ister (+ canlı ortam izni).
     if (!(await canliOnayIste(ortam, 'Deneme'))) return;
     const kosuId = kimlikUret();
-    deneme = { kosuId, bitti: false };
+    deneme = { kosuId, bitti: false, kaydedilmemis: degisti || !senaryo };
     deneDugmesi.disabled = true;
     kaydetDugmesi.disabled = true;
     denemeCiz({ durum: 'calisiyor', kosuId, ortam });
@@ -1826,7 +1828,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   function denemeCiz(d) {
     clearInterval(canliZamanlayici);
     denemeAlani.hidden = false;
-    const baslik = h('div', { class: 'kart-basligi' }, h('h3', { id: 'deneme-baslik' }, ikon('oynat'), 'Deneme'), h('span', { class: 'alt' }, `${d.ortam.ad} · taslak kaydedilmez`));
+    const hali = deneme && deneme.kaydedilmemis ? 'formdaki kaydedilmemiş değişikliklerle denendi' : 'formdaki hâliyle denendi';
+    const baslik = h('div', { class: 'kart-basligi' }, h('h3', { id: 'deneme-baslik' }, ikon('oynat'), 'Deneme'), h('span', { class: 'alt' }, `${d.ortam.ad} · ${hali} · senaryo kaydedilmez`));
     if (d.durum === 'calisiyor') {
       const img = h('img', { alt: 'Deneme: canlı ekran görüntüsü' });
       const bos = h('div', { class: 'medya-bos' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Deneme başlatıldı; canlı görüntü bekleniyor…');

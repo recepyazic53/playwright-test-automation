@@ -287,16 +287,16 @@ const kacis = (m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Oturumun zinciri → akış kaydı envanteri (KayitEnvanteri). Son adımın göstergesi Bitti metinleri, tüm adımların uyarıları Hata metinleri.
- * Alanlar: değeri olan alanlar (değer DEĞİL, yapı). Boş kalan son adım (düğmesiz, alansız) atılır.
+ * Alanlar: keşfedilen bütün doldurulabilir alanlar (değer DEĞİL, yapı; boş bırakılanlar senaryoda değersiz kalır). Boş kalan son adım (düğmesiz, alansız) atılır.
  * @param {{ adimlar: Array<{ alanlar: any[]; bas: { secici: string; metin: string | null } | null; okumalar?: Array<{ gorunen: string[]; secimler: Record<string, string> }>; kosullar?: Record<string, { secim: string; degerler: string[] }> }>;
  *   degerler: Record<string, unknown>; yol: string; baslik: string; profil: string | null }} o
  * @param {{ bitti: string[]; hata: string[] }} bitis
  */
 export function kayitEnvanteriKur(o, bitis) {
-  // Modele girenler: değeri olan alanlar ve sayfada HAZIR gelen seçim alanları (değersiz: koşu dokunmaz, sayfanın değeri kalır; ama
-  // modelde oldukları için liste tablolarına bağlanabilir ve senaryo formunda seçilebilir).
-  const dolu = (/** @type {any} */ a) => (o.degerler[a.anahtar] !== undefined && o.degerler[a.anahtar] !== '')
-    || (a.hazir === true && ['select', 'select-one', 'radio'].includes(String(a.tur)) && !a.devreDisi && !a.saltOkunur && !a.kosul);
+  // Modele keşfedilen BÜTÜN doldurulabilir alanlar (koşullu alanlar ve koşullarıyla) girer: değeri olanlar senaryoya değerleriyle,
+  // boş bırakılanlar / sayfada hazır gelenler değersiz (koşu dokunmaz; sayfanın değeri kalır). Böylece sonradan bu alanlar için senaryo
+  // yazılabilir ve liste tabloları alanlara bağlanabilir (yetim tablo kalmaz).
+  const dolu = (/** @type {any} */ a) => (o.degerler[a.anahtar] !== undefined && o.degerler[a.anahtar] !== '') || (!a.devreDisi && !a.saltOkunur);
   const adimlar = o.adimlar.map((a) => ({ ...a, alanlar: a.alanlar.filter(dolu) }));
   while (adimlar.length > 1 && !adimlar[adimlar.length - 1].alanlar.length && !adimlar[adimlar.length - 1].bas) adimlar.pop();
   const gosterge = (/** @type {string[]} */ l) => (!l.length ? null : l.length === 1
