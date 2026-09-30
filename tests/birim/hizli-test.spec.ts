@@ -426,6 +426,23 @@ test('CANLI ortam: kilit yok, bir kez açık onay istenir (onaysız tarayıcı a
   await isBitsin();
 });
 
+test('başka sitenin tam adresi: kayıtsızsa sorulur (409, hiçbir istek / tarayıcı yok); aynı kökteki tam adres yola ayrılır ve başlar', async () => {
+  test.setTimeout(120_000);
+  await isBitsin();
+  const once = uygulama.istekler.length;
+  const y = await api('/platform/hizli-test/baslat', { projeId, ortamId, hedef: 'http://127.0.0.2:9/basvuru/', ekranAdi: 'Başka site', izin: 'sor' });
+  expect(y).toMatchObject({ basarili: false, kod: 'TABAN_KAYITLI_DEGIL', koken: 'http://127.0.0.2:9' });
+  expect(String(y.mesaj)).toContain('Bu site adresi kayıtlı değil');
+  expect((await api('/platform/tarama/aktif')).is ?? null).toBeNull();
+  expect(uygulama.istekler.length).toBe(once);
+  // Ortamın kendi kökeninde tam adres: yol ayrılır ("/" ile başlayan yol olarak saklanır).
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: `${fikstur.adres}/basvuru/`, ekranAdi: 'Tam adresli', izin: 'sor' })).id);
+  const o = await bekle(id, ['veri']);
+  expect(o.hedef).toBe('/basvuru/');
+  await basarili('/platform/hizli-test/iptal', { id });
+  await isBitsin();
+});
+
 test('düzenleme kipi (aynı ekran): yeni model sürümü; kaydetmeden önce farklar ve etkilenen senaryolar onaya sunulur', async () => {
   test.setTimeout(180_000);
   await isBitsin();
