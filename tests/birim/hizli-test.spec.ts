@@ -236,6 +236,12 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   // Görülmeyen metne etiket verilemez; Bitti olmadan kaydedilemez.
   expect(await api('/platform/hizli-test/bitis', { id, etiketler: { 'Uydurma mesaj': 'bitti' } })).toMatchObject({ basarili: false, kod: 'BITIS' });
   o = await bekle(id, ['bitis']);
+  // "Sayfayı yeniden tara": ekrandaki güncel mesajlar görülenlere eklenir, verilen etiketler korunur, adım aynı kalır.
+  const gorulenSayisi = o.soru.gorulenler.length;
+  await basarili('/platform/hizli-test/yeniden-tara', { id, etiketler: { 'Başvurunuz alındı. Başvuru no: 4701': 'bitti' } });
+  o = await bekle(id, ['bitis']);
+  expect(o.soru.gorulenler.length).toBeGreaterThanOrEqual(gorulenSayisi);
+  expect(o.soru.etiketler['Başvurunuz alındı. Başvuru no: 4701']).toBe('bitti');
   await basarili('/platform/hizli-test/bitis', { id, etiketler: { ...o.soru.etiketler, 'Başvurunuz alındı. Başvuru no: 4701': 'bitti' } });
   o = await bekle(id, ['kaydet']);
   expect(o.soru).toMatchObject({ dogrulanabilir: true, dogrulama: null, ozet: { bitis: { bitti: ['Başvurunuz alındı. Başvuru no:'], hata: ['Zorunlu alan: Ödeme şekli'], devam: ['Hesaplanıyor…', 'Gönderiliyor…'] } } });
@@ -266,6 +272,13 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(vergiAlani?.gorunurluk).toBeTruthy();
   const s = (await api(`/platform/senaryo?id=${kayitli.senaryoId}&ortamId=${ortamId}`)) as Nesne;
   expect(JSON.stringify(s)).toContain('${Kişi.Ad soyad}');
+  // Elle yazılan değer (Vergi no) test verisi tablosuna alındı ve senaryo alanı tabloya bağlandı.
+  const kTablo = k.tablo as { tablo: string; sutunSayisi: number };
+  expect(kTablo).toMatchObject({ tablo: expect.stringContaining('Başvuru formu'), sutunSayisi: 3 });
+  const tablo = ((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).find((t: Nesne) => t.ad === kTablo.tablo);
+  expect(tablo?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Müşteri tipi', 'Vergi no', 'Ödeme şekli']);
+  expect(tablo?.satirlar).toHaveLength(1);
+  expect(JSON.stringify(s)).toContain(`\${${kTablo.tablo}.Vergi no}`);
 });
 
 test('kaydedilen senaryo normal koşuda (model-senaryolari.spec.ts) aynı zinciri yürütür ve Bitti\'de başarılı olur', async () => {
@@ -558,6 +571,8 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await tasmaYok(page, 'Veri durağı (hazır liste açık)');
     const adAlani = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
     await adAlani.getByRole('button', { name: 'Doldur', exact: true }).click();
+    // Önceki testlerin kaydettiği otomatik tablolar da adı uyan sütunla listelenir: "Kişi" tablosunun satırı seçilir.
+    await adAlani.getByRole('button', { name: 'Deneme — Deneme Kişi' }).click();
     await expect(adAlani.locator('.hizli-tablo-degeri')).toHaveText('${Kişi.Ad soyad}');
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
     await soru.getByRole('button', { name: 'Devam et' }).click();
