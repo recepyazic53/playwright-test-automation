@@ -82,6 +82,11 @@ function kimlikAl(d, ad) {
 }
 /** Alan doldurulabilir mi (veri durağına girer mi)? @param {Nesne} a */
 const doldurulabilir = (a) => !DOLDURULMAZ.has(String(a.tur)) && !a.devreDisi && !a.saltOkunur;
+/** Sayfada görünen adı bulunamayan alanın gösterim adı (teknik ad değil). @param {Nesne} a */
+const adsizEtiket = (a) => {
+  const tur = { select: 'Liste', textarea: 'Metin alanı', radio: 'Seçenek grubu', checkbox: 'Onay kutusu', date: 'Tarih alanı', number: 'Sayı alanı', tel: 'Telefon alanı', email: 'E-posta alanı' }[String(a.tur)] ?? 'Metin kutusu';
+  return `Adı görünmeyen alan (${tur})`;
+};
 /** Parola türündeki alanın değeri görünümde maskelenir. @param {Nesne} a */
 const gizliAlan = (a) => String(a.tur) === 'password';
 
@@ -294,7 +299,9 @@ export function hizliTestYoneticisiOlustur(s) {
     const alanGorunumu = (/** @type {Nesne} */ a) => {
       const v = o.degerler[a.anahtar];
       return {
-        anahtar: a.anahtar, etiket: a.etiket ?? a.ad ?? a.kimlik ?? a.anahtar, tur: a.tur, zorunlu: a.zorunlu === true,
+        // Etiket yalnız sayfada GÖRÜNEN addır; teknik ad (name / id) etiket olmaz (yalnız ipucu olarak teknikAd).
+        anahtar: a.anahtar, etiket: a.etiket ?? adsizEtiket(a), etiketBulundu: Boolean(a.etiket), teknikAd: a.ad ?? a.kimlik ?? null, tur: a.tur, zorunlu: a.zorunlu === true,
+        hazir: a.hazir === true, mevcut: gizliAlan(a) ? null : a.mevcut ?? null,
         secenekler: a.tur === 'radio' ? (a.radyolar ?? []).map((/** @type {Nesne} */ r) => ({ deger: r.deger, metin: r.metin ?? r.deger })) : a.secenekler ?? null,
         yeni: o.alanlar.get(a.anahtar)?.yeni === true, hata: o.alanHatalari?.[a.anahtar] ?? null,
         deger: v ? (gizliAlan(a) && v.kaynak === 'elle' ? '••••••' : v.deger) : null, kaynak: v?.kaynak ?? null, gizli: gizliAlan(a)

@@ -351,7 +351,7 @@ function farkCiz(a) {
 function veriDuragi(o, s, kart, m, gonder) {
   /** @type {Record<string, { deger: string | boolean | null; kaynak: 'elle' | 'tablo' | null; tabloSecimi?: any }>} */
   const durum = {};
-  const satirlar = s.alanlar.map((a) => {
+  const satirYap = (a) => {
     durum[a.anahtar] = { deger: a.deger, kaynak: a.kaynak };
     const id = `hizli-alan-${Math.random().toString(36).slice(2, 9)}`;
     const kap = h('div', { class: 'hizli-alan-girdisi' });
@@ -370,7 +370,7 @@ function veriDuragi(o, s, kart, m, gonder) {
         girdi = h('input', { type: 'checkbox', id, checked: d.deger === true || d.deger === 'true' || null });
         girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).checked, kaynak: 'elle' }; });
       } else if (secenekler) {
-        girdi = h('select', { id }, h('option', { value: '' }, 'Seçin'), secenekler.map((x) => h('option', { value: x.deger, selected: String(d.deger) === x.deger || null }, x.metin || x.deger)));
+        girdi = h('select', { id }, h('option', { value: '' }, 'Seçin'), secenekler.filter((x) => x.deger !== '').map((x) => h('option', { value: x.deger, selected: String(d.deger) === x.deger || null }, x.metin || x.deger)));
         girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLSelectElement} */ (girdi).value || null, kaynak: 'elle' }; });
       } else {
         girdi = h('input', { type: a.gizli ? 'password' : a.tur === 'date' ? 'date' : 'text', id, autocomplete: 'off', value: d.deger === null ? '' : String(d.deger) });
@@ -386,22 +386,41 @@ function veriDuragi(o, s, kart, m, gonder) {
     };
     ciz();
     return h('div', { class: `alan hizli-alan${a.yeni ? ' yeni' : ''}` },
-      h('label', { for: id }, a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
+      h('label', { for: id, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null }, a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
       kap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
-  });
+  };
+  // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir.
+  const hazirlar = s.alanlar.filter((a) => a.hazir && a.deger === null);
+  const acilan = new Set();
+  /** @type {Map<string, HTMLElement>} */
+  const satirlari = new Map();
+  const satir = (/** @type {any} */ a) => { if (!satirlari.has(a.anahtar)) satirlari.set(a.anahtar, satirYap(a)); return /** @type {HTMLElement} */ (satirlari.get(a.anahtar)); };
+  const satirlarKap = h('div', { class: 'hizli-alanlar' });
+  const hazirKap = h('details', { class: 'hizli-hazir' });
+  const listeyiCiz = () => {
+    const sorulan = s.alanlar.filter((a) => !hazirlar.includes(a) || acilan.has(a.anahtar));
+    yerlestir(satirlarKap, ...(sorulan.length ? sorulan.map(satir) : [h('p', { class: 'soluk' }, 'Sayfa hazır: sizden doldurmanızı isteyeceğim boş alan yok. Devam edebilirsiniz.')]));
+    const kalan = hazirlar.filter((a) => !acilan.has(a.anahtar));
+    hazirKap.hidden = !kalan.length;
+    yerlestir(hazirKap, h('summary', {}, `Sayfada hazır gelen ${kalan.length} değer (olduğu gibi kullanılacak)`),
+      h('ul', { class: 'hizli-hazir-liste' }, kalan.map((a) => h('li', {},
+        h('span', { class: 'hizli-hazir-ad' }, a.etiket), h('span', { class: 'hizli-hazir-deger' }, a.mevcut ?? 'dolu'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${a.etiket}: değiştir`, onclick: () => { acilan.add(a.anahtar); listeyiCiz(); } }, 'Değiştir')))));
+  };
+  listeyiCiz();
   const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
   devam.addEventListener('click', () => {
     const degerler = Object.fromEntries(Object.entries(durum).map(([k, d]) => [k, d.deger === null || d.deger === '' ? null
       : { deger: d.deger, kaynak: d.kaynak || 'elle', ...(d.tabloSecimi ? { tabloSecimi: d.tabloSecimi } : {}) }]));
-    const eksik = s.alanlar.filter((a) => a.zorunlu && !degerler[a.anahtar]).map((a) => a.etiket);
+    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar]).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
     void gonder(devam, 'veri', { degerler }, m);
   });
-  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && (a.deger === null || a.deger === '')).length;
+  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && (a.deger === null || a.deger === '')).length;
   return kart(o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
     s.not ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, s.not) : null,
-    h('p', { class: 'soluk' }, 'Alanlar boş gelir. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Doldurduğunuzda akış kaldığı yerden sürer.'),
-    m.kutu, h('div', { class: 'hizli-alanlar' }, satirlar),
+    h('p', { class: 'soluk' }, 'Sayfada boş görünen alanlar aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada zaten dolu gelenler sorulmaz, olduğu gibi kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
+    m.kutu, satirlarKap, hazirKap,
     h('div', { class: 'dugmeler' }, devam, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null));
 }
 

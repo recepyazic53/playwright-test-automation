@@ -64,3 +64,12 @@
 /* Ekran ekle sayfasındaki "Ya da: Hızlı test" bağlantısı (sayfa-paketi.js). */
 .hizli-test-baglantisi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 10px 0 0; color: var(--metin-2); overflow-wrap: anywhere; }
 .hizli-test-baglantisi .ikon { width: 15px; height: 15px; color: var(--vurgu); flex: none; }
+
+/* Veri durağı: sayfada zaten dolu gelen değerler (sorulmaz; olduğu gibi kullanılır). */
+.hizli-hazir { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); padding: 6px 10px; margin-top: 10px; background: var(--panel-kati); }
+.hizli-hazir > summary { cursor: pointer; color: var(--metin-2); }
+.hizli-hazir-liste { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.hizli-hazir-liste li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.hizli-hazir-ad { font-weight: 600; overflow-wrap: anywhere; }
+.hizli-hazir-deger { color: var(--metin-2); overflow-wrap: anywhere; }
+@media (max-width: 520px) { .hizli-hazir-liste li { grid-template-columns: minmax(0, 1fr) auto; } .hizli-hazir-deger { grid-column: 1; } }

@@ -34,10 +34,11 @@ import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
 export const ENVANTER_BETIGI = `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
 
 /** Ekranın envanteri (aynı kökenli çerçeveler dahil). Init betiği yoksa (ör. betik yüklenmeden) doğrudan ana belgede okunur. */
-export async function envanterOku(sayfa: Page): Promise<SayfaEnvanteri> {
+export async function envanterOku(sayfa: Page, secenek: { degerOku?: boolean } = {}): Promise<SayfaEnvanteri> {
+  const degerOku = secenek.degerOku === true;
   const hazir = await sayfa.evaluate(() => typeof (window as unknown as { __nobetciSayfadakiAlanlar?: unknown }).__nobetciSayfadakiAlanlar === 'function');
-  if (hazir) return sayfa.evaluate(() => (window as unknown as { __nobetciSayfadakiAlanlar: (d: number) => SayfaEnvanteri }).__nobetciSayfadakiAlanlar(0));
-  return sayfa.evaluate(sayfadakiAlanlar, 0);
+  if (hazir) return sayfa.evaluate((o) => (window as unknown as { __nobetciSayfadakiAlanlar: (d: number, o?: boolean) => SayfaEnvanteri }).__nobetciSayfadakiAlanlar(0, o), degerOku);
+  return sayfa.evaluate<SayfaEnvanteri>(`(${sayfadakiAlanlar.toString()})(0, ${degerOku})`);
 }
 
 /** Alanın kapsamı: çerçevesi varsa o çerçeve (iç içe), yoksa sayfa. */

@@ -4,7 +4,10 @@
 //                         aria-labelledby, yakındaki metin, yer tutucu), tür, name/id, seçici önerisi (#id →
 //                         [name=…] → role=…[name=…] → CSS yolu), zorunluluk, seçenekler (değer + metin), radyo ve onay
 //                         kutusu grupları, dosya (accept), devre dışı/salt okunur, bölüm (fieldset/legend, başlıklar).
-//                         Alan DEĞERİ okunmaz/döndürülmez.
+//                         Alan DEĞERİ okunmaz/döndürülmez; yalnız "sayfada hazır geldi mi" (hazir) bilgisi verilir. Değerin kendisi (mevcut)
+//                         YALNIZ degerOku=true iken (Hızlı test: hazır gelenleri kullanıcıya göstermek için) okunur; hiçbir yere yazılmaz.
+//                         Etiket: yan yana sütun başlıkları (başlık satırı) alanın kendi sütununa eşlenir; etiketsiz alan yakınındaki (üstündeki /
+//                         solundaki) görünen metinden ad alır.
 //                         Özel açılır liste (aramalı liste bileşenleri): gerçek <select> gizli, yanında GÖRÜNÜR bir kutu
 //                         (role=combobox, aria-controls/aria-owns, bilinen bileşen kapları, "<select id>_chosen" gibi
 //                         kimlik desenleri) → alan görünür sayılır (ozelBilesen), seçici gerçek <select>'in, seçenekler ondan.
@@ -20,7 +23,7 @@ import type { HamAlan, HamRadyo, Kirilganlik, SayfaEnvanteri } from './paket-olu
 /** Çerçevelerin içi en çok bu derinliğe kadar okunur (ana sayfa 0; iframe 1; iframe içindeki iframe 2). */
 export const CERCEVE_EN_DERIN = 2;
 
-export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
+export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri {
   const bosluk = (m: string | null | undefined): string => (m ?? '').replace(/\s+/g, ' ').trim();
   const kacis = (d: string): string => CSS.escape(d);
   const tirnak = (d: string): string => d.replace(/["\\]/g, '\\$&');
@@ -124,6 +127,115 @@ export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
     return null;
   };
 
+
+  // ---- Görsel yakınlık: sütun başlığı ve etiketsiz alanın yakınındaki görünen metin ----
+  type MetinOgesi = { metin: string; r: DOMRect };
+  /** Öğenin doğrudan metin düğümlerinin kapladığı alan (öğenin kutusu değil: sabit genişlikli başlık hücresi yazıyı aşabilir). */
+  const metinKutusu = (e: Element): DOMRect | null => {
+    let sol = Infinity; let ust = Infinity; let sag = -Infinity; let alt = -Infinity;
+    for (const c of e.childNodes) {
+      if (c.nodeType !== Node.TEXT_NODE || !bosluk(c.textContent)) continue;
+      const rg = document.createRange();
+      rg.selectNodeContents(c);
+      for (const r of rg.getClientRects()) {
+        if (r.width <= 0 || r.height <= 0) continue;
+        sol = Math.min(sol, r.left); ust = Math.min(ust, r.top); sag = Math.max(sag, r.right); alt = Math.max(alt, r.bottom);
+      }
+    }
+    return sol === Infinity ? null : new DOMRect(sol, ust, sag - sol, alt - ust);
+  };
+  /** Kökün altındaki görünür, denetimsiz, KISA metin öğeleri (başlık / etiket adayları). */
+  const metinOgeleri = (kok: Element, sinir = 400): MetinOgesi[] => {
+    const sonuc: MetinOgesi[] = [];
+    const adaylar: Element[] = [kok, ...kok.querySelectorAll('*')];
+    for (const e of adaylar.slice(0, sinir)) {
+      if (e.matches(`${KONTROLLER},option,script,style,noscript,template,svg`) || e.closest('select,button,option,script,style')) continue;
+      let dogrudan = '';
+      e.childNodes.forEach((c) => { if (c.nodeType === Node.TEXT_NODE) dogrudan += c.textContent ?? ''; });
+      const t = etiketTemizle(dogrudan);
+      if (!t || t.length > 60 || !/\p{L}/u.test(t) || !gorunurMu(e)) continue;
+      const r = metinKutusu(e);
+      if (r) sonuc.push({ metin: t, r });
+    }
+    return sonuc;
+  };
+  const alanKutusu = (el: Element): DOMRect => ((el instanceof HTMLSelectElement ? ozelKaplar.get(el)?.kap : undefined) ?? el).getBoundingClientRect();
+  /**
+   * Yan yana sütun başlıkları: alanın (ya da atalarının) öncesindeki, denetim içermeyen bir "başlık satırı" (≥ 2 metin) varsa
+   * alanın YATAY OLARAK hizalandığı başlığı döndürür (tablo th'leri de, <div> hücreleri de). Başlık alanın hemen üstünde olmalı.
+   */
+  const sutunBasligi = (el: Element): string | null => {
+    const k = alanKutusu(el);
+    let d: Element | null = el;
+    for (let seviye = 0; seviye < 6 && d && !d.matches('body,html'); seviye++) {
+      let o: Element | null = d.previousElementSibling;
+      for (let sayi = 0; o && sayi < 3; sayi++, o = o.previousElementSibling) {
+        if (o.matches(KONTROLLER) || o.querySelector(KONTROLLER)) break;
+        if (!gorunurMu(o)) continue;
+        const ogeler = metinOgeleri(o);
+        if (new Set(ogeler.map((x) => Math.round(x.r.left / 4))).size < 2) continue;
+        let en: { metin: string; puan: number } | null = null;
+        for (const x of ogeler) {
+          const dikey = k.top - x.r.bottom;
+          if (dikey < -4 || dikey > 56) continue;
+          const bosluk_ = Math.max(0, Math.max(x.r.left, k.left) - Math.min(x.r.right, k.right));
+          if (bosluk_ > 16) continue;
+          const puan = bosluk_ * 10 + Math.abs((x.r.left + x.r.right) / 2 - (k.left + k.right) / 2) * 0.1 + dikey * 0.01;
+          if (!en || puan < en.puan) en = { metin: x.metin, puan };
+        }
+        if (en) return en.metin;
+      }
+      d = d.parentElement;
+    }
+    return null;
+  };
+  /** Alan bir "tablo satırında" mı: aynı yatay bantta (üst üste binen) yanında başka görünür alan var. */
+  const satirdaBaskaAlanVar = (el: Element): boolean => {
+    const k = alanKutusu(el);
+    return [...document.querySelectorAll('input:not([type="hidden"]),select,textarea')].some((x) => {
+      if (x === el || (x instanceof HTMLInputElement && ['submit', 'button', 'reset', 'image'].includes(x.type)) || !gorunurMu(x)) return false;
+      const r = x.getBoundingClientRect();
+      return Math.min(r.bottom, k.bottom) - Math.max(r.top, k.top) >= 0.5 * Math.min(r.height, k.height) && (r.right <= k.left + 2 || r.left >= k.right - 2);
+    });
+  };
+  let tumMetinler: MetinOgesi[] | null = null;
+  /** Etiketsiz alan: alanın hemen üstündeki ya da solundaki (aynı satır) görünen en yakın kısa metin. */
+  const gorselEtiket = (el: Element): string | null => {
+    tumMetinler ??= metinOgeleri(document.body, 1500);
+    const k = alanKutusu(el);
+    let en: { metin: string; puan: number } | null = null;
+    for (const x of tumMetinler) {
+      const r = x.r;
+      if (r.right > k.left + 4 && r.left < k.right && r.bottom > k.top && r.top < k.bottom) continue; // alanın içindeki metin (ör. bileşenin kendi yazısı)
+      const ustte = k.top - r.bottom >= -4 && k.top - r.bottom <= 48 && r.left <= k.right && r.right >= k.left - 24 && Math.abs(r.left - k.left) <= Math.max(48, k.width);
+      const solda = Math.min(r.bottom, k.bottom) - Math.max(r.top, k.top) >= 0.4 * Math.min(r.height, k.height) && k.left - r.right >= -4 && k.left - r.right <= 200;
+      if (!ustte && !solda) continue;
+      const puan = ustte ? (k.top - r.bottom) + Math.abs(r.left - k.left) * 0.3 : (k.left - r.right) * 0.6;
+      if (!en || puan < en.puan) en = { metin: x.metin, puan };
+    }
+    return en?.metin ?? null;
+  };
+  const kar = (m: string): string => m.replace(/\s+/g, '').toLocaleLowerCase('tr');
+
+
+  /** "Seçiniz" türü boş seçenek metni. */
+  const BOS_SECENEK = /^\s*(-+\s*)?(lütfen\s+)?(seç(iniz|in|im)?|please select|select|choose)\b|^\s*[-–—.…]+\s*$/iu;
+  /** Alanın sayfada HAZIR gelen değeri (dolu mu) — değer yalnız degerOku iken metin olarak da döner. */
+  const hazirBilgisi = (el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, tur: string): { hazir: boolean; mevcut: string | null } => {
+    const kes = (m: string): string | null => (degerOku && m ? m.slice(0, 80) : null);
+    if (tur === 'password' || tur === 'file') return { hazir: false, mevcut: null };
+    if (el instanceof HTMLSelectElement) {
+      const sec = el.selectedOptions[0];
+      if (!sec) return { hazir: false, mevcut: null };
+      const metin = bosluk(sec.label || sec.text);
+      const bos = el.multiple ? false : sec.value === '' || BOS_SECENEK.test(metin);
+      return { hazir: !bos, mevcut: bos ? null : kes(el.multiple ? [...el.selectedOptions].map((o) => bosluk(o.label || o.text)).join(', ') : metin) };
+    }
+    if (tur === 'checkbox') return { hazir: (el as HTMLInputElement).checked, mevcut: (el as HTMLInputElement).checked ? kes('İşaretli') : null };
+    const v = bosluk(el.value);
+    return { hazir: v !== '', mevcut: kes(v) };
+  };
+
   type EtiketBilgisi = { metin: string | null; kaynak: HamAlan['etiketKaynagi']; yildiz: boolean };
   const etiketBul = (el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, secimliMi: boolean): EtiketBilgisi => {
     const etiketler = el.labels ? [...el.labels] : [];
@@ -133,7 +245,10 @@ export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
     }
     const aria = idMetni(el.getAttribute('aria-labelledby')) || bosluk(el.getAttribute('aria-label'));
     if (aria) return { metin: etiketTemizle(aria), kaynak: 'aria', yildiz: aria.includes('*') };
-    const yakin = secimliMi ? sonrakiMetin(el) ?? yakinMetin(el) : yakinMetin(el);
+    let yakin = secimliMi ? sonrakiMetin(el) ?? yakinMetin(el) : yakinMetin(el);
+    // Yan yana sütun başlıkları tek metin olarak gelmişse (ya da hiç gelmemişse) alanın kendi sütununun başlığı alınır.
+    const sutun = secimliMi && yakin ? null : sutunBasligi(el);
+    if (sutun && (!yakin || (kar(yakin) !== kar(sutun) && (kar(yakin).includes(kar(sutun)) || satirdaBaskaAlanVar(el))))) yakin = sutun;
     if (yakin) return { metin: etiketTemizle(yakin), kaynak: 'yakin', yildiz: yakin.includes('*') };
     const yer = bosluk(el.getAttribute('placeholder')) || bosluk(el.getAttribute('title'));
     if (yer) return { metin: etiketTemizle(yer), kaynak: 'yer-tutucu', yildiz: false };
@@ -145,6 +260,8 @@ export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
       const y = yakinMetin(ozel.kap);
       if (y) return { metin: etiketTemizle(y), kaynak: 'yakin', yildiz: y.includes('*') };
     }
+    const gorsel = gorselEtiket(el);
+    if (gorsel) return { metin: gorsel, kaynak: 'yakin', yildiz: false };
     return { metin: null, kaynak: null, yildiz: false };
   };
 
@@ -283,7 +400,11 @@ export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
         kimlik: null, ad: gercekAd, secici, kirilganlik: gercekAd ? 'dusuk' : 'yuksek',
         adaySeciciler: gercekAd ? [secici, `input[name="${tirnak(gercekAd)}"]`, `[name="${tirnak(gercekAd)}"]`] : [secici],
         zorunlu: grup.some((r) => r.required) || rg?.getAttribute('aria-required') === 'true', devreDisi: grup.every((r) => r.disabled),
-        saltOkunur: false, coklu: false, radyolar, bolum: bolumBul(el, grupFieldset)
+        saltOkunur: false, coklu: false, radyolar, bolum: bolumBul(el, grupFieldset),
+        ...(() => {
+          const i = grup.findIndex((r) => r.checked);
+          return { hazir: i >= 0, mevcut: i >= 0 && degerOku ? (radyolar[i].metin ?? radyolar[i].deger).slice(0, 80) : null };
+        })()
       });
       return;
     }
@@ -302,7 +423,7 @@ export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
       anahtar: anahtarVer(temelAnahtar), tur, etiket: e.metin, etiketKaynagi: e.kaynak, kimlik: id, ad, secici, kirilganlik, adaySeciciler: adaylar,
       zorunlu: zorunluOzellik || e.yildiz, devreDisi,
       saltOkunur: (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.readOnly : false) || el.getAttribute('aria-readonly') === 'true',
-      coklu: el instanceof HTMLSelectElement ? el.multiple : false, grup, bolum: bolumBul(el)
+      coklu: el instanceof HTMLSelectElement ? el.multiple : false, grup, bolum: bolumBul(el), ...hazirBilgisi(el, tur)
     };
     if (el instanceof HTMLSelectElement) {
       alan.secenekler = [...el.options].slice(0, 300).map((o) => ({ deger: o.value, metin: bosluk(o.label || o.text) }));
@@ -342,8 +463,8 @@ export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
     let alt: SayfaEnvanteri | null = null;
     try {
       // Başka kökenli çerçevede contentDocument null'dır (ya da erişim hata verir).
-      const w = f.contentWindow as (Window & { __nobetciSayfadakiAlanlar?: (d: number) => SayfaEnvanteri }) | null;
-      if (f.contentDocument && w && derinlik + 1 <= 2 && typeof w.__nobetciSayfadakiAlanlar === 'function') alt = w.__nobetciSayfadakiAlanlar(derinlik + 1);
+      const w = f.contentWindow as (Window & { __nobetciSayfadakiAlanlar?: (d: number, o?: boolean) => SayfaEnvanteri }) | null;
+      if (f.contentDocument && w && derinlik + 1 <= 2 && typeof w.__nobetciSayfadakiAlanlar === 'function') alt = w.__nobetciSayfadakiAlanlar(derinlik + 1, degerOku);
     } catch { alt = null; }
     if (!alt) { okunamayanCerceveSayisi++; continue; }
     const cs = cerceveSecici(f);

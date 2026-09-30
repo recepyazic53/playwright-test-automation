@@ -182,7 +182,7 @@ export async function hizliTestiYurut(
     /** Sayfanın okuması (değer yok). goruntu: JPEG ekran görüntüsü (yalnız bellekte; sunucuya gider). */
     async function anlikOku(page: Page, goruntu: boolean): Promise<HizliAnlik> {
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
-      const envanter = await envanterOku(page).catch(() => ({ alanlar: [] as HamAlan[], baslik: '' }));
+      const envanter = await envanterOku(page, { degerOku: true }).catch(() => ({ alanlar: [] as HamAlan[], baslik: '' }));
       const eylem = await eylemAdaylariniCikar(page);
       const metinler = (await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[];
       const dugmeler: HizliDugme[] = eylem.gonderim.map((a) => ({

@@ -272,8 +272,9 @@ export function adayMesajlari(eylem, cumleMesajlari = []) {
 
 /**
  * Zorunlu ve boş alanlar (veri durağı akışı DURDURUR). Onay kutusu zorunluysa "işaretli" beklenir; devre dışı / salt okunur alan sayılmaz.
- * @param {Array<{ anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean }>} alanlar @param {Record<string, unknown>} degerler
+ * Sayfada zaten HAZIR (dolu) gelen alan, kullanıcı değer vermese de eksik sayılmaz: sayfanın kendi değeri kullanılır.
+ * @param {Array<{ anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean; hazir?: boolean }>} alanlar @param {Record<string, unknown>} degerler
  */
 export function eksikAlanlar(alanlar, degerler) {
-  return alanlar.filter((a) => a.zorunlu && !a.devreDisi && !a.saltOkunur && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
+  return alanlar.filter((a) => a.zorunlu && !a.hazir && !a.devreDisi && !a.saltOkunur && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
 }
