@@ -4558,3 +4558,8 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 
 /* Alan başlığı şeridi: metinler kesilmez, sığmazsa alt satıra sarar. */
 .model-alani > .alan-ust .mutlaka-gorunmeli, .model-alani > .alan-ust .bilerek-bos { white-space: normal; min-width: 0; }
+
+/* Üst menüye Raporlar eklendi (7 öğe): dar genişliklerde menü öğeleri biraz daha sıkı. */
+@media (max-width: 1500px) { .ust-nav a { padding-left: 8px; padding-right: 8px; } }
+@media (max-width: 1240px) { .ust-nav a { padding-left: 6px; padding-right: 6px; font-size: 13px; } }
+@media (max-width: 1500px) { .hesap-menusu .hesap-adi { display: none; } }

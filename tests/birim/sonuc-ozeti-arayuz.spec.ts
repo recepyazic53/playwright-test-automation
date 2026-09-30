@@ -88,7 +88,7 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(page).toHaveURL(/#\/sonuclar\/ozet$/);
   await expect(page.locator('.farkindalik-karti [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole('tab', { name: 'Özet' })).toHaveAttribute('aria-selected', 'true');
-  expect(await page.locator('.sonuc-sekmeleri [role="tab"]').allTextContents()).toEqual(['Özet', 'Ekranlar', 'Servisler', 'Uçtan uca akışlar', 'Raporlar']);
+  expect(await page.locator('.sonuc-sekmeleri [role="tab"]').allTextContents()).toEqual(['Özet', 'Ekranlar', 'Servisler', 'Uçtan uca akışlar']);
   await expect(page.locator('.sayfa-basligi .meta')).toContainText('15.09.2026 – 28.09.2026 · önceki 01.09.2026 – 14.09.2026');
   // Özet kutuları: dönem başarı oranları ve sayılar (genel raporla aynı hesap).
   const kutular = page.locator('.ozet-kutulari a.ozet-kutusu');

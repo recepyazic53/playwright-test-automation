@@ -54,7 +54,7 @@ test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/sonuclar');
     const menu = page.getByRole('navigation', { name: 'Ana menü' });
-    await expect(menu.getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Test verisi', 'Planlı koşular', 'Ayarlar']);
+    await expect(menu.getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Test verisi', 'Planlı koşular', 'Raporlar', 'Ayarlar']);
 
     await menu.getByRole('link', { name: 'Test verisi' }).click();
     await expect(page).toHaveURL(/#\/veri$/);

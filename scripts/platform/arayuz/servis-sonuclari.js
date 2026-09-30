@@ -170,8 +170,8 @@ function sayfaBasligi(veri, proje, secenek, ad) {
         son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} başarısız`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
-      // Dönem raporu (PDF): servis sayfasında kapsam ve seçim dolu gelir.
-      secenek.akisId ? null : pdfRaporDugmesi(proje, secenek.servisId ? { kapsam: 'servis', id: secenek.servisId } : { kapsam: 'servis' }),
+      // Dönem raporu (PDF): yalnız tek servisin sayfasında (kapsam dolu gelir); Genel görünümde yok (Raporlar üst menüde).
+      secenek.akisId || !secenek.servisId ? null : pdfRaporDugmesi(proje, { kapsam: 'servis', id: secenek.servisId }),
       secenek.servisId ? h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(secenek.servisId)}/raporlar` }, ikon('liste'), 'Servisin çalıştırma listesi') : null,
       h('a', {
         class: 'dugme birincil', href: secenek.servisId ? `#/servisler/s/${q(secenek.servisId)}/senaryolar` : '#/servisler',
