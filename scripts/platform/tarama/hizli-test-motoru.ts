@@ -221,6 +221,8 @@ export async function hizliTestiYurut(
           return null;
         }
         await l.fill(String(deger), { timeout: 10_000 });
+        // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
+        await l.press('Tab', { timeout: 3_000 }).catch(() => l.blur({ timeout: 2_000 }).catch(() => undefined));
         return null;
       } catch (hata) {
         return `Alan doldurulamadı (${adreslerGizli(ilkSatir(hata))}).`;

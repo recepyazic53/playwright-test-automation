@@ -526,6 +526,8 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       } else {
         await l.fill(metin);
       }
+      // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
+      await l.press('Tab', { timeout: 3_000 }).catch(() => l.blur({ timeout: 2_000 }).catch(() => undefined));
     }
   }
 }
