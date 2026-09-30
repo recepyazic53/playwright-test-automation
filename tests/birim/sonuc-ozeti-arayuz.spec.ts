@@ -88,7 +88,7 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(page).toHaveURL(/#\/sonuclar\/ozet$/);
   await expect(page.locator('.farkindalik-karti [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole('tab', { name: 'Özet' })).toHaveAttribute('aria-selected', 'true');
-  expect(await page.locator('.sonuc-sekmeleri [role="tab"]').allTextContents()).toEqual(['Özet', 'Ekranlar', 'Servisler', 'Uçtan uca akışlar', 'Raporlar']);
+  expect(await page.locator('.sonuc-sekmeleri [role="tab"]').allTextContents()).toEqual(['Özet', 'Ekranlar', 'Servisler', 'Uçtan uca akışlar']);
   await expect(page.locator('.sayfa-basligi .meta')).toContainText('15.09.2026 – 28.09.2026 · önceki 01.09.2026 – 14.09.2026');
   // Özet kutuları: dönem başarı oranları ve sayılar (genel raporla aynı hesap).
   const kutular = page.locator('.ozet-kutulari a.ozet-kutusu');
@@ -108,6 +108,20 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt Servisi › POST /kayit');
   // Özet sayfasında rapor düğmesi yok: rapor Raporlar sekmesinden alınır.
   await expect(page.getByRole('button', { name: 'Rapor al (PDF)' })).toHaveCount(0);
+  // Tarih aralığı: hızlı seçimler açılır takvim panelindedir (üstte düğme); "Son 7 gün" seçilince Bitiş boş kalmaz.
+  const aralik = page.locator('.sonuc-araligi');
+  await expect(aralik.getByRole('button', { name: 'Son 7 gün' })).toBeHidden();
+  await aralik.locator('.tarih-tetik').click();
+  const panel = aralik.getByRole('dialog', { name: 'Tarih aralığı seç' });
+  await expect(panel.getByRole('button', { name: 'Son 7 gün' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Son 7 gün' }).click();
+  await expect(panel).toBeHidden();
+  await expect(aralik.locator('.tarih-tetik')).toContainText('Son 7 gün');
+  await aralik.locator('.tarih-tetik').click();
+  await expect(panel.getByLabel('Başlangıç')).not.toHaveValue('');
+  await expect(panel.getByLabel('Bitiş')).not.toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
   // Kutuya tıklayınca ilgili sekme.
   await kutular.nth(1).click();
   await expect(page).toHaveURL(/#\/sonuclar\/servisler$/);

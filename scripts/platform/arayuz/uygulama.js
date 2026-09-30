@@ -871,6 +871,8 @@ function anaDuzen() {
   // Günlük iş nesneleri (Ayarlar'dan taşındı): Test verisi ve Planlı koşular.
   const ustSayfaBaglantisi = (s) => h('a', { href: `#/${s.ad}` }, ikon(s.ikon), s.menu);
   const [navVeri, navPlanli] = UST_SAYFALAR.map(ustSayfaBaglantisi);
+  // Raporlar (kaydedilmiş PDF raporları): Planlı koşular'ın yanında üst menü kalemi (sayfa: #/sonuclar/raporlar).
+  const navRaporlar = h('a', { href: '#/sonuclar/raporlar' }, ikon('dosya'), 'Raporlar');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const kilitle = h('button', { type: 'button', class: 'kilitle-dugmesi', 'aria-label': 'Kilitle' }, ikon('kilit'), h('span', { class: 'dugme-metni' }, 'Kilitle'));
   const kilitleVeDon = async () => {
@@ -902,7 +904,7 @@ function anaDuzen() {
   const ust = h('header', { class: `ust-cubuk${basit ? ' basit-mod' : ''}` },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar]),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar]),
     basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
     hizliAramaDugmesi(aramaBaglami), sunucu, basit ? modAnahtari('basit', (hedef) => moduDegistir(hedef)) : null, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
@@ -923,7 +925,7 @@ function anaDuzen() {
     }
     // Sayfa değişince önceki sayfanın açık pencereleri (ör. geri düğmesiyle çıkılan rapor penceresi) kapanır.
     for (const d of document.querySelectorAll('dialog[open]')) d.close();
-    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar, navTestlerim, navBasitSonuclar]) n?.removeAttribute('aria-current');
+    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar, navTestlerim, navBasitSonuclar]) n?.removeAttribute('aria-current');
     if (gelismisNotu) gelismisNotu.hidden = !gelismisBolumuMu(bolum);
     if (basit && bolum === 'sonuclar') navBasitSonuclar?.setAttribute('aria-current', 'page');
     const altBolum = bolum === 'servisler' ? 'Servisler' : bolum === 'akislar' ? 'Uçtan uca' : '';
@@ -975,9 +977,9 @@ function anaDuzen() {
       ayarlarEkrani(main, AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
     } else {
       // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
-      navSonuclar.setAttribute('aria-current', 'page');
+      (bolum === 'sonuclar' && alt === 'raporlar' ? navRaporlar : navSonuclar).setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
-      sayfaBasligi('Sonuçlar');
+      sayfaBasligi(bolum === 'sonuclar' && alt === 'raporlar' ? 'Raporlar' : 'Sonuçlar');
       sonuclarEkrani(main, bolum === 'sonuclar' && alt ? [alt, ...kalan] : [], { durum });
     }
   };

@@ -70,79 +70,46 @@ type Veri = {
 };
 const veri = async (): Promise<Veri> => (await nobetciApi(nobetci, `/platform/rapor-verileri?projeId=${f.projeId}`)) as unknown as Veri;
 
-test('Ayarlar > Raporlar: ekip ekle / yeniden adlandır / sil, kritik anahtarı, ekip, süre eşiği ve metot eşikleri kaydedilir ve rapora yansır', async () => {
+test('Ayarlar > Raporlar: ekip ve ekran listesi yok; servis kritik / süre eşiği / metot eşikleri ve akış kritik kaydedilir ve rapora yansır', async () => {
   test.setTimeout(120_000);
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/ayarlar/raporlar');
   await expect(page.getByRole('heading', { name: 'Raporlar', level: 2 })).toBeVisible();
   await expect(page.locator('nav a[href="#/ayarlar/raporlar"]').first()).toBeVisible();
-  await expect(page.getByText('Henüz ekip yok.')).toBeVisible();
+  // Ekipler ve "Ekranlar ve genel senaryolar" bölümleri kaldırıldı; satırlarda ekip seçimi yok.
+  await expect(page.getByRole('form', { name: 'Ekip ekle' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Ekipler' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Ekranlar ve genel senaryolar' })).toHaveCount(0);
+  await expect(page.locator(`li.rapor-ogesi[data-oge="ekran:${f.ekranId}"]`)).toHaveCount(0);
+  await expect(page.locator('select.ekip-secimi')).toHaveCount(0);
 
-  // Ekipler.
-  const ekipFormu = page.getByRole('form', { name: 'Ekip ekle' });
-  await ekipFormu.getByRole('button', { name: 'Ekip ekle' }).click();
-  await expect(ekipFormu.getByText('Ekip adı boş olamaz.')).toBeVisible();
-  await ekipFormu.getByLabel('Ekip adı').fill('Kayıt ekibi');
-  await ekipFormu.getByRole('button', { name: 'Ekip ekle' }).click();
-  await expect(page.locator('.kayit-listesi li', { hasText: 'Kayıt ekibi' })).toBeVisible();
-  await page.getByRole('form', { name: 'Ekip ekle' }).getByLabel('Ekip adı').fill('Geçici ekip');
-  await page.getByRole('form', { name: 'Ekip ekle' }).getByRole('button', { name: 'Ekip ekle' }).click();
-  await page.getByRole('button', { name: 'Geçici ekip: düzenle' }).click();
-  const adlandir = page.locator('form.form-paneli', { hasText: 'Ekibi yeniden adlandır' });
-  await adlandir.getByLabel('Ekip adı').fill('Altyapı ekibi');
-  await adlandir.getByRole('button', { name: 'Kaydet' }).click();
-  await expect(page.locator('.kayit-listesi li', { hasText: 'Altyapı ekibi' })).toBeVisible();
-  expect((await veri()).ekipler.map((e) => e.ad)).toEqual(['Altyapı ekibi', 'Kayıt ekibi']);
-
-  // Başvuru: kritik anahtarı, ekip, test süresi eşiği.
-  const basvuru = page.locator(`li.rapor-ogesi[data-oge="ekran:${f.ekranId}"]`);
-  await basvuru.getByRole('switch', { name: 'Başvuru: kritik' }).check();
-  await expect(basvuru.getByRole('status')).toHaveText('Kaydedildi');
-  await basvuru.getByLabel('Başvuru: ekip').selectOption({ label: 'Kayıt ekibi' });
-  await expect(basvuru.getByRole('status')).toHaveText('Kaydedildi');
-  await basvuru.getByLabel('Başvuru: süre eşiği (ms)').fill('1200');
-  await basvuru.getByLabel('Başvuru: süre eşiği (ms)').blur();
-  await expect(basvuru.getByRole('status')).toHaveText('Kaydedildi');
-  // Geçersiz eşik kaydedilmez.
-  await basvuru.getByLabel('Başvuru: süre eşiği (ms)').fill('0');
-  await basvuru.getByLabel('Başvuru: süre eşiği (ms)').blur();
-  await expect(basvuru.getByLabel('Başvuru: süre eşiği (ms)')).toHaveAttribute('aria-invalid', 'true');
-
-  // Kayıt Servisi: metot eşiği; Kayıt akışı: kritik.
+  // Kayıt Servisi: süre eşiği (geçersiz değer kaydedilmez) ve metot eşiği; Kayıt akışı: kritik.
   const servis = page.locator(`li.rapor-ogesi[data-oge="servis:${f.servisId}"]`);
+  await servis.getByLabel('Kayıt Servisi: süre eşiği (ms)').fill('900');
+  await servis.getByLabel('Kayıt Servisi: süre eşiği (ms)').blur();
+  await expect(servis.getByRole('status').first()).toHaveText('Kaydedildi');
+  await servis.getByLabel('Kayıt Servisi: süre eşiği (ms)').fill('0');
+  await servis.getByLabel('Kayıt Servisi: süre eşiği (ms)').blur();
+  await expect(servis.getByLabel('Kayıt Servisi: süre eşiği (ms)')).toHaveAttribute('aria-invalid', 'true');
+  await servis.getByLabel('Kayıt Servisi: süre eşiği (ms)').fill('900');
+  await servis.getByLabel('Kayıt Servisi: süre eşiği (ms)').blur();
   await servis.locator('summary', { hasText: 'Metot eşikleri (0 / 2)' }).click();
   await servis.getByLabel('Kayıt Servisi › POST /kayit: süre eşiği (ms)').fill('400');
   await servis.getByLabel('Kayıt Servisi › POST /kayit: süre eşiği (ms)').blur();
-  await expect(servis.getByRole('status')).toHaveText('Kaydedildi');
+  await expect(servis.getByRole('status').first()).toHaveText('Kaydedildi');
   const akis = page.locator(`li.rapor-ogesi[data-oge="akis:${f.akisId}"]`);
-  await expect(akis.getByLabel('Kayıt akışı: ekip')).toHaveCount(0);
+  await expect(akis.getByLabel('Kayıt akışı: süre eşiği (ms)')).toHaveCount(0);
   await akis.getByRole('switch', { name: 'Kayıt akışı: kritik' }).check();
   await expect(akis.getByRole('status')).toHaveText('Kaydedildi');
 
   const v = await veri();
-  const kayitEkibi = v.ekipler.find((e) => e.ad === 'Kayıt ekibi')!.id;
-  expect(v.ekranlar.find((e) => e.id === f.ekranId)).toMatchObject({ kritik: true, ekipId: kayitEkibi, sureEsigiMs: 1200 });
   expect(v.servisler.find((s) => s.id === f.servisId)?.metotEsikleri).toEqual({ 'POST /kayit': 400 });
   expect(v.akislar.find((a) => a.id === f.akisId)?.kritik).toBe(true);
 
-  // Rapora yansır: kritik kartı, ekip, eşik aşımları.
+  // Rapora yansır: kritik kartı.
   const o = await nobetciApi(nobetci, '/platform/rapor/onizle', genelGirdi(f, { donem: DONEM, aksiyonSayisi: 20 }));
   expect(o.basarili).toBe(true);
-  const html = String(o.html);
-  expect(html).toContain('>Kritik akış</div>');
-  expect(html).toContain('Kayıt ekibi');
-  expect(html).toContain('Süre eşiği aşımları');
-
-  // Ekibi silmek atandığı öğeyi sahipsiz bırakır.
-  await page.reload();
-  await expect(page.locator('main .iskelet')).toHaveCount(0, { timeout: 15_000 });
-  // Onaylı düğme: ilk tıklama "Silmeyi onayla"ya döner, ikincisi siler.
-  const sil = page.getByRole('button', { name: 'Kayıt ekibi: sil' });
-  await sil.click();
-  await expect(sil).toContainText('Silmeyi onayla');
-  await sil.click();
-  await expect(page.locator('.kayit-listesi li', { hasText: 'Kayıt ekibi' })).toHaveCount(0);
-  expect((await veri()).ekranlar.find((e) => e.id === f.ekranId)).toMatchObject({ kritik: true, ekipId: null });
+  expect(String(o.html)).toContain('>Kritik akış</div>');
   expect(hatalar).toEqual([]);
   await kapat();
 });

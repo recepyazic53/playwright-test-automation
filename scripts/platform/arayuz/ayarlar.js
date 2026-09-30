@@ -1384,23 +1384,16 @@ async function raporVerileriBolumu(govde, baglam, yenile) {
     if (!tamam) bildir('Süre eşiği 1–3.600.000 ms arasında tam sayı olmalı (boş = eşik yok).', 'hata');
     return tamam;
   };
-  const ekipSecimi = (secili, etiket) => h('select', { 'aria-label': etiket, class: 'ekip-secimi' },
-    h('option', { value: '' }, 'Ekip yok (sınıfın varsayılanı)'),
-    v.ekipler.map((e) => h('option', { value: e.id, selected: e.id === secili }, e.ad)));
-
-  /** Tek öğe satırı: kritik anahtarı, (ekran / servis) ekip ve süre eşiği, (servis) metot eşikleri. */
+  /** Tek öğe satırı: kritik anahtarı, (servis) süre eşiği ve metot eşikleri. */
   const ogeSatiri = (tur, x, ek = {}) => {
     const durumAlani = h('span', { class: 'soluk kucuk rapor-ogesi-durumu', role: 'status' });
     const kritik = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', id: yeniKimlik('kritik'), checked: x.kritik, 'aria-label': `${x.ad}: kritik` });
     kritik.addEventListener('change', async () => { if (!(await kaydet(tur, x.id, { kritik: kritik.checked }, durumAlani))) kritik.checked = !kritik.checked; });
     const parcalar = [h('label', { class: 'onay-satiri rapor-kritik', for: kritik.id }, kritik, h('span', {}, 'Kritik'))];
     if (tur !== 'akis') {
-      const ekip = ekipSecimi(x.ekipId, `${x.ad}: ekip`);
-      ekip.addEventListener('change', () => kaydet(tur, x.id, { ekipId: ekip.value || null }, durumAlani));
       const esik = esikGirdisi(x.sureEsigiMs, `${x.ad}: süre eşiği (ms)`);
       esik.addEventListener('change', () => { if (esikGecerli(esik)) kaydet(tur, x.id, { sureEsigiMs: esikDegeri(esik) }, durumAlani); });
-      parcalar.push(h('label', { class: 'rapor-alan' }, h('span', { class: 'soluk kucuk' }, 'Ekip'), ekip),
-        h('label', { class: 'rapor-alan' }, h('span', { class: 'soluk kucuk' }, tur === 'ekran' ? 'Test süresi eşiği (ms)' : 'Çağrı süresi eşiği (ms)'), esik));
+      parcalar.push(h('label', { class: 'rapor-alan' }, h('span', { class: 'soluk kucuk' }, tur === 'ekran' ? 'Test süresi eşiği (ms)' : 'Çağrı süresi eşiği (ms)'), esik));
     }
     let metotlar = null;
     if (tur === 'servis' && x.metotlar.length) {
@@ -1422,54 +1415,13 @@ async function raporVerileriBolumu(govde, baglam, yenile) {
       h('div', { class: 'rapor-ogesi-alanlari' }, parcalar), metotlar);
   };
 
-  // Ekipler
-  const ekipAdi = h('input', { type: 'text', maxlength: '80', autocomplete: 'off', placeholder: 'Ör. ekip adı' });
-  const ekipEkle = h('button', { type: 'submit', class: 'birincil' }, ikon('arti'), 'Ekip ekle');
-  const ekipMesaj = mesajKutusu();
-  const ekipFormu = h('form', { class: 'satir-formu ekip-formu', novalidate: true, 'aria-label': 'Ekip ekle' }, alan('Ekip adı', ekipAdi), ekipEkle);
-  ekipFormu.addEventListener('submit', async (o) => {
-    o.preventDefault();
-    alanHatasi(ekipAdi, '');
-    if (!ekipAdi.value.trim()) { alanHatasi(ekipAdi, 'Ekip adı boş olamaz.'); ekipAdi.focus(); return; }
-    try {
-      await mesgulIken(ekipEkle, 'Ekleniyor…', () => api('/platform/rapor-verileri/ekip/kaydet', { govde: { projeId: proje.id, ad: ekipAdi.value } }));
-      bildir('Ekip eklendi.');
-      yenile();
-    } catch (hata) { ekipMesaj.goster(hata.message); }
-  });
-  const ekipFormAlani = h('div', {});
-  const ekipAdlandir = (e) => {
-    const ad = h('input', { type: 'text', maxlength: '80', autocomplete: 'off', value: e.ad });
-    const mesaj = mesajKutusu();
-    const kaydetDugmesi = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-    const form = formPaneli(`Ekibi yeniden adlandır: ${e.ad}`, mesaj.kutu, alan('Ekip adı', ad, { zorunlu: true }),
-      h('div', { class: 'dugmeler' }, kaydetDugmesi, h('button', { type: 'button', onclick: () => ekipFormAlani.replaceChildren() }, 'Vazgeç')));
-    form.addEventListener('submit', async (o) => {
-      o.preventDefault();
-      alanHatasi(ad, '');
-      if (!ad.value.trim()) { alanHatasi(ad, 'Ekip adı boş olamaz.'); ad.focus(); return; }
-      try {
-        await mesgulIken(kaydetDugmesi, 'Kaydediliyor…', () => api('/platform/rapor-verileri/ekip/kaydet', { govde: { projeId: proje.id, id: e.id, ad: ad.value } }));
-        bildir('Ekip yeniden adlandırıldı.');
-        yenile();
-      } catch (hata) { mesaj.goster(hata.message); }
-    });
-    formuGoster(ekipFormAlani, form);
-  };
-  const ekipSatirlari = v.ekipler.map((e) => kayitSatiri(e.ad, null, [
-    duzenleDugmesi(e.ad, () => ekipAdlandir(e)),
-    silDugmesi(e.ad, async () => { await api('/platform/rapor-verileri/ekip/sil', { govde: { projeId: proje.id, id: e.id } }); bildir('Ekip silindi; atandığı öğeler sahipsiz kaldı.'); yenile(); })
-  ], 'kullanici'));
-
   const liste = (baslik, tur, ogeler, bos, rozetFn = () => null) => [
     bolumBasligi(baslik, ogeler.length),
     ogeler.length ? h('ul', { class: 'rapor-ogeleri', 'aria-label': baslik }, ogeler.map((x) => ogeSatiri(tur, x, { rozet: rozetFn(x) }))) : h('p', { class: 'soluk' }, bos)
   ];
   yerlestir(govde,
     h('div', { class: 'not-kutusu bilgi kucuk', role: 'note' },
-      'Bu kararlar yalnız PDF raporlarını etkiler ve hepsi isteğe bağlıdır. Kritik işaretli öğe öncelik puanını artırır; son koşusunda kalırsa raporun durum rozeti Kritik olur. Ekip, aksiyonların "Sahip önerisi"dir (yoksa sınıfın varsayılan ekibi). Süre eşiği aşılırsa (p95 > eşik) raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür. Uygulama sürümü: Proje ve ortamlar > ortam > "Uygulama sürümü" ya da koşu başlatılırken.'),
-    bolumBasligi('Ekipler', v.ekipler.length), ekipMesaj.kutu, ekipFormu, ekipFormAlani, kayitListesi(ekipSatirlari, 'Henüz ekip yok.', 'kullanici'),
-    ...liste('Ekranlar ve genel senaryolar', 'ekran', v.ekranlar, 'Projede ekran yok.', (x) => (x.ortakAkis ? 'Genel senaryo' : x.devreDisi ? 'Devre dışı' : null)),
+      'Bu kararlar yalnız PDF raporlarını etkiler ve hepsi isteğe bağlıdır. Kritik işaretli öğe öncelik puanını artırır; son koşusunda kalırsa raporun durum rozeti Kritik olur. Süre eşiği aşılırsa (p95 > eşik) raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür. Uygulama sürümü: Proje ve ortamlar > ortam > "Uygulama sürümü" ya da koşu başlatılırken.'),
     ...liste('Servisler', 'servis', v.servisler, 'Projede servis yok.', (x) => String(x.tur || '').toUpperCase() || null),
     ...liste('Servis akışları ve uçtan uca akışlar', 'akis', v.akislar, 'Projede akış yok.', (x) => x.tur));
 }

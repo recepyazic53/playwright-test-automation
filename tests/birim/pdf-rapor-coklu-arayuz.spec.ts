@@ -89,7 +89,7 @@ test('uç: çoklu kapsamlarda application/pdf ve güvenli dosya adı; eksik seç
 test('diyalog: çoklu seçim listeleri, "Tüm …", en az seçim uyarısı, önizleme ve PDF indir (Raporlar\'a kaydedilir)', async () => {
   test.setTimeout(120_000);
   const { page, hatalar, kapat } = await sayfaAc();
-  await git(page, '#/sonuclar');
+  await git(page, '#/sonuclar/raporlar');
   await page.getByRole('button', { name: 'Rapor al (PDF)' }).first().click();
   const d = page.getByRole('dialog', { name: 'Rapor al (PDF)' });
   await expect(d.getByLabel('Ekran', { exact: true })).toBeVisible();

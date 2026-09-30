@@ -111,7 +111,7 @@ test('uç: POST /platform/rapor/pdf → application/pdf, %PDF, sayfa > 0, güven
 test('Sonuçlar > Raporlar: boş durum ve "Rapor al" düğmesi', async () => {
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/sonuclar/raporlar');
-  await expect(page.getByRole('tab', { name: 'Raporlar' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link', { name: 'Raporlar' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Henüz kaydedilmiş rapor yok.')).toBeVisible();
   await expect(page.locator('.bos-durum').getByRole('button', { name: 'Rapor al (PDF)' })).toBeVisible();
   expect(hatalar).toEqual([]);
@@ -121,7 +121,7 @@ test('Sonuçlar > Raporlar: boş durum ve "Rapor al" düğmesi', async () => {
 test('Sonuçlar: "Rapor al (PDF)" → diyalog seçimleri, önizleme, PDF indir (Raporlar\'a kaydedilir)', async () => {
   test.setTimeout(120_000);
   const { page, hatalar, kapat } = await sayfaAc();
-  await git(page, '#/sonuclar');
+  await git(page, '#/sonuclar/raporlar');
   await page.getByRole('button', { name: 'Rapor al (PDF)' }).first().click();
   const d = page.getByRole('dialog', { name: 'Rapor al (PDF)' });
   await expect(d).toBeVisible();

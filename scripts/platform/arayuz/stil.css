@@ -1204,7 +1204,9 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .bolum-grubu { display: grid; gap: 10px; }
 .bolum-grubu > h4 { margin: 0; font: 600 10.5px var(--yazi-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--metin-3); display: flex; align-items: center; gap: 8px; }
 .bolum-grubu > h4::after { content: ""; flex: 1; height: 1px; background: var(--cizgi); }
-.alan-izgarasi { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 12px 14px; align-items: start; }
+.alan-izgarasi { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 12px 14px; align-items: start; container-type: inline-size; }
+/* Seçenekleri geniş olan alan (radyo grubu) iki sütuna yayılır; ızgara en az iki sütunluksa. Sığmazsa başlığıyla birlikte alt satıra geçer. */
+@container (min-width: 32rem) { .alan-izgarasi > .model-alani.genis-secenek { grid-column: span 2; } }
 .alan-izgarasi > .genis { grid-column: 1 / -1; }
 .model-alani { margin: 0; min-width: 0; }
 /* Alan başlığı: önce etiket (ve zorunlu *), altında seçenekler şeridi (koşullu çipi, Mutlaka görünmeli, Tablodan, Bilerek boş bırak).
@@ -1256,7 +1258,7 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .tarih-kipi label:has(input:checked) { box-shadow: inset 0 0 0 1px var(--vurgu); background: var(--vurgu-zemin); color: var(--metin); }
 .tarih-kipi input { flex: none; width: 13px; height: 13px; margin: 0; }
 .tarih-kipi-secimi { display: none; width: 100%; min-width: 0; }
-@container (max-width: 13.5rem) {
+@container (max-width: 17rem) {
   .tarih-girdisi > .tarih-kipi { display: none; }
   .tarih-girdisi > .tarih-kipi-secimi { display: block; }
 }
@@ -2895,11 +2897,21 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .senaryo-adi-baglantisi:hover strong, .senaryo-adi-baglantisi:focus-visible strong { color: var(--vurgu); text-decoration: underline; text-underline-offset: 3px; }
 
 /* Tarih aralığı süzgeci (ortak: Sonuçlar, Servis sonuçları, servis Raporlar sekmesi) — tarih-araligi.js */
-.tarih-araligi { display: grid; gap: 10px; min-width: 0; }
-.tarih-araligi .tarih-hizli { flex-wrap: wrap; max-width: 100%; justify-self: start; }
-.tarih-araligi .tarih-alanlari { margin-bottom: 0; }
-.tarih-araligi .tarih-alanlari .alan { min-width: 0; }
-.tarih-araligi .tarih-alanlari input { min-width: 0; max-width: 100%; }
+.tarih-araligi { position: relative; display: inline-block; max-width: 100%; min-width: 0; }
+.tarih-tetik { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 36px; padding: 0 12px; font-weight: 550; }
+.tarih-tetik-metni { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tarih-paneli { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; display: grid; grid-template-columns: max-content minmax(14rem, 1fr); gap: 16px; padding: 14px; width: max-content; max-width: min(36rem, calc(100vw - 32px));
+  border-radius: var(--yaricap-m); background: var(--panel-kati); box-shadow: var(--golge-yuksek), 0 0 0 1px var(--cizgi-2); }
+.tarih-paneli[hidden] { display: none; }
+.tarih-paneli .tarih-hizli { display: grid; gap: 2px; align-content: start; }
+.tarih-paneli .tarih-hizli button { justify-content: flex-start; text-align: left; min-height: 32px; border: 0; background: transparent; font-weight: 500; }
+.tarih-paneli .tarih-hizli button:hover:not(:disabled) { background: var(--panel-2); }
+.tarih-paneli .tarih-hizli button[aria-pressed="true"] { background: var(--vurgu-zemin); box-shadow: inset 0 0 0 1px var(--vurgu); color: var(--metin); }
+.tarih-paneli .tarih-alanlari { display: grid; gap: 10px; align-content: start; margin: 0; }
+.tarih-paneli .tarih-alanlari .alan { min-width: 0; margin: 0; }
+.tarih-paneli .tarih-alanlari input { min-width: 0; max-width: 100%; width: 100%; }
+.tarih-paneli .tarih-alanlari .kucuk-dugme { justify-self: start; }
+@media (max-width: 560px) { .tarih-paneli { grid-template-columns: minmax(0, 1fr); width: auto; left: 0; right: 0; } }
 .sonuc-araligi, .servis-sonuc-suzgeci { margin-bottom: 14px; }
 .sonuc-sekmeleri { margin-bottom: 12px; }
 
@@ -2922,7 +2934,6 @@ td.servis-sonuc-hata > span { display: -webkit-box; -webkit-box-orient: vertical
 pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .servis-sonuc-yanit-ozeti { overflow-wrap: anywhere; margin: 0; }
 @media (max-width: 760px) {
-  .tarih-araligi .tarih-alanlari .alan { flex: 1 1 100%; }
   .servis-sonuc-basliklar, .servis-sonuc-ozet { grid-template-columns: minmax(0, 1fr); }
   .servis-sonuc-kaynak, td.servis-sonuc-hata { max-width: none; }
 }
@@ -4553,3 +4564,14 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .onay-satiri.kurtarma-acik { align-items: center; min-height: 34px; }
 .onay-satiri.kurtarma-acik input { margin: 0; }
 .ayar-izgarasi.esit-boy { align-items: stretch; }
+
+/* Alan başlığı şeridi: metinler kesilmez, sığmazsa alt satıra sarar. */
+.model-alani > .alan-ust .mutlaka-gorunmeli, .model-alani > .alan-ust .bilerek-bos { white-space: normal; min-width: 0; }
+
+/* Üst menüye Raporlar eklendi (7 öğe): dar genişliklerde menü öğeleri biraz daha sıkı. */
+@media (max-width: 1500px) { .ust-nav a { padding-left: 8px; padding-right: 8px; } }
+@media (max-width: 1240px) { .ust-nav a { padding-left: 6px; padding-right: 6px; font-size: 13px; } }
+@media (max-width: 1500px) { .hesap-menusu .hesap-adi { display: none; } }
+
+/* Açık tarih paneli (açılır takvim), altındaki kartların (backdrop-filter → ayrı yığın bağlamı) üstünde kalır. */
+:has(> .tarih-araligi > .tarih-paneli:not([hidden])) { position: relative; z-index: 30; }

@@ -105,14 +105,14 @@ const kisaKategori = (k) => String(k || 'Diğer').replace(/\s*\(.*?\)\s*/g, ' ')
 const TREND_EN_COK = 60;
 
 /**
- * Genel görünümün "Özet | Ekranlar | Servisler | Uçtan uca akışlar | Raporlar" sekmeleri. Özet (#/sonuclar/ozet; sonuc-ozeti.js)
+ * Genel görünümün "Özet | Ekranlar | Servisler | Uçtan uca akışlar" sekmeleri (Raporlar üst menüde, Planlı koşular'ın yanında). Özet (#/sonuclar/ozet; sonuc-ozeti.js)
  * Genel'in varsayılanıdır: sol paneldeki "Genel" onu açar. Ekranlar: #/sonuclar/ekranlar — eski #/sonuclar adresi de aynı görünümü
  * açar (mevcut bağlantılar ve yer imleri bozulmaz).
  */
 function genelSekmeleri(secili) {
   return h('div', { class: 'segment sekme-cubugu sonuc-sekmeleri', role: 'tablist', 'aria-label': 'Genel rapor' },
     [['ozet', 'Özet', '#/sonuclar/ozet', 'izgara'], ['ekranlar', 'Ekranlar', '#/sonuclar/ekranlar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag'],
-      ['uctan', 'Uçtan uca akışlar', '#/sonuclar/uctan-uca', 'katman'], ['raporlar', 'Raporlar', '#/sonuclar/raporlar', 'dosya']].map(([a, etiket, adres, ikonAd]) => h('button', {
+      ['uctan', 'Uçtan uca akışlar', '#/sonuclar/uctan-uca', 'katman']].map(([a, etiket, adres, ikonAd]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': a === secili ? 'true' : 'false',
       onclick: () => { if (a !== secili) location.hash = adres; }
     }, ikon(ikonAd), etiket)));
@@ -176,8 +176,8 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       }
       // Genel > Raporlar: kaydedilmiş PDF raporları (pdf-rapor.js).
       // Raporlar > Kapsam matrisi (#/sonuclar/raporlar/kapsam; kapsam-matrisi.js).
-      if (tur === 'raporlar' && kimlik === 'kapsam') return import('./kapsam-matrisi.js').then((m) => m.kapsamMatrisiGorunumu(icerik, proje, genelSekmeleri('raporlar')));
-      if (tur === 'raporlar') return raporlarGorunumu(icerik, proje, genelSekmeleri('raporlar'));
+      if (tur === 'raporlar' && kimlik === 'kapsam') return import('./kapsam-matrisi.js').then((m) => m.kapsamMatrisiGorunumu(icerik, proje, null));
+      if (tur === 'raporlar') return raporlarGorunumu(icerik, proje, null);
       // Genel > Uçtan uca akışlar: servis + ekran + SQL akışlarının koşuları (uctan-uca.js).
       if (tur === 'uctan-uca') {
         return import('./uctan-uca.js').then((m) => m.uctanUcaSonuclari(icerik, proje, { ust: genelSekmeleri('uctan'), kosuId: kimlik ? decodeURIComponent(kimlik) : null }));
@@ -313,8 +313,8 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran, aralikDegisti) {
           basarisizSayisi ? rozet([ikon('uyari'), `${basarisizSayisi} başarısız`], 'hata') : kart ? rozet([ikon('onay'), 'hepsi geçti'], 'basari') : null),
         h('div', { class: 'meta' }, meta)),
       h('div', { class: 'eylemler' },
-        // Dönem raporu (PDF): ekran sayfasında kapsam ve seçim dolu gelir.
-        pdfRaporDugmesi(proje, urun && !urun.startsWith('ad:') ? { kapsam: 'ekran', id: urun } : {}),
+        // Dönem raporu (PDF): yalnız tek ekranın sayfasında (kapsam dolu gelir); Genel görünümde yok (Raporlar üst menüde).
+        urun && !urun.startsWith('ad:') ? pdfRaporDugmesi(proje, { kapsam: 'ekran', id: urun }) : null,
         // Silinmiş / devre dışı ekranın koşusu başlatılamaz (sonuçları yalnızca görüntülenir).
         ekran && (ekran.ekranDurumu === 'silindi' || ekran.ekranDurumu === 'devre_disi') ? null
           : h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),

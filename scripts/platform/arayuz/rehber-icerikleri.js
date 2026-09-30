@@ -62,7 +62,7 @@ export const REHBERLER = {
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
-      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde beş sekme vardır, bu sırayla: Özet ("Genel"e tıklayınca ilk açılan sekme — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; şu an açık olan sekme), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde dört sekme vardır, bu sırayla: Özet ("Genel"e tıklayınca ilk açılan sekme — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; şu an açık olan sekme), Servisler (servis senaryolarının sonuçları) ve Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar). Kaydedilen PDF dönem raporları üst menüde, Planlı koşular kaleminin yanındaki Raporlar kaleminde durur. Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
         metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin başarısız olduğunu ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
@@ -139,7 +139,7 @@ export const REHBERLER = {
       { baslik: 'Ekran / servis seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
       { baslik: 'Başlık', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. PDF raporu almak için Raporlar sekmesini açın.' },
-      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar, Raporlar. Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar (Raporlar üst menüdedir). Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
       { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Özet kutuları ve kartlar seçtiğiniz aralığın günlerine göre, önceki eşit dönemle karşılaştırılarak hesaplanır. "Tümü" seçiliyken son 30 gün kullanılır.' },
       {
         baslik: 'Özet kutuları', hedef: '.ozet-kutulari',
@@ -750,11 +750,10 @@ export const REHBERLER = {
       {
         baslik: 'Rapor verileri',
         metin: ['PDF raporlarının kullandığı kararlarınız burada durur. Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır. Değişiklikler hemen kaydedilir ve yalnız raporları etkiler.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Ekip', alt: 'sahip önerisi', ikon: 'liste' }, { baslik: 'Kritik', alt: 'öncelik + rozet', ikon: 'uyari' }, { baslik: 'Süre eşiği', alt: 'p95 > eşik', ikon: 'saat' }, { baslik: 'PDF rapor', ikon: 'grafik' }] }
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kritik', alt: 'öncelik + rozet', ikon: 'uyari' }, { baslik: 'Süre eşiği', alt: 'p95 > eşik', ikon: 'saat' }, { baslik: 'PDF rapor', ikon: 'grafik' }] }
       },
-      { baslik: 'Ekipler', metin: 'Ekip ekleyin, yeniden adlandırın ya da silin. Ekran ve servis satırındaki "Ekip" seçimi, raporda o öğenin aksiyonlarının "Sahip önerisi" olur; seçilmezse sınıfın varsayılan ekibi yazılır.' },
-      { baslik: 'Kritik işareti', metin: 'Ekran, genel senaryo, servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda başarısız olduysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.' },
-      { baslik: 'Süre eşikleri', metin: 'Ekran ve servis için milisaniye cinsinden eşik; servislerde metot başına ayrı eşik de verebilirsiniz (metodun eşiği yoksa servisinki geçer). Dönemdeki p95 süre eşiği aşarsa raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür.' },
+      { baslik: 'Kritik işareti', metin: 'Servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda başarısız olduysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.' },
+      { baslik: 'Süre eşikleri', metin: 'Servis için milisaniye cinsinden çağrı süresi eşiği; metot başına ayrı eşik de verebilirsiniz (metodun eşiği yoksa servisinki geçer). Dönemdeki p95 süre eşiği aşarsa raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür.' },
       { baslik: 'Uygulama sürümü', metin: 'Sürüm bu bölümde değil, Proje ve ortamlar > ortam > "Uygulama sürümü"nde ya da koşu başlatılırken girilir. Raporlar sürüme göre başarıyı ve sorunun hangi sürümde başladığını gösterir.', ipucu: 'Nöbetçi sürümü hiçbir adrese sormaz; yalnız sizin girdiğiniz değer kullanılır.' }
     ]
   },
