@@ -40,6 +40,20 @@ export function alanGrubu(a) {
   return { tablo: temiz || 'Alan', sutun: temiz || 'Alan' };
 }
 
+/** Seçim / radyo alanının tüm seçenekleri (boş değerli "Seçiniz" hariç): görünen metin + sayfadaki seçenek değeri. @param {Record<string, any>} a */
+function tumSecenekler(a) {
+  const liste = a.tur === 'radio' ? (Array.isArray(a.radyolar) ? a.radyolar : []) : (Array.isArray(a.secenekler) ? a.secenekler : []);
+  /** @type {Map<string, { metin: string; kod: string }>} */
+  const m = new Map();
+  for (const s of liste) {
+    const kod = String(s.deger ?? '');
+    const metin = typeof s.metin === 'string' && s.metin.trim() ? s.metin.trim() : kod;
+    if (kod === '' || !metin) continue;
+    if (!m.has(metin.toLocaleLowerCase('tr'))) m.set(metin.toLocaleLowerCase('tr'), { metin, kod });
+  }
+  return [...m.values()];
+}
+
 /**
  * Seçim / radyo alanında değerin görünen metni (yoksa değerin kendisi) ve sayfadaki seçenek değeri (kod). Tabloya okunur metin yazılır;
  * metin koddan farklıysa sütuna "metin → kod" sayfa karşılığı eklenir (koşu ve koşullar seçeneği koddan tanır).
@@ -54,11 +68,12 @@ function okunurDeger(a, deger) {
 /**
  * @param {{ baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }> }} g
  * @returns {{ satirAdi: string; tablolar: Array<{ tabloAdi: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satir: Record<string, string>;
+ *   liste: { sutun: string; secenekler: Array<{ metin: string; kod: string }> } | null;
  *   karsiliklar: Record<string, Record<string, string>>;
  *   baglar: Record<string, { tablo: string; sutun: string; basvuru: string }> }> } | null} taşınacak değer yoksa null
  */
 export function tabloTaslagiKur(g) {
-  /** @type {Map<string, { tabloAdi: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satir: Record<string, string>; karsiliklar: Record<string, Record<string, string>>; baglar: Record<string, { tablo: string; sutun: string; basvuru: string }> }>} */
+  /** @type {Map<string, { tabloAdi: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satir: Record<string, string>; liste: { sutun: string; secenekler: Array<{ metin: string; kod: string }> } | null; karsiliklar: Record<string, Record<string, string>>; baglar: Record<string, { tablo: string; sutun: string; basvuru: string }> }>} */
   const tablolar = new Map();
   for (const a of g.alanlar) {
     const v = g.degerler[a.anahtar];
@@ -67,15 +82,20 @@ export function tabloTaslagiKur(g) {
     const { tablo, sutun } = alanGrubu(a);
     const anahtar = tablo.toLocaleLowerCase('tr');
     let t = tablolar.get(anahtar);
-    if (!t) { t = { tabloAdi: tablo, sutunlar: [], satir: {}, karsiliklar: {}, baglar: {} }; tablolar.set(anahtar, t); }
+    if (!t) { t = { tabloAdi: tablo, sutunlar: [], satir: {}, liste: null, karsiliklar: {}, baglar: {} }; tablolar.set(anahtar, t); }
     let ad = sutun;
     for (let i = 2; t.sutunlar.some((x) => x.ad.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr')); i++) ad = `${adTemizle(sutun, EN_COK_AD - 4)} ${i}`;
     // Kart numarası ve güvenlik kodu gizli sütun olur (değer şifreli saklanır, ekranda maskelenir).
     const kartGizli = tablo === KART_TABLOSU && /(numara|kartno|cvv|cvc|guvenlik)/.test(baslikNormal(ad));
+    const ilkAlan = !t.sutunlar.length;
     t.sutunlar.push({ ad, gizli: a.gizli === true || kartGizli || gizliAdMi(ad) });
+    // Tek başına duran seçim / radyo alanı: tabloya yalnız seçilen değil TÜM seçenekler yazılır (liste tablosu); grupta başka alan varsa değil.
+    const secim = ['select', 'select-one', 'radio'].includes(String(a.tur));
+    t.liste = secim && ilkAlan && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU ? { sutun: ad, secenekler: tumSecenekler(a) } : null;
     const ok = okunurDeger(a, v.deger);
     t.satir[ad] = ok.metin;
     if (ok.metin !== ok.kod && !t.sutunlar[t.sutunlar.length - 1].gizli) (t.karsiliklar[ad] ??= {})[ok.metin] = ok.kod;
+    if (t.liste) for (const x of t.liste.secenekler) if (x.metin !== x.kod && !t.sutunlar[t.sutunlar.length - 1].gizli) (t.karsiliklar[ad] ??= {})[x.metin] = x.kod;
     t.baglar[a.anahtar] = { tablo: t.tabloAdi, sutun: ad, basvuru: degerBasvurusuYaz(t.tabloAdi, ad) };
   }
   if (!tablolar.size) return null;

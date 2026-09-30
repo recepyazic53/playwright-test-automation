@@ -381,7 +381,7 @@ function secimeTikla(el: Element): boolean {
  * başka adrese götürürse not düşülür ve hedefe dönülür. Keşif HİÇBİR düğmeye / bağlantıya basmaz; sayfanın betiği bassa da
  * tıklama yutulur (dugmeTiklamaKorumasi) ve yazma istekleri ağ katmanında iptal edilir.
  */
-async function secimleriKesfet(
+export async function secimleriKesfet(
   sayfa: Page, temel: SayfaEnvanteri, notlar: string[], git: () => Promise<void>,
   sakinles: (page: Page, ms: number) => Promise<void>, sinir: number
 ): Promise<Kesif[]> {

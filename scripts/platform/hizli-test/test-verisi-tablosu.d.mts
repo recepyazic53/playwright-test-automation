@@ -8,6 +8,8 @@ export declare function tabloTaslagiKur(g: {
   satirAdi: string;
   tablolar: Array<{
     tabloAdi: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satir: Record<string, string>;
+    /** Tek başına duran seçim alanı: tablo bir liste tablosudur, TÜM seçenekleri satır olarak yazılır (yoksa null). */
+    liste: { sutun: string; secenekler: Array<{ metin: string; kod: string }> } | null;
     /** sütun → { tablodaki metin → sayfadaki seçenek değeri } */
     karsiliklar: Record<string, Record<string, string>>;
     baglar: Record<string, { tablo: string; sutun: string; basvuru: string }>;

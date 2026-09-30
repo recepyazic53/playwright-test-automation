@@ -327,7 +327,7 @@ function soruCiz(o, y) {
       h('p', {}, `Ekran “${o.ekran.ad}” ve senaryo “${s.senaryoBasligi}” kaydedildi.`),
       s.tablo ? h('div', { class: 'not-kutusu bilgi', role: 'note' },
         h('p', {}, `Test verisi tabloları (${s.tablo.tablolar.length}): ${s.tablo.baglanan ?? 0} alan ekranın Test verisi bölümünde ilgili tabloya bağlandı.`),
-        h('ul', { class: 'kucuk' }, s.tablo.tablolar.map((t) => h('li', {}, `${t.tablo} — ${t.sutunSayisi} sütun (${t.yeni ? 'yeni' : 'güncellendi'})`)))) : null,
+        h('ul', { class: 'kucuk' }, s.tablo.tablolar.map((t) => h('li', {}, `${t.tablo} — ${t.secenekSayisi ? `${t.secenekSayisi} seçenek (liste)` : `${t.sutunSayisi} sütun`} (${t.yeni ? 'yeni' : 'güncellendi'})`)))) : null,
       maddeler.length ? h('ul', { class: 'hizli-hazirlik', 'aria-label': 'Hazırlık kontrolü' }, maddeler.map((x) => h('li', { class: x.durum },
         h('span', { 'aria-hidden': 'true' }, x.durum === 'tamam' ? '✓' : x.durum === 'yok' ? '–' : '!'), ` ${x.baslik}: ${x.ayrinti}`))) : null,
       s.hazirlik && s.hazirlik.neden ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.hazirlik.neden) : null,
@@ -375,10 +375,10 @@ function veriDuragi(o, s, kart, m, gonder) {
       const secenekler = Array.isArray(a.secenekler) ? a.secenekler : null;
       if (a.tur === 'checkbox') {
         girdi = h('input', { type: 'checkbox', id, checked: d.deger === true || d.deger === 'true' || null });
-        girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).checked, kaynak: 'elle' }; });
+        girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).checked, kaynak: 'elle' }; kosulGuncelle(); });
       } else if (secenekler) {
         girdi = h('select', { id }, h('option', { value: '' }, 'Seçin'), secenekler.filter((x) => x.deger !== '').map((x) => h('option', { value: x.deger, selected: String(d.deger) === x.deger || null }, x.metin || x.deger)));
-        girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLSelectElement} */ (girdi).value || null, kaynak: 'elle' }; });
+        girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLSelectElement} */ (girdi).value || null, kaynak: 'elle' }; kosulGuncelle(); });
       } else {
         girdi = h('input', { type: a.gizli ? 'password' : a.tur === 'date' ? 'date' : 'text', id, autocomplete: 'off', value: d.deger === null ? '' : String(d.deger) });
         girdi.addEventListener('input', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).value, kaynak: 'elle' }; });
@@ -387,7 +387,7 @@ function veriDuragi(o, s, kart, m, gonder) {
       const doldur = doldurDugmesi({
         projeId: o.projeId, ortamId: o.ortam.id,
         alan: { id: a.anahtar, etiket: a.etiket, tip: doldurTipi(a.tur), hassas: a.gizli, secenekler: secenekler ? secenekler.map((x) => ({ deger: x.deger, metin: x.metin })) : null },
-        secildi: (secim) => { durum[a.anahtar] = { deger: secim.deger, kaynak: 'tablo', tabloSecimi: secim.tabloSecimi }; ciz(); }
+        secildi: (secim) => { durum[a.anahtar] = { deger: secim.deger, kaynak: 'tablo', tabloSecimi: secim.tabloSecimi }; ciz(); kosulGuncelle(); }
       });
       yerlestir(kap, girdi, doldur);
     };
@@ -401,6 +401,8 @@ function veriDuragi(o, s, kart, m, gonder) {
       h('div', { class: 'hizli-alan-baslik' },
         h('label', { for: id, id: `${id}-etiket`, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null }, a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
         sira),
+      // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa hangi seçimde göründüğü yazılır.
+      a.kosul ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
       kap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
   };
   // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir.
@@ -414,7 +416,25 @@ function veriDuragi(o, s, kart, m, gonder) {
   // Doldurma sırası (anahtarlar): başlangıçta sayfadaki sıra; "Devam et"te sunucuya gider, motor bu sırayla doldurur.
   const siralama = s.alanlar.map((a) => a.anahtar);
   const alanlarSirali = () => siralama.map((k) => s.alanlar.find((a) => a.anahtar === k)).filter(Boolean);
-  const sorulanlar = () => alanlarSirali().filter((a) => !hazirlar.includes(a) || acilan.has(a.anahtar));
+  /** Koşullu alan şu an geçerli mi (seçimin değeri: yazılan, yoksa sayfanın ilk değeri; tablodan gelen değer bilinmez → geçerli). */
+  const aktifMi = (/** @type {any} */ a, gorulen = new Set()) => {
+    if (!a.kosul || gorulen.has(a.anahtar)) return true;
+    gorulen.add(a.anahtar);
+    const kontrol = s.alanlar.find((x) => x.anahtar === a.kosul.secim);
+    if (kontrol && !aktifMi(kontrol, gorulen)) return false;
+    const d = durum[a.kosul.secim];
+    if (d && d.kaynak === 'tablo') return true;
+    const simdi = d && d.deger !== null && d.deger !== undefined && d.deger !== '' ? d.deger : a.kosul.ilk;
+    if (simdi === null || simdi === undefined) return true;
+    return a.kosul.degerler.includes(String(simdi));
+  };
+  const sorulanlar = () => alanlarSirali().filter((a) => (!hazirlar.includes(a) || acilan.has(a.anahtar)) && aktifMi(a));
+  // Seçim değişince koşullu alanlar açılır / kapanır (görünen küme değişmediyse liste yeniden çizilmez: odak kaybolmaz).
+  let gorunenImza = '';
+  const kosulGuncelle = () => {
+    const imza = sorulanlar().map((a) => a.anahtar).join('|');
+    if (imza !== gorunenImza) listeyiCiz();
+  };
   const tasi = (/** @type {any} */ a, /** @type {number} */ yon) => {
     const gorunen = sorulanlar();
     const j = gorunen.indexOf(a) + yon;
@@ -429,6 +449,7 @@ function veriDuragi(o, s, kart, m, gonder) {
   };
   const listeyiCiz = () => {
     const sorulan = sorulanlar();
+    gorunenImza = sorulan.map((a) => a.anahtar).join('|');
     yerlestir(satirlarKap, ...(sorulan.length ? sorulan.map(satir) : [h('p', { class: 'soluk' }, 'Sayfa hazır: sizden doldurmanızı isteyeceğim boş alan yok. Devam edebilirsiniz.')]));
     sorulan.forEach((a, i) => {
       const d = satir(a).querySelectorAll('.hizli-sira button');
@@ -447,7 +468,7 @@ function veriDuragi(o, s, kart, m, gonder) {
   devam.addEventListener('click', () => {
     const degerler = Object.fromEntries(Object.entries(durum).map(([k, d]) => [k, d.deger === null || d.deger === '' ? null
       : { deger: d.deger, kaynak: d.kaynak || 'elle', ...(d.tabloSecimi ? { tabloSecimi: d.tabloSecimi } : {}) }]));
-    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar]).map((a) => a.etiket);
+    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar] && aktifMi(a)).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
     void gonder(devam, 'veri', { degerler, sira: siralama }, m);
   });

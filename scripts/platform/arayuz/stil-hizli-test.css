@@ -80,3 +80,6 @@
 .hizli-sira { display: inline-flex; gap: 4px; flex: none; }
 .hizli-sira .kucuk-dugme { min-width: 28px; padding-inline: 6px; }
 .hizli-sira .kucuk-dugme:disabled { opacity: 0.35; cursor: default; }
+
+/* Seçim keşfi: koşullu alanın hangi seçimde göründüğü. */
+.hizli-kosul { margin: 0 0 4px; }

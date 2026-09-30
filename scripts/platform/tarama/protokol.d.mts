@@ -152,6 +152,14 @@ export type HizliFark = {
   adres: { once: string; sonra: string } | null; anlik: HizliAnlik;
 };
 /** Doldurulacak alan (değer yalnız bellekte; tablodan gelen başvuru sunucuda çözülmüş olarak gelir). */
+/**
+ * Seçim keşfi (ilk açılışta alanlar boşken seçimler tek tek denenir): bir seçim alanının her değerinde beliren / kaybolan alanlar.
+ * ust: iç içe keşif (bir değer seçilince beliren seçim alanı denendi) — o alanın belirdiği üst seçim + değer.
+ */
+export type HizliKesif = {
+  secim: string; ilkDeger: string | null; tur: string; ust: { secim: string; deger: string } | null;
+  degerler: Array<{ deger: string; metin: string | null; gorunenler: HamAlan[]; kaybolanlar: string[] }>;
+};
 export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | boolean };
 /** Doğrulama koşusu planı: adımlar baştan sona (doldur → bas), sonra bitiş koşulu. */
 export type HizliPlan = {
@@ -168,9 +176,9 @@ export type HizliKomut =
   | { no: number; tur: 'bitir' };
 /** Alt süreç → sunucu (POST …/hizli). */
 export type HizliOlay =
-  | { olay: 'kesif'; anlik: HizliAnlik }
+  | { olay: 'kesif'; anlik: HizliAnlik; kesifler?: HizliKesif[] }
   | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik; yeniMetinler?: HizliMetin[] }
-  | { olay: 'basildi'; no: number; fark: HizliFark }
+  | { olay: 'basildi'; no: number; fark: HizliFark; kesifler?: HizliKesif[] }
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }
   | { olay: 'okundu'; no: number; anlik: HizliAnlik }

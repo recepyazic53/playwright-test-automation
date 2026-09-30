@@ -39,6 +39,11 @@ test('taslak: gruplara ayrılır; yalnız elle yazılanlar; parola, dosya, boş 
   expect(t?.tablolar.map((x) => x.tabloAdi)).toEqual(['GİDİLECEK ÜLKE', 'Kişi bilgileri', 'Kart bilgileri']);
   const [ulke, kisi, kart] = t!.tablolar;
   expect(ulke.satir).toEqual({ 'GİDİLECEK ÜLKE': 'A.B.D' });
+  // Tek başına duran seçim alanı: liste tablosu; seçilen değil TÜM seçenekler tabloya yazılır ve her biri için sayfa karşılığı eklenir.
+  expect(ulke.liste).toEqual({ sutun: 'GİDİLECEK ÜLKE', secenekler: [{ metin: 'A.B.D', kod: '550' }, { metin: 'FRANSA', kod: '551' }] });
+  expect(ulke.karsiliklar).toEqual({ 'GİDİLECEK ÜLKE': { 'A.B.D': '550', FRANSA: '551' } });
+  expect(kisi.liste).toBeNull();
+  expect(kart.liste).toBeNull();
   expect(kisi.sutunlar.map((x) => x.ad)).toEqual(['Doğum tarihi', 'Telefon', 'Kimlik no']);
   expect(kisi.satir).toEqual({ 'Doğum tarihi': '13.04.1998', Telefon: '5426502153', 'Kimlik no': '45520772518' });
   expect(kart.sutunlar.map((x) => [x.ad, x.gizli])).toEqual([['Kart üzerindeki isim', false], ['Kart numarası', true], ['Güvenlik kodu (CVV)', true]]);
