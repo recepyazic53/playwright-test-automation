@@ -113,12 +113,14 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     await page.goto('/#/ayarlar/izinler');
     const kart = page.getByRole('region', { name: 'İzin paketi' });
     await expect(kart.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
-    await expect(kart.getByRole('radio', { name: /^Hiçbir izin açma/ })).toBeChecked();
+    // Test ortamı seçimi kayıt sihirbazındakiyle aynı: Ekran testleri / Servis testleri (hiçbiri = izin açma).
     // Ortam başına ayrı bölüm: test ortamları (her seçeneğin altında tek cümle) ve ayrı, uyarılı canlı ortam bölümü.
-    const testBolumu = kart.getByRole('group', { name: 'Test ortamlarında neler yapılabilsin?' });
-    await expect(testBolumu.getByRole('radio')).toHaveCount(4);
-    await expect(testBolumu.locator('.profil-secenegi small')).toHaveCount(4);
-    await expect(testBolumu.getByRole('checkbox')).toHaveCount(0);
+    const testBolumu = kart.getByRole('group', { name: /^Test ortamlarında neler yapılabilsin/ });
+    await expect(testBolumu.getByRole('checkbox')).toHaveCount(2);
+    await expect(testBolumu.getByRole('checkbox', { name: /^Ekran testleri/ })).not.toBeChecked();
+    await expect(testBolumu.getByRole('checkbox', { name: /^Servis testleri/ })).not.toBeChecked();
+    await expect(testBolumu.locator('.profil-secenegi small')).toHaveCount(2);
+    await expect(testBolumu.getByRole('radio')).toHaveCount(0);
     const canliBolumu = kart.getByRole('group', { name: 'Canlı ortamda neler yapılabilsin?' });
     await expect(canliBolumu).toContainText('gerçek kullanıcıların verisini etkileyebilir');
     await expect(canliBolumu.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırmaya izin ver' })).toBeVisible();
@@ -130,9 +132,10 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     const liste = kart.getByRole('list', { name: 'Açılacak izinler' });
     await expect(kart.getByRole('button', { name: 'Açılacak izin yok' })).toBeDisabled();
 
-    await kart.getByRole('radio', { name: /^Ekran ve servis testleri \+ veritabanı okuma/ }).check();
-    await expect(liste.locator('li[data-izin]')).toHaveCount(4);
-    await expect(liste.locator('li[data-izin="veritabani-okuma"]')).toContainText('risk:');
+    await testBolumu.getByRole('checkbox', { name: /^Ekran testleri/ }).check();
+    await testBolumu.getByRole('checkbox', { name: /^Servis testleri/ }).check();
+    await expect(liste.locator('li[data-izin]')).toHaveCount(3);
+    await expect(liste.locator('li[data-izin="servis-istekleri"]')).toContainText('risk:');
     await expect(liste).not.toContainText('null');
     await expect(liste).toContainText('Pakete girmez, her zaman tek tek açılır: Veritabanına yazma, Sistem değişikliği, Güvenlik gevşetme.');
     const canli = kart.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırmaya izin ver' });
@@ -145,14 +148,15 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     await canli.uncheck();
     await expect(liste.locator('li[data-izin="canli-ortam"]')).toHaveCount(0);
     await canli.check();
-    await kart.getByRole('button', { name: 'Bu 5 izni aç' }).click();
+    await kart.getByRole('button', { name: 'Bu 4 izni aç' }).click();
     await expect(page.locator('[data-izin="canli-ortam"] .izin-anahtari')).toBeChecked();
-    await expect(page.locator('[data-izin="veritabani-okuma"] .izin-anahtari')).toBeChecked();
+    await expect(page.locator('[data-izin="servis-istekleri"] .izin-anahtari')).toBeChecked();
+    await expect(page.locator('[data-izin="veritabani-okuma"] .izin-anahtari')).not.toBeChecked();
     await expect(page.locator('[data-izin="veritabani-yazma"] .izin-anahtari')).not.toBeChecked();
-    await expect(page.locator('.izin-gecmisi li')).toHaveCount(5);
+    await expect(page.locator('.izin-gecmisi li')).toHaveCount(4);
     await expect(kart.getByRole('button', { name: 'Açılacak izin yok' })).toBeDisabled();
     const durum = (await nobetciApi(nobetci, '/platform/izinler')).izinler as Record<string, boolean>;
-    expect(acikOlanlar(durum)).toEqual(['canli-ortam', 'giris-bilgisi', 'servis-istekleri', 'veritabani-okuma', 'web-erisimi']);
+    expect(acikOlanlar(durum)).toEqual(['canli-ortam', 'giris-bilgisi', 'servis-istekleri', 'web-erisimi']);
 
     // Riskli seçim sunucuda da reddedilir.
     const red = await nobetciApi(nobetci, '/platform/izin/paket-uygula', { paket: 'ozel', ozel: ['guvenlik-gevsetme'], onay: true });

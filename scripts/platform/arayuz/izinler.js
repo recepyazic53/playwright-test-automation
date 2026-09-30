@@ -5,7 +5,7 @@
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, tarihMetni } from './ortak.js';
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
-import { CANLI_IZNI, IZIN_PAKETLERI, OZEL_SECILEBILIR, PAKET_DISI_IZINLER, paketIzinleri } from './izin-paketleri.mjs';
+import { CANLI_IZNI, PAKET_DISI_IZINLER, paketIzinleri } from './izin-paketleri.mjs';
 
 let sayac = 0;
 
@@ -37,16 +37,15 @@ export function izinPaketiSecimi(s) {
   const ad = `izin-paketi-${no}`;
   const mesaj = mesajKutusu();
   let izinler = { ...s.izinler };
-  const radyolar = IZIN_PAKETLERI.map((p) => {
-    const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'radio', name: ad, value: p.ad, id: `${ad}-${p.ad}`, checked: p.ad === 'hicbiri' }));
-    return { p, girdi, etiket: h('label', { class: 'profil-secenegi', for: girdi.id }, girdi, h('span', {}, h('b', {}, p.etiket), h('small', { class: 'soluk' }, p.ozet))) };
+  // İşler: kayıt sihirbazındaki "İşleriniz" adımıyla aynı iki seçim (birini ya da ikisini seçin; hiçbiri = izin açma).
+  const ISLER = [
+    { ad: 'ekran', etiket: 'Ekran testleri', aciklama: 'Web sayfalarını açar, alanları doldurur ve sonucu doğrular.', izinler: ['web-erisimi', 'giris-bilgisi'] },
+    { ad: 'servis', etiket: 'Servis testleri', aciklama: 'Servislere istek gönderir ve yanıtı doğrular.', izinler: ['servis-istekleri'] }
+  ];
+  const isKutulari = ISLER.map((is) => {
+    const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `${ad}-is-${is.ad}`, value: is.ad }));
+    return { is, girdi, etiket: h('label', { class: 'profil-secenegi', for: girdi.id }, girdi, h('span', {}, h('b', {}, is.etiket), h('small', { class: 'soluk' }, is.aciklama))) };
   });
-  const ozelKutular = OZEL_SECILEBILIR.map((a) => {
-    const t = IZIN_TANIMLARI.find((x) => x.anahtar === a);
-    const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `${ad}-ozel-${a}`, value: a }));
-    return { a, girdi, etiket: h('label', { class: 'secenek', for: girdi.id }, girdi, t ? t.etiket : a) };
-  });
-  const ozelAlan = h('fieldset', { class: 'izin-paketi-ozel', hidden: true }, h('legend', {}, 'Açılacak izinleri seçin'), ozelKutular.map((k) => k.etiket));
   const canli = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `${ad}-canli` }));
   const canliTanimi = IZIN_TANIMLARI.find((x) => x.anahtar === CANLI_IZNI);
   const canliUyarisi = h('div', { class: 'not-kutusu hata izin-paketi-canli-uyarisi', role: 'note', hidden: true },
@@ -60,13 +59,12 @@ export function izinPaketiSecimi(s) {
     canliUyarisi);
   const liste = h('ul', { class: 'izin-paketi-listesi', 'aria-label': 'Açılacak izinler' });
   const dugme = h('button', { type: 'button', class: 'birincil' });
-  const secim = () => {
-    const r = radyolar.find((x) => x.girdi.checked) || radyolar[0];
-    return { paket: r.p.ad, canli: canli.checked, ozel: ozelKutular.filter((k) => k.girdi.checked).map((k) => k.a) };
-  };
+  const secim = () => ({
+    paket: 'ozel', canli: canli.checked,
+    ozel: isKutulari.filter((k) => k.girdi.checked).flatMap((k) => k.is.izinler).filter((x, i, d) => d.indexOf(x) === i)
+  });
   const ciz = () => {
     const sec = secim();
-    ozelAlan.hidden = sec.paket !== 'ozel';
     canliUyarisi.hidden = !sec.canli;
     const istenen = paketIzinleri(sec);
     const acilacak = istenen.filter((a) => izinler[a] !== true);
@@ -86,8 +84,7 @@ export function izinPaketiSecimi(s) {
     dugme.textContent = acilacak.length ? (s.dugmeMetni ? s.dugmeMetni(acilacak.length) : `Bu ${acilacak.length} izni aç`) : (s.bosDugmeMetni || 'Açılacak izin yok');
     dugme.disabled = !acilacak.length && !s.bosDugmeMetni;
   };
-  for (const r of radyolar) r.girdi.addEventListener('change', ciz);
-  for (const k of ozelKutular) k.girdi.addEventListener('change', ciz);
+  for (const k of isKutulari) k.girdi.addEventListener('change', ciz);
   canli.addEventListener('change', ciz);
   dugme.addEventListener('click', async () => {
     mesaj.temizle();
@@ -108,8 +105,7 @@ export function izinPaketiSecimi(s) {
     h('h3', {}, ikon('kalkan'), s.baslik || 'Nöbetçi sizin adınıza neleri yapabilsin?'),
     h('p', { class: 'soluk kucuk' }, 'Önce test ortamlarında, sonra canlı ortamda neler yapılabileceğini seçin; açılacak izinler riskleriyle aşağıda listelenir ve tek onayla açılır. Seçim hiçbir izni kapatmaz; izinleri istediğiniz an Ayarlar > İzinler\'den tek tek açıp kapatabilirsiniz.'),
     mesaj.kutu,
-    h('fieldset', { class: 'profil-secimi izin-paketi-bolumu' }, h('legend', {}, 'Test ortamlarında neler yapılabilsin?'), h('div', { class: 'profil-secenekleri' }, radyolar.map((r) => r.etiket))),
-    ozelAlan,
+    h('fieldset', { class: 'profil-secimi izin-paketi-bolumu' }, h('legend', {}, 'Test ortamlarında neler yapılabilsin? (birini ya da ikisini seçin)'), h('div', { class: 'profil-secenekleri' }, isKutulari.map((k) => k.etiket))),
     canliKutusu,
     h('h4', {}, 'Açılacak izinler'), liste,
     h('div', { class: 'dugmeler' }, ...(s.ekDugmeler || []), dugme));
