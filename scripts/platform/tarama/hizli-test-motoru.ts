@@ -69,8 +69,8 @@ export async function hizliTestiYurut(
     baseURL: g.tabanUrl, ...taramaTarayiciAyarlari(g).baglam, acceptDownloads: false, serviceWorkers: 'block', ...oturumBaglamSecenegi(g)
   });
   const durum: { asama: TaramaAsamasi } = { asama: 'hazirlik' };
-  /** Keşif / doldurma: yazma engelli ('tarama'); basış ve doğrulama koşusu: serbest ('kayit'); Hayır izninde hep 'secme'. */
-  const okumaAsamasi: TaramaAsamasi = basabilir ? 'tarama' : 'secme';
+  /** Hızlı testte ağ isteklerine kısıt yok: hangi bağlantıya gidileceğini ve neye basılacağını kullanıcı belirler (sorgu isteği de gider). */
+  const okumaAsamasi: TaramaAsamasi = 'kayit';
   const engellenenler: EngellenenIstek[] = [];
   let bekleyenIstek = 0;
   baglam.on('request', () => { bekleyenIstek++; });
