@@ -344,7 +344,7 @@ const SORU_ADIMLARI = [{ ad: 'modSorusu', etiket: 'Kullanım' }, { ad: 'girisSor
 const ILK_ADIMLAR = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
-  { ad: 'izinler', etiket: 'İzinler' },
+  { ad: 'izinler', etiket: 'İşleriniz' },
   ...SORU_ADIMLARI,
   { ad: 'tamam', etiket: 'Tamam' }
 ];
@@ -557,19 +557,49 @@ function sihirbazProje() {
 }
 
 /**
- * İZİNLER (yalnız ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — izin paketi (izinler.js > izinPaketiSecimi). Seçilen
- * paketin açacağı izinler riskleriyle listelenir, tek onayla açılır; "Hiçbiri" ve "Atla" hiçbir izni açmaz (her işlemde sorulur).
+ * İŞLERİNİZ (yalnız ilk kurulum; adım adı 'izinler'): "Nöbetçi'yi hangi işleriniz için kullanacaksınız?" — Ekran testleri / Servis testleri
+ * (birini ya da ikisini seçin). Seçim gereken izinleri açar (ekran: web uygulamasına erişim + giriş bilgisi kullanımı; servis: servis
+ * istekleri); sunucu ucu izin paketiyle aynıdır (paket "ozel", canlı kapalı). Ortam (test / canlı) sorulmaz: ortamlar Ayarlar'da
+ * tanımlanır, canlıda çalıştırırken zaten ayrıca onay istenir. Veritabanı okuma gibi ek izinler akışa eklenirken o anda sorulur.
+ * "Atla" hiçbir izin açmaz (her işlemde sorulur). Ayrıntılı izin yönetimi Ayarlar > İzinler'dedir.
  */
 async function sihirbazIzinler() {
   const kap = h('div', {}, iskelet('liste'));
   const atla = h('button', { type: 'button', class: 'hayalet', onclick: () => sorulardanSonra() }, 'Atla');
-  sihirbazEkrani('izinler', sihirbazBasligi(), 'Nöbetçi\'nin sizin adınıza yapabileceklerini şimdi toplu seçebilir ya da her işlemde ayrı ayrı karar verebilirsiniz. Seçiminizi sonra Ayarlar > İzinler\'den değiştirebilirsiniz.', kap);
+  sihirbazEkrani('izinler', sihirbazBasligi(), 'Seçtiğiniz işe göre gereken izinleri sizin için açarız. Sonra Ayarlar > İzinler\'den istediğiniz izni kapatıp açabilirsiniz.', kap);
+  const ISLER = [
+    { ad: 'ekran', etiket: 'Ekran testleri', aciklama: 'Web sayfalarını açar, alanları doldurur ve sonucu doğrular.', izinler: ['web-erisimi', 'giris-bilgisi'] },
+    { ad: 'servis', etiket: 'Servis testleri', aciklama: 'Servislere istek gönderir ve yanıtı doğrular.', izinler: ['servis-istekleri'] }
+  ];
   try {
-    const [{ izinPaketiSecimi }, { izinler }] = await Promise.all([import('./izinler.js'), api('/platform/izinler')]);
-    kap.replaceChildren(izinPaketiSecimi({
-      izinler, dugmeMetni: (n) => `Bu ${n} izni aç ve devam et`, bosDugmeMetni: 'Devam', ekDugmeler: [atla],
-      bitti: () => sorulardanSonra()
-    }));
+    const { izinler } = await api('/platform/izinler');
+    const kutular = ISLER.map((is) => {
+      const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `is-${is.ad}`, value: is.ad }));
+      return { is, girdi, etiket: h('label', { class: 'profil-secenegi', for: girdi.id }, girdi, h('span', {}, h('b', {}, is.etiket), h('small', { class: 'soluk' }, is.aciklama))) };
+    });
+    const mesaj = h('div', {});
+    const devam = /** @type {HTMLButtonElement} */ (h('button', { type: 'button', class: 'birincil', disabled: true }, 'Devam', ikon('ok')));
+    const secilenler = () => kutular.filter((k) => k.girdi.checked).flatMap((k) => k.is.izinler).filter((a, i, d) => d.indexOf(a) === i);
+    const guncelle = () => { devam.disabled = !kutular.some((k) => k.girdi.checked); };
+    for (const k of kutular) k.girdi.addEventListener('change', guncelle);
+    devam.addEventListener('click', async () => {
+      const istenen = secilenler();
+      mesaj.replaceChildren();
+      try {
+        // Yalnız kapalı olanlar açılır; hiçbir izin kapatılmaz.
+        if (istenen.some((a) => izinler[a] !== true)) {
+          const r = await mesgulIken(devam, 'Açılıyor…', () => api('/platform/izin/paket-uygula', { govde: { paket: 'ozel', canli: false, ozel: istenen, onay: true } }));
+          bildir(`${r.acilanlar.length} izin açıldı.`);
+        }
+        sorulardanSonra();
+      } catch (hata) { mesaj.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata))); }
+    });
+    kap.replaceChildren(h('section', { class: 'kart izin-paketi', 'aria-label': 'Kullanım alanı' },
+      h('h3', {}, ikon('kalkan'), 'Nöbetçi\'yi hangi işleriniz için kullanacaksınız?'),
+      mesaj,
+      h('fieldset', { class: 'profil-secimi izin-paketi-bolumu' }, h('legend', {}, 'Birini ya da ikisini seçin'), h('div', { class: 'profil-secenekleri' }, kutular.map((k) => k.etiket))),
+      h('p', { class: 'soluk kucuk' }, 'Veritabanı okuma gibi ek izinler, akışınıza o adımı eklediğinizde o anda sorulur. Canlı ortamda çalıştırırken de ayrıca onayınız istenir.'),
+      h('div', { class: 'dugmeler' }, atla, devam)));
   } catch (hata) {
     if (hata && hata.durum === 423) return;
     kap.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)), h('div', { class: 'dugmeler' }, atla));

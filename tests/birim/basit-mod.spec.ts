@@ -382,7 +382,7 @@ test('kurulum sihirbazı: "Kullanım" adımı (Basit önce seçili); Basit seçi
     const parola = `Gecici-Kurulum-${randomBytes(6).toString('hex')}`;
     await page.goto('/');
     await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
-    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
+    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İşleriniz', 'Kullanım', 'Giriş', 'Tamam']);
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(parola);
     await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(parola);
     await page.getByText('Parolayı unutursam').click();

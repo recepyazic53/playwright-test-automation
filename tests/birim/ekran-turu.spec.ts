@@ -251,7 +251,7 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       // "Sizi tanıyalım" adımı yok (ortamlar Ortamlar adımında / Ayarlar'da); giriş profili adımı da yok.
       await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
       await expect(page.getByRole('form', { name: 'Tanışma soruları' })).toHaveCount(0);
-      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
+      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İşleriniz', 'Kullanım', 'Giriş', 'Tamam']);
       await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 6');
       await kontrol('kasa');
       await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
@@ -262,11 +262,12 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByRole('button', { name: 'Devam' }).click();
       // Ortamlar sihirbazda sorulmaz (Ayarlar > Proje ve ortamlar); proje ortamsız oluşur.
       await expect(page.getByLabel('Ortam adı')).toHaveCount(0);
-      // İzinler (ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — varsayılan Hiçbir izin açma, canlı kutusu işaretsiz; Atla hiçbir izni açmaz.
+      // İşleriniz (ilk kurulum): "Nöbetçi'yi hangi işleriniz için kullanacaksınız?" — Ekran testleri / Servis testleri; seçim yokken Devam kapalı; Atla hiçbir izni açmaz.
       await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 6');
-      await expect(page.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
-      await expect(page.getByRole('radio', { name: /^Hiçbir izin açma/ })).toBeChecked();
-      await expect(page.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırmaya izin ver' })).not.toBeChecked();
+      await expect(page.getByRole('heading', { name: 'Nöbetçi\'yi hangi işleriniz için kullanacaksınız?' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: /^Ekran testleri/ })).not.toBeChecked();
+      await expect(page.getByRole('checkbox', { name: /^Servis testleri/ })).not.toBeChecked();
+      await expect(page.getByRole('button', { name: 'Devam' })).toBeDisabled();
       await kontrol('izinler');
       await page.getByRole('button', { name: 'Atla' }).click();
       // Kullanım (Basit / Gelişmiş; çalışma alanının ayarı): bu test bugünkü (Gelişmiş) arayüzü denetler.

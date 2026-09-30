@@ -310,7 +310,7 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     await page.goto('/');
     await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
     // Giriş profilinin ayrıntısı sorulmaz; yalnız isteğe bağlı "giriş istiyor mu?" sorusu (kendi adımı).
-    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
+    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İşleriniz', 'Kullanım', 'Giriş', 'Tamam']);
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(parola);
     await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(parola);
     await page.getByText('Parolayı unutursam').click();
