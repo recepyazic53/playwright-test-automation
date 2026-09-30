@@ -320,6 +320,7 @@ const calisanSurecler = new Map();
 const ARAYUZ_KLASORU = join(buDosyaninKlasoru, 'platform', 'arayuz');
 const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/stil.css', { dosya: 'stil.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/stil-doldur.css', { dosya: 'stil-doldur.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
@@ -440,6 +441,9 @@ const ARAYUZ_DOSYALARI = new Map([
   // Senaryo tasarım yardımcısı: saf öneri fonksiyonu (Node testleriyle ORTAK) + öneriler ekranı.
   ['/arayuz/senaryo-onerileri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'senaryo-onerileri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-onerileri.js', { dosya: 'senaryo-onerileri.js', tur: 'text/javascript; charset=utf-8' }],
+  // Doldur (boş alanın değeri yalnız tablodan; değer üretilmez): saf eşleme sunucu testleriyle ORTAK + bileşen.
+  ['/arayuz/doldur-onerisi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'doldur-onerisi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/doldur.js', { dosya: 'doldur.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.
   ['/arayuz/ekran-modeli-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'ekran-modeli-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
