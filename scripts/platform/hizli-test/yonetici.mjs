@@ -49,7 +49,7 @@ import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
 import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku,
-  eksikAlanlar, kayitEnvanteriKur, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
+  eksikAlanlar, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
 } from './akis.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -195,6 +195,9 @@ export function hizliTestYoneticisiOlustur(s) {
       o.sonGoruntu = anlik.goruntu ?? null;
       o.baslik = anlik.baslik ?? '';
       o.calisiyor = null;
+      // İstenen sayfa açılmadıysa (site başka sayfaya yönlendirdi) sessizce devam edilmez: kullanıcıya uyarı gösterilir.
+      o.sayfaUyarisi = sayfaUyarisi(o.hedefYol, anlik.yol);
+      if (o.sayfaUyarisi) gunluk(o, `Uyarı: istenen sayfa açılmadı; ${anlik.yol} açık.`);
       const adim = { alanlar: [], bas: null, okumalar: [{ gorunen: anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar), secimler: {} }] };
       o.adimlar = [adim];
       for (const a of anlik.alanlar.filter(doldurulabilir)) alanEkle(o, a, adim, false);
@@ -338,7 +341,7 @@ export function hizliTestYoneticisiOlustur(s) {
     else if (o.durum === 'kaydet') soru = { tur: 'kaydet', ozet: ozet(o), dogrulama: o.dogrulama, dogrulanabilir: o.izin !== 'hayir', baslik: o.senaryoBasligi, farklar: o.farklar ?? null };
     else if (o.durum === 'kaydedildi') soru = { tur: 'kaydedildi', ...o.kayit };
     return {
-      id: o.id, durum: o.durum, izin: o.izin, izinAdi: IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (o.izin)], projeId: o.projeId, ortam: o.ortam, hedef: o.hedefYol,
+      uyari: o.sayfaUyarisi ?? null, id: o.id, durum: o.durum, izin: o.izin, izinAdi: IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (o.izin)], projeId: o.projeId, ortam: o.ortam, hedef: o.hedefYol,
       ekran: o.ekran, cumle: o.cumle, duzenleme: Boolean(o.ekran.id), durak: durakNo(o), calisiyor: o.calisiyor, sonHata: o.sonHata, hata: o.hata,
       kesif: o.kesifAnlik ? {
         alanSayisi: o.kesifAnlik.alanlar.length, dugmeAdaylari: o.kesifAnlik.dugmeler.map((/** @type {Nesne} */ x) => x.metin ?? x.secici).slice(0, 8),

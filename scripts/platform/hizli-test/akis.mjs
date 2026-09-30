@@ -385,3 +385,17 @@ export function adayMesajlari(eylem, cumleMesajlari = []) {
 export function eksikAlanlar(alanlar, degerler) {
   return alanlar.filter((a) => a.zorunlu && !a.hazir && !a.devreDisi && !a.saltOkunur && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
 }
+
+/**
+ * İstenen sayfa (hedefYol) yerine site başka bir sayfa açtıysa (giriş sonrası ana sayfaya yönlendirme, kullanıcı ya da bağlam seçimi ya da yetki
+ * gerekmesi) kullanıcıya gösterilecek uyarı; aynı yolsa null. Yol karşılaştırılır (sondaki "/" ve sorgu dizisi yok sayılır).
+ * @param {string} hedefYol @param {string} anlikYol
+ * @returns {string | null}
+ */
+export function sayfaUyarisi(hedefYol, anlikYol) {
+  const yol = (/** @type {string} */ m) => {
+    try { return new URL(String(m || '/'), 'http://x.invalid').pathname.replace(/\/+$/, '') || '/'; } catch { return String(m || '/'); }
+  };
+  if (!hedefYol || !anlikYol || yol(hedefYol) === yol(anlikYol)) return null;
+  return `İstediğiniz sayfa (${yol(hedefYol)}) açılmadı: site ${yol(anlikYol)} sayfasına yönlendirdi. Giriş, kullanıcı ya da bağlam seçimi ya da yetki gerekiyor olabilir. Bu sayfada devam ederseniz alanlar ve düğmeler bu sayfadan seçilir; yanlış sayfaysa "Hızlı testi iptal et" deyip önce girişi / seçimi tamamlayın.`;
+}

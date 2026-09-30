@@ -14,7 +14,7 @@ import { chromium, expect, test, type Browser, type Page } from '@playwright/tes
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import {
-  basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku, sabitKisim, tekAday, varsayilanEtiketler
+  basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku, sabitKisim, sayfaUyarisi, tekAday, varsayilanEtiketler
 } from '../../scripts/platform/hizli-test/akis.mjs';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { HizliTestUygulamasi } from './hizli-test-fikstur';
@@ -94,6 +94,13 @@ test.afterAll(async () => {
 });
 
 test.describe('saf kurallar', () => {
+  test('sayfa uyarısı: istenen yerine başka sayfa açıldıysa uyarır (yol karşılaştırılır; sondaki / ve sorgu yok sayılır)', () => {
+    expect(sayfaUyarisi('/is/hedef/', '/is/hedef')).toBeNull();
+    expect(sayfaUyarisi('/is/hedef', '/is/hedef?x=1')).toBeNull();
+    expect(sayfaUyarisi('/is/hedef/', '/')).toMatch(/İstediğiniz sayfa \(\/is\/hedef\) açılmadı: site \/ sayfasına yönlendirdi/);
+    expect(sayfaUyarisi('', '/x')).toBeNull();
+  });
+
   test('cümle kalıpla okunur (YZ yok): tırnaklı metin mesaj, "…e bas" düğme; anlaşılmayan yok sayılır', () => {
     expect(cumleyiOku('Formu doldur, Hesapla\'ya bas, "İşlem hazır" mesajını doğrula.')).toEqual({ mesajlar: ['İşlem hazır'], dugmeler: ['Hesapla'] });
     expect(cumleyiOku('“Onayla” düğmesine tıkla; “Başvurunuz alındı” görünsün')).toEqual({ mesajlar: ['Başvurunuz alındı'], dugmeler: ['Onayla'] });

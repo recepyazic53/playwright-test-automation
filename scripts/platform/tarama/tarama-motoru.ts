@@ -59,15 +59,24 @@ export class TaramaHatasi extends Error {
 
 export type OlayGonderici = (olay: TaramaOlayi) => Promise<void>;
 
+/** İki adresin YOLU (pathname; sondaki "/" yok sayılır) aynı mı? */
+function ayniYol(a: string, b: string): boolean {
+  try {
+    const kok = (u: string): string => new URL(u, 'http://x.invalid').pathname.replace(/\/+$/, '') || '/';
+    return kok(a) === kok(b);
+  } catch { return false; }
+}
+
 /**
  * Hedef sayfayı açar (tarama, öğe seçme, akış kaydı ve hızlı test ortak). "net::ERR_ABORTED" bir erişilemezlik değil, gezinmenin
- * tamamlanmadan kesilmesidir (sayfa başka bir adrese yönlendirirken, boş 204 yanıtında, dosya indirmede). Bu yüzden:
- *  - gezinme kesildiyse sayfanın yerleşmesi beklenir; sayfa başka bir adreste açıldıysa (yönlendirme) açılmış sayfa sayılır,
- *  - açılmadıysa bir kez daha denenir,
- *  - yine olmuyorsa sunucunun GERÇEK yanıtı (HTTP durumu, indirme, yönlendirme adresi) Türkçe hata iletisine yazılır.
- * Adresler iletide gizlenir (<adres>). @returns yönlendirildiyse son sayfanın yolu (yoksa null)
+ * tamamlanmadan kesilmesidir (boş 204 yanıtı, giriş sonrası süren bir gezinmeyle çakışma, yönlendiren sayfa bilgisi (Referer) isteyen
+ * siteler, dosya indirme). Kesilen gezinme ASLA "sayfa açıldı" sayılmaz (giriş sonrası ana sayfada kalıp oradan devam etmek yanlıştır):
+ *  - önce giriş / bağlam değiştirmenin süren son gezinmesinin bitmesi beklenir,
+ *  - kesilirse sırayla: yönlendiren sayfa bilgisiyle (Referer) ve sayfanın içinden (location.assign) yeniden denenir; sayfa hedefe geldiyse biter,
+ *  - hâlâ olmuyorsa sunucunun GERÇEK yanıtı ve sayfanın şu anki yolu Türkçe hata iletisine yazılır.
+ * Adresler iletide gizlenir (<adres>). @returns açılan sayfanın yolu (site başka yola yönlendirdiyse o yol; çağıran karşılaştırır)
  */
-export async function hedefSayfayiAc(sayfa: Page, adres: string, zamanAsimiMs: number, hedefYol: string): Promise<string | null> {
+export async function hedefSayfayiAc(sayfa: Page, adres: string, zamanAsimiMs: number, hedefYol: string): Promise<string> {
   const yanitlar: string[] = [];
   const dinle = (y: import('@playwright/test').Response): void => {
     const istek = y.request();
@@ -78,11 +87,23 @@ export async function hedefSayfayiAc(sayfa: Page, adres: string, zamanAsimiMs: n
     yanitlar.push(ek ? `HTTP ${durum}, dosya indirme yanıtı` : yon ? `HTTP ${durum}, yönlendirme` : durum === 204 || durum === 205 ? `HTTP ${durum}, boş yanıt` : `HTTP ${durum}`);
   };
   sayfa.on('response', dinle);
+  const belgeVar = (): boolean => sayfa.url() !== '' && sayfa.url() !== 'about:blank';
+  const secenek = { waitUntil: 'domcontentloaded' as const, timeout: zamanAsimiMs };
   try {
-    for (let deneme = 1; deneme <= 2; deneme++) {
+    // Giriş sonrası sayfanın kendi gezinmesi (oturum kurulumu, ana sayfaya yönlendirme) sürüyorsa hedefe gidiş onunla çakışıp kesilebilir.
+    if (belgeVar()) await sayfa.waitForLoadState('load', { timeout: Math.min(5_000, zamanAsimiMs) }).catch(() => undefined);
+    const yollar: Array<() => Promise<unknown>> = [
+      () => sayfa.goto(adres, secenek),
+      // Bazı siteler yönlendiren sayfa bilgisi (Referer) olmayan doğrudan gidişi keser: uygulama içinden gidiliyormuş gibi.
+      ...(belgeVar() ? [
+        () => sayfa.goto(adres, { ...secenek, referer: sayfa.url() }),
+        async () => { await sayfa.evaluate((u) => { window.location.assign(u); }, adres); await sayfa.waitForURL((u) => ayniYol(u.toString(), adres), { timeout: zamanAsimiMs, waitUntil: 'domcontentloaded' }); }
+      ] : [])
+    ];
+    for (let i = 0; i < yollar.length; i++) {
       try {
-        await sayfa.goto(adres, { waitUntil: 'domcontentloaded', timeout: zamanAsimiMs });
-        return deneme > 1 ? yolu(sayfa.url()) : null;
+        await yollar[i]();
+        return yolu(sayfa.url());
       } catch (hata) {
         const m = ilkSatir(hata);
         if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${hedefYol}) ${zamanAsimiMs / 1000} sn içinde açılmadı.`);
@@ -93,18 +114,15 @@ export async function hedefSayfayiAc(sayfa: Page, adres: string, zamanAsimiMs: n
           if (agHatasiMi(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
           throw hata;
         }
-        // Gezinme kesildi: sayfa başka bir adrese yönlendiriyorsa yerleşmesini bekle; oraya varıldıysa sayfa açılmıştır.
-        await sayfa.waitForLoadState('domcontentloaded', { timeout: Math.min(8_000, zamanAsimiMs) }).catch(() => undefined);
-        const son = sayfa.url();
-        if (son && son !== 'about:blank') return yolu(son);
-        if (deneme === 2) {
-          const sonYanit = yanitlar.length ? yanitlar[yanitlar.length - 1] : 'sunucudan yanıt alınamadı';
-          throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılırken tarayıcı gezinmeyi iptal etti (net::ERR_ABORTED; ${sonYanit}). Adres yanlış olabilir, sunucu boş yanıt (204) ya da dosya indirmesi dönüyor olabilir ya da sayfa açılırken başka bir adrese yönlendirmeyi kesiyor olabilir; adresi tarayıcıda açıp kontrol edin.`);
-        }
-        await sayfa.waitForTimeout(1_000);
+        // Gezinme kesildi: sayfa yerleşsin; hedefteyse (kesilen gezinmeden sonra oraya varıldıysa) tamam, değilse sıradaki yol denenir.
+        await sayfa.waitForLoadState('domcontentloaded', { timeout: Math.min(5_000, zamanAsimiMs) }).catch(() => undefined);
+        if (belgeVar() && ayniYol(sayfa.url(), adres)) return yolu(sayfa.url());
+        if (i < yollar.length - 1) await sayfa.waitForTimeout(800);
       }
     }
-    return null;
+    const sonYanit = yanitlar.length ? yanitlar[yanitlar.length - 1] : 'sunucudan yanıt alınamadı';
+    const suAn = belgeVar() ? ` Sayfa şu an: ${yolu(sayfa.url())}.` : '';
+    throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa (${hedefYol}) açılırken tarayıcı gezinmeyi iptal etti (net::ERR_ABORTED; ${sonYanit}).${suAn} Adres yanlış olabilir, sunucu boş yanıt (204) ya da dosya indirmesi dönüyor olabilir, giriş / kullanıcı seçimi tamamlanmamış olabilir ya da site doğrudan adres yazılarak açılmasına izin vermiyor olabilir; adresi tarayıcıda açıp kontrol edin.`);
   } finally {
     sayfa.off('response', dinle);
   }
