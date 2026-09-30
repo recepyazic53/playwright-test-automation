@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
 import { alandanCik } from '../../scripts/platform/tarama/alan-cikisi';
+import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
@@ -534,6 +535,16 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
   }
 }
 
+/**
+ * Koşuda sayfa açma: hızlı test / tarama / kayıtla aynı ortak yol (giriş sonrası kesilen gezinme, Referer isteyen siteler,
+ * net::ERR_ABORTED). Hata iletisi adresi göstermez.
+ */
+async function sayfayiAc(page: Page, adres: string): Promise<void> {
+  let yol = adres;
+  try { const u = new URL(adres); yol = `${u.pathname}${u.search}`; } catch { /* göreli adres */ }
+  await hedefSayfayiAc(page, adres, 30_000, yol);
+}
+
 /** Hata göstergesinin (yoksa sayfanın) görünen metni; görünmüyorsa boş. */
 async function hataMetni(page: Page, kosu: PlanKosuTanimi | null): Promise<string> {
   return (await hataMesajlari(page, kosu)).join(' ').trim();
@@ -747,7 +758,7 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
   let ekranaDonuldu = false;
   for (const a of kosu?.aksiyonlar ?? []) {
     // Ekrana dön: ekranın adresi yeniden açılır (ör. ortak akış kullanıcıyı değiştirip ana sayfaya götürdükten sonra).
-    if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); ekranaDonuldu = true; continue; }
+    if (a.tur === 'ekranaDon') { await sayfayiAc(page, ekranUrl); ekranaDonuldu = true; continue; }
     // Şu adrese git: ekranın ortamının adresine göre yol açılır (kayıtta adres çubuğuyla / bağlantıyla gidilen sayfa). Önceki
     // adımın tıklaması hâlâ yükleniyorsa (form gönderimi, yönlendirme) o bitsin; gidilen sayfada sonraki adımlar sürer.
     if (a.tur === 'git') {
@@ -755,7 +766,7 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
       // Yol ekranın ortamının adresine göre çözülür: ekran adresi tam adresse onunla, değilse açık sayfanın kökeniyle (yoksa bağlamın
       // baseURL'iyle: page.goto göreli adresi ona göre açar).
       const kok = /^https?:/i.test(ekranUrl) ? ekranUrl : /^https?:/i.test(page.url()) ? page.url() : null;
-      await page.goto(kok ? new URL(a.yol ?? '/', kok).href : a.yol ?? '/', { waitUntil: 'domcontentloaded' });
+      await sayfayiAc(page, kok ? new URL(a.yol ?? '/', kok).href : a.yol ?? '/');
       ekranaDonuldu = false;
       continue;
     }
@@ -1183,7 +1194,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
           await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`, adim);
           await baglamiUygula(t);
-          if (/^https?:/i.test(donus)) await page.goto(donus, { waitUntil: 'domcontentloaded' });
+          if (/^https?:/i.test(donus)) await sayfayiAc(page, donus);
           return;
         }
         adimMesajlariniTemizle(page);
@@ -1265,7 +1276,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
       await oturumuKapat(page);
       await girisYap(page, t, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
       await baglamiUygula(t);
-      await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+      await sayfayiAc(page, plan.ekranUrl);
       return 'giriş yenilendi';
     };
     /** Başarıyla tamamlanan adımlar (baştan başlatmada hepsi yeniden koşar: hepsi tekrar denenebilir olmalı). */
@@ -1386,10 +1397,10 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     // 1) Baştaki ortak akışlar: girişten sonra açılan sayfada (girişsiz senaryoda ortamın taban adresi açılır).
     let senaryoBitti = false;
     if (bastakiler.some((a) => a.dahil)) {
-      if (!tarif) await page.goto(ortam.veri.tabanUrl, { waitUntil: 'domcontentloaded' });
+      if (!tarif) await sayfayiAc(page, ortam.veri.tabanUrl);
       const baslangicAdresi = page.url();
       senaryoBitti = await bolumuKos(bastakiler, async () => {
-        if (/^https?:/i.test(baslangicAdresi)) await page.goto(baslangicAdresi, { waitUntil: 'domcontentloaded' });
+        if (/^https?:/i.test(baslangicAdresi)) await sayfayiAc(page, baslangicAdresi);
       });
     }
 
@@ -1398,7 +1409,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
       await test.step('Ekran açılır', async () => {
         simdikiAdim = 'Ekran açılır';
         adimAdiniBildir(page, 'Ekran açılır');
-        if (!ekranaDonuldu) await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+        if (!ekranaDonuldu) await sayfayiAc(page, plan.ekranUrl);
         await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
       });
       simdikiAdim = null;
@@ -1413,7 +1424,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
 
       // 3) Ekran adımları (akışın ortasındaki ortak akışlar dahil; bugünkü gibi).
       await bolumuKos(ekranAdimlari, async () => {
-        await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+        await sayfayiAc(page, plan.ekranUrl);
       });
     }
   } catch (hata) {

@@ -5,7 +5,7 @@ import { eylemAdaylariniCikar } from '../../scripts/platform/tarama/eylem-kesfi-
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 
 const SAYFA = `<!doctype html><meta charset="utf-8"><body>${Array.from({ length: 14 }, (_, i) => `<div><button type="button">Adım ${i + 1}</button></div>`).join('')}
-<div id="modal"><button type="button" id="yeni">Poliçeleştir</button></div></body>`;
+<div id="modal"><button type="button" id="yeni">Sonradan beliren</button></div></body>`;
 
 test('çok düğmeli sayfada sonradan beliren düğme "Devam et" adaylarında bulunur', async () => {
   const s = await yerelSunucu(() => ({ tur: 'text/html; charset=utf-8', govde: SAYFA }));
@@ -13,9 +13,9 @@ test('çok düğmeli sayfada sonradan beliren düğme "Devam et" adaylarında bu
   try {
     const page = await (await t.newContext()).newPage();
     await page.goto(`${s.adres}/`);
-    expect((await eylemAdaylariniCikar(page)).gonderim.map((a) => a.metin)).not.toContain('Poliçeleştir');
+    expect((await eylemAdaylariniCikar(page)).gonderim.map((a) => a.metin)).not.toContain('Sonradan beliren');
     const a = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
-    expect(a.gonderim.map((x) => x.metin)).toContain('Poliçeleştir');
+    expect(a.gonderim.map((x) => x.metin)).toContain('Sonradan beliren');
     expect(a.gonderim).toHaveLength(15);
   } finally { await t.close(); await s.kapat(); }
 });

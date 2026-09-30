@@ -186,9 +186,9 @@ test.describe('Başlarken listesi (arayüz)', () => {
     await adim(page, 'ekran').getByRole('link', { name: 'Ekran ekle — İlk ekranı ekle' }).click();
     await expect(page).toHaveURL(/#\/ekranlar\/yeni$/);
     await expect(page.getByRole('heading', { level: 2, name: 'Ekran ekle' })).toBeVisible();
-    // Ekran ekle: önde tara / hızlı test ve kaydet; paket yükle / yapay zekâ bölümü görünür (açılır değil).
+    // Ekran ekle: en üstte paket yükle; altında tek satırda tara / hızlı test, kaydet ve yapay zekâ (açılır değil).
     await expect(page.locator('section.ileri-duzey-bolumu')).toBeVisible();
-    await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet']);
+    await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
     if (EKRAN_KLASORU) {
       await page.screenshot({ path: join(EKRAN_KLASORU, 'ekran-ekle-kapali.png'), fullPage: true });
       await page.goto('/#/ekranlar');

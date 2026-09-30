@@ -325,6 +325,7 @@ function soruCiz(o, y) {
     return h('section', { class: 'kart hizli-soru' },
       h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon('onay'), 'Test kaydedildi'), h('span', { class: 'sag' }, rozet(s.dogrulandi ? 'Doğrulandı' : 'Doğrulanmadı', s.dogrulandi ? 'basari' : 'uyari'))),
       h('p', {}, `Ekran “${o.ekran.ad}” ve senaryo “${s.senaryoBasligi}” kaydedildi.`),
+      s.tablo ? h('p', {}, `Test verisi tablosu “${s.tablo.tablo}” oluşturuldu (${s.tablo.sutunSayisi} sütun); alanlar bu tabloya bağlandı.`) : null,
       maddeler.length ? h('ul', { class: 'hizli-hazirlik', 'aria-label': 'Hazırlık kontrolü' }, maddeler.map((x) => h('li', { class: x.durum },
         h('span', { 'aria-hidden': 'true' }, x.durum === 'tamam' ? '✓' : x.durum === 'yok' ? '–' : '!'), ` ${x.baslik}: ${x.ayrinti}`))) : null,
       s.hazirlik && s.hazirlik.neden ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.hazirlik.neden) : null,
@@ -462,13 +463,16 @@ function bitisDuragi(o, s, kart, m, gonder) {
   devam.addEventListener('click', () => void gonder(devam, 'bitis', {
     etiketler, adres: adres.value.trim() || null, olumsuz: olumsuz.checked && olumsuzMesaj.value ? { mesaj: olumsuzMesaj.value } : null
   }, m));
+  const tara = h('button', { type: 'button', class: 'hayalet' }, 'Sayfayı yeniden tara');
+  tara.title = 'Tarayıcıda şu an görünen yeni mesajları (ör. sonradan çıkan hata / başarı) listeye ekler; verdiğiniz etiketler korunur.';
+  tara.addEventListener('click', () => void gonder(tara, 'yeniden-tara', { etiketler }, m));
   return kart('Bitiş koşulu: ne görülünce biter?', 'hedef',
     h('p', {}, 'Akış boyunca görülen metinler. Her birine bir etiket verin:'),
     h('ul', { class: 'hizli-bitis', 'aria-label': 'Görülen metinler' }, satirlar),
     h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
     olumsuzKutusu,
-    m.kutu, h('div', { class: 'dugmeler' }, devam));
+    m.kutu, h('div', { class: 'dugmeler' }, devam, tara));
 }
 
 /** 6. durak: kaydet (H3 doğrulama sorusu; aynı ekran varsa farklar). */
@@ -476,6 +480,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
   const oz = s.ozet;
   const baslikGirdi = h('input', { type: 'text', id: 'hizli-senaryo-basligi', maxlength: 200, value: s.baslik || '' });
   const dahil = h('input', { type: 'checkbox', id: 'hizli-kosuya-dahil', checked: true });
+  const tabloOlustur = h('input', { type: 'checkbox', id: 'hizli-tablo-olustur', checked: true });
   const zincir = h('ol', { class: 'hizli-zincir buyuk', 'aria-label': 'Kaydedilecek adımlar' },
     oz.adimlar.filter((a) => a.alanSayisi || a.bas).map((a) => h('li', {},
       a.alanSayisi ? `${a.alanSayisi} alan doldur` : null, a.alanSayisi && a.bas ? ', sonra ' : null, a.bas ? h('span', {}, 'bas: ', h('b', {}, a.bas)) : null)),
@@ -484,7 +489,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       oz.bitis.devam.length ? ` · Devam: ${oz.bitis.devam.map((x) => `“${x}”`).join(', ')}` : null) : null);
   const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), s.farklar ? 'Farkları onayla ve kaydet' : 'Ekranı ve senaryoyu kaydet');
   kaydet.addEventListener('click', async () => {
-    const r = await gonder(kaydet, 'kaydet', { baslik: baslikGirdi.value.trim(), kosuyaDahil: dahil.checked, ...(s.farklar ? { onay: true } : {}) }, m);
+    const r = await gonder(kaydet, 'kaydet', { baslik: baslikGirdi.value.trim(), kosuyaDahil: dahil.checked, tabloOlustur: tabloOlustur.checked, ...(s.farklar ? { onay: true } : {}) }, m);
     if (r && r.onayGerekli) bildir('Bu ekran zaten var: farkları gözden geçirip onaylayın.', 'uyari');
   });
   const dogrula = h('button', { type: 'button', class: s.dogrulama ? 'hayalet' : 'birincil' }, ikon('oynat'), s.dogrulama ? 'Yeniden doğrula' : 'Evet, doğrula');
@@ -508,6 +513,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       h('li', {}, h('b', {}, 'Senaryoya: '), `girilen değerler, tablo bağlantıları, izin (${oz.izin}), bitiş koşulu`)),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-senaryo-basligi' }, 'Senaryonun adı'), baslikGirdi),
     h('label', { class: 'onay-satiri', for: 'hizli-kosuya-dahil' }, dahil, 'Toplu koşuya dahil'),
+    h('label', { class: 'onay-satiri', for: 'hizli-tablo-olustur' }, tabloOlustur, 'Girdiğim değerleri test verisi tablosu olarak kaydet ve ekranın test verisine bağla'),
     dogrulamaKutusu, farklar, m.kutu,
     (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null);
 }
