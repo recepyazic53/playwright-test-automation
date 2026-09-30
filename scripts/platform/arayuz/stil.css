@@ -1495,6 +1495,10 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
   .senaryo-tablosu th.profil-sutunu, .senaryo-tablosu td.profil-sutunu { display: none; }
 }
 @media (max-width: 1060px) {
+  .senaryo-tablosu th.talep-sutunu, .senaryo-tablosu td.talep-hucresi { display: none; }
+  .rozet.dar-goster { display: inline-flex; }
+}
+@media (max-width: 1060px) {
   .form-duzeni { grid-template-columns: minmax(0, 1fr); }
   .ozet-sutunu { position: static; max-height: none; }
   .senaryo-tablosu th.ekran-sutunu, .senaryo-tablosu td.ekran-hucresi { display: none; }
@@ -4253,6 +4257,10 @@ a.ozet-kutusu:focus-visible { outline: 2px solid var(--odak); outline-offset: 2p
 .talep-benzer { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--atlanan); }
 .talep-benzer .ikon { width: 13px; height: 13px; }
 .rozet.talep-rozeti { max-width: 16rem; }
+/* Senaryolar listesi: ilk veri sütunu "Talep no" (geniş ekranda); dar ekranda sütun gizlenir, başlığın altındaki rozet görünür. */
+.senaryo-tablosu td.talep-hucresi { white-space: nowrap; min-width: 92px; max-width: 170px; font-variant-numeric: tabular-nums; }
+.senaryo-tablosu td.talep-hucresi .talep-numaralari { display: block; overflow: hidden; text-overflow: ellipsis; }
+.rozet.dar-goster { display: none; }
 .talep-kosu-dugmesi[hidden] { display: none; }
 .filtre-secimi[hidden] { display: none; }
 /* Kapsam matrisi (kapsam-matrisi.js) */
