@@ -1,7 +1,17 @@
 // KORUMA TESTLERİ — Çok düzeyli bağımlı listeler (il → ilçe → belde → köy): kayıt / tarama gözlemlerinden test verisi tablosuna
 // TÜM düzeyler yazılır. Tüm değerler SAHTEDİR.
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
+import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
+import { projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
+import { sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { secenekTablolariUret } from '../../scripts/platform/tablolar/paket-tablolari.mjs';
+import { tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
+import { ekranAlanBaglari } from '../../scripts/platform/tablolar/ekran-baglari.mjs';
+import { kayitPaketiOlustur, type HamAlan, type PaketMetasi } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 type Secenek = { deger: string; metin: string };
 type Gozlem = { anahtar: string; secimler: Record<string, string>; secenekler: Secenek[] };
@@ -50,4 +60,48 @@ test('4 düzeyli bağımlı liste: tek tabloda tüm düzeyler (il, ilçe, belde,
   for (const [il, ilceler] of Object.entries(AGAC)) for (const [ilce, beldeler] of Object.entries(ilceler)) for (const [belde, koyler] of Object.entries(beldeler)) for (const koy of koyler) beklenen.push([il, ilce, belde, koy]);
   expect(t.satirlar).toEqual(beklenen);
   expect(testVerisi?.baglantilar.map((b) => `${b.alanId}:${b.sutun}`)).toEqual(['il:İl', 'ilce:İlçe', 'belde:Belde', 'koy:Köy']);
+});
+
+test.describe('Kayıt → tablo → alan bağlama (uçtan uca, 4 düzey)', () => {
+  let vt: Veritabani;
+  let klasor: { yol: string; temizle: () => void };
+  let projeId: string;
+  test.beforeEach(async () => {
+    klasor = geciciKlasor('cok-duzeyli-liste');
+    vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
+    await kasaOlustur(vt, 'Cok-Duzeyli-Kasa-Parolasi-7', { kdf: HIZLI_KDF });
+    projeId = projeKaydet(vt, { ad: 'Örnek proje' });
+  });
+  test.afterEach(() => { vt.kapat(); klasor.temizle(); });
+
+  test('kayıttan gelen 4 düzeyli liste tek tabloya yazılır; dört alan da tablonun sütunlarına bağlanır', async () => {
+    const bolum = { anahtar: 'b:temel', baslik: 'Temel' };
+    const ham = (id: string, etiket: string): HamAlan => ({
+      anahtar: `#${id}`, tur: 'select', etiket, etiketKaynagi: 'label', kimlik: id, ad: id, secici: `#${id}`, kirilganlik: 'dusuk', adaySeciciler: [`#${id}`],
+      zorunlu: false, devreDisi: false, saltOkunur: false, coklu: false, bolum, secenekler: [{ deger: 'x', metin: 'x' }, { deger: 'y', metin: 'y' }]
+    });
+    const meta: PaketMetasi = { ekranAnahtari: 'adres-formu', ekranAdi: 'Adres formu', urlYolu: '/adres/', girisGerekli: false, ikiAsamali: 'yok', baglamTuru: null };
+    const { paket } = kayitPaketiOlustur(meta, {
+      kip: 'kayit', profil: null,
+      adimlar: [{ ad: 'Adres', yol: '/adres/', baslik: 'Adres', alanlar: [ham('il', 'İl'), ham('ilce', 'İlçe'), ham('belde', 'Belde'), ham('koy', 'Köy')], ilerleme: null }],
+      basariGostergesi: null, engellenenler: [], notlar: [], secenekGozlemleri: kayitGozlemleri().map((g) => ({ ...g, kaynak: 'liste' as const }))
+    });
+    expect(sayfaPaketiniDogrula(paket).hatalar).toEqual([]);
+    const tv = paket.testVerisi as { tablolar: Array<{ ad: string; sutunlar: Array<{ ad: string }>; satirlar: unknown[][] }>; baglantilar: Array<{ alanId: string }> };
+    expect(tv.tablolar).toHaveLength(1);
+    expect(tv.tablolar[0].sutunlar.map((c) => c.ad)).toEqual(['İl', 'İlçe', 'Belde', 'Köy']);
+    expect(tv.baglantilar.map((b) => b.alanId)).toEqual(['il', 'ilce', 'belde', 'koy']);
+
+    const ek = await sayfaEkle(vt, projeId, paket, {
+      senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: join(klasor.yol, 'medya'),
+      testVerisi: { tablolar: { [tv.tablolar[0].ad]: { islem: 'yeni' } }, baglantilar: ['il', 'ilce', 'belde', 'koy'] }
+    });
+    expect(ek.testVerisi.baglanan).toBe(4);
+    const [tablo] = tablolariListele(vt, projeId);
+    expect(tablo.sutunlar.map((c) => c.ad)).toEqual(['İl', 'İlçe', 'Belde', 'Köy']);
+    expect(tablo.satirlar).toHaveLength(tv.tablolar[0].satirlar.length);
+    expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({
+      il: { tablo: tablo.id, sutun: 'İl' }, ilce: { tablo: tablo.id, sutun: 'İlçe' }, belde: { tablo: tablo.id, sutun: 'Belde' }, koy: { tablo: tablo.id, sutun: 'Köy' }
+    });
+  });
 });
