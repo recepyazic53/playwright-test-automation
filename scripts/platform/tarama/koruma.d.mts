@@ -12,8 +12,12 @@ export declare function kesifGuvenligi(a: {
 }): { guvenli: true } | { guvenli: false; neden: string };
 
 export declare const OKUMA_YONTEMLERI: readonly string[];
-export declare class HedefHatasi extends Error {}
-export declare function hedefCoz(tabanUrl: string, hedef: unknown): { adres: string; yol: string };
+export declare class HedefHatasi extends Error {
+  constructor(mesaj: string, bilinmeyenKoken?: string | null);
+  bilinmeyenKoken: string | null;
+}
+export declare function ekKokenleri(ortam: { tabanUrl?: string; ayarlar?: Record<string, unknown> } | null | undefined): string[];
+export declare function hedefCoz(tabanUrl: string, hedef: unknown, ekKokenler?: string[]): { adres: string; yol: string; koken?: string };
 export declare function taramaAdresleri(tabanUrl: string, hedefAdres: string, tarif: GirisTarifi | null, profilDegerleri: Array<Record<string, unknown> | null>): string[];
 export declare function yasakliAdresBul(adresler: string[], desenler: YasakDeseni[]): { adres: string; host: string; kalip: string } | null;
 export declare function yasakliTaramaMesaji(b: { host: string; kalip: string }): string;

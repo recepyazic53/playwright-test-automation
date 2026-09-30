@@ -100,6 +100,32 @@ test.describe('saf kurallar', () => {
     expect(cumleyiOku('bir şeyler yap')).toEqual({ mesajlar: [], dugmeler: [] });
     expect(cumleyiOku(undefined)).toEqual({ mesajlar: [], dugmeler: [] });
   });
+  test('cümle normal Türkçeyle okunur: çekim ekleri, düğme sözcükleri, tırnaksız mesaj, çoklu cümle (YZ yok, uydurma yok)', () => {
+    // Düğme: fiil çekimleri ve ekler.
+    for (const c of ['Hesapla butonuna tıkla', 'Hesapla düğmesine basıyorum', "Hesapla'ya bas", 'Hesaplaya basacağım', 'Hesapla tuşuna tıklayacağım', 'Hesapla butonunu görünce tıkla']) {
+      expect(cumleyiOku(c).dugmeler, c).toEqual(['Hesapla']);
+    }
+    expect(cumleyiOku('Prim Hesapla düğmesine tıkla').dugmeler).toEqual(['Hesapla']);
+    expect(cumleyiOku('Doldur Hesapla\'ya bas').dugmeler).toEqual(['Hesapla']);
+    expect(cumleyiOku('"Prim Hesapla" düğmesine tıklıyorum').dugmeler).toEqual(['Prim Hesapla']);
+    // Mesaj: tırnaksız ifadeler.
+    expect(cumleyiOku('Başvurunuz alındı yazısını görünce bitir').mesajlar).toEqual(['Başvurunuz alındı']);
+    expect(cumleyiOku('Başvurunuz alındı mesajını görürsem testi bitir').mesajlar).toEqual(['Başvurunuz alındı']);
+    expect(cumleyiOku('Ekranda Prim tutarı hesaplandı yazısı gelmeli').mesajlar).toEqual(['Prim tutarı hesaplandı']);
+    expect(cumleyiOku('teşekkürler görünce bitir').mesajlar).toEqual(['teşekkürler']);
+    // Çoklu cümle: ".", ",", "sonra", "ardından", "ve" ile ayrılır.
+    expect(cumleyiOku('Formu doldur ve Hesapla\'ya bas sonra Prim tutarı hesaplandı mesajı gelmeli')).toEqual({ mesajlar: ['Prim tutarı hesaplandı'], dugmeler: ['Hesapla'] });
+    expect(cumleyiOku('Hesapla düğmesine basacağım, ardından Başvurunuz alındı yazısı çıkınca bitir.')).toEqual({ mesajlar: ['Başvurunuz alındı'], dugmeler: ['Hesapla'] });
+    expect(cumleyiOku('Formu doldur. Kaydet butonuna bas. Başarıyla kaydedildi yazısı gelmeli')).toEqual({ mesajlar: ['Başarıyla kaydedildi'], dugmeler: ['Kaydet'] });
+    // Anlaşılmayan yok sayılır; düğme adı mesaj sayılmaz.
+    expect(cumleyiOku('Formu doldur ve bir bakalım')).toEqual({ mesajlar: [], dugmeler: [] });
+    expect(cumleyiOku('Bu butona bas').dugmeler).toEqual([]);
+    expect(cumleyiOku('"Onayla" düğmesine tıkla').mesajlar).toEqual([]);
+    // Aday adı yazılandan uzunsa (ya da kısaysa) tek aday eşleşir; belirsizse eşleşmez.
+    const adaylar = [{ secici: 'a', metin: 'Prim Hesapla' }, { secici: 'b', metin: 'Temizle' }];
+    expect(tekAday(adaylar, ['Hesapla'])?.secici).toBe('a');
+    expect(tekAday([...adaylar, { secici: 'c', metin: 'Yeniden Hesapla' }], ['Hesapla'])).toBeNull();
+  });
   test('basma kararı: Hayır basmaz, Bana sor her zaman sorar, Evet tek adayda basar / çok adayda sorar', () => {
     expect(basmaKarari({ izin: 'hayir', adaySayisi: 1, kullaniciSecti: true })).toBe('basma');
     expect(basmaKarari({ izin: 'sor', adaySayisi: 1, kullaniciSecti: true })).toBe('sor');

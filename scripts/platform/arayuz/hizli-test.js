@@ -7,6 +7,7 @@
 // "Doldur" ile tablodan seçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesajKutusu, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { doldurDugmesi } from './doldur.js';
+import { adresliIstek } from './adres-ayirma.js';
 
 const DURAKLAR = ['Başlat', 'Keşfet', 'Veri durağı', 'Adım adım', 'Bitiş koşulu', 'Kaydet'];
 const IZIN_SECENEKLERI = [
@@ -64,7 +65,7 @@ async function baslatEkrani(govde, proje, ekranId) {
   if (s.ekran) ad.readOnly = true;
   const adres = h('input', { type: 'text', id: 'hizli-adres', maxlength: 2000, autocomplete: 'off', placeholder: '/basvuru', value: s.ekran && s.ekran.urlYolu ? s.ekran.urlYolu : '' });
   const ortam = h('select', { id: 'hizli-ortam' }, (s.ortamlar || []).map((o) => h('option', { value: o.id, selected: o.varsayilan || null }, o.canli ? `${o.ad} — CANLI ortam` : o.ad)));
-  const cumle = h('textarea', { id: 'hizli-cumle', rows: 2, maxlength: 1000, placeholder: 'ör. Formu doldur, Hesapla\'ya bas, "Başvurunuz alındı" mesajını doğrula.' });
+  const cumle = h('textarea', { id: 'hizli-cumle', rows: 2, maxlength: 1000, placeholder: 'ör. Hesapla butonuna tıklayacağım, Başvurunuz alındı yazısını görünce bitir' });
   const girissiz = h('input', { type: 'checkbox', id: 'hizli-girissiz' });
   const girissizSatiri = h('label', { class: 'onay-satiri', for: 'hizli-girissiz' }, girissiz, 'Giriş yapmadan aç (ortamın giriş tarifi kullanılmaz)');
   const secilenOrtam = () => (s.ortamlar || []).find((o) => o.id === ortam.value) || null;
@@ -85,11 +86,11 @@ async function baslatEkrani(govde, proje, ekranId) {
     mesaj.kutu,
     h('div', { class: 'alan' }, h('label', { for: 'hizli-ad' }, 'Testin adı'), ad),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-adres' }, 'Sayfa adresi'), adres,
-      h('div', { class: 'yardim' }, 'Ortamın adresine göre yol (ör. /basvuru) ya da aynı kökte tam adres.')),
+      h('div', { class: 'yardim' }, 'Ortamın adresine göre yol (ör. /basvuru) ya da tam adres. Başka bir sitenin adresi kayıtlı değilse kaydetmeyi size sorarım.')),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-ortam' }, 'Ortam'), ortam),
     girissizSatiri,
     h('div', { class: 'alan' }, h('label', { for: 'hizli-cumle' }, 'Ne yapılsın? ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), cumle,
-      h('div', { class: 'yardim' }, 'Kalıpla okunur: tırnak içindeki metin beklenen mesaj, “…’e bas” düğme adayı olur. Anlaşılmayan kısım yok sayılır.')),
+      h('div', { class: 'yardim' }, 'Kalıp gerekmez, normal yazın. Örnekler: “Hesapla butonuna tıklayacağım”; “Başvurunuz alındı yazısını görünce bitir”; “Prim tutarı yazısı gelmeli”. Anlaşılmayan kısım yok sayılır.')),
     h('fieldset', { class: 'hizli-izinler' }, h('legend', {}, 'Nöbetçi sayfadaki düğmelere basabilir mi?'), izinler.map((x) => x.el)),
     h('div', { class: 'dugmeler' }, baslat,
       h('a', { class: 'dugme hayalet', href: '#/testlerim' }, 'Vazgeç')));
@@ -111,12 +112,15 @@ async function baslatEkrani(govde, proje, ekranId) {
       if (!canliOnay) return;
     }
     try {
-      const y = await mesgulIken(baslat, 'Başlatılıyor…', () => api('/platform/hizli-test/baslat', {
+      const istek = () => api('/platform/hizli-test/baslat', {
         govde: {
           projeId: proje.id, ortamId: ortam.value, hedef: adres.value.trim(), ...(s.ekran ? { ekranId: s.ekran.id } : { ekranAdi: ad.value.trim() }),
           cumle: cumle.value.trim() || undefined, izin, girissiz: girissiz.checked || undefined, ...(canliOnay ? { canliOnay: true } : {})
         }
-      }));
+      });
+      // Başka bir sitenin tam adresi kayıtlı değilse sorulur; onaylanmadan hiçbir istek atılmaz.
+      const { onayIste } = await import('./kosu-paneli.js');
+      const y = await mesgulIken(baslat, 'Başlatılıyor…', () => adresliIstek(istek, { projeId: proje.id, ortamId: ortam.value, onayIste }));
       // Girilenler sunucuya gitti: çıkış uyarısı gerekmez.
       degisiklikleriBirak();
       location.hash = `#/hizli-test/o/${encodeURIComponent(y.id)}`;
