@@ -167,8 +167,7 @@ function paketYukleme(yukleme) {
   return h('section', { class: 'ileri-duzey-bolumu', 'aria-labelledby': 'paket-bolumu-baslik' },
     h('h3', { id: 'paket-bolumu-baslik', class: 'ara-baslik' }, ikon('dosya'), 'Paket yükle'),
     h('p', { class: 'soluk kucuk paket-nedir' }, h('b', {}, 'Elinizde ekran paketi varsa. '),
-      'Ekran paketi, bir sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json); yapay zekâ aracınızla da üretebilirsiniz. ',
-      paketOzetiBaglantisi()),
+      'Ekran paketi, bir sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır (.json); yapay zekâ aracınızla da üretebilirsiniz.'),
     h('div', { class: 'ileri-duzey-govdesi' }, yukleme));
 }
 
@@ -210,8 +209,8 @@ function eklemeKutulari(s, secenek) {
       analiz
         ? h('p', {}, 'Ekran sayfasındaki "Tekrar analiz et" bağlam profillerini sorar ve istek metnini hazırlar; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.')
         : h('ol', { class: 'ekleme-adimlari' },
-          h('li', {}, 'İstek metnini kopyalayın ve "Paket biçimini indir" ile biçim dosyasını alın'),
-          h('li', {}, 'İkisini de sayfanın bağlantısıyla birlikte yapay zekâ aracınıza verin'),
+          h('li', {}, '"İstek dosyasını indir" ile tek dosyayı alın (istek ve paket biçimi içinde)'),
+          h('li', {}, 'Dosyayı sayfanın bağlantısıyla birlikte yapay zekâ aracınıza verin'),
           h('li', {}, 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin')),
       analiz ? h('a', { class: 'dugme birincil', href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, ikon('yenile'), 'Ekrana dön') : istekMetniKutusu(CUMLE, { birincil: true, ek: bicimIndirBaglantisi() }),
       'Araç: tarayıcıyı kullanabilen bir kodlama asistanı.')

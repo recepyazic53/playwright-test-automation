@@ -1,6 +1,6 @@
 // ENTEGRASYON (yerel) — Nöbetçi arayüzü: Ekranlar > "Ekran ekle" (yan yana üç eşit kutu: Ekranı tara / Akışı kaydet /
 // Yapay zekâ ile oluştur), istek metni gösterimi (tam metin yok; tek "İstek metnini kopyala" + kapalı "Metni göster"),
-// "Paket biçimini indir" ve Ekranlar > Ortak akışlar kartları (ekran kartıyla aynı düzen; adım listesi yok).
+// "İstek dosyasını indir" ve Ekranlar > Ortak akışlar kartları (ekran kartıyla aynı düzen; adım listesi yok).
 // Tek kaynak: arayüzün kopyaladığı metin === paketIstekCumlesi(); biçim dosyası === paketBicimiBelgesi().
 // Geçici veritabanı + AYRI Nöbetçi örneği (TEST_SUNUCU_KOSU_KAPALI=1); tüm istekler 127.0.0.1'dedir.
 import { randomBytes } from 'node:crypto';
@@ -153,7 +153,7 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(ileri.locator('label.yukleme-alani')).toContainText('Dosya seç');
   const yz = page.locator('.ekleme-kutusu.yapay-zeka-kutusu');
   await expect(yz.locator('h3')).toHaveText(['Yapay zekâ ile oluştur']);
-  await expect(yz.locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın ve "Paket biçimini indir" ile biçim dosyasını alın', 'İkisini de sayfanın bağlantısıyla birlikte yapay zekâ aracınıza verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
+  await expect(yz.locator('.ekleme-adimlari li')).toHaveText(['"İstek dosyasını indir" ile tek dosyayı alın (istek ve paket biçimi içinde)', 'Dosyayı sayfanın bağlantısıyla birlikte yapay zekâ aracınıza verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
   await expect(yz.getByRole('button', { name: /yükle/i })).toHaveCount(0);
   await expect(yz.getByRole('button')).toHaveText(['İstek metnini kopyala']);
   await expect(yz.locator('.ekleme-notu')).toBeVisible();
@@ -169,7 +169,7 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(yz.locator('pre.istek-metni')).toHaveText(metin);
   const kutu = page.locator('.ekleme-kutusu');
   // "Paket biçimini indir": yerel uç, tek dosya, içerik sunucunun birleştirdiği belgeyle aynı.
-  const indir = yz.getByRole('link', { name: 'Paket biçimini indir' });
+  const indir = yz.getByRole('link', { name: 'İstek dosyasını indir' });
   await expect(indir).toHaveAttribute('href', BICIM_ADRESI);
   await expect(indir).toHaveAttribute('download', BICIM_DOSYASI_ADI);
   const yanit = await page.request.get(BICIM_ADRESI);
@@ -337,7 +337,7 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await expect(d.getByRole('button', { name: 'İstek metnini kopyala' })).toBeVisible();
   await expect(d.locator('pre.istek-metni')).toBeHidden();
   await expect(d.locator('textarea')).toHaveCount(0);
-  await expect(d.getByRole('link', { name: 'Paket biçimini indir' })).toHaveAttribute('href', BICIM_ADRESI);
+  await expect(d.getByRole('link', { name: 'İstek dosyasını indir' })).toHaveAttribute('href', BICIM_ADRESI);
   await d.getByRole('button', { name: 'İstek metnini kopyala' }).click();
   const kopya = await page.evaluate(() => navigator.clipboard.readText());
   expect(kopya).toContain(`ekteki ${BICIM_DOSYASI_ADI} dosyasındaki biçimde`);

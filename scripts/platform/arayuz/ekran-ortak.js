@@ -163,7 +163,7 @@ export function istekMetniKutusu(metin, s = {}) {
 /** "Paket biçimini indir": istek metniyle birlikte yapay zekâ aracına verilecek tek biçim dosyası (yerel sunucudan). */
 export function bicimIndirBaglantisi() {
   return h('a', { class: 'dugme kucuk-dugme hayalet bicim-indir', href: BICIM_ADRESI, download: BICIM_DOSYASI_ADI, title: 'Paketin biçimi (kurallar, şema, model yapısı): istek metniyle birlikte aracınıza verin' },
-    ikon('indir'), 'Paket biçimini indir');
+    ikon('indir'), 'İstek dosyasını indir');
 }
 
 /** Yapay zekâ aracına verilecek dosyanın sonucu: yol + istek metni (kopyala düğmesiyle; tam metin açılır bölümde). */
