@@ -347,6 +347,9 @@ test.describe('Planlı koşular > Planlı koşular arayüzü', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/planli-kosular');
     const kart = page.getByRole('region', { name: 'Planlı koşu kuralları' });
+    // Kılavuz başlığın "?" düğmesinin arkasında (sayaç rozeti düğme adına katılmaz); açılınca görünür.
+    await expect(kart.getByText('kaçan zamanlar sonradan toplu koşulmaz')).toBeHidden();
+    await kart.getByRole('button', { name: 'Planlı koşular: açıklamayı göster' }).click();
     await expect(kart.getByText('kaçan zamanlar sonradan toplu koşulmaz')).toBeVisible();
     await expect(kart.getByText('Planlı koşu yok.')).toBeVisible();
     await kart.getByRole('button', { name: 'Planlı koşu ekle' }).click();
@@ -421,6 +424,7 @@ test.describe('Planlı koşular > Planlı koşular arayüzü', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/planli-kosular');
     const bolum = page.getByRole('region', { name: 'Kasa kilitliyken ve açılışta' });
+    await bolum.getByRole('button', { name: 'Kasa kilitliyken ve açılışta: açıklamayı göster' }).click();
     await expect(bolum.getByText('varsayılan olarak kapalıdır', { exact: false })).toBeVisible();
     const a = bolum.getByRole('switch', { name: 'Kasa kilitlense de planlı koşular çalışsın (anahtar yalnız bellekte)' });
     await expect(a).not.toBeChecked();

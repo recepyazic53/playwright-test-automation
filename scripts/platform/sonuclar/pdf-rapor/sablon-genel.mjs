@@ -1,6 +1,6 @@
 // PDF RAPORU — genel raporun gövdesi (saf; A3): projenin tamamı (rapor verisi: donem-raporu.mjs > cokluBolumler + genelBolumler).
 // İskelet tasarımdaki genel rapordur: Tek bakışta → Ele alınması gerekenler → (bağlantılı sorunlar, varsa) → Sorunlar ve
-// eğilimleri (tür sütunlu) → Eğilim (ekran + servis ayrı) → Ekranlar ve ortak akışlar → Servisler → Servis akışları ve uçtan
+// eğilimleri (tür sütunlu) → Eğilim (ekran + servis ayrı) → Ekranlar ve genel senaryolar → Servisler → Servis akışları ve uçtan
 // uca akışlar → Planlı koşular → Kararsız testler + Test verisi sağlığı → Kapsam ve açıklar → Ortamlara göre (birden çok
 // ortam varsa) → Yöntem + gizlilik. Tablolar çoklu raporla aynı bileşenlerdir (sablon-coklu.mjs). A4 (rapor verileri; tanımlıysa):
 // "Kritik akış" kartı, Eğilim'den sonra "Uygulama sürümlerine göre", Servisler'in sonunda "Süre eşiği aşımları".
@@ -30,10 +30,10 @@ export function genelRapor(v, y) {
   let no = 0;
   const h2 = (/** @type {string} */ metin, ek = '') => `<h2 class="${ek}"><span class="no">${++no}</span>${kacis(metin)}</h2>`;
   const baslik = 'Genel Rapor — Tüm Proje';
-  const alt = 'Her şey dahil: ekranlar, ortak akışlar, servisler, akışlar, planlı koşular, test verisi sağlığı ve kapsam';
+  const alt = 'Her şey dahil: ekranlar, genel senaryolar, servisler, akışlar, planlı koşular, test verisi sağlığı ve kapsam';
   const o = gn.ozet;
   const secilenler = kacis([
-    `${o.ekranSayisi} ekran${o.ortakAkisSayisi ? ` + ${o.ortakAkisSayisi} ortak akış` : ''}`, `${o.servisSayisi} servis`,
+    `${o.ekranSayisi} ekran${o.ortakAkisSayisi ? ` + ${o.ortakAkisSayisi} genel senaryo` : ''}`, `${o.servisSayisi} servis`,
     `${o.akisSayisi} servis akışı`, `${o.uctanUcaSayisi} uçtan uca akış`, `${o.kuralSayisi} planlı koşu kuralı`
   ].join(' · '));
   const meta = ortakMeta(v, e, m, 'Genel (her şey dahil)', secilenler);
@@ -72,7 +72,7 @@ export function genelRapor(v, y) {
   govde += h2('Eğilim', 'sayfa-sonu');
   if (et) {
     govde += trendGrafigi({ kovalar: et.egilim.kovalar, oncekiOrt: et.egilim.oncekiOrt, esikler: esik, karsilastir: v.karsilastir, adetEtiketi: 'Koşulan test (tam koşu)',
-      baslik: `Ekran testleri — ${kirilim} başarı (tüm ekranlar ve ortak akışlar)` });
+      baslik: `Ekran testleri — ${kirilim} başarı (tüm ekranlar ve genel senaryolar)` });
   }
   if (st) {
     govde += trendGrafigi({ kovalar: st.egilim.kovalar, oncekiOrt: st.egilim.oncekiOrt, esikler: esik, karsilastir: v.karsilastir, adetEtiketi: 'Servis çağrısı',
@@ -82,8 +82,8 @@ export function genelRapor(v, y) {
   // ---- A4: uygulama sürümüne göre başarı (koşular sürüm etiketliyse).
   govde += surumBolumu(v.surumler, { e, esik, h2 });
 
-  // ---- Ekranlar ve ortak akışlar · Servisler.
-  govde += h2('Ekranlar ve ortak akışlar');
+  // ---- Ekranlar ve genel senaryolar · Servisler.
+  govde += h2('Ekranlar ve genel senaryolar');
   govde += et ? ekranKiyasTablosu(et.ogeler, { e, k, esik }) : '<p class="bos">Projede ekran yok.</p>';
   govde += h2('Servisler');
   if (st) {
@@ -115,7 +115,7 @@ export function genelRapor(v, y) {
   if (gn.ortamlar) govde += `${h2('Ortamlara göre')}${ortamTablosu(gn.ortamlar, { e, esik })}`;
 
   govde += yontemKutusu([
-    ['Genel rapor', 'Rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm ekranları, ortak akışları, servisleri, servis akışlarını, uçtan uca akışları ve planlı koşu kurallarını kapsar. Ekran ve servis oranları ayrı gösterilir, birbirine eklenmez; durum rozeti daha düşük oranlı tarafa göre verilir. “Akışlar” kartı servis, oturum ve uçtan uca akış koşularından.'],
+    ['Genel rapor', 'Rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm ekranları, genel senaryoları, servisleri, servis akışlarını, uçtan uca akışları ve planlı koşu kurallarını kapsar. Ekran ve servis oranları ayrı gösterilir, birbirine eklenmez; durum rozeti daha düşük oranlı tarafa göre verilir. “Akışlar” kartı servis, oturum ve uçtan uca akış koşularından.'],
     ['Planlı koşu güvenilirliği', 'Tamamlanan tetikleme ÷ takvime göre beklenen tetikleme (sonucun başarısından bağımsız). Beklenen = kuralın takviminden dönem içinde üretilen zamanlar (kural kaydından önceki zamanlar ve devre dışı kurallar hariç). Tamamlanan = “tamamlandı” ya da “başarısız sonuçlu”. Tetikleme geçmişi kural başına son 20 kayıtla sınırlıdır; dönem bu kayıtlardan eskiye uzanıyorsa hesap en eski kayıttan başlar (“kısıtlı”).'],
     ['Kararsız testler', 'Kararsızlık = geçti↔başarısız değişimi ÷ (koşu − 1); aynı senaryo, aynı ortam, aynı model sürümü ve aynı uygulama sürümündeki (sürüm kayıtlı değilse aynı gündeki) koşular. ≥ %20 ve ≥ 5 koşu: kararsız; %5–20 ya da tekrar denemesinde geçen: izlenir.'],
     ['Test verisi sağlığı', 'Test verisi ekranındaki “Veri sağlığı” ile aynı denetimler (kırık başvuru, hiç kullanılmayan tablo, birleştirilebilecek benzer tablo, boş sütun); değer içermez, yalnız tablo / sütun adları. “Test verisi kaynaklı sonuç” = sınıfı test verisi tahmin edilen sorunların başarısız sonuçları.'],

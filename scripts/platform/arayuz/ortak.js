@@ -657,6 +657,12 @@ export function yardimIpucu(govde, konu) {
  * @param {HTMLElement} kap
  */
 export function bolumAciklamalariniSimgeye(kap) {
+  // Düğme adı başlığın METNİNDEN: sayaç rozeti, simge ve düğmeler ada katılmaz ("Planlı koşular3" değil "Planlı koşular").
+  const baslikAdi = (/** @type {Element} */ b) => {
+    const kopya = /** @type {Element} */ (b.cloneNode(true));
+    for (const x of kopya.querySelectorAll('.rozet, button, svg, .ikon, [aria-hidden="true"]')) x.remove();
+    return (kopya.textContent || '').replace(/\s+/g, ' ').trim();
+  };
   const AC_ESIGI = 40;
   const uygula = () => {
     for (const para of kap.querySelectorAll('p.soluk, p.yardim, p.bolum-aciklamasi')) {
@@ -674,7 +680,7 @@ export function bolumAciklamalariniSimgeye(kap) {
       para.hidden = true;
       const dugme = /** @type {HTMLButtonElement} */ (h('button', {
         type: 'button', class: 'ikon-dugme hayalet ayrinti-dugmesi', 'aria-expanded': 'false', 'aria-controls': para.id,
-        'aria-label': `${(baslik.textContent || '').trim()}: açıklamayı göster`, title: 'Açıklama'
+        'aria-label': `${baslikAdi(baslik)}: açıklamayı göster`, title: 'Açıklama'
       }, ikon('soru')));
       const ac = (/** @type {boolean} */ goster) => { para.hidden = !goster; dugme.setAttribute('aria-expanded', String(goster)); };
       dugme.addEventListener('click', () => ac(para.hidden));

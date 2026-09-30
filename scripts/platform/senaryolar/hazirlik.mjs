@@ -45,7 +45,7 @@ export const NEDENLER = Object.freeze({
   /** @param {string} adim */
   hataAdimiKapsamDisi: (adim) => `beklenen hata “${adim}” adımında ama bu adım senaryonun adım kapsamında değil`,
   /** @param {string} adim @param {string} ad */
-  ortakAkisYok: (adim, ad) => `“${adim}” adımının ortak akışı (“${ad}”) bu projede bulunamadı`,
+  ortakAkisYok: (adim, ad) => `“${adim}” adımının genel senaryosu (“${ad}”) bu projede bulunamadı`,
   /** @param {number} n */
   alanlarEksik: (n) => (n === 1 ? '1 alan düzeltilmeli' : `${n} alan düzeltilmeli`),
   /** @param {string} ayrinti */

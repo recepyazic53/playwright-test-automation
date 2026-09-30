@@ -228,7 +228,7 @@ test.describe('koşu ve akış diyagramı', () => {
     // Ekran adımı "Ekran açılır"ın üstünde olamaz.
     const ustte = await kaydet(3);
     expect(ustte.basarili).toBe(false);
-    expect(ustte.hatalar).toEqual([expect.objectContaining({ blok: 2, mesaj: expect.stringContaining('yalnız ortak akış blokları olabilir') })]);
+    expect(ustte.hatalar).toEqual([expect.objectContaining({ blok: 2, mesaj: expect.stringContaining('yalnız genel senaryo blokları olabilir') })]);
     // Yer verilmezse (eski istemci) akışın ayarı korunur.
     expect((await akisKaydet('İki blok', iki, { onay: true, akisId: ikiId })).basarili).toBe(true);
     expect((await tasarim(ikiId)).ekranAcilisSirasi).toBe(0);

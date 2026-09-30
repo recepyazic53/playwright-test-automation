@@ -285,7 +285,8 @@ test.describe('talep no ve kapsam matrisi arayüzü', () => {
     await page.getByRole('link', { name: 'Kapsam matrisi' }).click();
     await expect(page).toHaveURL(/#\/sonuclar\/raporlar\/kapsam$/);
     await expect(page.getByRole('heading', { name: 'Kapsam matrisi', level: 2 })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Raporlar' })).toHaveAttribute('aria-selected', 'true');
+    // Raporlar üst menüde (Sonuçlar sekmesi değil): alt sayfada da menü bağlantısı etkin.
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link', { name: 'Raporlar' })).toHaveAttribute('aria-current', 'page');
     const talepler = page.getByRole('table', { name: 'Talepler' });
     await expect(talepler.getByRole('rowheader')).toHaveText(['TALEP-101', 'TALEP-303', 'TALEP-404']);
     const matris = page.getByRole('table', { name: 'Talep × senaryo' });

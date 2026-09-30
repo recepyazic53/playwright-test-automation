@@ -587,7 +587,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const e = ekranlariListele(vt, projeId).find((x) => x.id === kimlikAl(g.ekranId, 'ekranId'));
       if (!e) throw new DepoHatasi('Ekran bulunamadı.');
       const m = ekranModeliGetir(vt, e.id);
-      if (m && nesneMi(m.model) && (m.model.tur === 'altModel' || m.model.tur === 'ortakAkis')) throw new HizliTestHatasi('EKRAN_TURU', 'Alt model ve ortak akış hızlı testle düzenlenmez.');
+      if (m && nesneMi(m.model) && (m.model.tur === 'altModel' || m.model.tur === 'ortakAkis')) throw new HizliTestHatasi('EKRAN_TURU', 'Alt model ve genel senaryo hızlı testle düzenlenmez.');
       ekran = { id: e.id, ad: e.ad, anahtar: e.anahtar };
     } else {
       const ad = metin(g.ekranAdi, 120);

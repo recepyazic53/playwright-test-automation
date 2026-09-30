@@ -60,7 +60,7 @@ export function ortakAkisPaketineCevir(ham) {
   m.tur = 'ortakAkis';
   m.semaSurumu = 2;
   for (const k of ['ekranUrl', 'specDosyasi', 'pageObject', 'akislar']) delete m[k];
-  if (!metinMi(m.aciklama)) m.aciklama = `${metinMi(m.ad) ? m.ad : 'Ortak akış'} (ortak akış)`;
+  if (!metinMi(m.aciklama)) m.aciklama = `${metinMi(m.ad) ? m.ad : 'Genel senaryo'} (genel senaryo)`;
   if (nesneMi(m.senaryoDuzeyi) && Array.isArray(m.senaryoDuzeyi.alanlar)) {
     m.senaryoDuzeyi.alanlar = m.senaryoDuzeyi.alanlar.filter((a) => !(nesneMi(a) && a.tip === 'birlesim'));
   }

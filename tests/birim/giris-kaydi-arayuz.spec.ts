@@ -134,7 +134,8 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
 
   // Onay ekranı: roller önerilmiş, kod kaynağı sorusu görünür, başarı göstergesi kayıttan.
   const kutu = page.getByRole('region', { name: 'Giriş kaydı: Deneme' });
-  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeVisible({ timeout: 60_000 });
+  // Yönerge paragrafı başlığın "?" düğmesinin arkasında (bolumAciklamalariniSimgeye): DOM'da olmalı.
+  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeAttached({ timeout: 60_000 });
   await expect(kutu.getByRole('combobox', { name: 'Kayıt adımı 1: ne?' })).toHaveValue('kullaniciAdi');
   await expect(kutu.getByRole('combobox', { name: 'Kayıt adımı 2: ne?' })).toHaveValue('parola');
   await expect(kutu.getByRole('combobox', { name: 'Kayıt adımı 3: ne?' })).toHaveValue('gonder');

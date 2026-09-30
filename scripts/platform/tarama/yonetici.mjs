@@ -436,11 +436,11 @@ export function taramaYoneticisiOlustur(secenekler) {
         if (m.model.tur === 'altModel') throw new TaramaHatasi('ALT_MODEL', 'Alt modeller taranamaz; alt modeli kullanan ekranı tarayın.');
         if (m.model.tur === 'ortakAkis') {
           // Ortak akış taranmaz; KAYDEDİLEBİLİR: kayıt seçilen başlangıç ekranının adresinde başlar (ortak akışın kendi adresi yok).
-          if (g.kip !== 'kayit') throw new TaramaHatasi('ALT_MODEL', 'Ortak akışlar taranamaz; ortak akışı kullanan ekranı tarayın ya da ortak akışın sayfasında "Akışı kaydet"i kullanın.');
+          if (g.kip !== 'kayit') throw new TaramaHatasi('ALT_MODEL', 'Genel senaryolar taranamaz; genel senaryoyu kullanan ekranı tarayın ya da genel senaryonun sayfasında "Akışı kaydet"i kullanın.');
           const d = akisDuzenlenebilirMi(/** @type {Nesne} */ (m.model));
-          if (!d.duzenlenebilir) throw new TaramaHatasi('AKIS_DUZENLENEMEZ', `Ortak akışın kaydı akışına yazılamaz: ${d.neden} Ekran paketi yükleyin.`);
+          if (!d.duzenlenebilir) throw new TaramaHatasi('AKIS_DUZENLENEMEZ', `Genel senaryonun kaydı akışına yazılamaz: ${d.neden} Ekran paketi yükleyin.`);
           const b = ortakAkisBaslangicEkranlari(vt, projeId, e.id).find((x) => x.id === g.baslangicEkranId);
-          if (!b) throw new TaramaHatasi('BASLANGIC_EKRANI', 'Ortak akışın kaydı için başlangıç ekranını seçin (adresi olan bir ekran; kayıt o ekranın adresinde başlar).');
+          if (!b) throw new TaramaHatasi('BASLANGIC_EKRANI', 'Genel senaryonun kaydı için başlangıç ekranını seçin (adresi olan bir ekran; kayıt o ekranın adresinde başlar).');
           ortakBaslangic = { id: b.id, ad: b.ad, urlYolu: b.urlYolu };
         }
         mevcutModel = /** @type {Nesne} */ (m.model);
@@ -460,7 +460,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     // çevrilir (paket ucu; ekran adresi yazılmaz) ve "Ortak akışlar" altına kaydedilir. Varsayılan ekran (bugünkü davranış).
     const olusturulacak = !sayfaIsi && g.olusturulacak === 'ortakAkis' ? 'ortakAkis' : 'ekran';
     if (olusturulacak === 'ortakAkis' && (girisKaydi || girisDenemesi || mevcutModel || (g.ekranId !== undefined && g.ekranId !== null && g.ekranId !== ''))) {
-      throw new TaramaHatasi('OLUSTURMA', 'Ortak akış yalnız yeni oluştururken seçilir (Ekranlar > Ekran ekle).');
+      throw new TaramaHatasi('OLUSTURMA', 'Genel senaryo yalnız yeni oluştururken seçilir (Ekranlar > Ekran ekle).');
     }
 
     // Hedef (ortamın kökeninde bir yol). Giriş kaydında: verilen yol, yoksa kayıtlı tarifin giriş adresi, yoksa "/".
@@ -863,7 +863,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       return { alindi: true };
     }
     if (is.ortakAkis) {
-      bitir(is, 'hata', { kod: 'PAKET', mesaj: 'Ortak akışın kaydı okunamadı; kaydı yeniden başlatın.' });
+      bitir(is, 'hata', { kod: 'PAKET', mesaj: 'Genel senaryonun kaydı okunamadı; kaydı yeniden başlatın.' });
       return { alindi: true };
     }
     try {
@@ -1097,7 +1097,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       return { kaydedildi: !bicim.length, palet: akisPaleti(is.akis.envanter, is.akis.bloklar) };
     }
     // Ortak akış ekran paketiyle (ekran adresli model) önizlenmez: kayıt ortak akışın tek akışına yazılır.
-    if (is.ortakAkis) throw new TaramaHatasi('ORTAK_AKIS', 'Ortak akışın kaydı ekran paketine çevrilmez; “Ortak akışı güncelle” ile ortak akışın akışına yazılır.', 409);
+    if (is.ortakAkis) throw new TaramaHatasi('ORTAK_AKIS', 'Genel senaryonun kaydı ekran paketine çevrilmez; “Genel senaryoyu güncelle” ile genel senaryonun akışına yazılır.', 409);
     const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar, { satirSiniri: is.sqlSatirSiniri });
     if (!envanter) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;

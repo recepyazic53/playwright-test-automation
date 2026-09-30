@@ -97,7 +97,7 @@ test.describe('saf işlevler', () => {
     const kaynak = (harita: Record<string, Nesne>) => (d: string): unknown => { if (!(d in harita)) throw new Error(`"${d}" yok`); return harita[d]; };
     expect(() => ekranModeliniDogrula('ekran-b.model.json', kopya(B), kaynak({ [dosyasi('ekran-a')]: A }))).not.toThrow();
     const ALT = { semaSurumu: 2, tur: 'altModel', id: 'ekran-a' };
-    expect(() => ekranModeliniDogrula('ekran-b.model.json', kopya(B), kaynak({ [dosyasi('ekran-a')]: ALT }))).toThrow(/ortak akış ya da ekran değil/);
+    expect(() => ekranModeliniDogrula('ekran-b.model.json', kopya(B), kaynak({ [dosyasi('ekran-a')]: ALT }))).toThrow(/genel senaryo ya da ekran değil/);
     const AB = ekranModeli('ekran-a', 'Ekran A', 'aAlani', ['ekran-b']);
     expect(() => ekranModeliniDogrula('ekran-a.model.json', kopya(AB), kaynak({ [dosyasi('ekran-b')]: B }))).toThrow(/kendini içeremez/);
     const KENDI = ekranModeli('ekran-a', 'Ekran A', 'aAlani', ['ekran-a']);

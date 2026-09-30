@@ -822,8 +822,8 @@ export function playwrightKoduUret(g) {
     govde.push(`  await test.step('Ekran açılır', async () => {`, `    await page.goto(${s(plan.ekranUrl)}, { waitUntil: 'domcontentloaded' });`, '  });');
   };
   if (plan.adimlar.some((a) => a.dahil && a.ekranAcilmadan)) {
-    govde.push(girisAcik ? '  // Baştaki ortak akışlar ekran açılmadan önce, girişten sonra açılan sayfada koşar.'
-      : '  // Baştaki ortak akışlar ekran açılmadan önce, ortamın taban adresinde koşar.');
+    govde.push(girisAcik ? '  // Baştaki genel senaryolar ekran açılmadan önce, girişten sonra açılan sayfada koşar.'
+      : '  // Baştaki genel senaryolar ekran açılmadan önce, ortamın taban adresinde koşar.');
     if (!girisAcik) govde.push("  await page.goto(TABAN_ADRES, { waitUntil: 'domcontentloaded' });");
   } else ekraniAc();
 
@@ -842,7 +842,7 @@ export function playwrightKoduUret(g) {
       continue;
     }
     govde.push(`  await test.step(${s(adim.baslik)}, async () => {`);
-    if (adim.ortakAkisAdi) govde.push(`${ic}// Ortak akış: ${yorum(adim.ortakAkisAdi)}`);
+    if (adim.ortakAkisAdi) govde.push(`${ic}// Genel senaryo: ${yorum(adim.ortakAkisAdi)}`);
     if (adim.sql) {
       const sql = adim.sql;
       govde.push(`${ic}// Nöbetçi'de koşar: SQL kontrolü — sorgu ortamın veritabanında çalıştırılıp beklenenle karşılaştırılır.`);

@@ -14,7 +14,7 @@
 // NOT: import.meta KULLANILMAZ.
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, posix as posixYol, relative, resolve, sep, win32 as win32Yol } from 'node:path';
 
 export const AYAR_DOSYASI_DEGISKENI = 'NOBETCI_AYAR_DOSYASI';
 /** Başlatıcı yeniden başlatma döngüsünü destekliyorsa '1' (sunucu 75 koduyla çıkınca yeniden başlatılır). */
@@ -107,12 +107,14 @@ export function veriKlasoruDurumu(klasor) {
  * @param {NodeJS.ProcessEnv} [ortam] @param {string} [platform]
  */
 export function varsayilanAyarDosyasi(ortam = process.env, platform = process.platform) {
+  // Yol kuralları HEDEF platformun (çalışan makinenin değil): Windows'ta sınanan macOS yolu da '/' ile kurulur.
+  const y = platform === 'win32' ? win32Yol : posixYol;
   const ev = ortam.HOME || ortam.USERPROFILE;
   let taban = null;
-  if (platform === 'win32') taban = ortam.LOCALAPPDATA || (ortam.USERPROFILE ? join(ortam.USERPROFILE, 'AppData', 'Local') : null);
-  else if (platform === 'darwin') taban = ev ? join(ev, 'Library', 'Application Support') : null;
-  else taban = ortam.XDG_CONFIG_HOME || (ev ? join(ev, '.config') : null);
-  return taban && isAbsolute(taban) ? join(taban, 'Nöbetçi', 'ayar.json') : null;
+  if (platform === 'win32') taban = ortam.LOCALAPPDATA || (ortam.USERPROFILE ? y.join(ortam.USERPROFILE, 'AppData', 'Local') : null);
+  else if (platform === 'darwin') taban = ev ? y.join(ev, 'Library', 'Application Support') : null;
+  else taban = ortam.XDG_CONFIG_HOME || (ev ? y.join(ev, '.config') : null);
+  return taban && y.isAbsolute(taban) ? y.join(taban, 'Nöbetçi', 'ayar.json') : null;
 }
 
 /** Başlatıcının verdiği ayar dosyası (yoksa null: seçim yapılamaz). */

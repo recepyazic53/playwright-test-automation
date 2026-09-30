@@ -224,7 +224,7 @@ test.describe('koşucu: alan grubundan sonra beklenen mesaj (düğmesiz adım)',
     return { page, hata, kapat: () => baglam.close() };
   }
 
-  test('başarı bekleyen senaryo: Tab ile alandan çıkınca mesaj görülürse adım geçer; tuş yoksa ya da uyarı çıkarsa kalır', async ({}, testInfo) => {
+  test('başarı bekleyen senaryo: alandan çıkınca mesaj görülürse adım geçer (tuş seçilmese de koşucu Tab ile çıkar); uyarı çıkarsa kalır', async ({}, testInfo) => {
     test.setTimeout(90_000);
     const gecerli = { adSoyad: 'Deniz Ak', telefon: '5321234567' };
     // Tab'a basılır → onay metni görünür → adım geçer; sonra Kaydet.
@@ -234,12 +234,13 @@ test.describe('koşucu: alan grubundan sonra beklenen mesaj (düğmesiz adım)',
       await expect(a.page.locator('#telefonDurum')).toHaveText(ONAY);
       await expect(a.page.locator('#sonuc')).toHaveText('Başvuru alındı');
     } finally { await a.kapat(); }
-    // Tuş seçilmemiş: alandan çıkılmaz, mesaj görünmez → adım kalır (Kaydet'e basılmaz).
+    // Tuş seçilmemiş: koşucu her alandan sonra kullanıcı gibi alandan çıkar (ortak yazma yolu alanaYaz → Tab); blur tetiklenir,
+    // onay metni görünür → adım yine geçer. "Doldurduktan sonra" tuşu yalnız ek bir tuş (ör. Enter) gerektiğinde anlamlıdır.
     const b = await kos(testInfo, kosuModeli(null), gecerli);
     try {
-      expect(b.hata).toContain('başarı göstergesi görünmedi');
-      expect(b.hata).toContain(ONAY);
-      await expect(b.page.locator('#sonuc')).toHaveText('');
+      expect(b.hata).toBeNull();
+      await expect(b.page.locator('#telefonDurum')).toHaveText(ONAY);
+      await expect(b.page.locator('#sonuc')).toHaveText('Başvuru alındı');
     } finally { await b.kapat(); }
     // Eksik telefon: kabul edilen uyarı görünür → başarı bekleyen senaryo kalır.
     const c = await kos(testInfo, kosuModeli(), { ...gecerli, telefon: '532' });
