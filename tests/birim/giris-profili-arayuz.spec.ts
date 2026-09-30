@@ -125,10 +125,16 @@ test('Kod alanları tarife göre: kod istemeyen ortamda görünmez, isteyende bi
 
 test('Zorunlu alan eksikken açık hata; eksik alan Gelişmiş\'teyse Gelişmiş kendiliğinden açılır', async () => {
   const { page, istekler } = await arayuz();
+  // Bölüm açıklamasının "?" düğmesi başlığın metniyle adlanır; sayaç rozeti ada yapışmaz ("Giriş tarifi1" değil).
+  await expect(page.getByRole('button', { name: 'Giriş tarifi: açıklamayı göster' })).toBeVisible();
   await page.getByRole('button', { name: 'Giriş profili ekle' }).click();
   const form = profilFormu(page);
   await form.getByRole('button', { name: 'Kaydet' }).click();
   await expect(form.getByText('Profil adı boş olamaz.')).toBeVisible();
+  // Tüm alan hataları birlikte (yalnız ilki değil); odak ilk hatalı alanda.
+  await expect(form.getByText('Kullanıcı adı boş olamaz.')).toBeVisible();
+  await expect(form.getByText('Parola girin.')).toBeVisible();
+  await expect(form.getByLabel('Profil adı')).toBeFocused();
 
   await form.getByLabel('Profil adı').fill('Tarifsiz kullanıcı');
   await form.getByLabel('Ortam', { exact: true }).selectOption({ label: 'TARIFSIZ' });

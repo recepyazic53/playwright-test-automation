@@ -60,3 +60,14 @@ test('aynı gruptaki aynı türden iki alan ayrışır; taşınacak değer yoksa
   expect(t?.tablolar[0].sutunlar.map((x) => x.ad)).toEqual(['Telefon', 'Telefon 2']);
   expect(tabloTaslagiKur({ baslik: 'B', alanlar: [{ anahtar: 'a', tur: 'text', etiket: 'A' }], degerler: {} })).toBeNull();
 });
+
+test('sayı / tarih alanı (kişi / kart dışı) tek sütunlu tablo açmaz; doğum tarihi kişi tablosunda kalır', () => {
+  const t = tabloTaslagiKur({
+    baslik: 'C',
+    alanlar: [{ anahtar: 'a', tur: 'number', etiket: 'Adet' }, { anahtar: 't', tur: 'date', etiket: 'Teslimat tarihi' }, { anahtar: 'd', tur: 'date', etiket: 'Doğum tarihi' }],
+    degerler: { a: { deger: '3', kaynak: 'elle' }, t: { deger: '2026-10-05', kaynak: 'elle' }, d: { deger: '1990-01-01', kaynak: 'elle' } }
+  });
+  expect(t?.tablolar.map((x) => x.tabloAdi)).toEqual(['Kişi bilgileri']);
+  expect(t?.tablolar[0].satir).toEqual({ 'Doğum tarihi': '1990-01-01' });
+  expect(tabloTaslagiKur({ baslik: 'C', alanlar: [{ anahtar: 'a', tur: 'number', etiket: 'Adet' }], degerler: { a: { deger: '3', kaynak: 'elle' } } })).toBeNull();
+});

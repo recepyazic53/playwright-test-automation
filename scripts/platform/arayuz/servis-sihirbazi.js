@@ -192,7 +192,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
   };
 
   const adim2 = () => {
-    const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.yol, placeholder: '/AppService/siparis.asmx', 'aria-label': 'Yol' });
+    const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.yol, placeholder: '/AppService/siparis.asmx' }); // ad görünür etiketten (alan(): label for)
     const onizleme = h('ul', { class: 'adres-onizleme' });
     const onizle = () => yerlestir(onizleme, ...ortamlar.map((o) => h('li', {}, h('b', {}, `${o.ad}: `),
       d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol || '/…')) : h('span', { class: 'soluk' }, 'bu ortamda yok'))));

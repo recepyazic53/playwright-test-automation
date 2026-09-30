@@ -2116,7 +2116,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const meta = [
     h('span', {}, ikon('katman'), `${sema.modelAdi || baglam.ekran.ad} modeli${baglam.modelSurumu ? ` · sürüm ${baglam.modelSurumu}` : ''}`),
     h('span', {}, ikon('ag'), `doğrulama bağlamı: ${s.ortam.ad}`),
-    senaryo ? h('span', { class: 'mono cok-soluk' }, senaryo.id) : null
+    // Ham kimlik başlıkta gösterilmez; gerekirse kopyalanır (tam kimlik düğmenin ipucunda).
+    senaryo ? h('button', {
+      type: 'button', class: 'kucuk-dugme hayalet kimlik-kopyala', title: `Senaryo kimliği: ${senaryo.id}`,
+      onclick: async () => {
+        try { await navigator.clipboard.writeText(senaryo.id); bildir('Senaryo kimliği kopyalandı.'); } catch { bildir(`Senaryo kimliği: ${senaryo.id}`, 'uyari'); }
+      }
+    }, ikon('kopya'), 'Kimliği kopyala') : null
   ];
   // Playwright koduna dışa aktar: KAYDEDİLMİŞ senaryodan (kaydedilmemiş değişiklikler dosyaya girmez); senaryonun kayıtlı ortamlarından biri.
   // İndirmeden önce açıklamalı onay (playwright-disa-aktarma.js). Yeni senaryoda düğme görünür ama kapalıdır (önce kaydedilir).

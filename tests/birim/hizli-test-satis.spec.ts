@@ -337,6 +337,9 @@ test('1.22 Dene formdaki kaydedilmemiş değişiklikle koşar (satır seçimi de
     const ulke = page.getByLabel('GİDİLECEK ÜLKE satırı');
     await expect(ulke).toBeVisible({ timeout: 60_000 });
     console.log(`[1.19] senaryo formu açılışı (31 tablo, ~9300 satır): ${Date.now() - t0} ms`);
+    // Başlıkta ham kimlik yok; "Kimliği kopyala" düğmesi (tam kimlik ipucunda).
+    await expect(page.locator('.sayfa-basligi .meta')).not.toContainText(String(kayitli?.senaryoId));
+    await expect(page.getByRole('button', { name: 'Kimliği kopyala' })).toHaveAttribute('title', `Senaryo kimliği: ${kayitli?.senaryoId}`);
     // Kaydedilmemiş değişiklik: ülke satırı LIBERYA → A.B.D. Kaydetmeden Dene.
     const secenek = await ulke.locator('option').evaluateAll((l) => l.map((x) => ({ deger: (x as HTMLOptionElement).value, metin: (x.textContent ?? '').trim() })));
     const abd = secenek.find((x) => /A\.B\.D/.test(x.metin));

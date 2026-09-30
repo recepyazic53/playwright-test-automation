@@ -468,6 +468,8 @@ function trendGrafigi(noktalar, kap, secenek = {}) {
       s('text', { class: 'eksen-yazisi', x: L - 8, y: yy + 4, 'text-anchor': 'end' }, oranKipi ? `${t}%` : String(t)));
   }
   const etiketAdimi = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 64))));
+  // Aynı günün koşuları: eksende gün bir kez yazılır, sonrakilerde saat ("22.09" ×5 tekrarı olmasın).
+  let sonEtiketGunu = '';
   const ipucu = h('div', { class: 'trend-ipucu', hidden: true, role: 'presentation' });
   const ipucuGoster = (nk, x) => {
     const o = oran(nk);
@@ -510,7 +512,11 @@ function trendGrafigi(noktalar, kap, secenek = {}) {
     grup.addEventListener('keydown', (o2) => { if (o2.key === 'Enter' || o2.key === ' ') { o2.preventDefault(); ac(); } });
     svg.append(grup);
     if (i % etiketAdimi === (n - 1) % etiketAdimi || son) {
-      svg.append(s('text', { class: `eksen-yazisi${son ? ' son' : ''}`, x: x + bw / 2, y: H - 8, 'text-anchor': 'middle' }, gunAy(nk.z)));
+      const gun = gunAy(nk.z);
+      const t = tarihNesnesi(nk.z);
+      const eksenMetni = gun === sonEtiketGunu && !Number.isNaN(t.getTime()) ? `${iki(t.getHours())}:${iki(t.getMinutes())}` : gun;
+      sonEtiketGunu = gun;
+      svg.append(s('text', { class: `eksen-yazisi${son ? ' son' : ''}`, x: x + bw / 2, y: H - 8, 'text-anchor': 'middle' }, eksenMetni));
     }
   });
   const lejant = h('div', { class: 'trend-lejant' },

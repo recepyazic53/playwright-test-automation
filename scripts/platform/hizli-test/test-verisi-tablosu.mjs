@@ -17,6 +17,8 @@ export const KISI_TABLOSU = 'Kişi bilgileri';
 export const KART_TABLOSU = 'Kart bilgileri';
 /** Kart alanı desenleri (normal ad üzerinde). */
 const KART_DESENI = /(kart|cvv|cvc|guvenlikkodu|sonkullanma|gecerlilik)/;
+/** Tabloya önerilmeyen (kişi / kart dışında) girdi türleri: sayı, tarih, saat, aralık. */
+const SERBEST_TURLER = new Set(['number', 'date', 'datetime-local', 'time', 'month', 'week', 'range']);
 
 /** Tablo / sütun adında kullanılamayan karakterler: . [ ] { } $ < > & | (tablo-deposu.mjs). @param {unknown} m @param {number} [en] */
 export function adTemizle(m, en = EN_COK_AD) {
@@ -105,6 +107,9 @@ export function tabloTaslagiKur(g) {
     if (!v || v.kaynak === 'tablo' || typeof v.deger !== 'string' || !v.deger.trim()) continue;
     if (['password', 'file'].includes(String(a.tur))) continue;
     const { tablo, sutun } = alanGrubu(a);
+    // Sayı / tarih / saat alanı (kişi ya da kart bilgisi değilse; ör. "Adet", "Teslimat tarihi") kendi tek sütunlu tablosunu açmaz:
+    // değeri senaryoda düz değer olarak kalır (tabloya taşımak veri tekrarını azaltmaz, yalnız tablo kalabalığı yapar).
+    if (SERBEST_TURLER.has(String(a.tur)) && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU) continue;
     const anahtar = tablo.toLocaleLowerCase('tr');
     let t = tablolar.get(anahtar);
     if (!t) { t = { tabloAdi: tablo, sutunlar: [], satir: {}, liste: null, karsiliklar: {}, baglar: {} }; tablolar.set(anahtar, t); }

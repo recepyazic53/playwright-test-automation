@@ -539,12 +539,20 @@ async function girisProfilleri(govde, baglam, yenile) {
       o.preventDefault();
       mesaj.temizle();
       [ad, kullanici, parola.girdi, totp.girdi, smsKod].forEach((g) => alanHatasi(g, ''));
-      if (!ad.value.trim()) { hataGoster(ad, 'Profil adı boş olamaz.'); return; }
-      if (!kullanici.value.trim()) { hataGoster(kullanici, 'Kullanıcı adı boş olamaz.'); return; }
-      if (!p && !parola.girdi.value) { hataGoster(parola.girdi, 'Parola girin.'); return; }
+      // Tüm alan hataları birlikte gösterilir (yalnız ilki değil); odak ilk hatalı alana gider.
       const secilenTur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
-      if (secilenTur === 'totp' && !totp.girdi.value && !(p && p.totpGizli.dolu)) { hataGoster(totp.girdi, 'Authenticator gizli anahtarını girin.'); return; }
-      if (secilenTur === 'sms' && smsSabit.checked && !smsKod.value.trim()) { hataGoster(smsKod, 'Test kodunu girin veya "koşu sırasında elle girilir" seçin.'); return; }
+      /** @type {Array<[HTMLElement, string]>} */
+      const alanHatalari = [];
+      if (!ad.value.trim()) alanHatalari.push([ad, 'Profil adı boş olamaz.']);
+      if (!kullanici.value.trim()) alanHatalari.push([kullanici, 'Kullanıcı adı boş olamaz.']);
+      if (!p && !parola.girdi.value) alanHatalari.push([parola.girdi, 'Parola girin.']);
+      if (secilenTur === 'totp' && !totp.girdi.value && !(p && p.totpGizli.dolu)) alanHatalari.push([totp.girdi, 'Authenticator gizli anahtarını girin.']);
+      if (secilenTur === 'sms' && smsSabit.checked && !smsKod.value.trim()) alanHatalari.push([smsKod, 'Test kodunu girin veya "koşu sırasında elle girilir" seçin.']);
+      if (alanHatalari.length) {
+        for (const [g, m] of alanHatalari.slice(1)) { if (gelismis.contains(g)) gelismis.open = true; alanHatasi(g, m); }
+        hataGoster(alanHatalari[0][0], alanHatalari[0][1]);
+        return;
+      }
       const istek = {
         id: p ? p.id : undefined, projeId: proje.id, ad: ad.value.trim(), ortamId: ortam.value || null,
         kullaniciAdi: kullanici.value.trim(), ikiAsamaliTur: secilenTur,

@@ -201,6 +201,20 @@ test.describe('tüm ekranlar taşmasız', () => {
     await baglam.close();
   });
 
+  test('Servis sonuçları: koşu trendi ekseninde aynı gün tekrar etmez (sonraki koşularda saat); başlık rozeti her servisin son koşusundan', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar/servisler');
+    await bekle(page);
+    const etiketler = await page.locator('.trend-kapsayici .eksen-yazisi').allTextContents();
+    expect(etiketler.length).toBeGreaterThan(1);
+    const gunler = etiketler.filter((x) => /^\d\d\.\d\d$/.test(x));
+    expect(new Set(gunler).size, etiketler.join(' | ')).toBe(gunler.length);
+    // Y1: kart altı her servisin / akışın son koşusundan söz eder (tek koşudan değil).
+    await expect(page.locator('.kart-kaynak')).toContainText('Her servisin ve akışın son koşusu');
+    await baglam.close();
+  });
+
   test('Oluştur menüsü: Servis testleri grubunda "Uçtan uca akış" → #/akislar/yeni', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
     const page = await baglam.newPage();

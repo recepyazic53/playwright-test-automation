@@ -94,7 +94,7 @@ test.describe('sihirbaz uçtan uca', () => {
 
     // 2 · Metotlar: yol + denetle (onay penceresi) → metot listesi; "Onayla" CANLI'da çağrılmasın işaretli gelir.
     await expect(ileri).toBeDisabled();
-    await page.getByLabel('Yol', { exact: true }).fill('/ornek.asmx');
+    await page.getByLabel('Yol (zorunlu)', { exact: true }).fill('/ornek.asmx');
     await expect(page.locator('.adres-onizleme')).toContainText(`${soap.adres}/Servis/ornek.asmx`);
     await expect(page.locator('.adres-onizleme')).toContainText('bu ortamda yok');
     const once = soap.istekler.length;
