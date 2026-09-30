@@ -7,11 +7,13 @@
 // oluşturur (zamanlama/kurallar.mjs; kural Planlı koşular'da görünür). "N testten M'i çalıştırılacak" + çalıştırılamayanların
 // gerekçesi. CANLI ortamda bugünkü onay penceresi aynen sorulur. Diğer seçenekler (eşzamanlılık, kanıt düzeyi, veri koşusu…)
 // Ayarlar'daki varsayılanlardır.
+// KOŞU GRUPLARI (kosu-gruplari.js): farklı ekranlardan seçilen senaryolara ad verilip kaydedilir ("Koşu oluştur"), kayıtlı grup "Çalıştır" ile koşar.
 // Hiçbir alana değer üretilmez; istek yalnız yerel Nöbetçi sunucusuna gider. Kullanıcı verisi DOM'a yalnızca metin olarak yazılır.
 import { api, bildir, bosDurum, canliOnayPenceresi, h, ikon, iskelet, rozet, yeniKimlik } from './ortak.js';
 import { canliOnayIste, dinle, kosuBaslat, onerilenOrtam, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { sayiIyelikEki } from './hazirlik.mjs';
 import { adimSeridi } from './basit-mod.js';
+import { kosuGruplariBolumu } from './kosu-gruplari.js';
 
 /** Oturum boyunca seçili ortam (proje başına). @type {Map<string, string>} */
 const seciliOrtam = new Map();
@@ -108,9 +110,11 @@ export async function testlerimEkrani(icerik, baglam) {
       : [`Seçili ortam: ${ortam().ad}. Projedeki ortamlar: ${ortamlar.map(ortamSecenekMetni).join(', ')}. Ortam eklemek ya da değiştirmek için `, bag, '.']));
   };
   ortamNotuCiz();
+  const gruplar = h('section', { class: 'kosu-gruplari', 'aria-label': 'Koşu grupları' });
+  kosuGruplariBolumu(gruplar, { proje, ortamlar, ortamId: () => ortamSec.value });
   const liste = h('div', { class: 'testler-kap', 'aria-live': 'polite' }, iskelet('liste'));
   const gelismisNotu = h('div', { class: 'gelismis-testler-notu', hidden: true });
-  icerik.replaceChildren(baslik, ortamNotu, liste, gelismisNotu);
+  icerik.replaceChildren(baslik, ortamNotu, gruplar, liste, gelismisNotu);
 
   /** @type {Array<{ ekran: any; senaryolar: any[] }>} */
   let testler = [];

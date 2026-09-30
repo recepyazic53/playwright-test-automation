@@ -151,6 +151,7 @@ import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } f
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
 import { ekipKaydet, ekipSil, ortamUygulamaSurumu, raporIsaretiKaydet, uygulamaSurumuTemizle } from './ayarlar/rapor-verileri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
+import { kosuGrubuKaydet, kosuGrubuSil, kosuGruplariniListele } from './senaryolar/kosu-gruplari.mjs';
 import { kullanimModunuKaydet, kullanimModunuOku } from './ayarlar/kullanim-modu.mjs';
 import { baslarkenDurumu, baslarkenIsaretle } from './ayarlar/baslarken.mjs';
 import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
@@ -1395,6 +1396,8 @@ const GET_UCLARI = new Map([
   ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
   // Ayarlar > Arayüz > Sağlık noktası (proje başına): Sonuçlar ekranındaki noktanın renk eşikleri.
   ['/platform/saglik-esikleri', (db, q) => ({ esikler: saglikEsikleriniOku(db, kimlikAl(q.get('projeId'), 'projeId')), varsayilan: VARSAYILAN_SAGLIK_ESIKLERI })],
+  // Koşu grupları (isimli, ekranlar arası karışık senaryo seçimi; kasada şifreli — senaryolar/kosu-gruplari.mjs).
+  ['/platform/kosu-gruplari', (db, q) => ({ gruplar: kosuGruplariniListele(db, kimlikAl(q.get('projeId'), 'projeId')) })],
   // Ayarlar > Raporlar (PDF rapor A4): ekip listesi ve öğe işaretleri (kritik, ekip, süre eşiği) + öğe / metot listeleri.
   ['/platform/rapor-verileri', (db, q) => raporVerileriEkrani(db, kimlikAl(q.get('projeId'), 'projeId'))],
   // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
@@ -1635,6 +1638,8 @@ const POST_UCLARI = new Map([
   }],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
+  ['/platform/kosu-gruplari/kaydet', (db, g) => ({ grup: kosuGrubuKaydet(db, { id: g.id ? kimlikAl(g.id, 'id') : null, projeId: kimlikAl(g.projeId, 'projeId'), ad: g.ad, senaryoIdleri: g.senaryoIdleri }) })],
+  ['/platform/kosu-gruplari/sil', (db, g) => kosuGrubuSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id, 'id'))],
   ['/platform/saglik-esikleri/kaydet', (db, g) => ({ esikler: saglikEsikleriniKaydet(db, kimlikAl(g.projeId, 'projeId'), g.esikler) })],
   // Ayarlar > Raporlar (PDF rapor A4). Dış istek yok; yalnız kasaya yazılır.
   ['/platform/rapor-verileri/ekip/kaydet', (db, g) => ({ id: ekipKaydet(db, { projeId: kimlikAl(g.projeId, 'projeId'), id: g.id ? kimlikAl(g.id, 'id') : null, ad: g.ad }) })],
