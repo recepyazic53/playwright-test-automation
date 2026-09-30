@@ -23,5 +23,8 @@ export const TERIMLER = Object.freeze([
   { terim: 'Toplu koşuya dahil', aciklama: 'Senaryonun anahtarı: açıksa "Koşuyu başlat" ve planlı koşular senaryoyu koşar, kapalıysa senaryo yalnız tek başına (Dene ya da ▷) çalışır.' },
   { terim: 'Korunan parça', aciklama: 'Akış diyagramının gösteremediği ayar (ör. seçime bağlı düğme, kod yöntemi); siz değiştirmeseniz de kaydederken olduğu gibi korunur.' },
   { terim: 'Alan bağlantısı', aciklama: 'Ekrandaki bir alanın değerini hangi test verisi tablosunun hangi sütunundan alacağını söyleyen bağ (ör. İl → İller tablosu, Ad sütunu).' },
-  { terim: 'Kanıt', aciklama: 'İncelemede sayfanın o anki hâlini gösteren ekran görüntüsü; paketle gelir, şifreli saklanır ve modelin neye göre çıkarıldığını gösterir.' }
+  { terim: 'Kanıt', aciklama: 'İncelemede sayfanın o anki hâlini gösteren ekran görüntüsü; paketle gelir, şifreli saklanır ve modelin neye göre çıkarıldığını gösterir.' },
+  { terim: 'Basit mod', aciklama: 'Nöbetçi\'yi ilk kez kullananlar için sade görünüm: menüde yalnız Testlerim, Sonuçlar ve Ayarlar vardır, Gelişmiş moda üst çubuktaki anahtarla her an geçilir ve hiçbir veri değişmez.' },
+  { terim: 'Testlerim', aciklama: 'Basit moddaki test listesi: her satır bir ekranın testidir, o ekranın senaryoları da testin değişkenleri olarak sayılır.' },
+  { terim: 'Değişken', aciklama: 'Basit modda bir testin farklı değerlerle denenen hâli (ör. bireysel ve kurumsal başvuru); Gelişmiş modda aynı kayıt senaryo olarak görünür.' }
 ]);

@@ -226,6 +226,11 @@ export type AdimKosuTanimi = {
    */
   tekrarDenenebilir?: boolean;
   not?: string;
+  /**
+   * Bitiş koşulu (hızlı test; isteğe bağlı): "Devam" metinleri görünürken sonuç beklenmeye devam edilir (en çok zamanAsimiSn); başarı
+   * göstergesi (Bitti) ya da uyarı (Hata) görünmezse adım "Bitiş mesajı görülmedi" ile düşer.
+   */
+  bitisKosulu?: { devam: string[] };
 };
 
 export type Adim = {

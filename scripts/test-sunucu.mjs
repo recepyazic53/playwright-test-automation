@@ -320,6 +320,13 @@ const calisanSurecler = new Map();
 const ARAYUZ_KLASORU = join(buDosyaninKlasoru, 'platform', 'arayuz');
 const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/stil.css', { dosya: 'stil.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/stil-doldur.css', { dosya: 'stil-doldur.css', tur: 'text/css; charset=utf-8' }],
+  // Basit / Gelişmiş mod (v1.5): kendi stil dosyası, kabuk parçaları, Testlerim, Basit Sonuçlar ve sayfa rehberleri.
+  ['/arayuz/stil-basit-mod.css', { dosya: 'stil-basit-mod.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/basit-mod.js', { dosya: 'basit-mod.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/testlerim.js', { dosya: 'testlerim.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/basit-sonuclar.js', { dosya: 'basit-sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/basit-rehberler.js', { dosya: 'basit-rehberler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
@@ -375,6 +382,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/dosya-yukleme.js', { dosya: 'dosya-yukleme.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarama.js', { dosya: 'tarama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/oge-secme.js', { dosya: 'oge-secme.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/eylem-adaylari.js', { dosya: 'eylem-adaylari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-tasarimi.js', { dosya: 'akis-tasarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-siralama.js', { dosya: 'tablo-siralama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/aranabilir-secim.js', { dosya: 'aranabilir-secim.js', tur: 'text/javascript; charset=utf-8' }],
@@ -440,6 +448,12 @@ const ARAYUZ_DOSYALARI = new Map([
   // Senaryo tasarım yardımcısı: saf öneri fonksiyonu (Node testleriyle ORTAK) + öneriler ekranı.
   ['/arayuz/senaryo-onerileri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'senaryo-onerileri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-onerileri.js', { dosya: 'senaryo-onerileri.js', tur: 'text/javascript; charset=utf-8' }],
+  // Doldur (boş alanın değeri yalnız tablodan; değer üretilmez): saf eşleme sunucu testleriyle ORTAK + bileşen.
+  ['/arayuz/doldur-onerisi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'doldur-onerisi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/doldur.js', { dosya: 'doldur.js', tur: 'text/javascript; charset=utf-8' }],
+  // Hızlı test sihirbazı (v1.5; #/hizli-test): sayfa ve kendi stil dosyası.
+  ['/arayuz/hizli-test.js', { dosya: 'hizli-test.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-hizli-test.css', { dosya: 'stil-hizli-test.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.
   ['/arayuz/ekran-modeli-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'ekran-modeli-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],

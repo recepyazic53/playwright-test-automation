@@ -130,7 +130,9 @@ const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurl
 export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'icerir', 'icermez', 'sutunVar', 'satirSayisi', 'hucre']);
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
-const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'tekrarDenenebilir', 'not']);
+const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'tekrarDenenebilir', 'not', 'bitisKosulu']);
+/** Bitiş koşulunda (kosu.bitisKosulu.devam) en çok "Devam" metni. */
+export const DEVAM_METNI_EN_COK = 10;
 const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve']);
 
 /**
@@ -483,6 +485,20 @@ function kosuTanimiDogrula(h, yer, kosu) {
     else cerceveDogrula(h, `${yer}.hataGostergesi`, g.cerceve);
   }
   if (kosu.not !== undefined && typeof kosu.not !== 'string') h.ekle(yer, '"not" metin olmalı');
+  // Bitiş koşulu (hızlı test; isteğe bağlı): { devam: [metin] } — "Devam" metinleri görünürken sonuç beklenmeye devam edilir; süre dolar da
+  // başarı / hata göstergesi görünmezse adım "Bitiş mesajı görülmedi" ile düşer. Başarı göstergesi (Bitti) ister.
+  if (kosu.bitisKosulu !== undefined) {
+    const b = kosu.bitisKosulu;
+    const bYer = `${yer}.bitisKosulu`;
+    if (!nesneMi(b)) h.ekle(bYer, '{ devam: [metin] } olmalı');
+    else {
+      h.bilinmeyenAnahtarlar(bYer, b, new Set(['devam']));
+      if (!Array.isArray(b.devam) || b.devam.length > DEVAM_METNI_EN_COK || !b.devam.every((m) => metinMi(m) && m.length <= 200)) {
+        h.ekle(bYer, `"devam" en çok ${DEVAM_METNI_EN_COK} boş olmayan metinden (en çok 200 karakter) oluşan bir dizi olmalı`);
+      }
+      if (kosu.basariGostergesi === undefined) h.ekle(bYer, 'bitiş koşulu başarı göstergesi (Bitti mesajı ya da adres) ister');
+    }
+  }
 }
 
 /**
@@ -992,7 +1008,7 @@ const ANAHTAR_ADLARI = Object.freeze({
   tip: 'tip', tur: 'tür', ad: 'ad', aciklama: 'açıklama', deger: 'değer', metin: 'metin', altModel: 'alt model', ortakAkis: 'ortak akış',
   akislar: 'akışlar', varsayilan: 'varsayılan', senaryoDuzeyi: 'senaryo ayarları', yapilandirma: 'yapılandırma', doldurucu: 'doldurucu',
   ekranUrl: 'ekran adresi', girisGerekmez: 'girişsiz', bastakiOrtakAkislar: 'baştaki ortak akışlar', sinirlar: 'sınırlar', cerceve: 'çerçeve',
-  uyarilar: 'uyarılar', durum: 'durum', not: 'not', sqlKontrolu: 'SQL kontrolü', dosyaKontrolu: 'dosya kontrolü', yenidenGiris: 'yeniden giriş'
+  uyarilar: 'uyarılar', bitisKosulu: 'bitiş koşulu', devam: 'devam metinleri', durum: 'durum', not: 'not', sqlKontrolu: 'SQL kontrolü', dosyaKontrolu: 'dosya kontrolü', yenidenGiris: 'yeniden giriş'
 });
 
 /**

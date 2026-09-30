@@ -183,6 +183,9 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
       await expect(page.getByRole('list', { name: 'Açılacak izinler' }).locator('li[data-izin]')).toHaveCount(3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       await page.getByRole('button', { name: 'Bu 3 izni aç ve devam et' }).click();
+      // Kullanım (Basit / Gelişmiş) adımı: varsayılanla devam.
+      await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('Kullanım');
+      await page.getByRole('button', { name: 'Devam' }).click();
       await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('Giriş');
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       await page.getByRole('button', { name: 'Devam' }).click();

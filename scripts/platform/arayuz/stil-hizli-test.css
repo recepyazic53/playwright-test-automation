@@ -1,0 +1,66 @@
+/* HIZLI TEST SİHİRBAZI (v1.5) — hizli-test.js. stil.css'ten SONRA yüklenir (index.html); yalnız bu sayfanın sınıflarını tanımlar,
+   stil.css'teki kuralları değiştirmez. Renkler stil.css'teki tema değişkenlerinden gelir (açık / koyu ve stil seçimleri kendiliğinden
+   uyar). 390 px'te yatay taşma olmaz: iki sütun dar ekranda tek sütuna iner, uzun metinler kırılır. */
+.hizli-test { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hizli-test [hidden] { display: none !important; }
+.hizli-duraklar li.gecti { color: var(--metin); }
+.hizli-duraklar li.gecti .adim-no { background: color-mix(in srgb, var(--vurgu) 30%, var(--panel-2)); color: var(--metin); }
+.hizli-durum { min-height: 1.2em; color: var(--metin-2); font-size: 13px; overflow-wrap: anywhere; }
+.hizli-durum:empty { display: none; }
+.hizli-duzen { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .hizli-duzen { grid-template-columns: minmax(0, 1fr); } }
+.hizli-ana, .hizli-yan { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hizli-soru, .hizli-baslat { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hizli-soru p, .hizli-baslat p { margin: 0; overflow-wrap: anywhere; }
+.hizli-baslat textarea, .hizli-baslat input[type="text"], .hizli-baslat select { width: 100%; max-width: 100%; box-sizing: border-box; }
+.hizli-izinler, .hizli-kararlar, .hizli-mesajlar { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.hizli-izinler legend, .hizli-mesajlar legend { font-weight: 600; margin-bottom: 6px; }
+.hizli-izin-secenegi, .hizli-karar-secenegi {
+  align-items: flex-start; padding: 8px 10px; border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); background: var(--panel);
+  overflow-wrap: anywhere; min-width: 0;
+}
+.hizli-izin-secenegi:has(input:checked), .hizli-karar-secenegi:has(input:checked) { border-color: var(--vurgu); background: var(--vurgu-zemin); }
+.hizli-karar-secenegi select { max-width: min(100%, 22rem); margin: 0 4px; }
+.hizli-bekliyor { display: flex; align-items: center; gap: 8px; }
+.hizli-is-adimlari { margin: 0; padding-left: 1.2em; color: var(--metin-2); }
+.hizli-alanlar { display: grid; gap: 10px; min-width: 0; }
+.hizli-alan.yeni { border-left: 3px solid var(--vurgu); padding-left: 10px; }
+.hizli-alan-girdisi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.hizli-alan-girdisi > input[type="text"], .hizli-alan-girdisi > input[type="password"], .hizli-alan-girdisi > input[type="date"], .hizli-alan-girdisi > select {
+  flex: 1 1 14rem; min-width: 0; max-width: 100%;
+}
+.hizli-tablo-degeri { font-family: var(--yazi-mono); font-size: 12.5px; padding: 3px 8px; border-radius: var(--yaricap-s); background: var(--panel-2); overflow-wrap: anywhere; }
+.hizli-fark { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px dashed var(--cizgi-2); border-radius: var(--yaricap-m); background: var(--panel); min-width: 0; }
+.hizli-metinler { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.hizli-cip {
+  display: inline-block; max-width: 100%; padding: 2px 10px; border: 1px solid var(--cizgi-2); border-radius: 999px; background: var(--panel-2);
+  font-size: 12.5px; overflow-wrap: anywhere;
+}
+.hizli-cip.e-hata { border-color: color-mix(in srgb, var(--kirmizi, #d33) 50%, transparent); }
+.hizli-cip.e-bitti { border-color: color-mix(in srgb, var(--yesil, #2a8) 50%, transparent); }
+.hizli-bitis { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.hizli-bitis-satiri { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-width: 0; }
+.hizli-etiketler { display: inline-flex; gap: 4px; flex: none; }
+.hizli-etiket { padding: 2px 10px; font-size: 12px; border-radius: 999px; border: 1px solid var(--cizgi-2); background: var(--panel); color: var(--metin-2); cursor: pointer; }
+.hizli-etiket.secili.e-bitti { background: color-mix(in srgb, var(--yesil, #2a8) 22%, var(--panel)); color: var(--metin); border-color: transparent; }
+.hizli-etiket.secili.e-devam { background: var(--vurgu-zemin); color: var(--metin); border-color: transparent; }
+.hizli-etiket.secili.e-hata { background: color-mix(in srgb, var(--kirmizi, #d33) 22%, var(--panel)); color: var(--metin); border-color: transparent; }
+.hizli-olumsuz { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.hizli-olumsuz select { max-width: 100%; min-width: 0; }
+.hizli-zincir { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.hizli-zincir.buyuk { gap: 6px; }
+.hizli-ozet { margin: 0; padding-left: 1.2em; }
+.hizli-h3 { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--vurgu-zemin); }
+.hizli-h3 .dugmeler, .hizli-soru .dugmeler { margin-top: 0; flex-wrap: wrap; }
+.hizli-dikey { flex-direction: column; align-items: stretch; }
+.hizli-dikey button { text-align: left; white-space: normal; }
+.hizli-goruntu { display: block; width: 100%; height: auto; border: 1px solid var(--cizgi); border-radius: var(--yaricap-s); }
+.hizli-gunluk summary { cursor: pointer; font-weight: 600; }
+.hizli-gunluk ul { margin: 8px 0 0; padding-left: 1.2em; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.hizli-hazirlik { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.hizli-hazirlik li.eksik { color: var(--atlanan); }
+.hizli-alt { display: flex; justify-content: flex-end; }
+.hizli-farklar ul { margin: 4px 0; padding-left: 1.2em; }
+/* Ekran ekle sayfasındaki "Ya da: Hızlı test" bağlantısı (sayfa-paketi.js). */
+.hizli-test-baglantisi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 10px 0 0; color: var(--metin-2); overflow-wrap: anywhere; }
+.hizli-test-baglantisi .ikon { width: 15px; height: 15px; color: var(--vurgu); flex: none; }

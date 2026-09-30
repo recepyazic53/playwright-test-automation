@@ -151,6 +151,7 @@ import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } f
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
 import { ekipKaydet, ekipSil, ortamUygulamaSurumu, raporIsaretiKaydet, uygulamaSurumuTemizle } from './ayarlar/rapor-verileri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
+import { kullanimModunuKaydet, kullanimModunuOku } from './ayarlar/kullanim-modu.mjs';
 import { baslarkenDurumu, baslarkenIsaretle } from './ayarlar/baslarken.mjs';
 import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
@@ -232,6 +233,7 @@ import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
 } from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
+import { hizliTestIsteginiIsle } from './hizli-test/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
 import { KURTARMA_GET_UCLARI, KURTARMA_POST_UCLARI } from './ayarlar/kurtarma-kurallari.mjs';
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI, tabloKosuDenetimiAyarla } from './tablolar/tablo-uclari.mjs';
@@ -1397,6 +1399,8 @@ const GET_UCLARI = new Map([
   ['/platform/rapor-verileri', (db, q) => raporVerileriEkrani(db, kimlikAl(q.get('projeId'), 'projeId'))],
   // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
   ['/platform/rehber', (db) => ({ rehber: rehberAyarlariniOku(db) })],
+  // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı, yedeğe girer; kayıt yoksa Gelişmiş — ayarlar/kullanim-modu.mjs).
+  ['/platform/kullanim-modu', (db) => ({ kullanimModu: kullanimModunuOku(db) })],
   // Sonuçlar > Genel > Özet: "Başlarken" kontrol listesi (adım durumları projenin verisinden; gizle ve işaretler kasada — ayarlar/baslarken.mjs).
   ['/platform/baslarken', (db, q) => ({ baslarken: baslarkenDurumu(db, kimlikAl(q.get('projeId'), 'projeId')) })],
   // Ayarlar > Arayüz > Nöbetçi nasıl açılsın (kendi penceresi / varsayılan tarayıcı; başlatıcı okur, bkz. ayarlar/acilis-tercihi.mjs).
@@ -1622,6 +1626,7 @@ const POST_UCLARI = new Map([
   ['/platform/yedek-uyarisi/kapat', (db) => ({ kapatildi: yedekUyarisiniKapat(db) })],
   ['/platform/acilis/kaydet', (db, g) => ({ acilis: acilisTercihiniKaydet(VERI_KOKU, g.bicim) })],
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
+  ['/platform/kullanim-modu/kaydet', (db, g) => ({ kullanimModu: kullanimModunuKaydet(db, { mod: g.mod, gelismisAciklamasiGoruldu: g.gelismisAciklamasiGoruldu }) })],
   // Başlarken: gizle / girişe gerek yok / incelendi işaretleri (yalnız kasaya yazılır; dış istek yok).
   ['/platform/baslarken/kaydet', (db, g) => {
     const projeId = kimlikAl(g.projeId, 'projeId');
@@ -2166,6 +2171,13 @@ export async function platformIsteginiIsle(req, res, baglam) {
     if (req.method === 'POST' && sonucEslesme) {
       await raporlayiciIsteginiIsle(req, res, sonucEslesme[1], baglam);
       return true;
+    }
+
+    // --- /platform/hizli-test/* — Hızlı test sihirbazı (hizli-test/yonetici.mjs; tarama iş yöneticisini kullanır; kendi token/gövde kontrolü) ---
+    if (yol.startsWith('/platform/hizli-test/')) {
+      return await hizliTestIsteginiIsle(req, res, {
+        token: baglam.token, disTokenGecerli, jsonGonder, jsonGovde, acikVeritabani, projeKoku: PROJE_KOKU, medyaKlasoru: medyaKlasoruYolu, kosuyorMu
+      });
     }
 
     // --- /platform/tarama/* — "Ekranı otomatik tara" (iş yöneticisi: tarama/yonetici.mjs; kendi token/gövde kontrolü) ---

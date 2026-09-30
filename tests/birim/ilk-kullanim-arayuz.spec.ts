@@ -312,7 +312,7 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     await page.goto('/');
     await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
     // Giriş profilinin ayrıntısı sorulmaz; yalnız isteğe bağlı "giriş istiyor mu?" sorusu (kendi adımı).
-    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Giriş', 'Tamam']);
+    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(parola);
     await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(parola);
     await page.getByText('Parolayı unutursam').click();
@@ -322,6 +322,9 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     await page.getByLabel('Adres (link)').first().fill('http://127.0.0.1:9/');
     await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
     await page.getByRole('button', { name: 'Atla' }).click();
+    // Kullanım: Gelişmiş (bu test bugünkü arayüzün genel tanıtımını denetler).
+    await page.getByRole('radio', { name: /^Gelişmiş — tüm özellikler/ }).check();
+    await page.getByRole('button', { name: 'Devam' }).click();
     // Giriş sorusu: varsayılan "sonra karar vereceğim" → bugünkü davranış.
     await page.getByRole('button', { name: 'Devam' }).click();
     await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();

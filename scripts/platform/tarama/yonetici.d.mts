@@ -62,7 +62,11 @@ export type TaramaYoneticisi = {
   secenekler(vt: Veritabani, projeId: string, ekranId: string | null): Record<string, unknown>;
   baslat(vt: Veritabani, govde: Record<string, unknown>, s: { sunucuAdresi: string }): { isId: string };
   durum(id: string): IsGorunumu;
-  paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
+  paket(id: string): {
+    paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'];
+    /** Eylem ve doğrulama keşfi (basmadan; öneri). Tarama dışı işlerde / eski sonuçta null. */
+    eylemAdaylari: import('./eylem-kesfi.mjs').EylemAdaylari | null;
+  };
   akis(id: string): {
     bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; paketHazir: boolean;
     projeId: string; akisaYazildi: { akisId: string; surum: number } | null; girissiz: boolean; ortakAkis: OrtakAkisKaydi | null;
@@ -80,12 +84,22 @@ export type TaramaYoneticisi = {
     bulgular: import('./oge-isaretleri.mjs').KesifBulgusu[]; kosuVar: boolean; ogeler: import('./oge-isaretleri.mjs').SecilenOge[]; reddedilenler: string[];
     ortam: IsGorunumu['ortam'] & { canli?: boolean }; hedefYol: string; girissiz: boolean; ekran: IsGorunumu['ekran']; projeId: string; mod: 'yeni' | 'analiz';
     baglamProfili: string | null; ozet: IsGorunumu['ozet'];
+    /** Eylem ve doğrulama keşfi (seçenek olarak sunulur); isaretlendi: işaretler daha önce uygulandı (geri dönüş). */
+    eylemAdaylari: import('./eylem-kesfi.mjs').EylemAdaylari | null; isaretlendi: boolean;
+    /** Geri dönüş: "Sayfada seç" listesi ve adayların seçimi (tür → aday anahtarı; '' = Hiçbiri); işaretlenmediyse null. */
+    sayfadaSecilenler: import('./oge-isaretleri.mjs').SecilenOge[] | null; eylemSecimi: Record<'gonderim' | 'basari' | 'hata', string> | null;
   };
   /** İşaretlenenleri ve reddedilen bulguları taramanın paketine uygular (paket doğrulanır). */
   isaretle(id: string, govde: Record<string, unknown>): { isaretOzeti: import('./oge-isaretleri.mjs').IsaretOzeti; ozet: IsGorunumu['ozet'] };
   aktif(): { id: string; ekran: IsGorunumu['ekran']; projeId: string } | null;
   iptal(id: string): { iptal: true };
   kodGonder(id: string, kod: unknown): { iletildi: true };
+  /** Hızlı test (kip 'hizliTest'): alt sürece komut, alt sürecin uzun yoklaması, komut sonucu, sonuç dinleyicisi. */
+  komutGonder(id: string, komut: import('./protokol.mjs').HizliKomut): { gonderildi: true };
+  komutAl(id: string, token: string): Promise<{ komut: Record<string, unknown> | null }>;
+  hizliOlayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
+  /** Dinleyici alt sürecin olaylarını (HizliOlay) ve iş bitince { olay: 'isBitti', durum, hata } alır. */
+  hizliDinle(id: string, fn: (olay: Record<string, any>) => void): void;
   girdiVer(id: string, token: string): unknown;
   olayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
   oturumAl(id: string, token: string, durum: unknown): { kaydedildi: boolean };
@@ -112,4 +126,6 @@ export type TaramaIstekBaglami = {
 
 export declare function taramaIsteginiIsle(req: IncomingMessage, res: ServerResponse, b: TaramaIstekBaglami): Promise<boolean>;
 export declare function taramalariKapat(): void;
+/** Varsayılan (sunucudaki tek) tarama yöneticisi; hızlı test uçları da bunu kullanır. */
+export declare function taramaYoneticisiAl(projeKoku: string): TaramaYoneticisi;
 export declare function taramaSuruyorMu(): boolean;

@@ -71,6 +71,8 @@ export type PlanKosuTanimi = {
   /** "Tekrar denenebilir": kurtarma kuralı bu adımı tekrar deneyebilir (varsayılan işaretsiz). */
   tekrarDenenebilir?: boolean;
   not?: string;
+  /** Bitiş koşulu (hızlı test): "Devam" metinleri görünürken beklenir; sonuç görünmezse "Bitiş mesajı görülmedi". */
+  bitisKosulu?: { devam: string[] };
 };
 
 export type PlanAdimi = {

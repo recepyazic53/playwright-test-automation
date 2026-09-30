@@ -250,6 +250,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
 | (düğmesiz adım) | `aksiyonlar`'da tıklama yoksa `basariGostergesi` / `uyarilar` alanlar doldurulduktan (alanın `doldurucuParametreleri.tus`'una — ör. `Tab` — basıldıktan) sonra denetlenir: alandan çıkınca çıkan mesajlar için (akış diyagramında alan grubundan sonra gelen beklenen mesaj). |
 | `ekranGoruntusu` | `true`: "Ekran görüntüsü al" işareti. Adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır; diğer seçimlerde etkisizdir. |
+| `bitisKosulu` | (isteğe bağlı; Hızlı test yazar) `{ "devam": [metin] }` — en çok 10 "Devam" metni (ör. `"Hesaplanıyor…"`). Başarı göstergesi ("Bitti" mesajları / adres) ister. Koşucu süre dolduğunda bir "Devam" metni hâlâ görünüyorsa bir kez daha (en çok 60 sn) bekler; başarı göstergesi ya da kabul edilen uyarı ("Hata" metinleri, `uyarilar`) görünmezse adım **"Bitiş mesajı görülmedi"** ile düşer (son görülen Devam metni iletide). Yazılmazsa davranış eskisi gibidir. |
 
 ### Çerçeve (iframe) içindeki alanlar
 
@@ -373,6 +374,15 @@ Ekran paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ek
    yoksa boş olmayan metin), başarı / hata göstergesi → `kosu.basariGostergesi` / `kosu.hataGostergesi`, alan →
    "Sayfada seçilen alanlar" bölümü; koşu tanımı eklenince model `semaSurumu: 2` olur. Akış diyagramında da "Listede
    olmayan alanı / düğmeyi elle ekle"nin (ileri düzey: CSS seçici) yanında aynı **Sayfada seç** vardır.
+   **Eylem adayları** (Sayfada seç'in üstünde, "Nöbetçi'nin önerileri"): tarama, hiçbir düğmeye basmadan sayfadaki izlerden
+   gönderim düğmesi (form içindeki submit güçlü; form dışında Hesapla / Gönder / Devam… gibi eylem metinli düğme olası;
+   onclick'li ya da Temizle / Geri gibi düğme tahmin; "kayıt oluşturabilir" ipucu), başarı mesajı (gizli `.alert-success`,
+   `role=status` / `aria-live`, gizli "…alındı / …başarılı / …hazır" metni), hata alanları (`.invalid-feedback` gibi grup
+   seçicisi + adet, `role=alert`, `aria-describedby`, `aria-invalid`), yönlendirme tahmini (form action, bağlantı; yalnız yol)
+   ve bekleme göstergesi (spinner, `role=progressbar`, `aria-busy`) adaylarını güven düzeyiyle çıkarır (`tarama/eylem-kesfi.mjs`,
+   `eylem-kesfi-motoru.ts > eylemAdaylariniCikar(page)`). Adaylar `GET …/isaretler` ve `GET …/paket` yanıtında
+   `eylemAdaylari` olarak döner, pakete / modele yazılmaz. Her türün en olası adayı işaretli gelir (başarı / hata yalnız
+   "tahmin" değilse); seçilen aday seçilen öğe gibi uygulanır. Sayfada seç ile aynı türde öğe seçilirse o öğe adayın yerine geçer.
 
 Üretilen paket:
 
@@ -488,6 +498,34 @@ sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür / o düğmeden
 `senaryoDuzeyi`'ne bağlam profili alanı eklenir (varsayılan: kaydın profili). **Mevcut ekranda** seçiciyle eşleşen alanların
 kimliği ve ek bilgileri korunur; kayıtta olmayan alanlar yeni modelde yoktur (Bulgular'da "kaldırıldı", reddedilebilir);
 artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarılıp bilinmeyenlere yazılır.
+
+### Hızlı test (sihirbaz; `#/hizli-test`)
+
+Basit modun "+ Yeni test"i; Gelişmiş modda Oluştur menüsünden ve Ekran ekle sayfasından da açılır. Altı durak:
+
+1. **Başlat:** sayfa adresi, ortam, isteğe bağlı "Ne yapılsın?" cümlesi (yapay zekâ YOK — kalıpla okunur: tırnak içindeki metin
+   beklenen mesaj adayı, "…'e bas / …'a tıkla" düğme adayı; anlaşılmayan kısım yok sayılır) ve **basma izni**: Evet (gereken düğmeye
+   basar; birden çok aday varsa sorar) / Bana sor (her basıştan önce onay) / Hayır (hiç basmaz). CANLI ortamda kilit yoktur; bir kez
+   açık onay istenir. İzin senaryonun içeriğine yazılır (`hizliTest.izin`).
+2. **Keşfet:** taramanın alan envanteri ve eylem keşfi (`tarama/eylem-kesfi.mjs`) — hiçbir düğmeye basılmaz. Görünür tarayıcı
+   (`tarama/hizli-test-motoru.ts`, iş kipi `hizliTest`; giriş tarifi / saklanan oturum taramayla aynı).
+3. **Veri durağı:** zorunlu boş alanlar ve doldurunca beliren koşullu alanlar için akış DURUR; alanlar boş gelir, değer elle yazılır ya
+   da "Doldur" ile tablodan seçilir (tablo başvurusu `${Tablo.Sütun}` senaryoya aynen yazılır). **Değer üretilmez.** Tek bir seçim
+   değişince beliren alan o seçimin değerine bağlı koşul olur (`KayitAdimi.kosullar`).
+4. **Adım adım:** Nöbetçi formu doldurur; "Şimdi ne yapayım?" — Burada bitir / Devam et: [aday]'a bas / Başka bir düğmeye bas
+   (tarayıcıda tıklayarak seç; tıklama sayfaya iletilmez). Her basıştan sonra bekleme göstergesi kaybolana ve istekler bitene kadar
+   (en çok 60 sn) izlenir; fark gösterilir (yeni metinler, alanlar, düğmeler, adres, son görüntü — görüntü yalnız bellekte). Hata /
+   uyarı kutusu çıkarsa "Bu bir hata mı, beklenen uyarı mı?" sorulur (hata → veri düzeltilir; beklenen uyarı → olumsuz senaryo).
+5. **Bitiş koşulu:** görülen metinler Bitti / Devam / Hata etiketlenir (öneri: son basıştan sonraki metin Bitti, bekleme metinleri
+   Devam, uyarı kutuları Hata); isteğe bağlı "Adres şu olursa bitti".
+6. **Kaydet:** "Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı? (yeni kayıt oluşabilir)" sorulur. Zincir akış kaydı
+   envanterine çevrilir ve Akışı kaydet ile AYNI paket yolundan ekran modeli olur (`hizli-test/akis.mjs`): adımlar = alanlar →
+   düğme; son adımda Bitti → `kosu.basariGostergesi` (birden çoksa `veya`, adres → `url`), Devam → `kosu.bitisKosulu.devam`, Hata →
+   her adımın `kosu.uyarilar`'ı, `zamanAsimiSn: 60`. Senaryo değerleri, tablo seçimleri ve `hizliTest` (izin, bitiş, doğrulandı) ile
+   kaydedilir. Aynı ekran varsa (düzenleme kipi `#/hizli-test/duzenle/<ekranId>`) yeni model sürümü olur; farklar ve etkilenen
+   senaryolar önce onaya sunulur. Hayır izninde düğme ve mesaj adaylardan seçilir, doğrulama yapılmaz, senaryo "doğrulanmadı" kaydedilir.
+
+Uçlar: `/platform/hizli-test/*` (`scripts/platform/hizli-test/yonetici.mjs`).
 
 ## senaryoOnerileri
 

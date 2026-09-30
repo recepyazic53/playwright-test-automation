@@ -6,6 +6,8 @@
 // etkisiz) → sakinleşme → görünür alan envanteri → ekran görüntüsü → seçim keşfi (varsayılan açık; açılır listelerde, radyo
 // gruplarında ve onay kutularında diğer seçenekler denenir; beliren/kaybolan/etkinleşen alanlar ve seçenekleri değişen bağımlı
 // listeler kaydedilir, ilk değer geri yüklenir; kayıt / gönderim çağrıştıran seçimler denenmez — koruma.mjs > kesifGuvenligi).
+// Envanterden sonra eylem adayları (gönderim düğmesi / başarı / hata / yönlendirme / bekleme) BASMADAN izlerden çıkarılır
+// (eylem-kesfi-motoru.ts); profilin eylemAdaylari'na yazılır (öneri; modele girmez).
 //
 // Çerçeveler (iframe): aynı kökenli çerçevelerin alanları da okunur (sayfa-envanteri.ts; en çok 2 düzey, alanın "cerceve"si);
 // başka kökenli çerçeveler notlara "okunamadı" diye yazılır. Gizli <select>'e bağlı özel açılır listeler alan olarak okunur.
@@ -26,6 +28,7 @@ import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type K
 import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
+import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
 
 /** Sayfa envanteri okuyucusunu her belgeye (çerçeveler dahil) veren init betiği: çerçevelerin içi kendi penceresinde okunur. */
 export const ENVANTER_BETIGI = `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
@@ -249,6 +252,8 @@ async function profilTara(
   if (envanter.okunamayanCerceveSayisi) {
     notlar.push(`Sayfada ${envanter.okunamayanCerceveSayisi} çerçevenin (iframe) içi okunamadı (başka kökenden — cross-origin — ya da 2 düzeyden derin); içlerindeki alanlar taranmadı.`);
   }
+  // Eylem ve doğrulama keşfi: gönderim düğmesi / başarı / hata / yönlendirme / bekleme adayları sayfadaki izlerden (BASILMAZ).
+  const eylemAdaylari = await eylemAdaylariniCikar(sayfa);
   let ekranGoruntusu: string | null = null;
   try {
     ekranGoruntusu = (await sayfa.screenshot({ type: 'png', timeout: 15_000 })).toString('base64');
@@ -260,7 +265,7 @@ async function profilTara(
     await adimBildir('kesif');
     kesifler.push(...(await secimleriKesfet(sayfa, envanter, notlar, git, sakinles, kesifSecenekSiniri)));
   }
-  return { profil, yol: acilan, baslik: envanter.baslik, alanlar: envanter.alanlar, kesifler, ekranGoruntusu, notlar };
+  return { profil, yol: acilan, baslik: envanter.baslik, alanlar: envanter.alanlar, kesifler, ekranGoruntusu, notlar, eylemAdaylari };
 }
 
 /** Keşif adayı: seçim alanı + denenecek değerler (tur: açılır liste / radyo grubu / onay kutusu). */

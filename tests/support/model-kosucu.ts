@@ -794,7 +794,12 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
     return null;
   }
   if (!kosu || (!kosu.basariGostergesi && !kosu.hataGostergesi && !kosu.uyarilar?.length)) return null;
-  const son = Date.now() + sureMs;
+  let son = Date.now() + sureMs;
+  // Bitiş koşulu (hızlı test): "Devam" metinleri görünürken süre dolarsa bir kez daha (en çok 60 sn) beklenir; son görülen Devam
+  // metni hata iletisine yazılır.
+  const devamlar = kosu.bitisKosulu?.devam ?? [];
+  let uzatildi = false;
+  let sonDevam = '';
   for (;;) {
     const gorunen = kosu.basariGostergesi ? await gorunenBasari(page, kosu) : null;
     // Başarı ve hata birlikte görünürse hata kazanır. Her mesaj ayrı değerlendirilir: başarı mesajının KENDİSİNİ gösteren
@@ -806,7 +811,19 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
     if (hatalar.length) throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), hatalar.join(' | ')));
     if (gorunen) return kosu.basariGostergesi?.tur === 'veya' ? gostergeAciklamasi(gorunen) : null;
     if (!kosu.basariGostergesi) return null;
+    if (devamlar.length) {
+      const sayfa = await sayfaMetni(page);
+      sonDevam = devamlar.find((d) => mesajIceriyorMu(sayfa, d)) ?? sonDevam;
+    }
     if (Date.now() >= son) {
+      if (kosu.bitisKosulu && !uzatildi && sonDevam && devamlar.some((d) => sonDevam === d)) {
+        const sayfa = await sayfaMetni(page);
+        if (devamlar.some((d) => mesajIceriyorMu(sayfa, d))) { uzatildi = true; son = Date.now() + Math.min(60_000, sureMs); continue; }
+      }
+      if (kosu.bitisKosulu) {
+        throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu),
+          `Bitiş mesajı görülmedi (${Math.round(sureMs / 1000)} sn${uzatildi ? ' + uzatma' : ''}; sayfa: ${new URL(page.url()).pathname}${sonDevam ? `; son görülen: “${sonDevam}”` : ''})`));
+      }
       throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), `${Math.round(sureMs / 1000)} sn içinde başarı göstergesi görünmedi (sayfa: ${new URL(page.url()).pathname})`));
     }
     await page.waitForTimeout(250);

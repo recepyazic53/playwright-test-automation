@@ -207,7 +207,7 @@ export async function senaryoOnerileriEkrani(icerik, s) {
             h('b', {}, `${d.etiket}: `), d.deger === '(boş)' ? 'boş' : d.deger)))
           : null,
         h('p', { class: 'oneri-ozeti kucuk soluk' }, o.ozet),
-        o.eksikler.length ? h('p', { class: 'kucuk cok-soluk' }, `Değeri olmayan zorunlu alanlar (önizlemede doldurun): ${o.eksikler.join(', ')}`) : null,
+        o.eksikler.length ? h('p', { class: 'kucuk cok-soluk' }, `Değeri olmayan zorunlu alanlar (Önizle ile açıp "Doldur" ile tablodan seçin): ${o.eksikler.join(', ')}`) : null,
         o.engel ? h('p', { class: 'kucuk cok-soluk' }, o.engel) : null,
         o.beklenen.tur === 'belirsiz' ? h('p', { class: 'kucuk cok-soluk' }, o.beklenen.neden) : null,
         durum.redAcik === o.kimlik ? redPaneli(o) : null),
@@ -280,7 +280,7 @@ export async function senaryoOnerileriEkrani(icerik, s) {
     await mesgulIken(ekleDugmesi, 'Ekleniyor…', async () => {
       for (const o of secilenler) {
         if (o.beklenen.tur === 'belirsiz') { atlanan.push([o.baslik, 'beklenen sonucu siz seçin (Önizle ile açıp seçin)']); continue; }
-        if (o.eksikler.length) { atlanan.push([o.baslik, `değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')} (Önizle ile doldurun)`]); continue; }
+        if (o.eksikler.length) { atlanan.push([o.baslik, `değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')} (Önizle ile açıp "Doldur" ile tablodan seçin)`]); continue; }
         if (o.engel) { atlanan.push([o.baslik, `${o.engel} (Önizle ile açın)`]); continue; }
         const d = senaryoyuDogrula(o.veri, dogrulamaBaglami);
         if (d.hatalar.length) { atlanan.push([o.baslik, hatalariMetneCevir(d.hatalar)]); continue; }

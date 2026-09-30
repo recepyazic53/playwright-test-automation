@@ -366,6 +366,8 @@ export function senaryoListesi(vt, projeId, ortamId) {
       guncellenme: String(s.guncellenme),
       // Talep numaraları (listede süzme ve "Bu talebin senaryolarını koş").
       talepler: icerikTalepleri(icerik),
+      // Hızlı testle oluşturulan ve henüz doğrulanmamış (Hayır izni) senaryo: listede "doğrulanmadı" rozeti için.
+      ...(nesneMi(icerik.hizliTest) ? { hizliTest: { izin: icerik.hizliTest.izin, dogrulandi: icerik.hizliTest.dogrulandi === true } } : {}),
       ...(ortamId ? {} : { ortamlar })
     });
   }
@@ -404,7 +406,9 @@ export function senaryoDetayi(vt, id, ortamId) {
     // Çalıştırma biçimi (tablodan çoklu satır; yoksa null = her grup tek satır, bugünkü davranış).
     veriKosulari: nesneMi(icerik.veriKosulari) ? icerik.veriKosulari : null,
     // Talep numaraları (serbest metin; yoksa boş liste).
-    talepler: icerikTalepleri(icerik)
+    talepler: icerikTalepleri(icerik),
+    // Hızlı testle oluşturulduysa: izin, bitiş koşulu, doğrulandı mı (yoksa null).
+    hizliTest: nesneMi(icerik.hizliTest) ? icerik.hizliTest : null
   };
 }
 
@@ -821,6 +825,22 @@ function tabloSatirlariniEkle(vt, projeId, istek, veri, ortamIdleri) {
 }
 
 /**
+ * Hızlı test bilgisi (senaryo içeriğinde "hizliTest"): { izin: evet|sor|hayir, dogrulandi, bitis: { bitti[], hata[], devam[], adres } }.
+ * Geçersizse null (yazılmaz). Değer içermez (yalnız sayfada görülen mesaj metinleri).
+ * @param {unknown} d
+ */
+function hizliTestBilgisi(d) {
+  if (!nesneMi(d) || !['evet', 'sor', 'hayir'].includes(String(d.izin))) return null;
+  const liste = (/** @type {unknown} */ l) => (Array.isArray(l) ? l.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 200)).slice(0, 10) : []);
+  const b = nesneMi(d.bitis) ? d.bitis : {};
+  return {
+    izin: String(d.izin), dogrulandi: d.dogrulandi === true,
+    bitis: { bitti: liste(b.bitti), hata: liste(b.hata), devam: liste(b.devam), adres: typeof b.adres === 'string' && b.adres.startsWith('/') ? b.adres.slice(0, 300) : null },
+    ...(typeof d.olusturma === 'string' ? { olusturma: d.olusturma.slice(0, 40) } : {})
+  };
+}
+
+/**
  * Senaryoyu kaydeder (yeni ya da mevcut). Kurallar:
  *  - Model: veri seçilen her ortam için tek doğrulayıcıyla doğrulanır; kaynak.ad ve verideki başlık yeni başlıkla
  *    eşitlenir; ortam kapsamı ortamIdleri ile belirlenir (en az bir ortam).
@@ -835,7 +855,7 @@ function tabloSatirlariniEkle(vt, projeId, istek, veri, ortamIdleri) {
  * Çalıştırma biçimi (veriKosulari; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null kaldırır.
  * Kayıt grubunu tabloya da ekleme (yeniTabloSatirlari; tabloSatirlariniEkle): senaryo ve tablo satırı TEK işlemde yazılır.
  * Talep numaraları (talepler; senaryolar/talepler.mjs): verilmezse mevcut korunur, null / [] kaldırır.
- * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; talepler?: unknown; yapan?: string }} girdi
+ * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; talepler?: unknown; hizliTest?: unknown; yapan?: string }} girdi
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
  * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }>; tabloSatirlari?: import('./senaryo-servisi.d.mts').TabloSatiriEklemesi[] }}
  */
@@ -972,6 +992,12 @@ function senaryoKaydetIslem(vt, girdi, secenekler = {}) {
     if (t.hata) throw new SenaryoDogrulamaHatasi(t.hata, [{ alan: 'talepler', mesaj: t.hata }]);
     if (t.talepler.length) icerik.talepler = t.talepler;
     else delete icerik.talepler;
+  }
+  // Hızlı test bilgisi (hizli-test/yonetici.mjs; verilmezse mevcut korunur, null kaldırır): basma izni, bitiş koşulu, doğrulandı mı.
+  if (girdi.hizliTest !== undefined) {
+    const h = hizliTestBilgisi(girdi.hizliTest);
+    if (h) icerik.hizliTest = h;
+    else delete icerik.hizliTest;
   }
   // Tabloya eklenen kayıt grubu: satır seçimi o satıra; grubun çoklu satır ayarı (varsa) kalkar (tek satır).
   if (tabloEklemesi) {
