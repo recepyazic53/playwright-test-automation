@@ -211,7 +211,7 @@ function taramaTarayiciGirdisi(vt) {
   const e = taramaEtkinAyarlari(a);
   return {
     genislik: e.genislik, yukseklik: e.yukseklik, dil: e.dil,
-    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri,
+    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri, alanIslemMs: a.hizliAlanIslemSn * 1000,
     oturumKontrolMs: e.oturumKontrolSn * 1000, girisAlanBeklemeMs: e.girisAlanBeklemeSn * 1000
   };
 }

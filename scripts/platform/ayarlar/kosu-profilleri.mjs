@@ -36,7 +36,7 @@ export const KANIT_PROFILLERI = Object.freeze([
 export const HIZ_ALANLARI = Object.freeze([
   'kosuSureLimitiDk', 'alanBeklemeSn', 'zorlaIsaretlemeSn', 'servisZamanAsimiSn', 'taramaZamanAsimiDk', 'kayitZamanAsimiDk', 'taramaSayfaAcilmaSn',
   'taramaOturumKontrolSn', 'taramaGirisAlanBeklemeSn', 'gorunmeyenAlanBeklemeSn', 'alanSonrasiKosulSn', 'arkaPlanIstekSn', 'adimGostergeSn',
-  'oturumKontrolSn', 'girisAlanBeklemeSn'
+  'oturumKontrolSn', 'girisAlanBeklemeSn', 'hizliAlanIslemSn'
 ]);
 
 /** @type {ReadonlyArray<{ ad: 'hizli' | 'normal' | 'yavas'; etiket: string; ozet: string; carpan: number }>} */

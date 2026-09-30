@@ -75,7 +75,7 @@ export type TaramaGirdisi = {
   zamanAsimiMs: number;
   /** Tarayıcı kararları (Ayarlar > Koşu); yoksa önceki sabitler (bkz. taramaTarayiciAyarlari). dil null: verilmez. */
   tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number;
-    oturumKontrolMs?: number; girisAlanBeklemeMs?: number };
+    alanIslemMs?: number; oturumKontrolMs?: number; girisAlanBeklemeMs?: number };
   /**
    * YALNIZ "Koşunun saklanan oturumunu kullan" seçiliyken, giriş tarifi varken ve "Giriş yapmadan aç" seçilmemişken: koşunun bu
    * ortam + giriş profili için saklanan oturumu (ortamın kökenlerine sınırlanmış; yoksa / açılamadıysa null). Alan yoksa: her
@@ -88,6 +88,8 @@ export declare function taramaTarayiciAyarlari(g: { tarayici?: TaramaGirdisi['ta
   baglam: { viewport: { width: number; height: number }; locale?: string; timezoneId?: string };
   sayfaAcilmaMs: number;
   kesifSecenekSiniri: number;
+  /** Hızlı testte alan doldurma / seçme beklemesi (varsayılan 30 sn). */
+  alanIslemMs: number;
   /** Girişte oturum kontrolü (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
   oturumKontrolMs: number;
   /** Girişte giriş alanı beklemesi (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
