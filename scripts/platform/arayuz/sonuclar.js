@@ -395,7 +395,7 @@ function kartlar(kart, trend, urun) {
       h('span', { class: 'd-atlanan', style: { width: yuzde(son.atlanan) } }), h('span', { class: 'd-durdu', style: { width: yuzde(son.durduruldu || 0) } }))));
   const kaynak = urun
     ? ['Son tam koşu: ', h('span', { class: 'mono' }, kisaTarih(son.z)), son.kapsam ? rozet(`kapsam: ${son.kapsam}`, 'vurgu') : null]
-    : [`Her ürünün son tam koşusunun toplamı (${kart.urunSayisi} ürün; en yenisi ${kisaTarih(kart.enYeniZ)}).`];
+    : [`Her ekranın son tam koşusunun toplamı (${kart.urunSayisi} ekran; en yenisi ${kisaTarih(kart.enYeniZ)}).`];
   return h('div', {},
     h('div', { class: 'sonuc-kartlari' }, kartlarDizisi),
     h('p', { class: 'kart-kaynak' }, ...kaynak, onceki ? '' : ' Önceki koşu olmadığı için fark gösterilmiyor.'));
@@ -417,10 +417,10 @@ export function trendKarti(tumNoktalar, urun, secenek = {}) {
   const ciz = () => kap.replaceChildren(...trendGrafigi(noktalar, kap, secenek));
   const kart = h('section', { class: 'kart', 'aria-labelledby': 'trend-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'trend-basligi' }, ikon('grafik'), 'Koşu trendi'),
-      h('span', { class: 'alt' }, `${secenek.altYazi || `${urun ? 'Bu ürünü içeren tam koşular' : 'Genel kapsamlı tam koşular'} · ${aralikMetni(kayitliAralik())}`} · `
+      h('span', { class: 'alt' }, `${secenek.altYazi || `${urun ? 'Bu ekranı içeren tam koşular' : 'Genel kapsamlı tam koşular'} · ${aralikMetni(kayitliAralik())}`} · `
         + (tumNoktalar.length > noktalar.length ? `en yeni ${noktalar.length} / ${tumNoktalar.length}` : `${noktalar.length} koşu`)),
       noktalar.length ? h('div', { class: 'sag' }, kipSegmenti) : null),
-    h('p', { class: 'gorunmez' }, secenek.aciklama || (urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.')),
+    h('p', { class: 'gorunmez' }, secenek.aciklama || (urun ? 'Bu ekranı içeren tam koşular (yalnızca bu ekranın sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.')),
     kap);
   // Genel'de Genel kapsamlı koşu yok ama ekran kapsamlı tam koşular varsa: neden boş olduğunu söyle, istenirse onları göster.
   const diger = !urun && !noktalar.length && Array.isArray(secenek.digerNoktalar) ? aralikUygula(secenek.digerNoktalar) : [];
@@ -720,7 +720,7 @@ function kosuGecmisi(kosular, urun) {
   });
   return h('section', { class: 'kart', 'aria-labelledby': 'gecmis-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
-      h('span', { class: 'alt' }, urun ? 'Bu ürünü içeren tüm koşular; sayılar yalnızca bu ürün için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
+      h('span', { class: 'alt' }, urun ? 'Bu ekranı içeren tüm koşular; sayılar yalnızca bu ekran için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
       kosular.length ? h('div', { class: 'sag' }, kalanSuzgeci, denemeSuzgeci, filtreSegmenti, kosular.length > 1 ? secici.dugme : null) : null),
     kosular.length
       ? [h('div', { class: 'tablo-kaydirma' }, tablo), sayfalama]
@@ -1237,7 +1237,7 @@ async function kosuDetayi(icerik, id, proje) {
       sonuclar.length
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
           h('caption', { class: 'gorunmez' }, 'Senaryo sonuçları'),
-          h('thead', {}, h('tr', {}, ...['Durum', 'Ürün', 'Senaryo', 'Süre', 'Hata kalıbı', 'Medya'].map((b, i) => h('th', { scope: 'col', class: i === 3 ? 'sayi' : null }, b)))),
+          h('thead', {}, h('tr', {}, ...['Durum', 'Ekran', 'Senaryo', 'Süre', 'Hata kalıbı', 'Medya'].map((b, i) => h('th', { scope: 'col', class: i === 3 ? 'sayi' : null }, b)))),
           h('tbody', {}, ...tabloSatirlari)))
         : h('p', { class: 'bos-liste' }, 'Bu koşuda sonuç yok.')));
 }

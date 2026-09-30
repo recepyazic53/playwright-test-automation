@@ -153,7 +153,9 @@ test.describe('son yanıttan kontrol önerme arayüzü', () => {
     const once = servis.postSayisi();
     await page.getByRole('button', { name: 'Dene', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Dene' }).click();
-    await expect(page.getByRole('region', { name: 'Servis koşu paneli' })).toContainText('Servis koşusu bitti');
+    await expect(page.getByRole('region', { name: 'Servis koşu paneli' })).toContainText('Deneme bitti');
+    // Dene yanıt aldı: Hazırlık'taki "Ortam bağlantısı" artık "Denetlenmedi" demez.
+    await expect(page.locator('.servis-hazirligi [data-madde="ortam"]')).toContainText('Erişildi (');
     expect(servis.postSayisi()).toBe(once + 1);
     await page.getByRole('button', { name: 'Son yanıttan kontrol öner' }).click();
     const panel = page.getByRole('region', { name: 'Son yanıttan kontrol öner' });

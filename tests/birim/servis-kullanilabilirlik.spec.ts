@@ -196,7 +196,7 @@ test.describe('servis sayfaları: kullanılabilirlik', () => {
     const once = rest.yontemler.length;
     await deneOnayla();
     const panel = page.locator('.servis-kosu-paneli');
-    await expect(panel).toContainText('Servis koşusu bitti');
+    await expect(panel).toContainText('Deneme bitti');
     // İstek GET ile gitti (uç GET'e çevrilmişti).
     expect(rest.yontemler.slice(once)).toEqual(['GET']);
     const oner = page.getByRole('button', { name: 'Son yanıttan kontrol öner' });
@@ -230,11 +230,11 @@ test.describe('servis sayfaları: kullanılabilirlik', () => {
     rest.ayar.gecikmeMs = 15_000;
     try {
       await deneOnayla();
-      await expect(panel).toContainText('Servis koşusu sürüyor');
+      await expect(panel).toContainText('Deneme sürüyor');
       await oner.click();
       await expect(ekleler.first()).toBeVisible();
       await expect(panel).toHaveClass(/kucuk/);
-      await expect(panel).toContainText('Servis koşusu sürüyor');
+      await expect(panel).toContainText('Deneme sürüyor');
       const n = await ekleDugmeleriAcik();
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       const [sonKutu, panelKutu] = await Promise.all([ekleler.nth(n - 1).boundingBox(), panel.boundingBox()]);
