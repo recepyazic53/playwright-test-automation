@@ -100,6 +100,21 @@ export function veriKlasoruDurumu(klasor) {
 
 // --- Veri klasörü ayar dosyası (kasa dışı) ------------------------------------------------------------------------------
 
+/**
+ * Geliştirme başlatıcısı ("npm run baslat") için varsayılan ayar dosyası: paketli başlatıcılarla AYNI yer (Windows'ta
+ * %LOCALAPPDATA%\\Nöbetçi\\ayar.json, macOS'ta ~/Library/Application Support/Nöbetçi/ayar.json, diğerlerinde ~/.config/Nöbetçi/ayar.json);
+ * böylece veri klasörü seçimi hangi yoldan açılırsa açılsın aynı kalır. Ana klasör bulunamazsa null.
+ * @param {NodeJS.ProcessEnv} [ortam] @param {string} [platform]
+ */
+export function varsayilanAyarDosyasi(ortam = process.env, platform = process.platform) {
+  const ev = ortam.HOME || ortam.USERPROFILE;
+  let taban = null;
+  if (platform === 'win32') taban = ortam.LOCALAPPDATA || (ortam.USERPROFILE ? join(ortam.USERPROFILE, 'AppData', 'Local') : null);
+  else if (platform === 'darwin') taban = ev ? join(ev, 'Library', 'Application Support') : null;
+  else taban = ortam.XDG_CONFIG_HOME || (ev ? join(ev, '.config') : null);
+  return taban && isAbsolute(taban) ? join(taban, 'Nöbetçi', 'ayar.json') : null;
+}
+
 /** Başlatıcının verdiği ayar dosyası (yoksa null: seçim yapılamaz). */
 export function ayarDosyasiYolu() {
   const y = process.env[AYAR_DOSYASI_DEGISKENI];
