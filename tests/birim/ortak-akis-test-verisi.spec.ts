@@ -189,6 +189,9 @@ test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüş
   await expect(kart.getByText('✓ Kaydedildi')).toBeVisible();
   expect((await baglar(ortakId)).baglar).toEqual({});
   expect((await baglar(ekranId)).ortakBaglar).toEqual({});
+  // Seçenekleri ekran modelinde tanımlı alan bağsızken "bağlı değil" değil, "ekranda tanımlı" der (bağlamak gerekmez).
+  await expect(ortakSecim.locator('option:checked')).toHaveText('— seçenekler ekranda tanımlı (bağlamak gerekmez) —');
+  await expect(kart.getByText('— bağlı değil —')).toHaveCount(0);
   await ortakSecim.selectOption({ label: `${TABLO} → Teslimat` });
   await expect(kart.getByText('✓ Kaydedildi')).toBeVisible();
   await expect.poll(async () => (await baglar(ortakId)).baglar).toEqual({ teslimatSecimi: { tablo: tabloId, sutun: 'Teslimat' } });

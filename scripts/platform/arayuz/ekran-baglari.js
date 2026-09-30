@@ -98,7 +98,9 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       // Gizli sütun (ör. CVV, parola) yalnız seçim olmayan alanlara bağlanır: değer koşuda şifreli sütundan gelir, raporlarda
       // maskelenir. Seçim alanının seçenekleri tablodan listelendiği için gizli sütun ona sunulmaz.
       const gizliOlur = !SECIM_TIPLERI.includes(g.tip);
-      const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu` }, h('option', { value: '' }, '— bağlı değil —'),
+      // Seçenekleri ekran modelinde zaten tanımlı seçim alanı bağlanmadan da çalışır: "bağlı değil" uyarısı verilmez.
+      const modelde = Boolean(g.modeldeSecenek) && !b;
+      const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu` }, h('option', { value: '' }, modelde ? '— seçenekler ekranda tanımlı (bağlamak gerekmez) —' : '— bağlı değil —'),
         tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
           value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
         }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
@@ -131,7 +133,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
         alt = [alt, degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok')];
       }
-      const satir = h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
+      const satir = h('div', { class: `alan-satiri ${b || modelde ? '' : 'gonderilmez'}` },
         h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),
         h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
       if (!miras) { kendiSatirlari.push(satir); return; }
@@ -167,7 +169,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     ortakAkis ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Bu ortak akışın alanlarını burada bir kez bağlayın: bağlar onu kullanan tüm ekranlara varsayılan olarak geçer. Bir ekran aynı alanı kendi Test verisi sekmesinde başka sütuna bağlarsa o ekranda onunki geçerli olur.')
       : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Üstteki tablo bu ekranın kendi alanlarıdır. Ortak akışlardan gelen alanlar altta, ortak akış başına ayrı “Ortak akıştan” bölümündedir; bağları ortak akışın sayfasında kurulur. Değiştirirseniz yalnız bu ekran için geçerli olur (ekrana özel); “Ortak akışa dön” ekranın bağını siler.') : null,
-    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
+    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Seçenekleri ekranda zaten tanımlı olan seçim alanlarını bağlamak gerekmez; bağlanmazsa o seçenekler kullanılır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Test verisi > Tablolar'), ' bölümünden ekleyin.'),
     oneriKap, liste, ortakKap));
   ciz();

@@ -82,7 +82,11 @@ export const TABLO_GET_UCLARI = [
     return {
       baglar: ekranAlanBaglari(db, ekranId), ortakBaglar: ortakAkisBaglari(db, ekranId), ortakAkis: Boolean(model && model.model && model.model.tur === 'ortakAkis'),
       // senaryoAyari: ekranda karşılığı olmayan, akışı dallandıran seçim (rozetle gösterilir; tablodaki değer koda çevrilir).
-      girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}) })), tablolar: tablolariListele(db, projeId)
+      // modeldeSecenek: seçim alanının seçenekleri ekran modelinde zaten tanımlı (tabloya bağlamak gerekmez; "bağlı değil" uyarısı verilmez).
+      girdiler: girdiler.map((g) => ({
+        id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}),
+        ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { modeldeSecenek: true } : {})
+      })), tablolar: tablolariListele(db, projeId)
     };
   }]
 ];
