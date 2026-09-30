@@ -183,6 +183,11 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(o.soru.alanlar.find((a: Nesne) => a.etiket === 'Kanal')).toMatchObject({ mevcut: 'Web', etiketBulundu: true });
   // Zorunlu alan boşken ilerlenmez (akış tamamlanmadan bitmez).
   expect(await api('/platform/hizli-test/veri', { id, degerler: { '#adSoyad': deger('${Kişi.Ad soyad}', 'tablo') } })).toMatchObject({ basarili: false, kod: 'EKSIK' });
+  // Doldurma sırası kullanıcının verdiği sıradır: "sira" ile ters çevrilince adımın alan sırası değişir (eksik hatasına rağmen korunur).
+  const anahtarlar = o.soru.alanlar.map((a: Nesne) => String(a.anahtar));
+  expect(await api('/platform/hizli-test/veri', { id, degerler: {}, sira: [...anahtarlar].reverse() })).toMatchObject({ basarili: false, kod: 'EKSIK' });
+  o = await bekle(id, ['veri']);
+  expect(o.soru.alanlar.map((a: Nesne) => String(a.anahtar))).toEqual([...anahtarlar].reverse());
   const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
   await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('${Kişi.Ad soyad}', 'tablo'), [alan('Müşteri tipi')]: deger('kurumsal') } });
   // Kurumsal seçilince koşullu "Vergi no" belirir: veri durağı yeniden (yeni alan işaretli).
@@ -569,6 +574,18 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(hazir.locator('li')).toContainText('Kanal');
     await expect(hazir.locator('li')).toContainText('Web');
     await tasmaYok(page, 'Veri durağı (hazır liste açık)');
+    // Doldurma sırası: sayfadaki sırayla listelenir; yukarı / aşağı düğmeleriyle değişir (ilk alanda "yukarı", sonuncuda "aşağı" kapalı).
+    const etiketSirasi = soru.locator('.hizli-alan .hizli-alan-baslik label');
+    await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/]);
+    const satirAd = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
+    const satirTip = soru.locator('.hizli-alan').filter({ hasText: 'Müşteri tipi' });
+    await expect(satirAd.getByRole('button', { name: 'Yukarı taşı' })).toBeDisabled();
+    await expect(satirTip.getByRole('button', { name: 'Aşağı taşı' })).toBeDisabled();
+    await satirAd.getByRole('button', { name: 'Aşağı taşı' }).click();
+    await expect(etiketSirasi).toHaveText([/Müşteri tipi/, /Ad soyad/]);
+    await expect(satirAd.getByRole('button', { name: 'Yukarı taşı' })).toBeFocused();
+    await satirAd.getByRole('button', { name: 'Yukarı taşı' }).click();
+    await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/]);
     const adAlani = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
     await adAlani.getByRole('button', { name: 'Doldur', exact: true }).click();
     // Önceki testlerin kaydettiği otomatik tablolar da adı uyan sütunla listelenir: "Kişi" tablosunun satırı seçilir.

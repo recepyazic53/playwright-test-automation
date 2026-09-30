@@ -73,3 +73,10 @@
 .hizli-hazir-ad { font-weight: 600; overflow-wrap: anywhere; }
 .hizli-hazir-deger { color: var(--metin-2); overflow-wrap: anywhere; }
 @media (max-width: 520px) { .hizli-hazir-liste li { grid-template-columns: minmax(0, 1fr) auto; } .hizli-hazir-deger { grid-column: 1; } }
+
+/* Veri durağı: alan başlığı satırı ve doldurma sırası (yukarı / aşağı) düğmeleri. */
+.hizli-alan-baslik { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.hizli-alan-baslik > label { min-width: 0; }
+.hizli-sira { display: inline-flex; gap: 4px; flex: none; }
+.hizli-sira .kucuk-dugme { min-width: 28px; padding-inline: 6px; }
+.hizli-sira .kucuk-dugme:disabled { opacity: 0.35; cursor: default; }

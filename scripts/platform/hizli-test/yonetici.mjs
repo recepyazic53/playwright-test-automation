@@ -493,6 +493,11 @@ export function hizliTestYoneticisiOlustur(s) {
     durumda(o, ['veri']);
     const girilen = nesneMi(g.degerler) ? g.degerler : {};
     const adim = guncelAdim(o);
+    // Doldurma sırası: kullanıcının verdiği sıra (yukarı / aşağı taşıma); verilmeyenler sonda, sayfa sırasıyla kalır (kararlı sıralama).
+    if (Array.isArray(g.sira)) {
+      const sira = new Map(g.sira.filter((/** @type {unknown} */ k) => typeof k === 'string').map((/** @type {string} */ k, /** @type {number} */ i) => [k, i]));
+      adim.alanlar.sort((/** @type {Nesne} */ x, /** @type {Nesne} */ y) => (sira.get(x.anahtar) ?? 1e6) - (sira.get(y.anahtar) ?? 1e6));
+    }
     /** @type {Record<string, Nesne>} */
     const yeni = {};
     for (const a of adim.alanlar) {
