@@ -10,6 +10,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { degerBasvurusuYaz } from '../tablolar/tablo-secimi.mjs';
 import { kisiKategorisi } from '../tablolar/kisi-baglama.mjs';
 import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
+import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 
 const EN_COK_AD = 60;
 export const KISI_TABLOSU = 'Kişi bilgileri';
@@ -40,15 +41,39 @@ export function alanGrubu(a) {
   return { tablo: temiz || 'Alan', sutun: temiz || 'Alan' };
 }
 
-/** Seçim / radyo alanının tüm seçenekleri (boş değerli "Seçiniz" hariç): görünen metin + sayfadaki seçenek değeri. @param {Record<string, any>} a */
-function tumSecenekler(a) {
+/** Değeri her zaman GİZLİ sütunda (şifreli, ekranda maskeli) tutulan alanlar: kart numarası, CVV / CVC / güvenlik kodu, kart sahibi,
+ * T.C. / vergi / kimlik / pasaport no, parola, IBAN (normal ad üzerinde). */
+const HASSAS_DESEN = /(kartno|kartnumara|cardnumber|cardno|creditcard|cvv|cvc|cv2|guvenlikkod|securitycode|kartsahib|cardholder|holdername|iban|parola|sifre|password|passwd|vergino|vergikimlik|vergnumara|^vkn|tckimlik|kimlikno|kimliknumara|tckn|^tcno|^tc$|pasaport|passport)/;
+/** Kart tablosunda kart sahibinin adı / soyadı sütunu. */
+const KART_SAHIBI_DESENI = /^(ad|adi|isim|soyad|soyadi|soyisim|name|firstname|lastname|surname)$|(sahib|holder|isim|soyad|adsoyad)/;
+
+/**
+ * Alanın değeri gizli sütunda mı tutulur? Hassas alan kuralı (yukarıdaki desen; alanın ekrandaki adı, name / id ve sütun adı üzerinde),
+ * kişi tablosunda kimlik / vergi / pasaport no, kart tablosunda kart sahibinin adı / soyadı ve Ayarlar > Güvenlik > Maskeleme adları
+ * (çekirdek + kullanıcının ekleri: gizliAdMi) — rapor maskelemesiyle aynı liste.
+ * @param {Record<string, any>} a alan @param {{ tablo: string; sutun: string }} yer @param {ReadonlyArray<string>} [ekler] kullanıcının ek gizli adları
+ */
+export function hassasAlanMi(a, yer, ekler = []) {
+  const adlar = [a.etiket, a.ad, a.kimlik, yer.sutun].filter((x) => typeof x === 'string' && x);
+  if (a.gizli === true || a.tur === 'password') return true;
+  if (adlar.some((x) => HASSAS_DESEN.test(baslikNormal(x)) || gizliAdMi(String(x), ekler))) return true;
+  if (yer.tablo === KART_TABLOSU && adlar.some((x) => KART_SAHIBI_DESENI.test(baslikNormal(x)))) return true;
+  if (yer.tablo === KISI_TABLOSU) {
+    const k = kisiKategorisi({ etiket: String(a.etiket ?? ''), anahtar: a.ad ?? undefined, id: a.kimlik ?? undefined });
+    if (k && ['kimlikNo', 'vergiNo', 'pasaportNo'].includes(k.kategori)) return true;
+  }
+  return false;
+}
+
+/** Seçim / radyo alanının tüm seçenekleri (yer tutucu "SEÇİNİZ" / boş değerli seçenek hariç): görünen metin + sayfadaki seçenek değeri. @param {Record<string, any>} a */
+export function tumSecenekler(a) {
   const liste = a.tur === 'radio' ? (Array.isArray(a.radyolar) ? a.radyolar : []) : (Array.isArray(a.secenekler) ? a.secenekler : []);
   /** @type {Map<string, { metin: string; kod: string }>} */
   const m = new Map();
-  for (const s of liste) {
+  for (const [i, s] of liste.entries()) {
     const kod = String(s.deger ?? '');
     const metin = typeof s.metin === 'string' && s.metin.trim() ? s.metin.trim() : kod;
-    if (kod === '' || !metin) continue;
+    if (kod === '' || !metin || (a.tur !== 'radio' && yerTutucuSecenekMi(metin, kod, i === 0))) continue;
     if (!m.has(metin.toLocaleLowerCase('tr'))) m.set(metin.toLocaleLowerCase('tr'), { metin, kod });
   }
   return [...m.values()];
@@ -66,7 +91,7 @@ function okunurDeger(a, deger) {
 }
 
 /**
- * @param {{ baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }> }} g
+ * @param {{ baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string> }} g
  * @returns {{ satirAdi: string; tablolar: Array<{ tabloAdi: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satir: Record<string, string>;
  *   liste: { sutun: string; secenekler: Array<{ metin: string; kod: string }> } | null;
  *   karsiliklar: Record<string, Record<string, string>>;
@@ -85,10 +110,10 @@ export function tabloTaslagiKur(g) {
     if (!t) { t = { tabloAdi: tablo, sutunlar: [], satir: {}, liste: null, karsiliklar: {}, baglar: {} }; tablolar.set(anahtar, t); }
     let ad = sutun;
     for (let i = 2; t.sutunlar.some((x) => x.ad.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr')); i++) ad = `${adTemizle(sutun, EN_COK_AD - 4)} ${i}`;
-    // Kart numarası ve güvenlik kodu gizli sütun olur (değer şifreli saklanır, ekranda maskelenir).
-    const kartGizli = tablo === KART_TABLOSU && /(numara|kartno|cvv|cvc|guvenlik)/.test(baslikNormal(ad));
+    // Hassas alan (kart no, CVV, kart sahibi, kimlik / vergi no, parola, IBAN, maskeleme adları) gizli sütun olur: değer şifreli saklanır,
+    // ekranda maskelenir.
     const ilkAlan = !t.sutunlar.length;
-    t.sutunlar.push({ ad, gizli: a.gizli === true || kartGizli || gizliAdMi(ad) });
+    t.sutunlar.push({ ad, gizli: hassasAlanMi(a, { tablo, sutun: ad }, g.ekGizliAdlar ?? []) });
     // Tek başına duran seçim / radyo alanı: tabloya yalnız seçilen değil TÜM seçenekler yazılır (liste tablosu); grupta başka alan varsa değil.
     const secim = ['select', 'select-one', 'radio'].includes(String(a.tur));
     t.liste = secim && ilkAlan && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU ? { sutun: ad, secenekler: tumSecenekler(a) } : null;

@@ -50,6 +50,8 @@ const bekle = (ms: number): Promise<void> => new Promise((c) => setTimeout(c, ms
 const ALAN_SAKINLIK_EN_COK_MS = 8_000;
 /** Basıştan sonra bundan kısa süredir bekleyen istek sayılır (gönderim / hesaplama uzun sürebilir; uzun yoklama adresi zaten öğrenilir). */
 const BASIS_UZUN_ISTEK_MS = 20_000;
+/** Basıştan sonra hiç yeni metin görülmediyse ek bakma süresi (ms): pencerenin içi gecikmeli çizilebilir. */
+const YENI_METIN_BEKLEME_MS = 4_000;
 /** Metin karşılaştırması: büyük / küçük harf, Türkçe harfler ve boşluklar yok sayılır (koşucunun toleranslı içerir kuralı gibi). */
 const iceriyor = (metin: string, aranan: string): boolean => Boolean(aranan.trim()) && katla(metin).includes(katla(aranan));
 /** Doğru / yanlış sayılan değerler (onay kutusu). */
@@ -191,7 +193,9 @@ export async function hizliTestiYurut(
       let onceki = '';
       let sabitSince = Date.now();
       while (Date.now() - bas < sureMs && !kapandi) {
-        const iz = await page.evaluate(() => `${document.body.innerText.length}|${document.querySelectorAll('input,select,textarea,button').length}|${location.pathname}`).catch(() => '');
+        // Bağlantı biçimli düğmeler ve açılan pencereler de parmak izine girer (pencere önce boş açılıp içi sonra çizilebilir).
+        const iz = await page.evaluate(() => `${document.body.innerText.length}|${document.querySelectorAll('input,select,textarea,button,a,[role="link"],[role="button"]').length}|${
+          [...document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"]')].map((d) => (d as HTMLElement).innerText.length).join(',')}|${location.pathname}`).catch(() => '');
         if (iz !== onceki) { onceki = iz; sabitSince = Date.now(); } else if (Date.now() - sabitSince >= 1_000) return;
         await page.waitForTimeout(200);
       }
@@ -271,6 +275,29 @@ export async function hizliTestiYurut(
       }
     }
 
+    /**
+     * Basıştan sonra sayfa izleme (hızlı test ve doğrulama koşusu): istekler + bekleme göstergesi bitene kadar (sakinles), sonra görünüm
+     * sakinleşene kadar; o an bekleme göstergesi / ilerleme ekranı ("…lütfen bekleyiniz", "40%", "Onaylanıyor 0 / 1") HÂLÂ görünüyorsa
+     * izleme sürer (ilerleme ekranı ağ isteği olmadan da sürebilir). En çok HIZLI_BASIS_BEKLEME_EN_COK_MS (bas: izlemenin başladığı an).
+     */
+    async function basisiIzle(page: Page, bas: number): Promise<{ metinler: string[]; zamanAsimi: boolean }> {
+      const metinler = new Set<string>();
+      const kalan = (): number => HIZLI_BASIS_BEKLEME_EN_COK_MS - (Date.now() - bas);
+      let zamanAsimi = false;
+      for (;;) {
+        const s = await sakinles(page, Math.max(kalan(), 0), BASIS_UZUN_ISTEK_MS);
+        for (const m of s.metinler) metinler.add(m);
+        zamanAsimi = s.zamanAsimi;
+        await gorunumSakinles(page, Math.min(6_000, Math.max(kalan(), 0)));
+        const b = await page.evaluate(beklemeDurumu, { kaliplar: { ...KALIPLAR } }).catch(() => ({ bekliyor: false, metinler: [] as string[] }));
+        for (const m of b.metinler) metinler.add(m);
+        if (!b.bekliyor || kapandi) break;
+        if (kalan() <= 0) { zamanAsimi = true; break; }
+        await page.waitForTimeout(300);
+      }
+      return { metinler: [...metinler], zamanAsimi };
+    }
+
     /** Düğmeye basar, sonucu bekler ve farkı çıkarır. */
     async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik): Promise<HizliFark> {
       const onceAdres = yolu(page.url());
@@ -278,17 +305,37 @@ export async function hizliTestiYurut(
       durum.asama = 'kayit';
       diyaloglar.length = 0;
       let sonuc: { metinler: string[]; zamanAsimi: boolean };
+      const onceMetinler = new Set(once.metinler.map((m) => m.metin));
       try {
         let l = page.locator(secici);
         if (metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: metin });
         await l.filter({ visible: true }).first().click({ timeout: 15_000 });
-        sonuc = await sakinles(page, HIZLI_BASIS_BEKLEME_EN_COK_MS, BASIS_UZUN_ISTEK_MS);
-        await gorunumSakinles(page, 6_000);
+        sonuc = await basisiIzle(page, bas);
+        // Basıştan sonra hiç yeni metin görülmediyse (ör. pencere önce yalnız "Kapat" düğmesiyle açılıp içi sonra çizilir) kısa bir süre
+        // daha bakılır; yeni metin belirince görünüm yeniden sakinleşene kadar beklenir.
+        const yeniMetinVar = async (): Promise<boolean> => ((await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[])
+          .some((m) => !onceMetinler.has(m.metin) && m.tur !== 'bekleme');
+        const pencereAcik = (): Promise<boolean> => page.evaluate(() => [...document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],.modal')]
+          .some((d) => {
+            if (d.closest('[id^="nobetci"]')) return false;
+            const r = d.getBoundingClientRect();
+            const s = getComputedStyle(d);
+            return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+          })).catch(() => false);
+        if (await pencereAcik() && !(await yeniMetinVar())) {
+          for (const son = Date.now() + YENI_METIN_BEKLEME_MS; Date.now() < son && !kapandi;) {
+            await page.waitForTimeout(300);
+            if (await yeniMetinVar()) {
+              const ek = await basisiIzle(page, Date.now());
+              sonuc = { metinler: [...new Set([...sonuc.metinler, ...ek.metinler])], zamanAsimi: ek.zamanAsimi };
+              break;
+            }
+          }
+        }
       } finally {
         durum.asama = okumaAsamasi;
       }
       const sonra = await anlikOku(page, true);
-      const onceMetinler = new Set(once.metinler.map((m) => m.metin));
       const yeniMetinler: HizliMetin[] = [
         ...sonra.metinler.filter((m) => !onceMetinler.has(m.metin)),
         ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
@@ -364,7 +411,19 @@ export async function hizliTestiYurut(
       await page.waitForTimeout(500); // sayfanın gecikmeli sıfırlaması (zamanlayıcı) gerçekleşsin
       for (const d of alanlar) {
         if (typeof d.deger !== 'string' || !d.deger.trim() || atla.includes(d.anahtar)) continue;
-        if (['radio', 'checkbox', 'select', 'select-one', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen) continue;
+        // Açılır liste: sonraki bir alanın sorgusu / yeniden çizimi listeyi ilk seçeneğine ("SEÇİNİZ") döndürmüş olabilir; değeri artık
+        // seçilen değer değilse bir kez yeniden seçilir (normal koşu da aynı kuralı uygular: model-kosucu.ts).
+        if (['select', 'select-one'].includes(d.alan.tur)) {
+          const s = (d.alan.secenekler ?? []).find((x) => x.deger === String(d.deger) || katla(x.metin) === katla(String(d.deger)));
+          const hedef = s ? s.deger : String(d.deger);
+          const simdi = await alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first()
+            .evaluate((e) => (e instanceof HTMLSelectElement ? e.value : null), undefined, { timeout: 1_000 }).catch(() => null);
+          if (simdi === null || simdi === hedef) continue;
+          const h = await alaniDoldur(page, d);
+          if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
+          continue;
+        }
+        if (['radio', 'checkbox', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen) continue;
         const yer = alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first();
         if ((await yer.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) continue;
         const h = await alaniDoldur(page, d);
@@ -420,7 +479,7 @@ export async function hizliTestiYurut(
           let l = page.locator(adim.bas.secici);
           if (adim.bas.metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: adim.bas.metin });
           await l.filter({ visible: true }).first().click({ timeout: 15_000 });
-          const s = await sakinles(page, HIZLI_BASIS_BEKLEME_EN_COK_MS, BASIS_UZUN_ISTEK_MS);
+          const s = await basisiIzle(page, Date.now());
           for (const m of s.metinler) gorulen.add(m);
         } catch (hata) {
           return { sonuc: 'basarisiz', mesaj: `${i + 1}. adımda “${adim.bas.metin ?? adim.bas.secici}” düğmesine basılamadı (${adreslerGizli(ilkSatir(hata))}).`, gorulen: [...gorulen] };

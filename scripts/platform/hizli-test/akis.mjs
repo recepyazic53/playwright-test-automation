@@ -205,7 +205,23 @@ export function beklemeMetniMi(metin) {
   if (!k) return false;
   if (new RegExp(KALIPLAR.beklemeMetni, 'i').test(k) || /lutfen bekle/.test(k)) return true;
   const t = k.replace(/[.…\s]+$/, '');
-  return t.length <= 60 && /(iyor|uyor)$/.test(t.split(' ').pop() ?? '');
+  // İlerleme göstergesi: yalnız yüzde ("40%") ya da "…iyor n / m" ("Onaylanıyor 0 / 1", "İşleniyor 3/10").
+  if (/^\d{1,3} ?%$/.test(t)) return true;
+  // Kısa metinde "…ıyor / …iyor / …uyor / …üyor" ile biten bir sözcük (sonda sayaç olabilir: "Onaylanıyor 0 / 1").
+  return t.length <= 60 && t.split(' ').some((w) => /(iyor|uyor)$/.test(w.replace(/[^a-z]/g, '')));
+}
+
+/**
+ * Metin yalnız DEĞİŞKEN değerlerden mi oluşuyor (her koşuda değişen tutar, tarih, numara, maskeli ad): rakamlı ve maskeli (***)
+ * sözcükler ile para birimleri atılınca 3 harften az kalıyorsa evet ("6.78 EUR", "377.56 TL", "01.10.2026", "D*** K***"). Böyle bir
+ * metin bitiş ("Bitti") olarak önerilmez.
+ * @param {unknown} metin
+ */
+export function degiskenMetinMi(metin) {
+  const t = bosluk(metin);
+  if (!t) return false;
+  const sabit = t.replace(/\S*(?:\d|\*{2,})\S*/g, ' ').replace(/(?:^|\s)(?:tl|try|eur|euro|usd|gbp|chf|€|\$|₺|£)(?=\s|$)/giu, ' ').replace(/[^\p{L}]+/gu, '');
+  return sabit.length < 3;
 }
 
 /**
@@ -220,18 +236,27 @@ export function varsayilanEtiketler(gorulenler, sonBasis) {
   for (const g of gorulenler) {
     if (g.tur === 'hata' || (g.tur !== 'basari' && new RegExp(KALIPLAR.hataMetni, 'i').test(katla(g.metin)))) e[g.metin] = 'hata';
     else if (g.tur === 'bekleme' || beklemeMetniMi(g.metin)) e[g.metin] = 'devam';
-    else if (g.basis === sonBasis && sonBasis > 0) e[g.metin] = 'bitti';
+    // Değişken değer (tutar, tarih, maskeli ad) bitiş olarak önerilmez: her koşuda başka olur.
+    else if (g.basis === sonBasis && sonBasis > 0 && !degiskenMetinMi(g.metin)) e[g.metin] = 'bitti';
     else e[g.metin] ??= null;
   }
   return e;
 }
 
-/** Metnin değişken (rakamlı) kısmı atılmış sabit öneki: "Tutar: 1.250 TL" → "Tutar:" (en az 3 karakter; yoksa metnin kendisi). @param {string} m */
+/**
+ * Metnin sabit kısmı (bitiş koşulunda aranan desen): rakamlı kısımdan önceki önek ("Tutar: 1.250 TL" → "Tutar:"); önek yoksa değişken
+ * (rakamlı / maskeli) sözcükler atılır ve kalan en uzun sabit parça (en az 3 harf) alınır ("6.78 EUR" → "EUR"); hiç sabit parça yoksa
+ * '' ("377.56 TL", "D*** K***": bitiş olarak kullanılamaz). Rakamsız, maskesiz metin olduğu gibi. @param {string} m
+ */
 export function sabitKisim(m) {
   const t = bosluk(m);
+  const maskeli = /\*{2,}/.test(t);
   const i = t.search(/\d/);
+  if (i < 0 && !maskeli) return t;
   const bas = i > 0 ? t.slice(0, i).trim() : '';
-  return bas.length >= 3 ? bas : t;
+  if (bas.length >= 3 && !/\*{2,}/.test(bas)) return bas;
+  const parcalar = t.split(/\s*\S*(?:\d|\*{2,})\S*\s*/).map((x) => x.trim()).filter((x) => x.replace(/[^\p{L}]/gu, '').length >= 3);
+  return parcalar.sort((a, b) => b.length - a.length)[0] ?? '';
 }
 
 /**
@@ -246,6 +271,10 @@ export function bitisKosulu(g) {
   const adres = typeof g.adres === 'string' && g.adres.trim() ? g.adres.trim().slice(0, 300) : null;
   /** @type {string[]} */
   const hatalar = [];
+  // Yalnız değişken değerden oluşan metin (tutar, tarih, maskeli ad) Bitti / Hata olamaz: aranacak sabit kısmı yok.
+  for (const [k, v] of Object.entries(g.etiketler ?? {})) {
+    if ((v === 'bitti' || v === 'hata') && !sabitKisim(k)) hatalar.push(`“${bosluk(k).slice(0, 60)}” yalnız değişken değer (tutar / tarih / numara / maskeli ad) içeriyor; her koşuda değişir. ${v === 'bitti' ? 'Bitiş' : 'Hata'} için sabit bir metin seçin.`);
+  }
   if (adres && !adres.startsWith('/')) hatalar.push('“Adres şu olursa bitti” bir yol olmalı (/ ile başlar).');
   const olumsuz = g.olumsuz && bosluk(g.olumsuz.mesaj) ? { mesaj: bosluk(g.olumsuz.mesaj).slice(0, METIN_EN_UZUN) } : null;
   if (olumsuz && !hata.some((h) => katla(olumsuz.mesaj).includes(katla(h)) || katla(h).includes(katla(olumsuz.mesaj)))) hatalar.push('Olumsuz senaryoda beklenen mesaj “Hata” etiketli olmalı.');
@@ -264,7 +293,10 @@ const kacis = (m) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * @param {{ bitti: string[]; hata: string[] }} bitis
  */
 export function kayitEnvanteriKur(o, bitis) {
-  const dolu = (/** @type {any} */ a) => o.degerler[a.anahtar] !== undefined && o.degerler[a.anahtar] !== '';
+  // Modele girenler: değeri olan alanlar ve sayfada HAZIR gelen seçim alanları (değersiz: koşu dokunmaz, sayfanın değeri kalır; ama
+  // modelde oldukları için liste tablolarına bağlanabilir ve senaryo formunda seçilebilir).
+  const dolu = (/** @type {any} */ a) => (o.degerler[a.anahtar] !== undefined && o.degerler[a.anahtar] !== '')
+    || (a.hazir === true && ['select', 'select-one', 'radio'].includes(String(a.tur)) && !a.devreDisi && !a.saltOkunur && !a.kosul);
   const adimlar = o.adimlar.map((a) => ({ ...a, alanlar: a.alanlar.filter(dolu) }));
   while (adimlar.length > 1 && !adimlar[adimlar.length - 1].alanlar.length && !adimlar[adimlar.length - 1].bas) adimlar.pop();
   const gosterge = (/** @type {string[]} */ l) => (!l.length ? null : l.length === 1

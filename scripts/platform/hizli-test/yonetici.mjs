@@ -25,6 +25,7 @@
 //   POST /platform/hizli-test/onay { id, cevap }               Bana sor: "X'e basayım mı?"
 //   POST /platform/hizli-test/hata-cevabi { id, cevap: 'hata' | 'uyari' | 'onemsiz' }
 //   POST /platform/hizli-test/bitis { id, etiketler, adres?, olumsuz? }
+//   POST /platform/hizli-test/geri { id, hedef: 'karar' | 'bitis' }   bitiş / kaydet ekranından adım adım zincire ya da bitiş koşuluna dön
 //   POST /platform/hizli-test/dogrula { id }                   H3: baştan sona doğrulama koşusu (yeni kayıt oluşabilir; adım adım ilerleme)
 //   POST /platform/hizli-test/ozet { id, baslik?, kosuyaDahil?, tabloOlustur? }   kayıt özeti (hiçbir şey yazılmaz; seçimler oturumda saklanır,
 //                                                              özet sekmesi #/hizli-test/ozet/<id> gövdesiz okur)
@@ -50,6 +51,7 @@ import { senaryoHazirligi } from '../senaryolar/hazirlik-servisi.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
 import { karsiliklariEkrandanAl } from '../tablolar/karsiliklar.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { basvuruYaz, pinAnahtari, planKur, planOnizle, planYaz, senaryoOnerileri, varsayilanSecim } from './kayit-plani.mjs';
 import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
 import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
@@ -248,6 +250,8 @@ export function hizliTestYoneticisiOlustur(s) {
   };
   /** @param {Nesne} o @param {{ secici: string; metin: string | null }} d */
   const basmayaBasla = (o, d) => {
+    // Basıştan önce ekranda olan metinler: bitiş adımında "Sayfayı yeniden tara" yalnız bunlardan SONRA beliren metinleri ekler.
+    o.basOncesiMetinler = new Set((o.sonAnlik?.metinler ?? []).map((/** @type {Nesne} */ m) => m.metin));
     o.basiliyor = d;
     o.durum = 'calisiyor';
     o.calisiyor = `“${d.metin ?? d.secici}” düğmesine basıldı; sayfa izleniyor…`;
@@ -375,7 +379,8 @@ export function hizliTestYoneticisiOlustur(s) {
       o.sonAnlik = f.anlik;
       o.sonGoruntu = f.anlik.goruntu ?? null;
       for (const m of f.beklemeMetinleri ?? []) gorulenEkle(o, m, 'bekleme');
-      for (const m of f.yeniMetinler ?? []) gorulenEkle(o, m.metin, m.tur);
+      // Yeni beliren alanların etiketleri (ör. "D.TARİHİ") sonuç metni değildir: bitiş çiplerine girmez.
+      for (const m of f.yeniMetinler ?? []) if (!alanEtiketiMi(o, m.metin, f.anlik?.alanlar)) gorulenEkle(o, m.metin, m.tur);
       gunluk(o, `“${adim.bas.metin ?? adim.bas.secici}” basıldı (${Math.round(f.sureMs / 100) / 10} sn): ${f.yeniMetinler.length} yeni metin, ${f.yeniAlanlar.length} yeni alan${f.adres ? `, adres ${f.adres.sonra}` : ''}.`);
       const hatalar = f.yeniMetinler.filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
       if (hatalar.length) { o.hataSorusu = { metinler: hatalar, kaynak: 'bas' }; o.durum = 'hataSorusu'; return; }
@@ -397,7 +402,9 @@ export function hizliTestYoneticisiOlustur(s) {
       if (o.okumaAmaci === 'bitis') {
         // Bitiş koşulu adımı: ekranda o an görünen yeni metinler (mesajlar) görülenlere eklenir.
         const onceki = new Set(o.gorulenler.map((/** @type {Nesne} */ x) => x.metin));
-        for (const m of e.anlik.metinler) gorulenEkle(o, m.metin, m.tur);
+        // Yalnız son basıştan SONRA beliren, alan etiketi olmayan metinler (menü / başlık / altbilgi / alan etiketleri basıştan önce de vardı).
+        const bilinen = new Set([...(o.basOncesiMetinler ?? []), ...(o.kesifAnlik?.metinler ?? []).map((/** @type {Nesne} */ m) => m.metin)]);
+        for (const m of e.anlik.metinler) if (!bilinen.has(m.metin) && !alanEtiketiMi(o, m.metin, e.anlik.alanlar)) gorulenEkle(o, m.metin, m.tur);
         const yeni = o.gorulenler.filter((/** @type {Nesne} */ x) => !onceki.has(x.metin));
         for (const x of yeni) if (x.tur === 'hata' && !(x.metin in o.etiketler)) o.etiketler[x.metin] = 'hata';
         gunluk(o, `Sayfa yeniden tarandı: ${yeni.length} yeni metin.`);
@@ -421,6 +428,14 @@ export function hizliTestYoneticisiOlustur(s) {
       gunluk(o, `Doğrulama koşusu: ${e.sonuc === 'basarili' ? 'başarılı' : 'başarısız'} — ${o.dogrulama.mesaj}`);
       o.durum = 'kaydet';
     }
+  }
+
+  /** Metin bir alanın etiketi mi (bilinen ya da o an sayfadaki alanlar)? @param {Nesne} o @param {unknown} m @param {Nesne[]} [sayfadakiler] */
+  function alanEtiketiMi(o, m, sayfadakiler = []) {
+    const k = katla(String(m ?? '').replace(/[\s*:：]+$/u, ''));
+    if (!k) return false;
+    const esit = (/** @type {unknown} */ e) => typeof e === 'string' && katla(e.replace(/[\s*:：]+$/u, '')) === k;
+    return [...o.alanlar.values()].some((x) => esit(x.alan.etiket)) || sayfadakiler.some((a) => esit(a.etiket));
   }
 
   /** Görülen metin (bitiş çipleri). @param {Nesne} o @param {unknown} m @param {string} tur */
@@ -702,6 +717,8 @@ export function hizliTestYoneticisiOlustur(s) {
       o.etiketler = varsayilanEtiketler(o.gorulenler, o.basisNo);
       for (const m of o.cumle.mesajlar) for (const g2 of o.gorulenler) if (katla(g2.metin).includes(katla(m))) o.etiketler[g2.metin] = 'bitti';
       for (const [m, c] of Object.entries(o.hataCevaplari ?? {})) if (c === 'hata' && m in o.etiketler) o.etiketler[m] = 'hata';
+      // Geri dönülüp zincire devam edildiyse daha önce verilen etiketler korunur (görülen metinlerde).
+      for (const [m, e] of Object.entries(o.saklananEtiketler ?? {})) if (m in o.etiketler) o.etiketler[m] = e;
       o.adresBitti = null;
       o.durum = 'bitis';
       return { tamam: true };
@@ -796,6 +813,43 @@ export function hizliTestYoneticisiOlustur(s) {
     return { tamam: true };
   }
 
+  /**
+   * Geri dönüş: "Bitiş koşulu" ↔ "Kaydet" ↔ "Adım adım" arasında. hedef 'karar': zincire devam (bitiş seçimleri saklanır, yeniden
+   * "Burada bitir" denince korunur; Hayır izninde düğme / mesaj seçimine dönülür); hedef 'bitis': kaydet ekranından bitiş koşulunu
+   * düzenle (etiketler, adres, olumsuz senaryo korunur). Doğrulama sonucu geçersiz olur (bitiş / zincir değişebilir). @param {Nesne} g
+   */
+  function geri(g) {
+    const o = oturumGetir(String(g.id ?? ''));
+    const hedef = String(g.hedef ?? '');
+    if (hedef === 'bitis') {
+      durumda(o, ['kaydet']);
+      o.dogrulama = null;
+      o.dogrulamaAdimlari = null;
+      o.farklar = null;
+      o.durum = 'bitis';
+      gunluk(o, 'Bitiş koşulu yeniden düzenleniyor.');
+      return { tamam: true };
+    }
+    if (hedef !== 'karar') throw new HizliTestHatasi('GERI', 'Bilinmeyen geri dönüş.');
+    durumda(o, ['bitis', 'kaydet']);
+    // Verilmiş etiketler saklanır: zincir sürüp yeniden "Burada bitir" denince aynı metinlere aynı etiket verilir.
+    o.saklananEtiketler = { ...(o.saklananEtiketler ?? {}), ...o.etiketler };
+    o.bitis = null;
+    o.dogrulama = null;
+    o.dogrulamaAdimlari = null;
+    o.farklar = null;
+    if (o.izin === 'hayir') {
+      // Hayır izninde "bitir" düğme ve mesajı zincire yazmıştı: geri alınır, seçim yeniden yapılır.
+      guncelAdim(o).bas = null;
+      o.basisNo = 0;
+      o.gorulenler = [];
+      o.etiketler = {};
+      o.durum = 'hayirSecim';
+    } else o.durum = 'karar';
+    gunluk(o, 'Adım adım zincire dönüldü: kaldığı yerden devam edilebilir.');
+    return { tamam: true };
+  }
+
   /** Bitiş koşulu (etiketler). @param {Nesne} g */
   function bitis(g) {
     const o = oturumGetir(String(g.id ?? ''));
@@ -886,10 +940,13 @@ export function hizliTestYoneticisiOlustur(s) {
     return { paket, model, veri, mevcut: mevcut && nesneMi(mevcut.model) ? mevcut.model : null };
   }
 
-  /** Kayıt planı: analiz + elle yazılan değerler → tablo planı (kayit-plani.mjs). @param {Nesne} o @param {string} baslik */
-  function planKurOturum(o, baslik) {
+  /**
+   * Kayıt planı: analiz + elle yazılan değerler → tablo planı (kayit-plani.mjs). Hassas sütunlar Ayarlar > Güvenlik > Maskeleme
+   * adlarıyla da (kullanıcının ekleri) gizli olur. @param {Veritabani} vt @param {Nesne} o @param {string} baslik
+   */
+  function planKurOturum(vt, o, baslik) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
-    return planKur({ baslik, alanlar, degerler: aktifDegerler(o) });
+    return planKur({ baslik, alanlar, degerler: aktifDegerler(o), ekGizliAdlar: ekGizliAdlar(vt) });
   }
 
   /**
@@ -912,7 +969,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const { paket, mevcut } = paketKur(vt, o);
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
     const anahtarlar = senaryoAnahtarlari(/** @type {Nesne} */ (paket).model, alanlar);
-    const plan = planKurOturum(o, baslik);
+    const plan = planKurOturum(vt, o, baslik);
     const onizleme = planOnizle(vt, o.projeId, plan, o.ekran.id ?? null, anahtarlar);
     /** @type {Nesne | null} */
     let farklar = null;
@@ -942,7 +999,7 @@ export function hizliTestYoneticisiOlustur(s) {
    * @param {Veritabani} vt @param {Nesne} o @param {string} baslik @param {Nesne} secim
    */
   function planiUygula(vt, o, baslik, secim) {
-    const plan = planKurOturum(o, baslik);
+    const plan = planKurOturum(vt, o, baslik);
     if (!plan.tablolar.length) return null;
     const yedekDegerler = structuredClone(o.degerler);
     const yedekSecimler = structuredClone(o.tabloSecimleri);
@@ -1015,7 +1072,7 @@ export function hizliTestYoneticisiOlustur(s) {
       let secim = nesneMi(g.secim) ? /** @type {Nesne} */ (g.secim) : null;
       if (!secim) {
         const alanlar0 = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
-        secim = varsayilanSecim(planOnizle(vt, o.projeId, planKurOturum(o, baslik), o.ekran.id ?? null, senaryoAnahtarlari(/** @type {Nesne} */ (paket).model, alanlar0)));
+        secim = varsayilanSecim(planOnizle(vt, o.projeId, planKurOturum(vt, o, baslik), o.ekran.id ?? null, senaryoAnahtarlari(/** @type {Nesne} */ (paket).model, alanlar0)));
       }
       uygulanan = planiUygula(vt, o, baslik, secim);
       if (uygulanan) ({ paket, veri, mevcut } = paketKur(vt, o));
@@ -1097,6 +1154,7 @@ export function hizliTestYoneticisiOlustur(s) {
     onay,
     hataCevabi,
     yenidenTara,
+    geri,
     bitis,
     dogrula,
     ozet: kayitOzeti,
@@ -1157,6 +1215,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
       '/platform/hizli-test/hata-cevabi': () => y.hataCevabi(govde),
       '/platform/hizli-test/yeniden-tara': () => y.yenidenTara(govde),
       '/platform/hizli-test/bitis': () => y.bitis(govde),
+      '/platform/hizli-test/geri': () => y.geri(govde),
       '/platform/hizli-test/dogrula': () => y.dogrula(govde),
       '/platform/hizli-test/ozet': () => y.ozet(db, govde),
       '/platform/hizli-test/kaydet': () => y.kaydet(db, govde, { kosuyorMu: b.kosuyorMu, medyaKlasoru: b.medyaKlasoru() }),

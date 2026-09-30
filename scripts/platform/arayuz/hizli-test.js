@@ -524,13 +524,16 @@ function bitisDuragi(o, s, kart, m, gonder) {
   const tara = h('button', { type: 'button', class: 'hayalet' }, 'Sayfayı yeniden tara');
   tara.title = 'Tarayıcıda şu an görünen yeni mesajları (ör. sonradan çıkan hata / başarı) listeye ekler; verdiğiniz etiketler korunur.';
   tara.addEventListener('click', () => void gonder(tara, 'yeniden-tara', { etiketler }, m));
+  // Geri dönüş: zincire devam (etiketler saklanır; yeniden "Burada bitir" denince korunur).
+  const zincireDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Adım adım’a dön: zincire devam et');
+  zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
   return kart('Bitiş koşulu: ne görülünce biter?', 'hedef',
     h('p', {}, 'Akış boyunca görülen metinler. Her birine bir etiket verin:'),
     h('ul', { class: 'hizli-bitis', 'aria-label': 'Görülen metinler' }, satirlar),
     h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
     olumsuzKutusu,
-    m.kutu, h('div', { class: 'dugmeler' }, devam, tara));
+    m.kutu, h('div', { class: 'dugmeler' }, devam, tara, zincireDon));
 }
 
 /** 6. durak: kaydet (H3 doğrulama sorusu; aynı ekran varsa farklar). Özet kendi sekmesinde açılır (#/hizli-test/ozet/<id>). */
@@ -573,6 +576,11 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       : h('div', { class: `not-kutusu ${d.durum === 'basarili' ? 'basari' : 'hata'}`, role: 'status' },
         `Doğrulama koşusu ${d.durum === 'basarili' ? 'başarılı' : 'başarısız'}: ${d.mesaj}`,
         o.dogrulamaAdimlari && d.durum !== 'basarili' ? dogrulamaAdimListesi(o.dogrulamaAdimlari) : null);
+  // Geri dönüş: bitiş koşulunu düzenle / adım adım zincire dön (doğrulama sonucu geçersiz olur).
+  const bitiseDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Bitiş koşulunu düzenle');
+  bitiseDon.addEventListener('click', () => void gonder(bitiseDon, 'geri', { hedef: 'bitis' }, m));
+  const zincireDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Adım adım’a dön: zincire devam et');
+  zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
   const farklar = s.farklar ? h('div', { class: 'not-kutusu uyari hizli-farklar', role: 'note' },
     h('p', {}, h('b', {}, `“${oz.ekranAdi}” ekranı zaten var. `), `Kaydedince yeni model sürümü oluşur (${s.farklar.ozet.toplam} fark).`),
     s.farklar.maddeler.length ? h('ul', {}, s.farklar.maddeler.slice(0, 12).map((x) => h('li', {}, x))) : null,
@@ -587,7 +595,8 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     h('label', { class: 'onay-satiri', for: 'hizli-tablo-olustur' }, tabloOlustur, 'Girdiğim değerleri test verisi tablosu olarak kaydet ve ekranın test verisine bağla'),
     dogrulamaKutusu, farklar, m.kutu,
     (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null,
-    h('p', { class: 'kucuk soluk' }, 'Özet yeni bir sekmede açılır; kaydı orada onaylarsınız. Onaylamadan hiçbir şey yazılmaz.'));
+    h('p', { class: 'kucuk soluk' }, 'Özet yeni bir sekmede açılır; kaydı orada onaylarsınız. Onaylamadan hiçbir şey yazılmaz.'),
+    h('div', { class: 'dugmeler hizli-geri' }, bitiseDon, zincireDon));
 }
 
 /** Doğrulama koşusunun adımları ve durumları (bekliyor / sürüyor / tamam / hata). @param {Array<{ metin: string; durum: string; ayrinti: string | null }>} liste */

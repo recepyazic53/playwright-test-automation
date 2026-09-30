@@ -1191,6 +1191,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         const sureSn = adim.kosu?.zamanAsimiSn ?? adimSuresiSn();
         const gorunmeyenKaldirir = gorunmeyenAlanDavranisi() === 'kaldir';
         const doldurulanMetinler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
+        const doldurulanSecimler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
         for (const alan of adim.alanlar) {
           if (alan.atla) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, alan.atla));
@@ -1234,6 +1235,17 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
           if (!zorla && !['secim', 'okluSecim', 'radyo', 'onayKutusu', 'dosya'].includes(alan.tip)) doldurulanMetinler.push({ alan, l, k });
+          if (alan.tip === 'secim') doldurulanSecimler.push({ alan, l, k });
+        }
+        // Sonraki bir alanın sorgusu / yeniden çizimi açılır listeyi ilk seçeneğine ("SEÇİNİZ") döndürmüş olabilir: değeri artık
+        // seçilen değer olmayan listeler bir kez yeniden seçilir (metin alanlarındaki yeniden doldurmanın açılır liste karşılığı).
+        for (const d of doldurulanSecimler) {
+          const s = secenekBul(d.alan.secenekler, d.alan.deger);
+          const simdi = await d.l.evaluate((e) => (e instanceof HTMLSelectElement ? { deger: e.value, metin: (e.selectedOptions[0]?.text ?? '').trim() } : null)).catch(() => null);
+          if (!simdi || simdi.deger === s.deger || simdi.metin === s.metin) continue;
+          const yenidenBaslangic = Date.now();
+          await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
+          await arkaPlanIstekleriniBekle(page, yenidenBaslangic);
         }
         // Sonraki alanların sorgusu / sayfanın yeniden çizmesi önceki alanı silmiş olabilir (ör. satır yenilenir): boş kalan metin
         // alanları bir kez yeniden doldurulur (kullanıcının elle yazdığında olduğu gibi).

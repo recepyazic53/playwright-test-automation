@@ -8,7 +8,7 @@ export interface DoldurSutunu { ad: string; gizli?: boolean; karsiliklar?: Recor
 export interface DoldurTablosu { id: string; ad: string; sutunlar: DoldurSutunu[]; satirlar: DoldurSatiri[]; baglam?: boolean; kaynak?: { tur?: string; tabloTuru?: string } | null }
 export interface AdaySatiri { satirId: string; sira: number; ad: string; gosterim: string; kosul: Record<string, string> }
 export interface DoldurAdayi {
-  anahtar: string; tabloId: string; tablo: string; sutun: string; etiket: string; neden: 'bagli' | 'ad' | 'liste'; gizli: boolean;
+  anahtar: string; tabloId: string; tablo: string; sutun: string; etiket: string; neden: 'bagli' | 'ad' | 'liste' | 'benzer'; gizli: boolean;
   grup: string; deger: string; basvuru: string; coklu: boolean; satirlar: AdaySatiri[];
 }
 export interface DoldurSecimi { aday: DoldurAdayi; deger: string; basvuru: string; satir: AdaySatiri | null; tabloSecimi: { anahtar: string; kosul: Record<string, string> } | null }
@@ -17,7 +17,8 @@ export interface DoldurGirdisi {
   tabloSecimleri?: Record<string, Record<string, string>>; cokluGruplar?: string[];
   digerDegerler?: Array<DoldurBagi & { deger: unknown }>;
 }
-export declare const NEDEN_METINLERI: Readonly<{ bagli: string; ad: string; liste: string }>;
+export declare const NEDEN_METINLERI: Readonly<{ bagli: string; ad: string; liste: string; benzer: string }>;
+export declare function benzerAdMi(a: string, b: string): boolean;
 export declare function doldurAdaylari(g: DoldurGirdisi): DoldurAdayi[];
 export declare function adaySecimi(aday: DoldurAdayi, satirId?: string | null): DoldurSecimi;
 export declare function tekAnlamliSecim(adaylar: DoldurAdayi[]): DoldurSecimi | null;

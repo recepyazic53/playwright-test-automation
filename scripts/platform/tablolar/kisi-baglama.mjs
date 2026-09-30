@@ -33,7 +33,7 @@ import { baslikNormal, tabloTuru } from './tablo-benzerligi.mjs';
 const KATEGORILER = /** @type {const} */ ([
   ['vergiNo', 'Vergi no', /(vergi(no|numarasi|kimlik)|vkn|taxno|taxid)/],
   ['pasaportNo', 'Pasaport no', /(pasaport|passport)/],
-  ['kimlikNo', 'Kimlik no', /(tckimlik|kimlikno|kimliknumarasi|tckn|tcno|nationalid|identityno|identitynumber|^kimlik$)/],
+  ['kimlikNo', 'Kimlik no', /(tckimlik|kimlikno|kimliknumarasi|tckn|tcno|^tc$|nationalid|identityno|identitynumber|^kimlik$)/],
   ['dogumTarihi', 'Doğum tarihi', /(dogumtarihi|dogumgunu|birthdate|dateofbirth|^dob$|^dogum$)/],
   ['telefon', 'Telefon', /(telefon|ceptel|gsm|mobile|phone|^tel$|telno)/],
   ['eposta', 'E-posta', /(eposta|email|^mail$|epostaadresi)/],

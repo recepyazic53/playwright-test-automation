@@ -12,6 +12,7 @@ export declare function cumleyiOku(cumle: unknown): { mesajlar: string[]; dugmel
 export declare function tekAday<T extends { secici: string; metin: string | null }>(adaylar: T[], cumleDugmeleri?: string[]): T | null;
 export declare function basmaKarari(g: { izin: string; adaySayisi: number; kullaniciSecti?: boolean }): 'bas' | 'sor' | 'basma';
 export declare function beklemeMetniMi(metin: unknown): boolean;
+export declare function degiskenMetinMi(metin: unknown): boolean;
 export declare function varsayilanEtiketler(gorulenler: Array<{ metin: string; tur: string; basis: number }>, sonBasis: number): Record<string, BitisEtiketi | null>;
 export declare function sabitKisim(m: string): string;
 export declare function bitisKosulu(g: { etiketler: Record<string, string | null>; adres?: string | null; olumsuz?: { mesaj: string } | null }): {

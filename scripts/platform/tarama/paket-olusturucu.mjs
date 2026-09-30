@@ -22,6 +22,7 @@
 import { KANIT_BOYUT_SINIRI, KANIT_EN_COK, SAYFA_PAKETI_SURUMU, SAYFA_PAKETI_TURU, gizliKalipBul, kanitVerisiniCoz } from '../ekranlar/sayfa-paketi.mjs';
 import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/paket-tablolari.mjs';
 import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { yerTutucuSecenekMi } from './yer-tutucu-secenek.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
@@ -325,9 +326,9 @@ export function alanDonusturucu(sayac) {
     /** @type {Record<string, unknown>} */
     const alan = { id, tip, etiket: { ekran: etiket } };
     if (tip === 'secim') {
-      const secenekler = (a.secenekler ?? []).filter((s) => s.deger !== '').map((s) => ({ deger: String(s.deger).slice(0, 200), metin: temizMetin(s.metin, sayac) ?? String(s.deger).slice(0, 200) }))
+      const secenekler = (a.secenekler ?? []).filter((s, i) => s.deger !== '' && !yerTutucuSecenekMi(s.metin, s.deger, i === 0)).map((s) => ({ deger: String(s.deger).slice(0, 200), metin: temizMetin(s.metin, sayac) ?? String(s.deger).slice(0, 200) }))
         .filter((s) => !gizliKalipBul(s.deger));
-      if (a.secenekler && a.secenekler.some((s) => s.deger === '')) alanNotlari.push('Boş değerli ilk seçenek (ör. "Seçiniz") modele yazılmadı.');
+      if (a.secenekler && a.secenekler.some((s, i) => s.deger === '' || yerTutucuSecenekMi(s.metin, s.deger, i === 0))) alanNotlari.push('Yer tutucu ilk seçenek (ör. "Seçiniz") modele yazılmadı.');
       alan.secenekler = secenekler.length ? secenekler : null;
       alan.seceneklerDurumu = secenekler.length ? 'tam' : 'bilinmiyor';
       alan.seceneklerKaynagi = 'otomatik tarama (sayfadaki seçenekler)';

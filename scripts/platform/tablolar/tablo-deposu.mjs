@@ -15,7 +15,7 @@ import {
   DepoHatasi, baglamProfiliKaydet, baglamProfiliSil, baglamProfilleriniListele, testVerisiProfiliKaydet, testVerisiProfiliSil, testVerisiTuruKaydet,
   testVerisiTuruSil, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
-import { coz, sifrele, zarfMi } from '../kasa.mjs';
+import { acikAnahtar, coz, sifrele, zarfCoz, zarfMi } from '../kasa.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 
@@ -87,10 +87,33 @@ function karsiliklarDogrula(v, sutun) {
   return sonuc;
 }
 
+/**
+ * GİZLİ OLMAYAN hücrelerin çözülmüş değerleri (şifreli zarf → düz metin). Tablolar birçok uçta (senaryo listesi, senaryo formu, hazırlık,
+ * Doldur) baştan okunur; büyük liste tablolarında (yüzlerce satır × onlarca tablo) her okumada her hücreyi yeniden çözmek senaryo
+ * formunu saniyelerce bekletiyordu. Aynı zarf hep aynı metne çözülür (zarf değişirse yeni anahtar). Önbellek kasanın AÇIK ANAHTARINA
+ * bağlıdır (WeakMap): kasa kilitlenince anahtarla birlikte bırakılır; kilitliyken acikAnahtar hata verir (önbellekten okunmaz).
+ * Gizli sütunların değerleri önbelleğe GİRMEZ.
+ * @type {WeakMap<object, Map<string, string>>}
+ */
+const cozumOnbellegi = new WeakMap();
+const COZUM_ONBELLEGI_EN_COK = 200_000;
+/** @param {Veritabani} vt @param {string} zarf */
+function onbellekliCoz(vt, zarf) {
+  const anahtar = acikAnahtar(vt);
+  let m = cozumOnbellegi.get(anahtar);
+  if (!m) { m = new Map(); cozumOnbellegi.set(anahtar, m); }
+  const v = m.get(zarf);
+  if (v !== undefined) return v;
+  const d = zarfCoz(anahtar, zarf);
+  if (m.size >= COZUM_ONBELLEGI_EN_COK) m.clear();
+  m.set(zarf, d);
+  return d;
+}
+
 /** Saklanan karşılıklar (zarf) → nesne. @param {Veritabani} vt @param {unknown} z @returns {Record<string, Karsilik> | undefined} */
 function karsiliklarOku(vt, z) {
   if (!zarfMi(z)) return undefined;
-  const o = JSON.parse(String(coz(vt, z)));
+  const o = JSON.parse(onbellekliCoz(vt, z));
   return o && typeof o === 'object' && Object.keys(o).length ? o : undefined;
 }
 
@@ -116,7 +139,7 @@ const satirAdi = (no) => `Satır ${no}`;
 function degerOku(vt, v, gizli, cozulsun) {
   if (v === undefined || v === null || v === '') return null;
   if (gizli && !cozulsun) return null;
-  if (zarfMi(v)) return String(coz(vt, v));
+  if (zarfMi(v)) return gizli ? String(coz(vt, v)) : onbellekliCoz(vt, v);
   return String(v);
 }
 
