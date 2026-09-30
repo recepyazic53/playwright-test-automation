@@ -85,7 +85,7 @@ import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adres
 import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
 import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
 import { EKRAN_ANAHTARI_DESENI, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from '../ekranlar/sayfa-paketi.mjs';
-import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
+import { HedefHatasi, ekKokenleri, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
 import { OGE_TURLERI, kesifBulgulari, secilenOgeleriAyikla, taramaIsaretleriniUygula } from './oge-isaretleri.mjs';
 import { eylemAdaylariniAyikla } from './eylem-kesfi.mjs';
@@ -466,8 +466,10 @@ export function taramaYoneticisiOlustur(secenekler) {
     const mevcutGirisAdresi = girisKaydi || girisDenemesi ? (etkinGirisTarifi(vt, projeId, ortamId).tarif?.girisAdresi ?? '/') : null;
     let hedef;
     try {
-      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi || girisDenemesi ? mevcutGirisAdresi : sayfaIsi ? ogeVarsayilanYol : ortakBaslangic ? ortakBaslangic.urlYolu : mevcutModel?.ekranUrl);
+      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi || girisDenemesi ? mevcutGirisAdresi : sayfaIsi ? ogeVarsayilanYol : ortakBaslangic ? ortakBaslangic.urlYolu : mevcutModel?.ekranUrl, ekKokenleri(ortamKaydi));
     } catch (e) {
+      // Kayıtsız başka site: arayüz "taban adres olarak kaydedeyim mi?" diye sorar; onaylanmadan hiçbir istek atılmaz.
+      if (e instanceof HedefHatasi && e.bilinmeyenKoken) throw new TaramaHatasi('TABAN_KAYITLI_DEGIL', e.message, 409, { koken: e.bilinmeyenKoken });
       if (e instanceof HedefHatasi) throw new TaramaHatasi('HEDEF', e.message);
       throw e;
     }
