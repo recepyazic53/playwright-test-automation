@@ -265,8 +265,9 @@ const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
 /**
  * Test verisine yazılacaklar bölümü (paket önizlemesi ve akış kaydının "akışa yaz" onayı ortak kullanır).
  * @param {object | null} t önizlemenin testVerisi bölümü @param {() => void} degisti
+ * @param {{ kompakt?: boolean }} [ayar] kompakt: örnek satırlar katlanır (çok tablolu / uzun listeli özetler için)
  */
-export function testVerisiSecimi(t, degisti) {
+export function testVerisiSecimi(t, degisti, ayar = {}) {
   if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, bekleyenler: () => [], govde: () => undefined };
   /** Tablo adı → satırı ve odaklanacak ilk denetim (kararsız tabloya "Bölüme git" için). @type {Map<string, { satir: HTMLElement; odak: () => HTMLElement | null }>} */
   const satirlar = new Map();
@@ -325,6 +326,10 @@ export function testVerisiSecimi(t, degisti) {
           secenek('atla', 'Atla (yazma)')));
     }
     const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
+    const ornekTablo = h('div', { class: 'tv-ornek-kap' },
+      h('div', { class: 'tablo-kaydirma tv-ornek' }, h('table', { class: 'veri-tablosu' }, h('thead', {}, h('tr', {}, sutunlar)),
+        h('tbody', {}, x.ornek.map((r) => h('tr', {}, r.map((v, i) => h('td', {}, x.sutunlar[i].gizli ? '—' : v ?? ''))))))),
+      x.satirSayisi > x.ornek.length ? h('small', { class: 'cok-soluk' }, `… ve ${x.satirSayisi - x.ornek.length} satır daha`) : null);
     const satir = h('li', { class: 'tv-tablo' },
       h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
         x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablo; Test verisi > Ekran listeleri grubunda görünür.' }) : null,
@@ -332,9 +337,7 @@ export function testVerisiSecimi(t, degisti) {
         gizliVar ? rozet('gizli sütun: değeri Nöbetçi\'de şifreli girilir', 'uyari') : null),
       x.aciklama ? h('p', { class: 'kucuk soluk' }, x.aciklama) : null,
       x.bagliAlanlar.length ? h('p', { class: 'kucuk' }, 'Bağlanacak alanlar: ', x.bagliAlanlar.join(', ')) : null,
-      h('div', { class: 'tablo-kaydirma tv-ornek' }, h('table', { class: 'veri-tablosu' }, h('thead', {}, h('tr', {}, sutunlar)),
-        h('tbody', {}, x.ornek.map((r) => h('tr', {}, r.map((v, i) => h('td', {}, x.sutunlar[i].gizli ? '—' : v ?? ''))))))),
-      x.satirSayisi > x.ornek.length ? h('small', { class: 'cok-soluk' }, `… ve ${x.satirSayisi - x.ornek.length} satır daha`) : null,
+      ayar.kompakt ? h('details', { class: 'tv-katlanir' }, h('summary', {}, `Örnek satırlar (${x.ornek.length}/${x.satirSayisi})`), ornekTablo) : ornekTablo,
       secim);
     // Karar bekleyen tabloda ilk seçenek; yeni ad boşsa ad girdisi odaklanır.
     satirlar.set(x.ad, { satir, odak: () => (d.islem === 'yeniAd' ? satir.querySelector('.tv-cakisma input[type="text"]') : satir.querySelector('.tv-cakisma input[type="radio"]')) });

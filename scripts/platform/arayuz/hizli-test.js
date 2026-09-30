@@ -542,6 +542,8 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       oz.bitis.devam.length ? ` · Devam: ${oz.bitis.devam.map((x) => `“${x}”`).join(', ')}` : null) : null);
   const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Kaydet — özeti göster');
   const ozetAlani = h('div', { class: 'hizli-kayit-ozeti', 'aria-live': 'polite' });
+  /** @type {(ozet: boolean) => void} */
+  let sekmeyiSec = () => undefined;
   kaydet.addEventListener('click', async () => {
     // Özet yalnız okunur (oturum değişmez): kartın yeniden çizilmesi özeti silmesin diye gonder() (yenileyen) kullanılmaz.
     try {
@@ -551,7 +553,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
   });
   /** Özet ekranı (yapay zekâ paketinin önizlemesiyle aynı sistem): tablolar / birleştirme kararı / bağlantılar / senaryo önerileri; onaylamadan hiçbir şey yazılmaz. */
   const ozetCiz = (oz) => {
-    const tv = testVerisiSecimi(tabloOlustur.checked ? oz.onizleme : null, () => guncelle());
+    const tv = testVerisiSecimi(tabloOlustur.checked ? oz.onizleme : null, () => guncelle(), { kompakt: true });
     const oneriler = oz.senaryolar.filter((x) => x.indeks > 0);
     const secili = new Set(oneriler.filter((x) => x.varsayilanSecili).map((x) => x.indeks));
     const onayla = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), oz.farklar ? 'Farkları onayla ve kaydet' : 'Onayla ve kaydet');
@@ -582,6 +584,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       h('div', { class: 'ara-baslik' }, `Senaryolar (${1 + oneriler.length} öneri)`), senaryoListesi,
       neden, h('div', { class: 'dugmeler' }, onayla)));
     guncelle();
+    sekmeyiSec(true);
   };
   const dogrula = h('button', { type: 'button', class: s.dogrulama ? 'hayalet' : 'birincil' }, ikon('oynat'), s.dogrulama ? 'Yeniden doğrula' : 'Evet, doğrula');
   dogrula.addEventListener('click', () => void gonder(dogrula, 'dogrula', {}, m));
@@ -597,7 +600,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     h('p', {}, h('b', {}, `“${oz.ekranAdi}” ekranı zaten var. `), `Kaydedince yeni model sürümü oluşur (${s.farklar.ozet.toplam} fark).`),
     s.farklar.maddeler.length ? h('ul', {}, s.farklar.maddeler.slice(0, 12).map((x) => h('li', {}, x))) : null,
     s.farklar.senaryolar.length ? h('p', {}, `Etkilenebilecek senaryolar: ${s.farklar.senaryolar.join(', ')}`) : null) : null;
-  return kart('Kaydedilecekler', 'onay',
+  const kaydetPaneli = h('div', { class: 'hizli-sekme-paneli', role: 'tabpanel', id: 'hizli-panel-kaydet', 'aria-labelledby': 'hizli-sekme-kaydet' },
     zincir,
     h('ul', { class: 'hizli-ozet kucuk' },
       h('li', {}, h('b', {}, 'Ekrana: '), 'alanlar, koşullar, düğme zinciri, bitiş ve hata mesajları'),
@@ -606,7 +609,25 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     h('label', { class: 'onay-satiri', for: 'hizli-kosuya-dahil' }, dahil, 'Toplu koşuya dahil'),
     h('label', { class: 'onay-satiri', for: 'hizli-tablo-olustur' }, tabloOlustur, 'Girdiğim değerleri test verisi tablosu olarak kaydet ve ekranın test verisine bağla'),
     dogrulamaKutusu, farklar, m.kutu,
-    (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null, ozetAlani);
+    (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null);
+  // Özet ayrı sekmede: uzun tablo listesi kaydet formunu uzatmaz.
+  ozetAlani.setAttribute('role', 'tabpanel');
+  ozetAlani.setAttribute('id', 'hizli-panel-ozet');
+  ozetAlani.setAttribute('aria-labelledby', 'hizli-sekme-ozet');
+  ozetAlani.hidden = true;
+  const sekmeKaydet = h('button', { type: 'button', role: 'tab', id: 'hizli-sekme-kaydet', class: 'hizli-sekme', 'aria-controls': 'hizli-panel-kaydet', 'aria-selected': 'true' }, 'Kaydet');
+  const sekmeOzet = h('button', { type: 'button', role: 'tab', id: 'hizli-sekme-ozet', class: 'hizli-sekme', 'aria-controls': 'hizli-panel-ozet', 'aria-selected': 'false', disabled: true, title: '“Kaydet — özeti göster” ile açılır' }, 'Özet');
+  sekmeyiSec = (ozet) => {
+    sekmeKaydet.setAttribute('aria-selected', String(!ozet));
+    sekmeOzet.setAttribute('aria-selected', String(ozet));
+    sekmeOzet.disabled = false;
+    kaydetPaneli.hidden = ozet;
+    ozetAlani.hidden = !ozet;
+    if (ozet) ozetAlani.scrollIntoView?.({ block: 'start' });
+  };
+  sekmeKaydet.addEventListener('click', () => sekmeyiSec(false));
+  sekmeOzet.addEventListener('click', () => sekmeyiSec(true));
+  return kart('Kaydedilecekler', 'onay', h('div', { class: 'hizli-sekmeler', role: 'tablist', 'aria-label': 'Kaydet ve özet' }, sekmeKaydet, sekmeOzet), kaydetPaneli, ozetAlani);
 }
 
 /** H3'te "Hayır, kaydet": doğrulamadan kaydeder (sihirbaz koşusu doğrulama sayılmaz; "doğrulanmadı" rozeti). @param {HTMLButtonElement} kaydet */
