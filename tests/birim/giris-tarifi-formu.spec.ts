@@ -83,11 +83,12 @@ test('yeni tarif: yalnız zorunlu olanlar görünür, her alanın altında örne
     await expect(form.getByLabel(etiket, { exact: false }).first(), etiket).toBeVisible();
   }
   await expect(form.getByRole('button', { name: 'Analiz et' })).toBeVisible();
-  // Örnekli tek cümlelik yardım metinleri.
-  await expect(form.getByText('Örnek: #kullanici ya da input[name="kullanici"].')).toBeVisible();
-  await expect(form.getByText('Örnek: #parola ya da input[type="password"].')).toBeVisible();
-  await expect(form.getByText('Örnek: button[type="submit"] ya da #giris.')).toBeVisible();
-  await expect(form.getByText('Örnek: Oturumu Kapat.')).toBeVisible();
+  // Örnekli yardım metinleri etiketin yanındaki "?" içinde: metin sayfada var, "?" ile açılınca görünür.
+  const yardimlar = ['Örnek: #kullanici ya da input[name="kullanici"].', 'Örnek: #parola ya da input[type="password"].', 'Örnek: button[type="submit"] ya da #giris.', 'Örnek: Oturumu Kapat.'];
+  for (const y of yardimlar) await expect(form.getByText(y), y).toHaveCount(1);
+  await expect(form.getByText(yardimlar[0])).toBeHidden();
+  await form.locator('.alan').filter({ has: page.getByLabel('Kullanıcı adı alanı', { exact: false }) }).getByRole('button', { name: 'Açıklamayı göster' }).click();
+  await expect(form.getByText(yardimlar[0])).toBeVisible();
   // Gelişmiş kapalı: oturum kontrolü, giriş adımları, hata göstergeleri, iki aşamalı doğrulama, bağlam değiştirme.
   const gelismis = form.locator('details.giris-gelismis');
   await expect(gelismis).not.toHaveAttribute('open', /.*/);

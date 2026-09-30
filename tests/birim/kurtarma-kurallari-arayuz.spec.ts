@@ -85,11 +85,12 @@ test.describe('kurtarma kuralları arayüzü', () => {
     const { page, hatalar, kapat } = await sayfaAc(1440);
     const bolumler = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
     await expect(bolumler.getByRole('link', { name: 'Kurtarma kuralları' })).toHaveAttribute('aria-current', 'page');
-    // Eski yer: liste yok, kısa "taşındı" notu bağlantıyla yeni bölüme götürür.
+    // Eski yer: liste yok (bilgi notu da yok; bölüm Ayarlar menüsünden açılır).
     await page.goto('/#/ayarlar/proje');
     await expect(page.getByRole('heading', { level: 2, name: 'Proje ve ortamlar' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Kurtarma kuralları' })).toHaveCount(0);
-    await page.locator('.kurtarma-tasindi').getByRole('link', { name: 'Kurtarma kuralları' }).click();
+    await expect(page.locator('.kurtarma-tasindi')).toHaveCount(0);
+    await page.getByRole('navigation', { name: 'Ayarlar bölümleri' }).getByRole('link', { name: 'Kurtarma kuralları' }).click();
     await expect(page).toHaveURL(/#\/ayarlar\/kurtarma$/);
     await expect(page.getByRole('list', { name: 'Kurtarma kuralları' })).toBeVisible();
     // Eski biçimli adres yönlenir; #/ayarlar/kurtarma/yeni "Kural ekle" penceresini açar (hızlı arama, Oluştur menüsü).

@@ -4,7 +4,7 @@
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
   ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
-  kisaAciklama, yardimIpucu, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
+  kisaAciklama, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
 import { HIZ_ALANLARI, HIZ_PROFILLERI, KANIT_ALANLARI, KANIT_PROFILLERI, hizDegerleri, hizProfili, kanitDegerleri, kanitProfili } from './kosu-profilleri.mjs';
@@ -72,6 +72,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
     h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
   const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
+  bolumAciklamalariniSimgeye(govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
@@ -98,6 +99,7 @@ export function ustSayfaBolumu(kapsayici, ad, baglam) {
     h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
   const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
+  bolumAciklamalariniSimgeye(govde);
   const ciz = tanim.ad === 'planli-kosular' ? planliKosular : testVerisi;
   Promise.resolve(ciz(govde, baglam)).catch((hata) => {
     if (hata && hata.durum === 423) return;
@@ -344,10 +346,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
-    tabanAdresleriBolumu(proje),
-    // Kurtarma kuralları kendi Ayarlar bölümüne taşındı; eski yerinden de bulunabilsin.
-    h('p', { class: 'not-kutusu bilgi tasindi-notu kurtarma-tasindi', role: 'note' }, 'Kurtarma kuralları artık Ayarlar menüsünde kendi bölümünde: ',
-      h('a', { href: '#/ayarlar/kurtarma' }, 'Kurtarma kuralları'), '.'));
+    tabanAdresleriBolumu(proje));
 }
 
 /**
