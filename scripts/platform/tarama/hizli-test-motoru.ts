@@ -17,7 +17,7 @@
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
 import type { Browser, Locator, Page } from '@playwright/test';
-import { alandanCik, alanZatenDolu } from './alan-cikisi';
+import { alanaYaz, alanZatenDolu } from './alan-cikisi';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -240,17 +240,10 @@ export async function hizliTestiYurut(
         }
         // Aynı değer sayfada zaten varsa (önceki turda girildi; site alanı sorgudan sonra kilitlemiş olabilir) yeniden yazılmaz.
         if (await alanZatenDolu(l, String(deger))) return null;
-        await l.fill(String(deger), { timeout: bekleMs });
-        // Sayfa yazılanı geri almış / maske kabul etmemiş olabilir (alan boş kaldı): tuşlayarak bir kez daha denenir.
-        if (!(await l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) {
-          await l.fill('', { timeout: 2_000 }).catch(() => undefined);
-          await l.pressSequentially(String(deger), { delay: 30, timeout: bekleMs });
-          if (!(await l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) return 'Değer yazıldı ama sayfa kabul etmedi (alan boş kaldı).';
-        }
-        // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
-        await alandanCik(l);
-        // Alandan çıkınca sayfa sorgu / yeniden çizim yapabilir (ör. tarihten sonra satır yenilenir): bitmeden sonraki alana geçilmez.
-        await sakinles(page, Math.min(bekleMs, 15_000));
+        // Telefon alanları tuşlayarak yazılır (maske eklentileri tuş olaylarını bekler); diğerlerinde önce doğrudan yazılır, sayfa değeri geri
+        // alırsa (boş kalırsa / alandan çıkınca silinirse) gerçek tuşlarla yeniden yazılır. Alandan çıkınca sayfanın sorgusu / yeniden çizimi beklenir.
+        const sonuc = await alanaYaz(l, String(deger), { tuslayarak: a.tur === 'tel', zamanAsimiMs: bekleMs, sonra: async () => { await sakinles(page, Math.min(bekleMs, 15_000)); } });
+        if (sonuc === 'silindi') return 'Değer yazıldı ama alandan çıkınca sayfa sildi (maske / doğrulama); alanın nasıl doldurulduğunu kontrol edin.';
         return null;
       } catch (hata) {
         const neden = await alanDurumu(k.locator(a.secici).first());

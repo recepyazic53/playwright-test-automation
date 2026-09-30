@@ -89,16 +89,85 @@ export const HIZLI_KOSULLU_SAYFASI = `<h1>Koşullu</h1>
   $('ek').addEventListener('change', goster);
 </script>`;
 
+/**
+ * /kayit/: gerçek bir kayıt ekranının zorlu davranışları (sahte veriler):
+ *  - Gidilecek ülke (açılır liste), Ödeyen (radyo; varsayılan Kendisi),
+ *  - D.TARİHİ: odaklanınca takvim penceresi açılır, yalnız DIŞARI TIKLAYINCA kapanır (Tab / Escape kapatmaz),
+ *  - TELEFON: tuş olayı bekleyen maske (yalnız klavye tuşları biçimler: "(542) 650-2153"); tuş olmadan yazılan ham değer alandan çıkınca SİLİNİR,
+ *  - TC KİMLİK NO: alandan çıkınca sorgu (POST /api/sorgu, gecikmeli); yanıtta alan salt okunur olur, ad soyad maskeli görünür ve
+ *    satır yeniden çizilir (?sifirla=tc iken telefon SİLİNİR),
+ *  - "Hesapla": eksik alan varsa "… zorunludur", tamamsa POST /api/kayit ve "Kayıt alındı".
+ * window.__sira: alanların ilk doldurulma sırası.
+ */
+export const HIZLI_KAYIT_SAYFASI = String.raw`<h1>Kayıt</h1>
+<div><label for="ulke">Gidilecek ülke</label><select id="ulke" name="ulke"><option value="">Seçiniz</option><option value="US">A.B.D</option><option value="FR">Fransa</option><option value="DE">Almanya</option></select></div>
+<fieldset><legend>Ödeyen</legend><label><input type="radio" name="odeyen" value="kendisi" checked> Kendisi</label> <label><input type="radio" name="odeyen" value="baska"> Farklı kişi</label></fieldset>
+<div style="display:flex;gap:16px;margin-top:12px">
+  <div><div>D.TARİHİ</div><input id="dogum" name="dogum" autocomplete="off"></div>
+  <div><div>TELEFON</div><input id="tel" name="tel" autocomplete="off"></div>
+  <div><div>TC KİMLİK NO</div><input id="tc" name="tc" autocomplete="off"></div>
+  <div><div>AD SOYAD</div><span id="ad"></span></div>
+</div>
+<div id="takvim" class="ui-datepicker" style="display:none;position:absolute;top:150px;left:8px;width:220px;height:120px;background:#eee">takvim</div>
+<p><button type="button" id="hesapla">Hesapla</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  // Doldurma sırası: alanın ilk dolu hâli (boşalınca kayıt silinir: keşif geri yüklemesi sırayı bozmaz); sayfa kodu değeri sessizce silerse kayıt kalır.
+  var __say = 0, __ilk = {};
+  Object.defineProperty(window, '__sira', { get: function () { return Object.keys(__ilk).sort(function (a, b) { return __ilk[a] - __ilk[b]; }); } });
+  function izle(id) { if ($(id).value !== '') { if (!(id in __ilk)) __ilk[id] = ++__say; } else delete __ilk[id]; }
+  var qs = new URLSearchParams(location.search);
+  ['ulke', 'dogum', 'tel', 'tc'].forEach(function (id) {
+    $(id).addEventListener('input', function () { izle(id); });
+    $(id).addEventListener('change', function () { izle(id); });
+  });
+  $('dogum').addEventListener('focus', function () { $('takvim').style.display = 'block'; });
+  document.addEventListener('mousedown', function (o) { if (!$('takvim').contains(o.target) && o.target !== $('dogum')) $('takvim').style.display = 'none'; });
+  // Telefon maskesi: yalnız klavye tuşlarını biçimler; ham değer alandan çıkınca silinir.
+  $('tel').addEventListener('keydown', function (o) {
+    if (o.key.length !== 1 || !/\d/.test(o.key)) return;
+    o.preventDefault();
+    var r = ($('tel').value.replace(/\D/g, '') + o.key).slice(0, 10);
+    var b = '(' + r.slice(0, 3) + (r.length > 3 ? ') ' + r.slice(3, 6) : '') + (r.length > 6 ? '-' + r.slice(6) : '');
+    $('tel').value = b;
+    izle('tel');
+  });
+  $('tel').addEventListener('blur', function () { if (!/^\(\d{3}\) \d{3}-\d{4}$/.test($('tel').value)) $('tel').value = ''; });
+  $('tc').addEventListener('change', function () {
+    fetch('/api/sorgu', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tc: $('tc').value }) })
+      .then(function (r) { return r.json(); }).then(function (j) {
+        $('tc').readOnly = true; $('ad').textContent = j.ad;
+        if (qs.get('sifirla') === 'tc') $('tel').value = '';
+      });
+  });
+  $('hesapla').addEventListener('click', function () {
+    var eksik = [];
+    if (!$('ulke').value) eksik.push('Gidilecek ülke seçiniz');
+    if (!$('dogum').value) eksik.push('Doğum tarihi zorunludur');
+    if (!/^\(\d{3}\) \d{3}-\d{4}$/.test($('tel').value)) eksik.push('Telefon numarası zorunludur. Lütfen 10 hane olarak giriniz.');
+    if (!$('tc').value) eksik.push('TC kimlik no zorunludur');
+    if (eksik.length) { $('sonuc').textContent = eksik.join(' / '); return; }
+    fetch('/api/kayit', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ulke: $('ulke').value, odeyen: document.querySelector('input[name=odeyen]:checked').value, dogum: $('dogum').value, tel: $('tel').value, tc: $('tc').value, sira: window.__sira }) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+  });
+</script>`;
+
 export class HizliTestUygulamasi {
   readonly istekler: string[] = [];
   readonly hesaplamalar: Array<{ tip: string; vergi: string }> = [];
   readonly onaylar: string[] = [];
+  readonly kayitlar: Array<Record<string, unknown>> = [];
   kip: 'normal' | 'hata' | 'sessiz' = 'normal';
   private no = 4700;
 
   readonly isle: FiksturUygulamasi = (i: FiksturIstegi) => {
     this.istekler.push(`${i.yontem} ${i.yol}`);
     if (i.yol === '/basvuru/' && i.yontem === 'GET') return html('Başvuru', HIZLI_BASVURU_SAYFASI);
+    if (i.yol === '/kayit/' && i.yontem === 'GET') return html('Kayıt', HIZLI_KAYIT_SAYFASI);
+    if (i.yol === '/api/sorgu' && i.yontem === 'POST') return { tur: 'application/json', govde: JSON.stringify({ ad: 'D*** K***' }), gecikmeMs: 500 };
+    if (i.yol === '/api/kayit' && i.yontem === 'POST') { this.kayitlar.push(JSON.parse(i.govde) as Record<string, unknown>); return { tur: 'application/json', govde: JSON.stringify({ tamam: true }), gecikmeMs: 300 }; }
     if (i.yol === '/kosullu/' && i.yontem === 'GET') return html('Koşullu', HIZLI_KOSULLU_SAYFASI);
     if (i.yol === '/api/hesapla' && i.yontem === 'GET') {
       this.hesaplamalar.push({ tip: i.sorgu.get('tip') ?? '', vergi: i.sorgu.get('vergi') ?? '' });
