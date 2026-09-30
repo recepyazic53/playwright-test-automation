@@ -62,6 +62,24 @@ test('4 düzeyli bağımlı liste: tek tabloda tüm düzeyler (il, ilçe, belde,
   expect(testVerisi?.baglantilar.map((b) => `${b.alanId}:${b.sutun}`)).toEqual(['il:İl', 'ilce:İlçe', 'belde:Belde', 'koy:Köy']);
 });
 
+test('radyo düğmeleri: kayıtta okunan seçenekler (yalnız radyolar alanında) tabloya girer; tekrar üretimde sonuç aynı', () => {
+  const bolum = { anahtar: 'b:temel', baslik: 'Temel' };
+  const tip: HamAlan = {
+    anahtar: '#tip', tur: 'radio', etiket: 'Müşteri tipi', etiketKaynagi: 'label', kimlik: 'tip', ad: 'tip', secici: 'input[name="tip"]', kirilganlik: 'dusuk', adaySeciciler: ['input[name="tip"]'],
+    zorunlu: false, devreDisi: false, saltOkunur: false, coklu: false, bolum, radyolar: [{ deger: 'b', metin: 'Bireysel', secici: null }, { deger: 'k', metin: 'Kurumsal', secici: null }]
+  };
+  const meta: PaketMetasi = { ekranAnahtari: 'adres-formu', ekranAdi: 'Adres formu', urlYolu: '/adres/', girisGerekli: false, ikiAsamali: 'yok', baglamTuru: null };
+  const uret = () => kayitPaketiOlustur(meta, {
+    kip: 'kayit', profil: null, adimlar: [{ ad: 'Adres', yol: '/adres/', baslik: 'Adres', alanlar: [tip], ilerleme: null }],
+    basariGostergesi: null, engellenenler: [], notlar: [],
+    secenekGozlemleri: [{ anahtar: '#tip', secimler: {}, secenekler: [{ deger: 'b', metin: 'Bireysel' }, { deger: 'k', metin: 'Kurumsal' }], kaynak: 'liste' }]
+  }).paket.testVerisi;
+  const tv = uret() as { tablolar: Array<{ ad: string; satirlar: unknown[][] }>; baglantilar: Array<{ alanId: string }> };
+  expect(tv.tablolar.map((t) => [t.ad, t.satirlar])).toEqual([['Adres formu — Müşteri tipi', [['Bireysel'], ['Kurumsal']]]]);
+  expect(tv.baglantilar.map((b) => b.alanId)).toEqual(['tip']);
+  expect(uret()).toEqual(tv);
+});
+
 test.describe('Kayıt → tablo → alan bağlama (uçtan uca, 4 düzey)', () => {
   let vt: Veritabani;
   let klasor: { yol: string; temizle: () => void };
