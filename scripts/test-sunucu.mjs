@@ -325,6 +325,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/stil-basit-mod.css', { dosya: 'stil-basit-mod.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/basit-mod.js', { dosya: 'basit-mod.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/testlerim.js', { dosya: 'testlerim.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/kosu-gruplari.js', { dosya: 'kosu-gruplari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/basit-sonuclar.js', { dosya: 'basit-sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/basit-rehberler.js', { dosya: 'basit-rehberler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],

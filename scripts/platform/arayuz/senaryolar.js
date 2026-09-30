@@ -18,6 +18,7 @@ import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, 
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { dinle, durdur, ekranKosuBicimi, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSuruyorMu, onayIste, onerilenOrtam, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
+import { kosuGruplariPenceresi } from './kosu-gruplari.js';
 import { senaryoOnerileriEkrani } from './senaryo-onerileri.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
@@ -248,6 +249,8 @@ function listeGorunumu(icerik, s) {
   const oneriDugmesi = ekran && ekran.olusturulabilir && ekran.modelVar
     ? h('a', { class: 'dugme senaryo-onerileri-dugmesi', href: `#/senaryolar/oneriler/${encodeURIComponent(ekran.id)}`, title: 'Ekran modelinden ve mevcut senaryolardan senaryo önerileri (siz seçmeden senaryo oluşmaz)' }, ikon('simsek'), 'Senaryo önerileri')
     : null;
+  const gruplarDugmesi = h('button', { type: 'button', class: 'kosu-gruplari-dugmesi', title: 'Farklı ekranlardan seçtiğiniz senaryolara ad verip kaydedin ve tek tıkla çalıştırın' }, ikon('liste'), 'Koşu grupları');
+  gruplarDugmesi.addEventListener('click', () => kosuGruplariPenceresi({ proje, ortamlar, ortamId: () => (kosuSuruyorMu() && kosuOrtamiId() ? kosuOrtamiId() : onerilenOrtam(ortamlar)?.id ?? '') }));
   const kosuDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), 'Koşuyu başlat');
   kosuDugmesi.addEventListener('click', () => kosuyuBaslat());
 
@@ -259,7 +262,7 @@ function listeGorunumu(icerik, s) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, baslikMetni)),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Senaryolar — '), baslikMetni), baslikRozeti),
         metaAlani),
-      h('div', { class: 'eylemler' }, oneriDugmesi, yeniDugmesi, kosuDugmesi)),
+      h('div', { class: 'eylemler' }, oneriDugmesi, yeniDugmesi, gruplarDugmesi, kosuDugmesi)),
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama, h('kbd', { 'aria-hidden': 'true' }, '/')),
       ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, kapsamSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, talepSecimi.kap, talepKosusu, temizle, ozetAlani),

@@ -848,13 +848,14 @@ function anaDuzen() {
   const hesap = alanMod && durum.sunucu && durum.sunucu.calismaAlani !== undefined ? alanMod.hesapMenusu({
     calismaAlani: durum.sunucu ? durum.sunucu.calismaAlani : null,
     kilitle: kilitleVeDon,
+    mod: { mod: durum.kullanimModu.mod, degistir: (hedef) => moduDegistir(hedef) },
     kapandi: () => { location.hash = ''; yonlendir(); },
     yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
   }) : null;
   const sunucu = sunucuDurumu();
   const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, ustSayfalar: UST_SAYFALAR });
   // Basit mod (basit-mod.js): menü yalnız Testlerim · Sonuçlar · Ayarlar, "Oluştur" yerine "+ Yeni test"; Gelişmiş'e ait sayfanın
-  // üstünde not; sağda Basit / Gelişmiş anahtarı. Gelişmiş = bugünkü üst çubuk (değişmez); Basit'e geçiş Ayarlar'ın yan panelinde.
+  // üstünde not; sağda Basit / Gelişmiş anahtarı. Kullanım modu iki modda da üst çubuktaki çalışma alanı menüsünde ("Basit moda geç" / "Gelişmiş moda geç"), Ayarlar'ın yan panelinde ve Ayarlar > Arayüz'dedir. Gelişmiş üst çubuğu dolu olduğu için orada ayrı anahtar yoktur.
   const basit = durum.kullanimModu.mod === 'basit';
   const navTestlerim = basit ? h('a', { href: '#/testlerim' }, ikon('liste'), 'Testlerim') : null;
   const navBasitSonuclar = basit ? h('a', { href: '#/basit-sonuclar' }, ikon('grafik'), 'Sonuçlar') : null;
@@ -1012,11 +1013,11 @@ function ayarlarEkrani(main, bolum, odak = null) {
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Ayarlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav, tasinan,
-        // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): Gelişmiş üst çubuğu değişmesin diye anahtar burada da durur.
+        // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): Anahtar üst çubukta ve burada da durur.
         h('div', { class: 'kullanim-modu-secimi' }, h('span', { class: 'kucuk soluk' }, 'Kullanım modu'), modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef))),
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
-  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });
+  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak, moduDegistir });
 }
 
 /** Üst menü sayfası (Veri / Planlı koşular): yan panelsiz tek sütun. @param {HTMLElement} main @param {'veri' | 'planli-kosular'} ad */
