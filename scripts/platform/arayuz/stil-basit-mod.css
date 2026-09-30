@@ -1,0 +1,104 @@
+/* BASİT MOD (v1.5) — basit-mod.js, testlerim.js, basit-sonuclar.js. stil.css'ten SONRA yüklenir (index.html); yalnız bu
+   özelliklerin sınıflarını tanımlar, stil.css'teki kuralları değiştirmez. Renkler stil.css'teki tema değişkenlerinden gelir
+   (açık / koyu ve stil seçimleri kendiliğinden uyar). 390 px'te yatay taşma olmaz. */
+
+/* --- Üst çubuk: Basit / Gelişmiş anahtarı ve "+ Yeni test" --- */
+.ust-cubuk > .mod-anahtari { flex: none; }
+.mod-anahtari button { font-family: var(--yazi); font-size: 12px; padding: 0 9px; }
+.ust-cubuk > .yeni-test-dugmesi {
+  flex: none; display: inline-flex; align-items: center; gap: 7px; height: 34px; min-height: 34px; padding: 0 11px; margin-left: 6px;
+  border-radius: 8px; font-size: 13.5px; font-weight: 600; text-decoration: none;
+}
+.yeni-test-dugmesi .ikon { width: 15px; height: 15px; }
+@media (max-width: 1180px) { .yeni-test-dugmesi .dugme-metni { display: none; } }
+@media (max-width: 480px) { .mod-anahtari button { padding: 0 7px; font-size: 11.5px; } }
+
+/* Basit modda Gelişmiş'e ait sayfanın üstündeki not (üst çubuğun hemen altında). */
+.gelismis-sayfa-notu {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 16px; font-size: 13px; color: var(--metin);
+  background: var(--vurgu-zemin); border-bottom: 1px solid color-mix(in srgb, var(--vurgu) 30%, transparent);
+}
+.gelismis-sayfa-notu[hidden] { display: none; }
+.gelismis-sayfa-notu .ikon { width: 15px; height: 15px; color: var(--vurgu); flex: none; }
+
+/* --- Beş adımlık şerit (boş durum, Yeni test) --- */
+.basit-adimlar { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.basit-adimlar li {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 999px; font-size: 12.5px;
+  border: 1px solid var(--cizgi-2); background: var(--panel); color: var(--metin-2);
+}
+.basit-adimlar li.etkin { background: var(--vurgu-zemin); color: var(--metin); border-color: color-mix(in srgb, var(--vurgu) 45%, transparent); }
+.basit-adimlar .adim-no {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font: 600 11px var(--yazi-mono);
+  background: var(--panel-2); color: var(--metin-2);
+}
+.basit-adimlar li.etkin .adim-no { background: var(--vurgu); color: var(--vurgu-metin); }
+
+/* --- Testlerim --- */
+.basit-sayfa .sayfa-basligi .eylemler { align-items: center; }
+.basit-ortam-secimi { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.basit-ortam-secimi select { max-width: min(260px, 60vw); }
+.testler-listesi, .basit-sonuc-listesi {
+  list-style: none; margin: 0; padding: 0; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel);
+}
+.test-satiri, .basit-sonuc {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 10px 14px;
+  border-bottom: 1px solid var(--cizgi);
+}
+.test-satiri:last-child, .basit-sonuc:last-child { border-bottom: 0; }
+.test-bilgisi, .basit-sonuc-bilgi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.test-adi, .basit-sonuc-bilgi > b { overflow-wrap: anywhere; }
+.test-gerekcesi { margin: 2px 0 0; color: var(--atlanan); overflow-wrap: anywhere; }
+.test-eylemleri, .basit-sonuc-eylemleri { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.basit-kanit-dugmeleri { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.test-menu-kap { position: relative; }
+.test-menu-kap > .acilir-menu { left: auto; right: 0; min-width: 190px; }
+.gelismis-testler-notu { margin-top: 14px; }
+.gelismis-testler-notu[hidden] { display: none; }
+.basit-bos {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; border: 1px dashed var(--cizgi-2);
+  border-radius: var(--yaricap-l); background: var(--panel-2);
+}
+.basit-bos h3, .basit-bos p { margin: 0; }
+@media (max-width: 640px) {
+  .test-satiri, .basit-sonuc { grid-template-columns: minmax(0, 1fr); }
+  .test-eylemleri, .basit-sonuc-eylemleri { justify-content: flex-start; }
+}
+
+/* --- Yeni test (yer tutucu) --- */
+.yeni-test-karti { display: flex; flex-direction: column; gap: 14px; }
+.yeni-test-karti .dugmeler { margin-top: 0; }
+.yeni-test-yolu { margin: 0; padding-left: 1.2rem; display: grid; gap: 6px; font-size: 13.5px; }
+
+/* --- Basit Çalıştır penceresi --- */
+dialog.onay-diyalogu.basit-calistir-penceresi { width: min(38rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
+.basit-calistir-penceresi .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
+.basit-calistir-izgara { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; align-items: start; }
+.basit-calistir-izgara select { width: 100%; }
+.basit-ne-zaman { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.basit-ne-zaman .secenek-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.basit-ne-zaman input[type="time"] { width: 7.5rem; }
+.basit-sayim { margin: 14px 0 4px; }
+.basit-gerekceler { margin: 0 0 8px; padding-left: 1.1rem; display: grid; gap: 3px; }
+.basit-gerekceler[hidden] { display: none; }
+@media (max-width: 560px) { .basit-calistir-izgara { grid-template-columns: minmax(0, 1fr); } }
+
+/* --- Basit Sonuçlar --- */
+.basit-son-kosu { display: flex; flex-direction: column; gap: 12px; }
+.basit-kosu-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.basit-kosu-ust h3 { margin: 0; font-size: 16px; }
+.basit-neden { color: var(--metin-2); overflow-wrap: anywhere; }
+.basit-sonuc.basarisiz .basit-neden { color: var(--metin); }
+.basit-kanit { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel-2); }
+.basit-kanit[hidden] { display: none; }
+.basit-kanit-baslik { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.basit-kanit img, .basit-kanit video { max-width: 100%; height: auto; }
+.basit-onceki { margin-top: 18px; }
+.basit-onceki h3 { font-size: 14px; margin: 0 0 8px; }
+.basit-onceki-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.basit-onceki-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.basit-baglantilar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 16px; }
+
+/* Ayarlar yan paneli: kullanım modu anahtarı (Gelişmiş'ten Basit'e geçiş burada; dar ekranda da görünür). */
+.kullanim-modu-secimi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 14px; }
+@media (max-width: 860px) { .kullanim-modu-secimi { margin-top: 8px; } }

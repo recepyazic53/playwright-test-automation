@@ -320,6 +320,12 @@ const calisanSurecler = new Map();
 const ARAYUZ_KLASORU = join(buDosyaninKlasoru, 'platform', 'arayuz');
 const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/stil.css', { dosya: 'stil.css', tur: 'text/css; charset=utf-8' }],
+  // Basit / Gelişmiş mod (v1.5): kendi stil dosyası, kabuk parçaları, Testlerim, Basit Sonuçlar ve sayfa rehberleri.
+  ['/arayuz/stil-basit-mod.css', { dosya: 'stil-basit-mod.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/basit-mod.js', { dosya: 'basit-mod.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/testlerim.js', { dosya: 'testlerim.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/basit-sonuclar.js', { dosya: 'basit-sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/basit-rehberler.js', { dosya: 'basit-rehberler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],

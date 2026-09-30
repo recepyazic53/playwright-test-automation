@@ -251,8 +251,8 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       // "Sizi tanıyalım" adımı yok (ortamlar Ortamlar adımında / Ayarlar'da); giriş profili adımı da yok.
       await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
       await expect(page.getByRole('form', { name: 'Tanışma soruları' })).toHaveCount(0);
-      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Giriş', 'Tamam']);
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 6');
+      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 7');
       await kontrol('kasa');
       await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
       await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA);
@@ -261,7 +261,7 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByLabel('Proje adı').fill('İlk kurulum projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
       // Ortamlar: satır = × | Ortam adı | Adres | Ortam türü (Test / Canlı; × yalnız ikon, TEST'te yok). CANLI "Ortam ekle" ile eklenir.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 6');
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 7');
       await expect(page.getByLabel('Ortam adı')).toHaveCount(1);
       // "Ortam türü" etiketi diğer alan etiketleriyle aynı biçimde (büyük harf değil); adres alanında hangi adresin yazılacağı ve örnek.
       await expect(page.locator('.ortam-turu-secimi > legend').first()).toHaveCSS('text-transform', 'none');
@@ -302,14 +302,18 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
       await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
       // İzinler (ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — varsayılan Hiçbiri, canlı kutusu işaretsiz; Atla hiçbir izni açmaz.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 6');
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 7');
       await expect(page.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
       await expect(page.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırabilsin' })).not.toBeChecked();
       await kontrol('izinler');
       await page.getByRole('button', { name: 'Atla' }).click();
+      // Kullanım (Basit / Gelişmiş; çalışma alanının ayarı): bu test bugünkü (Gelişmiş) arayüzü denetler.
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 5 / 7');
+      await page.getByRole('radio', { name: /^Gelişmiş — tüm özellikler/ }).check();
+      await page.getByRole('button', { name: 'Devam' }).click();
       // İsteğe bağlı giriş sorusu (kendi adımı): Hayır → Başlarken'de "Girişe gerek yok" işaretlenir.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 5 / 6');
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 6 / 7');
       await expect(page.getByRole('heading', { name: 'Uygulamanız giriş istiyor mu?' })).toBeVisible();
       await expect(page.getByRole('radio', { name: /^Emin değilim/ })).toBeChecked();
       await kontrol('giris-sorusu');

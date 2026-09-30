@@ -8,6 +8,8 @@
 
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
 import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
+// Basit mod sayfalarının kısa rehberleri (Testlerim, Basit Sonuçlar): basit-rehberler.js.
+import { BASIT_MOD_REHBERLERI } from './basit-rehberler.js';
 
 const ANA_AKIS = {
   tur: 'akis',
@@ -22,6 +24,7 @@ const ANA_AKIS = {
 
 /** @type {Record<string, { baslik: string; adimlar: Array<Record<string, any>> }>} */
 export const REHBERLER = {
+  ...BASIT_MOD_REHBERLERI,
   genel: {
     baslik: 'Nöbetçi',
     adimlar: [
