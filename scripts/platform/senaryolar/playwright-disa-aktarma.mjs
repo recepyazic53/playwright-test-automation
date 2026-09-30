@@ -16,6 +16,7 @@
 // NOT: import.meta KULLANILMAZ. Tipler: playwright-disa-aktarma.d.mts.
 
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { seciciAgaciniDuzelt } from '../tarama/secici-duzelt.mjs';
 import { girisAdimlariniCoz } from '../giris/tarif.mjs';
 import { referansCoz } from '../dosyalar/referans.mjs';
 import { secenekBul } from './model-kosusu.mjs';
@@ -377,7 +378,8 @@ const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge'
  * @returns {import('./playwright-disa-aktarma.d.mts').DisaAktarmaSonucu}
  */
 export function playwrightKoduUret(g) {
-  const plan = g.plan;
+  // Eski kayıtlı seçicilerdeki iç içe metinli düğme sorunu (`tag:text-is`) dışa aktarılan kodda da düzeltilir.
+  const plan = seciciAgaciniDuzelt(g.plan);
   /** @type {Set<string>} */
   const yardimcilar = new Set(['ortamDegeri', 'sayfa']);
   /** @type {Map<string, { ad: string; aciklama: string }>} anahtar → değişken */
@@ -736,6 +738,12 @@ export function playwrightKoduUret(g) {
     for (const a of kosu?.aksiyonlar ?? []) {
       if (a.aciklama) satirlar.push(`${ic}// ${yorum(a.aciklama)}`);
       if (a.tur === 'bekle' && a.sureSn && !a.secici) { satirlar.push(`${ic}await page.waitForTimeout(${Number(a.sureSn) * 1000});`); continue; }
+      // Şu adrese git: ortamın adresine (baseURL) göre yol (kayıtta adres çubuğuyla / bağlantıyla gidilen sayfa).
+      if (a.tur === 'git' && typeof a.yol === 'string') {
+        satirlar.push(`${ic}await page.waitForLoadState('load', { timeout: 5000 }).catch(() => undefined);`,
+          `${ic}await page.goto(${s(a.yol)}, { waitUntil: 'domcontentloaded' });`);
+        continue;
+      }
       if (!a.secici) continue;
       // Öğe bir çerçevedeyse (iframe) o çerçevede aranır.
       const l = `${kapsamIfadesi(a.cerceve)}.locator(${s(a.secici)})${a.metin ? `.filter({ hasText: ${s(a.metin)} })` : ''}`;

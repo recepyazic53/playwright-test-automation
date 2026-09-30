@@ -188,6 +188,8 @@ export type AdimAksiyonu = {
   tur: (typeof AKSIYON_TURLERI)[number];
   /** Playwright seçicisi (CSS, "text=…", "role=button[name=…]"); tikla / bekle'de zorunlu, ekranaDon'da yok. */
   secici?: string;
+  /** Yalnızca "git": ortamın adresine göre yol (ör. /liste; tam adres / başka site olmaz). */
+  yol?: string;
   /** Birden çok öğe eşleşirse bu metni içeren öğe. */
   metin?: string;
   /** Yalnızca "bekle": öğe görünür (varsayılan) ya da gizli olana kadar. */

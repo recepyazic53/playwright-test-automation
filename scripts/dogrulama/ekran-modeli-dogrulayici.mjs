@@ -16,11 +16,59 @@
 export const DESTEKLENEN_SEMA_SURUMU = 2;
 /** Kabul edilen şema sürümleri. */
 export const SEMA_SURUMLERI = Object.freeze([1, 2]);
+// ---- Adrese git yolu (giriş / ekran akışı kaydı ve "git" aksiyonu ortak kuralı; gezinme-yolu.mjs bunu yeniden dışa verir) ----
+// Yol YALNIZ aynı ortamın kökenine göredir: "/" ile başlar; tam adres, başka site, "//…" olmaz. Parça ("#") atılır, yalnız yol gibi
+// görünen parça ("#/rota", "#!/rota") korunur. Sorgu dizisi kısa ve gizli değer çağrıştıran parametre içermiyorsa korunur, aksi hâlde atılır.
+const GIZLI_SORGU = /(token|jeton|key|anahtar|sid|session|oturum|pass|parola|sifre|şifre|pwd|auth|code|kod|jwt|ticket|secret)/i;
+/** Yolun en çok uzunluğu; sorgu / parça dizisinin en çok uzunluğu. */
+export const GEZINME_YOLU_EN_COK = 300;
+export const GEZINME_SORGU_EN_COK = 100;
+// eslint-disable-next-line no-control-regex
+const YASAK_KARAKTER = /[\s\\\u0000-\u001f\u007f]/u;
+
+/** "a=1&b=2" biçimindeki dizide gizli değer çağrıştıran parametre var mı? @param {string} sorgu ("?" olmadan) */
+const gizliSorgu = (sorgu) => sorgu.split('&').some((p) => GIZLI_SORGU.test(p.split('=')[0]));
+
+/**
+ * Kaydedilecek sayfa adresi (yol): yalnız "/" ile başlayan yol; sorgu dizisi korunur ya da (uzun / gizli çağrışımlıysa) atılır;
+ * parça yalnız "#/" ya da "#!/" ile başlıyorsa (ve gizli çağrışımsızsa) korunur. Geçersizse ''.
+ * @param {unknown} yol
+ */
+export function gezinmeYolu(yol) {
+  if (typeof yol !== 'string') return '';
+  const t = yol.trim();
+  if (!t.startsWith('/') || t.startsWith('//') || YASAK_KARAKTER.test(t)) return '';
+  const h = t.indexOf('#');
+  const parca = h < 0 ? '' : t.slice(h);
+  const oncesi = h < 0 ? t : t.slice(0, h);
+  const q = oncesi.indexOf('?');
+  const yolu = q < 0 ? oncesi : oncesi.slice(0, q);
+  const sorgu = q < 0 ? '' : oncesi.slice(q + 1);
+  const sorguKalir = sorgu !== '' && !gizliSorgu(sorgu) && sorgu.length <= GEZINME_SORGU_EN_COK;
+  const rota = /^#!?\//.test(parca) && parca.length <= GEZINME_SORGU_EN_COK && !gizliSorgu(parca.split('?').slice(1).join('?'));
+  return `${yolu}${sorguKalir ? `?${sorgu}` : ''}${rota ? parca : ''}`.slice(0, GEZINME_YOLU_EN_COK);
+}
+
+/**
+ * Modeldeki "git" aksiyonunun yolu geçerli mi? Kayıtta üretilen yol her zaman kendi kuralından geçmiş olur; elle yazılan da
+ * aynı kuraldan geçmelidir. Geçerliyse null, değilse okunur hata.
+ * @param {unknown} yol @returns {string | null}
+ */
+export function gitYoluHatasi(yol) {
+  if (typeof yol !== 'string' || !yol.trim()) return '"yol" zorunlu: ortamın adresine göre bir yol (ör. /liste)';
+  if (!yol.startsWith('/') || yol.startsWith('//')) return '"yol" "/" ile başlayan, aynı sitenin yolu olmalı (tam adres ya da başka site olmaz)';
+  if (YASAK_KARAKTER.test(yol)) return '"yol" boşluk, ters bölü ya da denetim karakteri içeremez';
+  if (yol.length > GEZINME_YOLU_EN_COK) return `"yol" en çok ${GEZINME_YOLU_EN_COK} karakter olmalı`;
+  if (gezinmeYolu(yol) !== yol) return '"yol" gizli değer çağrıştıran ya da uzun bir sorgu dizisi (ya da yol olmayan bir parça) içeriyor; sorgu dizisini çıkarın';
+  return null;
+}
+
 /**
  * Adım koşu tanımındaki aksiyon türleri: tikla (düğme/bağlantı), bekle (öğe görünür/gizli olana kadar), ekranaDon (ekranın adresi
- * yeniden açılır; ör. ortak akış başka sayfaya götürdükten sonra — seçicisiz, hangi ekrana eklenirse onun adresi).
+ * yeniden açılır; ör. ortak akış başka sayfaya götürdükten sonra — seçicisiz, hangi ekrana eklenirse onun adresi), git (ortamın
+ * adresine göre bir yol açılır: { tur: 'git', yol: '/liste' }; tam adres / başka site olmaz — kayıtta adres çubuğuyla gidilen sayfalar).
  */
-export const AKSIYON_TURLERI = Object.freeze(['tikla', 'bekle', 'ekranaDon']);
+export const AKSIYON_TURLERI = Object.freeze(['tikla', 'bekle', 'ekranaDon', 'git']);
 /**
  * Tıklama koşulları: gorunurse → öğe kısa bir süre (varsayılan GORUNURSE_BEKLEME_SN; aksiyonun zamanAsimiSn'i ile ayarlanır,
  * adımın süresinden bağımsız) beklenir; görünürse tıklanır, görünmezse atlanır (hata değil; raporda not). Ör. bazı ekranlarda
@@ -133,7 +181,7 @@ export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri',
 const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'tekrarDenenebilir', 'not', 'bitisKosulu']);
 /** Bitiş koşulunda (kosu.bitisKosulu.devam) en çok "Devam" metni. */
 export const DEVAM_METNI_EN_COK = 10;
-const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve']);
+const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve', 'yol']);
 
 /**
  * "cerceve": öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri, dıştan içe — 1–CERCEVE_EN_DERIN boş olmayan metinden
@@ -452,12 +500,17 @@ function kosuTanimiDogrula(h, yer, kosu) {
       if (a.sureSn !== undefined) {
         if (a.tur !== 'bekle' || !(Number.isInteger(a.sureSn) && a.sureSn >= 1 && a.sureSn <= 120)) h.ekle(aYer, '"sureSn" yalnızca "bekle" aksiyonunda, 1–120 arasında tam sayı olabilir');
         if (a.secici !== undefined) h.ekle(aYer, 'süreli beklemede "secici" olmaz');
+      } else if (a.tur === 'git') {
+        const yh = gitYoluHatasi(a.yol);
+        if (yh) h.ekle(aYer, `"git" aksiyonunda ${yh}`);
+        if (a.secici !== undefined || a.metin !== undefined || a.durum !== undefined || a.kosul !== undefined || a.cerceve !== undefined) h.ekle(aYer, '"git" aksiyonunda yalnız "yol" (ve isteğe bağlı "aciklama", "zamanAsimiSn") olur');
       } else if (a.tur === 'ekranaDon') {
         if (a.secici !== undefined || a.metin !== undefined || a.durum !== undefined || a.kosul !== undefined) h.ekle(aYer, '"ekranaDon" aksiyonunda "secici", "metin", "durum" ve "kosul" olmaz');
       } else if (!metinMi(a.secici)) h.ekle(aYer, '"secici" zorunlu');
+      if (a.yol !== undefined && a.tur !== 'git') h.ekle(aYer, '"yol" yalnızca "git" aksiyonunda olur');
       if (a.metin !== undefined && !metinMi(a.metin)) h.ekle(aYer, '"metin" boş olmayan metin olmalı');
       // Koşullu tıklama (yalnız "tikla"): öğe kısa sürede görünmezse atlanır. ekranaDon'da yukarıda ayrıca reddedilir.
-      if (a.kosul !== undefined && a.tur !== 'ekranaDon' && (a.tur !== 'tikla' || !listedeMi(AKSIYON_KOSULLARI, a.kosul))) h.ekle(aYer, `"kosul" yalnızca "tikla" aksiyonunda ${AKSIYON_KOSULLARI.join(' | ')} olabilir`);
+      if (a.kosul !== undefined && a.tur !== 'ekranaDon' && a.tur !== 'git' && (a.tur !== 'tikla' || !listedeMi(AKSIYON_KOSULLARI, a.kosul))) h.ekle(aYer, `"kosul" yalnızca "tikla" aksiyonunda ${AKSIYON_KOSULLARI.join(' | ')} olabilir`);
       if (a.durum !== undefined && (a.tur !== 'bekle' || !['gorunur', 'gizli', 'dolu'].includes(a.durum))) h.ekle(aYer, '"durum" yalnızca "bekle" aksiyonunda gorunur | gizli | dolu olabilir');
       if (a.aciklama !== undefined && typeof a.aciklama !== 'string') h.ekle(aYer, '"aciklama" metin olmalı');
       if (a.cerceve !== undefined && a.secici === undefined) h.ekle(aYer, '"cerceve" yalnızca seçicili aksiyonda olur');
@@ -728,7 +781,9 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
         if (adim.kosu !== undefined) h.ekle(adYer, 'dosya adımının koşu tanımı ("kosu") olmaz');
       }
       if (bolumVar) {
-        if (!Array.isArray(adim.bolumler) || adim.bolumler.length === 0) h.ekle(adYer, '"bolumler" boş olmayan dizi olmalı');
+        // Yalnızca sayfa değiştiren adım ("git" aksiyonu; kayıtta adres çubuğuyla gidilen sayfa) alansızdır: bölümü boş olabilir.
+        const gitli = nesneMi(adim.kosu) && Array.isArray(adim.kosu.aksiyonlar) && adim.kosu.aksiyonlar.some((a) => nesneMi(a) && a.tur === 'git');
+        if (!Array.isArray(adim.bolumler) || (adim.bolumler.length === 0 && !gitli)) h.ekle(adYer, '"bolumler" boş olmayan dizi olmalı');
         else adim.bolumler.forEach((bolum, j) => bolumDogrula(h, `${adYer}.bolumler[${j}]`, bolum, bolumKimlikleri, kimlikler, b));
       }
       if (altModelVar) altModelBasvurusuDogrula(h, `${adYer}.altModel`, adim.altModel, b);

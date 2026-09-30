@@ -72,7 +72,8 @@ export function ogeBilgisi(el: Element, isaret: string): OgeBilgisi {
   if (rol && ad && ad.length <= 80) ekle(`role=${rol}[name="${tirnak(ad)}"]`, /\d/.test(ad) ? 'orta' : 'dusuk', 'rol');
   // 2) Görünen metin (düğme / sonuç; kayıt panelinin :text-is kuralı).
   const yazi = gorunenMetin();
-  if (!kontrol && yazi && yazi.length <= 60) ekle(`${etiket}:text-is("${tirnak(yazi)}")`, /\d/.test(yazi) ? 'yuksek' : 'orta', 'metin');
+  // :text-is() yalnız metni doğrudan taşıyan en küçük öğeyle eşleşir: iç içe metinli düğme için :has() birlikte yazılır; girdi düğmesi değerle bulunur.
+  if (!kontrol && yazi && yazi.length <= 60) ekle(etiket === 'input' ? `input[value="${tirnak(yazi)}"]` : `${etiket}:is(:text-is("${tirnak(yazi)}"), :has(:text-is("${tirnak(yazi)}")))`, /\d/.test(yazi) ? 'yuksek' : 'orta', 'metin');
   // 3) Kimlik ve test kimlikleri.
   const id = el.getAttribute('id');
   if (id && !/^\d/.test(id) && tek(`#${kacis(id)}`)) ekle(`#${kacis(id)}`, /\d{4,}|^(ctl\d|ext-|ember|react|mui-|ng-|:r)/i.test(id) ? 'orta' : 'dusuk', 'kimlik');

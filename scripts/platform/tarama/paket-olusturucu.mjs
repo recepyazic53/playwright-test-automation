@@ -1082,7 +1082,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     }
     // Düğmesiz adımın beklenen mesajı (akışta alan grubundan sonra; alandan çıkınca beklenir) adımın son parçasına bağlanır.
     const alanSonrasiMesaj = !k.ilerleme && Boolean(k.gosterge || k.uyarilar?.length);
-    if (!k.ilerleme && i < kayitlar.length - 1 && !alanSonrasiMesaj) {
+    // Ardından "Şu adrese git" adımı gelen adım da geçer: sayfadan adres çubuğuyla / bağlantıyla ayrılınmış olabilir (adres adımı ilerletir).
+    if (!k.ilerleme && i < kayitlar.length - 1 && !alanSonrasiMesaj && !k.adreseGit && !kayitlar[i + 1]?.adreseGit) {
       bilinmeyenler.push(`"${ad}" adımının ilerleme düğmesi kaydedilmedi; model koşucusu bu adımdan sonrakine geçemez (modelde "kosu.aksiyonlar" ekleyin ya da akışı yeniden kaydedin).`);
     }
     // Korunan aksiyonlar: ilerleme parçasına (düğmesizse alanı / düğmesi olan son parçaya) — oradaki düğme ve beklemelerin yerine.

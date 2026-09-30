@@ -24,6 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
+import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
@@ -743,6 +744,17 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
   for (const a of kosu?.aksiyonlar ?? []) {
     // Ekrana dön: ekranın adresi yeniden açılır (ör. ortak akış kullanıcıyı değiştirip ana sayfaya götürdükten sonra).
     if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); ekranaDonuldu = true; continue; }
+    // Şu adrese git: ekranın ortamının adresine göre yol açılır (kayıtta adres çubuğuyla / bağlantıyla gidilen sayfa). Önceki
+    // adımın tıklaması hâlâ yükleniyorsa (form gönderimi, yönlendirme) o bitsin; gidilen sayfada sonraki adımlar sürer.
+    if (a.tur === 'git') {
+      await page.waitForLoadState('load', { timeout: 5_000 }).catch(() => undefined);
+      // Yol ekranın ortamının adresine göre çözülür: ekran adresi tam adresse onunla, değilse açık sayfanın kökeniyle (yoksa bağlamın
+      // baseURL'iyle: page.goto göreli adresi ona göre açar).
+      const kok = /^https?:/i.test(ekranUrl) ? ekranUrl : /^https?:/i.test(page.url()) ? page.url() : null;
+      await page.goto(kok ? new URL(a.yol ?? '/', kok).href : a.yol ?? '/', { waitUntil: 'domcontentloaded' });
+      ekranaDonuldu = false;
+      continue;
+    }
     // Süreli bekleme (akış diyagramındaki "Bekleme süresi"; sayfayı değiştirmez).
     if (a.tur === 'bekle' && a.sureSn && !a.secici) { await page.waitForTimeout(a.sureSn * 1000); continue; }
     if (!a.secici) continue;
@@ -1035,7 +1047,9 @@ async function parolaAlaniysaGizle(page: Page, alan: PlanAlani, l: Locator): Pro
  * Model senaryosunu koşturur. Atlanan alanlar "atlananAlanlar" annotation'ı olarak eklenir (raporlayıcı
  * sonuç satırına yazar); yasaklı host'a istek denenmişse test başarısız olur.
  */
-export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
+export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitliSenaryo: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
+  // Eski kayıtlı modellerdeki iç içe metinli düğme seçicileri (`tag:text-is("…")`) çalışırken düzeltilir (bkz. secici-duzelt.mjs).
+  const s: PlatformModelSenaryosu = { ...kayitliSenaryo, model: seciciAgaciniDuzelt(kayitliSenaryo.model), altModeller: seciciAgaciniDuzelt(kayitliSenaryo.altModeller) };
   if (!s.model) throw new Error(`"${s.baslik}": "${s.ekran.ad || s.ekran.id}" ekranının modeli yok; model koşucusu çalışamaz.`);
   // ${Tablo.Sütun} başvurusu çözülemediyse (ör. tabloda bu ortamda satır yok) tarayıcı açılmadan açık hatayla durulur.
   if (s.veriHatalari?.length) throw new Error(veriHatalariMetni(s.baslik, s.veriHatalari));

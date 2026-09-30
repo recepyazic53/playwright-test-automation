@@ -37,8 +37,21 @@ export type AkisEnvanteri = {
    * çubuğuna yazarak gitti (bağlantı / düğme / yönlendirme değil). Giriş kaydında çok sayfalı girişi çıkarmak için.
    */
   gezinmeler?: Gezinme[];
+  /** Ortamın adresi dışındaki bir siteye gidişler (adım olmaz; onay ekranında uyarı satırı olur). */
+  atlananGezinmeler?: AtlananGezinme[];
+  /** Kaydın başladığı sayfanın yolu (gezinme takibi başlarken açık olan sayfa; yoksa ilk okumadaki adres). */
+  baslangicYolu?: string;
+  /** Kayıt sırasında açılan / kapanan pencereler (yeni sekme, window.open). */
+  pencereler?: PencereOlayi[];
 };
-export type Gezinme = { sira: number; yol: string; elle: boolean };
+/**
+ * kaynak: adres değişiminin nedeni — adresCubugu (yazarak / öneriden / yer imiyle), geriIleri (tarayıcının geri / ileri düğmesi),
+ * etkilesim (kayıt motorunun düğme saymadığı bir öğeye tıklama; ör. betikle yönlenen menü), tik (kayıtlı düğme / bağlantı tıklaması
+ * ve arkasından gelen yönlendirmeler), yenileme, yonlendirme (kullanıcı işlemi olmadan; otomatik). Eski kayıtlarda yalnız elle.
+ */
+export type Gezinme = { sira: number; yol: string; elle: boolean; kaynak?: 'adresCubugu' | 'geriIleri' | 'etkilesim' | 'tik' | 'yenileme' | 'yonlendirme' };
+export type AtlananGezinme = { sira: number; koken: string; neden: 'baskaSite'; kayitli?: boolean };
+export type PencereOlayi = { sira: number; olay: 'acildi' | 'kapandi'; yol: string };
 export type SonSayfa = { yol: string; cikisMetni: string | null };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
@@ -63,6 +76,8 @@ export type AkisBlogu =
   | { tur: 'sql'; ad: string; sql: Record<string, unknown> }
   /** İndirilen dosyayı doğrula: dugme (sağ listedeki düğmenin sırası) indirmeyi başlatır; dosya: DosyaTanimi (kaydederken doğrulanır). */
   | { tur: 'dosya'; ad: string; dugme: number; dosya: Record<string, unknown> }
+  /** Şu adrese git: ortamın adresine göre yol (ör. /liste); modelde adımın kosu.aksiyonlar'ında { tur: 'git', yol } olur. */
+  | { tur: 'git'; yol: string }
   /** Yeniden giriş: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profili adı; null = varsayılan). */
   | { tur: 'giris'; ad: string; profil: string | null }
   /** Diyagramda düzenlenemeyen, modeldeki hâliyle aynen korunan parça (salt okunur): adımın tamamı ya da adımın koşu aksiyonları. ozet yalnız gösterim. */

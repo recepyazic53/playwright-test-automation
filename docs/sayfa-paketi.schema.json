@@ -39,7 +39,7 @@
       "properties": {
         "specDosyasi": { "type": "string", "minLength": 1, "description": "İsteğe bağlı (model koşucusu kullanmaz). Yazılmazsa Nöbetçi \"tests/scenarios/<anahtar>/<anahtar>.spec.ts\" yazar." },
         "pageObject": { "type": "string", "minLength": 1, "description": "İsteğe bağlı (model koşucusu kullanmaz). Yazılmazsa Nöbetçi \"yok (model koşucusu)\" yazar." },
-        "semaSurumu": { "enum": [1, 2], "description": "2: adımlarda koşu tanımı (kosu: aksiyonlar, basariGostergesi, hataGostergesi, zamanAsimiSn) — model koşucusu. Alan / aksiyon / gösterge bir iframe içindeyse cerceve (konum.cerceve: dıştan içe iframe seçicileri); gizli <select>'li özel açılır listede doldurucu ozelSecim." },
+        "semaSurumu": { "enum": [1, 2], "description": "2: adımlarda koşu tanımı (kosu: aksiyonlar, basariGostergesi, hataGostergesi, zamanAsimiSn) — model koşucusu. Aksiyon türleri: tikla, bekle, ekranaDon, git ({ tur: 'git', yol: '/x' } — ortamın adresine göre yol; tam adres / başka site reddedilir). Alan / aksiyon / gösterge bir iframe içindeyse cerceve (konum.cerceve: dıştan içe iframe seçicileri); gizli <select>'li özel açılır listede doldurucu ozelSecim." },
         "tur": { "const": "ekran" },
         "baglam": {
           "type": "object",

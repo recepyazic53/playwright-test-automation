@@ -3,7 +3,7 @@
 
 export declare const DESTEKLENEN_SEMA_SURUMU: number;
 export declare const SEMA_SURUMLERI: readonly number[];
-export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle', 'ekranaDon'];
+export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle', 'ekranaDon', 'git'];
 /** Tıklama koşulları (gorunurse: öğe kısa sürede görünmezse tıklama atlanır). */
 export declare const AKSIYON_KOSULLARI: readonly ['gorunurse'];
 /** "gorunurse" tıklamasında varsayılan kısa bekleme (sn). */
@@ -57,3 +57,8 @@ export declare function anlasilirDogrulamaIletisi(madde: string, model?: unknown
 
 /** "kosullar"da tanımlı olup hiçbir yerde adıyla kullanılmayan koşulların uyarıları (modeli değiştirmez). */
 export declare function bagsizKosulUyarilari(model: unknown): Array<{ yer: string; mesaj: string }>;
+/** Adrese git yolu kuralı (giriş / ekran akışı kaydı ve modeldeki "git" aksiyonu ortak): bkz. gezinme-yolu.mjs. */
+export declare const GEZINME_YOLU_EN_COK: number;
+export declare const GEZINME_SORGU_EN_COK: number;
+export declare function gezinmeYolu(yol: unknown): string;
+export declare function gitYoluHatasi(yol: unknown): string | null;

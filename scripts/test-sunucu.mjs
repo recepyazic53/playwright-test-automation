@@ -339,6 +339,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/tema-stilleri.mjs', { dosya: 'tema-stilleri.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/terimler.mjs', { dosya: 'terimler.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-denemesi.js', { dosya: 'giris-denemesi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/gezinme-ozeti.js', { dosya: 'gezinme-ozeti.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuc-ozeti.js', { dosya: 'sonuc-ozeti.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/baslarken.js', { dosya: 'baslarken.js', tur: 'text/javascript; charset=utf-8' }],

@@ -17,6 +17,11 @@ export type GirisTaslagi = {
   adimlar: TaslakAdimi[]; ilkYol: string | null; sonYol: string | null;
   /** Bitir anındaki sayfa (yol + görünen çıkış yazısı); eski kayıtlarda yok. */
   sonSayfa?: { yol: string; cikisMetni: string | null } | null;
+  /** Kayıttaki adres değişimlerinin dökümü: kaçı adım oldu, kaçı neden alınmadı (onay ekranı her zaman özet satırını gösterir). */
+  gezinmeOzeti: import('../tarama/gezinme-plani.mjs').GezinmeOzeti;
+  gezinmeOzetMetni: string;
+  /** Başka siteye gidildiyse okunur uyarılar ("Şu siteye gidildi: <köken>; ortamın adresi dışında olduğu için alınmadı."). */
+  gezinmeUyarilari: string[];
 };
 
 export type KodKaynagi = 'totp' | 'sabit' | 'elle';

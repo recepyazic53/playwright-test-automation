@@ -184,6 +184,8 @@ export type KayitAdimi = {
   dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
   /** Yeniden giriş adımı (akış tasarımında "+ > Yeniden giriş"): alanı yoktur; modelde adımın yenidenGiris'i olur. */
   yenidenGiris?: { profil?: string };
+  /** Şu adrese git adımı (akış tasarımında "+ > Şu adrese git"): alanı yoktur; modelde adımın kosu.aksiyonlar'ı [{ tur: 'git', yol }] olur. */
+  adreseGit?: { yol: string };
 };
 /** "Akışı kaydet" sonucu (ekran görüntüsü YOKTUR: kullanıcının girdiği bilgileri içerirdi). */
 export type KayitEnvanteri = {

@@ -115,8 +115,13 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
     }
     const metin = gorunenMetin(el);
     if (metin && metin.length <= 60 && [...doc.querySelectorAll(etiket)].filter((x) => gorunenMetin(x) === metin).length === 1) {
-      // Playwright metin seçicisi (model koşucusu page.locator ile çözer).
-      return `${etiket}:text-is("${tirnak(metin)}")`;
+      // Playwright metin seçicisi (model koşucusu page.locator ile çözer). :text-is() yalnız metni DOĞRUDAN taşıyan en küçük öğeyle
+      // eşleştiği için iç içe metinli düğme (<button><em><span>…) ya da değer taşıyan girdi düğmesi için ayrı biçim yazılır.
+      if (etiket === 'input') return `input[value="${tirnak(metin)}"]`;
+      // Ekranda CSS ile büyük / küçük harfe çevrilmiş metin (innerText) sayfanın gerçek metninden (textContent) farklı olabilir: gerçek metin yazılır.
+      const dom = bosluk(el.textContent).slice(0, 120);
+      const yazilacak = dom && dom.toLocaleLowerCase('tr') === metin.toLocaleLowerCase('tr') ? dom : metin;
+      return `${etiket}:is(:text-is("${tirnak(yazilacak)}"), :has(:text-is("${tirnak(yazilacak)}")))`;
     }
     const parcalar: string[] = [];
     let d: Element | null = el;
@@ -385,6 +390,9 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
   const tiklandi = (e: Event): void => {
     const t = e.target;
     if (panelIci(e) || !ogeMi(t)) return;
+    // Kullanıcının her gerçek tıklaması kayıt motoruna hafifçe bildirilir: düğme / bağlantı saymadığımız bir öğeye (ör. betikle
+    // yönlenen menü) tıklayıp sayfa adresi değişirse motor bunu "adres çubuğuyla gidildi" ile karıştırmaz, ayrı bir adım yapar.
+    if (e.isTrusted) void kopru({ tur: 'etkilesim' }).catch(() => undefined);
     if (mesajModu) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -414,6 +422,14 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
   const isleyiciler: Record<OlayTuru, (e: Event) => void> = { input: dokun, change: degisim, click: tiklandi, keyup: tusBirakildi, keydown: tusBasildi };
   for (const [tur, f] of Object.entries(isleyiciler)) window.addEventListener(tur, f, true);
   window.addEventListener('blur', odakKaybi);
+  // Sayfa terk edilirken (adres çubuğuyla başka adrese gidildi) bekleyen okuma kaybolmasın: kısa süre önce dokunulan alanlar o
+  // sayfanın kaydında kalır (yoksa sonraki sayfanın alanı sayılırdı ya da hiç kaydedilmezdi).
+  window.addEventListener('pagehide', () => {
+    if (!okumaZamanlayici) return;
+    clearTimeout(okumaZamanlayici);
+    okumaZamanlayici = null;
+    try { oku(false); } catch { /* sayfa kapanıyor: yok sayılır */ }
+  });
   window.addEventListener('focusout', odakKaybi, true);
   const merkez: Merkez = { olay: (tur, e) => { try { isleyiciler[tur](e); } catch { /* çerçeve olayı işlenemedi: yok sayılır */ } } };
   pencere.__nobetciKayitMerkezi = merkez;

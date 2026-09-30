@@ -13,7 +13,7 @@ const html = (baslik: string, govde: string): FiksturYaniti => ({
   govde: `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${baslik}</title></head><body>${govde}</body></html>`
 });
 
-type Mod = 'dugme' | 'otomatik' | 'yenile' | 'cerceve';
+type Mod = 'dugme' | 'otomatik' | 'yenile' | 'cerceve' | 'icice';
 const BOLGELER = [{ kod: 'A1', ad: 'Merkez' }, { kod: 'B2', ad: 'Şube' }];
 const KULLANICILAR: Record<string, string[]> = { A1: ['A1001'], B2: ['B2001', 'B2002'] };
 
@@ -58,7 +58,7 @@ class Uygulama {
     const kullanicilar = (KULLANICILAR[bolge] ?? []).map((k) => `<option value="${k}">${k}</option>`).join('');
     return html('Kullanıcı değiştir', `<label>Bölge <select id="bolge"><option value="">Seçiniz</option>${secenekler}</select></label>
 <label>Kullanıcı <select id="kullanici"><option value="">Seçiniz</option>${kullanicilar}</select></label>
-<button id="kaydet" type="button">KULLANICI DEĞİŞTİR</button>
+${this.mod === 'icice' ? '<button id="kaydet" class="bt-blue left" type="submit"><em><span>KULLANICI DEĞİŞTİR</span></em></button>' : '<button id="kaydet" type="button">KULLANICI DEĞİŞTİR</button>'}
 <script>
 const MOD = ${JSON.stringify(this.mod)};
 const $ = (x) => document.getElementById(x);
@@ -159,4 +159,12 @@ test('hedef hiçbir pencerede yoksa: kısa sürede açık Türkçe adım hatası
   expect((hata as GirisHatasi).kod).toBe('GIRIS_ADIMI');
   expect((hata as GirisHatasi).message).toContain('Adım 4');
   expect(Date.now() - basla).toBeLessThan(20_000);
+});
+
+test('metni iç içe öğelerde olan düğme (<button><em><span>…): eski kayıtlı `button:text-is("…")` seçicisi de bulunur ve tıklanır', async () => {
+  test.setTimeout(90_000);
+  uygulama.mod = 'icice';
+  // Kayıt bu seçiciyi üretmişti; Playwright :text-is() yalnız metni doğrudan taşıyan en küçük öğeyle (span) eşleştiği için `button` ile hiç eşleşmiyordu.
+  await giris([...temel, { islem: 'tikla', hedef: { secici: '#kd' } }, sec('#bolge', '{bolge}'), sec('#kullanici', '{kullanici}'),
+    { islem: 'tikla', hedef: { secici: 'button:text-is("KULLANICI DEĞİŞTİR")' }, aciklama: '“KULLANICI DEĞİŞTİR” düğmesine bas' }]);
 });

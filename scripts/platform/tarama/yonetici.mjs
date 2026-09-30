@@ -90,6 +90,7 @@ import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './pa
 import { OGE_TURLERI, kesifBulgulari, secilenOgeleriAyikla, taramaIsaretleriniUygula } from './oge-isaretleri.mjs';
 import { eylemAdaylariniAyikla } from './eylem-kesfi.mjs';
 import { akisEnvanteriMi, akisPaleti, akisTaslagi, akistanKayitEnvanteri, bloklariAyikla } from './akis-tasarimi.mjs';
+import { gezinmeOzetMetni, gezinmePlani, gezinmeUyarilari } from './gezinme-plani.mjs';
 import { akisDuzenlenebilirMi, akisKaydet as ekranAkisiKaydet, akislariListele } from '../ekranlar/akis-servisi.mjs';
 import { ortakAkisBaslangicEkranlari } from '../ekranlar/ekran-servisi.mjs';
 import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../giris/giris-kaydi.mjs';
@@ -568,7 +569,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     /** @type {Nesne} */
     const is = {
       id, token, kip: girisDenemesi ? 'girisDenemesi' : girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : ogeSecme ? 'ogeSecme' : hizliTest ? 'hizliTest' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', olusturulacak,
-      ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad, canli: riskliOrtamMi(ortamKaydi) }, hedefYol: hedef.yol, kesif,
+      ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad, canli: riskliOrtamMi(ortamKaydi), tabanUrl: ortamKaydi.tabanUrl }, hedefYol: hedef.yol, kesif,
       durum: 'suruyor', hata: null, baslangic: simdi(), bitis: null,
       adimlar: girisDenemesi
         ? { hazirlik: { durum: 'bekliyor' }, giris: { durum: 'bekliyor' } }
@@ -1040,12 +1041,20 @@ export function taramaYoneticisiOlustur(secenekler) {
     return is;
   }
 
+  /** Kayıt envanterinden adres değişimi dökümü (özet + satır + uyarılar). @param {import('./akis-tasarimi.d.mts').AkisEnvanteri} envanter */
+  function gezinmeBilgisi(envanter) {
+    const { ozet } = gezinmePlani(envanter);
+    return { ozet, ozetMetni: gezinmeOzetMetni(ozet), uyarilar: gezinmeUyarilari(ozet) };
+  }
+
   /** Diyagram + sağ liste. @param {string} id */
   function akisGetir(id) {
     const is = akisIsi(id);
     return {
       bloklar: is.akis.bloklar, palet: akisPaleti(is.akis.envanter, is.akis.bloklar), ekran: is.ekran, mod: is.mod, olusturulacak: is.olusturulacak ?? 'ekran', paketHazir: Boolean(is.paket),
       projeId: is.projeId, akisaYazildi: is.akisaYazildi ?? null,
+      // Kayıttaki adres değişimlerinin dökümü (onay ekranı her zaman özet satırını gösterir; başka siteye gidildiyse uyarı satırları).
+      ortam: is.ortam, gezinme: gezinmeBilgisi(is.akis.envanter),
       // Kayıt "Giriş yapmadan aç" ile yapıldıysa diyagramın başı "Girişsiz" olur.
       girissiz: is.meta.girissiz === true,
       // Ortak akışın kaydı: diyagram ortak akışın tek akışına yazılır (başlangıç ekranına ait bloklar silinir).
