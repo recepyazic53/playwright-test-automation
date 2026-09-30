@@ -35,7 +35,7 @@ import { ogeBilgisi, type SeciciAdayi } from './oge-secme-paneli';
 import { adaySirasi } from './oge-secme-motoru';
 import { beklemeDurumu, hizliMetinleriTopla, hizliSecimSeridiKur } from './hizli-test-sayfasi';
 import { dugmeTiklamaKorumasi, formGonderimKorumasi } from './sayfa-envanteri';
-import { ENVANTER_BETIGI, TaramaHatasi, alanKapsami, envanterOku, hataBilgisi, type OlayGonderici } from './tarama-motoru';
+import { ENVANTER_BETIGI, TaramaHatasi, alanKapsami, envanterOku, hataBilgisi, hedefSayfayiAc, type OlayGonderici } from './tarama-motoru';
 
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -148,14 +148,7 @@ export async function hizliTestiYurut(
     }
     durum.asama = okumaAsamasi;
     const ac = async (): Promise<void> => {
-      try {
-        await islem.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: taramaTarayiciAyarlari(g).sayfaAcilmaMs });
-      } catch (hata) {
-        const m = ilkSatir(hata);
-        if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${taramaTarayiciAyarlari(g).sayfaAcilmaMs / 1000} sn içinde açılmadı.`);
-        if (agHatasiMi(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
-        throw hata;
-      }
+      await hedefSayfayiAc(islem, g.hedefAdres, taramaTarayiciAyarlari(g).sayfaAcilmaMs, g.hedefYol);
       await sakinles(islem, 10_000);
     };
     await ac();
