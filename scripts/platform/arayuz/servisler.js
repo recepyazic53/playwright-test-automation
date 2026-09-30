@@ -53,6 +53,8 @@ const KONTROL_TURLERI = [
   ['yanitAlani', 'Yanıt alanı (işleçli)'], ['altinYanit', 'Altın yanıtla karşılaştır'], ['yanitSuresi', 'Yanıt süresi (en çok ms)']
 ];
 const DEGERLI_KONTROLLER = new Set(['icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'durumKodu', 'yanitSuresi']);
+/** Değer girilmeyen kontroller: satırın değer sütununda kısa not durur (× düğmesi o sütuna yayılıp boş çubuk gibi görünmesin). */
+const DEGERSIZ_KONTROLLER = new Set(['soapYaniti', 'soapHatasiYok', 'soapHatasi', 'dosya']);
 
 /**
  * "Yanıt alanı" kontrol satırının girdileri: kaynak (XML / JSON), alan yolu, işleç, değer ya da aralık. Gizli alandan gelen kontrolde
@@ -1533,6 +1535,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         k.tur === 'xpathEsit' ? xpath : null, k.tur === 'jsonEsit' ? jsonYolu : null, DEGERLI_KONTROLLER.has(k.tur) ? deger : null,
         k.tur === 'yanitAlani' ? yanitAlaniGirdileri(k, no) : null, k.tur === 'altinYanit' ? altinYanitOzeti(k) : null,
         k.tur === 'icerir' || k.tur === 'icermez' ? h('label', { class: 'secenek', for: buyuk.id }, buyuk, 'büyük/küçük duyarsız') : null,
+        DEGERSIZ_KONTROLLER.has(k.tur) ? h('span', { class: 'soluk kucuk kontrol-degersiz' }, k.tur === 'dosya' ? 'beklentiler aşağıda' : 'değer gerekmez') : null,
         kaldir,
         k.tur === 'dosya' ? h('div', { class: 'kontrol-dosyasi' }, dosyaKontroluFormu(k.dosya ||= yeniDosyaTanimi(), { degisti: () => undefined, ad: `${no} kontrol` })) : null);
     });

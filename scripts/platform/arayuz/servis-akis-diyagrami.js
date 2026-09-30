@@ -208,7 +208,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
   // ---- Genel ayarlar ----------------------------------------------------------------------------------------------------------
   const baslik = h('input', { type: 'text', value: is.baslik, maxlength: '200', autocomplete: 'off', placeholder: 'ör. Giriş → Sorgu' });
   // Talep no (yalnız uçtan uca akışta; isteğe bağlı, birden çok): başlığın yanında; içerikte kaydedilir.
-  const talep = uctan ? talepAlani({ projeId: proje.id, degerler: Array.isArray(a.icerik.talepler) ? a.icerik.talepler : [], degisti: () => degisti() }) : null;
+  const talep = uctan ? talepAlani({ projeId: proje.id, degerler: Array.isArray(a.icerik.talepler) ? a.icerik.talepler : [], degisti: () => degisti(), ne: 'akışın' }) : null;
   baslik.addEventListener('input', () => { is.baslik = baslik.value; degisti(); });
   const tur = h('select', {}, h('option', { value: 'akis', selected: is.tur === 'akis' }, 'Akış'), h('option', { value: 'oturum', selected: is.tur === 'oturum' }, 'Oturum (servise atanır; token sağlar)'));
   const omur = h('input', { type: 'number', min: '30', max: '86400', step: '1', value: String(is.omur), 'aria-label': 'Oturum ömrü (saniye)' });

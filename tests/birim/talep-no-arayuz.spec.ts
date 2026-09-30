@@ -173,6 +173,8 @@ test.describe('talep no ve kapsam matrisi arayüzü', () => {
     await page.goto(`/#/akislar/${akisId}`);
     await expect(page.getByRole('heading', { name: 'Uçtan uca akışı düzenle' })).toBeVisible();
     const akisGirdisi = page.getByRole('combobox', { name: 'Talep no' });
+    // Yardım metni bağlama göre: akışta "Bu akışın karşıladığı…" ("senaryonun" değil).
+    await expect(akisGirdisi).toHaveAccessibleDescription(/^Bu akışın karşıladığı talep numaraları/);
     await expect(page.getByRole('list', { name: 'Eklenen talepler' }).getByRole('listitem')).toHaveText(['TALEP-101']);
     await akisGirdisi.fill('TALEP-404');
     await akisGirdisi.press('Enter');
