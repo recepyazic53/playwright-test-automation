@@ -138,7 +138,7 @@ export const REHBERLER = {
       },
       { baslik: 'Ekran / servis seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
-      { baslik: 'Başlık ve "Rapor al (PDF)"', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. "Rapor al (PDF)" genel kapsamlı dönem raporunu hazırlar.' },
+      { baslik: 'Başlık', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. PDF raporu almak için Raporlar sekmesini açın.' },
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar, Raporlar. Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
       { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Özet kutuları ve kartlar seçtiğiniz aralığın günlerine göre, önceki eşit dönemle karşılaştırılarak hesaplanır. "Tümü" seçiliyken son 30 gün kullanılır.' },
       {

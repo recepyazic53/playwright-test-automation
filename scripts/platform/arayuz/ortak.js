@@ -650,6 +650,9 @@ export function yardimIpucu(govde, konu) {
   return { dugme, panel };
 }
 
+/** Bu uzunluktan uzun alan açıklamaları ? düğmesinin içinde durur. */
+const YARDIM_ESIGI = 60;
+
 export function alan(etiket, girdi, secenekler = {}) {
   const id = girdi.id || yeniKimlik('alan');
   girdi.id = id;
@@ -657,8 +660,23 @@ export function alan(etiket, girdi, secenekler = {}) {
   const hataId = `${id}-hata`;
   const aciklamalar = [yardimId, hataId].filter(Boolean).join(' ');
   girdi.setAttribute('aria-describedby', aciklamalar);
+  const etiketi = h('label', { for: id }, etiket, secenekler.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null);
+  // Uzun açıklama ekranı doldurmasın: etiketin yanındaki "?" düğmesiyle açılır (kısa olanlar altta yazılı kalır).
+  if (yardimId && typeof secenekler.yardim === 'string' && secenekler.yardim.length > YARDIM_ESIGI) {
+    const { dugme, panel } = yardimIpucu(secenekler.yardim, String(etiket));
+    panel.id = yardimId;
+    dugme.setAttribute('aria-controls', yardimId);
+    // Ad alanın etiketini içermez (etiketle arama alanın kendisini bulsun).
+    dugme.setAttribute('aria-label', 'Açıklamayı göster');
+    dugme.title = `Açıklama: ${etiket}`;
+    return h('div', { class: 'alan' },
+      h('div', { class: 'alan-etiket-satiri' }, etiketi, dugme),
+      panel,
+      secenekler.icerik || girdi,
+      h('div', { class: 'alan-hatasi', id: hataId, role: 'alert' }));
+  }
   return h('div', { class: 'alan' },
-    h('label', { for: id }, etiket, secenekler.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null),
+    etiketi,
     secenekler.icerik || girdi,
     yardimId ? h('div', { class: 'yardim', id: yardimId }, secenekler.yardim) : null,
     h('div', { class: 'alan-hatasi', id: hataId, role: 'alert' }));

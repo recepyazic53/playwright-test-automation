@@ -4546,3 +4546,9 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .adres-oneki + input { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .gezinme-ozeti { display: grid; gap: 6px; margin: 0 0 10px; }
 .gezinme-ozeti p { margin: 0; }
+
+/* Başlangıç ekranı: çalışma alanı listesi (⋯ menüsü dahil) altındaki başlık yazısının üstünde kalır; menü tam opak. */
+.ca-listesi { position: relative; z-index: 3; }
+.acilir-menu { background-color: var(--panel-kati); opacity: 1; }
+.alan-etiket-satiri { display: flex; align-items: center; gap: 6px; }
+.alan-etiket-satiri label { margin: 0; }
