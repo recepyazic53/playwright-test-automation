@@ -32,3 +32,4 @@ export declare function adayMesajlari(
   eylem: { basari?: Array<{ metin: string | null }>; hata?: Array<{ metin: string | null }>; bekleme?: Array<{ metin: string | null }> } | null, cumleMesajlari?: string[]
 ): Array<{ metin: string; tur: 'basari' | 'hata' | 'bekleme'; kaynak: 'aday' | 'cumle' }>;
 export declare function eksikAlanlar<T extends { anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean }>(alanlar: T[], degerler: Record<string, unknown>): T[];
+export declare function sayfaUyarisi(hedefYol: string, anlikYol: string): string | null;

@@ -13,7 +13,7 @@ import type { AddressInfo } from 'node:net';
 import { chromium, type Browser, type BrowserContext } from '@playwright/test';
 import { totpUret, base32Coz } from '../support/totp';
 
-export type FiksturIstegi = { yontem: string; yol: string; sorgu: URLSearchParams; govde: string; cerezler: Record<string, string> };
+export type FiksturIstegi = { yontem: string; yol: string; sorgu: URLSearchParams; govde: string; cerezler: Record<string, string>; basliklar?: Record<string, string | string[] | undefined> };
 export type FiksturYaniti = { durum?: number; tur?: string; govde: string; basliklar?: Record<string, string>; gecikmeMs?: number };
 export type FiksturUygulamasi = (istek: FiksturIstegi) => FiksturYaniti;
 
@@ -402,7 +402,7 @@ export async function yerelSunucu(uygulama: FiksturUygulamasi): Promise<{ adres:
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     istekler.push(`${req.method} ${url.pathname}`);
     const y = uygulama({
-      yontem: req.method ?? 'GET', yol: url.pathname, sorgu: url.searchParams, govde: await govdeOku(req),
+      yontem: req.method ?? 'GET', yol: url.pathname, sorgu: url.searchParams, govde: await govdeOku(req), basliklar: req.headers,
       cerezler: cerezleriAyristir(req.headers.cookie)
     });
     if (y.gecikmeMs) await new Promise((coz) => setTimeout(coz, y.gecikmeMs));

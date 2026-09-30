@@ -210,7 +210,7 @@ function soruCiz(o, y) {
     } }, 'Hızlı testi iptal et') : null;
   const kart = (baslikMetni, ikonAd, ...cocuklar) => h('section', { class: 'kart hizli-soru' },
     h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon(ikonAd), baslikMetni), h('span', { class: 'sag' }, rozet(`${o.durak} / 6`))),
-    hata, ...cocuklar, iptal ? h('div', { class: 'hizli-alt' }, iptal) : null);
+    o.uyari ? h('div', { class: 'not-kutusu uyari', role: 'alert' }, o.uyari) : null, hata, ...cocuklar, iptal ? h('div', { class: 'hizli-alt' }, iptal) : null);
   /** Uç çağrısı + hata kutusu. @param {HTMLButtonElement} dugme @param {string} uc @param {Record<string, unknown>} govde @param {{ goster: (m: string) => void }} m */
   const gonder = async (dugme, uc, govde, m) => {
     try {
