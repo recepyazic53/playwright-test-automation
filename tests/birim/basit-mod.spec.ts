@@ -120,11 +120,13 @@ test.describe('Basit mod (127.0.0.1)', () => {
     const menu = page.getByRole('navigation', { name: 'Ana menü' });
     await expect(menu.getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Test verisi', 'Planlı koşular', 'Ayarlar']);
     await expect(page.getByRole('button', { name: /Oluştur/ }).first()).toBeVisible();
-    // Gelişmiş üst çubuğu değişmez: anahtar Ayarlar'ın yan panelinde.
-    await expect(page.locator('.ust-cubuk .mod-anahtari')).toHaveCount(0);
+    // Kullanım modu anahtarı Gelişmiş'te de üst çubukta görünür (Gelişmiş seçili).
+    const ustAnahtar = page.locator('.ust-cubuk').getByRole('group', { name: 'Kullanım modu' });
+    await expect(ustAnahtar.getByRole('button', { name: 'Gelişmiş' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(ustAnahtar.getByRole('button', { name: 'Basit' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('.gelismis-sayfa-notu')).toHaveCount(0);
     await page.goto('/#/ayarlar/proje');
-    const anahtar = page.getByRole('group', { name: 'Kullanım modu' });
+    const anahtar = page.locator('.yan-panel').getByRole('group', { name: 'Kullanım modu' });
     await expect(anahtar.getByRole('button', { name: 'Gelişmiş' })).toHaveAttribute('aria-pressed', 'true');
     await expect(anahtar.getByRole('button', { name: 'Basit' })).toHaveAttribute('aria-pressed', 'false');
     expect(hatalar).toEqual([]);
@@ -188,6 +190,22 @@ test.describe('Basit mod (127.0.0.1)', () => {
     await expect(page).toHaveURL(/#\/senaryolar$/);
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect((await mod()).mod).toBe('gelismis');
+    // Gelişmiş üst çubuğundaki anahtar Basit'e sorusuz döndürür (Senaryolar → Testlerim).
+    await page.locator('.ust-cubuk').getByRole('group', { name: 'Kullanım modu' }).getByRole('button', { name: 'Basit' }).click();
+    await expect(page).toHaveURL(/#\/testlerim$/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect((await mod()).mod).toBe('basit');
+    // Ayarlar > Arayüz > Kullanım modu: iki yönde de çalışır (Gelişmiş'ten Basit'e sorusuz).
+    await page.goto('/#/ayarlar/arayuz');
+    const secim = page.getByRole('radiogroup', { name: 'Kullanım modu' });
+    await expect(secim.getByRole('radio', { name: /^Basit/ })).toBeChecked();
+    await secim.getByRole('radio', { name: /^Gelişmiş/ }).check();
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Test verisi', 'Planlı koşular', 'Ayarlar']);
+    expect((await mod()).mod).toBe('gelismis');
+    await expect(page).toHaveURL(/#\/ayarlar\/arayuz$/);
+    await page.getByRole('radiogroup', { name: 'Kullanım modu' }).getByRole('radio', { name: /^Basit/ }).check();
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link')).toHaveText(['Testlerim', 'Sonuçlar', 'Ayarlar']);
+    expect((await mod()).mod).toBe('basit');
     expect((await api('/platform/kullanim-modu/kaydet', { mod: 'basit' })).basarili).toBe(true);
     expect(hatalar).toEqual([]);
     expect(disari).toEqual([]);
@@ -234,6 +252,22 @@ test.describe('Basit mod (127.0.0.1)', () => {
     await expect(page).toHaveURL(/#\/servisler$/);
     await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link', { name: 'Senaryolar' })).toBeVisible();
     expect((await mod()).mod).toBe('gelismis');
+    // Gelişmiş üst çubuğundaki anahtar Basit'e sorusuz döndürür (Senaryolar → Testlerim).
+    await page.locator('.ust-cubuk').getByRole('group', { name: 'Kullanım modu' }).getByRole('button', { name: 'Basit' }).click();
+    await expect(page).toHaveURL(/#\/testlerim$/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect((await mod()).mod).toBe('basit');
+    // Ayarlar > Arayüz > Kullanım modu: iki yönde de çalışır (Gelişmiş'ten Basit'e sorusuz).
+    await page.goto('/#/ayarlar/arayuz');
+    const secim = page.getByRole('radiogroup', { name: 'Kullanım modu' });
+    await expect(secim.getByRole('radio', { name: /^Basit/ })).toBeChecked();
+    await secim.getByRole('radio', { name: /^Gelişmiş/ }).check();
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link')).toHaveText(['Sonuçlar', 'Senaryolar', 'Ekranlar', 'Test verisi', 'Planlı koşular', 'Ayarlar']);
+    expect((await mod()).mod).toBe('gelismis');
+    await expect(page).toHaveURL(/#\/ayarlar\/arayuz$/);
+    await page.getByRole('radiogroup', { name: 'Kullanım modu' }).getByRole('radio', { name: /^Basit/ }).check();
+    await expect(page.getByRole('navigation', { name: 'Ana menü' }).getByRole('link')).toHaveText(['Testlerim', 'Sonuçlar', 'Ayarlar']);
+    expect((await mod()).mod).toBe('basit');
     expect((await api('/platform/kullanim-modu/kaydet', { mod: 'basit' })).basarili).toBe(true);
     expect(hatalar).toEqual([]);
     expect(disari).toEqual([]);

@@ -1521,7 +1521,25 @@ async function arayuzAyarlari(govde, baglam) {
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
           : 'Varsayılan kapalı: rehberler sayfa başlığındaki "Bu sayfanın rehberi" bağlantısıyla ya da üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
-    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), acilisKarti(acilis), listeFormu, saglik, terimlerKarti());
+    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), kullanimModuKarti(baglam), acilisKarti(acilis), listeFormu, saglik, terimlerKarti());
+}
+
+/** Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): üst çubuktaki anahtarla aynı ayar. Gelişmiş → Basit sorusuz geçer. */
+function kullanimModuKarti(baglam) {
+  const mod = baglam && baglam.durum && baglam.durum.kullanimModu ? baglam.durum.kullanimModu.mod : 'gelismis';
+  const degistir = baglam && baglam.moduDegistir ? baglam.moduDegistir : null;
+  if (!degistir) return null;
+  const secenek = (deger, baslik, aciklama) => {
+    const r = h('input', { type: 'radio', name: 'ayar-kullanim-modu', value: deger, id: yeniKimlik(`ayar-mod-${deger}`), checked: mod === deger });
+    r.addEventListener('change', () => { if (r.checked && mod !== deger) void degistir(deger); });
+    return h('label', { class: 'onay-satiri giris-sorusu-secenegi', for: r.id }, r, h('span', {}, h('b', {}, baslik), h('small', { class: 'blok soluk' }, aciklama)));
+  };
+  return h('section', { class: 'kart form-paneli kullanim-modu-karti', 'aria-labelledby': 'kullanim-modu-basligi' },
+    h('h3', { id: 'kullanim-modu-basligi' }, ikon('katman'), 'Kullanım modu'),
+    h('p', { class: 'soluk' }, 'Basit modda menü yalnız Testlerim, Sonuçlar ve Ayarlar\'dır. Gelişmiş mod tüm özellikleri açar. Hiçbir veri silinmez; istediğiniz zaman ikisi arasında geçebilirsiniz. Aynı anahtar üst çubukta da vardır.'),
+    h('div', { role: 'radiogroup', 'aria-label': 'Kullanım modu', 'data-kayit-disi': '' },
+      secenek('basit', 'Basit', 'Testlerim, Sonuçlar ve Ayarlar; adres girin, çalıştırın, sonucu görün.'),
+      secenek('gelismis', 'Gelişmiş', 'Ekran modelleri, test verisi, servisler, uçtan uca akışlar, planlı koşular ve tüm ayarlar.')));
 }
 
 /** Terimler sözlüğü (terimler.mjs): arayüzdeki her kavram tek cümleyle. */
