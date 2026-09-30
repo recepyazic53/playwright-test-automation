@@ -969,6 +969,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
       // Başlık (etiket + seçenekler şeridi) ve gövde (girdi + hata / uyarı) iki ayrı parça: aynı ızgara satırındaki alanların
       // girdileri, başlık yükseklikleri farklı olsa da aynı hizadan başlar (stil.css > .alan-izgarasi, subgrid).
       yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, govde, hata, uyari));
+      // Seçenekleri tek satıra sığmayacak kadar geniş radyo grubu: alan iki sütuna yayılır (yetmezse başlığıyla birlikte alt satıra geçer).
+      if (govde && govde.classList && govde.classList.contains('radyo-grubu')) {
+        const etiketler = [...govde.querySelectorAll('label')].map((l) => (l.textContent || '').trim().length);
+        const tahmin = etiketler.reduce((t, n) => t + n * 7.5 + 58, 0) + 6 * Math.max(0, etiketler.length - 1);
+        kap.classList.toggle('genis-secenek', tahmin > 230);
+      }
     };
     kayit.ciz = () => { ciz(); planla(); };
     ciz();
