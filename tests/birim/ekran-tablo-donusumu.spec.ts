@@ -233,7 +233,8 @@ test.describe('uçtan uca: değerleri tabloya bağla + satır seçimi (127.0.0.1
       const hatalar: string[] = [];
       page.on('pageerror', (e) => hatalar.push(String(e)));
       await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekran1)}/veri`);
-      await page.getByRole('button', { name: 'Değerleri tabloya bağla…' }).click();
+      await page.getByRole('button', { name: 'Otomatik eşleştir…' }).click();
+      await page.getByRole('button', { name: 'Senaryo değerlerini tabloya çevir…' }).click();
       const pencere = page.locator('dialog[open]');
       await expect(pencere.getByRole('heading', { name: 'Değerler tabloya bağlansın mı?' })).toBeVisible({ timeout: 15_000 });
       const tabloEl = pencere.getByRole('table', { name: 'Dönüşüm planı' });

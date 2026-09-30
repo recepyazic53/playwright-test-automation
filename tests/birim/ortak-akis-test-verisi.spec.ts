@@ -181,6 +181,7 @@ test('arayüz: ortak akışta Test verisi sekmesi (bağ kaydı, senaryo dönüş
   await page.getByRole('tab', { name: 'Test verisi' }).click();
   const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
   await expect(kart.getByText(/bağlar onu kullanan tüm ekranlara varsayılan olarak geçer/)).toBeVisible();
+  await expect(kart.getByRole('button', { name: 'Otomatik eşleştir…' })).toBeVisible();
   await expect(kart.getByRole('button', { name: 'Değerleri tabloya bağla…' })).toHaveCount(0);
   await expect(kart.getByRole('button', { name: 'Kişi alanlarını tabloya bağla…' })).toHaveCount(0);
   const ortakSecim = kart.getByRole('combobox', { name: 'Teslimat tablo sütunu' });
