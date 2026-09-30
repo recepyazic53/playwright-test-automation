@@ -317,6 +317,21 @@ async function hizliSayfa(): Promise<{ tarayici: Browser; sayfa: Page }> {
   }
 }
 
+test('doldururken sayfa hata gösterirse sessizce ilerlenmez: "Bu bir hata mı?" sorulur; önemsiz denince devam edilir', async () => {
+  test.setTimeout(200_000);
+  await isBitsin();
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Doldurma uyarısı', izin: 'sor' })).id);
+  let o = await bekle(id, ['veri']);
+  const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
+  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('HATALI'), [alan('Müşteri tipi')]: deger('bireysel') } });
+  o = await bekle(id, ['hataSorusu']);
+  expect(o.soru).toEqual({ tur: 'hata', metinler: ['Zorunlu alan: Ad soyad geçersiz'] });
+  await basarili('/platform/hizli-test/hata-cevabi', { id, cevap: 'onemsiz' });
+  o = await bekle(id, ['karar']);
+  expect(o.soru.tur).toBe('karar');
+  await basarili('/platform/hizli-test/iptal', { id });
+});
+
 test('Bana sor: her basıştan önce onay (Hayır → basılmaz); "Başka düğmeye bas" sayfada seçilir (tıklama iletilmez); beklenen uyarı → olumsuz senaryo', async () => {
   test.setTimeout(300_000);
   await isBitsin();
