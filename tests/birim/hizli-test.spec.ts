@@ -887,6 +887,20 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     const satir = (m: string) => soru.locator('.hizli-bitis-satiri').filter({ hasText: m });
     await expect(satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' })).toHaveAttribute('aria-checked', 'true');
     await expect(satir('Hesaplanıyor…').getByRole('radio', { name: 'Devam' })).toHaveAttribute('aria-checked', 'true');
+    // Radyo: seçili "Bitti"ye tıklamak seçimi kaldırmaz; "Etiketsiz" seçilince tek "Bitti" kalmaz → "Devam et" pasif + gerekçe
+    // (sunucuya 400 alacak istek gitmez); yeniden "Bitti" seçilince açılır.
+    const bitti = satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' });
+    await bitti.click();
+    await expect(bitti).toHaveAttribute('aria-checked', 'true');
+    const bitisIstekleri: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/platform/hizli-test/bitis')) bitisIstekleri.push(r.url()); });
+    await satir('Başvurunuz alındı').getByRole('radio', { name: 'Etiketsiz' }).click();
+    await expect(bitti).toHaveAttribute('aria-checked', 'false');
+    await expect(soru.getByRole('button', { name: 'Devam et', exact: true })).toBeDisabled();
+    await expect(soru.locator('#hizli-bitis-eksik')).toContainText('En az bir metni “Bitti” etiketleyin');
+    expect(bitisIstekleri).toEqual([]);
+    await bitti.click();
+    await expect(soru.getByRole('button', { name: 'Devam et', exact: true })).toBeEnabled();
     await tasmaYok(page, 'Bitiş koşulu');
     await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     // Kaydet: H3 sorusu.

@@ -17,6 +17,8 @@ const IZIN_SECENEKLERI = [
   { deger: 'hayir', baslik: 'Hayır', aciklama: 'Hiçbir düğmeye basmam; düğmeyi ve mesajı siz seçersiniz, test “doğrulanmadı” olarak kaydedilir.' }
 ];
 const ETIKETLER = [['bitti', 'Bitti'], ['devam', 'Devam'], ['hata', 'Hata']];
+/** Bitiş durağındaki radyo seçenekleri: üç etiket + "Etiketsiz" (seçili radyoya tıklamak seçimi kaldırmaz; etiketi kaldırmak için bu seçilir). */
+const ETIKET_SECENEKLERI = [...ETIKETLER, [null, 'Etiketsiz']];
 /** Süren işlerde yoklama aralığı (ms). */
 const YOKLAMA_MS = 1000;
 
@@ -494,9 +496,11 @@ function bitisDuragi(o, s, kart, m, gonder) {
   const satirlar = s.gorulenler.map((g, i) => {
     const grup = h('div', { class: 'hizli-etiketler', role: 'radiogroup', 'aria-label': `“${g.metin}” etiketi` });
     const ciz = () => {
-      yerlestir(grup, ...ETIKETLER.map(([deger, ad]) => h('button', {
-        type: 'button', role: 'radio', 'aria-checked': String(etiketler[g.metin] === deger), class: `hizli-etiket e-${deger}${etiketler[g.metin] === deger ? ' secili' : ''}`,
-        onclick: () => { etiketler[g.metin] = etiketler[g.metin] === deger ? null : deger; ciz(); olumsuzGuncelle(); }
+      const secili = etiketler[g.metin] ?? null;
+      yerlestir(grup, ...ETIKET_SECENEKLERI.map(([deger, ad]) => h('button', {
+        type: 'button', role: 'radio', 'aria-checked': String(secili === deger), class: `hizli-etiket e-${deger ?? 'yok'}${secili === deger ? ' secili' : ''}`,
+        // Radyo: tıklama yalnız seçer (seçili olana tıklamak seçimi KALDIRMAZ); etiketi kaldırmak için "Etiketsiz".
+        onclick: () => { if (secili === deger) return; etiketler[g.metin] = deger; ciz(); olumsuzGuncelle(); }
       }, ad)));
     };
     ciz();
@@ -514,10 +518,21 @@ function bitisDuragi(o, s, kart, m, gonder) {
     olumsuzKutusu.hidden = !hatalar.length;
     if (!hatalar.length) olumsuz.checked = false;
     olumsuzMesaj.disabled = !olumsuz.checked;
+    gecerlilikGuncelle();
   };
+  // İstemci doğrulaması (sunucudaki kuralın aynısı): en az bir "Bitti", ya da bitiş adresi, ya da olumsuz senaryo. Yoksa "Devam et"
+  // pasif ve gerekçe yazılı (sunucuya 400 alacak istek gitmez).
+  const eksikNotu = h('span', { class: 'soluk kucuk', id: 'hizli-bitis-eksik', role: 'status' });
+  const devam = h('button', { type: 'button', class: 'birincil', 'aria-describedby': 'hizli-bitis-eksik' }, 'Devam et', ikon('ok'));
+  function gecerlilikGuncelle() {
+    const gecerli = Object.values(etiketler).includes('bitti') || Boolean(adres.value.trim()) || (olumsuz.checked && Boolean(olumsuzMesaj.value));
+    devam.disabled = !gecerli;
+    eksikNotu.textContent = gecerli ? '' : 'En az bir metni “Bitti” etiketleyin (ya da “Adres şu olursa bitti”yi yazın).';
+  }
   olumsuz.addEventListener('change', olumsuzGuncelle);
+  olumsuzMesaj.addEventListener('change', gecerlilikGuncelle);
+  adres.addEventListener('input', gecerlilikGuncelle);
   olumsuzGuncelle();
-  const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
   devam.addEventListener('click', () => void gonder(devam, 'bitis', {
     etiketler, adres: adres.value.trim() || null, olumsuz: olumsuz.checked && olumsuzMesaj.value ? { mesaj: olumsuzMesaj.value } : null
   }, m));
@@ -533,7 +548,7 @@ function bitisDuragi(o, s, kart, m, gonder) {
     h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
     olumsuzKutusu,
-    m.kutu, h('div', { class: 'dugmeler' }, devam, tara, zincireDon));
+    m.kutu, h('div', { class: 'dugmeler' }, devam, tara, zincireDon), eksikNotu);
 }
 
 /** 6. durak: kaydet (H3 doğrulama sorusu; aynı ekran varsa farklar). Özet kendi sekmesinde açılır (#/hizli-test/ozet/<id>). */
