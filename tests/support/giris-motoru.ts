@@ -22,6 +22,7 @@ import {
 } from '../../scripts/platform/giris/tarif.mjs';
 import { CAPTCHA_MESAJI, captchaAlgila, kodAlaniniAlgila } from '../../scripts/platform/giris/algilama.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiYaz, kodYanitiniBekle } from '../../scripts/platform/giris/elle-kod.mjs';
+import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { totpKoduUret } from './totp';
 import { sureAyari } from './kosu-ayarlari';
 
@@ -327,7 +328,9 @@ async function gonderdenSonrasiniBekle(page: Page, tarif: GirisTarifi, oncekiAdr
  * Tarife göre giriş yapar. Başarı göstergesi görünene kadar bekler; aksi halde GirisHatasi.
  * page'in bağlamında baseURL tanımlı olmalıdır (tarifteki yollar ona göre).
  */
-export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKimligi, secenekler: GirisSecenekleri = {}): Promise<void> {
+export async function girisYap(page: Page, tarifKaydi: GirisTarifi, kimlik: GirisKimligi, secenekler: GirisSecenekleri = {}): Promise<void> {
+  // Eski kayıtlarda iç içe metinli düğme için yazılmış `tag:text-is("…")` seçicileri bulunamazdı: çalışırken düzeltilir (bkz. secici-duzelt.mjs).
+  const tarif = seciciAgaciniDuzelt(tarifKaydi);
   if (!kimlik.kullaniciAdi || !kimlik.parola) {
     throw new GirisHatasi('TARIF_GECERSIZ', 'Giriş profilinde kullanıcı adı ve parola tanımlı olmalı (Ayarlar > Giriş profilleri).');
   }

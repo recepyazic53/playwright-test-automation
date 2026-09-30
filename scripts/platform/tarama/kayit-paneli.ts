@@ -115,8 +115,13 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
     }
     const metin = gorunenMetin(el);
     if (metin && metin.length <= 60 && [...doc.querySelectorAll(etiket)].filter((x) => gorunenMetin(x) === metin).length === 1) {
-      // Playwright metin seçicisi (model koşucusu page.locator ile çözer).
-      return `${etiket}:text-is("${tirnak(metin)}")`;
+      // Playwright metin seçicisi (model koşucusu page.locator ile çözer). :text-is() yalnız metni DOĞRUDAN taşıyan en küçük öğeyle
+      // eşleştiği için iç içe metinli düğme (<button><em><span>…) ya da değer taşıyan girdi düğmesi için ayrı biçim yazılır.
+      if (etiket === 'input') return `input[value="${tirnak(metin)}"]`;
+      // Ekranda CSS ile büyük / küçük harfe çevrilmiş metin (innerText) sayfanın gerçek metninden (textContent) farklı olabilir: gerçek metin yazılır.
+      const dom = bosluk(el.textContent).slice(0, 120);
+      const yazilacak = dom && dom.toLocaleLowerCase('tr') === metin.toLocaleLowerCase('tr') ? dom : metin;
+      return `${etiket}:is(:text-is("${tirnak(yazilacak)}"), :has(:text-is("${tirnak(yazilacak)}")))`;
     }
     const parcalar: string[] = [];
     let d: Element | null = el;

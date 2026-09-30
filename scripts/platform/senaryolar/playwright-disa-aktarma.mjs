@@ -16,6 +16,7 @@
 // NOT: import.meta KULLANILMAZ. Tipler: playwright-disa-aktarma.d.mts.
 
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { seciciAgaciniDuzelt } from '../tarama/secici-duzelt.mjs';
 import { girisAdimlariniCoz } from '../giris/tarif.mjs';
 import { referansCoz } from '../dosyalar/referans.mjs';
 import { secenekBul } from './model-kosusu.mjs';
@@ -377,7 +378,8 @@ const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge'
  * @returns {import('./playwright-disa-aktarma.d.mts').DisaAktarmaSonucu}
  */
 export function playwrightKoduUret(g) {
-  const plan = g.plan;
+  // Eski kayıtlı seçicilerdeki iç içe metinli düğme sorunu (`tag:text-is`) dışa aktarılan kodda da düzeltilir.
+  const plan = seciciAgaciniDuzelt(g.plan);
   /** @type {Set<string>} */
   const yardimcilar = new Set(['ortamDegeri', 'sayfa']);
   /** @type {Map<string, { ad: string; aciklama: string }>} anahtar → değişken */

@@ -24,6 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
+import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
@@ -1035,7 +1036,9 @@ async function parolaAlaniysaGizle(page: Page, alan: PlanAlani, l: Locator): Pro
  * Model senaryosunu koşturur. Atlanan alanlar "atlananAlanlar" annotation'ı olarak eklenir (raporlayıcı
  * sonuç satırına yazar); yasaklı host'a istek denenmişse test başarısız olur.
  */
-export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
+export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitliSenaryo: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
+  // Eski kayıtlı modellerdeki iç içe metinli düğme seçicileri (`tag:text-is("…")`) çalışırken düzeltilir (bkz. secici-duzelt.mjs).
+  const s: PlatformModelSenaryosu = { ...kayitliSenaryo, model: seciciAgaciniDuzelt(kayitliSenaryo.model), altModeller: seciciAgaciniDuzelt(kayitliSenaryo.altModeller) };
   if (!s.model) throw new Error(`"${s.baslik}": "${s.ekran.ad || s.ekran.id}" ekranının modeli yok; model koşucusu çalışamaz.`);
   // ${Tablo.Sütun} başvurusu çözülemediyse (ör. tabloda bu ortamda satır yok) tarayıcı açılmadan açık hatayla durulur.
   if (s.veriHatalari?.length) throw new Error(veriHatalariMetni(s.baslik, s.veriHatalari));
