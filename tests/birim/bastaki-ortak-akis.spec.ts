@@ -253,7 +253,7 @@ test.describe('koşu ve akış diyagramı', () => {
       await duzenle();
       const diyagram = page.getByRole('list', { name: 'Akış diyagramı' });
       const isaret = diyagram.getByRole('listitem', { name: 'Ekran açılır', exact: true });
-      const blok = diyagram.getByRole('listitem', { name: /^1\. blok: Ortak akış$/ });
+      const blok = diyagram.getByRole('listitem', { name: /^1\. blok: Önce şu ekrana git$/ });
       const ustte = async (): Promise<boolean> => ((await blok.boundingBox())?.y ?? 0) < ((await isaret.boundingBox())?.y ?? 0);
       await expect(isaret).toBeVisible();
       await expect(isaret.getByRole('button')).toHaveCount(0);

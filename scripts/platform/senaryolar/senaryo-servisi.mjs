@@ -183,20 +183,35 @@ export function modelBaglami(vt, ekranId, akisId = null, secenekler = {}) {
   /** @type {Set<string>} */
   const dosyalar = new Set();
   // Alt modeller tüm akışların adımlarından (akış değişince yeniden okunmasın).
-  const tumAdimlar = [/** @type {Nesne[]} */ (tamModel.adimlar), ...(Array.isArray(tamModel.akislar) ? tamModel.akislar.map((/** @type {Nesne} */ a) => (Array.isArray(a.adimlar) ? a.adimlar : [])) : [])].flat();
-  for (const adim of /** @type {Nesne[]} */ (tumAdimlar)) {
-    if (nesneMi(adim) && nesneMi(adim.altModel) && typeof adim.altModel.dosya === 'string') dosyalar.add(adim.altModel.dosya);
-    if (nesneMi(adim) && nesneMi(adim.ortakAkis) && typeof adim.ortakAkis.dosya === 'string') dosyalar.add(adim.ortakAkis.dosya);
-  }
+  const basvurulari = (/** @type {Nesne} */ m) => {
+    const tumAdimlar = [/** @type {Nesne[]} */ (Array.isArray(m.adimlar) ? m.adimlar : []), ...(Array.isArray(m.akislar) ? m.akislar.map((/** @type {Nesne} */ a) => (Array.isArray(a.adimlar) ? a.adimlar : [])) : [])].flat();
+    /** @type {string[]} */
+    const liste = [];
+    for (const adim of /** @type {Nesne[]} */ (tumAdimlar)) {
+      if (nesneMi(adim) && nesneMi(adim.altModel) && typeof adim.altModel.dosya === 'string') liste.push(adim.altModel.dosya);
+      if (nesneMi(adim) && nesneMi(adim.ortakAkis) && typeof adim.ortakAkis.dosya === 'string') liste.push(adim.ortakAkis.dosya);
+    }
+    return liste;
+  };
+  for (const d of basvurulari(tamModel)) dosyalar.add(d);
   const sd = nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? /** @type {Nesne[]} */ (model.senaryoDuzeyi.alanlar) : [];
   for (const a of sd) if (nesneMi(a.altModel) && typeof a.altModel.dosya === 'string') dosyalar.add(a.altModel.dosya);
   /** @type {Record<string, Nesne>} */
   const altModeller = {};
-  for (const dosya of dosyalar) {
+  // Başvurulan ekranlar başka ekranlara da başvurabilir (ekran = ortak akış): kuyrukla, döngüye karşı her dosya bir kez okunur.
+  const okunan = new Set();
+  const kuyruk = [...dosyalar];
+  for (let i = 0; i < kuyruk.length; i++) {
+    const dosya = kuyruk[i];
+    if (okunan.has(dosya)) continue;
+    okunan.add(dosya);
     const anahtar = dosya.replace(/\.model\.json$/, '');
     const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ? AND durum <> ? ORDER BY rowid', [ekran?.proje_id ?? '', anahtar, 'silindi']);
     const alt = e ? ekranModeliGetir(vt, String(e.id)) : undefined;
-    if (alt && nesneMi(alt.model)) altModeller[dosya] = alt.model;
+    if (alt && nesneMi(alt.model)) {
+      altModeller[dosya] = alt.model;
+      if (alt.model.tur !== 'altModel') for (const d of basvurulari(alt.model)) if (!okunan.has(d)) kuyruk.push(d);
+    }
   }
   // Ortak akış adımları açılır (form, doğrulama ve koşu düz modeli görür; ortak akış hep son sürümüyle).
   const acik = ortakAkislariAc(model, altModeller);

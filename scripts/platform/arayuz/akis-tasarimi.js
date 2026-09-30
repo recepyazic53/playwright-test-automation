@@ -50,7 +50,7 @@ const TURLER = {
   aksiyon: { etiket: 'Aksiyon', ikonAd: 'simsek' },
   mesaj: { etiket: 'Beklenen mesaj', ikonAd: 'hedef' },
   bekle: { etiket: 'Bekleme süresi', ikonAd: 'saat' },
-  ortak: { etiket: 'Ortak akış', ikonAd: 'pusula' },
+  ortak: { etiket: 'Önce şu ekrana git', ikonAd: 'pusula' },
   sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
   dosya: { etiket: 'İndirilen dosyayı doğrula', ikonAd: 'indir' },
   giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
@@ -421,7 +421,7 @@ export async function akisTasarimi(icerik, s) {
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bekle', saniye: 3 }) }, ikon('saat'), 'Bekleme süresi'),
         ortakAkislar.length ? h('button', {
           type: 'button', onclick: () => blokEkle(konum, { tur: 'ortak', dosya: ortakAkislar[0].dosya, ad: ortakAkislar[0].ad, istegeBagli: false })
-        }, ikon('pusula'), 'Ortak akış') : null,
+        }, ikon('pusula'), 'Önce şu ekrana git') : null,
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'dosya', ad: '', dugme: -1, dosya: yeniDosyaTanimi() }) }, ikon('indir'), 'İndirilen dosyayı doğrula'),
         girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
@@ -795,9 +795,9 @@ export async function akisTasarimi(icerik, s) {
     }
     if (b.tur === 'ortak') {
       const o = ortakAkislar.find((x) => x.dosya === b.dosya);
-      const secim = h('select', { 'aria-label': 'Ortak akış' },
+      const secim = h('select', { 'aria-label': 'Gidilecek ekran' },
         o ? null : h('option', { value: b.dosya, selected: true }, `${b.dosya} (projede yok)`),
-        ortakAkislar.map((x) => h('option', { value: x.dosya, selected: x.dosya === b.dosya }, x.ad)));
+        ortakAkislar.map((x) => h('option', { value: x.dosya, selected: x.dosya === b.dosya }, x.tur === 'ekran' ? `${x.ad} (ekran)` : x.ad)));
       secim.addEventListener('change', () => {
         const yeni = ortakAkislar.find((x) => x.dosya === secim.value);
         // Ad önceki ortak akışın adıysa yeni ortak akışın adı olur (elle verilmiş ad korunur).
@@ -813,10 +813,10 @@ export async function akisTasarimi(icerik, s) {
         if (x) x.focus();
       }, b.ad || 'Ortak akış');
       return [
-        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Ortak akış'), secim),
-        o ? h('ol', { class: 'ortak-akis-adimlari soluk kucuk' }, o.adimlar.map((a) => h('li', {}, a))) : h('p', { class: 'hata-metni kucuk' }, 'Bu ortak akış projede bulunamadı.'),
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Önce gidilecek ekran'), secim),
+        o ? h('ol', { class: 'ortak-akis-adimlari soluk kucuk' }, o.adimlar.map((a) => h('li', {}, a))) : h('p', { class: 'hata-metni kucuk' }, 'Bu ekran projede bulunamadı.'),
         calisma,
-        h('p', { class: 'soluk kucuk' }, `Adımları ortak akışın kendi yerinde tanımlıdır; koşuda buraya açılır (hep son sürümü).${o && o.yalnizTest ? ' Yalnızca test ortamında koşar; canlı ortamda atlanır.' : ''}`)
+        h('p', { class: 'soluk kucuk' }, `Adımları seçilen ekranın kendi yerinde tanımlıdır; koşuda buraya açılır (hep son sürümü).${o && o.yalnizTest ? ' Yalnızca test ortamında koşar; canlı ortamda atlanır.' : ''}`)
       ];
     }
     if (b.tur === 'giris') {
@@ -887,6 +887,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
       b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,
       b.tur === 'ortak' ? rozet(b.istegeBagli ? 'isteğe bağlı' : 'her zaman', b.istegeBagli ? 'uyari' : 'basari', { title: ortakSecimMetni(b), 'data-ortak-durumu': b.istegeBagli ? 'istege-bagli' : 'her-zaman' }) : null,
+      b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.tur === 'ekran' ? rozet('ekran', 'durdu') : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.yalnizTest ? rozet('yalnızca test', 'uyari') : null,
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,
       b.tur === 'mesaj' && !b.uyari && mesajGrubu(i)[2].length > 1 ? rozet(`veya ${mesajGrubu(i)[2].indexOf(i) + 1}/${mesajGrubu(i)[2].length}`, 'vurgu') : null,
