@@ -159,6 +159,27 @@ test.describe('tüm ekranlar taşmasız', () => {
     expect(olcum.yukseklik, 'uzun metin birden çok satıra kayar').toBeGreaterThan(24);
     expect(olcum.tasmaY).toBeLessThanOrEqual(1);
     expect(olcum.tasmaX).toBeLessThanOrEqual(1);
+    // Tüm senaryolar (Ekran sütunu da görünür, sütunlar dar): sözcük ortasından kırılmaz ("Teslima / t / bilgile / ri" değil).
+    await page.goto('/#/senaryolar');
+    await bekle(page);
+    const tumunde = page.locator('.senaryo-tablosu td.beklenen-hucresi .rozet').first();
+    await expect(tumunde).toBeVisible();
+    const bolunen = await tumunde.evaluate((r) => {
+      r.textContent = 'Teslimat bilgileri';
+      const metin = r.firstChild as Text;
+      const sonuc: string[] = [];
+      let i = 0;
+      for (const s of 'Teslimat bilgileri'.split(' ')) {
+        const aralik = document.createRange();
+        aralik.setStart(metin, i);
+        aralik.setEnd(metin, i + s.length);
+        const satirlar = new Set([...aralik.getClientRects()].map((x) => Math.round(x.top)));
+        if (satirlar.size > 1) sonuc.push(s);
+        i += s.length + 1;
+      }
+      return sonuc;
+    });
+    expect(bolunen, 'sözcük satır ortasından bölünmemeli').toEqual([]);
     await baglam.close();
   });
 
