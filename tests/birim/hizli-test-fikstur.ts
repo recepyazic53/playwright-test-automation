@@ -154,8 +154,59 @@ export const HIZLI_KAYIT_SAYFASI = String.raw`<h1>Kayıt</h1>
   });
 </script>`;
 
+/**
+ * /maskeli/: tuş olayı bekleyen maskeler + keyup sorgusu + sürekli açık uzun yoklama (sahte veriler):
+ *  - Doğum tarihi (placeholder "__.__.____") ve Telefon (type=text): yalnız klavye tuşlarını (keypress) biçimler; tuş olmadan yazılan
+ *    (fill) ham değer alandan çıkınca SİLİNİR. Değer geçmişi (her değişim; silinince "") window.__gecmis'te.
+ *  - T.C. kimlik no: keyup'ta 11 hane olunca (doğum ve telefon doluysa) GET /api/kimlik → "Ad soyad" dolar (sorgu sayacı).
+ *  - Sayfa açılınca GET /api/yoklama (sunucu 20 sn bekletir; biter bitmez yeniden) — hiç sakinleşmeyen ağ.
+ *  - "Gönder": POST /api/maskeli { dogum, tel, tc, ad, gecmis, sorgular, dolumMs } → "Kayıt tamam". dolumMs: ilk alan girdisinden
+ *    Gönder'e kadar geçen süre (alan başı bekleme ölçüsü).
+ */
+export const HIZLI_MASKELI_SAYFASI = String.raw`<h1>Maskeli form</h1>
+<div><label for="dogum">Doğum tarihi</label><input id="dogum" name="dogum" placeholder="__.__.____" autocomplete="off"></div>
+<div><label for="tel">Telefon</label><input id="tel" name="tel" type="text" autocomplete="off"></div>
+<div><label for="tc">T.C. kimlik no</label><input id="tc" name="tc" type="text" autocomplete="off"></div>
+<div><label for="adSoyad">Ad soyad</label><input id="adSoyad" name="adSoyad" readonly></div>
+<p><button type="button" id="gonder">Gönder</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var gecmis = { dogum: [], tel: [], tc: [] }, sorgular = 0, ilk = 0;
+  window.__gecmis = gecmis;
+  function kaydet(id) { var v = $(id).value; var g = gecmis[id]; if (!g.length || g[g.length - 1] !== v) g.push(v); if (!ilk && v) ilk = Date.now(); }
+  function maske(id, bicim, gecerli) {
+    $(id).addEventListener('keypress', function (o) {
+      o.preventDefault();
+      if (!/\d/.test(o.key)) return;
+      $(id).value = bicim($(id).value.replace(/\D/g, '') + o.key);
+      kaydet(id);
+    });
+    $(id).addEventListener('input', function () { kaydet(id); });
+    $(id).addEventListener('blur', function () { if (!gecerli.test($(id).value)) { $(id).value = ''; kaydet(id); } });
+  }
+  maske('dogum', function (r) { r = r.slice(0, 8); return r.slice(0, 2) + (r.length > 2 ? '.' + r.slice(2, 4) : '') + (r.length > 4 ? '.' + r.slice(4) : ''); }, /^\d{2}\.\d{2}\.\d{4}$/);
+  maske('tel', function (r) { r = r.slice(0, 10); return '(' + r.slice(0, 3) + (r.length > 3 ? ') ' + r.slice(3, 6) : '') + (r.length > 6 ? '-' + r.slice(6) : ''); }, /^\(\d{3}\) \d{3}-\d{4}$/);
+  $('tc').addEventListener('input', function () { kaydet('tc'); });
+  $('tc').addEventListener('keyup', function () {
+    if (!/^\d{11}$/.test($('tc').value) || !$('dogum').value || !$('tel').value || $('adSoyad').value) return;
+    sorgular++;
+    fetch('/api/kimlik?tc=' + encodeURIComponent($('tc').value)).then(function (r) { return r.json(); }).then(function (j) { $('adSoyad').value = j.ad; });
+  });
+  function yokla() { fetch('/api/yoklama').then(function (r) { return r.text(); }).then(yokla, function () { setTimeout(yokla, 1000); }); }
+  yokla();
+  $('gonder').addEventListener('click', function () {
+    var dolum = ilk ? Date.now() - ilk : -1;
+    fetch('/api/maskeli', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dogum: $('dogum').value, tel: $('tel').value, tc: $('tc').value, ad: $('adSoyad').value, gecmis: gecmis, sorgular: sorgular, dolumMs: dolum }) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt tamam'; });
+  });
+</script>`;
+
 export class HizliTestUygulamasi {
   readonly istekler: string[] = [];
+  /** /maskeli/ sayfasının gönderimleri (değer geçmişi, sorgu sayısı, doldurma süresi). */
+  readonly maskeliKayitlar: Array<Record<string, any>> = [];
   readonly hesaplamalar: Array<{ tip: string; vergi: string }> = [];
   readonly onaylar: string[] = [];
   readonly kayitlar: Array<Record<string, unknown>> = [];
@@ -169,6 +220,10 @@ export class HizliTestUygulamasi {
     if (i.yol === '/api/sorgu' && i.yontem === 'POST') return { tur: 'application/json', govde: JSON.stringify({ ad: 'D*** K***' }), gecikmeMs: 500 };
     if (i.yol === '/api/kayit' && i.yontem === 'POST') { this.kayitlar.push(JSON.parse(i.govde) as Record<string, unknown>); return { tur: 'application/json', govde: JSON.stringify({ tamam: true }), gecikmeMs: 300 }; }
     if (i.yol === '/kosullu/' && i.yontem === 'GET') return html('Koşullu', HIZLI_KOSULLU_SAYFASI);
+    if (i.yol === '/maskeli/' && i.yontem === 'GET') return html('Maskeli', HIZLI_MASKELI_SAYFASI);
+    if (i.yol === '/api/yoklama' && i.yontem === 'GET') return { tur: 'text/plain', govde: 'bos', gecikmeMs: 20_000 };
+    if (i.yol === '/api/kimlik' && i.yontem === 'GET') return { tur: 'application/json', govde: JSON.stringify({ ad: 'D*** K***' }), gecikmeMs: 300 };
+    if (i.yol === '/api/maskeli' && i.yontem === 'POST') { this.maskeliKayitlar.push(JSON.parse(i.govde) as Record<string, any>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/hesapla' && i.yontem === 'GET') {
       this.hesaplamalar.push({ tip: i.sorgu.get('tip') ?? '', vergi: i.sorgu.get('vergi') ?? '' });
       return { tur: 'application/json', govde: JSON.stringify({ tutar: i.sorgu.get('tip') === 'kurumsal' ? '2.500,00' : '1.250,00' }), gecikmeMs: 1_200 };

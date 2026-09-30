@@ -183,5 +183,7 @@ export type HizliOlay =
   | { olay: 'secimIptal'; no: number }
   | { olay: 'okundu'; no: number; anlik: HizliAnlik }
   | { olay: 'dogrulandi'; no: number; sonuc: 'basarili' | 'basarisiz'; mesaj: string; gorulen: string[] }
+  /** Süren komutun ilerlemesi (doldurma / doğrulama koşusu): adim 1'den başlar (doğrulamada planın adımı; 0 = sayfa açılıyor, toplam+1 = bitiş bekleniyor). */
+  | { olay: 'ilerleme'; no: number; mesaj: string; adim?: number; toplam?: number }
   | { olay: 'hata'; no: number | null; mesaj: string };
 export type HizliTestSonucu = { kip: 'hizliTest'; notlar: string[] };

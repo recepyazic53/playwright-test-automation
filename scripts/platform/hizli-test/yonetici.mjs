@@ -25,8 +25,11 @@
 //   POST /platform/hizli-test/onay { id, cevap }               Bana sor: "X'e basayım mı?"
 //   POST /platform/hizli-test/hata-cevabi { id, cevap: 'hata' | 'uyari' | 'onemsiz' }
 //   POST /platform/hizli-test/bitis { id, etiketler, adres?, olumsuz? }
-//   POST /platform/hizli-test/dogrula { id }                   H3: baştan sona doğrulama koşusu (yeni kayıt oluşabilir)
-//   POST /platform/hizli-test/kaydet { id, baslik, kosuyaDahil?, onay? }   aynı ekran varsa önce farklar (onaysız), onayla yeni sürüm
+//   POST /platform/hizli-test/dogrula { id }                   H3: baştan sona doğrulama koşusu (yeni kayıt oluşabilir; adım adım ilerleme)
+//   POST /platform/hizli-test/ozet { id, baslik?, kosuyaDahil?, tabloOlustur? }   kayıt özeti (hiçbir şey yazılmaz; seçimler oturumda saklanır,
+//                                                              özet sekmesi #/hizli-test/ozet/<id> gövdesiz okur)
+//   POST /platform/hizli-test/kaydet { id, baslik, kosuyaDahil?, onay?, uzerineYaz? }   düzenlemede aynı başlıklı senaryo varsa önce
+//                                                              { senaryoVar } (onaysız); aynı ekran varsa farklar (onaysız), onayla yeni sürüm
 //   POST /platform/hizli-test/iptal { id }
 // NOT: import.meta KULLANILMAZ. Tipler: yonetici.d.mts.
 import { randomBytes } from 'node:crypto';
@@ -296,6 +299,22 @@ export function hizliTestYoneticisiOlustur(s) {
       if (adim.alanlar.length) veriDuragi(o); else verilerTamam(o);
       return;
     }
+    // Süren komutun ilerlemesi (doldurma / doğrulama koşusu): komut bitmez, yalnız "şu an ne yapılıyor" ve doğrulamanın adım durumu güncellenir.
+    if (e.olay === 'ilerleme') {
+      if (!o.bekleyen || e.no !== o.bekleyen.no) return;
+      const m = metin(e.mesaj, 300);
+      if (o.bekleyen.tur === 'dogrula') {
+        if (m) o.calisiyor = `Doğrulama koşusu — ${m}`;
+        const adim = Number(e.adim);
+        if (Array.isArray(o.dogrulamaAdimlari) && Number.isInteger(adim)) {
+          // adim 0: sayfa açılıyor; 1..n: planın adımı; n+1: bitiş koşulu (listenin son satırı). Öncekiler tamam, bu sürüyor.
+          o.dogrulamaAdimlari.forEach((/** @type {Nesne} */ x, /** @type {number} */ i) => { x.durum = i + 1 < adim ? 'tamam' : i + 1 === adim ? 'suruyor' : 'bekliyor'; });
+          const suren = o.dogrulamaAdimlari[adim - 1];
+          if (suren && m) suren.ayrinti = m;
+        }
+      } else if (m) o.calisiyor = m;
+      return;
+    }
     if (!o.bekleyen || e.no !== o.bekleyen.no) return;
     const bekleyen = o.bekleyen;
     o.bekleyen = null;
@@ -304,7 +323,7 @@ export function hizliTestYoneticisiOlustur(s) {
       o.sonHata = String(e.mesaj ?? '').slice(0, 500);
       gunluk(o, `Hata: ${o.sonHata}`);
       if (bekleyen.tur === 'doldur') veriDuragi(o);
-      else if (bekleyen.tur === 'dogrula') { o.dogrulama = { durum: 'basarisiz', mesaj: o.sonHata, gorulen: [] }; o.durum = 'kaydet'; }
+      else if (bekleyen.tur === 'dogrula') { o.dogrulama = { durum: 'basarisiz', mesaj: o.sonHata, gorulen: [] }; dogrulamaAdimlariniKapat(o, false); o.durum = 'kaydet'; }
       else o.durum = o.izin === 'hayir' ? 'hayirSecim' : 'karar';
       return;
     }
@@ -398,6 +417,7 @@ export function hizliTestYoneticisiOlustur(s) {
     }
     if (e.olay === 'dogrulandi') {
       o.dogrulama = { durum: e.sonuc, mesaj: String(e.mesaj ?? ''), gorulen: Array.isArray(e.gorulen) ? e.gorulen.slice(0, 20) : [] };
+      dogrulamaAdimlariniKapat(o, e.sonuc === 'basarili');
       gunluk(o, `Doğrulama koşusu: ${e.sonuc === 'basarili' ? 'başarılı' : 'başarısız'} — ${o.dogrulama.mesaj}`);
       o.durum = 'kaydet';
     }
@@ -476,7 +496,7 @@ export function hizliTestYoneticisiOlustur(s) {
         alanSayisi: o.kesifAnlik.alanlar.length, dugmeAdaylari: o.kesifAnlik.dugmeler.map((/** @type {Nesne} */ x) => x.metin ?? x.secici).slice(0, 8),
         mesajAdaylari: adayMesajlari(o.kesifAnlik.eylem, o.cumle.mesajlar).slice(0, 8), notlar: o.kesifAnlik.eylem?.notlar ?? []
       } : null,
-      adimlar, soru, goruntu: o.sonGoruntu, gunluk: o.gunluk.slice(-20),
+      adimlar, soru, goruntu: o.sonGoruntu, gunluk: o.gunluk.slice(-20), dogrulamaAdimlari: o.dogrulamaAdimlari ?? null,
       is: is ? { durum: is.durum, adimlar: is.adimlar, hata: is.hata, kodIstegi: is.kodIstegi } : null
     };
   }
@@ -802,27 +822,43 @@ export function hizliTestYoneticisiOlustur(s) {
     return { tamam: true };
   }
 
-  /** H3: baştan sona doğrulama koşusu. @param {Nesne} g */
+  /**
+   * H3: baştan sona doğrulama koşusu. Plan yalnız DEĞERLİ alanı ya da basışı olan adımlardır (kaydet özetindeki zincirle aynı sayım:
+   * "2. adımda …" iletisi kullanıcının gördüğü zincirin 2. satırıdır). Adımların durumu ilerleme olaylarıyla güncellenir.
+   * @param {Nesne} g
+   */
   function dogrula(g) {
     const o = oturumGetir(String(g.id ?? ''));
     durumda(o, ['kaydet']);
     if (o.izin === 'hayir') throw new HizliTestHatasi('IZIN', 'Hayır izninde doğrulama koşusu yapılmaz (düğmeye basılmaz).');
-    const adimlar = o.adimlar.filter((/** @type {Nesne} */ a) => a.alanlar.length || a.bas).map((/** @type {Nesne} */ a) => ({
+    const adimlar = o.adimlar.map((/** @type {Nesne} */ a) => ({
       alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x))).map((/** @type {Nesne} */ x) => ({ anahtar: x.anahtar, alan: x, deger: o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger })),
       bas: a.bas ? { secici: a.bas.secici, metin: a.bas.metin } : null
-    }));
-    if (o.bitis.olumsuz) {
+    })).filter((/** @type {Nesne} */ a) => a.alanlar.length || a.bas);
+    const bitis = o.bitis.olumsuz
       // Olumsuz senaryo: beklenen hata mesajı "bitti" sayılır.
-      const bitis = { bitti: [o.bitis.olumsuz.mesaj], devam: o.bitis.devam, hata: o.bitis.hata.filter((/** @type {string} */ h) => !katla(o.bitis.olumsuz.mesaj).includes(katla(h))), adres: null };
-      o.durum = 'dogrulama';
-      o.calisiyor = 'Doğrulama koşusu: sayfa yeniden açılıyor, zincir baştan uygulanıyor…';
-      gonder(o, { tur: 'dogrula', plan: { adimlar, bitis, zamanAsimiSn: BITIS_BEKLEME_SN } });
-      return { basladi: true };
-    }
+      ? { bitti: [o.bitis.olumsuz.mesaj], devam: o.bitis.devam, hata: o.bitis.hata.filter((/** @type {string} */ h) => !katla(o.bitis.olumsuz.mesaj).includes(katla(h))), adres: null }
+      : { bitti: o.bitis.bitti, devam: o.bitis.devam, hata: o.bitis.hata, adres: o.bitis.adres };
+    o.dogrulamaAdimlari = [
+      ...adimlar.map((/** @type {Nesne} */ a, /** @type {number} */ i) => ({
+        metin: `${i + 1}. ${[a.alanlar.length ? `${a.alanlar.length} alan doldur` : null, a.bas ? `“${a.bas.metin ?? a.bas.secici}” bas` : null].filter(Boolean).join(', sonra ')}`,
+        durum: 'bekliyor', ayrinti: null
+      })),
+      { metin: o.bitis.olumsuz ? `Beklenen uyarı: “${o.bitis.olumsuz.mesaj}”` : 'Bitiş koşulu', durum: 'bekliyor', ayrinti: null }
+    ];
+    o.dogrulama = null;
     o.durum = 'dogrulama';
     o.calisiyor = 'Doğrulama koşusu: sayfa yeniden açılıyor, zincir baştan uygulanıyor…';
-    gonder(o, { tur: 'dogrula', plan: { adimlar, bitis: { bitti: o.bitis.bitti, devam: o.bitis.devam, hata: o.bitis.hata, adres: o.bitis.adres }, zamanAsimiSn: BITIS_BEKLEME_SN } });
+    gonder(o, { tur: 'dogrula', plan: { adimlar, bitis, zamanAsimiSn: BITIS_BEKLEME_SN } });
     return { basladi: true };
+  }
+
+  /** Doğrulama bitti: başarılıysa tüm adımlar tamam; değilse süren adım hata (sonrakiler bekliyor kalır). @param {Nesne} o @param {boolean} basarili */
+  function dogrulamaAdimlariniKapat(o, basarili) {
+    if (!Array.isArray(o.dogrulamaAdimlari)) return;
+    if (basarili) { for (const x of o.dogrulamaAdimlari) x.durum = 'tamam'; return; }
+    const suren = o.dogrulamaAdimlari.find((/** @type {Nesne} */ x) => x.durum === 'suruyor') ?? o.dogrulamaAdimlari.find((/** @type {Nesne} */ x) => x.durum === 'bekliyor');
+    if (suren) suren.durum = 'hata';
   }
 
   /**
@@ -866,6 +902,13 @@ export function hizliTestYoneticisiOlustur(s) {
     const o = oturumGetir(String(g.id ?? ''));
     durumda(o, ['kaydet']);
     const baslik = metin(g.baslik, 200) ?? o.senaryoBasligi;
+    // Özet kendi sekmesinde (#/hizli-test/ozet/<id>) açılır: kaydet sekmesindeki seçimler oturumda (bellekte) saklanır, özet sekmesi
+    // onları gövdesiz istekle okur. Veritabanına hiçbir şey yazılmaz.
+    o.senaryoBasligi = baslik;
+    o.kayitTercihi = {
+      kosuyaDahil: typeof g.kosuyaDahil === 'boolean' ? g.kosuyaDahil : o.kayitTercihi?.kosuyaDahil ?? true,
+      tabloOlustur: typeof g.tabloOlustur === 'boolean' ? g.tabloOlustur : o.kayitTercihi?.tabloOlustur ?? true
+    };
     const { paket, mevcut } = paketKur(vt, o);
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
     const anahtarlar = senaryoAnahtarlari(/** @type {Nesne} */ (paket).model, alanlar);
@@ -880,9 +923,17 @@ export function hizliTestYoneticisiOlustur(s) {
     return {
       ozet: {
         baslik, ekran: { ad: o.ekran.ad, mevcut: Boolean(mevcut && o.ekran.id) }, ortam: { id: o.ortam.id, ad: o.ortam.ad },
-        dogrulandi: o.dogrulama?.durum === 'basarili', onizleme, secim: varsayilanSecim(onizleme), senaryolar: senaryoOnerileri(plan, baslik), farklar
+        dogrulandi: o.dogrulama?.durum === 'basarili', onizleme, secim: varsayilanSecim(onizleme), senaryolar: senaryoOnerileri(plan, baslik), farklar,
+        tercih: o.kayitTercihi, senaryoVar: ayniAdliSenaryo(vt, o, baslik) !== null
       }
     };
+  }
+
+  /** Düzenleme kipinde ekranın aynı başlıklı senaryosu (kimliği) ya da null. @param {Veritabani} vt @param {Nesne} o @param {string} baslik */
+  function ayniAdliSenaryo(vt, o, baslik) {
+    if (!o.ekran.id) return null;
+    const r = vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ? AND ekran_id = ? AND baslik = ?', [o.projeId, o.ekran.id, baslik])[0];
+    return r ? String(r.id) : null;
   }
 
   /**
@@ -941,6 +992,9 @@ export function hizliTestYoneticisiOlustur(s) {
     const o = oturumGetir(String(g.id ?? ''));
     durumda(o, ['kaydet']);
     const baslik = metin(g.baslik, 200) ?? o.senaryoBasligi;
+    // Düzenleme kipi: ekranda aynı başlıklı senaryo varsa üzerine yazmadan önce sorulur (hiçbir şey yazılmadan döner); arayüz "Üzerine
+    // yaz" (uzerineYaz: true) / "Yeni adla kaydet" (başka başlık) / "Vazgeç" seçtirir.
+    if (g.uzerineYaz !== true && ayniAdliSenaryo(vt, o, baslik)) return { senaryoVar: true, baslik };
     o.senaryoBasligi = baslik;
     let { paket, veri, mevcut } = paketKur(vt, o);
     if (mevcut && o.ekran.id && g.onay !== true) {
