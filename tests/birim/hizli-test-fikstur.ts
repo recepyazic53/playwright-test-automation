@@ -1,7 +1,7 @@
 // HIZLI TEST SİHİRBAZI TESTLERİNİN YEREL FİKSTÜRÜ (spec DEĞİL). Çok aşamalı sahte başvuru formu 127.0.0.1'de geçici bir http sunucusunda
 // (giris-fikstur.ts > yerelSunucu) çalışır; tüm metinler ve değerler UYDURMADIR, hiçbir gerçek siteye bağlanılmaz.
 //
-//   /basvuru/        giriş gerektirmez. Alanlar: Ad soyad (zorunlu), Müşteri tipi (zorunlu; Kurumsal seçilince zorunlu "Vergi no" belirir).
+//   /basvuru/        giriş gerektirmez. Alanlar: Ad soyad (zorunlu), Kanal (sayfada hazır: Web seçili, sorulmaz), Müşteri tipi (zorunlu; Kurumsal seçilince zorunlu "Vergi no" belirir).
 //                    "Hesapla" (form dışında, type=button): Ad soyad boşsa hata kutusu "Zorunlu alan: Ad soyad"; doluysa "Hesaplanıyor…"
 //                    göstergesi + GET /api/hesapla (sunucu gecikmeli) → "Tutar: 1.250,00 TL" + yeni alan "Ödeme şekli" (HTML'de zorunlu işaretsiz; sayfa kendisi denetler) + "Onayla".
 //                    "Onayla": Ödeme şekli boşsa "Zorunlu alan: Ödeme şekli"; doluysa "Gönderiliyor…" + POST /api/onayla → "Başvurunuz alındı."
@@ -22,6 +22,8 @@ export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
   <label for="adSoyad">Ad soyad</label><input id="adSoyad" name="adSoyad" required>
   <label for="musteriTipi">Müşteri tipi</label>
   <select id="musteriTipi" name="musteriTipi" required><option value="">Seçin</option><option value="bireysel">Bireysel</option><option value="kurumsal">Kurumsal</option></select>
+  <label for="kanal">Kanal</label>
+  <select id="kanal" name="kanal"><option value="web" selected>Web</option><option value="sube">Şube</option></select>
   <div id="vergiKutusu" class="gizli"><label for="vergiNo">Vergi no</label><input id="vergiNo" name="vergiNo" required></div>
 </div>
 <p><button type="button" id="hesapla">Hesapla</button> <button type="button" id="temizle" onclick="document.getElementById('adSoyad').value=''">Temizle</button>

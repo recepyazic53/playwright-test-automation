@@ -145,7 +145,9 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   // Keşif hiçbir düğmeye basmadı.
   expect(uygulama.hesaplamalar.length).toBe(once.h);
   expect(o.cumle).toEqual({ mesajlar: ['Başvurunuz alındı'], dugmeler: ['Hesapla'] });
-  expect(o.soru.alanlar.map((a: Nesne) => [a.etiket, a.zorunlu])).toEqual([['Ad soyad', true], ['Müşteri tipi', true]]);
+  // Kanal sayfada hazır (Web seçili) gelir: listede vardır ama hazır işaretli (arayüz sormaz, sunucu zorunlu-eksik saymaz).
+  expect(o.soru.alanlar.map((a: Nesne) => [a.etiket, a.zorunlu, a.hazir])).toEqual([['Ad soyad', true, false], ['Müşteri tipi', true, false], ['Kanal', false, true]]);
+  expect(o.soru.alanlar.find((a: Nesne) => a.etiket === 'Kanal')).toMatchObject({ mevcut: 'Web', etiketBulundu: true });
   // Zorunlu alan boşken ilerlenmez (akış tamamlanmadan bitmez).
   expect(await api('/platform/hizli-test/veri', { id, degerler: { '#adSoyad': deger('${Kişi.Ad soyad}', 'tablo') } })).toMatchObject({ basarili: false, kod: 'EKSIK' });
   const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
@@ -480,6 +482,15 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     const soru = page.locator('.hizli-soru');
     await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 60_000 });
     await tasmaYok(page, 'Veri durağı');
+    // Önce analiz: sayfada zaten dolu gelen "Kanal" sorulmaz; değeriyle hazır listesinde durur; "Değiştir" onu sorulanlara taşır.
+    await expect(soru.locator('.hizli-alan').filter({ hasText: 'Kanal' })).toHaveCount(0);
+    const hazir = soru.locator('.hizli-hazir');
+    await expect(hazir.locator('summary')).toContainText('Sayfada hazır gelen 1 değer');
+    await hazir.locator('summary').click();
+    await expect(hazir.locator('li')).toHaveCount(1);
+    await expect(hazir.locator('li')).toContainText('Kanal');
+    await expect(hazir.locator('li')).toContainText('Web');
+    await tasmaYok(page, 'Veri durağı (hazır liste açık)');
     const adAlani = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
     await adAlani.getByRole('button', { name: 'Doldur', exact: true }).click();
     await expect(adAlani.locator('.hizli-tablo-degeri')).toHaveText('${Kişi.Ad soyad}');

@@ -29,6 +29,10 @@ export type HamAlan = {
   zorunlu: boolean;
   devreDisi: boolean;
   saltOkunur: boolean;
+  /** Alan sayfada hazır bir değerle (dolu metin, boş olmayan seçim, işaretli radyo / onay) geldi mi. Değer yok. */
+  hazir?: boolean;
+  /** Hazır değerin görünen metni (kısa). YALNIZ degerOku ile okunur (Hızlı test); taramada ve paketlerde hiçbir zaman yoktur. */
+  mevcut?: string | null;
   coklu: boolean;
   secenekler?: HamSecenek[];
   radyolar?: HamRadyo[];
