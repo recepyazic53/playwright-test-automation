@@ -17,6 +17,7 @@
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
 import type { Browser, Locator, Page } from '@playwright/test';
+import { alandanCik } from './alan-cikisi';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -223,7 +224,7 @@ export async function hizliTestiYurut(
         }
         await l.fill(String(deger), { timeout: bekleMs });
         // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
-        await l.press('Tab', { timeout: 3_000 }).catch(() => l.blur({ timeout: 2_000 }).catch(() => undefined));
+        await alandanCik(l);
         return null;
       } catch (hata) {
         const neden = await alanDurumu(k.locator(a.secici).first());
