@@ -125,7 +125,7 @@ export function izinPaketiUygula(vt, s) {
       gecmisYaz(vt, {
         varlikTuru: IZIN_GECMIS_TURU, varlikId: a, islem: 'guncelle', ...(s.yapan ? { yapan: s.yapan } : {}),
         onceki: { acik: false }, sonraki: { acik: true },
-        aciklama: `açıldı (izin paketinden: ${paketEtiketi}${a === CANLI_IZNI ? '; "Canlı ortamda da çalıştırabilsin" işaretli' : ''})`
+        aciklama: `açıldı (izin paketinden: ${paketEtiketi}${a === CANLI_IZNI ? '; "Canlı ortamda da çalıştırmaya izin ver" işaretli' : ''})`
       });
     }
   });

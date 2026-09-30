@@ -262,11 +262,11 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByRole('button', { name: 'Devam' }).click();
       // Ortamlar sihirbazda sorulmaz (Ayarlar > Proje ve ortamlar); proje ortamsız oluşur.
       await expect(page.getByLabel('Ortam adı')).toHaveCount(0);
-      // İzinler (ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — varsayılan Hiçbiri, canlı kutusu işaretsiz; Atla hiçbir izni açmaz.
+      // İzinler (ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — varsayılan Hiçbir izin açma, canlı kutusu işaretsiz; Atla hiçbir izni açmaz.
       await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 6');
       await expect(page.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
-      await expect(page.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
-      await expect(page.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırabilsin' })).not.toBeChecked();
+      await expect(page.getByRole('radio', { name: /^Hiçbir izin açma/ })).toBeChecked();
+      await expect(page.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırmaya izin ver' })).not.toBeChecked();
       await kontrol('izinler');
       await page.getByRole('button', { name: 'Atla' }).click();
       // Kullanım (Basit / Gelişmiş; çalışma alanının ayarı): bu test bugünkü (Gelişmiş) arayüzü denetler.
