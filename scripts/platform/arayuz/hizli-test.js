@@ -653,9 +653,11 @@ async function ozetEkrani(govde, id) {
   const secili = new Set(oneriler.filter((x) => x.varsayilanSecili).map((x) => x.indeks));
   const onayla = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), oz.farklar ? 'Farkları onayla ve kaydet' : 'Onayla ve kaydet');
   const neden = h('p', { class: 'kucuk soluk', role: 'status' });
+  /** Kayıt başka sekmede onaylandı (görünür olunca durum sorulur): Onayla kapalı kalır. */
+  let baskaSekmedeKaydedildi = false;
   const guncelle = () => {
     const bekleyen = tv.bekleyenler();
-    onayla.disabled = !tv.hazir();
+    onayla.disabled = baskaSekmedeKaydedildi || !tv.hazir();
     neden.textContent = bekleyen.length ? bekleyen.map((x) => x.metin).join(' · ') : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo`;
   };
   const baslikSatiri = h('b', {}, baslik);
@@ -712,6 +714,20 @@ async function ozetEkrani(govde, id) {
   guncelle();
   const odak = govde.querySelector('[data-odak]');
   if (odak instanceof HTMLElement) odak.focus();
+  // Kayıt başka sekmede onaylandıysa (aynı özet iki sekmede açık) bu sekme görünür olunca durumu sorar: ikinci "Onayla" 409 almasın.
+  const gorununceDenetle = async () => {
+    if (!govde.isConnected) { document.removeEventListener('visibilitychange', gorununceDenetle); return; }
+    if (document.visibilityState !== 'visible' || !onayla.isConnected || baskaSekmedeKaydedildi) return;
+    try {
+      const o = (await api(`/platform/hizli-test/durum?id=${encodeURIComponent(id)}`)).oturum;
+      if (o && o.durum === 'kaydedildi' && onayla.isConnected) {
+        baskaSekmedeKaydedildi = true;
+        onayla.disabled = true;
+        m.goster('Bu kayıt başka bir sekmede onaylandı; yeniden onaylamanız gerekmez.', 'bilgi');
+      }
+    } catch { /* bir sonraki görünüşte yeniden sorulur */ }
+  };
+  document.addEventListener('visibilitychange', gorununceDenetle);
 }
 
 /**

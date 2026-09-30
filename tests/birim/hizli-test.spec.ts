@@ -925,8 +925,16 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(ozet).toContainText('karar bekleniyor');
     for (const r of await ozet.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
     await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
+    // Aynı özet ikinci sekmede de açık: kayıt ilkinde onaylanınca ikinci sekme görünür olduğunda durumu sorar, "Onayla" kapanır.
+    const ikinciSekme = await baglam.newPage();
+    await ikinciSekme.goto(`/#/hizli-test/ozet/${encodeURIComponent(oturumId)}`);
+    await expect(ikinciSekme.locator('.hizli-ozet-karti')).toBeVisible({ timeout: 30_000 });
     await ozet.getByRole('button', { name: 'Onayla ve kaydet' }).click();
     await expect(ozetSekmesi.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
+    await ikinciSekme.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(ikinciSekme.getByText('Bu kayıt başka bir sekmede onaylandı')).toBeVisible();
+    await expect(ikinciSekme.locator('.hizli-ozet-karti').getByRole('button', { name: /Onayla ve kaydet/ })).toBeDisabled();
+    await ikinciSekme.close();
     await ozetSekmesi.close();
     // Kaydet sekmesi de (yoklamayla) kaydedildi durumuna geçer.
     await expect(page.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
