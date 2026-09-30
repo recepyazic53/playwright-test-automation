@@ -350,18 +350,20 @@ test('kurulum sihirbazı: "Kullanım" adımı (Basit önce seçili); Basit seçi
     const parola = `Gecici-Kurulum-${randomBytes(6).toString('hex')}`;
     await page.goto('/');
     await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
-    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
+    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(parola);
     await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(parola);
     await page.getByText('Parolayı unutursam').click();
     await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
     await page.getByLabel('Proje adı').fill('İlk proje');
     await page.getByRole('button', { name: 'Devam' }).click();
-    await page.getByLabel('Adres (link)').first().fill('http://127.0.0.1:9/');
-    await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+    // Ortamlar sihirbazda sorulmaz: ortam Ayarlar'dan tanımlanır (burada API ile); ortamsız proje Testlerim'de "Ortam ekle" der.
+    await expect(page.getByRole('button', { name: 'Atla' })).toBeVisible();
+    const { projeler } = (await nobetciApi(n, '/platform/projeler')) as unknown as { projeler: Array<{ id: string }> };
+    await nobetciApi(n, '/platform/ortam/kaydet', { projeId: projeler[0].id, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, riskli: false });
     await page.getByRole('button', { name: 'Atla' }).click();
     await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('Kullanım');
-    await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 5 / 7');
+    await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 6');
     await expect(page.getByRole('radio', { name: /^Basit — Nöbetçi'yi ilk kez kullanıyorum/ })).toBeChecked();
     await expect(page.getByRole('radio', { name: /^Gelişmiş — tüm özellikler/ })).not.toBeChecked();
     expect(await tasma(page)).toBeLessThanOrEqual(0);
@@ -380,7 +382,7 @@ test('kurulum sihirbazı: "Kullanım" adımı (Basit önce seçili); Basit seçi
     // Aynı kasada yeni proje: "Kullanım" sorulmaz (çalışma alanının ayarı).
     await page.locator('.proje-secici').click();
     await page.getByRole('menuitem', { name: 'Proje ekle' }).click();
-    await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Ortamlar', 'Giriş', 'Tamam']);
+    await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Giriş', 'Tamam']);
     expect(hatalar).toEqual([]);
     await baglam.close();
   } finally {

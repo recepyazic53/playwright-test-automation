@@ -312,15 +312,17 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     await page.goto('/');
     await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
     // Giriş profilinin ayrıntısı sorulmaz; yalnız isteğe bağlı "giriş istiyor mu?" sorusu (kendi adımı).
-    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
+    await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'İzinler', 'Kullanım', 'Giriş', 'Tamam']);
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(parola);
     await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(parola);
     await page.getByText('Parolayı unutursam').click();
     await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
     await page.getByLabel('Proje adı').fill('Örnek Proje');
     await page.getByRole('button', { name: 'Devam' }).click();
-    await page.getByLabel('Adres (link)').first().fill('http://127.0.0.1:9/');
-    await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+    // Ortamlar sihirbazda sorulmaz: ortam Ayarlar'dan tanımlanır (burada API ile); yoksa Tamam "Ortamı tanımlayın" der (ekran-turu).
+    await expect(page.getByRole('button', { name: 'Atla' })).toBeVisible();
+    const { projeler } = (await nobetciApi(bos, '/platform/projeler')) as unknown as { projeler: Array<{ id: string }> };
+    await nobetciApi(bos, '/platform/ortam/kaydet', { projeId: projeler[0].id, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, riskli: false });
     await page.getByRole('button', { name: 'Atla' }).click();
     // Kullanım: Gelişmiş (bu test bugünkü arayüzün genel tanıtımını denetler).
     await page.getByRole('radio', { name: /^Gelişmiş — tüm özellikler/ }).check();
@@ -328,7 +330,7 @@ test('ilk kurulum: son adımda "Sıradaki: giriş tarifini kaydet"; bitince gene
     // Giriş sorusu: varsayılan "sonra karar vereceğim" → bugünkü davranış.
     await page.getByRole('button', { name: 'Devam' }).click();
     await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
-    // Sıradaki: giriş tarifini kaydet (zorunlu adım değil) — varsayılan ortamın tarif formuna götürür.
+    // Sıradaki: giriş tarifini kaydet (zorunlu adım değil) — varsayılan ortamın tarif formuna götürür (ortam sihirbaz sırasında Ayarlar'dan tanımlandı).
     const siradaki = page.locator('.siradaki-adim');
     await expect(siradaki).toContainText('Sıradaki: giriş tarifini kaydet.');
     await expect(siradaki.getByRole('link', { name: 'Girişi kaydet' })).toHaveAttribute('href', /^#\/ayarlar\/giris\/tarif\/[0-9a-f-]{36}$/);

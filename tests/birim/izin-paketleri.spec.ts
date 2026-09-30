@@ -174,8 +174,6 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
       await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
       await page.getByLabel('Proje adı').fill('Sihirbaz projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
-      await page.getByLabel('Adres (link)').fill('http://127.0.0.1:9/uygulama/');
-      await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
       await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('İzinler');
       await expect(page.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
       await expect(page.getByRole('button', { name: 'Devam' })).toBeVisible();
