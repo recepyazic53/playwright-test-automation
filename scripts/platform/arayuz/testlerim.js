@@ -159,6 +159,8 @@ export async function testlerimEkrani(icerik, baglam) {
       else rozetler.push(rozet(`${basarili} / ${ss.length} başarılı`, 'basari'));
       if (eksikler.length) rozetler.push(rozet('Eksik', 'uyari'));
     }
+    // Hızlı testte düğmeye basılmadan (Hayır izni) kaydedilen ve henüz hiç çalışmamış değişken: ilk çalıştırmada doğrulanır.
+    if (ss.some((s) => s.hizliTest && s.hizliTest.dogrulandi === false && !s.sonSonuc)) rozetler.push(rozet('Doğrulanmadı', 'uyari'));
     const ilkEksik = eksikler[0];
     const gerekce = ilkEksik
       ? (ss.length === 1 ? `Bu test çalıştırılamıyor çünkü ${sadeNeden(ilkEksik.hazirlik.neden)}` : `"${ilkEksik.baslik}" değişkeni çalıştırılamıyor çünkü ${sadeNeden(ilkEksik.hazirlik.neden)}`)

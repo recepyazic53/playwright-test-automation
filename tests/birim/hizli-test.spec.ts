@@ -515,6 +515,9 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(page.locator('.hizli-hazirlik li.eksik')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Akış diyagramında aç' })).toBeVisible();
     await tasmaYok(page, 'Kaydedildi');
+    // Testlerim: Hayır izniyle (basılmadan) kaydedilen, henüz çalışmamış test "Doğrulanmadı" rozetiyle.
+    await page.getByRole('link', { name: 'Testlerim' }).click();
+    await expect(page.locator('.test-satiri').filter({ hasText: 'Başvuru formu basılmadan' }).locator('.rozet').filter({ hasText: 'Doğrulanmadı' })).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();
   } finally {
