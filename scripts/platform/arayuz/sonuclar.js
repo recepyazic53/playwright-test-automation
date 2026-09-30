@@ -581,7 +581,10 @@ async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel, proje
       bildir(e.message, 'hata');
     }
   });
+  // Kart yalnız son sonucu BAŞARISIZ olanları sayar ve listeler; önceki koşuya göre düzelenler ayrı, kapalı bir alt bölümde.
+  const duzelenler = satirlar.filter((r) => r.tur === 'duzeldi');
   const liste = h('ul', { class: 'degisim-listesi' });
+  const duzelenListesi = h('ul', { class: 'degisim-listesi' });
   const fazlasi = [];
   const ogeler = new Map();
   for (const r of satirlar) {
@@ -595,18 +598,24 @@ async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel, proje
         r.x.videoSayisi ? h('span', { title: 'Video var' }, ikon('video'), h('span', { class: 'gorunmez' }, 'video')) : null,
         sureMetni(r.x.sureMs)));
     ogeler.set(r.x.id, li);
-    if (ogeler.size <= 8) liste.append(li); else fazlasi.push(li);
+    if (r.tur === 'duzeldi') duzelenListesi.append(li);
+    else if (liste.childElementCount < 8) liste.append(li); else fazlasi.push(li);
   }
   const tumunuGoster = fazlasi.length ? h('div', { class: 'liste-alti' }, h('button', {
     type: 'button', class: 'kucuk-dugme hayalet tumunu-goster', onclick: (o) => { liste.append(...fazlasi); o.currentTarget.parentElement.remove(); }
-  }, `Tümünü göster (${satirlar.length})`)) : null;
+  }, `Tümünü göster (${basarisizlar.length})`)) : null;
+  const duzelenBolumu = duzelenler.length
+    ? h('details', { class: 'duzelen-testler' }, h('summary', {}, `Önceki koşuya göre düzelen testler (${duzelenler.length})`), duzelenListesi)
+    : null;
   panel.secili = (id) => { for (const [k, li] of ogeler) li.classList.toggle('secili', k === id); };
   const kosu = hedefler[0];
   alan.replaceChildren(h('section', { class: 'kart', 'aria-labelledby': 'basarisiz-basligi' },
-    h('div', { class: 'kart-basligi' }, h('h3', { id: 'basarisiz-basligi' }, ikon('uyari'), 'Başarısız testler'),
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'basarisiz-basligi' }, ikon('uyari'), 'Başarısız testler', basarisizlar.length ? rozet(String(basarisizlar.length), 'hata') : null),
       h('span', { class: 'alt' }, `son koşu · ${kisaTarih(kosu.bitis || kosu.baslangic)}${gecmis.length ? ` · önceki ${gecmis.length} tam koşuyla karşılaştırıldı` : ''}`),
       basarisizlar.length ? h('div', { class: 'sag' }, yenidenCalistir) : null),
-    satirlar.length ? [liste, tumunuGoster] : bosDurum('Son koşuda başarısız test yok', gecmis.length ? 'Önceki koşuya göre düzelen test de yok.' : 'Karşılaştırılacak önceki koşu bulunmuyor.', { ikon: 'onay' })));
+    basarisizlar.length ? [liste, tumunuGoster]
+      : bosDurum('Son koşuda başarısız test yok', duzelenler.length ? 'Önceki koşuda başarısız olup bu koşuda düzelen testler aşağıda.' : gecmis.length ? 'Önceki koşuya göre düzelen test de yok.' : 'Karşılaştırılacak önceki koşu bulunmuyor.', { ikon: 'onay' }),
+    duzelenBolumu));
   if (basarisizlar.length) panel.ac(basarisizlar[0].x.id);
 }
 

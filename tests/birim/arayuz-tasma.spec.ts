@@ -201,6 +201,29 @@ test.describe('tüm ekranlar taşmasız', () => {
     await baglam.close();
   });
 
+  test('"Başarısız testler" kartı yalnız son sonucu başarısız olanları sayar; düzelenler ayrı kapalı bölümde', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar/ekranlar');
+    await bekle(page);
+    const kart = page.locator('section[aria-labelledby="basarisiz-basligi"]');
+    await expect(kart).toBeVisible();
+    const tumu = kart.getByRole('button', { name: /^Tümünü göster/ });
+    if (await tumu.count()) await tumu.click();
+    const ana = kart.locator(':scope > ul.degisim-listesi > li');
+    const anaSayisi = await ana.count();
+    expect(anaSayisi).toBeGreaterThan(0);
+    await expect(ana.filter({ hasText: 'Düzeldi' })).toHaveCount(0);
+    await expect(kart.locator('h3 .rozet')).toHaveText(String(anaSayisi));
+    const duzelen = kart.locator('details.duzelen-testler');
+    if (await duzelen.count()) {
+      await expect(duzelen).not.toHaveAttribute('open', '');
+      await expect(duzelen.locator('summary')).toHaveText(/^Önceki koşuya göre düzelen testler \(\d+\)$/);
+      expect(await duzelen.locator('li').count()).toBe(Number(/\((\d+)\)/.exec(await duzelen.locator('summary').innerText())?.[1]));
+    }
+    await baglam.close();
+  });
+
   test('Sonuçlar rehberi ekrandaki her bölümü sırayla anlatır ve vurgular', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
     const page = await baglam.newPage();
