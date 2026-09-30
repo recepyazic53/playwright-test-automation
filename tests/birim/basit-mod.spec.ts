@@ -217,6 +217,8 @@ test.describe('Basit mod (127.0.0.1)', () => {
     await tam.getByRole('button', { name: /Test işlemleri/ }).click();
     await menu.getByRole('menuitem', { name: 'Değişken ekle' }).click();
     await expect(page).toHaveURL(new RegExp(`#/senaryolar/yeni/${tamEkran}$`));
+    // Form çizilmeden çıkılırsa geç biten çizim Testlerim'in üstüne yazabilir; formu bekle.
+    await expect(page.getByRole('heading', { name: 'Yeni senaryo', level: 2 })).toBeVisible();
     await page.goto('/#/testlerim');
     // Düzenle: Hızlı test sihirbazının düzenleme kipi (ekranın adıyla açılır).
     await tam.getByRole('button', { name: /Test işlemleri/ }).click();
