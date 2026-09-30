@@ -97,6 +97,12 @@ function tiklama(a) {
   if (t) return /** @type {Record<string, any>} */ (t);
   return nesneMi(a.dosyaKontrolu) && nesneMi(a.dosyaKontrolu.tetikleyici) ? /** @type {Record<string, any>} */ (a.dosyaKontrolu.tetikleyici) : null;
 }
+/** Adımdaki "şu adrese git" aksiyonu (kayıtta adres çubuğuyla gidilen sayfa): alan doldurulduktan sonra sayfa değişimi de gönderme sayılır. @param {Record<string, any>} a */
+function adreseGit(a) {
+  const k = nesneMi(a.kosu) ? a.kosu : null;
+  const g = k && Array.isArray(k.aksiyonlar) ? k.aksiyonlar.find((x) => nesneMi(x) && x.tur === 'git') : null;
+  return g ? /** @type {Record<string, any>} */ (g) : null;
+}
 /** Düğmesiz adımın denetlenen mesajları (başarı / hata göstergesi, kabul edilen uyarılar). @param {Record<string, any>} a */
 function mesajDenetimiVar(a) {
   const k = nesneMi(a.kosu) ? a.kosu : null;
@@ -153,11 +159,14 @@ export function eylemDenetimi(model, g = {}) {
     gonderme = { anahtar: 'gonderme', durum: 'yok', baslik: baslikG, ayrinti: 'Bu senaryoda doldurulan alan yok.' };
   } else {
     const l = dolduranlar[dolduranlar.length - 1];
-    const sonraki = kapsam.slice(kapsam.indexOf(l)).find((a) => tiklama(a));
-    if (sonraki) {
+    const sonraki = kapsam.slice(kapsam.indexOf(l)).find((a) => tiklama(a) || adreseGit(a));
+    if (sonraki && tiklama(sonraki)) {
       const t = /** @type {Record<string, any>} */ (tiklama(sonraki));
       const ad = String(t.aciklama || t.metin || '').trim();
       gonderme = { anahtar: 'gonderme', durum: 'tamam', baslik: baslikG, ayrinti: `${ad ? `“${ad}” düğmesine` : 'Düğmeye'} “${adimAdi(sonraki)}” adımında basılır.` };
+    } else if (sonraki) {
+      // Alanlardan sonra sayfa değişiyor (adres çubuğuyla gidilen sayfa): düğmesiz gönderme olarak kabul edilir.
+      gonderme = { anahtar: 'gonderme', durum: 'tamam', baslik: baslikG, ayrinti: `“${adimAdi(sonraki)}” adımında ${String(/** @type {Record<string, any>} */ (adreseGit(sonraki)).yol)} adresine gidilir.` };
     } else if (mesajDenetimiVar(l)) {
       gonderme = { anahtar: 'gonderme', durum: 'tamam', baslik: baslikG, ayrinti: `Düğmesiz adım: “${adimAdi(l)}” mesajı alanlardan çıkınca denetlenir.` };
     } else {
