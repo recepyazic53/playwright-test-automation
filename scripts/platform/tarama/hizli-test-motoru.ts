@@ -16,7 +16,7 @@
 // reddedilir), sayfaya form gönderimi ve düğme tıklaması korumaları konur, GET/HEAD dışındaki istekler engellenir. Diğer izinlerde
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
-import type { Browser, Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -191,6 +191,7 @@ export async function hizliTestiYurut(
     /** Bir alanı doldurur (değer kullanıcının; motor üretmez). Hata metni döner (başarılıysa null). */
     async function alaniDoldur(page: Page, d: HizliDoldurulan): Promise<string | null> {
       const a = d.alan;
+      const bekleMs = taramaTarayiciAyarlari(g).alanIslemMs;
       const k = alanKapsami(page, a.cerceve);
       const deger = d.deger;
       try {
@@ -198,11 +199,11 @@ export async function hizliTestiYurut(
         if (a.tur === 'radio') {
           const r = (a.radyolar ?? []).find((x) => x.deger === String(deger) || (x.metin && katla(x.metin) === katla(String(deger))));
           if (!r || !r.secici) return `“${String(deger)}” seçeneği bu alanda yok.`;
-          await k.locator(r.secici).first().check({ timeout: 10_000 });
+          await k.locator(r.secici).first().check({ timeout: bekleMs });
           return null;
         }
         const l = k.locator(a.secici).first();
-        if (a.tur === 'checkbox') { await l.setChecked(dogruMu(deger), { timeout: 10_000 }); return null; }
+        if (a.tur === 'checkbox') { await l.setChecked(dogruMu(deger), { timeout: bekleMs }); return null; }
         if (a.tur === 'select' || a.tur === 'select-one' || a.tur === 'select-multiple' || a.ozelBilesen) {
           const s = (a.secenekler ?? []).find((x) => x.deger === String(deger) || katla(x.metin) === katla(String(deger)));
           const hedef = s ? s.deger : String(deger);
@@ -217,15 +218,29 @@ export async function hizliTestiYurut(
             }, hedef);
             return tamam ? null : `“${String(deger)}” seçeneği bu listede yok.`;
           }
-          await l.selectOption({ value: hedef }, { timeout: 10_000 }).catch(async () => { await l.selectOption({ label: String(deger) }, { timeout: 5_000 }); });
+          await l.selectOption({ value: hedef }, { timeout: bekleMs }).catch(async () => { await l.selectOption({ label: String(deger) }, { timeout: 5_000 }); });
           return null;
         }
-        await l.fill(String(deger), { timeout: 10_000 });
+        await l.fill(String(deger), { timeout: bekleMs });
         // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir.
         await l.press('Tab', { timeout: 3_000 }).catch(() => l.blur({ timeout: 2_000 }).catch(() => undefined));
         return null;
       } catch (hata) {
-        return `Alan doldurulamadı (${adreslerGizli(ilkSatir(hata))}).`;
+        const neden = await alanDurumu(k.locator(a.secici).first());
+        return `“${a.etiket ?? d.anahtar}” alanı doldurulamadı, ${Math.round(bekleMs / 1000)} sn beklendi: ${neden} (${adreslerGizli(ilkSatir(hata))}).`;
+      }
+    }
+
+    /** Doldurulamayan alanın neden yazılamadığını söyler (bulunamadı / görünmüyor / devre dışı / salt okunur). */
+    async function alanDurumu(l: Locator): Promise<string> {
+      try {
+        if ((await l.count()) === 0) return 'alan sayfada bulunamadı (sayfa değişmiş ya da alan henüz açılmamış olabilir)';
+        if (!(await l.isVisible())) return 'alan sayfada görünmüyor (başka bir alan doldurulunca ya da sorgu bitince açılıyor olabilir)';
+        if (!(await l.isEnabled())) return 'alan devre dışı (önceki adım tamamlanmadan açılmıyor olabilir)';
+        if (!(await l.isEditable())) return 'alan salt okunur';
+        return 'alan görünür ve etkin, ancak başka bir öğe onu örtüyor olabilir';
+      } catch {
+        return 'alanın durumu okunamadı';
       }
     }
 

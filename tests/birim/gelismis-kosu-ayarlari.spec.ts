@@ -381,10 +381,10 @@ test('planlı koşular: varsayılan kaçanı ve çakışanı atlar; "sonra bir k
 });
 
 test('tarama / akış kaydı tarayıcısı: girdide ayar yoksa önceki sabitler; verilince kullanılır', () => {
-  expect(taramaTarayiciAyarlari({})).toEqual({ baglam: { viewport: { width: 1366, height: 900 }, locale: 'tr-TR' }, sayfaAcilmaMs: 30_000, kesifSecenekSiniri: 8,
+  expect(taramaTarayiciAyarlari({})).toEqual({ baglam: { viewport: { width: 1366, height: 900 }, locale: 'tr-TR' }, sayfaAcilmaMs: 30_000, kesifSecenekSiniri: 8, alanIslemMs: 30_000,
     oturumKontrolMs: 15_000, girisAlanBeklemeMs: 15_000 });
   expect(taramaTarayiciAyarlari({ tarayici: { genislik: 1920, yukseklik: 1080, dil: 'en-GB', saatDilimi: 'UTC', sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20 } }))
-    .toEqual({ baglam: { viewport: { width: 1920, height: 1080 }, locale: 'en-GB', timezoneId: 'UTC' }, sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20,
+    .toEqual({ baglam: { viewport: { width: 1920, height: 1080 }, locale: 'en-GB', timezoneId: 'UTC' }, sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20, alanIslemMs: 30_000,
       oturumKontrolMs: 15_000, girisAlanBeklemeMs: 15_000 });
 });
 

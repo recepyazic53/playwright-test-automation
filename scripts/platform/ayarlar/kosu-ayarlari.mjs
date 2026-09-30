@@ -93,6 +93,8 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 180, birim: 'dk' },
   { anahtar: 'taramaSayfaAcilmaSn', grup: 'Tarama ve akış kaydı', etiket: 'Sayfa açılma zaman aşımı', aciklama: 'Tarama ve akış kaydında hedef sayfa bu sürede açılmazsa iş durur.',
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 300, birim: 'sn' },
+  { anahtar: 'hizliAlanIslemSn', grup: 'Tarama ve akış kaydı', etiket: 'Hızlı testte doldurma beklemesi', aciklama: 'Hızlı testte bir alan doldurulurken / seçilirken alanın görünür ve yazılabilir olması en çok bu kadar beklenir.',
+    tur: 'sayi', varsayilan: 30, enAz: 3, enCok: 300, birim: 'sn' },
   { anahtar: 'kesifSecenekSiniri', grup: 'Tarama ve akış kaydı', etiket: 'Açılır liste keşif sınırı', aciklama: 'Taramada seçenekleri tek tek denenen açılır listelerin en çok seçenek sayısı; daha uzun listeler denenmez (raporda belirtilir).',
     tur: 'sayi', varsayilan: 8, enAz: 2, enCok: 50, birim: 'seçenek' },
   // Tarama ve akış kaydındaki 4 çift ayar (ekran boyutu, dil, oturum kontrolü, giriş alanı beklemesi) koşudaki eşleriyle tek
@@ -216,7 +218,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
  *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
- *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
+ *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number; hizliAlanIslemSn: number;
  *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;

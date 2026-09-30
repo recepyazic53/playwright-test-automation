@@ -40,10 +40,10 @@ test('profil → ayar eşlemesi: "Dengeli" ve "Normal" bugünkü varsayılanlar;
   expect(kanitDegerleri('tam')).toEqual({ video: 'her', videoBoyutu: 'ekran', ekranGoruntusu: 'her', adimGoruntusu: 'her', iz: 'her', indirilenDosya: 'her' });
   expect(kanitDegerleri('yok')).toBeNull();
 
-  // Ortam hızı: 17 süre ayarından 15'i (iki "arası bekleme" hariç); hepsi sn / dk birimli sayı.
-  expect(HIZ_ALANLARI).toHaveLength(15);
+  // Ortam hızı: 18 süre ayarından 16'sı (iki "arası bekleme" hariç); hepsi sn / dk birimli sayı.
+  expect(HIZ_ALANLARI).toHaveLength(16);
   const sureler = KOSU_AYAR_TANIMLARI.filter((t) => t.tur === 'sayi' && ['sn', 'dk', 'ms'].includes(String(t.birim))).map((t) => t.anahtar);
-  expect(sureler).toHaveLength(17);
+  expect(sureler).toHaveLength(18);
   expect(sureler.filter((a) => !HIZ_ALANLARI.includes(a)).sort()).toEqual(['ekranBeklemeMs', 'servisIstekBeklemeMs']);
   expect(HIZ_PROFILLERI.map((p) => [p.ad, p.carpan])).toEqual([['hizli', 0.7], ['normal', 1], ['yavas', 2]]);
   expect(hizDegerleri(KOSU_AYAR_TANIMLARI, 'normal')).toEqual(Object.fromEntries(HIZ_ALANLARI.map((a) => [a, v[a]])));
