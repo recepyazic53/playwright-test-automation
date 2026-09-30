@@ -157,22 +157,28 @@ test('kilit ekranı çalışma alanının adını ve "Başka çalışma alanı"n
   await page.keyboard.press('Escape');
 });
 
-test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → giriş sorusu → proje hazır özeti; Evet → giriş tarifine geç)', async () => {
+test('aynı kasada yeni proje: sihirbaz (proje → giriş sorusu → proje hazır özeti; ortamsızsa "Ortamı tanımlayın"; Evet → giriş tarifine geç)', async () => {
   const menu = await projeMenusu();
   await expect(menu.getByRole('menuitem', { name: 'Proje ekle' })).toBeVisible();
   await goruntu('03-proje-secici', undefined, { x: 0, y: 0, width: 760, height: 300 });
   await menu.getByRole('menuitem', { name: 'Proje ekle' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
-  // "Sizi tanıyalım" adımı yok: doğrudan proje; canlı ortam Ortamlar adımında "Ortam ekle" ile eklenir.
-  await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Ortamlar', 'Giriş', 'Tamam']);
+  // "Sizi tanıyalım" ve "Ortamlar" adımları yok: doğrudan proje; ortamlar Ayarlar > Proje ve ortamlar'dan tanımlanır.
+  await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Giriş', 'Tamam']);
+  await expect(page.getByLabel('Ortam adı')).toHaveCount(0);
+  // Aynı kasada yeni projede ad önerilmez (çalışma alanı adıyla dolu gelmez).
+  await expect(page.getByLabel('Proje adı')).toHaveValue('');
   await page.getByLabel('Proje adı').fill('İkinci proje');
   await page.getByRole('button', { name: 'Devam' }).click();
-  await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
-  await page.getByRole('button', { name: 'Ortam ekle' }).click();
-  await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
-  await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
-  await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
-  await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+  // Ortamlar Ayarlar'dan tanımlanır (burada aynı oturumun API'siyle): TEST + CANLI.
+  await expect(page.getByRole('heading', { name: 'Uygulamanız giriş istiyor mu?' })).toBeVisible();
+  await page.evaluate(async () => {
+    const { api } = await import('/arayuz/ortak.js' as string);
+    const { projeler } = await api('/platform/projeler');
+    const proje = projeler.find((p: { ad: string }) => p.ad === 'İkinci proje');
+    await api('/platform/ortam/kaydet', { govde: { projeId: proje.id, ad: 'TEST', tabanUrl: 'https://ikinci.ornek.invalid', varsayilan: true, riskli: false } });
+    await api('/platform/ortam/kaydet', { govde: { projeId: proje.id, ad: 'CANLI', tabanUrl: 'https://canli-ikinci.ornek.invalid', riskli: true } });
+  });
   // Giriş sorusu: Evet → Proje hazır'da birincil eylem giriş tarifi sayfası.
   await page.getByRole('radio', { name: /^Evet, giriş sayfası var/ }).check();
   await page.getByRole('button', { name: 'Devam' }).click();
@@ -396,7 +402,7 @@ test('çalışma alanını kapat (dışa aktarmadan): soru diyaloğu → başlan
   await goruntu('10-baslangic-ekrani');
 });
 
-test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa → proje → ortam → hazır', async () => {
+test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa → proje (adı çalışma alanı adıyla önceden dolu) → hazır', async () => {
   await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
   const d = diyalog();
   await expect(d.getByRole('heading')).toContainText('Yeni çalışma alanı');
@@ -412,10 +418,11 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA_B);
   await page.getByText('Parolayı unutursam').click();
   await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
+  // Proje adı çalışma alanı adıyla önceden dolu gelir (değiştirilebilir; açıklama notu görünür).
+  await expect(page.getByLabel('Proje adı')).toHaveValue('İş');
+  await expect(page.getByText('Çalışma alanı adınızla dolu geldi; değiştirebilirsiniz.')).toBeVisible();
   await page.getByLabel('Proje adı').fill('Deneme');
   await page.getByRole('button', { name: 'Devam' }).click();
-  await page.getByLabel('Adres (link)').fill('https://deneme.ornek.invalid');
-  await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   // İlk kurulumda izin paketi adımı (yeni çalışma alanı): Atla → hiçbir izin açılmaz.
   await page.getByRole('button', { name: 'Atla' }).click();
   // Kullanım: Gelişmiş (sonraki testler bugünkü arayüzü kullanır).

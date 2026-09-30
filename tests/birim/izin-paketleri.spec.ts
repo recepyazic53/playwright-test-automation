@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — İzin paketi (S4): "Nöbetçi sizin adınıza neleri yapabilsin?" (ilk kurulum sihirbazı ve Ayarlar > İzinler).
-//   - paketlerin açtığı izinler; "Canlı ortamda da çalıştırabilsin" kutusu (işaretsiz / işaretli)
+//   - paketlerin açtığı izinler; "Canlı ortamda da çalıştırmaya izin ver" kutusu (işaretsiz / işaretli)
 //   - veritabanına yazma, sistem değişikliği ve güvenlik gevşetme hiçbir pakete, "Özel"e ya da kutuya girmez
 //   - tek onay: açılan her izin izin geçmişine yazılır; paket hiçbir izni kapatmaz; onaysız hiçbir şey açılmaz
 //   - canlı kutusu CANLI ortam onayını kaldırmaz (istekte canliOnay yoksa 409 CANLI_ONAY_GEREKLI)
@@ -68,13 +68,13 @@ test('paket uygulama: tek onayla açar, her izin geçmişe yazılır; onaysız /
     const gecmis = izinDegisiklikleri(vt);
     expect(gecmis.filter((g) => g.acik).map((g) => g.izin).sort()).toEqual(['dis-gonderim', 'giris-bilgisi', 'servis-istekleri', 'web-erisimi']);
     const aciklamalar = vt.tumu("SELECT varlik_id, aciklama FROM degisiklik_gecmisi WHERE varlik_turu = 'izin' ORDER BY rowid").map((x) => [String(x.varlik_id), String(x.aciklama)]);
-    expect(aciklamalar.filter(([, a]) => a.includes('izin paketinden: Test ortamında ekran ve servis testi'))).toHaveLength(3);
+    expect(aciklamalar.filter(([, a]) => a.includes('izin paketinden: Ekran ve servis testleri'))).toHaveLength(3);
     // Zaten açık izinler yeniden yazılmaz; canlı kutusu yalnız "Canlı ortamda çalıştırma"yı ekler.
     const r2 = izinPaketiUygula(vt, { paket: 'test-veritabani', canli: true, onay: true });
     expect(r2.acilanlar).toEqual(['veritabani-okuma', 'canli-ortam']);
     for (const riskli of PAKET_DISI_IZINLER) expect(r2.izinler[riskli], riskli).toBe(false);
     const canliSatiri = vt.tumu("SELECT aciklama FROM degisiklik_gecmisi WHERE varlik_turu = 'izin' AND varlik_id = 'canli-ortam'").map((x) => String(x.aciklama));
-    expect(canliSatiri).toEqual(['açıldı (izin paketinden: Test + veritabanı okuma; "Canlı ortamda da çalıştırabilsin" işaretli)']);
+    expect(canliSatiri).toEqual(['açıldı (izin paketinden: Ekran ve servis testleri + veritabanı okuma; "Canlı ortamda da çalıştırmaya izin ver" işaretli)']);
     expect(izinDegisiklikleri(vt)).toHaveLength(6);
   } finally { vt.kapat(); klasor.temizle(); }
 });
@@ -113,16 +113,29 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     await page.goto('/#/ayarlar/izinler');
     const kart = page.getByRole('region', { name: 'İzin paketi' });
     await expect(kart.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
-    await expect(kart.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
+    await expect(kart.getByRole('radio', { name: /^Hiçbir izin açma/ })).toBeChecked();
+    // Ortam başına ayrı bölüm: test ortamları (her seçeneğin altında tek cümle) ve ayrı, uyarılı canlı ortam bölümü.
+    const testBolumu = kart.getByRole('group', { name: 'Test ortamlarında neler yapılabilsin?' });
+    await expect(testBolumu.getByRole('radio')).toHaveCount(4);
+    await expect(testBolumu.locator('.profil-secenegi small')).toHaveCount(4);
+    await expect(testBolumu.getByRole('checkbox')).toHaveCount(0);
+    const canliBolumu = kart.getByRole('group', { name: 'Canlı ortamda neler yapılabilsin?' });
+    await expect(canliBolumu).toContainText('gerçek kullanıcıların verisini etkileyebilir');
+    await expect(canliBolumu.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırmaya izin ver' })).toBeVisible();
+    // Aşağıdaki izin listesi de ortam başına bölümlü; her izin tek bir bölümde.
+    await expect(page.locator('.izin-bolumu > h4')).toHaveText(['Test ortamlarında', 'Canlı ortamda', 'Kalıcı değişiklik ve güvenlik', 'Bildirim ve arka plan']);
+    await expect(page.locator('.izin-bolumu.canli [data-izin]')).toHaveCount(1);
+    await expect(page.locator('.izin-bolumu.canli [data-izin="canli-ortam"]')).toBeVisible();
+    await expect(page.locator('.izin-satiri')).toHaveCount(10);
     const liste = kart.getByRole('list', { name: 'Açılacak izinler' });
     await expect(kart.getByRole('button', { name: 'Açılacak izin yok' })).toBeDisabled();
 
-    await kart.getByRole('radio', { name: /Test \+ veritabanı okuma/ }).check();
+    await kart.getByRole('radio', { name: /^Ekran ve servis testleri \+ veritabanı okuma/ }).check();
     await expect(liste.locator('li[data-izin]')).toHaveCount(4);
     await expect(liste.locator('li[data-izin="veritabani-okuma"]')).toContainText('risk:');
     await expect(liste).not.toContainText('null');
     await expect(liste).toContainText('Pakete girmez, her zaman tek tek açılır: Veritabanına yazma, Sistem değişikliği, Güvenlik gevşetme.');
-    const canli = kart.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırabilsin' });
+    const canli = kart.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırmaya izin ver' });
     await expect(canli).not.toBeChecked();
     await expect(kart.locator('.izin-paketi-canli-uyarisi')).toBeHidden();
     await canli.check();
@@ -156,7 +169,7 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
     await baglam.close();
   });
 
-  test('ilk kurulum sihirbazı: İzinler adımı (Hiçbiri varsayılan); paket seçilip tek onayla açılır, canlı kapalı kalır; 390 px taşmasız', async () => {
+  test('ilk kurulum sihirbazı: İzinler adımı (Hiçbir izin açma varsayılan); paket seçilip tek onayla açılır, canlı kapalı kalır; 390 px taşmasız', async () => {
     test.setTimeout(120_000);
     const k2 = mkdtempSync(join(tmpdir(), 'izin-paketi-sihirbaz-'));
     const n = await nobetciBaslat(k2, join(k2, 'platform.db'), { NOBETCI_REHBER_OTOMATIK: '0', TEST_SUNUCU_KOSU_KAPALI: '1' });
@@ -174,12 +187,10 @@ test.describe('İzin paketi: sunucu ve arayüz', () => {
       await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
       await page.getByLabel('Proje adı').fill('Sihirbaz projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
-      await page.getByLabel('Adres (link)').fill('http://127.0.0.1:9/uygulama/');
-      await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
       await expect(page.locator('.adimlar li[aria-current="step"]')).toHaveText('İzinler');
-      await expect(page.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
+      await expect(page.getByRole('radio', { name: /^Hiçbir izin açma/ })).toBeChecked();
       await expect(page.getByRole('button', { name: 'Devam' })).toBeVisible();
-      await page.getByRole('radio', { name: /Test ortamında ekran ve servis testi/ }).check();
+      await page.getByRole('radio', { name: /^Ekran ve servis testleri(?! \+)/ }).check();
       await expect(page.getByRole('list', { name: 'Açılacak izinler' }).locator('li[data-izin]')).toHaveCount(3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       await page.getByRole('button', { name: 'Bu 3 izni aç ve devam et' }).click();

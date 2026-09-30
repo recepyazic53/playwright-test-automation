@@ -131,7 +131,9 @@ export function veriKlasoruSatiri() {
   api('/platform/veri-klasoru', { kilitOlayiYok: true }).then(({ veriKlasoru: b }) => {
     yerlestir(satir, h('span', { class: 'kucuk soluk' }, ikon('klasor'), ' Veri klasörü: '), h('code', { class: 'kucuk', title: b.etkin }, b.etkin),
       b.secilebilir ? h('button', { type: 'button', class: 'bag-dugme', onclick: () => veriKlasoruDiyalogu(b, { ilkKip: 'bos' }) }, 'Değiştir…') : null,
-      b.secilebilir ? h('button', { type: 'button', class: 'bag-dugme', onclick: () => veriKlasoruDiyalogu(b, { ilkKip: 'ac', baslik: 'Var olan veri klasörünü aç' }) }, 'Var olan veri klasörünü aç…') : null);
+      b.secilebilir ? h('button', { type: 'button', class: 'bag-dugme', onclick: () => veriKlasoruDiyalogu(b, { ilkKip: 'ac', baslik: 'Var olan veri klasörünü aç' }) }, 'Var olan veri klasörünü aç…') : null,
+      b.secilebilir ? h('span', { class: 'kucuk soluk veri-klasoru-notu' }, ' Değiştirince veri kopyalanıp doğrulanır; eski klasör silinmez. Çalışma alanı açıkken Ayarlar > Yedekleme > Veri klasörü\'nden de değiştirebilirsiniz.')
+        : h('span', { class: 'kucuk soluk veri-klasoru-notu' }, ' Bu kurulumda veri klasörü buradan değiştirilemez.'));
   }).catch(() => kap.remove());
   return kap;
 }

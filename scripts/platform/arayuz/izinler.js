@@ -10,9 +10,22 @@ import { CANLI_IZNI, IZIN_PAKETLERI, OZEL_SECILEBILIR, PAKET_DISI_IZINLER, paket
 let sayac = 0;
 
 /**
- * "Nöbetçi sizin adınıza neleri yapabilsin?" — izin paketi seçimi (ilk kurulum sihirbazı ve Ayarlar > İzinler). Seçenekler:
- * Hiçbiri / Test ortamında ekran ve servis testi / Test + veritabanı okuma / Özel…; altında ayrı "Canlı ortamda da çalıştırabilsin"
- * kutusu (varsayılan işaretsiz; işaretlenince açık risk uyarısı). Seçimin açacağı izinler riskleriyle tek listede görünür; düğme tek
+ * Ayarlar > İzinler listesinin bölümleri (yalnız sunum; izin verisi ve sunucu sözleşmesi değişmez): her bölüm kendi başlığı altında
+ * ne için gerektiğini söyler. Listede olmayan (ileride eklenen) izinler son bölümde görünür.
+ * @type {ReadonlyArray<{ ad: string; baslik: string; aciklama: string; izinler: readonly string[]; canli?: boolean }>}
+ */
+const IZIN_BOLUMLERI = Object.freeze([
+  { ad: 'test', baslik: 'Test ortamlarında', aciklama: 'Test ortamındaki ekran ve servis testleri için gereken izinler.', izinler: Object.freeze(['web-erisimi', 'servis-istekleri', 'giris-bilgisi', 'veritabani-okuma']) },
+  { ad: 'canli', baslik: 'Canlı ortamda', aciklama: 'Dikkat: canlı ortam gerçek kullanıcıların verisini etkileyebilir. Bu izin kapalıyken Nöbetçi canlı ortama hiçbir istek atmaz; açıkken de her işlemden önce ayrıca "CANLI ortam — emin misiniz?" diye sorulur.', izinler: Object.freeze([CANLI_IZNI]), canli: true },
+  { ad: 'kalici', baslik: 'Kalıcı değişiklik ve güvenlik', aciklama: 'Veriyi kalıcı değiştiren ya da güvenliği gevşeten izinler; hiçbir hazır seçime girmez, yalnız buradan tek tek açılır.', izinler: Object.freeze([...PAKET_DISI_IZINLER]) },
+  { ad: 'diger', baslik: 'Bildirim ve arka plan', aciklama: 'Nöbetçi dışına bildirim gönderen ve siz yokken çalışan işlemler.', izinler: Object.freeze(['dis-gonderim', 'arka-plan']) }
+]);
+
+/**
+ * "Nöbetçi sizin adınıza neleri yapabilsin?" — izin paketi seçimi (ilk kurulum sihirbazı ve Ayarlar > İzinler). İki ayrı bölüm:
+ * "Test ortamlarında neler yapılabilsin?" (Hiçbir izin açma / Ekran ve servis testleri / … + veritabanı okuma / Kendim seçeyim; her
+ * seçeneğin altında tek cümle) ve ayrı, uyarılı "Canlı ortamda neler yapılabilsin?" ("Canlı ortamda da çalıştırmaya izin ver" kutusu;
+ * varsayılan işaretsiz; işaretlenince açık risk uyarısı). Seçimin açacağı izinler riskleriyle tek listede görünür; düğme tek
  * onaydır (sunucu: /platform/izin/paket-uygula; açılan her izin geçmişe yazılır). Paket hiçbir izni kapatmaz; veritabanına yazma,
  * sistem değişikliği ve güvenlik gevşetme listede "pakete girmez" olarak yazar.
  * @param {{ izinler: Record<string, boolean>; baslik?: string; dugmeMetni?: (n: number) => string; bosDugmeMetni?: string | null;
@@ -39,6 +52,12 @@ export function izinPaketiSecimi(s) {
   const canliUyarisi = h('div', { class: 'not-kutusu hata izin-paketi-canli-uyarisi', role: 'note', hidden: true },
     h('p', {}, h('strong', {}, 'Risk: '), canliTanimi ? canliTanimi.risk : ''),
     h('p', {}, 'Canlı ortamdaki her işlemden önce sorulan "CANLI ortam — emin misiniz?" onayı aynen kalır; bu kutu o onayı kaldırmaz.'));
+  const canliKutusu = h('fieldset', { class: 'izin-paketi-bolumu izin-paketi-canli-bolumu' },
+    h('legend', {}, ikon('uyari'), 'Canlı ortamda neler yapılabilsin?'),
+    h('p', { class: 'kucuk izin-risk' }, h('b', {}, 'Dikkat: '), 'canlı ortam gerçek kullanıcıların verisini etkileyebilir; bu yüzden ayrı tutulur ve varsayılan olarak kapalıdır.'),
+    h('div', { class: 'alan onay-alani izin-paketi-canli' }, h('label', { class: 'secenek', for: canli.id }, canli, 'Canlı ortamda da çalıştırmaya izin ver'),
+      h('div', { class: 'yardim' }, 'İşaretlerseniz "Canlı ortamda çalıştırma" izni de açılır; işaretlemezseniz Nöbetçi canlı ortama hiçbir istek atmaz.')),
+    canliUyarisi);
   const liste = h('ul', { class: 'izin-paketi-listesi', 'aria-label': 'Açılacak izinler' });
   const dugme = h('button', { type: 'button', class: 'birincil' });
   const secim = () => {
@@ -87,13 +106,11 @@ export function izinPaketiSecimi(s) {
   ciz();
   const kok = h('section', { class: 'kart izin-paketi', 'aria-label': 'İzin paketi' },
     h('h3', {}, ikon('kalkan'), s.baslik || 'Nöbetçi sizin adınıza neleri yapabilsin?'),
-    h('p', { class: 'soluk kucuk' }, 'Bir paket seçin; açacağı izinler riskleriyle aşağıda listelenir ve tek onayla açılır. Paket hiçbir izni kapatmaz; izinleri istediğiniz an Ayarlar > İzinler\'den tek tek açıp kapatabilirsiniz.'),
+    h('p', { class: 'soluk kucuk' }, 'Önce test ortamlarında, sonra canlı ortamda neler yapılabileceğini seçin; açılacak izinler riskleriyle aşağıda listelenir ve tek onayla açılır. Seçim hiçbir izni kapatmaz; izinleri istediğiniz an Ayarlar > İzinler\'den tek tek açıp kapatabilirsiniz.'),
     mesaj.kutu,
-    h('fieldset', { class: 'profil-secimi' }, h('legend', {}, 'Paket'), h('div', { class: 'profil-secenekleri' }, radyolar.map((r) => r.etiket))),
+    h('fieldset', { class: 'profil-secimi izin-paketi-bolumu' }, h('legend', {}, 'Test ortamlarında neler yapılabilsin?'), h('div', { class: 'profil-secenekleri' }, radyolar.map((r) => r.etiket))),
     ozelAlan,
-    h('div', { class: 'alan onay-alani izin-paketi-canli' }, h('label', { class: 'secenek', for: canli.id }, canli, 'Canlı ortamda da çalıştırabilsin'),
-      h('div', { class: 'yardim' }, '"Canlı ortamda çalıştırma" iznini de açar. Varsayılan: işaretsiz.')),
-    canliUyarisi,
+    canliKutusu,
     h('h4', {}, 'Açılacak izinler'), liste,
     h('div', { class: 'dugmeler' }, ...(s.ekDugmeler || []), dugme));
   /** İzinler başka yerden (tek tek) değişince listeyi tazeler. @param {Record<string, boolean>} yeni */
@@ -202,12 +219,21 @@ function degisiklikListesi(kayitlar, makineler) {
  */
 export async function izinlerBolumu(govde, baglam = {}) {
   let veri = await api('/platform/izinler');
-  const liste = h('ul', { class: 'izin-listesi', 'aria-label': 'İzinler' });
+  const liste = h('div', { class: 'izin-bolumleri' });
   const gecmis = h('div', {});
   const ozet = h('p', { class: 'kucuk izin-ozeti', 'aria-live': 'polite' });
   const ciz = () => {
     ozet.textContent = `${Object.values(veri.izinler).filter(Boolean).length} / ${IZIN_TANIMLARI.length} izin açık.`;
-    liste.replaceChildren(...IZIN_TANIMLARI.map((t) => izinSatiri(t, veri.izinler[t.anahtar] === true, degistir)));
+    const bolunenler = new Set(IZIN_BOLUMLERI.flatMap((b) => b.izinler));
+    const bolumler = [...IZIN_BOLUMLERI, { ad: 'baska', baslik: 'Diğer izinler', aciklama: '', izinler: IZIN_TANIMLARI.map((t) => t.anahtar).filter((a) => !bolunenler.has(a)) }];
+    liste.replaceChildren(...bolumler.map((b) => {
+      const tanimlar = b.izinler.map((a) => IZIN_TANIMLARI.find((t) => t.anahtar === a)).filter((t) => t !== undefined);
+      if (!tanimlar.length) return null;
+      return h('section', { class: `izin-bolumu${'canli' in b && b.canli ? ' canli' : ''}`, 'aria-label': b.baslik },
+        h('h4', {}, 'canli' in b && b.canli ? ikon('uyari') : null, b.baslik),
+        b.aciklama ? h('p', { class: `kucuk ${'canli' in b && b.canli ? 'izin-risk' : 'soluk'}` }, b.aciklama) : null,
+        h('ul', { class: 'izin-listesi', 'aria-label': b.baslik }, tanimlar.map((t) => izinSatiri(t, veri.izinler[t.anahtar] === true, degistir))));
+    }).filter(Boolean));
     gecmis.replaceChildren(degisiklikListesi(veri.degisiklikler || [], veri.makineler || {}));
   };
   /** @param {string} anahtar @param {boolean} acik */

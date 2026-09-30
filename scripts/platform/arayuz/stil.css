@@ -4496,3 +4496,14 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .sonuc-karti.uyari { --k: var(--atlanan-dolgu); }
 .ozet-donem-notu { display: block; margin-top: 2px; }
 .kosu-bos-nedeni { margin: 0 0 10px; }
+/* İzin paketi ve İzinler listesi bölümleri: test ortamları / canlı ortam (uyarılı) / kalıcı değişiklik ayrı başlıklar altında. */
+.izin-paketi-bolumu { border: 0; padding: 0; margin: var(--b3) 0 var(--b2); min-width: 0; }
+.izin-paketi-bolumu > legend { font-weight: 600; padding: 0; margin-bottom: var(--b1); }
+.izin-paketi-canli-bolumu { padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlanan) 45%, var(--cizgi)); }
+.izin-paketi-canli-bolumu > legend { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px; }
+.izin-paketi-canli-bolumu > p { margin: 0 0 var(--b1); }
+.izin-bolumleri { display: grid; gap: var(--b4); margin: 12px 0 0; }
+.izin-bolumu > h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+.izin-bolumu > p { margin: 0 0 var(--b2); }
+.izin-bolumu .izin-listesi { margin-top: 0; }
+.izin-bolumu.canli { padding: 10px 12px; border-radius: var(--yaricap-m); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlanan) 45%, var(--cizgi)); }
