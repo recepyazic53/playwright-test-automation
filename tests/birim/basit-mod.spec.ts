@@ -216,6 +216,16 @@ test.describe('Basit mod (127.0.0.1)', () => {
     test.setTimeout(60_000);
     const { baglam, page, hatalar, disari } = await sayfaAc('/#/testlerim');
     await expect(page.getByRole('heading', { level: 2, name: 'Testlerim' })).toBeVisible();
+    // Ortam seçicisi projedeki TÜM ortamları (CANLI dahil) listeler; not tüm ortamları ve değiştirileceği yeri söyler.
+    const ortamSecici = page.locator('.basit-ortam-secimi select');
+    await expect(ortamSecici.locator('option')).toHaveText(['CANLI (Canlı)', 'TEST']);
+    await expect(ortamSecici).toHaveValue(testOrtami);
+    const ortamNotu = page.locator('.basit-ortam-notu');
+    await expect(ortamNotu).toContainText('Seçili ortam: TEST. Projedeki ortamlar: CANLI (Canlı), TEST.');
+    await expect(ortamNotu.getByRole('link', { name: 'Ayarlar > Proje ve ortamlar' })).toHaveAttribute('href', '#/ayarlar/proje');
+    await ortamSecici.selectOption({ label: 'CANLI (Canlı)' });
+    await expect(ortamNotu).toContainText('Seçili ortam: CANLI.');
+    await ortamSecici.selectOption({ label: 'TEST' });
     const satirlar = page.locator('.test-satiri');
     await expect(satirlar).toHaveCount(2);
     const tam = satirlar.filter({ hasText: 'Tam form' });

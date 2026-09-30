@@ -99,9 +99,18 @@ export async function testlerimEkrani(icerik, baglam) {
   const hepsi = h('button', { type: 'button', class: 'birincil hepsini-calistir' }, ikon('oynat'), 'Hepsini çalıştır');
   baslik.append(h('div', { class: 'eylemler' },
     h('label', { class: 'basit-ortam-secimi', for: ortamSec.id }, h('span', { class: 'soluk kucuk' }, 'Ortam'), ortamSec), hepsi));
+  // Ortam açıklaması: açılır liste yalnız seçili ortamı gösterir; projedeki tüm ortamlar ve nereden değişeceği burada yazar.
+  const ortamNotu = h('p', { class: 'soluk kucuk basit-ortam-notu' });
+  const ortamNotuCiz = () => {
+    const bag = h('a', { href: '#/ayarlar/proje' }, 'Ayarlar > Proje ve ortamlar');
+    ortamNotu.replaceChildren(...(ortamlar.length === 1
+      ? [`Projede tek ortam var: ${ortam().ad}. Canlı ortam eklemek ya da adresi değiştirmek için `, bag, '.']
+      : [`Seçili ortam: ${ortam().ad}. Projedeki ortamlar: ${ortamlar.map(ortamSecenekMetni).join(', ')}. Ortam eklemek ya da değiştirmek için `, bag, '.']));
+  };
+  ortamNotuCiz();
   const liste = h('div', { class: 'testler-kap', 'aria-live': 'polite' }, iskelet('liste'));
   const gelismisNotu = h('div', { class: 'gelismis-testler-notu', hidden: true });
-  icerik.replaceChildren(baslik, liste, gelismisNotu);
+  icerik.replaceChildren(baslik, ortamNotu, liste, gelismisNotu);
 
   /** @type {Array<{ ekran: any; senaryolar: any[] }>} */
   let testler = [];
@@ -110,6 +119,7 @@ export async function testlerimEkrani(icerik, baglam) {
 
   const yenile = async () => {
     seciliOrtam.set(proje.id, ortamSec.value);
+    ortamNotuCiz();
     try {
       const [t, servisler, akislar] = await Promise.all([
         testleriAl(proje.id, ortamSec.value),
