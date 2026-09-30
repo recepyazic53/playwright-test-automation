@@ -202,17 +202,9 @@ test('Ekranlar: istek metni tam gösterilmez (kopyala düğmesi); ortak akış k
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
-  // Şerit tara / kaydet yolunu anlatır; yapay zekâ istek metni kapalı "İleri düzey" içinde.
-  const serit = page.locator('.kesif-seridi');
-  await expect(serit.locator('.kesif-adimlari li b')).toHaveText(['Ekranı tarayın ya da akışı kaydedin', 'Düğmeyi ve sonucu kontrol edin', 'Senaryo yazın']);
-  await expect(serit.getByRole('link', { name: 'Ekranı tara' })).toHaveAttribute('href', '#/ekranlar/yeni/tara');
-  await expect(serit.locator('button', { hasText: 'İstek metnini kopyala' })).toHaveCount(1);
-  await expect(serit.locator('button', { hasText: 'İstek metnini kopyala' })).toBeHidden();
-  await expect(serit.locator('code')).toHaveCount(0);
-  await expect(serit.locator('pre.istek-metni')).toBeHidden();
-  await serit.locator('details.kesif-ileri > summary').click();
-  await serit.getByRole('button', { name: 'İstek metnini kopyala' }).click();
-  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')).toBe(paketIstekCumlesi(''));
+  // Ekranlar sayfasında yol şeridi / yapay zekâ isteği yok (Ekran ekle sayfasında).
+  await expect(page.locator('.kesif-seridi')).toHaveCount(0);
+  await expect(page.locator('details.kesif-ileri')).toHaveCount(0);
 
   const bolum = page.locator('.ortak-akis-bolumu');
   const kartlar = bolum.locator('article.ekran-karti.ortak-akis-karti');

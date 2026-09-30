@@ -17,7 +17,7 @@
 import { TOKEN, api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { pdfRaporDugmesi } from './pdf-rapor.js';
 import {
-  BULGU_TURLERI, bicimIndirBaglantisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz, paketAdiniGuncelle, tekrarAnalizDiyalogu
+  BULGU_TURLERI, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, modelAgaciCiz, paketAdiniGuncelle, tekrarAnalizDiyalogu
 } from './ekran-ortak.js';
 import { paketOzetiBaglantisi, sayfaPaketiAkisi } from './sayfa-paketi.js';
 import { akisDiyagrami } from './akis-diyagrami.mjs';
@@ -167,7 +167,6 @@ function listeGorunumu(icerik, proje, liste) {
   const devreDisi = ekranlar.filter((e) => e.durum === 'devre_disi').length;
   const modelli = ekranlar.filter((e) => e.modelSurumu).length;
   const bekleyen = ekranlar.filter((e) => e.bekleyenAnaliz);
-  const cumle = CLAUDE_ISTEK_CUMLESI('');
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
@@ -179,19 +178,6 @@ function listeGorunumu(icerik, proje, liste) {
           h('span', {}, ikon('liste'), `${ekranlar.reduce((t, e) => t + e.senaryoSayisi, 0)} senaryo`),
           devreDisi ? h('span', {}, ikon('eksi'), `${devreDisi} devre dışı`) : null)),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Ekran ekle'))),
-    // Yeni ekranın yolu: tara / kaydet → önizlemede düğme ve sonuç → senaryo. Yapay zekâ ile paket üretmek "İleri düzey"de (kapalı).
-    h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
-      h('ol', { class: 'kesif-adimlari' },
-        h('li', {}, h('b', {}, 'Ekranı tarayın ya da akışı kaydedin'), h('span', {}, '"Ekran ekle"de Nöbetçi sayfayı yalnızca okuyarak tarar; çok adımlı formlarda işlemi siz yaparsınız, Nöbetçi adımları kaydeder.')),
-        h('li', {}, h('b', {}, 'Düğmeyi ve sonucu kontrol edin'), h('span', {}, 'Önizlemede alanları, işlem düğmesini ve beklenen sonucu gözden geçirin; onaylamadığınız hiçbir şey kaydedilmez.')),
-        h('li', {}, h('b', {}, 'Senaryo yazın'), h('span', {}, 'Senaryolar\'da ekranın formundan değerleri ve beklenen sonucu seçin; "Dene" ile hemen çalıştırın.'))),
-      h('div', { class: 'kesif-cumlesi' },
-        h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni/tara' }, ikon('ara'), 'Ekranı tara'),
-        h('details', { class: 'ileri-duzey kesif-ileri' },
-          h('summary', {}, ikon('simsek'), h('span', {}, 'İleri düzey: yapay zekâ ile paket'), ikon('asagi', 'ileri-duzey-ok')),
-          h('div', { class: 'ileri-duzey-govdesi' },
-            h('p', { class: 'soluk kucuk paket-nedir' }, 'Ekran paketi, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır. İstek metnini sayfanın bağlantısıyla yapay zekâ aracınıza verin; ürettiği paketi "Ekran ekle"den yükleyin. ', paketOzetiBaglantisi()),
-            istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk ekranınızı ekleyin: "Ekranı tara" sayfayı yalnızca okuyarak alanlarını çıkarır; çok adımlı formlarda "Ekran ekle" > "Akışı kaydet" ile işlemi bir kez siz yaparsınız.',

@@ -192,7 +192,7 @@ test.describe('Başlarken listesi (arayüz)', () => {
     if (EKRAN_KLASORU) {
       await page.screenshot({ path: join(EKRAN_KLASORU, 'ekran-ekle-kapali.png'), fullPage: true });
       await page.goto('/#/ekranlar');
-      await expect(page.locator('.kesif-seridi')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Henüz ekran yok.' })).toBeVisible();
       await page.screenshot({ path: join(EKRAN_KLASORU, 'ekranlar-bos.png'), fullPage: true });
     }
     // Genel > Ekranlar (ilk açılış görünümü) da tam koşu yokken listeyi gösterir.
