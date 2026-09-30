@@ -38,6 +38,7 @@ import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from
 import { servisOnerileriAdresi, servisOnerileriSayfasi } from './servis-onerileri.js';
 import { sonYanitliKosu, yanitKontrolPaneli } from './yanit-kontrol-paneli.js';
 import { talepAlani } from './talep-alani.js';
+import { doldurDugmesi } from './doldur.js';
 import { talebeUyar, talepKosuDugmesi, talepSecenekleri } from './talep-kosusu.js';
 import { HAZIRLIK_BASLIKLARI, NEDENLER, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
 
@@ -1362,6 +1363,14 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       const satir = h('div', { class: 'alan-satiri', role: 'row' });
       const pin = h('button', { type: 'button', class: 'kucuk-dugme pin', 'aria-label': `${sat.alan.ad} için servis varsayılanı` });
       const eksikNotu = h('span', { class: 'alan-uyarisi' });
+      // Boş zorunlu alan: "Doldur" (doldur.js) — değer yalnız test verisi tablosundan seçilir (bağlı sütun, yoksa adı uyan); kaynak
+      // "Tablodan" olur, satır seçilirse grubun satır seçimi yazılır. Değer üretilmez.
+      const doldur = doldurDugmesi({
+        projeId: proje.id, ortamId: null, tabloSecimleri: () => tabloSecimleri,
+        alan: () => ({ id: sat.yol, etiket: sat.alan.ad, tip: sat.alan.secenekler ? 'secim' : 'metin', hassas: gizliMi(sat.alan.ad), secenekler: sat.alan.secenekler || null }),
+        mevcutBag: () => { const b = bag(sat.yol); return b && b.tablo && b.sutun ? b : null; },
+        secildi: (secim) => { if (secim.tabloSecimi) tabloSecimleri[secim.tabloSecimi.anahtar] = { ...secim.tabloSecimi.kosul }; v.kaynak = 'tablo'; v.deger = secim.basvuru; tabloCiz(); }
+      });
       // Yerinde güncelleme (yazarken): sınıflar, ★ durumu, zorunlu uyarısı, sayaç — denetimler yeniden oluşturulmaz.
       const tazele = () => {
         const varsayilan = (varsayilanlar[operasyon.value] || {})[sat.yol];
@@ -1372,6 +1381,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         satir.className = `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''} ${zorunlu ? 'zorunlu' : ''}`;
         const eksik = zorunlu && (v.kaynak === 'gonderme' || v.kaynak === 'bos' || v.kaynak === 'nil' || ((v.kaynak === 'sabit' || v.kaynak === 'parametre' || v.kaynak === 'tablo' || v.kaynak === 'akis' || v.kaynak === 'hesap') && !v.deger));
         eksikNotu.textContent = eksik ? 'Zorunlu alan dolu gönderilmiyor (olumsuz senaryo değilse doldurun).' : '';
+        doldur.hidden = !eksik || v.kaynak === 'akis' || v.kaynak === 'parametre' || v.kaynak === 'hesap';
         sayacGuncelle();
       };
       pin.addEventListener('click', async () => { await varsayilanKaydet(sat.yol, v, ayniDeger((varsayilanlar[operasyon.value] || {})[sat.yol], v)); tazele(); });
@@ -1393,7 +1403,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Zorunlu alan' }, '*') : null,
             h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
           h('span', { role: 'cell' }, kaynak),
-          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele, () => satirCiz()), eksikNotu, kuralNotu(sat.yol, v)),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele, () => satirCiz()), eksikNotu, doldur, kuralNotu(sat.yol, v)),
           h('span', { role: 'cell' }, pin));
         tazele();
       };

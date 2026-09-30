@@ -1,0 +1,29 @@
+/* "Doldur" bileşeni (doldur.js): boş alanın değerini test verisi tablosundan seçtiren düğme, küçük seçim listesi ve
+   "Tümünü doldur (tablodan)" sonucu. Renkler stil.css'teki tema değişkenlerinden gelir. */
+.doldur-kap { position: relative; display: inline-flex; flex-wrap: wrap; align-items: center; }
+.doldur-kap[hidden] { display: none; }
+.doldur-paneli {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  width: max-content; max-width: min(24rem, calc(100vw - 32px)); max-height: 20rem; overflow: auto;
+  padding: 8px; border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); background: var(--panel-kati);
+  box-shadow: var(--golge-yuksek); text-align: left; white-space: normal;
+}
+.doldur-paneli[hidden] { display: none; }
+.doldur-baslik { margin: 0 0 6px; color: var(--metin-2); }
+.doldur-aday + .doldur-aday { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--cizgi); }
+.doldur-aday-basligi { display: flex; align-items: center; gap: 4px; font-weight: 600; overflow-wrap: anywhere; }
+.doldur-satirlari { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.doldur-secenegi {
+  display: block; width: 100%; text-align: left; padding: 4px 8px; border: 1px solid transparent; border-radius: var(--yaricap-s);
+  background: transparent; color: var(--metin); font: inherit; cursor: pointer; overflow-wrap: anywhere;
+}
+.doldur-secenegi:hover, .doldur-secenegi:focus-visible { border-color: var(--vurgu); background: var(--vurgu-zemin); }
+.doldur-vazgec { margin-top: 6px; }
+.doldur-yok { margin: 0; overflow-wrap: anywhere; }
+/* Öneriden açılan taslakta boş zorunlu alan vurgusu. */
+.model-alani.doldur-bekliyor { outline: 2px dashed var(--atlanan); outline-offset: 4px; border-radius: var(--yaricap-s); }
+.doldur-tumu-kap { display: grid; gap: 4px; margin-top: 6px; justify-items: start; }
+.doldur-sonucu:empty { display: none; }
+.doldur-sonucu p { margin: 0; }
+.doldur-kalanlar { margin: 2px 0 0; padding-left: 1.2em; }
+.alan-degeri .doldur-kap { margin-left: 4px; }

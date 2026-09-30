@@ -22,6 +22,7 @@ import {
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
 import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
+import { doldurDugmesi, tumunuDoldurDugmesi } from './doldur.js';
 import { basvuru, basvurununTekDegeri, degerBasvurusuYaz, formSuzgecleri, grupAnahtari, satirUyumu, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
@@ -580,6 +581,38 @@ function modelFormu(icerik, s, senaryo, baglam) {
   let degisti = false;
   let sonDurum = { senaryo: {}, gorunurluk: null, hatalar: [], uyarilar: [] };
 
+  // --- "Doldur" (doldur.js): boş zorunlu alanın değeri YALNIZ test verisi tablosundan (değer üretilmez) ----------------
+  // Tablo bağlantısı (${Tablo.Sütun}) yazılır; satır seçilirse grubun satır seçimi (tabloSecimleri). Kayıt grubu alanları
+  // grubun "Hazır" seçimiyle dolar (burada yok). Öneriden açılan taslakta boş zorunlu alanlar vurgulanır.
+  /** alan kimliği → { el: Doldur düğmesi, kap: alan kabı } */
+  const doldurlar = new Map();
+  const DOLDUR_HARIC = ['kimlik', 'altModel', 'profil', 'onayKutusu', 'dosya'];
+  const bosDeger = (a) => { const d = degerler[a.anahtar]; return d === undefined || d === null || d === ''; };
+  const doldurulabilir = (a) => a.zorunlu === true && Boolean(a.anahtar) && a.anahtar !== sema.baslik && !DOLDUR_HARIC.includes(a.tip) && !alanGrubu.has(a.id);
+  const alanBagi = (a) => { const l = degerListeleri.find((x) => x.hedef?.alan === a.id && x.baglanti); return l ? l.baglanti : (baglam.gizliBaglar || {})[a.id] || null; };
+  const doldurAlani = (a) => ({ id: a.id, etiket: a.etiket, tip: a.tip, hassas: Boolean(a.hassas), secenekler: a.tip === 'secim' ? alanSecenekleri(a) : null });
+  const doldurBaglami = {
+    projeId: s.proje.id, ortamId: () => s.ortam.id, tabloSecimleri: () => tabloSecimleri,
+    cokluGruplar: () => Object.entries(veriKosulari.gruplar || {}).filter(([, v]) => v && (v.kip === 'tumu' || v.kip === 'secili')).map(([k]) => k),
+    digerDegerler: () => tumAlanlar.flatMap((a) => { const b = alanBagi(a); return b && a.anahtar && !bosDeger(a) ? [{ ...b, deger: degerler[a.anahtar] }] : []; })
+  };
+  /** Doldur seçimi forma yazılır: değer + (varsa) grubun satır seçimi; alan yeniden çizilir. */
+  function doldurYaz(a, secim, ciz = true) {
+    if (secim.tabloSecimi) tabloSecimleri[secim.tabloSecimi.anahtar] = { ...secim.tabloSecimi.kosul };
+    bilerekBos.delete(a.anahtar);
+    degerYaz(a.anahtar, secim.deger);
+    if (ciz) { alanlar.get(a.id)?.ciz(); satirSecimiCiz(true); }
+  }
+  /** Doldur düğmelerinin görünürlüğü ve öneri taslağındaki vurgu (değer değişince). */
+  function doldurlariGuncelle(g) {
+    for (const [id, d] of doldurlar) {
+      const a = tumAlanlar.find((x) => x.id === id);
+      const bosMu = Boolean(a) && bosDeger(a) && !bilerekBos.has(a.anahtar);
+      d.el.hidden = !bosMu;
+      d.kap.classList.toggle('doldur-bekliyor', Boolean(s.taslak?.oneri) && bosMu && g?.alanlar[id] !== false);
+    }
+  }
+
   // --- Durum hesaplama ------------------------------------------------------------------
   const gorunurlukHesapla = (taslak) => gorunurlukleriHesapla(taslak, dogrulamaBaglami);
   function hesapla() {
@@ -666,6 +699,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     tablodanBagliListeleriYenile();
     if (grupOnizlemesiEski) { grupOnizlemesiEski = false; if (tabloListesi) for (const g of kayitGruplari.values()) if (g.kip === 'hazir') for (const kap of g.kaplar) kayitGrubuCiz(g, kap); }
     beklenenAdimSecenekleriniGuncelle(g);
+    doldurlariGuncelle(g);
     if (!diyagramAlani.hidden) diyagramiCiz();
   }
 
@@ -923,6 +957,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
         ust.el.querySelector('.sag')?.append(h('label', { class: 'bilerek-bos', title: 'Olumsuz senaryo: alan boş bırakılır; koşucu bu alana değer yazmaz.' }, kutu, h('span', {}, 'Bilerek boş bırak')));
         kap.classList.toggle('bilerek-bos-acik', acik);
         if (acik) for (const el of [govde, ...govde.querySelectorAll('input, select, textarea, button')]) if ('disabled' in el) el.disabled = true;
+      }
+      // Boş zorunlu alan: "Doldur" (yalnız tablodan; doldur.js). Görünürlüğü değer değişince guncelle() ayarlar.
+      if (doldurulabilir(alan)) {
+        const el = doldurDugmesi({ ...doldurBaglami, alan: () => doldurAlani(alan), mevcutBag: () => alanBagi(alan), secildi: (secim) => doldurYaz(alan, secim) });
+        el.hidden = !bosDeger(alan) || bilerekBos.has(alan.anahtar);
+        ust.el.querySelector('.sag')?.append(el);
+        doldurlar.set(alan.id, { el, kap });
       }
       kayit.gorunurlukCipi = ust.cip;
       // Başlık (etiket + seçenekler şeridi) ve gövde (girdi + hata / uyarı) iki ayrı parça: aynı ızgara satırındaki alanların
@@ -2087,7 +2128,22 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (s.taslak?.oneri) {
     // Senaryo önerisinin önizlemesi (senaryo-onerileri.js): kaydedilmedi; oluşturmak kullanıcının kararı.
     icerik.querySelector('.form-duzeni')?.before(h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' },
-      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Toplu koşuya dahil" kapalı gelir.`)));
+      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Toplu koşuya dahil" kapalı gelir.`),
+      // Boş zorunlu alanlar vurgulu; her birinin yanında "Doldur". Önerinin kendi değerleri korunur (yalnız boşlar dolar).
+      h('p', { class: 'kucuk' }, 'Boş kalan zorunlu alanlar vurgulandı. Her birini yanındaki "Doldur" ile test verisi tablosundan seçin ya da elle yazın; değer üretilmez.'),
+      tumunuDoldurDugmesi({
+        ...doldurBaglami,
+        alanlar: () => {
+          const g = hesapla().gorunurluk;
+          return tumAlanlar.filter((a) => doldurulabilir(a) && bosDeger(a) && !bilerekBos.has(a.anahtar) && g.alanlar[a.id] !== false)
+            .map((a) => ({ alan: doldurAlani(a), bag: alanBagi(a) }));
+        },
+        uygula: (dolanlar) => {
+          for (const d of dolanlar) { const a = tumAlanlar.find((x) => x.id === d.alanId); if (a) doldurYaz(a, d.secim, false); }
+          for (const d of dolanlar) alanlar.get(d.alanId)?.ciz();
+          satirSecimiCiz(true);
+        }
+      })));
   } else if (s.taslak) {
     // Akış değişti: yeni akışta olmayan değerler kaldırıldı mı?
     degisti = true;
