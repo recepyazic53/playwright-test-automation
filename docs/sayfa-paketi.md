@@ -190,7 +190,7 @@ akış olmaz. Nasıl çalışır:
   alanlarından biri ekrana özel bağlıysa açık gelir); ekran aynı alanı başka sütuna
   bağlarsa o ekranda onunki geçerlidir (ekrana özel), "Ortak akışa dön" ekranın bağını siler. Etkin bağ (ekranınki, yoksa ortak
   akışınki) senaryo formunda, koşuda, tablo etkisi / kullanımında, birleştirme denetiminde ve istek dosyasında kullanılır
-  (`tablolar/ekran-baglari.mjs > etkinAlanBaglari`). Ortak akışta senaryo dönüşümleri ("Değerleri / Kişi alanlarını tabloya bağla…") yoktur.
+  (`tablolar/ekran-baglari.mjs > etkinAlanBaglari`). Ortak akışta senaryo dönüşümleri ("Otomatik eşleştir…" penceresindeki senaryo adımları) yoktur.
 - **Yalnızca test ortamı:** `"yalnizTestOrtami": true` ise adımları canlı işaretli ortamda koşulmaz, raporda
   "(canlı ortam: atlandı)" yazar.
 - **Kart:** kimlik bloğu gibi bir kayıt bloğudur (`kimlikProfili`, `kimlikTuru: "kart"`). Değer, "Kredi kartı" tablosunun

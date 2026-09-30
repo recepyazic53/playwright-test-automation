@@ -339,8 +339,10 @@ test.describe('arayüz ve koşu (127.0.0.1)', () => {
     const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
     await expect(kart).toBeVisible({ timeout: 20_000 });
     await expect(kart.locator('.alan-satiri.baslik').first()).toContainText('Alan');
-    // "Müşteri tipi" bağlı değil ve Müşteri tablosunda aynı adlı sütun var.
-    await expect(kart).toContainText('1 alanın adı bir tablo sütunuyla aynı.');
+    // "Müşteri tipi" bağlı değil ve Müşteri tablosunda aynı adlı sütun var: tek "Otomatik eşleştir…" akışı bunu önerir (ayrı düğme yok).
+    await kart.getByRole('button', { name: 'Otomatik eşleştir…' }).click();
+    await expect(page.getByRole('dialog', { name: 'Otomatik eşleştir' }).getByRole('table', { name: 'Önerilen eşleşmeler' })).toContainText('Müşteri tipi');
+    await page.getByRole('dialog', { name: 'Otomatik eşleştir' }).getByRole('button', { name: 'Kapat' }).click();
     expect((await kart.innerText()).toLowerCase()).not.toContain('input');
     expect(hatalar).toEqual([]);
     await page.context().close();

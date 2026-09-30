@@ -48,14 +48,6 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
   };
   const degisti = () => { clearTimeout(zaman); durum.textContent = 'Değişti…'; zaman = setTimeout(kaydet, 400); };
 
-  /** Adı aynı sütun (bağlı olmayan input'lar için öneri). */
-  const oneri = (g) => {
-    for (const t of tablolar) {
-      const c = t.sutunlar.find((x) => !x.gizli && kucuk(x.ad) === kucuk(g.etiket));
-      if (c) return { tablo: t.id, sutun: c.ad };
-    }
-    return null;
-  };
   const liste = h('div', { class: 'alan-formu ekran-baglari' });
   // Ortak akış bölümleri (ekranın kendi alanlarının altında); açık / kapalı durumu yeniden çizimde korunur. İlk çizimde: o ortak
   // akışın alanlarından biri bu ekranda ekrana özel bağlıysa açık, değilse kapalı.
@@ -98,7 +90,9 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       // Gizli sütun (ör. CVV, parola) yalnız seçim olmayan alanlara bağlanır: değer koşuda şifreli sütundan gelir, raporlarda
       // maskelenir. Seçim alanının seçenekleri tablodan listelendiği için gizli sütun ona sunulmaz.
       const gizliOlur = !SECIM_TIPLERI.includes(g.tip);
-      const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu` }, h('option', { value: '' }, '— bağlı değil —'),
+      // Seçenekleri ekran modelinde zaten tanımlı seçim alanı bağlanmadan da çalışır: "bağlı değil" uyarısı verilmez.
+      const modelde = Boolean(g.modeldeSecenek) && !b;
+      const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu` }, h('option', { value: '' }, modelde ? '— seçenekler ekranda tanımlı (bağlamak gerekmez) —' : '— bağlı değil —'),
         tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
           value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
         }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
@@ -131,7 +125,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
         alt = [alt, degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok')];
       }
-      const satir = h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
+      const satir = h('div', { class: `alan-satiri ${b || modelde ? '' : 'gonderilmez'}` },
         h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),
         h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
       if (!miras) { kendiSatirlari.push(satir); return; }
@@ -140,36 +134,25 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       if (kendi) grup.ozel += 1;
       gruplar.set(miras.ortakAkis.id, grup);
     });
-    const bagsiz = girdiler.filter((g) => !baglar[g.id] && !ortakBaglar[g.id] && oneri(g));
     yerlestir(liste, basliklar(), ...kendiSatirlari,
       kendiSatirlari.length ? null : h('p', { class: 'soluk kucuk' }, 'Bu ekranın kendi alanı yok; alanları aşağıdaki ortak akışlardan gelir.'));
     yerlestir(ortakKap, [...gruplar.values()].map((x) => ortakBolumu(x.o, x.satirlar, x.ozel)));
-    yerlestir(oneriKap, bagsiz.length ? h('div', { class: 'not-kutusu bilgi kucuk' },
-      `${bagsiz.length} alanın adı bir tablo sütunuyla aynı. `,
-      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { for (const g of bagsiz) baglar[g.id] = oneri(g); ciz(); degisti(); } }, 'Adı aynı sütunlara bağla')) : null);
   };
-  const oneriKap = h('div', {});
-  // "Değerleri tabloya bağla…": bu ekranın senaryolarında bağlı alanların düz değerleri → ${Tablo.Sütun} (önce plan, onayla).
-  const donustur = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('veri'), 'Değerleri tabloya bağla…');
-  donustur.addEventListener('click', async () => {
+  // "Otomatik eşleştir…": bağlantısız alanlar için tablo sütunu önerisi (önizleme → tek onay → geri al); senaryo değerlerini tabloya çevirme
+  // adımları (değerler / kişi satırları) aynı pencerede sonraki adım olarak durur.
+  const otomatik = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('yildiz'), 'Otomatik eşleştir…');
+  otomatik.addEventListener('click', async () => {
     if (zaman) { clearTimeout(zaman); zaman = null; await kaydet(); }
-    await degerleriTabloyaBagla(s.proje, ekran, donustur);
-  });
-  // "Kişi alanlarını tabloya bağla…": kişi / kimlik alanları kişi / kayıt tablosunun sütunlarına (öneri + onay), senaryo değerleri satıra.
-  const kisi = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('kullanici'), 'Kişi alanlarını tabloya bağla…');
-  kisi.addEventListener('click', async () => {
-    if (zaman) { clearTimeout(zaman); zaman = null; await kaydet(); }
-    if (await kisiAlanlariniBagla(s.proje, ekran, kisi)) ekranBaglariSekmesi(kap, s, ekran);
+    if (await otomatikEslestir(s.proje, ekran, otomatik, ortakAkis, () => ekranBaglariSekmesi(kap, s, ekran))) ekranBaglariSekmesi(kap, s, ekran);
   });
   yerlestir(kap, h('section', { class: 'kart form-paneli', 'aria-label': 'Ekranın test verisi bağlantıları' },
-    // Ortak akışın senaryosu yok: senaryo dönüşümleri ("Değerleri / Kişi alanlarını tabloya bağla…") gösterilmez.
-    h('div', { class: 'kart-basligi' }, h('h3', {}, 'Test verisi'), h('span', { class: 'sag' }, durum, ortakAkis ? null : donustur, ortakAkis ? null : kisi,
+    h('div', { class: 'kart-basligi' }, h('h3', {}, 'Test verisi'), h('span', { class: 'sag' }, durum, tablolar.length ? otomatik : null,
       h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     ortakAkis ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Bu ortak akışın alanlarını burada bir kez bağlayın: bağlar onu kullanan tüm ekranlara varsayılan olarak geçer. Bir ekran aynı alanı kendi Test verisi sekmesinde başka sütuna bağlarsa o ekranda onunki geçerli olur.')
       : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Üstteki tablo bu ekranın kendi alanlarıdır. Ortak akışlardan gelen alanlar altta, ortak akış başına ayrı “Ortak akıştan” bölümündedir; bağları ortak akışın sayfasında kurulur. Değiştirirseniz yalnız bu ekran için geçerli olur (ekrana özel); “Ortak akışa dön” ekranın bağını siler.') : null,
-    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. Değişiklikler anında kaydedilir. Mevcut senaryolardaki düz değerleri tabloya bağlamak için "Değerleri tabloya bağla…" (önce ne değişeceği gösterilir).'),
+    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Seçenekleri ekranda zaten tanımlı olan seçim alanlarını bağlamak gerekmez; bağlanmazsa o seçenekler kullanılır. Değişiklikler anında kaydedilir. Alanları sizin yerinize eşleştirmek için "Otomatik eşleştir…" (önce öneriler gösterilir, tek onayla uygulanır, geri alınabilir).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Test verisi > Tablolar'), ' bölümünden ekleyin.'),
-    oneriKap, liste, ortakKap));
+    liste, ortakKap));
   ciz();
 }
 
@@ -287,7 +270,7 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
     };
     function ciz() {
       const o = is.o;
-      const parcalar = [h('h2', { id: 'kisi-baglama-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kullanici')), 'Kişi alanlarını tabloya bağla'),
+      const parcalar = [h('h2', { id: 'kisi-baglama-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kullanici')), 'Kişi satırlarını eşleştir'),
         h('p', { class: 'soluk kucuk' }, `${ekran.ad} ekranındaki kişi / kimlik alanları (kimlik no, doğum tarihi, telefon, e-posta, ad soyad…) bir kişi / kayıt tablosunun sütunlarına bağlanır; senaryolardaki düz değerler o tablonun satırına çevrilir. Eşlemeler öneridir: kontrol edip onaylayın. Değerler burada gösterilmez.`)];
       if (is.hata) parcalar.push(h('div', { class: 'not-kutusu hata', role: 'alert' }, is.hata));
       if (is.bekliyor) parcalar.push(h('p', { class: 'soluk kucuk', 'aria-live': 'polite' }, 'Hesaplanıyor…'));
@@ -359,5 +342,115 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
     diyalog.showModal();
     dugme.blur();
     hesapla();
+  });
+}
+
+const GUVEN_METNI = { yuksek: 'yüksek', orta: 'orta' };
+
+/**
+ * "Otomatik eşleştir" penceresi (sunucu: tablolar/otomatik-eslestirme.mjs). Bağlantısız alanlar için tablo sütunu önerileri (güven ve
+ * neden ile) önce gösterilir; yüksek güvenliler işaretli gelir. "Eşleştir" seçilenleri tek işlemde bağlar; "Geri al" yalnız onları
+ * eski hâline döndürür. Senaryolardaki değerleri tabloya çevirme adımları (ayrı önizlemeli pencereler) burada sonraki adımdır.
+ * @param {{ id: string }} proje @param {{ id: string; ad: string }} ekran @param {HTMLButtonElement} dugme @param {boolean} ortakAkis @param {() => void} yenile sekmeyi yeniler
+ * @returns {Promise<boolean>} bağlar değiştiyse true (sekme yenilenir)
+ */
+export function otomatikEslestir(proje, ekran, dugme, ortakAkis, yenile) {
+  return new Promise((coz) => {
+    const is = { o: /** @type {any} */ (null), hata: '', secili: /** @type {Set<string>} */ (new Set()), sonuc: /** @type {any} */ (null), degisti: false };
+    const govde = h('div', { class: 'diyalog-govde' });
+    const uygula = h('button', { type: 'button', class: 'birincil', disabled: true }, ikon('onay'), 'Eşleştir');
+    const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay etki-diyalogu kisi-baglama-diyalogu otomatik-eslestir-diyalogu', 'aria-labelledby': 'otomatik-eslestir-basligi' }, govde, h('div', { class: 'diyalog-alt' }, kapat, uygula));
+    const baslik = () => h('h2', { id: 'otomatik-eslestir-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('yildiz')), 'Otomatik eşleştir');
+    /** Senaryo değerlerini tabloya çevirme: ayrı, önizlemeli pencereler (bu pencere kapanır, bağlar değişmişse sekme yenilenir). */
+    const sonrakiAdim = () => (ortakAkis ? null : h('div', { class: 'otomatik-sonraki' },
+      h('h3', { class: 'kucuk-baslik' }, 'Sonraki adım: senaryo değerleri'),
+      h('p', { class: 'soluk kucuk' }, 'Senaryolarda yazılı düz değerleri tablodaki değerlere çevirir; önce ne değişeceği gösterilir, siz onaylarsınız.'),
+      h('div', { class: 'satir-eylemleri' },
+        h('button', { type: 'button', class: 'kucuk-dugme', onclick: async (/** @type {Event} */ e) => { const d = /** @type {HTMLButtonElement} */ (e.currentTarget); diyalog.close(); await degerleriTabloyaBagla(proje, ekran, d); } },
+          ikon('veri'), 'Senaryo değerlerini tabloya çevir…'),
+        h('button', { type: 'button', class: 'kucuk-dugme', onclick: async (/** @type {Event} */ e) => { const d = /** @type {HTMLButtonElement} */ (e.currentTarget); diyalog.close(); if (await kisiAlanlariniBagla(proje, ekran, d)) yenile(); } },
+          ikon('kullanici'), 'Kişi satırlarını eşleştir…'))));
+    function ciz() {
+      const o = is.o;
+      const parcalar = [baslik()];
+      uygula.hidden = Boolean(is.sonuc);
+      if (is.hata) parcalar.push(h('div', { class: 'not-kutusu hata', role: 'alert' }, is.hata));
+      if (is.sonuc) {
+        const r = is.sonuc;
+        const geriAl = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('geri'), 'Geri al');
+        geriAl.addEventListener('click', async () => {
+          try {
+            await mesgulIken(geriAl, 'Geri alınıyor…', () => api('/platform/ekran/otomatik-eslestir/geri-al', { govde: { projeId: proje.id, ekranId: ekran.id, alanlar: r.alanlar, onceki: r.onceki } }));
+            is.sonuc = null; is.degisti = true;
+            bildir(`${r.alanlar.length} alanın eşleştirmesi geri alındı.`);
+            diyalog.close();
+          } catch (e) { bildir(e.message, 'hata'); }
+        });
+        parcalar.push(h('div', { class: 'not-kutusu basari kucuk', role: 'status' }, `${r.alanlar.length} alan tablo sütunlarına bağlandı.${r.karsiliklar && r.karsiliklar.eklenen ? ` ${r.karsiliklar.eklenen} sayfa değeri karşılığı eklendi.` : ''} `, geriAl),
+          sonrakiAdim());
+        yerlestir(govde, parcalar);
+        return;
+      }
+      parcalar.push(h('p', { class: 'soluk kucuk' }, `${ekran.ad} ekranında henüz bir tablo sütununa bağlanmamış alanlar için alan adına, alan türüne (kimlik no, telefon, doğum tarihi…) ve seçeneklere göre uyan sütunlar önerilir. Uygulamadan önce kontrol edin; sonra "Geri al" ile eski hâline dönebilirsiniz.`));
+      if (!o) parcalar.push(h('p', { class: 'soluk kucuk', 'aria-live': 'polite' }, 'Öneriler hazırlanıyor…'));
+      else if (!o.oneriler.length) {
+        parcalar.push(h('div', { class: 'not-kutusu bilgi kucuk' }, o.ozet.tablo ? 'Bağlanmamış alanlar için uyan bir tablo sütunu bulunamadı.' : 'Henüz test verisi tablosu yok.',
+          o.ozet.zatenBagli ? ` ${o.ozet.zatenBagli} alan zaten bağlı.` : '', ' Tabloları ', h('a', { href: '#/veri' }, 'Test verisi'), ' bölümünden ekleyebilirsiniz.'), sonrakiAdim());
+      } else {
+        const kutular = /** @type {Array<[HTMLInputElement, string]>} */ ([]);
+        const sayac = h('span', { class: 'soluk', 'aria-live': 'polite' });
+        const tumu = h('input', { type: 'checkbox', 'aria-label': 'Tüm eşleşmeleri seç' });
+        const sayacYaz = () => {
+          sayac.textContent = `${is.secili.size} eşleşme seçili`;
+          tumu.checked = is.secili.size > 0 && is.secili.size === kutular.length;
+          uygula.disabled = !is.secili.size;
+        };
+        tumu.addEventListener('change', () => { for (const [k, id] of kutular) { k.checked = tumu.checked; if (tumu.checked) is.secili.add(id); else is.secili.delete(id); } sayacYaz(); });
+        const satirlar = o.oneriler.map((x) => {
+          const kutu = h('input', { type: 'checkbox', checked: is.secili.has(x.alanId), 'aria-label': `${x.etiket}: eşleştir` });
+          kutular.push([kutu, x.alanId]);
+          kutu.addEventListener('change', () => { if (kutu.checked) is.secili.add(x.alanId); else is.secili.delete(x.alanId); sayacYaz(); });
+          return h('tr', { 'data-alan': x.alanId },
+            h('td', {}, kutu),
+            h('td', { 'data-baslik': 'Alan' }, x.etiket, h('span', { class: 'alan-tipi' }, TIP[x.tip] || x.tip)),
+            h('td', { 'data-baslik': 'Tablo sütunu' }, `${x.tablo.ad} → ${x.sutun}`, x.gizli ? h('span', { class: 'neden' }, 'gizli sütun') : null),
+            h('td', { 'data-baslik': 'Güven' }, rozet(GUVEN_METNI[x.guven] || x.guven, x.guven === 'yuksek' ? 'basari' : 'uyari'), h('span', { class: 'neden' }, x.neden)));
+        });
+        parcalar.push(h('div', { class: 'donusum-ozeti' }, h('b', {}, `${o.ozet.oneri} eşleşme önerildi`), h('span', {}, `${o.ozet.yuksek} yüksek güven`),
+          o.ozet.zatenBagli ? h('span', {}, `${o.ozet.zatenBagli} alan zaten bağlı`) : null, o.ozet.eslesmeyen ? h('span', {}, `${o.ozet.eslesmeyen} alan eşleşmedi`) : null, sayac),
+        h('div', { class: 'donusum-tablosu-kap' }, h('table', { class: 'donusum-tablosu', 'aria-label': 'Önerilen eşleşmeler' },
+          h('thead', {}, h('tr', {}, h('th', {}, tumu), h('th', {}, 'Alan'), h('th', {}, 'Tablo sütunu'), h('th', {}, 'Güven'))), h('tbody', {}, satirlar))),
+        h('p', { class: 'soluk kucuk' }, 'Yüksek güvenli öneriler işaretli gelir; orta güvenlileri kontrol edip işaretleyin. Yalnız alan bağlantısı yazılır, senaryolarınız değişmez.'));
+        if (o.birlestirilebilir.length) {
+          parcalar.push(h('div', { class: 'not-kutusu bilgi kucuk' }, `Bu tablolar birleştirilebilir görünüyor: ${o.birlestirilebilir.map((b) => `${b.a} + ${b.b}`).join('; ')}. `,
+            h('a', { href: '#/veri' }, 'Test verisi'), ' bölümündeki birleştirme önerisinden (önizlemeli, geri alınabilir) birleştirebilirsiniz.'));
+        }
+        parcalar.push(sonrakiAdim());
+        sayacYaz();
+      }
+      yerlestir(govde, parcalar);
+    }
+    uygula.addEventListener('click', async () => {
+      const secim = [...is.secili];
+      if (!secim.length || !is.o) return;
+      try {
+        const r = await mesgulIken(uygula, 'Uygulanıyor…', () => api('/platform/ekran/otomatik-eslestir', { govde: { projeId: proje.id, ekranId: ekran.id, onay: true, secimler: secim } }));
+        is.sonuc = { alanlar: secim, onceki: r.onceki, karsiliklar: r.karsiliklar };
+        is.degisti = true;
+        ciz();
+      } catch (e) { bildir(e.message, 'hata'); }
+    });
+    kapat.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(is.degisti); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    dugme.blur();
+    ciz();
+    api('/platform/ekran/otomatik-eslestir', { govde: { projeId: proje.id, ekranId: ekran.id } }).then((r) => {
+      is.o = r.onizleme;
+      is.secili = new Set(r.onizleme.oneriler.filter((/** @type {any} */ x) => x.onerilenSecim).map((/** @type {any} */ x) => x.alanId));
+      ciz();
+    }).catch((e) => { is.hata = e.message; ciz(); });
   });
 }
