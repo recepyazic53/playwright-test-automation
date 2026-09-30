@@ -23,7 +23,7 @@ import { SECIM_KOPRUSU, SECIM_PANELI_KIMLIGI, taramaTarayiciAyarlari, type Taram
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { ogeBilgisi, ogeSecmePaneliniKur, type SeciciAdayi, type SecimPaneliDurumu } from './oge-secme-paneli';
 import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
-import { TaramaHatasi, alanKapsami, hataBilgisi, type OlayGonderici } from './tarama-motoru';
+import { TaramaHatasi, alanKapsami, hataBilgisi, hedefSayfayiAc, type OlayGonderici } from './tarama-motoru';
 
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -210,14 +210,7 @@ export async function ogeleriSec(browser: Browser, g: TaramaGirdisi, olay: OlayG
     }
     durum.asama = 'secme';
     await paneliKur();
-    try {
-      await islem.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: taramaTarayiciAyarlari(g).sayfaAcilmaMs });
-    } catch (hata) {
-      const m = ilkSatir(hata);
-      if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${taramaTarayiciAyarlari(g).sayfaAcilmaMs / 1000} sn içinde açılmadı.`);
-      if (agHatasiMi(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
-      throw hata;
-    }
+    await hedefSayfayiAc(islem, g.hedefAdres, taramaTarayiciAyarlari(g).sayfaAcilmaMs, g.hedefYol);
     const captcha = await captchaAlgila(islem);
     if (captcha.length) throw new TaramaHatasi('CAPTCHA', `Hedef sayfada CAPTCHA görüldü (${captcha.slice(0, 2).join('; ')}); otomasyon CAPTCHA çözmez.`);
     if (g.tarif && (await islem.locator(g.tarif.parolaAlani).first().isVisible().catch(() => false))) {

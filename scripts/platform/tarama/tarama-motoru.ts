@@ -59,6 +59,57 @@ export class TaramaHatasi extends Error {
 
 export type OlayGonderici = (olay: TaramaOlayi) => Promise<void>;
 
+/**
+ * Hedef sayfayı açar (tarama, öğe seçme, akış kaydı ve hızlı test ortak). "net::ERR_ABORTED" bir erişilemezlik değil, gezinmenin
+ * tamamlanmadan kesilmesidir (sayfa başka bir adrese yönlendirirken, boş 204 yanıtında, dosya indirmede). Bu yüzden:
+ *  - gezinme kesildiyse sayfanın yerleşmesi beklenir; sayfa başka bir adreste açıldıysa (yönlendirme) açılmış sayfa sayılır,
+ *  - açılmadıysa bir kez daha denenir,
+ *  - yine olmuyorsa sunucunun GERÇEK yanıtı (HTTP durumu, indirme, yönlendirme adresi) Türkçe hata iletisine yazılır.
+ * Adresler iletide gizlenir (<adres>). @returns yönlendirildiyse son sayfanın yolu (yoksa null)
+ */
+export async function hedefSayfayiAc(sayfa: Page, adres: string, zamanAsimiMs: number, hedefYol: string): Promise<string | null> {
+  const yanitlar: string[] = [];
+  const dinle = (y: import('@playwright/test').Response): void => {
+    const istek = y.request();
+    if (!istek.isNavigationRequest() || istek.frame() !== sayfa.mainFrame()) return;
+    const durum = y.status();
+    const yon = y.headers().location;
+    const ek = (y.headers()['content-disposition'] ?? '').toLowerCase().startsWith('attachment');
+    yanitlar.push(ek ? `HTTP ${durum}, dosya indirme yanıtı` : yon ? `HTTP ${durum}, yönlendirme` : durum === 204 || durum === 205 ? `HTTP ${durum}, boş yanıt` : `HTTP ${durum}`);
+  };
+  sayfa.on('response', dinle);
+  try {
+    for (let deneme = 1; deneme <= 2; deneme++) {
+      try {
+        await sayfa.goto(adres, { waitUntil: 'domcontentloaded', timeout: zamanAsimiMs });
+        return deneme > 1 ? yolu(sayfa.url()) : null;
+      } catch (hata) {
+        const m = ilkSatir(hata);
+        if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${hedefYol}) ${zamanAsimiMs / 1000} sn içinde açılmadı.`);
+        if (/Download is starting/i.test(m)) {
+          throw new TaramaHatasi('SITE_ERISILEMEDI', 'Hedef adres sayfa değil, bir dosya indirmesi başlatıyor; test edilecek sayfanın adresini yazın.');
+        }
+        if (!/ERR_ABORTED/i.test(m)) {
+          if (agHatasiMi(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
+          throw hata;
+        }
+        // Gezinme kesildi: sayfa başka bir adrese yönlendiriyorsa yerleşmesini bekle; oraya varıldıysa sayfa açılmıştır.
+        await sayfa.waitForLoadState('domcontentloaded', { timeout: Math.min(8_000, zamanAsimiMs) }).catch(() => undefined);
+        const son = sayfa.url();
+        if (son && son !== 'about:blank') return yolu(son);
+        if (deneme === 2) {
+          const sonYanit = yanitlar.length ? yanitlar[yanitlar.length - 1] : 'sunucudan yanıt alınamadı';
+          throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılırken tarayıcı gezinmeyi iptal etti (net::ERR_ABORTED; ${sonYanit}). Adres yanlış olabilir, sunucu boş yanıt (204) ya da dosya indirmesi dönüyor olabilir ya da sayfa açılırken başka bir adrese yönlendirmeyi kesiyor olabilir; adresi tarayıcıda açıp kontrol edin.`);
+        }
+        await sayfa.waitForTimeout(1_000);
+      }
+    }
+    return null;
+  } finally {
+    sayfa.off('response', dinle);
+  }
+}
+
 const SECIM_BEKLEME_MS = 2_500;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -226,14 +277,7 @@ async function profilTara(
 ): Promise<ProfilEnvanteri> {
   const { sayfaAcilmaMs, kesifSecenekSiniri } = taramaTarayiciAyarlari(g);
   const git = async (): Promise<void> => {
-    try {
-      await sayfa.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: sayfaAcilmaMs });
-    } catch (hata) {
-      const m = ilkSatir(hata);
-      if (agHatasiMi(m) && !/Timeout/i.test(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
-      if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${sayfaAcilmaMs / 1000} sn içinde açılmadı.`);
-      throw hata;
-    }
+    await hedefSayfayiAc(sayfa, g.hedefAdres, sayfaAcilmaMs, g.hedefYol);
     await sayfa.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => undefined);
     await sakinles(sayfa, 3_000);
   };
