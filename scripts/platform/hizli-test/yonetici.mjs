@@ -45,6 +45,8 @@ import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
 import { senaryoKaydet } from '../senaryolar/senaryo-servisi.mjs';
 import { senaryoHazirligi } from '../senaryolar/hazirlik-servisi.mjs';
 import { tablolariListele, tabloKaydet } from '../tablolar/tablo-deposu.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
+import { karsiliklariEkrandanAl } from '../tablolar/karsiliklar.mjs';
 import { tabloTaslagiKur } from './test-verisi-tablosu.mjs';
 import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
 import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
@@ -753,7 +755,8 @@ export function hizliTestYoneticisiOlustur(s) {
   /**
    * Veri durağında ELLE yazılan değerleri test verisi tablosuna kaydeder ve senaryo alanlarını tablo başvurusuna çevirir
    * ("${Tablo.Sütun}"): ekranın test verisi bölümünde görünür. Aynı ekran + senaryo adı yeniden kaydedilirse tablo ve satır güncellenir.
-   * @param {Veritabani} vt @param {Nesne} o @param {string} baslik @returns {{ tablo: string; sutunSayisi: number } | null}
+   * @param {Veritabani} vt @param {Nesne} o @param {string} baslik
+   * @returns {{ tablo: string; tabloId: string; sutunSayisi: number; baglar: Record<string, { sutun: string; gizli: boolean }>; baglanan?: number } | null}
    */
   function degerleriTabloyaKaydet(vt, o, baslik) {
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
@@ -763,12 +766,37 @@ export function hizliTestYoneticisiOlustur(s) {
     const eskiSutunlar = (mevcut?.sutunlar ?? []).map((x) => ({ ad: x.ad, gizli: x.gizli }));
     const yeniSutunlar = t.sutunlar.filter((x) => !eskiSutunlar.some((e) => e.ad.toLocaleLowerCase('tr') === x.ad.toLocaleLowerCase('tr')));
     const eskiSatir = mevcut?.satirlar.find((s) => s.ad.toLocaleLowerCase('tr') === t.satirAdi.toLocaleLowerCase('tr'));
-    tabloKaydet(vt, {
+    const tabloId = tabloKaydet(vt, {
       projeId: o.projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: t.tabloAdi, tur: 'kayit', sutunlar: [...eskiSutunlar, ...yeniSutunlar],
       satirlar: [{ ...(eskiSatir ? { id: eskiSatir.id } : {}), ad: t.satirAdi, ortamId: null, degerler: t.satir }]
     });
     for (const [anahtar, b] of Object.entries(t.baglar)) o.degerler[anahtar] = { deger: b.basvuru, kaynak: 'tablo' };
-    return { tablo: t.tabloAdi, sutunSayisi: t.sutunlar.length };
+    const gizli = new Map(t.sutunlar.map((x) => [x.ad, x.gizli]));
+    return { tablo: t.tabloAdi, tabloId, sutunSayisi: t.sutunlar.length, baglar: Object.fromEntries(Object.entries(t.baglar).map(([k, b]) => [k, { sutun: b.sutun, gizli: gizli.get(b.sutun) === true }])) };
+  }
+
+  /**
+   * Ekranın test verisi bölümü: tabloya alınan her alan, ekranın alan bağlarında ilgili tablo sütununa bağlanır (Ekran > Test verisi).
+   * Seçim alanına gizli sütun bağlanmaz (ekran-baglari kuralı). @param {Veritabani} vt @param {Nesne} o @param {string} ekranId
+   * @param {Nesne} paket @param {NonNullable<ReturnType<typeof degerleriTabloyaKaydet>>} tablo @returns {number} bağlanan alan sayısı
+   */
+  function alanlariTabloyaBagla(vt, o, ekranId, paket, tablo) {
+    const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
+    const anahtarlar = senaryoAnahtarlari(paket.model, alanlar);
+    /** @type {Record<string, { tablo: string; sutun: string }>} */
+    const yeni = {};
+    for (const a of alanlar) {
+      const b = tablo.baglar[a.anahtar];
+      const senaryoAnahtari = anahtarlar[a.anahtar];
+      if (!b || !senaryoAnahtari) continue;
+      if (b.gizli && ['select', 'radio'].includes(String(a.tur))) continue;
+      yeni[senaryoAnahtari] = { tablo: tablo.tabloId, sutun: b.sutun };
+    }
+    if (!Object.keys(yeni).length) return 0;
+    ekranAlanBaglariniKaydet(vt, o.projeId, ekranId, { ...ekranAlanBaglari(vt, ekranId), ...yeni });
+    // Seçim alanlarının sayfa değeri karşılıkları (tablo değeri ↔ sayfadaki seçenek) eksikse eklenir.
+    try { karsiliklariEkrandanAl(vt, o.projeId, ekranId); } catch { /* karşılık eklenemedi: bağ yine geçerli */ }
+    return Object.keys(yeni).length;
   }
 
   /** Kaydet: aynı ekran varsa önce farklar (onaysız); sonra ekran modeli + senaryo. @param {Veritabani} vt @param {Nesne} g @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; medyaKlasoru: string }} c */
@@ -802,6 +830,9 @@ export function hizliTestYoneticisiOlustur(s) {
       ekranId = r.ekranId;
     }
     const ayni = vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ? AND ekran_id = ? AND baslik = ?', [o.projeId, ekranId, baslik])[0];
+    if (tablo) {
+      try { tablo.baglanan = alanlariTabloyaBagla(vt, o, ekranId, paket, tablo); } catch (h) { gunluk(o, `Alanlar tabloya bağlanamadı: ${h instanceof Error ? h.message : String(h)}`); }
+    }
     const hizli = { izin: o.izin, dogrulandi: o.dogrulama?.durum === 'basarili', bitis: { bitti: o.bitis.bitti, hata: o.bitis.hata, devam: o.bitis.devam, adres: o.bitis.adres }, olusturma: simdi() };
     const s2 = senaryoKaydet(vt, {
       ...(ayni ? { id: String(ayni.id) } : {}), projeId: o.projeId, ekranId, baslik, veri, ortamIdleri: [o.ortam.id], kosuyaDahil: g.kosuyaDahil !== false,

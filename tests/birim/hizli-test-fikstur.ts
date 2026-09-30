@@ -42,6 +42,8 @@ export const HIZLI_BASVURU_SAYFASI = `<h1>Başvuru</h1>
   var $ = function (id) { return document.getElementById(id); };
   // Alandan çıkınca gelen sayfa doğrulaması (ör. geçersiz değer): doldurma sırasında hata mesajı belirir.
   $('adSoyad').addEventListener('change', function () { if (this.value === 'HATALI') uyar('Zorunlu alan: Ad soyad geçersiz'); });
+  // Sonradan silinen alan: müşteri tipi seçilince (gecikmeli) ad soyad sıfırlanır (sayfa satırı yeniden çizer).
+  $('musteriTipi').addEventListener('change', function () { if (this.value === 'bireysel' && $('adSoyad').value === 'SILINIR') setTimeout(function () { $('adSoyad').value = ''; }, 300); });
   $('musteriTipi').addEventListener('change', function () { $('vergiKutusu').className = this.value === 'kurumsal' ? '' : 'gizli'; });
   function uyar(m) { $('uyari').textContent = m; $('uyari').hidden = false; }
   $('hesapla').addEventListener('click', function () {

@@ -1200,6 +1200,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         adimMesajlariniTemizle(page);
         const sureSn = adim.kosu?.zamanAsimiSn ?? adimSuresiSn();
         const gorunmeyenKaldirir = gorunmeyenAlanDavranisi() === 'kaldir';
+        const doldurulanMetinler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
         for (const alan of adim.alanlar) {
           if (alan.atla) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, alan.atla));
@@ -1242,6 +1243,16 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           await alaniDoldur(page, alan, l, adim.baslik, k);
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
+          if (!zorla && !['secim', 'okluSecim', 'radyo', 'onayKutusu', 'dosya'].includes(alan.tip)) doldurulanMetinler.push({ alan, l, k });
+        }
+        // Sonraki alanların sorgusu / sayfanın yeniden çizmesi önceki alanı silmiş olabilir (ör. satır yenilenir): boş kalan metin
+        // alanları bir kez yeniden doldurulur (kullanıcının elle yazdığında olduğu gibi).
+        for (const d of doldurulanMetinler) {
+          const bos = !(await d.l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
+          if (!bos || !String(d.alan.deger ?? '').trim()) continue;
+          const yenidenBaslangic = Date.now();
+          await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
+          await arkaPlanIstekleriniBekle(page, yenidenBaslangic);
         }
         ekranaDonuldu = await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);

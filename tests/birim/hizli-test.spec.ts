@@ -284,6 +284,11 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(tablo?.sutunlar.map((x: Nesne) => x.ad)).toEqual(['Müşteri tipi', 'Vergi no', 'Ödeme şekli']);
   expect(tablo?.satirlar).toHaveLength(1);
   expect(JSON.stringify(s)).toContain(`\${${kTablo.tablo}.Vergi no}`);
+  // Ekranın Test verisi bölümü: tabloya alınan alanlar ilgili tablo sütununa bağlandı.
+  const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${kayitli.ekranId}`)) as Nesne;
+  expect(Object.values(bag.baglar as Record<string, Nesne>).map((b) => b.sutun).sort()).toEqual(['Müşteri tipi', 'Vergi no', 'Ödeme şekli']);
+  expect(new Set(Object.values(bag.baglar as Record<string, Nesne>).map((b) => b.tablo))).toEqual(new Set([tablo?.id]));
+  expect((k.tablo as { baglanan?: number }).baglanan).toBe(3);
 });
 
 test('kaydedilen senaryo normal koşuda (model-senaryolari.spec.ts) aynı zinciri yürütür ve Bitti\'de başarılı olur', async () => {
@@ -347,6 +352,21 @@ test('doldururken sayfa hata gösterirse sessizce ilerlenmez: "Bu bir hata mı?"
   await basarili('/platform/hizli-test/hata-cevabi', { id, cevap: 'onemsiz' });
   o = await bekle(id, ['karar']);
   expect(o.soru.tur).toBe('karar');
+  await basarili('/platform/hizli-test/iptal', { id });
+});
+
+test('sayfa doldurulan alanı sonradan silerse (yeniden çizim) boş kalan alan yeniden doldurulur; düğme dolu alanla basılır', async () => {
+  test.setTimeout(200_000);
+  await isBitsin();
+  const once = uygulama.hesaplamalar.length;
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Silinen alan', izin: 'evet', cumle: 'Hesapla\'ya bas' })).id);
+  let o = await bekle(id, ['veri']);
+  const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
+  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('SILINIR'), [alan('Müşteri tipi')]: deger('bireysel') } });
+  // Ad soyad silinseydi Hesapla "Zorunlu alan: Ad soyad" verirdi (hata sorusu); yeniden doldurulunca hesaplanır ve yeni alan (Ödeme şekli) sorulur.
+  o = await bekle(id, ['veri', 'hataSorusu']);
+  expect(o.durum, JSON.stringify(o.soru)).toBe('veri');
+  expect(uygulama.hesaplamalar.length).toBe(once + 1);
   await basarili('/platform/hizli-test/iptal', { id });
 });
 
