@@ -643,7 +643,9 @@ function sihirbazTamam() {
   const ortamNotu = () => h('div', { class: 'not-kutusu bilgi siradaki-adim', role: 'note' },
     h('p', {}, h('strong', {}, 'Sıradaki: ortamı tanımlayın. '),
       'Testlerin çalışacağı adresi (ör. TEST) Ayarlar > Proje ve ortamlar bölümünden ekleyin; ortam eklenene kadar tarama ve koşu başlamaz. ',
-      giris === 'evet' ? 'Ortamı ekledikten sonra giriş tarifini kaydedebilirsiniz.' : 'Giriş tarifi ortam eklendikten sonra kaydedilir.'),
+      giris === 'evet' ? 'Ortamı ekledikten sonra giriş tarifini kaydedebilirsiniz.'
+        : giris === 'hayir' ? 'Giriş gerekmiyor olarak işaretlendi; fikriniz değişirse Ayarlar > Giriş profilleri\'nden tarif tanımlayabilirsiniz.'
+          : 'Giriş tarifi ortam eklendikten sonra kaydedilir.'),
     h('div', { class: 'dugmeler' }, ortamBaglantisi));
   const ortamBaglantisi = h('a', { class: 'dugme birincil', href: '#/ayarlar/proje', onclick: (o) => { o.preventDefault(); location.hash = ortamBaglantisi.getAttribute('href'); yonlendir(); } },
     ikon('ag'), 'Ortamı tanımla');

@@ -290,6 +290,9 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);
       // Ortam yok: sıradaki adım ortamı tanımlamak (Ayarlar > Proje ve ortamlar).
       await expect(ozet.getByRole('note')).toContainText('Sıradaki: ortamı tanımlayın.');
+      // "Giriş gerekmiyor" seçildi: "Giriş tarifi ortam eklendikten sonra kaydedilir" denmez.
+      await expect(ozet.getByRole('note')).toContainText('Giriş gerekmiyor olarak işaretlendi');
+      await expect(ozet.getByRole('note')).not.toContainText('Giriş tarifi ortam eklendikten sonra kaydedilir');
       await expect(ozet.getByRole('link', { name: 'Ortamı tanımla' })).toHaveAttribute('href', '#/ayarlar/proje');
       await kontrol('tamam');
       // Kayıt doğrulaması: proje ortamsız kaydedildi.
@@ -306,6 +309,17 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await expect(page.locator('.kayit-listesi:not(.proje-listesi):not(.kurtarma-listesi) li')).toHaveCount(0);
       await expect(page.locator('.proje-listesi li')).toHaveCount(1);
       expect(await page.locator('#ana').innerText()).not.toMatch(/\bnull\b|\bundefined\b/);
+      // Ayarlar > Giriş profilleri: kurulumdaki "Giriş gerekmiyor" seçimi görünür ("Tanımlı değil" uyarısı değil); geri alınabilir.
+      await nobetciApi(bos, '/platform/ortam/kaydet', { projeId: projeler[0].id, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, riskli: false });
+      await page.evaluate(() => { location.hash = '#/ayarlar/giris'; });
+      const girisSatiri = page.locator('.giris-tarifi-bolumu li[data-ortam]').filter({ hasText: 'TEST' });
+      await expect(girisSatiri).toContainText('Giriş gerekmiyor (kurulumda seçildi)');
+      await expect(girisSatiri).not.toContainText('Tanımlı değil');
+      await expect(girisSatiri.getByRole('button', { name: 'Tarif tanımla — TEST giriş tarifi' })).toBeVisible();
+      await girisSatiri.getByRole('button', { name: 'Geri al' }).click();
+      await expect(girisSatiri).toContainText('Tanımlı değil');
+      const sonra = (await nobetciApi(bos, `/platform/baslarken?projeId=${projeler[0].id}`)) as unknown as { baslarken: { adimlar: Array<{ anahtar: string; atlandi?: boolean }> } };
+      expect(sonra.baslarken.adimlar.find((a) => a.anahtar === 'giris')?.atlandi).toBe(false);
       expect(hatalar).toEqual([]);
       await baglam.close();
     } finally {
