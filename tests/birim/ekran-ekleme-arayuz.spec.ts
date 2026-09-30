@@ -116,8 +116,8 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(page.locator('.sayfa-basligi .eylemler').getByRole('link', { name: 'Ekran ekle' })).toBeVisible();
   await expect(page.getByText('Sayfa ekle')).toHaveCount(0);
   await page.goto('/#/ekranlar/yeni');
-  // Sıra: ana yollar (Ekranı tara / hızlı test, Akışı kaydet) → görünür "Paket yükle ya da yapay zekâ ile oluştur" → tek seçenek
-  // ("başlangıç adımı olarak da kullan"). Eski "Ne oluşturulsun?", "Ya da: Hızlı test" ve üst notlar yok.
+  // Sıra: ana yollar (Ekranı tara / hızlı test, Akışı kaydet) → görünür "Paket yükle ya da yapay zekâ ile oluştur". Eski "Ne oluşturulsun?",
+  // "Ya da: Hızlı test", üst notlar ve ortak akış / başlangıç adımı seçimi yok.
   const ana = page.locator('section.ekleme-secenekleri .ekleme-kutusu');
   const ileri = page.locator('section.ileri-duzey-bolumu');
   await expect(page.getByRole('heading', { name: 'Nasıl eklensin?' })).toBeVisible();
@@ -130,20 +130,19 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(page.getByText('gizli değer içeren paket reddedilir')).toHaveCount(0);
   await expect(page.getByText('Paketiniz yoksa')).toHaveCount(0);
   await expect(page.locator('.sayfa-basligi .meta')).toHaveCount(0);
-  const secimY = (await page.locator('.olusturma-secimi').boundingBox())!.y;
+  await expect(page.locator('.olusturma-secimi')).toHaveCount(0);
   const anaY = (await ana.first().boundingBox())!.y;
   const ileriY = (await ileri.boundingBox())!.y;
   expect(anaY).toBeLessThan(ileriY);
-  expect(ileriY).toBeLessThan(secimY);
   await expect(ana.nth(0)).toContainText('Adresi verin, gerisini Nöbetçi yapsın: alanları bulur, eksik veriyi sorar, ekranı ve senaryoyu kaydeder. Basit ve tek adımlı sayfalar için.');
   await expect(ana.nth(1)).toContainText('Ekranda işlemi kendiniz yaparsınız, Nöbetçi adımları ve alanları kaydeder. Çok adımlı ya da koşullu formlar için.');
   // Hızlı test artık "Ekranı tara"nın akıllı yolu: kartın eylemi hızlı test sihirbazına (eski #/hizli-test adresi) götürür.
   await expect(ana.nth(0).getByRole('link', { name: 'Adresi ver ve başla' })).toHaveAttribute('href', '#/hizli-test');
   await expect(ana.nth(1).getByRole('button')).toHaveCount(1);
   for (const i of [0, 1]) await expect(ana.nth(i).locator('.ekleme-notu')).toBeVisible();
-  // Ekran / Ortak akış ayrımı yok: tek onay kutusu (varsayılan işaretsiz = ekran).
+  // Ekran / Ortak akış ayrımı yok: ne seçim ne onay kutusu (her ekran başka senaryoda önceki adım olabilir).
   await expect(page.getByRole('radiogroup')).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   // Eşit boyutlu, yan yana (aynı üst kenar).
   const b = await kutular(ana);
   expect(Math.max(...b.map((x) => x.height)) - Math.min(...b.map((x) => x.height))).toBeLessThanOrEqual(1);
@@ -177,14 +176,14 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   expect(yanit.status()).toBe(200);
   expect(yanit.headers()['content-disposition']).toContain(BICIM_DOSYASI_ADI);
   expect(await yanit.text()).toBe(paketBicimiBelgesi(KOK));
-  // Başlangıç adımı işaretliyken sihirbaz yerine eski tarama penceresi açılır (klavyeyle); işaret kalkınca kart yine hızlı teste gider.
-  await page.getByRole('checkbox', { name: 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan' }).check();
-  await expect(page).toHaveURL(/#\/ekranlar\/yeni\/ortak-akis$/);
+  // Eski ortak akış bağlantısı (yalnız geriye uyum): sihirbaz yerine eski tarama penceresi açılır (klavyeyle); yeni ekran adresinde kart yine hızlı teste gider.
+  await page.goto('/#/ekranlar/yeni/ortak-akis');
   await page.locator('.tara-kutusu').getByRole('button', { name: 'Ekranı tara' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('dialog[open]')).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('checkbox', { name: 'Bu ekranı başka senaryolarda başlangıç adımı olarak da kullan' }).uncheck();
+  await page.goto('/#/ekranlar/yeni');
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.locator('.tara-kutusu').getByRole('link', { name: 'Adresi ver ve başla' })).toBeVisible();
   // 390px: alt alta, taşma yok.
   await page.setViewportSize({ width: 390, height: 900 });
