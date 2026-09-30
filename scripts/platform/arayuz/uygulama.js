@@ -15,7 +15,7 @@
 // henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
-  degisiklikleriBirak, parolaAlani, rozet, s, temaDugmesi, yerlestir
+  degisiklikleriBirak, kasaDurumunuBildir, parolaAlani, rozet, s, temaDugmesi, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberBaglaminiAyarla, rehberDugmesi, rehberOtomatikDene, sayfaRehberiBaglantisiKur } from './rehber.js';
@@ -109,6 +109,7 @@ export async function yonlendir() {
     return;
   }
   durum.sunucu = d;
+  kasaDurumunuBildir(Boolean(d.kasa && d.kasa.olusturuldu && d.kasa.acik));
   await modulleriYukle();
   // Açık çalışma alanı yok (kapatıldı / ilk kurulum) → başlangıç ekranı. Sabit veritabanıyla (PLATFORM_VERITABANI)
   // başlatılan sunucuda çalışma alanı her zaman açıktır. (undefined = eski sunucu: tek veritabanı gibi davranılır.)
@@ -502,6 +503,7 @@ function sihirbazKasa() {
     if (!anladim.checked) { mesaj.goster('Devam etmek için parolanın kurtarılamayacağını onaylayın.'); anladim.focus(); return; }
     try {
       await mesgulIken(gonder, 'Kasa oluşturuluyor…', () => api('/platform/kasa/olustur', { govde: { parola: p1.girdi.value } }));
+      kasaDurumunuBildir(true);
       p1.girdi.value = ''; p2.girdi.value = '';
       if (durum.sunucu) durum.sunucu = { ...durum.sunucu, kasa: { ...(durum.sunucu.kasa || {}), olusturuldu: true, acik: true } };
       durum.kullanimModu = VARSAYILAN_MOD;
@@ -742,6 +744,7 @@ function kilitEkrani(beklemeSaniye) {
     if (!parola.girdi.value) { alanHatasi(parola.girdi, 'Parolayı girin.'); parola.girdi.focus(); return; }
     try {
       await mesgulIken(gonder, 'Açılıyor…', () => api('/platform/kasa/ac', { govde: { parola: parola.girdi.value }, kilitOlayiYok: true }));
+      kasaDurumunuBildir(true);
       parola.girdi.value = '';
       durdur();
       yonlendir();

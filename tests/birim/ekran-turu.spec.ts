@@ -225,6 +225,8 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       const page = await baglam.newPage();
       const hatalar: string[] = [];
       page.on('pageerror', (e) => hatalar.push(String(e)));
+      // Kasa yokken ayar istenmez (eskiden GET /platform/kosu-ayarlari 409 dönüp konsolu kirletiyordu).
+      page.on('response', (r) => { if (r.url().includes('/platform/kosu-ayarlari') && r.status() >= 400) hatalar.push(`${r.status()} ${r.url()}`); });
       const kontrol = async (ad: string) => {
         const d = await denetle(page);
         expect(d.adsiz, `${cihaz}/${ad}: adsız öğe`).toEqual([]);

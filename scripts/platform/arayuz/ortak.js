@@ -985,7 +985,19 @@ export const rozet = (metin, tur = '', ek = {}) => {
 
 /** Kullanıcının koşu / arayüz ayarları (Ayarlar > Koşu, Arayüz; oturum boyunca önbellekte, kaydedince tazelenir). */
 let ayarSozu = null;
+/** Kasa açık mı (kabuk /platform/durum'dan bildirir). Kasa yokken / kilitliyken ayar istenmez: sunucu 409 / 423 döner, konsol kirlenir. */
+/** @type {boolean | null} null: kabuk durumu henüz okumadı (ilk istek bildirimi bekler). */
+let kasaAcik = null;
+/** @type {Array<() => void>} */
+let kasaBekleyenleri = [];
+export function kasaDurumunuBildir(/** @type {boolean} */ acik) {
+  kasaAcik = acik;
+  if (!acik) ayarSozu = null;
+  const b = kasaBekleyenleri; kasaBekleyenleri = []; for (const f of b) f();
+}
 export function kullaniciAyarlari() {
+  if (kasaAcik === null) return new Promise((coz) => { kasaBekleyenleri.push(() => { coz(kullaniciAyarlari()); }); });
+  if (!kasaAcik) return Promise.resolve({});
   ayarSozu ??= api('/platform/kosu-ayarlari').then((y) => y.ayarlar || {}).catch(() => { ayarSozu = null; return {}; });
   return ayarSozu;
 }
