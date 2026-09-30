@@ -390,6 +390,9 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
   const tiklandi = (e: Event): void => {
     const t = e.target;
     if (panelIci(e) || !ogeMi(t)) return;
+    // Kullanıcının her gerçek tıklaması kayıt motoruna hafifçe bildirilir: düğme / bağlantı saymadığımız bir öğeye (ör. betikle
+    // yönlenen menü) tıklayıp sayfa adresi değişirse motor bunu "adres çubuğuyla gidildi" ile karıştırmaz, ayrı bir adım yapar.
+    if (e.isTrusted) void kopru({ tur: 'etkilesim' }).catch(() => undefined);
     if (mesajModu) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -419,6 +422,14 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: 
   const isleyiciler: Record<OlayTuru, (e: Event) => void> = { input: dokun, change: degisim, click: tiklandi, keyup: tusBirakildi, keydown: tusBasildi };
   for (const [tur, f] of Object.entries(isleyiciler)) window.addEventListener(tur, f, true);
   window.addEventListener('blur', odakKaybi);
+  // Sayfa terk edilirken (adres çubuğuyla başka adrese gidildi) bekleyen okuma kaybolmasın: kısa süre önce dokunulan alanlar o
+  // sayfanın kaydında kalır (yoksa sonraki sayfanın alanı sayılırdı ya da hiç kaydedilmezdi).
+  window.addEventListener('pagehide', () => {
+    if (!okumaZamanlayici) return;
+    clearTimeout(okumaZamanlayici);
+    okumaZamanlayici = null;
+    try { oku(false); } catch { /* sayfa kapanıyor: yok sayılır */ }
+  });
   window.addEventListener('focusout', odakKaybi, true);
   const merkez: Merkez = { olay: (tur, e) => { try { isleyiciler[tur](e); } catch { /* çerçeve olayı işlenemedi: yok sayılır */ } } };
   pencere.__nobetciKayitMerkezi = merkez;

@@ -27,6 +27,10 @@
 //            düğmeye basılır, indirilen dosya (CSV / XLSX / PDF / metin) beklentilerle doğrulanır. SQL adımıyla aynı yerde durur.
 //   giris    { ad, profil }                         Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle
 //            (profil: giriş profilinin adı; boşsa ortamın varsayılanı) yeniden girilir; kendi adımıdır, aksiyondan sonra gelir.
+//   git      { yol }                                Şu adrese git: ekranın kendi ortamının adresine göre yol (ör. /liste) açılır; kendi adımıdır
+//            (kayıtta adres çubuğuyla / bağlantıyla gidilen sayfa geçişleri taslakta bu bloktur; kullanıcı kaldırabilir). Ardından
+//            gelen alan grubu / aksiyon gidilen sayfada uygulanır; beklenen mesaj gidilen sayfada aranır. Yol kuralı:
+//            dogrulama/gezinme-yolu.mjs (tam adres / başka site / gizli sorgu reddedilir).
 //   bitir    {}                                     akışın sonu (zorunlu, son blok)
 //   korunan  { korunan: anahtar, ad, kapsam }       diyagramda DÜZENLENEMEYEN, modeldeki hâliyle AYNEN korunan parça (salt okunur;
 //            taşınabilir / silinebilir): kapsam 'adim' → adımın tamamı (ör. alt model adımı, yalnız öğe beklemesi), 'aksiyonlar'
@@ -53,6 +57,8 @@ import { UYARI_EN_COK, VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulay
 import { sabitGostergeMetni, secimKosuluCikar } from './paket-olusturucu.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
+import { gitYoluHatasi } from '../../dogrulama/gezinme-yolu.mjs';
+import { gezinmePlani } from './gezinme-plani.mjs';
 
 export const BLOK_EN_COK = 200;
 export const BEKLEME_EN_COK_SN = 120;
@@ -166,7 +172,19 @@ export function akisTaslagi(env) {
     bloklar.push({ tur: 'alanlar', ad: adOner(grup), alanlar: grup, zorunlu: zorunlular(grup) });
     grup = [];
   };
-  for (const o of env.olaylar) {
+  // Adres değişimleri (adres çubuğuyla gitmek dahil; gezinme-plani.mjs): olay sırasına göre araya girer. Adres değişince önceki
+  // sayfanın alanları kapanır; sonraki sayfada dokunulan alanlar o adrese göre gelen adımın parçası olur. Aynı adrese dönüş /
+  // yenileme, tıklamayla açılan ve otomatik yönlendirmeler blok üretmez.
+  const gezinme = gezinmePlani(env).adimlar;
+  let gezinSirasi = 0;
+  const gezinmeleriIsle = (/** @type {number} */ sirasi) => {
+    while (gezinSirasi < gezinme.length && gezinme[gezinSirasi].sira <= sirasi) {
+      kapat();
+      bloklar.push({ tur: 'git', yol: gezinme[gezinSirasi++].yol });
+    }
+  };
+  for (const [olayNo, o] of env.olaylar.entries()) {
+    gezinmeleriIsle(olayNo);
     if (o.tur === 'okuma') topla(o.okuma);
     else if (o.tur === 'tik') {
       topla(o.oncesi);
@@ -178,6 +196,7 @@ export function akisTaslagi(env) {
       bloklar.push({ tur: 'mesaj', mesaj: o.mesaj, metin: (m && sabitGostergeMetni(metin(m.metin, METIN_EN_COK))) || '' });
     }
   }
+  gezinmeleriIsle(Number.POSITIVE_INFINITY);
   kapat();
   // İşaretli ama hiçbir okumada görülmemiş alan (olmamalı) son gruba.
   const kalan = [...secili].filter((a) => !kullanildi.has(a));
@@ -386,6 +405,7 @@ export function bloklariAyikla(ham) {
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
     else if (b.tur === 'sql') bloklar.push({ tur: 'sql', ad: metin(b.ad, AD_EN_COK), sql: nesneMi(b.sql) ? b.sql : {} });
     else if (b.tur === 'dosya') bloklar.push({ tur: 'dosya', ad: metin(b.ad, AD_EN_COK), dugme: sayi(b.dugme), dosya: nesneMi(b.dosya) ? b.dosya : {} });
+    else if (b.tur === 'git') bloklar.push({ tur: 'git', yol: typeof b.yol === 'string' ? b.yol.trim().slice(0, 400) : '' });
     else if (b.tur === 'giris') bloklar.push({ tur: 'giris', ad: metin(b.ad, AD_EN_COK), profil: metin(b.profil, 120) || null });
     else hatalar.push({ blok: i, mesaj: 'Bilinmeyen blok türü.' });
   });
@@ -589,6 +609,23 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const tetikleyici = { secici: dg.secici, ...(dg.metin ? { aciklama: metin(dg.metin, 120) } : {}) };
       adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], dosyaKontrolu: { ...d.tanim, tetikleyici } });
       sqlSonrasi = 'dosya';
+      return;
+    }
+    if (b.tur === 'git') {
+      // Şu adrese git: kendi adımıdır (oynatmada ekranın kendi adresine göre yol açılır); ardından gelen alan / aksiyon yeni adım
+      // olur, beklenen mesaj ise gidilen sayfada aranır. Önceki alan grubu ilerleme düğmesiz olabilir (adres çubuğuyla gidildi).
+      const gh = gitYoluHatasi(b.yol);
+      if (gh) { hata(i, `Şu adrese git: ${gh}.`); return; }
+      if (bekleyen) { hata(i, 'Şu adrese git, isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+      sureyiBirak();
+      let ad = `Adrese git: ${b.yol}`.slice(0, AD_EN_COK);
+      for (let n = 2; adlar.has(ad); n++) ad = `${`Adrese git: ${b.yol}`.slice(0, AD_EN_COK - 6)} (${n})`;
+      adlar.add(ad);
+      const c = yeniAdim(ad, []);
+      c.aksiyonlarAynen = [{ tur: 'git', yol: b.yol }];
+      c.adreseGit = { yol: b.yol };
+      kapali = true;
+      sqlSonrasi = false;
       return;
     }
     if (b.tur === 'giris') {

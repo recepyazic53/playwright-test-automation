@@ -109,7 +109,8 @@ const aksiyonTemsilEdilir = (a) => nesneMi(a) && (
   (a.tur === 'tikla' && typeof a.secici === 'string' && a.secici !== '' && Object.keys(a).every((k) => TIKLA_ANAHTARLARI.includes(k)))
   || (gorunurseMi(a) && typeof a.secici === 'string' && a.secici !== '' && (a.zamanAsimiSn === undefined || Number.isInteger(a.zamanAsimiSn))
     && Object.keys(a).every((k) => TIKLA_ANAHTARLARI.includes(k) || k === 'kosul' || k === 'zamanAsimiSn'))
-  || (a.tur === 'bekle' && Number.isInteger(a.sureSn) && Object.keys(a).every((k) => k === 'tur' || k === 'sureSn')));
+  || (a.tur === 'bekle' && Number.isInteger(a.sureSn) && Object.keys(a).every((k) => k === 'tur' || k === 'sureSn'))
+  || (a.tur === 'git' && typeof a.yol === 'string' && a.yol !== '' && Object.keys(a).every((k) => k === 'tur' || k === 'yol')));
 /** "Yalnız görünürse bas" tıklaması mı? @param {unknown} a */
 const gorunurseMi = (a) => nesneMi(a) && a.tur === 'tikla' && a.kosul === 'gorunurse';
 /**
@@ -119,6 +120,12 @@ const gorunurseMi = (a) => nesneMi(a) && a.tur === 'tikla' && a.kosul === 'gorun
  */
 const aksiyonlarTemsilEdilir = (adim, aksiyonlar) => {
   if (!aksiyonlar.every(aksiyonTemsilEdilir)) return false;
+  // "Şu adrese git" yalnız kendi adımı olarak gösterilir (tek aksiyon, alanı ve görünürlük koşulu yok); başka aksiyonlarla / alanlarla
+  // karışıksa (elle yazılmış model) aynen korunur.
+  if (aksiyonlar.some((x) => nesneMi(x) && x.tur === 'git')) {
+    const alanli = (Array.isArray(adim.bolumler) ? adim.bolumler : []).some((b) => nesneMi(b) && Array.isArray(b.alanlar) && b.alanlar.some((x) => nesneMi(x) && !['buton', 'cikti'].includes(x.tip)));
+    return aksiyonlar.length === 1 && !alanli && !nesneMi(adim.gorunurluk);
+  }
   const ilkGorunurse = aksiyonlar.findIndex(gorunurseMi);
   if (ilkGorunurse < 0) return true;
   const duzler = aksiyonlar.map((x, i) => (nesneMi(x) && x.tur === 'tikla' && !gorunurseMi(x) ? i : -1)).filter((i) => i >= 0);
@@ -198,6 +205,7 @@ function aksiyonOzeti(a) {
   if (a.tur === 'bekle' && Number.isInteger(a.sureSn) && a.secici === undefined) return `${a.sureSn} sn bekle`;
   if (a.tur === 'bekle') return `“${String(a.secici ?? a.metin ?? '?')}” ${a.durum === 'gizli' ? 'gizlenene' : a.durum === 'dolu' ? 'dolana' : 'görünene'} kadar bekle${sure}`;
   if (a.tur === 'ekranaDon') return 'ekranın adresine dön';
+  if (a.tur === 'git') return `Şu adrese git: ${String(a.yol ?? '?')}`;
   return `${String(a.tur)} aksiyonu`;
 }
 
@@ -644,6 +652,7 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
       // İsteğe bağlı düğme adımı: aksiyon önce (grubundan sonra); açtığı alanlar ayrı adımdaysa yukarıda grup olarak geldi.
       for (const x of aksiyonlar) {
         if (x.tur === 'bekle' && Number.isInteger(x.sureSn)) bloklar.push({ tur: 'bekle', saniye: x.sureSn });
+        else if (x.tur === 'git') bloklar.push({ tur: 'git', yol: String(x.yol) });
         else if (x.tur === 'tikla') {
           const d = env.dugmeler.findIndex((o) => o.secici === x.secici && o.metin === (typeof x.aciklama === 'string' ? x.aciklama : null));
           if (gorunurseMi(x)) {

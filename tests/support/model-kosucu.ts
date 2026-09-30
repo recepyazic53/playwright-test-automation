@@ -744,6 +744,17 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
   for (const a of kosu?.aksiyonlar ?? []) {
     // Ekrana dön: ekranın adresi yeniden açılır (ör. ortak akış kullanıcıyı değiştirip ana sayfaya götürdükten sonra).
     if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); ekranaDonuldu = true; continue; }
+    // Şu adrese git: ekranın ortamının adresine göre yol açılır (kayıtta adres çubuğuyla / bağlantıyla gidilen sayfa). Önceki
+    // adımın tıklaması hâlâ yükleniyorsa (form gönderimi, yönlendirme) o bitsin; gidilen sayfada sonraki adımlar sürer.
+    if (a.tur === 'git') {
+      await page.waitForLoadState('load', { timeout: 5_000 }).catch(() => undefined);
+      // Yol ekranın ortamının adresine göre çözülür: ekran adresi tam adresse onunla, değilse açık sayfanın kökeniyle (yoksa bağlamın
+      // baseURL'iyle: page.goto göreli adresi ona göre açar).
+      const kok = /^https?:/i.test(ekranUrl) ? ekranUrl : /^https?:/i.test(page.url()) ? page.url() : null;
+      await page.goto(kok ? new URL(a.yol ?? '/', kok).href : a.yol ?? '/', { waitUntil: 'domcontentloaded' });
+      ekranaDonuldu = false;
+      continue;
+    }
     // Süreli bekleme (akış diyagramındaki "Bekleme süresi"; sayfayı değiştirmez).
     if (a.tur === 'bekle' && a.sureSn && !a.secici) { await page.waitForTimeout(a.sureSn * 1000); continue; }
     if (!a.secici) continue;

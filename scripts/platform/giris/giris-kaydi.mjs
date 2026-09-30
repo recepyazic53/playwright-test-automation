@@ -14,17 +14,23 @@
 //                                  Girişten sonra açılan sayfa oturum kontrol adresi (ve çıkış yazısı başarı göstergesi)
 //                                  olarak ÖNERİLİR (sayfaOnerileri); mevcut tarifte yalnız kullanıcı onaylarsa yazılır.
 // ÇOK SAYFALI KAYIT: kullanıcı adres çubuğuyla başka sayfaya giderse (envanter.gezinmeler; kayıt motoru yakalar) taslağa "sayfa"
-// adımı girer (önerisi: o adrese git); adımlar olay sırasındadır, oynatmada her adım kendi sayfasında uygulanır. Kullanıcının
+// adımı girer (önerisi: o adrese git); adımlar olay sırasındadır, oynatmada her adım kendi sayfasında uygulanır. Hangi adres
+// değişiminin adım olacağını (ve alınmayanların nedenini: aynı sayfa / tıklamayla açılan / otomatik yönlendirme / başka site /
+// yeni pencere) ekran akışı kaydıyla ORTAK plan belirler: tarama/gezinme-plani.mjs; özet taslakta gezinmeOzeti olarak döner. Kullanıcının
 // dokunduğu alanlar kendiliğinden listededir (kullanıcı ayrıca alan SEÇMEZ); dokunmadığı alanları ayrıca ekleyebilir.
 // NOT: import.meta KULLANILMAZ. Tipler: giris-kaydi.d.mts.
 
 import { regexKacis, varsayilanGirisAdimlariMi } from './tarif.mjs';
+import { gezinmeYolu } from '../../dogrulama/gezinme-yolu.mjs';
+import { gezinmeOzetMetni, gezinmePlani, gezinmeUyarilari } from '../tarama/gezinme-plani.mjs';
+
+/** Sayfa adresi kuralı ortaktır (ekran modelindeki "git" aksiyonuyla aynı): dogrulama/gezinme-yolu.mjs. */
+export { gezinmeYolu };
 
 export const ALAN_ROLLERI = Object.freeze(['kullaniciAdi', 'parola', 'kod', 'ek', 'yoksay']);
 export const DUGME_ROLLERI = Object.freeze(['gonder', 'tikla', 'kodGonder', 'yoksay']);
 /** Kayıtta adres çubuğuyla gidilen sayfa: oynatmada o adrese gidilir ya da alınmaz. */
 export const SAYFA_ROLLERI = Object.freeze(['git', 'yoksay']);
-const GIZLI_SORGU = /(token|jeton|key|anahtar|sid|session|oturum|pass|parola|sifre|şifre|pwd|auth|code|kod|jwt|ticket|secret)/i;
 /** Doğrulama kodunun kaynağı: Authenticator (TOTP), SMS sabit test kodu, SMS koşu sırasında elle girilir. */
 export const KOD_KAYNAKLARI = Object.freeze(['totp', 'sabit', 'elle']);
 const EK_ALAN_ADI = /^[\p{L}\p{N}_.-]{1,60}$/u;
@@ -45,23 +51,6 @@ export function ekAlanAdiOner(etiket) {
 }
 
 /**
- * Kaydedilen sayfa adresi (tarife yazılacak yol): yalnız "/" ile başlayan yol; parça atılır; sorgu dizisi kısa ve gizli değer
- * çağrıştıran parametre (jeton, oturum, parola…) içermiyorsa korunur, aksi hâlde atılır. Geçersizse ''.
- * @param {unknown} yol
- */
-export function gezinmeYolu(yol) {
-  if (typeof yol !== 'string') return '';
-  const temiz = yol.trim().split('#')[0];
-  if (!temiz.startsWith('/') || temiz.startsWith('//')) return '';
-  const i = temiz.indexOf('?');
-  if (i < 0) return temiz.slice(0, 300);
-  const sorgu = temiz.slice(i + 1);
-  const gizli = sorgu.split('&').some((p) => GIZLI_SORGU.test(p.split('=')[0]));
-  return gizli || sorgu.length > 100 ? temiz.slice(0, i) : temiz.slice(0, 300);
-}
-const yolSorgusuz = (/** @type {string} */ y) => y.split('?')[0];
-
-/**
  * Kayıttan taslak adımlar. @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env
  * @returns {import('./giris-kaydi.d.mts').GirisTaslagi}
  */
@@ -76,24 +65,19 @@ export function girisKaydiTaslagi(env) {
   const yollar = [];
   // Kullanıcının panelde işaretini açıkça kaldırdığı alan taslağa girmez (dokunulan alanlar varsayılan işaretlidir).
   const kaldirilan = new Set(env.alanlar.filter((a) => nesneMi(a) && a.secili === false && nesneMi(a.alan)).map((a) => a.alan.anahtar));
-  // Sayfa değişimleri (adres çubuğu dahil): olay sırasına göre araya girer; her sayfada dokunulan alanlar ayrı sayılır.
-  const gezinmeler = (Array.isArray(env.gezinmeler) ? env.gezinmeler : [])
-    .filter((g) => nesneMi(g) && Number.isFinite(g.sira) && typeof g.yol === 'string')
-    .map((g) => ({ sira: Number(g.sira), yol: gezinmeYolu(g.yol), elle: g.elle === true }))
-    .filter((g) => g.yol).sort((a, b) => a.sira - b.sira).slice(0, 200);
+  // Sayfa değişimleri (adres çubuğu dahil): olay sırasına göre araya girer; her sayfada dokunulan alanlar ayrı sayılır. Hangi
+  // değişimin adım olacağını ortak plan belirler (tarama/gezinme-plani.mjs): adres çubuğuyla gidilenler ve kayıtlı düğme
+  // saymadığımız bir öğeye tıklanınca açılanlar adım olur; aynı sayfa, tıklamayla açılan, otomatik yönlendirme, başka site
+  // ve yeni pencere adım olmaz ama özette nedeniyle görünür (sessiz kayıp yok).
+  const plan = gezinmePlani(env);
+  const gecisler = plan.gecisler;
   let gezinSirasi = 0;
   let bolum = 0;
-  /** @type {string | null} */
-  let sayfaYolu = null;
   const gezinmeleriIsle = (/** @type {number} */ sira) => {
-    while (gezinSirasi < gezinmeler.length && gezinmeler[gezinSirasi].sira <= sira) {
-      const g = gezinmeler[gezinSirasi++];
-      const onceki = sayfaYolu ?? (yollar[0] ? yolSorgusuz(yollar[0]) : null);
-      sayfaYolu = g.yol;
-      // Aynı sayfanın yenilenmesi ya da kaydın başladığı sayfa yeni bir sayfa sayılmaz.
-      if (onceki !== null && yolSorgusuz(onceki) === yolSorgusuz(g.yol)) continue;
+    while (gezinSirasi < gecisler.length && gecisler[gezinSirasi].sira <= sira) {
+      const g = gecisler[gezinSirasi++];
       bolum++;
-      if (g.elle) adimlar.push({ tur: 'sayfa', yol: g.yol, oneri: 'git' });
+      if (g.adim) adimlar.push({ tur: 'sayfa', yol: g.yol, oneri: 'git' });
     }
   };
   /** Herhangi bir sayfada listelenmiş alanlar (kayıt sonunda listeye alınanlar bir daha eklenmesin). */
@@ -127,6 +111,8 @@ export function girisKaydiTaslagi(env) {
   const son = nesneMi(env.sonSayfa) ? env.sonSayfa : null;
   return {
     adimlar, ilkYol: yollar[0] ?? null, sonYol: yollar[yollar.length - 1] ?? null,
+    // Onay ekranı HER ZAMAN özet satırını gösterir; başka siteye gidildiyse ayrıca uyarı satırları.
+    gezinmeOzeti: plan.ozet, gezinmeOzetMetni: gezinmeOzetMetni(plan.ozet), gezinmeUyarilari: gezinmeUyarilari(plan.ozet),
     sonSayfa: son ? { yol: metin(son.yol, 300), cikisMetni: metin(son.cikisMetni, 40) || null } : null
   };
 }

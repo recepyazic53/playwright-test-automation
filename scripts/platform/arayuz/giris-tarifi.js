@@ -16,6 +16,7 @@ import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIk
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';
 import { girisiDeneDugmesi } from './giris-denemesi.js';
+import { gezinmeOzetiKutusu } from './gezinme-ozeti.js';
 import {
   AYNI_ADRES_UYARISI, basariAdresindenYol, girisSonrasiSayfasiniHatirla, hatirlananGirisSonrasiSayfasi, oturumAdresiGirisleAyniMi, oturumAdresiOnerisi
 } from './oturum-kontrolu.mjs';
@@ -87,7 +88,7 @@ const varsayilanMi = (adimlar) => adimlar.length === 3 && adimlar.every((a, i) =
 
 /**
  * Sıralı adım düzenleyici (bağlam adımları ve giriş adımları ortak).
- * @param {{ adimlar: any[]; islemler: Array<{ islem: string; etiket: string }>; onEk: string; ogeSinifi: string; degerYardimi: string; degisti?: () => void }} s
+ * @param {{ adimlar: any[]; islemler: Array<{ islem: string; etiket: string }>; onEk: string; ogeSinifi: string; degerYardimi: string; degisti?: () => void; taban?: { url: string; ad?: string } }} s
  */
 function adimDuzenleyici(s) {
   const { adimlar } = s;
@@ -132,7 +133,30 @@ function adimDuzenleyici(s) {
       case 'kullaniciAdi': case 'parola': case 'gonder':
         govde.append(h('p', { class: 'soluk kucuk giris-ozel-not' }, OZEL_ACIKLAMA[a.islem]));
         break;
-      case 'git': govde.append(girdi('Adres', 'adres', '/yol ya da tam adres')); break;
+      case 'git': {
+        const adresi = girdi('Adres', 'adres', '/yol ya da tam adres');
+        // Yol ortamın taban adresine göre çözülür: taban adres salt okunur önek olarak yanında (tam adres yazılırsa önek gizlenir).
+        const kok = (() => { try { return s.taban && s.taban.url ? new URL(s.taban.url).origin : ''; } catch { return ''; } })();
+        if (kok) {
+          const giris = adresi.querySelector('input');
+          const onek = h('span', { class: 'adres-oneki', 'data-taban-adres': '', title: `Ortamın taban adresi${s.taban.ad ? ` (${s.taban.ad})` : ''}; değiştirilemez` }, kok);
+          const kap = h('div', { class: 'adres-girdisi' });
+          const tam = h('small', { class: 'soluk', 'data-tam-adres': '' });
+          const goster = () => {
+            const yol = String(a.adres ?? '');
+            const goreli = yol === '' || yol.startsWith('/');
+            onek.hidden = !goreli;
+            tam.textContent = goreli ? `Tam adres: ${kok}${yol}${s.taban.ad ? ` (ortam: ${s.taban.ad})` : ''}` : `Tam adres: ${yol}`;
+          };
+          giris.replaceWith(kap);
+          kap.append(onek, giris);
+          adresi.append(tam);
+          giris.addEventListener('input', goster);
+          goster();
+        }
+        govde.append(adresi);
+        break;
+      }
       case 'adresBekle': govde.append(girdi('Adres deseni', 'desen', 'Düzenli ifade')); break;
       case 'bekle': govde.append(girdi('Saniye', 'saniye', '1–300 arası. Sayfa bir şey göstermeden önce sabit süre bekler; mümkünse "Görünmesini bekle" ya da "Adresi bekle" daha güvenilirdir.')); break;
       case 'kosulBekle': govde.append(girdi('Sayfa koşulu (JavaScript)', 'ifade', 'ör. window.hazir === true — yer tutucu içeremez')); break;
@@ -330,7 +354,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     let ozetiCiz = () => {};
     const girisDuzenleyici = adimDuzenleyici({
       adimlar: girisAdimlari, islemler: girisIslemleri, onEk: 'Giriş adımı', ogeSinifi: 'giris-adimi',
-      degerYardimi: '{ad} = giriş profilinin ek alanı (ör. {firmaKodu})', degisti: () => ozetiCiz()
+      degerYardimi: '{ad} = giriş profilinin ek alanı (ör. {firmaKodu})', degisti: () => ozetiCiz(), taban: { url: o.tabanUrl, ad: o.ortamAd }
     });
     const girisAdimEkle = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('arti'), 'Giriş adımı ekle');
     girisAdimEkle.addEventListener('click', () => { girisAdimlari.push({ islem: 'doldur', hedef: { secici: '' }, deger: '' }); girisDuzenleyici.ciz(); });
@@ -445,7 +469,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const adimlar = t.baglamDegistirme ? t.baglamDegistirme.adimlar.map((a) => JSON.parse(JSON.stringify(a))) : [];
     const adimOzetMetni = h('span', {});
     const baglamDuzenleyici = adimDuzenleyici({
-      adimlar, islemler: veri.adimIslemleri, onEk: 'Adım', ogeSinifi: 'tarif-adim', degerYardimi: '{alan} yer tutucusu kullanılabilir',
+      adimlar, islemler: veri.adimIslemleri, onEk: 'Adım', ogeSinifi: 'tarif-adim', degerYardimi: '{alan} yer tutucusu kullanılabilir', taban: { url: o.tabanUrl, ad: o.ortamAd },
       degisti: () => { adimOzetMetni.textContent = `Adımlar (${adimlar.length})`; ozetiCiz(); }
     });
     const adimEkle = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('arti'), 'Adım ekle');
@@ -713,6 +737,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const ALAN_SECENEKLERI = [['kullaniciAdi', 'Kullanıcı adı'], ['parola', 'Parola'], ['kod', 'Doğrulama kodu (2FA)'], ['ek', 'Ek alan (değeri giriş profilinde)'], ['yoksay', 'Tarife alma']];
     const DUGME_SECENEKLERI = [['gonder', 'Giriş düğmesi'], ['tikla', 'Ara tıklama (ör. Devam, sekme, onay)'], ['kodGonder', 'Kodu gönder (2FA)'], ['yoksay', 'Tarife alma']];
     const SAYFA_SECENEKLERI = [['git', 'Bu sayfaya git'], ['yoksay', 'Tarife alma']];
+    // Adres değişimi satırı taban adresle birlikte görünür (saklanan değer yine yoldur; ortamın taban adresine göre çözülür).
+    const tamAdres = (/** @type {string} */ yol) => { try { return `${new URL(o.tabanUrl).origin}${yol}`; } catch { return yol; } };
     const satirlar = v.taslak.adimlar.map((a, i) => {
       const secim = h('select', { 'aria-label': `Kayıt adımı ${i + 1}: ne?` },
         (a.tur === 'alan' ? ALAN_SECENEKLERI : a.tur === 'sayfa' ? SAYFA_SECENEKLERI : DUGME_SECENEKLERI).map(([d, m]) => h('option', { value: d, selected: a.oneri === d }, m)));
@@ -726,7 +752,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       return {
         el: h('li', { class: 'giris-kaydi-adimi' },
           h('span', { class: 'tarif-adim-no sayi', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')),
-          h('div', {}, h('strong', {}, a.tur === 'alan' ? `Alan: ${a.etiket}` : a.tur === 'sayfa' ? `Sayfa: ${a.yol}` : `Düğme: ${a.metin || a.secici}`),
+          h('div', {}, h('strong', {}, a.tur === 'alan' ? `Alan: ${a.etiket}` : a.tur === 'sayfa' ? `Sayfa: ${tamAdres(a.yol)}` : `Düğme: ${a.metin || a.secici}`),
             h('div', { class: 'kucuk soluk' }, a.tur === 'alan' ? `tür: ${a.alanTuru}` : a.tur === 'sayfa' ? 'adres çubuğuyla gidildi' : 'basıldı')),
           secim, ekKutusu),
         isaret: () => ({ rol: secim.value, ad: adGirdi.value.trim(), gizli: gizli.checked })
@@ -850,6 +876,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     kutu.replaceChildren(
       h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
       h('p', { class: 'soluk kucuk' }, 'Nöbetçi girişi böyle anladı: dokunduğunuz alanlar, bastığınız düğmeler ve gittiğiniz sayfalar sırasıyla listelendi (alan seçmeniz gerekmedi). Yanlış tanınan bir adım varsa yanındaki seçimi değiştirin. Kayıtta değer yok.'),
+      // Adres değişimlerinin dökümü HER ZAMAN görünür: kaçı adım oldu, kaçı neden alınmadı; başka siteye gidildiyse uyarı.
+      v.taslak.gezinmeOzetMetni ? gezinmeOzetiKutusu({ ozet: v.taslak.gezinmeOzeti, ozetMetni: v.taslak.gezinmeOzetMetni, uyarilar: v.taslak.gezinmeUyarilari || [] }, { id: o.ortamId }, proje.id) : null,
       h('ol', { class: 'giris-kaydi-listesi' }, satirlar.map((s) => s.el)),
       kodKutusu, basariKutusu, sayfaOneriKutusu, ozetAlani,
       h('div', { class: 'dugmeler' }, kaydet, gelismis, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));

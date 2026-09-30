@@ -198,12 +198,17 @@ test('çok sayfalı giriş kaydı: adres çubuğuyla gidilen sayfalar algılanı
   await expect(rol(1)).toHaveValue('kullaniciAdi');
   await expect(rol(2)).toHaveValue('parola');
   await expect(rol(3)).toHaveValue('gonder');
-  await expect(kutu.locator('li.giris-kaydi-adimi').nth(3)).toContainText('Sayfa: /kullanici-degistir');
+  // Adres değişimi satırı taban adresle birlikte görünür (saklanan değer yol; ortamın taban adresine göre çözülür).
+  await expect(kutu.locator('li.giris-kaydi-adimi').nth(3)).toContainText(`Sayfa: ${fikstur.adres}/kullanici-degistir`);
+  // Özet satırı HER ZAMAN görünür: 4 adres değişimi (giriş gönderimi + kullanıcı değiştirme gönderimi: tıklamayla açılan, oynatmada
+  // tıklama zaten gider; iki adres çubuğu gidişi adım oldu).
+  await expect(kutu.locator('[data-gezinme-ozet-metni]')).toHaveText('Kayıtta 4 adres değişimi görüldü: 2 tanesi adım oldu, 2 tanesi alınmadı (nedeni — tıklamayla açıldı, oynatmada tıklama zaten gider: 2).');
+  await expect(kutu.locator('.gezinme-uyarisi')).toHaveCount(0);
   await expect(rol(4)).toHaveValue('git');
   await expect(rol(5)).toHaveValue('ek');
   await expect(rol(6)).toHaveValue('ek');
   await expect(rol(7)).toHaveValue('tikla');
-  await expect(kutu.locator('li.giris-kaydi-adimi').nth(7)).toContainText('Sayfa: /');
+  await expect(kutu.locator('li.giris-kaydi-adimi').nth(7)).toContainText(`Sayfa: ${fikstur.adres}/`);
   await expect(rol(8)).toHaveValue('git');
   // Ek alanların adları (değerleri giriş profilinde): etiketten önerilir.
   await kutu.getByLabel('Kayıt adımı 5: ek alan adı').fill('bolge');
@@ -213,6 +218,24 @@ test('çok sayfalı giriş kaydı: adres çubuğuyla gidilen sayfalar algılanı
   await kaydet.click();
   await expect(kutu.getByText('Deneme girişi kaydedildi.')).toBeVisible();
   await kutu.getByRole('button', { name: 'Şimdi değil' }).click();
+
+  // Tarif düzenleyicisinde "Sayfaya git" adımının adresi: ortamın taban adresi salt okunur önek olarak yanında, yol düzenlenir.
+  await page.goto('/#/ayarlar/giris');
+  await page.getByRole('button', { name: 'Düzenle — Deneme giriş tarifi' }).click();
+  const form = page.locator('form.tarif-formu');
+  // Adım düzenleyicisi açık değilse aç (sekiz adımlıda kapalı gelir).
+  const duzenleyici = form.locator('details.tarif-adim-kutusu').filter({ has: page.getByText(/^Adımları düzenle \(\d+\)$/) }).first();
+  if (!(await duzenleyici.evaluate((d) => (d as HTMLDetailsElement).open))) await duzenleyici.locator('summary').click();
+  const gitAdimi = form.locator('.giris-adimi').filter({ has: page.locator('[data-taban-adres]') });
+  await expect(gitAdimi).toHaveCount(2);
+  await expect(gitAdimi.first().locator('[data-taban-adres]')).toHaveText(fikstur.adres);
+  await expect(gitAdimi.first().getByRole('textbox', { name: /Adres$/ })).toHaveValue('/kullanici-degistir');
+  await expect(gitAdimi.first().locator('[data-tam-adres]')).toHaveText(`Tam adres: ${fikstur.adres}/kullanici-degistir (ortam: Deneme)`);
+  // Tam adres yazılırsa önek gizlenir (tam adres olarak kalır).
+  await gitAdimi.first().getByRole('textbox', { name: /Adres$/ }).fill(`${fikstur.adres}/kullanici-degistir`);
+  await expect(gitAdimi.first().locator('[data-taban-adres]')).toBeHidden();
+  await gitAdimi.first().getByRole('textbox', { name: /Adres$/ }).fill('/kullanici-degistir');
+  await expect(gitAdimi.first().locator('[data-taban-adres]')).toBeVisible();
 
   const tarif = ((await api(`/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Nesne[]).find((o) => o.ortamId === ortamId)?.tarif as Nesne;
   expect(tarif.girisAdimlari).toEqual([
@@ -242,4 +265,108 @@ test('çok sayfalı giriş kaydı: adres çubuğuyla gidilen sayfalar algılanı
     await giris.close();
   }
   await baglam.close();
+});
+
+/**
+ * Giriş kaydını başlatır, kayıt tarayıcısında `akis` işlevini çalıştırır, Bitir ve Nöbetçi'ye gönder der; Nöbetçi'deki onay ekranını
+ * (region "Giriş kaydı: Deneme") döner. Testin sayfası (page) Nöbetçi arayüzüdür.
+ */
+async function girisKaydiYap(akis: (sayfa: Page) => Promise<void>): Promise<{ page: Page; kutu: ReturnType<Page['getByRole']>; kapat: () => Promise<void> }> {
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1360, height: 1400 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/giris');
+  const satir = page.locator('.giris-tarifi-bolumu li[data-ortam]').filter({ hasText: 'Deneme' });
+  // Tarif kayıtlıysa düğme "Yeniden kaydet" olur.
+  await satir.getByRole('button', { name: /^(Girişi kaydet|Yeniden kaydet) — Deneme girişi$/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Tarayıcıyı aç' }).click();
+  const { kayit, sayfa } = await kayitSayfasi();
+  try {
+    await akis(sayfa);
+    const panel = sayfa.locator('#nobetci-kayit-paneli');
+    await panel.getByRole('button', { name: 'Bitir', exact: true }).click();
+    await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click().catch(() => undefined);
+  } finally {
+    await kayit.close().catch(() => undefined);
+  }
+  const kutu = page.getByRole('region', { name: 'Giriş kaydı: Deneme' });
+  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeVisible({ timeout: 60_000 });
+  return { page, kutu, kapat: () => baglam.close() };
+}
+
+test('girişten hemen sonra (4 sn dolmadan) adres çubuğuyla gidiş adım olur; başka siteye gidiş sessizce kaybolmaz: özet satırı + uyarı + ek taban adres önerisi; aynı sayfa yenileme çift adım olmaz', async () => {
+  test.setTimeout(240_000);
+  const baskaSite = await yerelSunucu(() => html('Başka site', '<h1>Başka site</h1>'));
+  try {
+    const { page, kutu, kapat } = await girisKaydiYap(async (sayfa) => {
+      await sayfa.fill('#kullanici', ORNEK_KULLANICI);
+      await sayfa.fill('#parola', ORNEK_PAROLA);
+      await sayfa.click('#gir');
+      await sayfa.waitForURL(/\/panel$/);
+      // Giriş düğmesinden ~1 sn sonra: eski sezgi (son tıklamadan 4 sn) bunu kaçırırdı; sayfa geçişi türü (typed) ölçülür.
+      await sayfa.goto(`${fikstur.adres}/kullanici-degistir`);
+      await sayfa.selectOption('#bolge', 'A1');
+      // Yenileme ve aynı adrese yeniden gidiş: yeni sayfa sayılmaz (çift adım yok).
+      await sayfa.reload();
+      await sayfa.goto(`${fikstur.adres}/kullanici-degistir`);
+      await sayfa.selectOption('#bolge', 'B2');
+      await sayfa.selectOption('#kisi', 'B2002');
+      await sayfa.waitForTimeout(1200); // gerçek kullanıcı hızı: alan okuması (0,7 sn) sayfa terk edilmeden yazılır
+      // Başka siteye gidiş engellenir ama kaydedilir.
+      await sayfa.goto(`${baskaSite.adres}/`).catch(() => undefined);
+      await expect.poll(() => sayfa.url(), { timeout: 10_000 }).toMatch(/^chrome-error:/);
+      await sayfa.goto(`${fikstur.adres}/`);
+      await expect(sayfa.getByText('Oturumu Kapat')).toBeVisible();
+    });
+    try {
+      const adimlar = kutu.locator('li.giris-kaydi-adimi');
+      // 01 kullanıcı adı · 02 parola · 03 giriş düğmesi · 04 sayfa (kullanıcı değiştir) · 05 bölge · 06 kişi · 07 sayfa (ana sayfa)
+      await expect(adimlar).toHaveCount(7);
+      await expect(adimlar.nth(3)).toContainText(`Sayfa: ${fikstur.adres}/kullanici-degistir`);
+      await expect(adimlar.nth(6)).toContainText(`Sayfa: ${fikstur.adres}/`);
+      await expect(kutu.getByRole('combobox', { name: 'Kayıt adımı 4: ne?' })).toHaveValue('git');
+      // Özet: giriş gönderimi (tıklamayla açıldı) + 2 adres çubuğu gidişi + yenileme + aynı adrese gidiş (aynı sayfa: 2) + başka site.
+      const ozet = kutu.locator('[data-gezinme-ozet-metni]');
+      await expect(ozet).toContainText('Kayıtta 6 adres değişimi görüldü: 2 tanesi adım oldu, 4 tanesi alınmadı');
+      await expect(ozet).toContainText('aynı sayfa: 2');
+      await expect(ozet).toContainText('başka site: 1');
+      const uyari = kutu.locator('.gezinme-uyarisi');
+      await expect(uyari).toContainText(`Şu siteye gidildi: ${new URL(baskaSite.adres).origin}; ortamın adresi dışında olduğu için alınmadı.`);
+      // Ek taban adres önerisi: onaylanırsa ortamın taban adresleri listesine eklenir; yasaklı adres eklenmez.
+      await uyari.getByRole('button', { name: 'Bu adresi ortamın ek taban adresi olarak ekle' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Evet, ekle' }).click();
+      await expect(kutu.getByText(`${new URL(baskaSite.adres).origin} ortamın ek taban adresi olarak eklendi.`)).toBeVisible();
+      const ortamlar = (await api('/platform/ortamlar?projeId=' + projeId)).ortamlar as Nesne[];
+      expect((ortamlar.find((o) => o.id === ortamId) as Nesne).tabanAdresleri).toContain(new URL(baskaSite.adres).origin);
+    } finally { await kapat(); }
+  } finally { await baskaSite.kapat(); }
+});
+
+test('yeni pencere (sekme): açılan pencere ve kapanışı onay ekranında bilgi satırı olur; ana sayfadaki adımlar bozulmaz', async () => {
+  test.setTimeout(240_000);
+  const { kutu, kapat } = await girisKaydiYap(async (sayfa) => {
+    await sayfa.fill('#kullanici', ORNEK_KULLANICI);
+    await sayfa.fill('#parola', ORNEK_PAROLA);
+    await sayfa.click('#gir');
+    await sayfa.waitForURL(/\/panel$/);
+    // Sayfa yeni bir sekme açar (window.open): içinde kullanıcı değiştirme sayfası; iş bitince pencere kapanır.
+    const [pencere] = await Promise.all([
+      sayfa.context().waitForEvent('page'),
+      sayfa.evaluate((adres) => { window.open(adres, '_blank'); }, `${fikstur.adres}/kullanici-degistir`)
+    ]);
+    await pencere.waitForLoadState();
+    await pencere.selectOption('#bolge', 'B2');
+    await pencere.selectOption('#kisi', 'B2001');
+    await pencere.close();
+    await expect(sayfa.locator('h1')).toHaveText('Hoş geldiniz');
+  });
+  try {
+    const ozet = kutu.locator('[data-gezinme-ozet-metni]');
+    await expect(ozet).toContainText('yeni pencere: 1');
+    await expect(kutu.locator('[data-gezinme-pencere]').first()).toContainText('Açılan pencerede: /kullanici-degistir');
+    await expect(kutu.locator('[data-gezinme-pencere]').nth(1)).toContainText('Pencere kapandı');
+    // Açılan pencerede dokunulan alanlar (bölge, kişi) listede; giriş adımları bozulmadı.
+    const adimlar = kutu.locator('li.giris-kaydi-adimi');
+    await expect(adimlar.filter({ hasText: 'Alan: Bölge' })).toHaveCount(1);
+    await expect(adimlar.filter({ hasText: 'Alan: Kişi' })).toHaveCount(1);
+  } finally { await kapat(); }
 });

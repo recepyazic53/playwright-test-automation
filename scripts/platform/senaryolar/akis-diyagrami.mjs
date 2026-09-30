@@ -104,6 +104,7 @@ function kapsamAyari(model, gorunurluk) {
 /** Aksiyonun okunuşu. */
 function aksiyonMetni(a) {
   if (a.tur === 'tikla') return `${tirnak(typeof a.aciklama === 'string' && a.aciklama ? a.aciklama : 'düğme')} düğmesine ${a.kosul === 'gorunurse' ? 'görünürse ' : ''}basılır`;
+  if (a.tur === 'git') return `Şu adrese gidilir: ${typeof a.yol === 'string' ? a.yol : '?'}`;
   if (a.tur === 'bekle' && Number.isInteger(a.sureSn)) return `${a.sureSn} sn beklenir`;
   if (a.tur === 'bekle') return a.durum === 'gizli' ? 'Öğe kaybolana kadar beklenir' : 'Öğe görünene kadar beklenir';
   return null;
@@ -319,4 +320,4 @@ export function hataDugumleri(alanHatalari, sema) {
     for (const d of kontrolDugumleri(anahtar, sema)) (sonuc[d] = sonuc[d] || []).push(...(Array.isArray(mesajlar) ? mesajlar : []));
   }
   return sonuc;
-}
+}

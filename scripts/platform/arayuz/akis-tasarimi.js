@@ -44,6 +44,7 @@ import { girisAyrintisi } from './senaryo-diyagrami.js';
 import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
 import { sinirHatalari } from './ekran-modeli-dogrulayici.mjs';
 import { sayfadaSecDiyalogu } from './oge-secme.js';
+import { gezinmeOzetiKutusu } from './gezinme-ozeti.js';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -53,6 +54,7 @@ const TURLER = {
   ortak: { etiket: 'Önce şu ekrana git', ikonAd: 'pusula' },
   sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
   dosya: { etiket: 'İndirilen dosyayı doğrula', ikonAd: 'indir' },
+  git: { etiket: 'Şu adrese git', ikonAd: 'pusula' },
   giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
   korunan: { etiket: 'Korunan adım', ikonAd: 'kilit' },
   bitir: { etiket: 'Bitir', ikonAd: 'onay' }
@@ -169,6 +171,15 @@ export async function akisTasarimi(icerik, s) {
   const sqlKaynaklari = await sqlKaynaklariniAl(s.proje.id);
   /** Ekran girişsiz açılıyor mu (akışın başı "Girişsiz"; "Yeniden giriş" sunulmaz). */
   const girissiz = veri.girissiz === true;
+  /**
+   * "Şu adrese git" bloğunun yolu hangi ortamın adresine göre çözülür: kayıtta kaydın ortamı, ekranın akışını düzenlerken varsayılan
+   * (yoksa ilk) ortam. Yalnız yol saklanır; taban adres salt okunur önek olarak (ve ortam adıyla) gösterilir.
+   */
+  const ortamlar = await api(`/platform/ortamlar?projeId=${encodeURIComponent(s.proje.id)}`).then((v) => v.ortamlar || []).catch(() => []);
+  const tabanOrtami = (veri.ortam && ortamlar.find((o) => o.id === veri.ortam.id)) || ortamlar.find((o) => o.varsayilan) || ortamlar[0] || (veri.ortam && veri.ortam.tabanUrl ? veri.ortam : null);
+  const tabanKoken = (() => { try { return tabanOrtami ? new URL(tabanOrtami.tabanUrl).origin : ''; } catch { return ''; } })();
+  /** Kayıttaki adres değişimlerinin dökümü: HER ZAMAN bir özet satırı; başka siteye gidildiyse uyarı + (kayıtlı değilse) ek taban adres önerisi. */
+  const gezinmeKutusu = !ekranKipi && veri.gezinme ? gezinmeOzetiKutusu(veri.gezinme, veri.ortam, s.proje.id) : null;
   /** "Yeniden giriş" bloğunun seçebileceği giriş profili ADLARI (Ayarlar > Giriş profilleri; değer yok). */
   const girisProfilAdlari = girissiz ? [] : await api(`/platform/giris-profilleri?projeId=${encodeURIComponent(s.proje.id)}`)
     .then((v) => [...new Set((v.profiller || []).map((p) => p.ad))]).catch(() => []);
@@ -292,6 +303,12 @@ export async function akisTasarimi(icerik, s) {
     if (baska ? zorunluydu : alanBilgisi.get(anahtar)?.zorunlu) b.zorunlu.push(anahtar);
     etkin = hedef;
     degisti();
+  }
+  /** "Şu adrese git" bloğunun tam adresi (salt okunur açıklama): taban adres + yol, ortam adıyla. @param {string} yol */
+  function tamAdresMetni(yol) {
+    const gidilen = `Adrese gidildi: ${yol || '(yol yok)'}`;
+    if (!tabanKoken) return `${gidilen} · ortamın taban adresi okunamadı; yol ekranın ortamının adresine göre çözülür.`;
+    return `${gidilen} · Tam adres: ${tabanKoken}${yol || ''}${tabanOrtami && tabanOrtami.ad ? ` (ortam: ${tabanOrtami.ad})` : ''}`;
   }
   function blokEkle(konum, blok) {
     bloklar.splice(konum, 0, blok);
@@ -424,6 +441,7 @@ export async function akisTasarimi(icerik, s) {
         }, ikon('pusula'), 'Önce şu ekrana git') : null,
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'dosya', ad: '', dugme: -1, dosya: yeniDosyaTanimi() }) }, ikon('indir'), 'İndirilen dosyayı doğrula'),
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'git', yol: '/' }) }, ikon('pusula'), 'Şu adrese git'),
         girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
         bitirVar ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bitir' }) }, ikon('onay'), 'Bitir')) : null);
   }
@@ -819,6 +837,18 @@ export async function akisTasarimi(icerik, s) {
         h('p', { class: 'soluk kucuk' }, `Adımları seçilen ekranın kendi yerinde tanımlıdır; koşuda buraya açılır (hep son sürümü).${o && o.yalnizTest ? ' Yalnızca test ortamında koşar; canlı ortamda atlanır.' : ''}`)
       ];
     }
+    if (b.tur === 'git') {
+      // Şu adrese git: yol ortamın taban adresine göre çözülür (yalnız yol saklanır); taban adres salt okunur önek olarak görünür.
+      const yol = h('input', { type: 'text', class: 'mono', value: b.yol, maxlength: '300', placeholder: '/liste', 'aria-label': 'Gidilecek yol (ortamın adresine göre)' });
+      const tam = h('p', { class: 'soluk kucuk', 'data-tam-adres': '' }, tamAdresMetni(b.yol));
+      yol.addEventListener('input', () => { b.yol = yol.value.trim(); tam.textContent = tamAdresMetni(b.yol); sakla(); });
+      return [
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Gidilecek adres'),
+          h('div', { class: 'adres-girdisi' }, tabanKoken ? h('span', { class: 'adres-oneki', 'data-taban-adres': '', title: `Ortamın taban adresi${tabanOrtami && tabanOrtami.ad ? ` (${tabanOrtami.ad})` : ''}; değiştirilemez` }, tabanKoken) : null, yol)),
+        tam,
+        h('p', { class: 'soluk kucuk' }, 'Yol ortamın taban adresine göre çözülür (yalnız yol saklanır; tam adres ya da başka site olmaz). Kayıtta adres çubuğuyla gittiğiniz sayfalar burada görünür; gerekmiyorsa bloğu silin. Ardından gelen alanlar ve aksiyonlar gidilen sayfada uygulanır.')
+      ];
+    }
     if (b.tur === 'giris') {
       // Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle (seçilen profille) yeniden girilir.
       const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Onaycı olarak gir', 'aria-label': 'Yeniden giriş adımının adı' });
@@ -883,6 +913,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'aksiyon' && b.gorunurse ? rozet('görünürse basılır', 'vurgu', { title: 'Düğme kısa sürede görünmezse atlanır (ör. her ekranda çıkmayan ara pencere).' }) : null,
       b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu', { kisalt: true }) : null,
+      b.tur === 'git' ? rozet(b.yol || '(yol yok)', 'vurgu', { kisalt: true, title: tamAdresMetni(b.yol) }) : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
       b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,
@@ -1246,7 +1277,7 @@ export async function akisTasarimi(icerik, s) {
             ? h('p', { class: 'kucuk' }, 'Bu diyagram yeni ortak akışın akışıdır; kaydedip önizledikten sonra “Ortak akışlar” altına kaydedilir.')
             : h('p', { class: 'kucuk' }, 'Bu diyagram ekranın akışıdır; senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.')),
     h('div', { class: 'form-duzeni tasarim-duzeni' },
-      h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' }, hataKutusu, akis),
+      h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' }, gezinmeKutusu, hataKutusu, akis),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıtta yakalananlar' },
         h('section', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('katman'), ekranKipi ? (veri.ortakAkis ? 'Ortak akışın alanları' : 'Ekranın alanları') : 'Kayıtta yakalananlar')), paletKap, elleKap),
         h('section', { class: 'kart form-paneli' }, h('h3', {}, 'Kaydet'),
@@ -1284,3 +1315,4 @@ export async function akisTasarimi(icerik, s) {
       h('span', { class: 'tasarim-etiketi' }, h('span', {}, 'Kayıt nereye yazılsın?')), ...radyolar, hedefAdi, hedefAkis);
   }
 }
+
