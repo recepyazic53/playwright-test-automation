@@ -63,7 +63,8 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti) {
     sekmeler,
     // Başlarken: ilk koşuya giden yol (tamamlanınca ya da gizlenince kaybolur; baslarken.js).
     baslarkenKarti(proje),
-    h('section', { class: 'kart sonuc-araligi', 'aria-label': 'Tarih aralığı süzgeci' }, tarihAraligiSecici({ degisti: () => aralikDegisti() })),
+    // "Tümü" seçiliyken Özet sabit son 30 günü kullanır (önceki eşit dönemle karşılaştırma): seçici de bunu söyler, başlıkla çelişmez.
+    h('section', { class: 'kart sonuc-araligi', 'aria-label': 'Tarih aralığı süzgeci' }, tarihAraligiSecici({ degisti: () => aralikDegisti(), tumuMetni: 'Özet: son 30 gün' })),
     kutuAlani,
     h('div', { class: 'farkindalik-kartlari' }, KARTLAR.map(([a]) => kartlar[a].kart)),
     notAlani);
