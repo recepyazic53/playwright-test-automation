@@ -38,6 +38,8 @@ import { ogeBilgisi, type SeciciAdayi } from './oge-secme-paneli';
 import { adaySirasi } from './oge-secme-motoru';
 import { beklemeDurumu, hizliMetinleriTopla, hizliSecimSeridiKur } from './hizli-test-sayfasi';
 import { dugmeTiklamaKorumasi, formGonderimKorumasi } from './sayfa-envanteri';
+import { zincirKesfet } from './zincir-motoru';
+import type { ZincirSonucu } from './zincir-kesfi.mjs';
 import { ENVANTER_BETIGI, TaramaHatasi, alanKapsami, envanterOku, hataBilgisi, hedefSayfayiAc, secimleriKesfet, type OlayGonderici } from './tarama-motoru';
 
 // eslint-disable-next-line no-control-regex
@@ -217,6 +219,8 @@ export async function hizliTestiYurut(
       return { yol: yolu(page.url()), baslik: await page.title().catch(() => ''), alanlar: envanter.alanlar, metinler, dugmeler, eylem, goruntu: resim };
     }
 
+    /** Son doldurmada seçeneğini beklemek gereken listeler: anahtar → bekleme (ms; bağlı listenin dolma süresi ölçümü). */
+    let beklemeler: Record<string, number> = {};
     /** Bir alanı doldurur (değer kullanıcının; motor üretmez). Hata metni döner (başarılıysa null). */
     async function alaniDoldur(page: Page, d: HizliDoldurulan): Promise<string | null> {
       const a = d.alan;
@@ -236,8 +240,11 @@ export async function hizliTestiYurut(
         if (a.tur === 'select' || a.tur === 'select-one' || a.tur === 'select-multiple' || a.ozelBilesen) {
           const s = (a.secenekler ?? []).find((x) => x.deger === String(deger) || katla(x.metin) === katla(String(deger)));
           const hedef = s ? s.deger : String(deger);
+          // Zaten bu değerdeyse yeniden seçilmez: yeniden seçmek sayfada bağlı alt listeleri boşaltıp yeniden yükletir.
+          if ((await l.inputValue({ timeout: 2_000 }).catch(() => null)) === hedef) return null;
           if (a.ozelBilesen) {
-            const tamam = await l.evaluate((el, v) => {
+            // Bağlı liste: seçenek üst alan seçildikten sonra gelir; gelene kadar (en çok alan işlem süresi) beklenir.
+            const yaz = (): Promise<boolean> => l.evaluate((el, v) => {
               const sec = el as HTMLSelectElement;
               if (![...sec.options].some((o) => o.value === v)) return false;
               sec.value = v;
@@ -245,9 +252,16 @@ export async function hizliTestiYurut(
               sec.dispatchEvent(new Event('change', { bubbles: true }));
               return true;
             }, hedef);
-            return tamam ? null : `“${String(deger)}” seçeneği bu listede yok.`;
+            const bas = Date.now();
+            for (const bitis = bas + bekleMs; ;) {
+              if (await yaz()) { if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas; return null; }
+              if (Date.now() >= bitis) return `“${String(deger)}” seçeneği bu listede yok (${Math.round(bekleMs / 1000)} sn beklendi).`;
+              await page.waitForTimeout(250);
+            }
           }
+          const bas = Date.now();
           await l.selectOption({ value: hedef }, { timeout: bekleMs }).catch(async () => { await l.selectOption({ label: String(deger) }, { timeout: 5_000 }); });
+          if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas;
           return null;
         }
         // Aynı değer sayfada zaten varsa (önceki turda girildi; site alanı sorgudan sonra kilitlemiş olabilir) yeniden yazılmaz.
@@ -543,7 +557,10 @@ export async function hizliTestiYurut(
       const sakin = async (p: Page, ms: number): Promise<void> => { await sakinles(p, ms); };
       const sade = (k: import('./paket-olusturucu.mjs').Kesif, ust: HizliKesif['ust']): HizliKesif => ({
         secim: k.secim, ilkDeger: k.ilkDeger, tur: String(k.tur ?? ''), ust,
-        degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({ deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar }))
+        degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({
+          deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
+          ...(d.secenekler ? { secenekler: d.secenekler } : {}), ...(d.etkinlesenler?.length ? { etkinlesenler: d.etkinlesenler } : {})
+        }))
       });
       let temel;
       try { temel = await envanterOku(islem); } catch { return []; }
@@ -551,6 +568,7 @@ export async function hizliTestiYurut(
       let birinci: import('./paket-olusturucu.mjs').Kesif[] = [];
       try { birinci = await secimleriKesfet(islem, temel, notlar2, ac, sakin, sinir); } catch { birinci = []; }
       for (const k of birinci) if (k.degerler.length) sonuc.push(sade(k, null));
+      kesifTabani = { alanlar: temel.alanlar, kesifler: birinci };
       // 2. düzey: bir değer seçilince beliren seçim alanları.
       let sayac = 0;
       for (const k of birinci) {
@@ -575,6 +593,29 @@ export async function hizliTestiYurut(
       return sonuc;
     }
 
+    /** Seçim keşfinin ilk okuması ve birinci düzey sonuçları (bağlı liste zincirinin başlangıcı). */
+    let kesifTabani: { alanlar: HamAlan[]; kesifler: Parameters<typeof zincirKesfet>[2] } | null = null;
+
+    /**
+     * Bağlı liste zinciri (zincir-motoru.ts): seçim keşfinin bulduğu bağlantılardan (ör. üst liste seçilince alt liste doluyor) zincirin
+     * sonuna kadar inilir; her katta birkaç değer denenir, boş kalan / hata veren / tekrarlayan listeler bulgu olur. Hiçbir düğmeye basılmaz;
+     * sonunda sayfa yeniden açılır (temiz başlangıç durumu).
+     */
+    async function zincirKesfi(): Promise<ZincirSonucu | null> {
+      if (!kesifTabani) return null;
+      const t = taramaTarayiciAyarlari(g);
+      const z = await zincirKesfet({
+        sayfa: islem, ac, sakinles: async (p, ms) => { await sakinles(p, ms); },
+        oku: async () => (await envanterOku(islem)).alanlar,
+        hataMetinleri: async () => ((await islem.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[])
+          .filter((m) => m.tur === 'hata').map((m) => m.metin),
+        durdu: () => kapandi,
+        ilerleme: (m) => bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `${m} (hiçbir düğmeye basılmaz)` })
+      }, kesifTabani.alanlar, kesifTabani.kesifler, { derinlik: t.zincirDerinligi, ornek: t.zincirOrnek });
+      if (z.acilis) await ac().catch(() => undefined);
+      return z.iliskiler.length ? z : null;
+    }
+
     /** Basıştan sonra beliren seçim alanlarının keşfi (yalnız bu alanlar; sayfa yeniden açılmaz, zincirin durumu korunur). */
     async function yeniAlanKesfi(yeniSecimler: HamAlan[]): Promise<HizliKesif[]> {
       const sinir = taramaTarayiciAyarlari(g).kesifSecenekSiniri;
@@ -590,8 +631,9 @@ export async function hizliTestiYurut(
     // ---- Keşif (basmadan) ----
     await olay({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: 'Keşfediliyor… (seçimler tek tek denenir; hiçbir düğmeye basılmaz)' });
     const secimKesifleri = await secimKesfi().catch(() => [] as HizliKesif[]);
+    const zincir = await zincirKesfi().catch(() => null);
     let sonAnlik = await anlikOku(islem, true);
-    await gonder({ olay: 'kesif', anlik: sonAnlik, kesifler: secimKesifleri });
+    await gonder({ olay: 'kesif', anlik: sonAnlik, kesifler: secimKesifleri, zincir });
     await olay({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: 'Tarayıcı hazır: soruları Nöbetçi’de yanıtlayın.' });
     await islem.bringToFront().catch(() => undefined);
 
@@ -609,6 +651,7 @@ export async function hizliTestiYurut(
           await gonder({ olay: 'okundu', no: k.no, anlik: sonAnlik });
         } else if (k.tur === 'doldur') {
           diyaloglar.length = 0;
+          beklemeler = {};
           const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
           for (const [j, d] of k.alanlar.entries()) {
             await gonder({ olay: 'ilerleme', no: k.no, mesaj: `Alanlar dolduruluyor: “${d.alan.etiket ?? d.anahtar}” (${j + 1}/${k.alanlar.length})` }).catch(() => undefined);
@@ -626,7 +669,7 @@ export async function hizliTestiYurut(
             ...sonAnlik.metinler.filter((m) => !once.has(m.metin)),
             ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
           ];
-          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler });
+          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
           const fark = await bas(islem, k.secici, k.metin, sonAnlik);

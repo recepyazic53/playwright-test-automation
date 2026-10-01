@@ -281,6 +281,9 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       secenekler: Array.isArray(alan.secenekler) ? alan.secenekler.map((/** @type {any} */ s) => ({ ...s }))
         : alan.bagimlilik && nesneMi(alan.bagimlilik.secenekHaritasi) ? Object.values(alan.bagimlilik.secenekHaritasi).flat().map((/** @type {any} */ s) => ({ ...s })) : [],
       parametreler: nesneMi(alan.doldurucuParametreleri) ? { ...alan.doldurucuParametreleri } : {},
+      // Bağlı liste: gözlenen olağan dolma süresi (koşucu bekleme sınırı ve yavaşlama notu; zincir-kesfi.mjs > yuklenmeBeklemesi).
+      yuklenmeMs: alan.bagimlilik && Number.isFinite(alan.bagimlilik.yuklenmeMs) ? Number(alan.bagimlilik.yuklenmeMs) : null,
+      ustId: alan.bagimlilik && typeof alan.bagimlilik.alan === 'string' ? alan.bagimlilik.alan : null,
       // Akışta "zorunlu" işaretli alan (model: mutlakaGorunmeli) ya da senaryonun "mutlaka görünmeli" kuralı.
       mutlakaGorunmeli: mutlaka.has(id) || alan.mutlakaGorunmeli === true, atla
     };

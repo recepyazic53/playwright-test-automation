@@ -29,6 +29,8 @@ import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, ty
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
+import { zincirKesfet } from './zincir-motoru';
+import type { ZincirSonucu } from './zincir-kesfi.mjs';
 
 /** Sayfa envanteri okuyucusunu her belgeye (çerçeveler dahil) veren init betiği: çerçevelerin içi kendi penceresinde okunur. */
 export const ENVANTER_BETIGI = `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
@@ -326,11 +328,22 @@ async function profilTara(
     notlar.push('Ekran görüntüsü alınamadı.');
   }
   const kesifler: Kesif[] = [];
+  let zincir: ZincirSonucu | null = null;
   if (g.kesif) {
     await adimBildir('kesif');
     kesifler.push(...(await secimleriKesfet(sayfa, envanter, notlar, git, sakinles, kesifSecenekSiniri)));
+    // Bağlı liste zinciri (zincir-motoru.ts): birinci düzey bağlantılardan zincirin sonuna kadar (yalnız seçim; basılmaz).
+    const { zincirDerinligi, zincirOrnek } = taramaTarayiciAyarlari(g);
+    try {
+      const z = await zincirKesfet({ sayfa, ac: git, sakinles, oku: async () => (await envanterOku(sayfa)).alanlar }, envanter.alanlar, kesifler,
+        { derinlik: zincirDerinligi, ornek: zincirOrnek });
+      notlar.push(...z.notlar);
+      if (z.iliskiler.length) zincir = z;
+    } catch (hata) {
+      notlar.push(`Bağlı liste zinciri incelenemedi: ${hataBilgisi(hata).mesaj}`);
+    }
   }
-  return { profil, yol: acilan, baslik: envanter.baslik, alanlar: envanter.alanlar, kesifler, ekranGoruntusu, notlar, eylemAdaylari };
+  return { profil, yol: acilan, baslik: envanter.baslik, alanlar: envanter.alanlar, kesifler, ekranGoruntusu, notlar, eylemAdaylari, ...(zincir ? { zincir } : {}) };
 }
 
 /** Keşif adayı: seçim alanı + denenecek değerler (tur: açılır liste / radyo grubu / onay kutusu). */

@@ -4,7 +4,8 @@ import type { KayitEnvanteri, TaramaEnvanteri } from './paket-olusturucu.mjs';
 import type { AkisEnvanteri } from './akis-tasarimi.mjs';
 import type { OturumDurumu } from '../giris/oturum-dosyasi.mjs';
 import type { OgeSecmeSonucu, SecilenOge, SecilenOgeTuru } from './oge-isaretleri.mjs';
-import type { HamAlan } from './paket-olusturucu.mjs';
+import type { HamAlan, HamSecenek } from './paket-olusturucu.mjs';
+import type { ZincirSonucu } from './zincir-kesfi.mjs';
 import type { EylemAdaylari } from './eylem-kesfi.mjs';
 
 export declare const TARAMA_ADRES_DEGISKENI: string;
@@ -75,7 +76,7 @@ export type TaramaGirdisi = {
   zamanAsimiMs: number;
   /** Tarayıcı kararları (Ayarlar > Koşu); yoksa önceki sabitler (bkz. taramaTarayiciAyarlari). dil null: verilmez. */
   tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number;
-    alanIslemMs?: number; oturumKontrolMs?: number; girisAlanBeklemeMs?: number };
+    alanIslemMs?: number; oturumKontrolMs?: number; girisAlanBeklemeMs?: number; zincirDerinligi?: number; zincirOrnek?: number };
   /**
    * YALNIZ "Koşunun saklanan oturumunu kullan" seçiliyken, giriş tarifi varken ve "Giriş yapmadan aç" seçilmemişken: koşunun bu
    * ortam + giriş profili için saklanan oturumu (ortamın kökenlerine sınırlanmış; yoksa / açılamadıysa null). Alan yoksa: her
@@ -88,6 +89,9 @@ export declare function taramaTarayiciAyarlari(g: { tarayici?: TaramaGirdisi['ta
   baglam: { viewport: { width: number; height: number }; locale?: string; timezoneId?: string };
   sayfaAcilmaMs: number;
   kesifSecenekSiniri: number;
+  /** Bağlı liste keşfi (zincir-motoru.ts): en çok kat ve her katta denenecek değer sayısı. */
+  zincirDerinligi: number;
+  zincirOrnek: number;
   /** Hızlı testte alan doldurma / seçme beklemesi (varsayılan 30 sn). */
   alanIslemMs: number;
   /** Girişte oturum kontrolü (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
@@ -160,7 +164,13 @@ export type HizliFark = {
  */
 export type HizliKesif = {
   secim: string; ilkDeger: string | null; tur: string; ust: { secim: string; deger: string } | null;
-  degerler: Array<{ deger: string; metin: string | null; gorunenler: HamAlan[]; kaybolanlar: string[] }>;
+  degerler: Array<{
+    deger: string; metin: string | null; gorunenler: HamAlan[]; kaybolanlar: string[];
+    /** Bu değerde seçenekleri DEĞİŞEN listeler (bağlı liste: alanın anahtarı → yeni seçenekleri). */
+    secenekler?: Record<string, HamSecenek[]>;
+    /** Bu değerde etkinleşen (önce devre dışı) alanlar. */
+    etkinlesenler?: string[];
+  }>;
 };
 export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | boolean };
 /** Doğrulama koşusu planı: adımlar baştan sona (doldur → bas), sonra bitiş koşulu. */
@@ -178,8 +188,10 @@ export type HizliKomut =
   | { no: number; tur: 'bitir' };
 /** Alt süreç → sunucu (POST …/hizli). */
 export type HizliOlay =
-  | { olay: 'kesif'; anlik: HizliAnlik; kesifler?: HizliKesif[] }
-  | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik; yeniMetinler?: HizliMetin[] }
+  | { olay: 'kesif'; anlik: HizliAnlik; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null }
+  | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik; yeniMetinler?: HizliMetin[];
+      /** Seçeneğini beklemek gereken listeler: anahtar → bekleme (ms; bağlı listenin dolma süresi). */
+      beklemeler?: Record<string, number> }
   | { olay: 'basildi'; no: number; fark: HizliFark; kesifler?: HizliKesif[] }
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }

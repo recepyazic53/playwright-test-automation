@@ -97,22 +97,56 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   const idMetni = (ids: string | null): string => (ids ?? '').split(/\s+/).filter(Boolean)
     .map((id) => { const e = document.getElementById(id); return e ? saltMetin(e) : ''; }).filter(Boolean).join(' ');
 
-  /** Yakındaki metin: öğenin (ya da 3 düzeye kadar atalarının) önceki kardeşlerindeki ilk kısa metin. */
+  /** Form denetimleri (gizli alanlar sayılmaz). */
+  const denetimleri = (e: Element): Element[] => (e.matches('input,select,textarea') ? [e] : [...e.querySelectorAll('input,select,textarea')])
+    .filter((x) => !(x instanceof HTMLInputElement && x.type === 'hidden'));
+  /** Serbest metin kutusu mu (radyo / onay kutusu / liste değil)? */
+  const metinKutusuMu = (x: Element): boolean => x instanceof HTMLTextAreaElement
+    || (x instanceof HTMLInputElement && !['radio', 'checkbox', 'button', 'submit', 'reset', 'image', 'file', 'range', 'color'].includes(x.type));
+  /** Kap yalnız bu alanı mı sarıyor (içinde başka denetim ve kendi yazısı yok)? Süsleme kütüphanelerinin iç içe kapları böyledir. */
+  const yalnizSarar = (kap: Element, el: Element): boolean => {
+    const d = denetimleri(kap);
+    return d.length === 1 && d[0] === el && !saltMetin(kap);
+  };
+  /**
+   * Yakındaki metin: öğenin (ya da atalarının) önceki kardeşlerindeki ilk kısa metin. Yalnız bu alanı saran kaplar düzey sayılmaz (en çok
+   * 3 gerçek düzey): süsleme kütüphaneleri kutuyu birkaç kat sarar, ad ise satırın ayrı bir sütunundadır. Önceki kardeşte yalnız metin
+   * kutusu varsa (aynı satırda alan kodu + numara gibi birden çok kutu) atlanır ve satırın adı sıra ekiyle ("Telefon (2)") alınır;
+   * radyo / onay kutusu / liste varsa durulur: oradaki yazı onların seçeneği, seçili değeri ya da adıdır. Başka bir denetimin etiketi
+   * (label[for=başka]) de bu alanın adı olamaz.
+   */
   const yakinMetin = (el: Element): string | null => {
     let d: Element | null = el;
-    for (let seviye = 0; seviye < 3 && d; seviye++) {
+    let seviye = 0;
+    let kardes = 0;
+    for (let adim = 0; adim < 12 && d; adim++) {
       let o: ChildNode | null = d.previousSibling;
       while (o) {
         // Özel bileşenin kutusu ("Seçiniz…") etiket değildir: atlanır.
         if (o instanceof Element && kaplar.includes(o as HTMLElement)) { o = o.previousSibling; continue; }
-        if (o instanceof Element && o.querySelector('input,select,textarea')) return null;
+        if (o instanceof Element && o.matches('label')) {
+          const hedef = (o as HTMLLabelElement).control;
+          // Atlanan yan kutunun etiketi satırın adıdır ("İl [kutu] [kutu]" → ikinci kutu "İl (2)"); değilse başka denetimin adı.
+          if (hedef && hedef !== el && !kardes) return null;
+        }
+        if (o instanceof Element) {
+          const ds = denetimleri(o);
+          if (ds.length) {
+            if (!ds.every(metinKutusuMu)) return null;
+            kardes += ds.length;
+            o = o.previousSibling;
+            continue;
+          }
+        }
         const t = o.nodeType === Node.TEXT_NODE ? bosluk(o.textContent) : o instanceof Element && !o.matches(KONTROLLER) && gorunurMu(o) ? saltMetin(o) : '';
         // Yalnız ayraç olan metin (":", "*", "-") etiket değildir: atlanıp bir öncekine bakılır ("Ad : [input]" tabloları).
-        if (t && /[\p{L}\p{N}]/u.test(t)) return t.length <= 80 ? t : null;
+        if (t && /[\p{L}\p{N}]/u.test(t)) return t.length <= 80 ? (kardes ? `${etiketTemizle(t)} (${kardes + 1})` : t) : null;
         o = o.previousSibling;
       }
-      d = d.parentElement;
-      if (!d || d.matches('form,fieldset,body,main,section,article')) break;
+      const ust: Element | null = d.parentElement;
+      if (!ust || ust.matches('form,fieldset,body,main,section,article')) break;
+      if (!yalnizSarar(ust, el) && ++seviye >= 3) break;
+      d = ust;
     }
     return null;
   };

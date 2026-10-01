@@ -89,7 +89,7 @@ export const TARAMA_GIRIS_KIPLERI = Object.freeze(['bastan', 'saklananOturum']);
  * Girdide yoksa (eski sunucu / testler) önceki sabitler: 1366×900, tr-TR, bilgisayarın saat dilimi, 30 sn sayfa açılma, 8 seçenek,
  * girişte 15 sn oturum kontrolü ve 15 sn giriş alanı beklemesi.
  * @param {{ tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number;
- *   alanIslemMs?: number; oturumKontrolMs?: number; girisAlanBeklemeMs?: number } }} g
+ *   alanIslemMs?: number; oturumKontrolMs?: number; girisAlanBeklemeMs?: number; zincirDerinligi?: number; zincirOrnek?: number } }} g
  */
 export function taramaTarayiciAyarlari(g) {
   const t = g.tarayici ?? {};
@@ -104,6 +104,9 @@ export function taramaTarayiciAyarlari(g) {
     },
     sayfaAcilmaMs: tam(t.sayfaAcilmaMs, 30_000, 5_000, 300_000),
     kesifSecenekSiniri: tam(t.kesifSecenekSiniri, 8, 2, 50),
+    // Bağlı liste keşfi (zincir-motoru.ts; Ayarlar > Koşu > Tarama ve akış kaydı): en çok kat ve her katta denenecek değer.
+    zincirDerinligi: tam(t.zincirDerinligi, 8, 1, 10),
+    zincirOrnek: tam(t.zincirOrnek, 3, 1, 10),
     // Hızlı testte alan doldurma / seçme beklemesi (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 30 sn).
     alanIslemMs: tam(t.alanIslemMs, 30_000, 3_000, 300_000),
     // Girişte (Ayarlar > Koşu > Tarama ve akış kaydı; koşudaki giriş ayarlarından ayrı): giriş motoruna verilir.

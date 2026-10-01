@@ -97,6 +97,14 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 30, enAz: 3, enCok: 300, birim: 'sn' },
   { anahtar: 'kesifSecenekSiniri', grup: 'Tarama ve akış kaydı', etiket: 'Açılır liste keşif sınırı', aciklama: 'Taramada seçenekleri tek tek denenen açılır listelerin en çok seçenek sayısı; daha uzun listeler denenmez (raporda belirtilir).',
     tur: 'sayi', varsayilan: 8, enAz: 2, enCok: 50, birim: 'seçenek' },
+  // Bağlı liste keşfi (zincir-motoru.ts): bir liste seçilince seçenekleri değişen / açılan liste (il → ilçe, marka → model) zincirin
+  // sonuna kadar izlenir. İki sınır taramanın ve hızlı testin süresini belirler.
+  { anahtar: 'zincirDerinligi', grup: 'Tarama ve akış kaydı', etiket: 'Bağlı liste keşfi: en çok kat', aciklama: 'Bir liste seçilince seçenekleri gelen başka bir liste varsa (ör. il → ilçe → mahalle, marka → model) zincir en çok bu kadar kat aşağı izlenir.',
+    tur: 'sayi', varsayilan: 8, enAz: 1, enCok: 10, birim: 'kat' },
+  { anahtar: 'hizliOneriSayisi', grup: 'Tarama ve akış kaydı', etiket: 'Hızlı test: senaryo önerisi sayısı', aciklama: 'Hızlı testi kaydederken önerilen alternatif senaryo sayısı. Her öneri farklı değerler dener; bağlı listeler (il → ilçe…) gözlenen geçerli bir birleşimle birlikte değişir.',
+    tur: 'sayi', varsayilan: 5, enAz: 1, enCok: 20, birim: 'senaryo' },
+  { anahtar: 'zincirOrnek', grup: 'Tarama ve akış kaydı', etiket: 'Bağlı liste keşfi: her katta denenecek değer', aciklama: 'Zincirin her katında listenin ilk, son ve aradan bu kadar değeri denenir; boş gelen, hata veren ya da aynı seçeneği iki kez listeleyen liste bulgu olarak raporlanır. Değer arttıkça keşif uzar.',
+    tur: 'sayi', varsayilan: 3, enAz: 1, enCok: 10, birim: 'değer' },
   // Tarama ve akış kaydındaki 4 çift ayar (ekran boyutu, dil, oturum kontrolü, giriş alanı beklemesi) koşudaki eşleriyle tek
   // onayda birleşir. Varsayılanı KAPALI: tarama ve koşunun varsayılanları farklıdır (1366×900 / tr-TR ↔ 1280×720 / tarayıcı
   // varsayılanı); açmak taramanın davranışını değiştirir, bu yüzden kararı kullanıcı verir. Kayıtsız kurulumda değer kayıtlı
@@ -219,7 +227,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
  *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number; hizliAlanIslemSn: number;
- *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
+ *   kesifSecenekSiniri: number; zincirDerinligi: number; zincirOrnek: number; hizliOneriSayisi: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;

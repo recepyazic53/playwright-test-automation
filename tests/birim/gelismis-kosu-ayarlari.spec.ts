@@ -57,6 +57,8 @@ test('varsayılanlar bugünkü değerler; aralıklar doğrulanır; gelişmiş ay
     ekranEszamanli: 1, ekranBeklemeMs: 0, servisEszamanli: 1, servisIstekBeklemeMs: 0,
     // Tarama ve akış kaydı: 1366×900, tr-TR, 30 sn sayfa açılma, 8 seçenekli listeler keşfedilir.
     taramaEkranGenisligi: 1366, taramaEkranYuksekligi: 900, taramaDili: 'tr-TR', taramaSayfaAcilmaSn: 30, kesifSecenekSiniri: 8,
+    // Bağlı liste keşfi: en çok 8 kat, her katta 3 değer.
+    zincirDerinligi: 8, zincirOrnek: 3, hizliOneriSayisi: 5,
     // Planlı koşular: kaçan zaman ve koşu sürerken gelen zaman atlanır. HTML rapor görüntü sınırı 25 MB.
     zamanliKacan: 'atla', zamanliCakisma: 'atla', raporGoruntuSiniriMb: 25
   });
@@ -67,6 +69,8 @@ test('varsayılanlar bugünkü değerler; aralıklar doğrulanır; gelişmiş ay
   expect(bolumu('zamanliKacan')).toMatchObject({ bolum: 'zamanlama' });
   expect(bolumu('raporGoruntuSiniriMb')).toMatchObject({ bolum: 'arayuz', grup: 'Raporlar' });
   expect(bolumu('kesifSecenekSiniri')).toMatchObject({ grup: 'Tarama ve akış kaydı' });
+  expect(bolumu('zincirDerinligi')).toMatchObject({ grup: 'Tarama ve akış kaydı', tur: 'sayi', enAz: 1, enCok: 10, varsayilan: 8 });
+  expect(bolumu('zincirOrnek')).toMatchObject({ grup: 'Tarama ve akış kaydı', tur: 'sayi', enAz: 1, enCok: 10, varsayilan: 3 });
   // Paralellik: eski tek seçenekli "Eşzamanlı senaryo" yerine sayısal koşu hızı ayarları (ekran 1–5, servis 1–10).
   expect(bolumu('eszamanliKosu')).toBeUndefined();
   expect(bolumu('ekranEszamanli')).toMatchObject({ grup: 'Ekran senaryoları', tur: 'sayi', enAz: 1, enCok: 5, varsayilan: 1 });
@@ -381,10 +385,10 @@ test('planlı koşular: varsayılan kaçanı ve çakışanı atlar; "sonra bir k
 });
 
 test('tarama / akış kaydı tarayıcısı: girdide ayar yoksa önceki sabitler; verilince kullanılır', () => {
-  expect(taramaTarayiciAyarlari({})).toEqual({ baglam: { viewport: { width: 1366, height: 900 }, locale: 'tr-TR' }, sayfaAcilmaMs: 30_000, kesifSecenekSiniri: 8, alanIslemMs: 30_000,
+  expect(taramaTarayiciAyarlari({})).toEqual({ baglam: { viewport: { width: 1366, height: 900 }, locale: 'tr-TR' }, sayfaAcilmaMs: 30_000, kesifSecenekSiniri: 8, zincirDerinligi: 8, zincirOrnek: 3, alanIslemMs: 30_000,
     oturumKontrolMs: 15_000, girisAlanBeklemeMs: 15_000 });
   expect(taramaTarayiciAyarlari({ tarayici: { genislik: 1920, yukseklik: 1080, dil: 'en-GB', saatDilimi: 'UTC', sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20 } }))
-    .toEqual({ baglam: { viewport: { width: 1920, height: 1080 }, locale: 'en-GB', timezoneId: 'UTC' }, sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20, alanIslemMs: 30_000,
+    .toEqual({ baglam: { viewport: { width: 1920, height: 1080 }, locale: 'en-GB', timezoneId: 'UTC' }, sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20, zincirDerinligi: 8, zincirOrnek: 3, alanIslemMs: 30_000,
       oturumKontrolMs: 15_000, girisAlanBeklemeMs: 15_000 });
 });
 

@@ -261,8 +261,9 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect((oz.onizleme.tablolar as Nesne[]).every((t) => t.mevcut === null)).toBe(true);
   expect(oz.onizleme.baglantilar.length).toBeGreaterThanOrEqual(3);
   expect(oz.senaryolar[0]).toMatchObject({ indeks: 0, baslik: 'Başvuru formu — kurumsal', varsayilanSecili: true });
-  const alternatif = (oz.senaryolar as Nesne[]).find((x) => x.alt?.planAdi === 'Müşteri tipi');
-  expect(alternatif?.alt).toMatchObject({ deger: 'Bireysel' });
+  // Öneri: Müşteri tipi "Bireysel" (Kurumsal'ın açtığı Vergi no gerekmez) diğer seçimlerin başka değerleriyle birlikte denenir.
+  const alternatif = (oz.senaryolar as Nesne[]).find((x) => (x.alt?.degisiklikler as Nesne[] | undefined)?.some((d) => d.etiket === 'Müşteri tipi'));
+  expect((alternatif?.alt.degisiklikler as Nesne[]).find((d) => d.etiket === 'Müşteri tipi')).toMatchObject({ deger: 'Bireysel' });
   // Özet hiçbir şey yazmaz.
   expect(((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).some((t) => t.ad === 'Kişi bilgileri')).toBe(false);
   const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal', secim: oz.secim, senaryoIndeksleri: [alternatif?.indeks] });
@@ -887,9 +888,12 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     const satir = (m: string) => soru.locator('.hizli-bitis-satiri').filter({ hasText: m });
     await expect(satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' })).toHaveAttribute('aria-checked', 'true');
     await expect(satir('Hesaplanıyor…').getByRole('radio', { name: 'Devam' })).toHaveAttribute('aria-checked', 'true');
-    // Radyo: seçili "Bitti"ye tıklamak seçimi kaldırmaz; "Etiketsiz" seçilince tek "Bitti" kalmaz → "Devam et" pasif + gerekçe
-    // (sunucuya 400 alacak istek gitmez); yeniden "Bitti" seçilince açılır.
+    // Seçili "Bitti"ye yeniden tıklamak etiketi kaldırır (Etiketsiz'e döner); tekrar tıklayınca geri gelir. "Etiketsiz" seçilince tek "Bitti"
+    // kalmaz → "Devam et" pasif + gerekçe (sunucuya 400 alacak istek gitmez); yeniden "Bitti" seçilince açılır.
     const bitti = satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' });
+    await bitti.click();
+    await expect(bitti).toHaveAttribute('aria-checked', 'false');
+    await expect(satir('Başvurunuz alındı').getByRole('radio', { name: 'Etiketsiz' })).toHaveAttribute('aria-checked', 'true');
     await bitti.click();
     await expect(bitti).toHaveAttribute('aria-checked', 'true');
     const bitisIstekleri: string[] = [];

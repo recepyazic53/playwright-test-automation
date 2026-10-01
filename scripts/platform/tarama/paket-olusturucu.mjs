@@ -23,6 +23,7 @@ import { KANIT_BOYUT_SINIRI, KANIT_EN_COK, SAYFA_PAKETI_SURUMU, SAYFA_PAKETI_TUR
 import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/paket-tablolari.mjs';
 import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { yerTutucuSecenekMi } from './yer-tutucu-secenek.mjs';
+import { bulguMetni, olaganYuklenme, zincirBagimliliklari } from './zincir-kesfi.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
@@ -148,6 +149,8 @@ function taramaGozlemleri(profiller) {
         for (const a of d.gorunenler) if (a.secenekler || a.radyolar) sonuc.push({ anahtar: a.anahtar, secimler: haric(secimler, a.anahtar), secenekler: secenekleri(a) });
       }
     }
+    // Bağlı liste zinciri (zincir-motoru.ts): her seçim yolunda alt listenin seçenekleri (çok düzeyli tablolar: il → ilçe → mahalle…).
+    for (const z of p.zincir?.gozlemler ?? []) if (z.secenekler.length) sonuc.push({ anahtar: z.anahtar, secimler: { ...z.secimler }, secenekler: z.secenekler });
   }
   return sonuc;
 }
@@ -246,6 +249,13 @@ function bagimliliklariHesapla(profiller, hamlar, notlar) {
         }
         if (onceki) { for (const [x, l] of harita) if (!onceki.harita.has(x)) onceki.harita.set(x, l); continue; }
         sonuc.set(c, { ust: k.secim, harita, kismi: k.kismi === true });
+      }
+    }
+    // Zincirin derin katları (ilçe → mahalle → sokak…): zincir keşfinin gözlemlerinden; birinci düzeyden bulunan bağımlılık korunur.
+    if (p.zincir) {
+      for (const [alt, b] of zincirBagimliliklari(p.zincir.iliskiler, p.zincir.gozlemler)) {
+        if (sonuc.has(alt) || hamlar.get(alt)?.tur !== 'select') continue;
+        sonuc.set(alt, { ust: b.ust, harita: b.harita, kismi: true });
       }
     }
   }
@@ -659,8 +669,12 @@ export function taramaPaketiOlustur(meta, envanter) {
         /** @type {Map<string, { deger: string; metin: string }>} */
         const birlesik = new Map();
         for (const l of Object.values(harita)) for (const s of l) if (!birlesik.has(s.deger)) birlesik.set(s.deger, s);
-        alan.bagimlilik = { alan: ustId, secenekHaritasi: harita };
-        alan.secenekler = [...birlesik.values()];
+        const olcumler = profiller.flatMap((pr) => pr.zincir?.sureler?.[anahtar] ?? []);
+        const yuklenmeMs = olaganYuklenme(olcumler);
+        alan.bagimlilik = { alan: ustId, secenekHaritasi: harita, ...(yuklenmeMs ? { yuklenmeMs } : {}) };
+        // Kısmi harita (üst listenin yalnız bazı değerleri denendi): birleşik liste yazılmaz; yazılsaydı senaryo doğrulaması denenmemiş üst
+        // değerlerin alt seçeneklerini "listede yok" diye reddederdi. Denetim haritadaki üst değerlerle sınırlı kalır.
+        alan.secenekler = b.kismi ? null : [...birlesik.values()];
         alan.seceneklerDurumu = b.kismi ? 'kismi' : 'tam';
         alan.seceneklerKaynagi = 'otomatik tarama keşfi (bağımlı liste)';
         const ustEtiket = temizMetin(hamlar.get(b.ust)?.etiket, sayac, 80) ?? ustId;
@@ -682,6 +696,14 @@ export function taramaPaketiOlustur(meta, envanter) {
         if (d.hata) bilinmeyenler.push(`${ad}: "${secimAdi}" = "${temizMetin(d.metin, sayac) ?? d.deger}" denenemedi (${d.hata}).`);
       }
       if (!k.atlandi && !k.geriAlindi) bilinmeyenler.push(`${ad}: "${secimAdi}" keşiften sonra ilk değerine geri alınamadı; sonraki gözlemler etkilenmiş olabilir.`);
+    }
+    // Bağlı liste zincirinin sayfa bulguları (boş kalan / hata veren / tekrarlayan liste…): kullanıcıya gösterilen cümleyle.
+    for (const b of p.zincir?.bulgular ?? []) {
+      const m = temizMetin(bulguMetni(b, (k) => hamlar.get(k)?.etiket || k), sayac, 400);
+      if (!m) continue;
+      bilinmeyenler.push(`${ad}: Bağlı liste bulgusu — ${m}`);
+      // Sayfa bulgusu modelde de kalır (ekran kaydedildikten sonra Ekranlar'da görünür).
+      if (Array.isArray(model.bilinmeyenler)) model.bilinmeyenler.push(`Bağlı liste bulgusu — ${m}`);
     }
   }
   for (const h of envanter.hataliProfiller ?? []) bilinmeyenler.push(`"${h.profil ?? '—'}" bağlam profili taranamadı: ${h.mesaj}`);
@@ -1468,6 +1490,33 @@ export function kayitPaketiOlustur(meta, envanter) {
   if (yasakli.length) bilinmeyenler.push(`Yasaklı adres kalıbına uyan ${yasakli.length} istek engellendi (${[...new Set(yasakli.map((e) => e.adres))].slice(0, 3).join(', ')}).`);
   if (etiketsizler.length) bilinmeyenler.push(`Etiketi bulunamayan ${etiketsizler.length} alan: ${etiketsizler.slice(0, 10).join(', ')} (etiketi ekrandan kontrol edin).`);
   if (cokluDegerliler.length) bilinmeyenler.push(`Çoklu seçim listeleri: ${cokluDegerliler.join(', ')} — model tek değer bekler.`);
+  // Bağlı listeler (hızlı testin zincir keşfi; zincir-motoru.ts): alt listenin seçenekleri üst seçime göre gelir → modelde bagimlilik
+  // (koşucu ve senaryo formu üstü önce doldurur). Harita kısmidir (üst listenin yalnız bazı değerleri denendi): birleşik seçenek listesi
+  // yazılmaz, böylece denenmemiş üst değerin alt seçenekleri senaryo doğrulamasında reddedilmez.
+  const bagliBaglar = zincirBagimliliklari(envanter.bagliListeler ?? [], envanter.secenekGozlemleri ?? []);
+  for (const { ust, alt, yuklenmeMs } of envanter.bagliListeler ?? []) {
+    const a = hamdanModel.get(alt);
+    const u = hamdanModel.get(ust);
+    if (!a || !u || a.tip !== 'secim' || u.tip !== 'secim' || a.bagimlilik !== undefined) continue;
+    const b = bagliBaglar.get(alt);
+    const temizle = (/** @type {Array<{ deger: string; metin: string }>} */ l) => l.filter((x) => !gizliKalipBul(String(x.deger)))
+      .map((x) => ({ deger: String(x.deger).slice(0, 200), metin: temizMetin(x.metin, sayac) ?? String(x.deger).slice(0, 200) }));
+    const harita = b ? Object.fromEntries([...b.harita].filter(([d]) => !gizliKalipBul(d)).map(([d, l]) => [d, temizle(l)])) : null;
+    // yuklenmeMs: gözlenen olağan dolma süresi (koşucu beklemesini buna göre kurar; zincir-kesfi.mjs > yuklenmeBeklemesi).
+    a.bagimlilik = { alan: String(u.id), ...(harita ? { secenekHaritasi: harita } : {}), ...(yuklenmeMs ? { yuklenmeMs } : {}) };
+    a.secenekler = null;
+    a.seceneklerDurumu = 'kismi';
+    a.seceneklerKaynagi = 'hızlı test keşfi (bağlı liste)';
+    a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Seçenekleri "')),
+      `Seçenekleri "${u.etiket ?? u.id}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
+  }
+  for (const m of envanter.zincirBulgulari ?? []) {
+    const t = temizMetin(m, sayac, 400);
+    if (!t) continue;
+    bilinmeyenler.push(`Bağlı liste bulgusu — ${t}`);
+    // Sayfa bulgusu modelde de kalır (ekran kaydedildikten sonra Ekranlar'da görünür).
+    if (Array.isArray(model.bilinmeyenler)) model.bilinmeyenler.push(`Bağlı liste bulgusu — ${t}`);
+  }
   // Test verisi: kayıtta gözlenen seçim listeleri (okumalar + tıklanınca açılan listeler) → tablolar + alan bağlantıları.
   const testVerisi = testVerisiOlustur(model, new Map([...hamdanModel].map(([k, a]) => [k, String(a.id)])), envanter.secenekGozlemleri ?? [], bilinmeyenler, sayac);
   if (sayac.gizlenen) bilinmeyenler.push(`${sayac.gizlenen} metin gizli/kişisel veri kalıbına (kart, kimlik no, IBAN…) benzediği için pakete yazılmadı.`);
