@@ -837,7 +837,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     zincir,
     Array.isArray(s.uyarilar) && s.uyarilar.length ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.uyarilar.map((x) => h('p', {}, x))) : null,
     // Düzenleme kipi: ekranın mevcut test verisi tablolarıyla birleştirme kararı özet sekmesinde istenir (o karar verilmeden "Onayla" pasiftir).
-    s.tabloKarariGerekebilir ? h('p', { class: 'kucuk soluk hizli-tablo-karari-notu' }, 'Bu ekranın test verisi tabloları varsa özet sekmesinde her tablo için “Birleştir / Yeni adla yaz / Atla” kararı istenir; karar verilmeden “Onayla ve kaydet” pasif kalır. Tablo yazmak istemiyorsanız aşağıdaki “test verisi tablosu olarak kaydet” seçeneğini kaldırın.') : null,
+    s.tabloKarariGerekebilir ? h('p', { class: 'kucuk soluk hizli-tablo-karari-notu' }, 'Projede aynı adlı test verisi tablosu varsa (bu ekranın ya da başka bir ekranın) özet sekmesinde her tablo için “Birleştir / Yeni adla yaz / Atla” kararı istenir; karar verilmeden “Onayla ve kaydet” pasif kalır. Tablo yazmak istemiyorsanız aşağıdaki “test verisi tablosu olarak kaydet” seçeneğini kaldırın.') : null,
     h('ul', { class: 'hizli-ozet kucuk' },
       h('li', {}, h('b', {}, 'Ekrana: '), 'alanlar, koşullar, düğme zinciri, bitiş ve hata mesajları'),
       h('li', {}, h('b', {}, 'Senaryoya: '), `girilen değerler, tablo bağlantıları, izin (${oz.izin}), bitiş koşulu`)),

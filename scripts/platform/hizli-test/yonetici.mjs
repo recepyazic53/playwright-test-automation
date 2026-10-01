@@ -715,8 +715,9 @@ export function hizliTestYoneticisiOlustur(s) {
       soru = {
         tur: 'kaydet', ozet: ozet(o), dogrulama: o.dogrulama, dogrulanabilir: o.izin !== 'hayir', baslik: o.senaryoBasligi, farklar: o.farklar ?? null,
         uyarilar: o.olumsuz ? [] : bitisUyarilari({ izin: o.izin, gonderimVar: o.gonderimVar === true, gorulenler: o.gorulenler, etiketler: o.etiketler }),
-        // Düzenleme kipi: mevcut ekranın test verisi tablolarıyla birleştirme kararı özet sekmesinde istenir (önceden haber verilir).
-        tabloKarariGerekebilir: Boolean(o.ekran.id)
+        // Projede aynı adlı test verisi tablosu varsa (düzenleme kipi ya da başka ekranın tablosu) birleştirme kararı özet sekmesinde istenir:
+        // önceden haber verilir.
+        tabloKarariGerekebilir: true
       };
     }
     else if (o.durum === 'kaydedildi') soru = { tur: 'kaydedildi', ...o.kayit };
