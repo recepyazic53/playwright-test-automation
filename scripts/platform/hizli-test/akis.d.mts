@@ -13,7 +13,8 @@ export declare function tekAday<T extends { secici: string; metin: string | null
 export declare function basmaKarari(g: { izin: string; adaySayisi: number; kullaniciSecti?: boolean }): 'bas' | 'sor' | 'basma';
 export declare function beklemeMetniMi(metin: unknown): boolean;
 export declare function degiskenMetinMi(metin: unknown): boolean;
-export declare function varsayilanEtiketler(gorulenler: Array<{ metin: string; tur: string; basis: number }>, sonBasis: number): Record<string, BitisEtiketi | null>;
+export declare function varsayilanEtiketler(gorulenler: Array<{ metin: string; tur: string; basis: number; sonuc?: boolean; onceGorundu?: boolean }>, sonBasis: number): Record<string, BitisEtiketi | null>;
+export declare function bitisUyarilari(g: { izin: string; gonderimVar: boolean; gorulenler: Array<{ metin: string; onceGorundu?: boolean }>; etiketler: Record<string, string | null> }): string[];
 export declare function sabitKisim(m: string): string;
 export declare function bitisKosulu(g: { etiketler: Record<string, string | null>; adres?: string | null; olumsuz?: { mesaj: string } | null }): {
   bitti: string[]; hata: string[]; devam: string[]; adres: string | null; olumsuz: { mesaj: string } | null; hatalar: string[];
