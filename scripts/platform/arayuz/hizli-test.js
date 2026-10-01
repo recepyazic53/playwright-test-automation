@@ -347,9 +347,14 @@ function soruCiz(o, y) {
     bitir.addEventListener('click', () => void gonder(bitir, 'karar', { karar: 'bitir', dugme: dugme.value, mesajlar: kutular.filter((x) => x.k.checked).map((x) => x.k.value) }, m));
     const duzelt = h('button', { type: 'button', class: 'hayalet' }, 'Veriyi düzenle');
     duzelt.addEventListener('click', () => void gonder(duzelt, 'karar', { karar: 'duzelt' }, m));
+    // Aday listesinde olmayan düğme: tarayıcıda tıklanarak seçilir (tıklama sayfaya iletilmez; basılmaz).
+    const sayfadaSec = h('button', { type: 'button', class: 'hayalet' }, 'Tarayıcıda seç…');
+    sayfadaSec.addEventListener('click', () => void gonder(sayfadaSec, 'karar', { karar: 'baska' }, m));
+    bitir.disabled = !s.adaylar.length;
     return kart('Düğmeyi ve mesajı seçin', 'hedef', m.kutu,
       h('div', { class: 'not-kutusu bilgi', role: 'note' }, 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz. Seçimler adaylardandır; test “doğrulanmadı” olarak kaydedilir ve ilk koşuda doğrulanır.'),
-      h('div', { class: 'alan' }, h('label', { for: 'hizli-hayir-dugme' }, 'Formu gönderen düğme'), dugme),
+      !s.adaylar.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Sayfada düğme adayı bulunamadı. Formu gönderen düğmeyi “Tarayıcıda seç…” ile hızlı test tarayıcısında tıklayarak seçin; ya da hızlı testi iptal edip “Evet” / “Bana sor” izniyle yeniden başlatın.') : null,
+      h('div', { class: 'alan' }, h('label', { for: 'hizli-hayir-dugme' }, 'Formu gönderen düğme'), dugme, h('div', { class: 'dugmeler' }, sayfadaSec)),
       h('fieldset', { class: 'hizli-mesajlar' }, h('legend', {}, 'Başarıyı gösteren mesaj'),
         kutular.length ? kutular.map((x) => x.el) : h('p', { class: 'soluk' }, 'Mesaj adayı bulunamadı: “Ne yapılsın?” cümlesinde beklenen mesajı tırnak içinde yazıp yeniden başlatın.')),
       h('div', { class: 'dugmeler' }, bitir, duzelt));
@@ -473,6 +478,11 @@ function veriDuragi(o, s, kart, m, gonder) {
       /** @type {HTMLElement} */
       let girdi;
       const secenekler = Array.isArray(a.secenekler) ? a.secenekler : null;
+      // Dosya alanı hızlı testte doldurulmaz: açıkça söylenir (dosya kaydettikten sonra senaryo formunda yüklenir).
+      if (a.tur === 'file') {
+        yerlestir(kap, h('p', { class: 'soluk kucuk hizli-dosya-notu', id }, 'Dosya alanı hızlı testte doldurulmaz (desteklenmiyor). Testi kaydettikten sonra senaryo formunda dosyayı yükleyin; sayfa dosyayı zorunlu tutuyorsa basışta uyarı görebilirsiniz.'));
+        return;
+      }
       if (a.tur === 'checkbox') {
         girdi = h('input', { type: 'checkbox', id, checked: d.deger === true || d.deger === 'true' || null });
         girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).checked, kaynak: 'elle' }; kosulGuncelle(); });
@@ -665,7 +675,7 @@ function veriDuragi(o, s, kart, m, gonder) {
   /** "Devam et" / "Bağlı alanları atla": zorunlu boş alan yoksa veri gönderilir. @param {HTMLButtonElement} dugme @param {boolean} zinciriAtla */
   const ilerle = (dugme, zinciriAtla) => {
     const degerler = degerleriTopla();
-    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
+    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
     void gonder(dugme, 'veri', { degerler, sira: siralama, ...(zinciriAtla ? { zinciriAtla: true } : {}) }, m);
   };
@@ -687,9 +697,12 @@ function veriDuragi(o, s, kart, m, gonder) {
     bekleyenDuyuru = gelen.length ? gelen.map((x) => `“${x.etiket}” seçenekleri geldi (${x.secenekler.length} seçenek).`).join(' ')
       : altlar.length ? `${altlar.map((x) => `“${x.etiket}”`).join(', ')} için seçenek gelmedi.` : '';
   }
-  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
+  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
   return kart(o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
     s.not ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, s.not) : null,
+    // Keşfin notları (ör. seçimlerin sayfada tek tek denendiği) ilk veri durağında gösterilir.
+    o.adimlar.length === 1 && o.kesif && Array.isArray(o.kesif.notlar) && o.kesif.notlar.length
+      ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
     h('p', { class: 'soluk' }, 'Sayfada boş görünen alanlar aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada zaten dolu gelenler sorulmaz, olduğu gibi kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
     gosterge, m.kutu, satirlarKap, hazirKap,
     h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),

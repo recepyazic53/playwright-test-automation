@@ -196,7 +196,8 @@ export type HizliPlan = {
 };
 /** Sunucu → alt süreç. */
 export type HizliKomut =
-  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[] }
+  /** kontrol: sayfaya aynı değerle zaten uygulanmış alanlar (yazılmaz; sayfa boşaltmışsa bir kez yeniden yazılır). */
+  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[] }
   | { no: number; tur: 'bas'; secici: string; metin: string | null; cerceve?: string[] }
   /** Bana sor: basış sırasında açılan onay / soru penceresine kullanıcının yanıtı. */
   | { no: number; tur: 'diyalogYaniti'; yanit: 'kabul' | 'iptal' }

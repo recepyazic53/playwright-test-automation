@@ -17,9 +17,9 @@
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
 import type { Browser, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
-import { alanaYaz, alanZatenDolu } from './alan-cikisi';
+import { alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
-import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, sakinlikBekle } from './guvenli-tiklama';
+import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, ortuyuKaldir, sakinlikBekle, sayfaParmakIzi } from './guvenli-tiklama';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -53,6 +53,9 @@ const bekle = (ms: number): Promise<void> => new Promise((c) => setTimeout(c, ms
 const ALAN_SAKINLIK_EN_COK_MS = 8_000;
 /** Basıştan sonra bundan kısa süredir bekleyen istek sayılır (gönderim / hesaplama uzun sürebilir; uzun yoklama adresi zaten öğrenilir). */
 const BASIS_UZUN_ISTEK_MS = 20_000;
+/** Doldurmadan sonra görünümün değişmeden kalması gereken süre (ms) ve en çok bekleme: beklemeyle (debounce) beliren alanlar için. */
+const DURULMA_MS = 1_600;
+const DURULMA_EN_COK_MS = 5_000;
 /** Basıştan sonra hiç yeni metin görülmediyse ek bakma süresi (ms): pencerenin içi gecikmeli çizilebilir. */
 const YENI_METIN_BEKLEME_MS = 4_000;
 /** Metin karşılaştırması: büyük / küçük harf, Türkçe harfler ve boşluklar yok sayılır (koşucunun toleranslı içerir kuralı gibi). */
@@ -291,6 +294,23 @@ export async function hizliTestiYurut(
       return parcalar.filter(Boolean).join('\n');
     }
 
+    /**
+     * Doldurmadan sonra sayfa görünümünün durulmasını bekler: görünüm parmak izi (görünür metin uzunluğu, görünür alan / düğme sayısı,
+     * açık pencereler; guvenli-tiklama.ts) en az DURULMA_MS değişmeden kalana kadar, en çok DURULMA_EN_COK_MS. Alana yazdıktan bir süre
+     * sonra (debounce / zamanlayıcı + sorgu) beliren zorunlu alanlar böylece aynı veri durağında sorulur, otomatik basıştan önce görülür.
+     */
+    async function gorunumDurulsun(page: Page): Promise<void> {
+      const bas = Date.now();
+      let onceki = await sayfaParmakIzi(page);
+      let sabit = Date.now();
+      while (!kapandi && Date.now() - bas < DURULMA_EN_COK_MS) {
+        await page.waitForTimeout(200);
+        const iz = await sayfaParmakIzi(page);
+        if (iz !== onceki || !ag.sakinMi(0, { enUzunMs: UZUN_ISTEK_MS })) { onceki = iz; sabit = Date.now(); continue; }
+        if (Date.now() - sabit >= DURULMA_MS) return;
+      }
+    }
+
     /** Sayfanın okuması (değer yok). goruntu: JPEG ekran görüntüsü (yalnız bellekte; sunucuya gider). */
     async function anlikOku(page: Page, goruntu: boolean): Promise<HizliAnlik> {
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
@@ -356,12 +376,29 @@ export async function hizliTestiYurut(
           if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas;
           return null;
         }
+        // Takvimden seçilen (salt okunur) tarih alanı: değer + olaylar, olmazsa takvimden gün (alan-cikisi.ts > takvimdenYaz; normal koşu aynı).
+        if (a.takvimden) {
+          const h = await takvimdenYaz(l, String(deger), bekleMs);
+          if (h) return h;
+          await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
+          return null;
+        }
         // Aynı değer sayfada zaten varsa (önceki turda girildi; site alanı sorgudan sonra kilitlemiş olabilir) yeniden yazılmaz.
         if (await alanZatenDolu(l, String(deger))) return null;
+        // Otomatik tamamlama: yaz → öneri listesini bekle → eşleşen öneriyi seç (liste açılmazsa sıradan metin gibi devam; normal koşu aynı).
+        if (a.oneri) {
+          const r = await oneridenYaz(l, String(deger), bekleMs);
+          if (r !== 'secildi' && r !== 'liste-yok') return `“${a.etiket ?? d.anahtar}”: ${r}`;
+          await alandanCik(l);
+          await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
+          return null;
+        }
         // Ortak yazma kuralı (alan-cikisi.ts > alanaYaz): kısa tek satırlı metin gerçek tuşlarla yazılır (maske / keyup sorgusu çalışır, yaz-sil-yaz
         // olmaz); uzun metin doğrudan. Alandan çıkınca sayfanın sorgusu / yeniden çizimi beklenir (kısa üst sınır; uzun istekler sayılmaz).
         const sonuc = await alanaYaz(l, String(deger), { zamanAsimiMs: bekleMs, sonra: async () => { await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); } });
         if (sonuc === 'silindi') return 'Değer yazıldı ama alandan çıkınca sayfa sildi (maske / doğrulama); alanın nasıl doldurulduğunu kontrol edin.';
+        // "Yazıp Enter'a basın" alanı (etiket / beceri girdisi): değer Enter ile eklenir (normal koşu aynı: doldurucuParametreleri.tus).
+        if (a.tus) { await l.press(a.tus, { timeout: 3_000 }); await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); }
         return null;
       } catch (hata) {
         const neden = await alanDurumu(k.locator(a.secici).first());
@@ -422,7 +459,9 @@ export async function hizliTestiYurut(
       const hedef = l.filter({ visible: true }).first();
       await hedef.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
       await sakinlikBekle(page, hedef, { ag });
-      durum.asama = 'kayit';
+      // Düğmeyi örten öğe (ör. açık kalan öneri listesi / açılır menü): Escape, sonra sayfanın boş bir yerine tıklanarak kapatılır;
+      // kapanmazsa örten öğe açıkça söylenir (ham "locator.click: Timeout" yerine).
+      await ortuyuKaldir(page, hedef, metin ?? secici);
       // Tıklama ile pencere yarışır: tıklama bir pencere açarsa (confirm / alert) pencere yanıtlanana kadar dönmez; pencere açılınca
       // tıklama yapılmış sayılır, pencerenin yanıtı (izin / kullanıcı) beklenir, sonra izleme sürer.
       const tikla = async (oge: Locator, ms: number): Promise<void> => {
@@ -433,7 +472,16 @@ export async function hizliTestiYurut(
           if (r === 'diyalog') t.catch(() => undefined);
         } finally { diyalogAcildi = null; }
       };
-      const t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false, tikla });
+      let t: Awaited<ReturnType<typeof guvenliTikla>>;
+      try {
+        t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false, tikla });
+      } catch (hata) {
+        const m = String(hata instanceof Error ? hata.message : hata);
+        const ortu = /(<[a-z][^>]*>[^<]{0,80})(?:<\/[a-z]+>)?[^\n]*intercepts pointer events/i.exec(m)?.[1];
+        if (ortu) throw new Error(`“${metin ?? secici}” düğmesine basılamadı: başka bir öğe düğmeyi örtüyor (${ortu.replace(/\s+/g, ' ').slice(0, 120)}). Açık kalan liste / pencere kapatılamadı; önce o öğede seçim yapın ya da pencereyi kapatan düğmeye basın.`);
+        if (/Timeout \d+ms exceeded/i.test(m)) throw new Error(`“${metin ?? secici}” düğmesine 15 sn içinde basılamadı: düğme görünür ve etkin olmadı (sayfa değişmiş, düğme devre dışı ya da örtülü olabilir).`);
+        throw hata;
+      }
       await diyalogBitsin();
       return { not: t.etkisiz ? etkisizTiklamaMetni(metin ?? secici, t.tekrarlandi) : t.tekrarlandi ? TEKRAR_NOTU : null, etkisiz: t.etkisiz };
     }
@@ -583,7 +631,8 @@ export async function hizliTestiYurut(
           if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
           continue;
         }
-        if (['radio', 'checkbox', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen) continue;
+        // Yaz + Enter alanı Enter'dan sonra boş kalır (değer eklendi): yeniden yazılmaz.
+        if (['radio', 'checkbox', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen || d.alan.tus) continue;
         const yer = alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first();
         if ((await yer.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) continue;
         const h = await alaniDoldur(page, d);
@@ -620,6 +669,7 @@ export async function hizliTestiYurut(
         if (adim.alanlar.length) {
           // Sayfa doldururken alanı silmiş olabilir: sakinleşince boş kalanlar yeniden doldurulur.
           await sakinles(page, 5_000);
+          await gorunumDurulsun(page);
           const yenile = await bosKalanlariYenile(page, adim.alanlar, []);
           if (yenile[0]) {
             const d = adim.alanlar.find((x) => x.anahtar === yenile[0].anahtar);
@@ -793,8 +843,11 @@ export async function hizliTestiYurut(
           }
           // Sonradan silinen / geri alınan alan (sayfa arka planda satırı yeniden çizmiş olabilir): boş kalanlar bir kez yeniden doldurulur.
           await sakinles(islem, 5_000);
-          hatalar.push(...await bosKalanlariYenile(islem, k.alanlar, hatalar.map((x) => x.anahtar)));
+          // Yazılan alanlar ve sayfaya aynı değerle önceden uygulanmış (yeniden yazılmayan) alanlar: boşalmışsa bir kez yeniden doldurulur.
+          hatalar.push(...await bosKalanlariYenile(islem, [...k.alanlar, ...(k.kontrol ?? [])], hatalar.map((x) => x.anahtar)));
           await sakinles(islem, 5_000);
+          // Beklemeyle (debounce) beliren alanlar / metinler: sayfa görünümü durulana kadar (yeni alan otomatik basıştan önce sorulsun).
+          await gorunumDurulsun(islem);
           await diyalogBitsin();
           for (const x of diyalogKayitlari.splice(0)) notlar.push(`Doldururken sayfa ${x.tur === 'alert' ? 'bilgi' : 'onay'} penceresi açtı (“${x.mesaj}”): ${yanitAdi(x)}.`);
           const once = new Set(sonAnlik.metinler.map((m) => m.metin));

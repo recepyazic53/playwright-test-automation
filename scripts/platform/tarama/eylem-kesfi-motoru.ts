@@ -67,7 +67,8 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   const golgeKokleri: ShadowRoot[] = [];
   const kokleriTopla = (k: ParentNode, n = 0): void => {
     for (const e of Array.from(k.querySelectorAll('*'))) {
-      if (e.shadowRoot && golgeKokleri.length < 200) { golgeKokleri.push(e.shadowRoot); if (n < 5) kokleriTopla(e.shadowRoot, n + 1); }
+      // Nöbetçi'nin kendi arayüzü (kayıt paneli, seçme şeridi; kimliği "nobetci" ile başlar) okunmaz.
+      if (e.shadowRoot && !e.closest('[id^="nobetci"]') && golgeKokleri.length < 200) { golgeKokleri.push(e.shadowRoot); if (n < 5) kokleriTopla(e.shadowRoot, n + 1); }
     }
   };
   kokleriTopla(document);

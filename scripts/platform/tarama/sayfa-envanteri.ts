@@ -32,7 +32,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   const golgeKokleri: ShadowRoot[] = [];
   const kokleriTopla = (k: ParentNode, n = 0): void => {
     for (const e of Array.from(k.querySelectorAll('*'))) {
-      if (e.shadowRoot && golgeKokleri.length < 200) { golgeKokleri.push(e.shadowRoot); if (n < 5) kokleriTopla(e.shadowRoot, n + 1); }
+      // Nöbetçi'nin kendi arayüzü (kayıt paneli, seçme şeridi; kimliği "nobetci" ile başlar) okunmaz.
+      if (e.shadowRoot && !e.closest('[id^="nobetci"]') && golgeKokleri.length < 200) { golgeKokleri.push(e.shadowRoot); if (n < 5) kokleriTopla(e.shadowRoot, n + 1); }
     }
   };
   kokleriTopla(document);
@@ -43,7 +44,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     const yuru = (k: ParentNode): void => {
       for (const e of Array.from(k.children)) {
         if (e.matches(s)) l.push(e);
-        if (e.shadowRoot) yuru(e.shadowRoot);
+        if (e.shadowRoot && !e.closest('[id^="nobetci"]')) yuru(e.shadowRoot);
         yuru(e);
       }
     };
@@ -544,6 +545,23 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       alan.secenekler = [...el.options].slice(0, 300).map((o) => ({ deger: o.value, metin: bosluk(o.label || o.text) }));
     }
     if (tur === 'file') alan.kabul = el.getAttribute('accept') || null;
+    const metinTuru = el instanceof HTMLInputElement && ['text', 'search', ''].includes(tur);
+    // Salt okunur ama yalnız takvimden seçilen tarih alanı: adı / yer tutucusu / sınıfı tarih ya da takvim çağrıştırıyor ya da açılır pencere
+    // (aria-haspopup) bildiriyor. Doldurulabilir sayılır (değer + olaylar; olmazsa takvimden).
+    if (metinTuru && alan.saltOkunur && !devreDisi) {
+      const ipucu = `${e.metin ?? ''} ${el.getAttribute('placeholder') ?? ''} ${el.getAttribute('name') ?? ''} ${id ?? ''} ${el.getAttribute('class') ?? ''}`.toLocaleLowerCase('tr');
+      if (/tarih|date|takvim|calendar|datepicker|gün|day/.test(ipucu) || ['dialog', 'grid', 'true'].includes(el.getAttribute('aria-haspopup') ?? '')) alan.takvimden = true;
+    }
+    // "Yazıp Enter'a basın" (etiket / beceri girdisi): değer Enter ile eklenir; doldurduktan sonra Enter (modelde doldurucuParametreleri.tus).
+    // ("Enter your name" gibi İngilizce yönergeler sayılmaz: yalnız Enter'a basma yönergesi.)
+    if (metinTuru && /enter['’]?\s*(?:a|e|ya|ye)?\s*bas|enter\s*tuşu|enter\s+ile\s+ekle|(?:press|hit)\s+enter/i.test(`${e.metin ?? ''} ${el.getAttribute('placeholder') ?? ''} ${idMetni(el.getAttribute('aria-describedby'), el)}`)) alan.tus = 'Enter';
+    // Otomatik tamamlama: yazınca öneri listesi açılan alan (aria-autocomplete, role=combobox, list, bağlı liste kutusu ya da yanında liste).
+    if (metinTuru && !alan.saltOkunur) {
+      const bagliIdler = `${el.getAttribute('aria-controls') ?? ''} ${el.getAttribute('aria-owns') ?? ''}`.split(/\s+/).filter(Boolean);
+      const bagliListe = bagliIdler.some((x) => kokteBul(el, x)?.matches('[role="listbox"], ul, ol, datalist'));
+      const yanindaListe = Boolean(el.parentElement?.querySelector(':scope > [role="listbox"]'));
+      if (['list', 'both'].includes(el.getAttribute('aria-autocomplete') ?? '') || el.getAttribute('role') === 'combobox' || el.hasAttribute('list') || bagliListe || yanindaListe) alan.oneri = true;
+    }
     if (ozel) {
       alan.ozelBilesen = true;
       alan.bilesen = seciciOner(ozel.kap, null, null).secici;

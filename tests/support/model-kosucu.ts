@@ -24,7 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
-import { alanaYaz } from '../../scripts/platform/tarama/alan-cikisi';
+import { alanaYaz, alandanCik, oneridenYaz, takvimdenYaz } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
@@ -574,6 +574,12 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       await l.setChecked(deger === true || deger === 'true');
       return;
     case 'tarih':
+      // Takvimden seçilen (salt okunur) alan: değer + olaylar, olmazsa takvimden gün (hızlı testle aynı kural: alan-cikisi.ts > takvimdenYaz).
+      if (alan.parametreler.takvim === true) {
+        const h = await takvimdenYaz(l, String(deger), alanTiklamaSuresiMs());
+        if (h) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${String(deger)}" seçilir`, h));
+        return;
+      }
       if (alan.doldurucu === 'tarihJs') {
         await l.evaluate((e, v) => {
           (e as HTMLInputElement).value = v;
@@ -596,6 +602,13 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       // "yaz-sil-yaz" olmaz), uzun metin doğrudan; alandan çıkılır (change / blur ve bağlı sorgu), sayfa değeri silerse bir kez yeniden
       // tuşlanır. Doldurucu tuşlama istiyorsa (tuslayarakYaz / telefonTuslama) her zaman tuşlanır; maske parametresiyle biçimlenmiş değer
       // (kalıba göre tek seferde yazılması amaçlanır) doğrudan yazılır.
+      // Otomatik tamamlama (hızlı testte öneriden seçildi): yaz → öneri listesini bekle → eşleşen öneriyi seç (alan-cikisi.ts > oneridenYaz).
+      if (alan.parametreler.oneri === true) {
+        const r = await oneridenYaz(l, metin, alanTiklamaSuresiMs());
+        if (r !== 'secildi' && r !== 'liste-yok') throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${metin}" öneriden seçilir`, r));
+        await alandanCik(l);
+        return;
+      }
       const tuslayarak = alan.doldurucu === 'tuslayarakYaz' || alan.doldurucu === 'telefonTuslama';
       await alanaYaz(l, metin, {
         tuslayarak, aralikMs: tuslayarak ? 25 : undefined, kip: ham.parametreler.maske ? 'dogrudan' : 'otomatik', zamanAsimiMs: alanTiklamaSuresiMs()
@@ -1386,6 +1399,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         for (const d of doldurulanMetinler) {
           const bos = !(await d.l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
           if (!bos || !String(d.alan.deger ?? '').trim()) continue;
+          // "Yaz + Enter" alanı (etiket / beceri girdisi): Enter değeri ekleyip alanı boşaltır; boş kalması beklenir.
+          if (d.alan.parametreler.tus === 'Enter') continue;
           const yenidenBaslangic = Date.now();
           await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
           await arkaPlanIstekleriniBekle(page, yenidenBaslangic);

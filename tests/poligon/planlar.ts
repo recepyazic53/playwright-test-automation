@@ -81,7 +81,7 @@ export const PLANLAR: EkranPlani[] = [
       { etiket: /^Yolcu$/, deger: '1' }, { etiket: /^Yolcu adı$/, tablo: 'Ad' }, { etiket: /^Yolcu soyadı$/, tablo: 'Soyad' }, { etiket: /^Doğum tarihi/, tablo: 'Doğum tarihi' }
     ],
     // Aynı metinli “Seç” düğmeleri yakın yazılarıyla ayırt edilir (“Seç (07:40 · PG 101 · 1.250 TL)”).
-    basilacak: [/Uçuşları ara/, /^Seç\b/, /4B/, /Yolcu bilgilerini gir/, /Rezervasyonu tamamla/],
+    basilacak: [/Uçuşları ara/, /^Seç( |$)/, /4B/, /Yolcu bilgilerini gir/, /Rezervasyonu tamamla/],
     bitti: /PNR/,
     gonderim: { nereden: 'Kuzeykent (KZK)', nereye: 'Batıkent (BTK)', koltuk: '4B', dogum: '01.02.1990' }
   },

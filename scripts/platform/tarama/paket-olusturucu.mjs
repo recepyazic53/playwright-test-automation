@@ -332,15 +332,16 @@ export function alanDonusturucu(sayac) {
   const cokluDegerliler = [];
   /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string} id @returns {Record<string, unknown>} */
   const taslakAlan = (a, id) => {
-    const { tip, not } = modelTipi(a);
+    // Takvimden seçilen (salt okunur) tarih alanı: tarih olarak doldurulur (değer + olaylar, olmazsa takvimden; koşucu aynı kural).
+    const { tip, not } = a.takvimden ? { tip: 'tarih', not: 'Salt okunur, takvimden seçilen tarih alanı: değer yazılır, olmazsa takvimden gün seçilir.' } : modelTipi(a);
     const etiket = temizMetin(a.etiket, sayac, 120);
     if (!etiket) etiketsizler.push(id);
-    const dokunulmaz = a.devreDisi || a.saltOkunur;
+    const dokunulmaz = a.devreDisi || (a.saltOkunur && !a.takvimden);
     /** @type {string[]} */
     const alanNotlari = [];
     if (not) alanNotlari.push(not);
     if (a.devreDisi) alanNotlari.push('Taramada devre dışıydı.');
-    if (a.saltOkunur) alanNotlari.push('Taramada salt okunurdu.');
+    if (a.saltOkunur && !a.takvimden) alanNotlari.push('Taramada salt okunurdu.');
     if (a.grup) alanNotlari.push(`"${a.grup}" onay kutusu grubunun parçası.`);
     /** @type {Record<string, unknown>} */
     const alan = { id, tip, etiket: { ekran: etiket } };
@@ -379,6 +380,12 @@ export function alanDonusturucu(sayac) {
     }
     if (a.cerceve?.length) alanNotlari.push(`Çerçeve (iframe) içinde: ${a.cerceve.join(' › ')}.`);
     if (tip === 'tarih') alan.bicim = 'YYYY-AA-GG';
+    if (a.takvimden) {
+      alan.doldurucu = 'tarihJs';
+      alan.doldurucuParametreleri = { takvim: true };
+    }
+    // Otomatik tamamlama: koşucu yazıp öneri listesinden eşleşeni seçer (doldurucuParametreleri.oneri).
+    if (a.oneri && tip === 'metin') alan.doldurucuParametreleri = { ...(nesneMi(alan.doldurucuParametreleri) ? alan.doldurucuParametreleri : {}), oneri: true };
     if (tip === 'dosya') {
       const kabul = kabulUzantisi(a.kabul);
       if (kabul) alan.kabul = kabul;

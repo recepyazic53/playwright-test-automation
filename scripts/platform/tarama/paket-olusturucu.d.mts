@@ -57,6 +57,13 @@ export type HamAlan = {
    * verilmezse (undefined) eşleşen mevcut tanımınki korunur.
    */
   tus?: string | null;
+  /**
+   * Salt okunur ama yalnız takvimden seçilen tarih alanı (ör. "Giriş tarihi — Takvimden seçin"): doldurulur (önce değer + input / change
+   * olayları, olmazsa takvimden gün tıklanır); modelde tip "tarih", doldurucu "tarihJs", doldurucuParametreleri.takvim.
+   */
+  takvimden?: boolean;
+  /** Yazınca öneri listesi açılan (otomatik tamamlama) alan: yazılır, öneriden seçilir; modelde doldurucuParametreleri.oneri. */
+  oneri?: boolean;
 };
 
 /**

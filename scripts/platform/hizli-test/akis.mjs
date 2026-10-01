@@ -443,7 +443,9 @@ export function adayMesajlari(eylem, cumleMesajlari = []) {
  * @param {Array<{ anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean; hazir?: boolean }>} alanlar @param {Record<string, unknown>} degerler
  */
 export function eksikAlanlar(alanlar, degerler) {
-  return alanlar.filter((a) => a.zorunlu && !a.hazir && !a.devreDisi && !a.saltOkunur && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
+  // Dosya alanı hızlı testte doldurulmaz (senaryo formunda yüklenir): eksik sayılmaz.
+  return alanlar.filter((a) => a.zorunlu && !a.hazir && !a.devreDisi && !a.saltOkunur && /** @type {any} */ (a).tur !== 'file'
+    && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
 }
 
 /**
