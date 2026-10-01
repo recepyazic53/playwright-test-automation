@@ -404,7 +404,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   }
 
   const alanlar: HamAlan[] = [];
-  const islenenRadyolar = new Set<string>();
+  const islenenRadyoOgeleri = new Set<Element>();
   const ogeler = [...document.querySelectorAll('input, select, textarea')] as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
   ogeler.forEach((el, sira) => {
     const etiketAdi = el.tagName.toLowerCase();
@@ -415,15 +415,30 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     const zorunluOzellik = el.required || el.getAttribute('aria-required') === 'true';
 
     if (tur === 'radio') {
-      const ad = el.getAttribute('name') || `#${el.id || sira}`;
-      if (islenenRadyolar.has(ad)) return;
-      const grup = (el.getAttribute('name')
-        ? [...document.querySelectorAll(`input[type="radio"][name="${tirnak(ad)}"]`)]
-        : [el]) as HTMLInputElement[];
+      if (islenenRadyoOgeleri.has(el)) return;
+      const gercekAd = el.getAttribute('name');
+      // Grup: aynı name'li radyolar; name yoksa aynı kaptaki (radiogroup / fieldset; yoksa radyonun yalnız kendisini saran kabın üstü)
+      // name'siz radyolar — kimliği (id) olmayan gruplar da tek alan olarak okunur.
+      let grup: HTMLInputElement[];
+      if (gercekAd) grup = [...document.querySelectorAll(`input[type="radio"][name="${tirnak(gercekAd)}"]`)] as HTMLInputElement[];
+      else {
+        let kap: Element | null = el.closest('[role="radiogroup"], fieldset') ?? el.parentElement;
+        const adsizlar = (k: Element): HTMLInputElement[] => [...k.querySelectorAll('input[type="radio"]:not([name])')] as HTMLInputElement[];
+        for (let i = 0; kap && i < 3 && adsizlar(kap).length < 2 && !kap.matches('form, body, main, [role="radiogroup"], fieldset'); i++) kap = kap.parentElement;
+        const radyo = el as HTMLInputElement;
+        grup = kap ? adsizlar(kap) : [radyo];
+        if (!grup.includes(radyo)) grup = [radyo];
+      }
+      for (const r of grup) islenenRadyoOgeleri.add(r);
       const gorunenler = grup.filter((r) => gorunurMu(r) || (r.labels ? [...r.labels].some(gorunurMu) : false));
       if (!gorunenler.length) return;
-      islenenRadyolar.add(ad);
-      // Grup etiketi: yalnızca bu grubu içeren fieldset'in legend'ı, radiogroup'un aria adı ya da grubun önündeki metin.
+      const secenekMetni = (r: HTMLInputElement): string | null => {
+        const lm = r.labels && r.labels.length ? saltMetin(r.labels[0]) : sonrakiMetin(r);
+        return lm ? etiketTemizle(lm) : null;
+      };
+      const secenekMetinleri = new Set(grup.map((r) => kar(secenekMetni(r) ?? '')).filter(Boolean));
+      // Grup etiketi: yalnızca bu grubu içeren fieldset'in legend'ı, radiogroup'un aria adı, grubun ilk radyosunun önündeki metin (ör.
+      // "<span>Biçim:</span> <label><input> PDF</label>"; tablo satırında satırın başlık hücresi) ya da yalnız bu grubu saran kabın önündeki metin.
       let etiket: string | null = null;
       let kaynak: HamAlan['etiketKaynagi'] = null;
       let grupFieldset: Element | null = null;
@@ -437,21 +452,27 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
         const t = idMetni(rg.getAttribute('aria-labelledby')) || bosluk(rg.getAttribute('aria-label'));
         if (t) { etiket = etiketTemizle(t); kaynak = 'aria'; }
       }
+      // Seçeneğin kendi yazısı grup adı olamaz.
+      const grupAdi = (t: string | null): string | null => (t && !secenekMetinleri.has(kar(etiketTemizle(t))) ? t : null);
+      if (!etiket) {
+        const t = grupAdi(yakinMetin(grup[0]));
+        if (t) { etiket = etiketTemizle(t); kaynak = 'yakin'; }
+      }
       if (!etiket) {
         let kap: Element | null = el.parentElement;
         while (kap && !grup.every((r) => kap?.contains(r))) kap = kap.parentElement;
-        const t = kap ? yakinMetin(kap) : null;
+        const yalnizGrup = kap ? denetimleri(kap).every((x) => grup.includes(x as HTMLInputElement)) : false;
+        const t = kap && yalnizGrup ? grupAdi(yakinMetin(kap)) : null;
         if (t) { etiket = etiketTemizle(t); kaynak = 'yakin'; }
       }
+      // Seçeneğin seçicisi: kimlik → name + value → rol + yazı → CSS yolu (kimliği olmayan radyo da seçilebilir).
       const radyolar: HamRadyo[] = grup.map((r) => {
-        const lm = r.labels && r.labels.length ? saltMetin(r.labels[0]) : sonrakiMetin(r);
-        const rid = r.getAttribute('id');
-        return { deger: r.value, metin: lm ? etiketTemizle(lm) : null, secici: rid && tekMi(`#${kacis(rid)}`) ? `#${kacis(rid)}` : null };
+        const metin = secenekMetni(r);
+        return { deger: r.value, metin, secici: seciciOner(r, metin, 'radio').secici };
       });
-      const gercekAd = el.getAttribute('name');
       const secici = gercekAd ? `input[type="radio"][name="${tirnak(gercekAd)}"]` : seciciOner(el, etiket, 'radio').secici;
       alanlar.push({
-        anahtar: anahtarVer(gercekAd ? `radyo:${gercekAd}` : `radyo:${el.id || sira}`), tur: 'radio', etiket, etiketKaynagi: kaynak,
+        anahtar: anahtarVer(gercekAd ? `radyo:${gercekAd}` : `radyo:${el.id || etiket || sira}`), tur: 'radio', etiket, etiketKaynagi: kaynak,
         kimlik: null, ad: gercekAd, secici, kirilganlik: gercekAd ? 'dusuk' : 'yuksek',
         adaySeciciler: gercekAd ? [secici, `input[name="${tirnak(gercekAd)}"]`, `[name="${tirnak(gercekAd)}"]`] : [secici],
         zorunlu: grup.some((r) => r.required) || rg?.getAttribute('aria-required') === 'true', devreDisi: grup.every((r) => r.disabled),

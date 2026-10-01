@@ -1183,6 +1183,13 @@ export function hizliTestYoneticisiOlustur(s) {
       mevcutModel: mevcut && nesneMi(mevcut.model) ? mevcut.model : null
     };
     const degerler = Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger]));
+    // Koşullu alanları belirleyen seçim (radyo / liste / onay kutusu) için değer verilmediyse sayfanın İLK değeri (keşifte okunan; değer
+    // üretilmez) senaryoya yazılır: hızlı test koşulları bu değerle değerlendirdi, normal koşu da aynı değerle değerlendirir.
+    const kontroller = new Set(o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).map((/** @type {Nesne} */ a) => a.kosul?.secim).filter(Boolean));
+    for (const k of kontroller) {
+      const ilk = o.kesifIlk?.[k];
+      if (degerler[k] === undefined && ilk !== null && ilk !== undefined && ilk !== '') degerler[k] = ilk;
+    }
     const envanter = kayitEnvanteriKur({ adimlar: o.adimlar.map((/** @type {Nesne} */ x) => ({ ...x, alanlar: bagimliSirala(x.alanlar) })), degerler, yol: o.hedefYol.startsWith('/') ? o.hedefYol : `/${o.hedefYol}`, baslik: o.baslik, profil: null }, o.bitis);
     // Bağlı listeler: modelde bagimlilik + çok düzeyli test verisi tablosu (kökün seçenekleri + zincirin gözlemleri) + bulgular.
     const tumAlanlar = new Map(o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).map((/** @type {Nesne} */ a) => [a.anahtar, a]));

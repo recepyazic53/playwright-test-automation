@@ -296,8 +296,13 @@ export async function hizliTestiYurut(
         if (a.tur === 'file') return 'Dosya alanı hızlı testte doldurulmaz; senaryo formunda dosya yükleyin.';
         if (a.tur === 'radio') {
           const r = (a.radyolar ?? []).find((x) => x.deger === String(deger) || (x.metin && katla(x.metin) === katla(String(deger))));
-          if (!r || !r.secici) return `“${String(deger)}” seçeneği bu alanda yok.`;
-          await k.locator(r.secici).first().check({ timeout: bekleMs });
+          if (!r) return `“${String(deger)}” seçeneği bu alanda yok (seçenekler: ${(a.radyolar ?? []).map((x) => x.metin ?? x.deger).join(', ')}).`;
+          // Seçeneğin seçicisi yoksa (eski okuma) grubun adı + değeri.
+          const secici = r.secici ?? (a.ad ? `input[type="radio"][name="${a.ad.replace(/["\\]/g, '\\$&')}"][value="${r.deger.replace(/["\\]/g, '\\$&')}"]` : null);
+          if (!secici) return `“${String(deger)}” seçeneği sayfada bulunamadı.`;
+          const l = k.locator(secici).first();
+          // Özel çizimli radyo (girdi gizli ya da örtülü): zorla işaretlenir.
+          await l.check({ timeout: bekleMs }).catch(async () => { await l.check({ timeout: 5_000, force: true }); });
           return null;
         }
         const l = k.locator(a.secici).first();
