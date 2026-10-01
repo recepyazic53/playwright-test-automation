@@ -382,7 +382,7 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const m of f.beklemeMetinleri ?? []) gorulenEkle(o, m, 'bekleme');
       // Yeni beliren alanların etiketleri (ör. "D.TARİHİ") sonuç metni değildir: bitiş çiplerine girmez.
       for (const m of f.yeniMetinler ?? []) if (!alanEtiketiMi(o, m.metin, f.anlik?.alanlar)) gorulenEkle(o, m.metin, m.tur);
-      gunluk(o, `“${adim.bas.metin ?? adim.bas.secici}” basıldı (${Math.round(f.sureMs / 100) / 10} sn): ${f.yeniMetinler.length} yeni metin, ${f.yeniAlanlar.length} yeni alan${f.adres ? `, adres ${f.adres.sonra}` : ''}.`);
+      gunluk(o, `“${adim.bas.metin ?? adim.bas.secici}” basıldı (${Math.round(f.sureMs / 100) / 10} sn): ${f.yeniMetinler.length} yeni metin, ${f.yeniAlanlar.length} yeni alan${f.adres ? `, adres ${f.adres.sonra}` : ''}${f.tiklamaNotu ? ` (${f.tiklamaNotu})` : ''}.`);
       const hatalar = f.yeniMetinler.filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
       if (hatalar.length) { o.hataSorusu = { metinler: hatalar, kaynak: 'bas' }; o.durum = 'hataSorusu'; return; }
       basistanSonra(o);
@@ -481,7 +481,7 @@ export function hizliTestYoneticisiOlustur(s) {
       fark: a.fark ? {
         sureMs: a.fark.sureMs, zamanAsimi: a.fark.zamanAsimi, beklemeMetinleri: a.fark.beklemeMetinleri, yeniMetinler: a.fark.yeniMetinler,
         yeniAlanlar: a.fark.yeniAlanlar.map((/** @type {Nesne} */ x) => x.etiket ?? x.anahtar), yeniDugmeler: a.fark.yeniDugmeler.map((/** @type {Nesne} */ x) => x.metin ?? x.secici),
-        adres: a.fark.adres
+        adres: a.fark.adres, tiklamaNotu: a.fark.tiklamaNotu ?? null
       } : null
     }));
     const adim = o.adimlar.length ? guncelAdim(o) : null;

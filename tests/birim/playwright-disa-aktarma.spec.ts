@@ -184,7 +184,9 @@ test('alan türleri koşucunun eylemleriyle: seçim (value → label), oklu seç
   expect(r.icerik).toContain('// Atlanan alan: eksik — alanın konumu (seçicisi) modelde yok');
   expect(r.icerik).toContain('await alan(page, "#zorunluGoster", "zorunluGoster", null, { zorunlu: true });');
   // Aksiyonlar ve sonuç: "veya" yardımcısı, kabul edilen uyarı yorumu.
-  expect(r.icerik).toContain('await page.locator("#hesapla").filter({ visible: true }).first().click({ timeout: 12000 });');
+  // Aksiyon tıklaması güvenli tıklamayla (sakinlik + etkisiz tıklamanın bir kez tekrarı; koşucuyla aynı kural).
+  expect(r.icerik).toContain('await guvenliTikla(page, page.locator("#hesapla").filter({ visible: true }).first(), 12000);');
+  expect(r.icerik).toContain('async function guvenliTikla(page: Page, oge: Locator, zamanMs: number, basariVarMi?: () => Promise<boolean>): Promise<void> {');
   expect(r.icerik).toContain('await page.waitForTimeout(1000);');
   expect(r.icerik).toContain('await doluBekle(page, "#sonuc", 12000);');
   expect(r.icerik).toContain('await page.locator("#yukleniyor").first().waitFor({ state: \'hidden\', timeout: 12000 });');

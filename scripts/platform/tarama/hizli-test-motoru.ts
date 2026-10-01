@@ -19,6 +19,7 @@
 import type { Browser, Locator, Page } from '@playwright/test';
 import { alanaYaz, alanZatenDolu } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
+import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, sakinlikBekle } from './guvenli-tiklama';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -298,18 +299,33 @@ export async function hizliTestiYurut(
       return { metinler: [...metinler], zamanAsimi };
     }
 
+    /**
+     * Güvenli basış (guvenli-tiklama.ts; normal koşuyla aynı kural): öğe görünür olunca sayfa sakinleşene kadar beklenir (yazma
+     * izni bu bekleme bitince açılır), sonra basılır; basış etkisiz kalırsa (istek yok, görünüm aynı) bir kez daha basılır — istek
+     * başlatan / sayfayı değiştiren basış asla tekrarlanmaz. Not: tekrar ya da etkisizlik (yoksa null); etkisiz: son basıştan sonra da
+     * hiçbir şey değişmedi.
+     */
+    async function guvenliBas(page: Page, secici: string, metin: string | null): Promise<{ not: string | null; etkisiz: boolean }> {
+      let l = page.locator(secici);
+      if (metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: metin });
+      const hedef = l.filter({ visible: true }).first();
+      await hedef.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
+      await sakinlikBekle(page, hedef, { ag });
+      durum.asama = 'kayit';
+      const t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false });
+      return { not: t.etkisiz ? etkisizTiklamaMetni(metin ?? secici, t.tekrarlandi) : t.tekrarlandi ? TEKRAR_NOTU : null, etkisiz: t.etkisiz };
+    }
+
     /** Düğmeye basar, sonucu bekler ve farkı çıkarır. */
     async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik): Promise<HizliFark> {
       const onceAdres = yolu(page.url());
       const bas = Date.now();
-      durum.asama = 'kayit';
       diyaloglar.length = 0;
       let sonuc: { metinler: string[]; zamanAsimi: boolean };
       const onceMetinler = new Set(once.metinler.map((m) => m.metin));
+      let tiklamaNotu: string | null = null;
       try {
-        let l = page.locator(secici);
-        if (metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: metin });
-        await l.filter({ visible: true }).first().click({ timeout: 15_000 });
+        tiklamaNotu = (await guvenliBas(page, secici, metin)).not;
         sonuc = await basisiIzle(page, bas);
         // Basıştan sonra hiç yeni metin görülmediyse (ör. pencere önce yalnız "Kapat" düğmesiyle açılıp içi sonra çizilir) kısa bir süre
         // daha bakılır; yeni metin belirince görünüm yeniden sakinleşene kadar beklenir.
@@ -348,7 +364,7 @@ export async function hizliTestiYurut(
         yeniMetinler, yeniAlanlar: sonra.alanlar.filter((a) => !onceAlanlar.has(a.anahtar)),
         kaybolanAlanlar: once.alanlar.filter((a) => !sonraAlanlar.has(a.anahtar)).map((a) => a.anahtar),
         yeniDugmeler: sonra.dugmeler.filter((d) => !onceDugmeler.has(d.secici)),
-        adres: onceAdres !== sonra.yol ? { once: onceAdres, sonra: sonra.yol } : null, anlik: sonra
+        adres: onceAdres !== sonra.yol ? { once: onceAdres, sonra: sonra.yol } : null, anlik: sonra, tiklamaNotu
       };
     }
 
@@ -441,6 +457,8 @@ export async function hizliTestiYurut(
       await ilerle(0, 'Sayfa yeniden açılıyor…');
       await ac();
       const gorulen = new Set<string>();
+      /** Son basış etkisiz kaldıysa (iki kez basıldı, hiçbir şey değişmedi) bitiş görülmezse iletiye eklenen açıklama. */
+      let sonEtkisiz: string | null = null;
       const hataVar = async (): Promise<string | null> => {
         const govde = `${await page.locator('body').innerText().catch(() => '')}\n${diyaloglar.join('\n')}`;
         return plan.bitis.hata.find((h) => iceriyor(govde, h)) ?? null;
@@ -474,11 +492,10 @@ export async function hizliTestiYurut(
         await page.waitForTimeout(200);
         if (!adim.bas) continue;
         await ilerle(i + 1, `${onEk}: “${adim.bas.metin ?? adim.bas.secici}” düğmesine basıldı; sayfa izleniyor…`);
-        durum.asama = 'kayit';
         try {
-          let l = page.locator(adim.bas.secici);
-          if (adim.bas.metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: adim.bas.metin });
-          await l.filter({ visible: true }).first().click({ timeout: 15_000 });
+          const t = await guvenliBas(page, adim.bas.secici, adim.bas.metin);
+          sonEtkisiz = t.etkisiz && t.not ? `${i + 1}. adımda ${t.not}` : null;
+          if (t.not) await ilerle(i + 1, `${onEk}: “${adim.bas.metin ?? adim.bas.secici}” — ${t.not}`);
           const s = await basisiIzle(page, Date.now());
           for (const m of s.metinler) gorulen.add(m);
         } catch (hata) {
@@ -499,7 +516,7 @@ export async function hizliTestiYurut(
         if (b) return { sonuc: 'basarili', mesaj: `Bitiş mesajı göründü: “${b}”.`, gorulen: [...gorulen, b] };
         if (plan.bitis.adres && yolu(page.url()).includes(plan.bitis.adres)) return { sonuc: 'basarili', mesaj: `Sayfa adresi “${plan.bitis.adres}” oldu.`, gorulen: [...gorulen] };
         for (const d of plan.bitis.devam) if (iceriyor(govde, d)) gorulen.add(d);
-        if (Date.now() >= son || kapandi) return { sonuc: 'basarisiz', mesaj: `Bitiş mesajı görülmedi (${plan.zamanAsimiSn} sn).`, gorulen: [...gorulen] };
+        if (Date.now() >= son || kapandi) return { sonuc: 'basarisiz', mesaj: `Bitiş mesajı görülmedi (${plan.zamanAsimiSn} sn)${sonEtkisiz ? `; ${sonEtkisiz}` : ''}.`, gorulen: [...gorulen] };
         await page.waitForTimeout(250);
       }
     }
