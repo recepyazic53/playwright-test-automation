@@ -164,6 +164,32 @@ test.describe('Koşu sonuçları deposu', () => {
     }
   });
 
+  test('"Dene" koşusu: deneme olarak işaretlenir (bitince korunur), geçmişte işaretli döner, kartlara / hata kalıplarına girmez; tamda işaret yok', async () => {
+    const k = geciciKlasor('sonuc-deneme');
+    try {
+      const vt = await kasaliVeritabani(k.yol);
+      const proje = projeKaydet(vt, { ad: 'Proje' });
+      const zaman = (dk: number) => new Date(Date.UTC(2026, 0, 1, 10, dk)).toISOString();
+      kosuKaydet(vt, { id: 'tam-1', projeId: proje, tur: 'tam', kapsam: 'Genel', baslangic: zaman(0) });
+      sonucKaydet(vt, { kosuId: 'tam-1', projeId: proje, senaryoBaslik: 'A1', durum: 'basarili', testKimligi: 'a1', urunAdi: 'Ürün A', bitis: zaman(1) });
+      kosuyuBitir(vt, 'tam-1', { durum: 'tamamlandi', bitis: zaman(2) });
+      kosuKaydet(vt, { id: 'dene-1', projeId: proje, tur: 'tekil', baslangic: zaman(10), denemeKosusu: true });
+      sonucKaydet(vt, { kosuId: 'dene-1', projeId: proje, senaryoBaslik: 'Taslak', durum: 'basarisiz', testKimligi: 't', urunAdi: 'Ürün A', hataMesaji: 'Deneme hatası 12', bitis: zaman(11) });
+      kosuyuBitir(vt, 'dene-1', { durum: 'tamamlandi', bitis: zaman(12) });
+      // Tam koşuya işaret yazılmaz (yalnız tekil).
+      kosuKaydet(vt, { id: 'tam-2', projeId: proje, tur: 'tam', kapsam: 'Genel', baslangic: zaman(20), denemeKosusu: true });
+      kosuyuBitir(vt, 'tam-2', { durum: 'tamamlandi', bitis: zaman(21) });
+      const ozet = sonucOzeti(vt, proje);
+      expect(ozet.kosuGecmisi.map((g) => [g.id, g.denemeKosusu])).toEqual([['tam-2', false], ['dene-1', true], ['tam-1', false]]);
+      expect(ozet.kart?.son).toMatchObject({ basarili: 1, basarisiz: 0 });
+      expect(kosuDetayi(vt, 'dene-1')?.kosu.denemeKosusu).toBe(true);
+      expect(hataKaliplari(vt, proje).toplam).toBe(0);
+      vt.kapat();
+    } finally {
+      k.temizle();
+    }
+  });
+
   test('saklama: süresi dolan videolar silinir (satır "silinme" ile kalır), ekran görüntüleri kalır; sahipsiz eski dosya temizlenir', async () => {
     const k = geciciKlasor('saklama');
     try {

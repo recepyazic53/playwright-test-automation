@@ -30,7 +30,8 @@ test('denetim sözlüğe aykırı kullanımları yakalar, doğru kullanımlara t
     ['Kaldı'], ['Kaldı: '], ['Sözleşme: Kaldı — 2 uyumsuzluk'], ['✗ kaldı'], ['geçti / kaldı'], ['Yalnız kalanlar'],
     ['Kalan testlerin hataları (3)'], ['yalnız kalan testlerde'], ['yeni kalan'],
     ['CANLI', "h('span', { class: 'canli-rozeti' }, 'CANLI')"], ['CANLI önizleme'],
-    ['3 ürün / ekran'], ['Ürünler'], ['Koşuda'], ['"Koşuda" kapalı'], ['Koşuda (TEST): Formdan senaryo'], ['Koşudan çıkar'], ['Koşuya dahil'], ['Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.']
+    ['3 ürün / ekran'], ['Ürünler'], ['Koşuda'], ['"Koşuda" kapalı'], ['Koşuda (TEST): Formdan senaryo'], ['Koşudan çıkar'], ['Koşuya dahil'], ['Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.'],
+    ['Ekranlar ve ortak akışlar'], [' (ortak akış)'], ['"Onay" bir ORTAK AKIŞTIR'], ['Ortak akış kaydedildi.']
   ];
   for (const [metin, satir] of aykiri) expect(terimIhlalleri(metin, satir), metin).not.toEqual([]);
   const dogru: Array<[string, string?]> = [
@@ -38,7 +39,8 @@ test('denetim sözlüğe aykırı kullanımları yakalar, doğru kullanımlara t
     ['Yarıda kaldı'], ['İçerik aynı kaldı (yeniden kaydedildi).'], ['Kalan tablonun adı'], ['kalan süre'], ['CANLI onayı verilmedi; kalan senaryolar koşmadı.'],
     ['CANLI ortam'], ["CANLI'da çağrılmasın"], ['CANLI', "const KAPSAM = { test: 'TEST', canli: 'CANLI' };"], ['Canlı görüntü'], ['Canlı'],
     ['Ekranlar ve servisler'], ['3 ekran'], ['Toplu koşuya dahil (TEST): Formdan senaryo'], ['Toplu koşudan çıkar'], ['Koşuda seçilen satırdan gelir.'],
-    ['Koşuda yakalanan mesajlar'], ['"Toplu koşuya dahil" kapalı'], ['Başlık, raporlarda görünen test adıdır; aynı ekranda tekil olmalıdır.'], ['Playwright koduna dışa aktar']
+    ['Koşuda yakalanan mesajlar'], ['"Toplu koşuya dahil" kapalı'], ['Başlık, raporlarda görünen test adıdır; aynı ekranda tekil olmalıdır.'], ['Playwright koduna dışa aktar'],
+    ['Ekranlar ve genel senaryolar'], ['ortakAkis'], ['#/ekranlar/yeni/ortak-akis'], ['Ortak adımlar']
   ];
   for (const [metin, satir] of dogru) expect(terimIhlalleri(metin, satir), metin).toEqual([]);
 });

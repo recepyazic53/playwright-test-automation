@@ -338,12 +338,12 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
 
   test('CANLI ortam: izin + her işlemde açık onay (canliOnay) — koşu, tarama, öner, servis erişim / şema / REST Dene / Dene; "Varsayılanları öner" onay ve yasak adres ister', async () => {
     await ac('web-erisimi');
-    // Test ortamında izin yeter (senaryo yoksa işleyici 400 "bulunamadı" — denetimden geçti).
-    expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: test_, senaryoId: 'yok', kosuId: 'k3' })).toMatchObject({ durum: 400 });
+    // Test ortamında izin yeter (senaryo yoksa işleyici 404 "bulunamadı" — denetimden geçti).
+    expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: test_, senaryoId: 'yok', kosuId: 'k3' })).toMatchObject({ durum: 404 });
     expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: canli, senaryoId: 'yok', kosuId: 'k4' })).toMatchObject({ durum: 403, y: { izin: 'canli-ortam' } });
     await ac('canli-ortam');
     expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: canli, senaryoId: 'yok', kosuId: 'k5' })).toMatchObject({ durum: 409, y: { kod: 'CANLI_ONAY_GEREKLI' } });
-    expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: canli, senaryoId: 'yok', kosuId: 'k6', canliOnay: true })).toMatchObject({ durum: 400 });
+    expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: canli, senaryoId: 'yok', kosuId: 'k6', canliOnay: true })).toMatchObject({ durum: 404 });
     expect(await ham('/platform/tarama/baslat', { projeId, ortamId: canli, ekranAdi: 'Yeni', hedef: '/', onay: true })).toMatchObject({ durum: 409, y: { kod: 'CANLI_ONAY_GEREKLI' } });
     // Öner: onay yoksa, yasak adreste tarayıcı açılmadan red.
     expect((await ham('/platform/giris-tarifi/oner', { projeId, ortamId: test_ })).y.mesaj).toMatch(/onaylayın/);

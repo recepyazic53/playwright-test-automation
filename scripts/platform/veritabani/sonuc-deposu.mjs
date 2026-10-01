@@ -67,11 +67,26 @@ export const uygulamaSurumuOku = (ozetJson) => {
     return null;
   }
 };
-/** Özet JSON'unun kalıcı ekleri (tekrar bağı, uygulama sürümü). @param {unknown} ozetJson */
+/**
+ * Koşu senaryo formundaki "Dene" koşusu mu (ozet_json.denemeKosusu; şema göçü yok)? Deneme koşuları koşu geçmişinde varsayılan
+ * olarak gizlenir ("Denemeleri de göster"); kartlar ve trend zaten yalnız tam koşulardandır.
+ * @param {unknown} ozetJson
+ */
+export const denemeKosusuMu = (ozetJson) => {
+  try {
+    const o = JSON.parse(String(ozetJson ?? '{}'));
+    return nesneMi(o) && o.denemeKosusu === true;
+  } catch {
+    return false;
+  }
+};
+/** SQL koşulu: "Dene" koşusu olmayan koşu (k = kosular). */
+const DENEME_DISI = `(k.tur = 'tam' OR k.ozet_json NOT LIKE '%"denemeKosusu":true%')`;
+/** Özet JSON'unun kalıcı ekleri (tekrar bağı, uygulama sürümü, deneme işareti). @param {unknown} ozetJson */
 const ozetEkleri = (ozetJson) => {
   const tekrarKaynagi = tekrarKaynagiOku(ozetJson);
   const uygulamaSurumu = uygulamaSurumuOku(ozetJson);
-  return { ...(tekrarKaynagi ? { tekrarKaynagi } : {}), ...(uygulamaSurumu ? { uygulamaSurumu } : {}) };
+  return { ...(tekrarKaynagi ? { tekrarKaynagi } : {}), ...(uygulamaSurumu ? { uygulamaSurumu } : {}), ...(denemeKosusuMu(ozetJson) ? { denemeKosusu: true } : {}) };
 };
 
 /**
@@ -137,8 +152,9 @@ const veriKosusuOku = (eklerJson) => {
  * uygulamaSurumu: test edilen uygulamanın sürümü (koşu başlatılırken girilen ya da ortam ayarındaki; özet JSON'unda saklanır; ilk
  * verilen kalır).
  * @param {Veritabani} vt
+ * denemeKosusu: senaryo formundaki "Dene" (yalnız tekil koşuda; özet JSON'unda saklanır, koşu geçmişinde varsayılan gizli).
  * @param {{ id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null;
- *   uygulamaSurumu?: string | null }} girdi
+ *   uygulamaSurumu?: string | null; denemeKosusu?: boolean }} girdi
  */
 export function kosuKaydet(vt, girdi) {
   const id = kimlik(girdi.id, 'kosuId');
@@ -150,7 +166,7 @@ export function kosuKaydet(vt, girdi) {
     const mevcut = vt.tek('SELECT id, tur, baslangic, kapsam, ozet_json FROM kosular WHERE id = ?', [id]);
     if (!mevcut) {
       const makine = yerelMakine(vt);
-      const ek = { ...(tekrarKaynagi ? { tekrarKaynagi } : {}), ...(uygulamaSurumu ? { uygulamaSurumu } : {}) };
+      const ek = { ...(tekrarKaynagi ? { tekrarKaynagi } : {}), ...(uygulamaSurumu ? { uygulamaSurumu } : {}), ...(girdi.denemeKosusu === true && tur === 'tekil' ? { denemeKosusu: true } : {}) };
       vt.calistir(
         `INSERT INTO kosular (id, proje_id, ortam_id, makine_id, tur, durum, baslangic, ozet_json, kapsam, kaynak)
          VALUES (?, ?, ?, ?, ?, 'calisiyor', ?, ?, ?, ?)`,
@@ -311,7 +327,7 @@ const urunAnahtari = (s) => (s.ekran_id ? String(s.ekran_id) : `ad:${s.urun_adi 
  */
 export function kosulariHesapIcinOku(vt, projeId) {
   const kosular = vt.tumu(
-    'SELECT id, tur, kapsam, durum, baslangic, bitis, kaynak, ortam_id FROM kosular WHERE proje_id = ? ORDER BY COALESCE(bitis, baslangic), baslangic',
+    'SELECT id, tur, kapsam, durum, baslangic, bitis, kaynak, ortam_id, ozet_json FROM kosular WHERE proje_id = ? ORDER BY COALESCE(bitis, baslangic), baslangic',
     [projeId]
   );
   /** @type {Map<string, Record<string, Record<string, number>>>} */
@@ -330,6 +346,7 @@ export function kosulariHesapIcinOku(vt, projeId) {
     baslangic: String(k.baslangic), bitis: k.bitis == null ? null : String(k.bitis), kaynak: String(k.kaynak ?? 'raporlayici'),
     ortamId: k.ortam_id == null ? null : String(k.ortam_id),
     z: new Date(String(k.bitis ?? k.baslangic)).getTime(),
+    denemeKosusu: k.tur !== 'tam' && denemeKosusuMu(k.ozet_json),
     urunler: /** @type {Record<string, import('../sonuclar/hesaplama.mjs').Sayilar>} */ (sayilar.get(String(k.id)) ?? {})
   }));
 }
@@ -381,7 +398,7 @@ export function sonucOzeti(vt, projeId, secim = {}) {
   const gecmis = secilenKosular.slice().reverse().map((k) => ({
     id: k.id, tur: k.tur, kapsam: k.tur === 'tam' ? k.kapsam ?? 'Genel' : null, durum: k.durum, baslangic: k.baslangic, bitis: k.bitis,
     kaynak: k.kaynak, ...sayilariTopla(urun ? [k.urunler[urun]] : Object.values(k.urunler)),
-    urunSayisi: Object.keys(k.urunler).length
+    urunSayisi: Object.keys(k.urunler).length, denemeKosusu: k.denemeKosusu
   }));
   return {
     // Silinmiş ekran (mezar taşı) yalnızca sonucu varsa listelenir.
@@ -431,7 +448,7 @@ export function kosuDetayi(vt, kosuId) {
     kosu: {
       id: String(k.id), projeId: k.proje_id == null ? null : String(k.proje_id), ortamId: k.ortam_id == null ? null : String(k.ortam_id),
       tur: String(k.tur), kapsam: k.kapsam == null ? null : String(k.kapsam), durum: String(k.durum), baslangic: String(k.baslangic),
-      bitis: k.bitis == null ? null : String(k.bitis), kaynak: String(k.kaynak ?? 'raporlayici'),
+      bitis: k.bitis == null ? null : String(k.bitis), kaynak: String(k.kaynak ?? 'raporlayici'), denemeKosusu: k.tur !== 'tam' && denemeKosusuMu(k.ozet_json),
       ...(() => { const o = kosuOzetiHesapla(vt, kosuId); return { ...sayilariTopla([o]), calistirilamadi: /** @type {any} */ (o).calistirilamadi ?? 0 }; })(),
       // "Tekrar: <önceki koşu>" (kaynak koşu silinmişse yalnız kimlik) ve bu koşunun tekrarları.
       tekrarKaynagi: tekrarKaynagi ? { id: tekrarKaynagi, baslangic: kaynak ? String(kaynak.baslangic) : null, bitis: kaynak?.bitis == null ? null : String(kaynak.bitis), var: Boolean(kaynak) } : null,
@@ -502,7 +519,8 @@ function yakalananMesajlariOku(vt, sonucId) {
  * @param {{ urun?: string | null; baslangic?: string | null; bitis?: string | null; limit?: number }} [filtre]
  */
 export function hataKaliplari(vt, projeId, filtre = {}) {
-  const kosullar = ["k.proje_id = ?", "r.durum = 'basarisiz'"];
+  // "Dene" koşuları (taslak denemeleri) hata kalıplarına girmez.
+  const kosullar = ["k.proje_id = ?", "r.durum = 'basarisiz'", DENEME_DISI];
   /** @type {unknown[]} */
   const p = [projeId];
   const bas = isoZaman(filtre.baslangic);
@@ -563,7 +581,7 @@ export function hataKaliplari(vt, projeId, filtre = {}) {
  * @param {{ urun?: string | null; baslangic?: string | null; bitis?: string | null; limit?: number }} [filtre]
  */
 export function yakalananMesajKaliplari(vt, projeId, filtre = {}) {
-  const kosullar = ['k.proje_id = ?'];
+  const kosullar = ['k.proje_id = ?', DENEME_DISI];
   /** @type {unknown[]} */
   const p = [projeId];
   const bas = isoZaman(filtre.baslangic);

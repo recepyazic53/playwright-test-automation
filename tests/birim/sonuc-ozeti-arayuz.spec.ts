@@ -120,8 +120,11 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await aralik.locator('.tarih-tetik').click();
   await expect(panel.getByLabel('Başlangıç')).not.toHaveValue('');
   await expect(panel.getByLabel('Bitiş')).not.toHaveValue('');
-  await page.keyboard.press('Escape');
-  await expect(panel).toBeHidden();
+  // "Tümü": Özet sabit son 30 günü kullanır; seçici "Tüm zamanlar" demez, başlıktaki dönemle çelişmez.
+  await panel.getByRole('button', { name: 'Tümü (Özet: son 30 gün)' }).click();
+  await expect(page.locator('.sonuc-araligi .tarih-tetik')).toHaveText('Özet: son 30 gün');
+  await expect(page.locator('.sayfa-basligi .meta')).toContainText('son 30 gün', { timeout: 30_000 });
+  await expect(page.locator('.farkindalik-karti [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
   // Kutuya tıklayınca ilgili sekme.
   await kutular.nth(1).click();
   await expect(page).toHaveURL(/#\/sonuclar\/servisler$/);

@@ -291,7 +291,10 @@ test('genel senaryo: "+ > Genel senaryo" bloğuyla akışa eklenir; "dahil" sena
   // Diyagram: ana akışın kopyasına hesaplamadan sonra genel senaryo bloğu (isteğe bağlı) eklenir.
   const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekranId}&kopya=ana`) as Nesne & { bloklar: Nesne[]; ortakAkislar: Nesne[] };
   expect(tasarim.basarili, String(tasarim.mesaj ?? '')).toBe(true);
-  expect(tasarim.ortakAkislar).toEqual([{ dosya: ONAY_DOSYASI, ad: 'Onay (ortak)', adimlar: ['Onay formu açılır', 'Onay kodu girilir, onaylanır'], yalnizTest: true }]);
+  // Liste genel senaryoları VE (önceki adım olabilecek) diğer ekranları "tur" ile ayırarak verir; burada yalnız genel senaryolar.
+  expect(tasarim.ortakAkislar.filter((x) => x.tur === 'ortakAkis'))
+    .toEqual([{ dosya: ONAY_DOSYASI, ad: 'Onay (ortak)', tur: 'ortakAkis', adimlar: ['Onay formu açılır', 'Onay kodu girilir, onaylanır'], yalnizTest: true }]);
+  expect(tasarim.ortakAkislar.every((x) => x.tur === 'ortakAkis' || x.tur === 'ekran')).toBe(true);
   const bloklar = [...tasarim.bloklar.slice(0, -1), { tur: 'ortak', dosya: ONAY_DOSYASI, ad: 'Onay', istegeBagli: true }, { tur: 'bitir' }];
   const akisId = String((await basarili('/platform/ekran/akis/kaydet', { projeId, ekranId, ad: 'Onaylı akış', bloklar, onay: true })).akisId);
   const geri = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekranId}&akisId=${akisId}`) as Nesne & { bloklar: Nesne[] };
@@ -349,6 +352,11 @@ test('Dene (model senaryosu): kaydedilmemiş taslak koşar; senaryo yazılmaz; a
   expect(d2.durum, JSON.stringify(d2.hataMesaji)).toBe('passed');
   expect(uygulama.onaylar.length).toBe(onayOnce + 1);
   expect(await say()).toBe(once);
+  // Dene koşuları koşu geçmişinde "deneme" işaretli (arayüzde varsayılan gizli).
+  const gecmis = (await api(`/platform/sonuclar/ozet?projeId=${projeId}`)).kosuGecmisi as Nesne[];
+  const denemeler = gecmis.filter((k) => k.denemeKosusu === true);
+  expect(denemeler.length).toBeGreaterThanOrEqual(2);
+  expect(denemeler.every((k) => k.tur === 'tekil')).toBe(true);
   // Geçersiz taslak (zorunlu ürün yok): koşmadan doğrulama hatası.
   const hatali = await api('/platform/senaryo/dene', { projeId, ekranId, ortamId, kosuId: `kosu-${randomUUID()}`, veri: { kategori: 'K1' } });
   expect(hatali.basarili).toBe(false);

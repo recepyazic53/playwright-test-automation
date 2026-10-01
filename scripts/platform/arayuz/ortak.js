@@ -9,6 +9,23 @@ const IZIN_ANAHTAR_SAYISI = IZIN_TANIMLARI.length;
 const tokenMeta = document.querySelector('meta[name="oturum-tokeni"]');
 /** Sunucunun bu yanıta enjekte ettiği oturum token'ı (yalnızca bellekte tutulur). */
 export const TOKEN = tokenMeta ? tokenMeta.getAttribute('content') || '' : '';
+
+/**
+ * Çalışan koşunun canlı ekran karesi. Token BAŞLIKTA gider (img src'de sorgu dizesi olsaydı adres geçmişine / günlüklere düşerdi);
+ * kare henüz yoksa sunucu 204 döner (konsolda hata yok) ve null döner. Dönen blob: adresini çağıran, yenisini koyunca
+ * URL.revokeObjectURL ile bırakır.
+ * @param {string} kosuId @returns {Promise<string | null>}
+ */
+export async function canliKareAl(kosuId) {
+  try {
+    const r = await fetch(`/canli?kosuId=${encodeURIComponent(kosuId)}`, { headers: { 'X-Test-Sunucu-Token': TOKEN }, cache: 'no-store' });
+    if (r.status !== 200) return null;
+    const b = await r.blob();
+    return b.size ? URL.createObjectURL(b) : null;
+  } catch {
+    return null;
+  }
+}
 if (tokenMeta) tokenMeta.remove();
 
 // ---------------------------------------------------------------------------------------
@@ -657,6 +674,12 @@ export function yardimIpucu(govde, konu) {
  * @param {HTMLElement} kap
  */
 export function bolumAciklamalariniSimgeye(kap) {
+  // Düğme adı başlığın METNİNDEN: sayaç rozeti, simge ve düğmeler ada katılmaz ("Planlı koşular3" değil "Planlı koşular").
+  const baslikAdi = (/** @type {Element} */ b) => {
+    const kopya = /** @type {Element} */ (b.cloneNode(true));
+    for (const x of kopya.querySelectorAll('.rozet, button, svg, .ikon, [aria-hidden="true"]')) x.remove();
+    return (kopya.textContent || '').replace(/\s+/g, ' ').trim();
+  };
   const AC_ESIGI = 40;
   const uygula = () => {
     for (const para of kap.querySelectorAll('p.soluk, p.yardim, p.bolum-aciklamasi')) {
@@ -674,7 +697,7 @@ export function bolumAciklamalariniSimgeye(kap) {
       para.hidden = true;
       const dugme = /** @type {HTMLButtonElement} */ (h('button', {
         type: 'button', class: 'ikon-dugme hayalet ayrinti-dugmesi', 'aria-expanded': 'false', 'aria-controls': para.id,
-        'aria-label': `${(baslik.textContent || '').trim()}: açıklamayı göster`, title: 'Açıklama'
+        'aria-label': `${baslikAdi(baslik)}: açıklamayı göster`, title: 'Açıklama'
       }, ikon('soru')));
       const ac = (/** @type {boolean} */ goster) => { para.hidden = !goster; dugme.setAttribute('aria-expanded', String(goster)); };
       dugme.addEventListener('click', () => ac(para.hidden));
@@ -692,6 +715,68 @@ export function bolumAciklamalariniSimgeye(kap) {
   });
   gozlemci.observe(kap, { childList: true, subtree: true });
   uygula();
+}
+
+/**
+ * Yana kaydırılan kap (geniş tablo) için ipucu: taşan kenarda gölge (sol / sağ; kaydırdıkça güncellenir) ve altta "N sütundan M'si
+ * görünüyor · yana kaydırın" satırı. Kap bir sarmalın içine alınır; sarmal döner. Taşma yoksa ipucu görünmez.
+ * @param {HTMLElement} kap overflow-x: auto olan kap @param {{ sutunSecici?: string }} [secenek] sayılacak sütun başlıkları
+ * @returns {HTMLElement}
+ */
+export function yatayKaydirmaIpucu(kap, secenek = {}) {
+  const bilgi = h('div', { class: 'kaydirma-bilgisi kucuk soluk', role: 'status', hidden: true });
+  const sarmal = h('div', { class: 'yatay-kaydirma-sarmali' }, kap, bilgi);
+  let bekleyen = 0;
+  const guncelle = () => {
+    const fazla = kap.scrollWidth - kap.clientWidth;
+    const tasiyor = fazla > 2;
+    sarmal.classList.toggle('sol-tasma', tasiyor && kap.scrollLeft > 2);
+    sarmal.classList.toggle('sag-tasma', tasiyor && kap.scrollLeft < fazla - 2);
+    if (!tasiyor) { bilgi.hidden = true; return; }
+    const k = kap.getBoundingClientRect();
+    const sutunlar = secenek.sutunSecici ? [...kap.querySelectorAll(secenek.sutunSecici)] : [];
+    const gorunen = sutunlar.filter((s) => { const r = s.getBoundingClientRect(); return r.left >= k.left - 1 && r.right <= k.right + 1; }).length;
+    bilgi.hidden = false;
+    bilgi.textContent = sutunlar.length ? `${sutunlar.length} sütundan ${gorunen} tanesi tam görünüyor · diğerleri için yana kaydırın` : 'Tablo yana kaydırılabilir';
+  };
+  const planla = () => { cancelAnimationFrame(bekleyen); bekleyen = requestAnimationFrame(guncelle); };
+  kap.addEventListener('scroll', planla, { passive: true });
+  if (typeof ResizeObserver === 'function') {
+    const g = new ResizeObserver(() => { if (!sarmal.isConnected && !document.contains(kap)) return; planla(); });
+    g.observe(kap);
+    if (kap.firstElementChild) g.observe(kap.firstElementChild);
+  }
+  new MutationObserver(planla).observe(kap, { childList: true, subtree: true });
+  planla();
+  return sarmal;
+}
+
+/**
+ * Yana kaydırılan şerit (dar ekranda üst menü): taşan kenara sol-tasma / sag-tasma sınıfı (CSS kenarı soldurur: orada devamı olduğu
+ * görülür); etkin bağlantı (aria-current) görünür alana kaydırılır. Taşma yoksa sınıf yok.
+ * @template {HTMLElement} T @param {T} el @returns {T}
+ */
+export function kaydirmaKenarlariniIzle(el) {
+  let bekleyen = 0;
+  const guncelle = () => {
+    const fazla = el.scrollWidth - el.clientWidth;
+    el.classList.toggle('sol-tasma', fazla > 2 && el.scrollLeft > 2);
+    el.classList.toggle('sag-tasma', fazla > 2 && el.scrollLeft < fazla - 2);
+  };
+  const planla = () => { cancelAnimationFrame(bekleyen); bekleyen = requestAnimationFrame(guncelle); };
+  el.addEventListener('scroll', planla, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(planla).observe(el);
+  // Etkin bağlantı değişince (sayfa geçişi) görünür alana getirilir; yalnız şeridin kendisi kayar (sayfa kaydırılmaz).
+  new MutationObserver(() => {
+    const etkin = /** @type {HTMLElement | null} */ (el.querySelector('[aria-current="page"]'));
+    if (etkin && el.scrollWidth > el.clientWidth + 2) {
+      const e = etkin.getBoundingClientRect(); const k = el.getBoundingClientRect();
+      if (e.left < k.left) el.scrollLeft -= k.left - e.left + 8; else if (e.right > k.right) el.scrollLeft += e.right - k.right + 8;
+    }
+    planla();
+  }).observe(el, { subtree: true, attributes: true, attributeFilter: ['aria-current'] });
+  planla();
+  return el;
 }
 
 /** Bu uzunluktan uzun alan açıklamaları ? düğmesinin içinde durur. */
@@ -928,7 +1013,19 @@ export const rozet = (metin, tur = '', ek = {}) => {
 
 /** Kullanıcının koşu / arayüz ayarları (Ayarlar > Koşu, Arayüz; oturum boyunca önbellekte, kaydedince tazelenir). */
 let ayarSozu = null;
+/** Kasa açık mı (kabuk /platform/durum'dan bildirir). Kasa yokken / kilitliyken ayar istenmez: sunucu 409 / 423 döner, konsol kirlenir. */
+/** @type {boolean | null} null: kabuk durumu henüz okumadı (ilk istek bildirimi bekler). */
+let kasaAcik = null;
+/** @type {Array<() => void>} */
+let kasaBekleyenleri = [];
+export function kasaDurumunuBildir(/** @type {boolean} */ acik) {
+  kasaAcik = acik;
+  if (!acik) ayarSozu = null;
+  const b = kasaBekleyenleri; kasaBekleyenleri = []; for (const f of b) f();
+}
 export function kullaniciAyarlari() {
+  if (kasaAcik === null) return new Promise((coz) => { kasaBekleyenleri.push(() => { coz(kullaniciAyarlari()); }); });
+  if (!kasaAcik) return Promise.resolve({});
   ayarSozu ??= api('/platform/kosu-ayarlari').then((y) => y.ayarlar || {}).catch(() => { ayarSozu = null; return {}; });
   return ayarSozu;
 }

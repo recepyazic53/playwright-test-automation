@@ -111,7 +111,7 @@ function ortakAkislariAcIc(model, ortakAkislar, yigin) {
     if (!nesneMi(ortak) || (ortak.tur === 'altModel') || !Array.isArray(ortak.adimlar)) {
       // Bulunamayan ortak akış (ya da döngü): yer tutucu adım kalır (koşu planı açık hatayla durur; sessizce atlanmaz).
       if (!donguMu) eksikler.push(dosya);
-      sonuc.push({ id: adim.id, sira: 0, baslik: adim.baslik || 'Ortak akış', eksikOrtakAkis: String(adim.ortakAkis.dosya), ...(adim.gorunurluk ? { gorunurluk: adim.gorunurluk } : {}), bolumler: [] });
+      sonuc.push({ id: adim.id, sira: 0, baslik: adim.baslik || 'Genel senaryo', eksikOrtakAkis: String(adim.ortakAkis.dosya), ...(adim.gorunurluk ? { gorunurluk: adim.gorunurluk } : {}), bolumler: [] });
       continue;
     }
     const on = String(ortak.id || 'ortak');

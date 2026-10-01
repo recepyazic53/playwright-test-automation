@@ -103,6 +103,10 @@ const kisaKategori = (k) => String(k || 'Diğer').replace(/\s*\(.*?\)\s*/g, ' ')
 
 /** Trend grafiğinde en çok bu kadar koşu çizilir (aralıktaki en yeniler; daha fazlası okunmaz). */
 const TREND_EN_COK = 60;
+/** Koşu geçmişinde "Dene" koşularını göster (oturumda). */
+const DENEME_GOSTER_ANAHTARI = 'platform.ekranSonucDenemeler';
+const oturumOku = (a) => { try { return sessionStorage.getItem(a) || ''; } catch { return ''; } };
+const oturumYaz = (a, d) => { try { sessionStorage.setItem(a, d); } catch { /* yok sayılır */ } };
 
 /**
  * Genel görünümün "Özet | Ekranlar | Servisler | Uçtan uca akışlar" sekmeleri (Raporlar üst menüde, Planlı koşular'ın yanında). Özet (#/sonuclar/ozet; sonuc-ozeti.js)
@@ -391,7 +395,7 @@ function kartlar(kart, trend, urun) {
       h('span', { class: 'd-atlanan', style: { width: yuzde(son.atlanan) } }), h('span', { class: 'd-durdu', style: { width: yuzde(son.durduruldu || 0) } }))));
   const kaynak = urun
     ? ['Son tam koşu: ', h('span', { class: 'mono' }, kisaTarih(son.z)), son.kapsam ? rozet(`kapsam: ${son.kapsam}`, 'vurgu') : null]
-    : [`Her ürünün son tam koşusunun toplamı (${kart.urunSayisi} ürün; en yenisi ${kisaTarih(kart.enYeniZ)}).`];
+    : [`Her ekranın son tam koşusunun toplamı (${kart.urunSayisi} ekran; en yenisi ${kisaTarih(kart.enYeniZ)}).`];
   return h('div', {},
     h('div', { class: 'sonuc-kartlari' }, kartlarDizisi),
     h('p', { class: 'kart-kaynak' }, ...kaynak, onceki ? '' : ' Önceki koşu olmadığı için fark gösterilmiyor.'));
@@ -413,10 +417,10 @@ export function trendKarti(tumNoktalar, urun, secenek = {}) {
   const ciz = () => kap.replaceChildren(...trendGrafigi(noktalar, kap, secenek));
   const kart = h('section', { class: 'kart', 'aria-labelledby': 'trend-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'trend-basligi' }, ikon('grafik'), 'Koşu trendi'),
-      h('span', { class: 'alt' }, `${secenek.altYazi || `${urun ? 'Bu ürünü içeren tam koşular' : 'Genel kapsamlı tam koşular'} · ${aralikMetni(kayitliAralik())}`} · `
+      h('span', { class: 'alt' }, `${secenek.altYazi || `${urun ? 'Bu ekranı içeren tam koşular' : 'Genel kapsamlı tam koşular'} · ${aralikMetni(kayitliAralik())}`} · `
         + (tumNoktalar.length > noktalar.length ? `en yeni ${noktalar.length} / ${tumNoktalar.length}` : `${noktalar.length} koşu`)),
       noktalar.length ? h('div', { class: 'sag' }, kipSegmenti) : null),
-    h('p', { class: 'gorunmez' }, secenek.aciklama || (urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.')),
+    h('p', { class: 'gorunmez' }, secenek.aciklama || (urun ? 'Bu ekranı içeren tam koşular (yalnızca bu ekranın sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.')),
     kap);
   // Genel'de Genel kapsamlı koşu yok ama ekran kapsamlı tam koşular varsa: neden boş olduğunu söyle, istenirse onları göster.
   const diger = !urun && !noktalar.length && Array.isArray(secenek.digerNoktalar) ? aralikUygula(secenek.digerNoktalar) : [];
@@ -464,6 +468,8 @@ function trendGrafigi(noktalar, kap, secenek = {}) {
       s('text', { class: 'eksen-yazisi', x: L - 8, y: yy + 4, 'text-anchor': 'end' }, oranKipi ? `${t}%` : String(t)));
   }
   const etiketAdimi = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 64))));
+  // Aynı günün koşuları: eksende gün bir kez yazılır, sonrakilerde saat ("22.09" ×5 tekrarı olmasın).
+  let sonEtiketGunu = '';
   const ipucu = h('div', { class: 'trend-ipucu', hidden: true, role: 'presentation' });
   const ipucuGoster = (nk, x) => {
     const o = oran(nk);
@@ -506,7 +512,11 @@ function trendGrafigi(noktalar, kap, secenek = {}) {
     grup.addEventListener('keydown', (o2) => { if (o2.key === 'Enter' || o2.key === ' ') { o2.preventDefault(); ac(); } });
     svg.append(grup);
     if (i % etiketAdimi === (n - 1) % etiketAdimi || son) {
-      svg.append(s('text', { class: `eksen-yazisi${son ? ' son' : ''}`, x: x + bw / 2, y: H - 8, 'text-anchor': 'middle' }, gunAy(nk.z)));
+      const gun = gunAy(nk.z);
+      const t = tarihNesnesi(nk.z);
+      const eksenMetni = gun === sonEtiketGunu && !Number.isNaN(t.getTime()) ? `${iki(t.getHours())}:${iki(t.getMinutes())}` : gun;
+      sonEtiketGunu = gun;
+      svg.append(s('text', { class: `eksen-yazisi${son ? ' son' : ''}`, x: x + bw / 2, y: H - 8, 'text-anchor': 'middle' }, eksenMetni));
     }
   });
   const lejant = h('div', { class: 'trend-lejant' },
@@ -577,7 +587,10 @@ async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel, proje
       bildir(e.message, 'hata');
     }
   });
+  // Kart yalnız son sonucu BAŞARISIZ olanları sayar ve listeler; önceki koşuya göre düzelenler ayrı, kapalı bir alt bölümde.
+  const duzelenler = satirlar.filter((r) => r.tur === 'duzeldi');
   const liste = h('ul', { class: 'degisim-listesi' });
+  const duzelenListesi = h('ul', { class: 'degisim-listesi' });
   const fazlasi = [];
   const ogeler = new Map();
   for (const r of satirlar) {
@@ -591,18 +604,24 @@ async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel, proje
         r.x.videoSayisi ? h('span', { title: 'Video var' }, ikon('video'), h('span', { class: 'gorunmez' }, 'video')) : null,
         sureMetni(r.x.sureMs)));
     ogeler.set(r.x.id, li);
-    if (ogeler.size <= 8) liste.append(li); else fazlasi.push(li);
+    if (r.tur === 'duzeldi') duzelenListesi.append(li);
+    else if (liste.childElementCount < 8) liste.append(li); else fazlasi.push(li);
   }
   const tumunuGoster = fazlasi.length ? h('div', { class: 'liste-alti' }, h('button', {
     type: 'button', class: 'kucuk-dugme hayalet tumunu-goster', onclick: (o) => { liste.append(...fazlasi); o.currentTarget.parentElement.remove(); }
-  }, `Tümünü göster (${satirlar.length})`)) : null;
+  }, `Tümünü göster (${basarisizlar.length})`)) : null;
+  const duzelenBolumu = duzelenler.length
+    ? h('details', { class: 'duzelen-testler' }, h('summary', {}, `Önceki koşuya göre düzelen testler (${duzelenler.length})`), duzelenListesi)
+    : null;
   panel.secili = (id) => { for (const [k, li] of ogeler) li.classList.toggle('secili', k === id); };
   const kosu = hedefler[0];
   alan.replaceChildren(h('section', { class: 'kart', 'aria-labelledby': 'basarisiz-basligi' },
-    h('div', { class: 'kart-basligi' }, h('h3', { id: 'basarisiz-basligi' }, ikon('uyari'), 'Başarısız testler'),
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'basarisiz-basligi' }, ikon('uyari'), 'Başarısız testler', basarisizlar.length ? rozet(String(basarisizlar.length), 'hata') : null),
       h('span', { class: 'alt' }, `son koşu · ${kisaTarih(kosu.bitis || kosu.baslangic)}${gecmis.length ? ` · önceki ${gecmis.length} tam koşuyla karşılaştırıldı` : ''}`),
       basarisizlar.length ? h('div', { class: 'sag' }, yenidenCalistir) : null),
-    satirlar.length ? [liste, tumunuGoster] : bosDurum('Son koşuda başarısız test yok', gecmis.length ? 'Önceki koşuya göre düzelen test de yok.' : 'Karşılaştırılacak önceki koşu bulunmuyor.', { ikon: 'onay' })));
+    basarisizlar.length ? [liste, tumunuGoster]
+      : bosDurum('Son koşuda başarısız test yok', duzelenler.length ? 'Önceki koşuda başarısız olup bu koşuda düzelen testler aşağıda.' : gecmis.length ? 'Önceki koşuya göre düzelen test de yok.' : 'Karşılaştırılacak önceki koşu bulunmuyor.', { ikon: 'onay' }),
+    duzelenBolumu));
   if (basarisizlar.length) panel.ac(basarisizlar[0].x.id);
 }
 
@@ -630,6 +649,8 @@ function kosuGecmisi(kosular, urun) {
   let filtre = 'tumu';
   // "Yalnız başarısızlar": yalnız başarısız testi olan koşular (hızlı süzgeç).
   let yalnizKalan = false;
+  // Senaryo formundaki "Dene" koşuları varsayılan gizli (servis sonuçlarındaki "Denemeleri (Dene) de say" gibi; oturumda saklanır).
+  let denemeler = oturumOku(DENEME_GOSTER_ANAHTARI) === '1';
   // Sıralama VERİDE (sayfalı tablo; tablo-siralama.js 'tablo-sirala' olayı → { anahtar, yon }).
   /** @type {{ anahtar: string | null; yon: 'artan' | 'azalan' | null }} */
   let siralama = { anahtar: null, yon: null };
@@ -646,7 +667,8 @@ function kosuGecmisi(kosular, urun) {
   basliklar.unshift(secici.baslik());
   const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
   const ciz = () => {
-    const suzulen = (filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre)).filter((k) => !yalnizKalan || (k.basarisiz || 0) > 0);
+    const suzulen = (filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre))
+      .filter((k) => (!yalnizKalan || (k.basarisiz || 0) > 0) && (denemeler || !k.denemeKosusu));
     const secilen = siralama.anahtar ? veriyiSirala(suzulen, SIRALAMA_ALANLARI[siralama.anahtar], siralama.yon) : suzulen;
     for (const th of basliklar) {
       const a = th.getAttribute('data-sirala-anahtar');
@@ -668,6 +690,7 @@ function kosuGecmisi(kosular, urun) {
         h('td', {}, h('a', { class: 'kosu-baglantisi', href: adres, tabindex: '-1' }, kosuNoktasi(k), tarih),
           h('span', { class: 'gorunmez' }, ` (${KOSU_DURUMU[k.durum] || k.durum})`)),
         h('td', {}, h('span', { class: 'etiketler' }, rozet(k.tur === 'tam' ? 'tam' : 'tekil', k.tur === 'tam' ? 'vurgu' : ''), ' ',
+          k.denemeKosusu ? [rozet('deneme'), ' '] : null,
           k.kapsam ? rozet(k.kapsam, '', { kisalt: true }) : null)),
         h('td', {}, dagilimCubugu(k)),
         h('td', { class: 'sayi' }, String(toplam(k))), sayiHucresi(k.basarili, 'basarili-renk'),
@@ -686,6 +709,11 @@ function kosuGecmisi(kosular, urun) {
   const kalanKutusu = h('input', { type: 'checkbox', id: 'gecmis-yalniz-kalan' });
   kalanKutusu.addEventListener('change', () => { yalnizKalan = kalanKutusu.checked; sayfa = 0; ciz(); });
   const kalanSuzgeci = h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id, 'data-kayit-disi': '' }, kalanKutusu, 'Yalnız başarısızlar');
+  const denemeKutusu = h('input', { type: 'checkbox', id: 'gecmis-denemeler', checked: denemeler });
+  denemeKutusu.addEventListener('change', () => { denemeler = denemeKutusu.checked; oturumYaz(DENEME_GOSTER_ANAHTARI, denemeler ? '1' : ''); sayfa = 0; ciz(); });
+  const denemeSuzgeci = kosular.some((k) => k.denemeKosusu)
+    ? h('label', { class: 'secenek mini-secenek', for: denemeKutusu.id, 'data-kayit-disi': '', title: 'Senaryo formundaki Dene koşuları (kartlar ve trend yalnız tam koşulardandır)' }, denemeKutusu, 'Denemeleri (Dene) de göster')
+    : null;
   const tablo = h('table', { class: 'ozet-tablosu gecmis-tablosu', 'data-siralama': 'veri' },
     h('caption', { class: 'gorunmez' }, 'Koşu geçmişi'),
     h('thead', {}, h('tr', {}, basliklar)),
@@ -698,8 +726,8 @@ function kosuGecmisi(kosular, urun) {
   });
   return h('section', { class: 'kart', 'aria-labelledby': 'gecmis-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
-      h('span', { class: 'alt' }, urun ? 'Bu ürünü içeren tüm koşular; sayılar yalnızca bu ürün için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
-      kosular.length ? h('div', { class: 'sag' }, kalanSuzgeci, filtreSegmenti, kosular.length > 1 ? secici.dugme : null) : null),
+      h('span', { class: 'alt' }, urun ? 'Bu ekranı içeren tüm koşular; sayılar yalnızca bu ekran için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
+      kosular.length ? h('div', { class: 'sag' }, kalanSuzgeci, denemeSuzgeci, filtreSegmenti, kosular.length > 1 ? secici.dugme : null) : null),
     kosular.length
       ? [h('div', { class: 'tablo-kaydirma' }, tablo), sayfalama]
       : h('p', { class: 'bos-liste' }, 'Henüz koşu yok.'));
@@ -1191,7 +1219,7 @@ async function kosuDetayi(icerik, id, proje) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Koşu')),
         h('h2', { tabindex: '-1' }, `Koşu — ${tarihMetni(kosu.bitis || kosu.baslangic)}`),
         h('div', { class: 'meta' },
-          h('span', {}, rozet(kosu.tur === 'tam' ? 'tam koşu' : 'tekil koşu', kosu.tur === 'tam' ? 'vurgu' : '')),
+          h('span', {}, rozet(kosu.tur === 'tam' ? 'tam koşu' : kosu.denemeKosusu ? 'deneme (Dene)' : 'tekil koşu', kosu.tur === 'tam' ? 'vurgu' : '')),
           kosu.kapsam ? h('span', {}, rozet(`kapsam: ${kosu.kapsam}`, '', { kisalt: true })) : null,
           ortam ? h('span', {}, ikon('ag'), `ortam: ${ortam}`) : null,
           h('span', {}, kosuNoktasi(kosu), KOSU_DURUMU[kosu.durum] || kosu.durum),
@@ -1215,7 +1243,7 @@ async function kosuDetayi(icerik, id, proje) {
       sonuclar.length
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
           h('caption', { class: 'gorunmez' }, 'Senaryo sonuçları'),
-          h('thead', {}, h('tr', {}, ...['Durum', 'Ürün', 'Senaryo', 'Süre', 'Hata kalıbı', 'Medya'].map((b, i) => h('th', { scope: 'col', class: i === 3 ? 'sayi' : null }, b)))),
+          h('thead', {}, h('tr', {}, ...['Durum', 'Ekran', 'Senaryo', 'Süre', 'Hata kalıbı', 'Medya'].map((b, i) => h('th', { scope: 'col', class: i === 3 ? 'sayi' : null }, b)))),
           h('tbody', {}, ...tabloSatirlari)))
         : h('p', { class: 'bos-liste' }, 'Bu koşuda sonuç yok.')));
 }

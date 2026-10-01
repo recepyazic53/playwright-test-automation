@@ -103,7 +103,11 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     }
     if (tur === 'e' && kimlik) {
       const ekran = liste.ekranlar.find((e) => e.id === kimlik);
-      if (!ekran) { yerlestir(icerik, bosDurum('Ekran bulunamadı.', 'Silinmiş ya da başka bir projeye ait olabilir.', { ikon: 'ekran' })); return; }
+      if (!ekran) {
+        yerlestir(icerik, bosDurum('Ekran bulunamadı.', 'Silinmiş ya da başka bir projeye ait olabilir.',
+          { ikon: 'ekran', eylem: h('a', { class: 'dugme', href: '#/ekranlar' }, ikon('geri'), 'Ekranlara dön') }));
+        return;
+      }
       if (alt === 'yukle') {
         sayfaPaketiAkisi(icerik, {
           mod: ekran.modelSurumu ? 'analiz' : 'yeni', proje, ekran, tara: () => taramaBaslat(proje, ekran), kaydet: () => kayitBaslat(proje, ekran),
@@ -141,7 +145,8 @@ function yanListe(nav, tumu, secili, yeniden, servisler = []) {
     h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Ekran ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
-    // Genel senaryo artık yeni oluşturulmaz (her ekran başka akışın önceki adımı olabilir); yalnız var olanlar listelenir.
+    // Genel senaryo yalnız "Ekran ekle > Boş başla > Boş genel senaryo oluştur" ile oluşturulur (her ekran başka akışın önceki
+    // adımı da olabildiği için sol menüde ayrı "ekle" bağlantısı yok); burada var olanlar listelenir.
     ortakAkislar.length ? navGrubu({ anahtar: 'ortak-akislar', baslik: 'Genel senaryolar', ogeler: ortakAkislar.map(baglanti) }) : null,
     altModeller.length ? navGrubu({ anahtar: 'alt-modeller', baslik: 'Alt modeller', ogeler: altModeller.map(baglanti), ekle: { etiket: 'Alt model ekle (ekran paketiyle)', href: '#/ekranlar/yeni' } }) : null,
     devreDisiAnahtari(devreDisiSayisi, () => yeniden()),

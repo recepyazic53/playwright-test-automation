@@ -669,7 +669,7 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   // aynı adım biçimi; ekran adresi / spec / page object yok; içinde alt model ya da başka ortak akış olmaz.
   const ortakMi = ham.tur === 'ortakAkis';
   semaSurumunuDogrula(h, yer, ham, ortakMi ? 'ortakAkis' : 'ekran');
-  if (ortakMi && ham.semaSurumu !== 2) h.ekle(yer, 'ortak akış "semaSurumu": 2 olmalı');
+  if (ortakMi && ham.semaSurumu !== 2) h.ekle(yer, 'genel senaryo "semaSurumu": 2 olmalı');
   for (const anahtar of ortakMi ? ['ad', 'aciklama'] : ['ad', 'aciklama', 'ekranUrl']) {
     if (!metinMi(ham[anahtar])) h.ekle(yer, `"${anahtar}" zorunlu`);
   }
@@ -677,12 +677,12 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   for (const anahtar of ortakMi ? [] : ['specDosyasi', 'pageObject']) {
     if (ham[anahtar] !== undefined && !metinMi(ham[anahtar])) h.ekle(yer, `"${anahtar}" verilirse boş olmayan metin olmalı (isteğe bağlı; yazmayabilirsiniz)`);
   }
-  if (ham.yalnizTestOrtami !== undefined && (typeof ham.yalnizTestOrtami !== 'boolean' || !ortakMi)) h.ekle(yer, '"yalnizTestOrtami" yalnızca ortak akışta true/false olabilir');
-  if (ortakMi && ham.akislar !== undefined) h.ekle(yer, 'ortak akışın kendi akışları olmaz ("akislar")');
+  if (ham.yalnizTestOrtami !== undefined && (typeof ham.yalnizTestOrtami !== 'boolean' || !ortakMi)) h.ekle(yer, '"yalnizTestOrtami" yalnızca genel senaryoda true/false olabilir');
+  if (ortakMi && ham.akislar !== undefined) h.ekle(yer, 'genel senaryonun kendi akışları olmaz ("akislar")');
   // Ekran giriş yapılmadan açılır (model koşucusu giriş ve bağlam değiştirme adımlarını atlar).
   if (ham.girisGerekmez !== undefined && typeof ham.girisGerekmez !== 'boolean') h.ekle(yer, '"girisGerekmez" true/false olmalı');
   if (ham.bastakiOrtakAkislar !== undefined && (ortakMi || !BASTAKI_ORTAK_AKIS_SECENEKLERI.includes(ham.bastakiOrtakAkislar))) {
-    h.ekle(yer, ortakMi ? 'ortak akışta "bastakiOrtakAkislar" olmaz' : '"bastakiOrtakAkislar" "once" ya da "sonra" olmalı');
+    h.ekle(yer, ortakMi ? 'genel senaryoda "bastakiOrtakAkislar" olmaz' : '"bastakiOrtakAkislar" "once" ya da "sonra" olmalı');
   }
 
   const b = yeniBasvurular(ham.semaSurumu);
@@ -744,11 +744,11 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
         if (adim.kosu !== undefined) h.ekle(adYer, 'yeniden giriş adımının koşu tanımı ("kosu") olmaz');
         if (ham.girisGerekmez === true) h.ekle(gYer, 'girişsiz modelde ("girisGerekmez": true) yeniden giriş adımı olmaz');
       }
-      if (ortakMi && (altModelVar || ortakVar)) h.ekle(adYer, 'ortak akışın adımında alt model ya da başka ortak akış olmaz');
+      if (ortakMi && (altModelVar || ortakVar)) h.ekle(adYer, 'genel senaryonun adımında alt model ya da başka genel senaryo olmaz');
       if (ortakVar) {
         if (!nesneMi(adim.ortakAkis) || !metinMi(adim.ortakAkis.dosya) || Object.keys(adim.ortakAkis).length !== 1) h.ekle(`${adYer}.ortakAkis`, '"ortakAkis" { dosya } olmalı');
         else b.ortakAkislar.push([`${adYer}.ortakAkis`, adim.ortakAkis.dosya]);
-        if (adim.kosu !== undefined) h.ekle(adYer, 'ortak akış adımının kendi koşu tanımı olmaz (adımları ortak akıştadır)');
+        if (adim.kosu !== undefined) h.ekle(adYer, 'genel senaryo adımının kendi koşu tanımı olmaz (adımları genel senaryodadır)');
       }
       // SQL ADIMI: { veritabaniId | baglantiId, sql, beklenen: { tur, … }, yenidenDeneme?, zamanAsimiSn?, okumalar? } — koşuda veritabanında sorgu
       // çalışır, sonuç beklenenle karşılaştırılır (ayrıntılı kurallar platform/sql/sql-adimi.mjs; burada yapı).
@@ -844,11 +844,11 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
     try {
       ortak = altModelKaynagi(dosya);
     } catch (hata) {
-      h.ekle(bYer, `ortak akış "${dosya}" yüklenemedi: ${hata instanceof Error ? hata.message : String(hata)}`);
+      h.ekle(bYer, `genel senaryo "${dosya}" yüklenemedi: ${hata instanceof Error ? hata.message : String(hata)}`);
       continue;
     }
     // Başvurulan model bir ortak akış ya da adımları olan herhangi bir ekran olabilir (alt model olamaz).
-    if (!nesneMi(ortak) || ortak.tur === 'altModel' || !Array.isArray(ortak.adimlar)) { h.ekle(bYer, `"${dosya}" bir ortak akış ya da ekran değil`); continue; }
+    if (!nesneMi(ortak) || ortak.tur === 'altModel' || !Array.isArray(ortak.adimlar)) { h.ekle(bYer, `"${dosya}" bir genel senaryo ya da ekran değil`); continue; }
     // Ekran kendini doğrudan ya da dolaylı içeremez.
     const kendi = typeof ham.id === 'string' ? `${ham.id}.model.json` : null;
     if (kendi && ortakZincirindeMi(dosya, kendi, altModelKaynagi)) h.ekle(bYer, `"${dosya}" bu ekranı kendi içinde kullanıyor (bir ekran kendini içeremez)`);
@@ -1083,9 +1083,9 @@ const ANAHTAR_ADLARI = Object.freeze({
   hataGostergesi: 'hata göstergesi', zamanAsimiSn: 'bekleme süresi', sureSn: 'bekleme süresi', bolumler: 'bölümler', alanlar: 'alanlar',
   adimlar: 'adımlar', baslik: 'başlık', id: 'kimlik', sira: 'sıra', gorunurluk: 'görünürlük', kosul: 'koşul', kosullar: 'koşullar',
   ifade: 'koşul ifadesi', eslesme: 'senaryo eşleşmesi', 'eslesme.senaryo': 'senaryo eşleşmesi', konum: 'konum', secenekler: 'seçenekler',
-  tip: 'tip', tur: 'tür', ad: 'ad', aciklama: 'açıklama', deger: 'değer', metin: 'metin', altModel: 'alt model', ortakAkis: 'ortak akış',
+  tip: 'tip', tur: 'tür', ad: 'ad', aciklama: 'açıklama', deger: 'değer', metin: 'metin', altModel: 'alt model', ortakAkis: 'genel senaryo',
   akislar: 'akışlar', varsayilan: 'varsayılan', senaryoDuzeyi: 'senaryo ayarları', yapilandirma: 'yapılandırma', doldurucu: 'doldurucu',
-  ekranUrl: 'ekran adresi', girisGerekmez: 'girişsiz', bastakiOrtakAkislar: 'baştaki ortak akışlar', sinirlar: 'sınırlar', cerceve: 'çerçeve',
+  ekranUrl: 'ekran adresi', girisGerekmez: 'girişsiz', bastakiOrtakAkislar: 'baştaki genel senaryolar', sinirlar: 'sınırlar', cerceve: 'çerçeve',
   uyarilar: 'uyarılar', bitisKosulu: 'bitiş koşulu', devam: 'devam metinleri', durum: 'durum', not: 'not', sqlKontrolu: 'SQL kontrolü', dosyaKontrolu: 'dosya kontrolü', yenidenGiris: 'yeniden giriş'
 });
 

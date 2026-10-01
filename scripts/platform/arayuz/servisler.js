@@ -53,6 +53,8 @@ const KONTROL_TURLERI = [
   ['yanitAlani', 'Yanıt alanı (işleçli)'], ['altinYanit', 'Altın yanıtla karşılaştır'], ['yanitSuresi', 'Yanıt süresi (en çok ms)']
 ];
 const DEGERLI_KONTROLLER = new Set(['icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'durumKodu', 'yanitSuresi']);
+/** Değer girilmeyen kontroller: satırın değer sütununda kısa not durur (× düğmesi o sütuna yayılıp boş çubuk gibi görünmesin). */
+const DEGERSIZ_KONTROLLER = new Set(['soapYaniti', 'soapHatasiYok', 'soapHatasi', 'dosya']);
 
 /**
  * "Yanıt alanı" kontrol satırının girdileri: kaynak (XML / JSON), alan yolu, işleç, değer ya da aralık. Gizli alandan gelen kontrolde
@@ -174,7 +176,11 @@ export function servislerEkrani(main, parcalar, baglam) {
           'Servis senaryoları ve raporları ekranlardan ayrıdır. Deneme ve erişim kontrolü seçilen ortamda yapılır; CANLI ortamda önce onay sorulur.')),
       icerik));
   urunlerPaneli(nav, proje, { servisId: servisId ?? (tur === 'yeni' ? 'yeni' : null) }).catch(() => undefined);
-  const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
+  // Hata (ör. olmayan servis kimliği): mesajın altında geri dönüş bağlantısı (sayfa çıkmaz sokak olmasın).
+  const hata = (e) => {
+    if (e && e.durum === 423) return;
+    yerlestir(icerik, hataKutusu(e), h('div', { class: 'dugmeler' }, h('a', { class: 'dugme', href: '#/servisler' }, ikon('geri'), 'Servislere dön')));
+  };
   if (tur === 'yeni') { servisEkleSayfasi(icerik, proje).catch(hata); return; }
   if (!servisId) { yerlestir(icerik, bosDurum('Servis seçin.', 'Soldaki listeden bir servis seçin ya da yeni servis ekleyin.', { ikon: 'ag', eylem: h('a', { class: 'dugme birincil', href: '#/servisler/yeni' }, ikon('arti'), 'Servis ekle') })); return; }
   // Senaryo önerileri ayrı sayfa (#/servisler/s/<id>/oneriler; ekran önerileri sayfasının karşılığı).
@@ -1019,7 +1025,7 @@ async function deneVeGoster(proje, s, ortam, istek, baslik, dugme, yanitGeldi = 
   try {
     // Bitince Dene'nin koşu kaydı düzenleyiciye bildirilir ("Son yanıttan kontrol öner" bu yanıtı açar; kontrolü kullanıcı ekler).
     await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, taslak: { baslik: istek.baslik, icerik: istek.icerik, ...(istek.kaynakSenaryoId ? { kaynakSenaryoId: istek.kaynakSenaryoId } : {}) },
-      bitti: (is) => { const kosuId = is?.satirlar?.[0]?.sonuc?.kosuId; if (kosuId && yanitGeldi) yanitGeldi(kosuId); } });
+      bitti: (is) => { const kosuId = is?.satirlar?.[0]?.sonuc?.kosuId; if (yanitGeldi) yanitGeldi(kosuId || null, is); } });
   } catch (e) { bildir(e.message, 'hata'); } finally { dugme.disabled = false; }
 }
 
@@ -1533,6 +1539,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         k.tur === 'xpathEsit' ? xpath : null, k.tur === 'jsonEsit' ? jsonYolu : null, DEGERLI_KONTROLLER.has(k.tur) ? deger : null,
         k.tur === 'yanitAlani' ? yanitAlaniGirdileri(k, no) : null, k.tur === 'altinYanit' ? altinYanitOzeti(k) : null,
         k.tur === 'icerir' || k.tur === 'icermez' ? h('label', { class: 'secenek', for: buyuk.id }, buyuk, 'büyük/küçük duyarsız') : null,
+        DEGERSIZ_KONTROLLER.has(k.tur) ? h('span', { class: 'soluk kucuk kontrol-degersiz' }, k.tur === 'dosya' ? 'beklentiler aşağıda' : 'değer gerekmez') : null,
         kaldir,
         k.tur === 'dosya' ? h('div', { class: 'kontrol-dosyasi' }, dosyaKontroluFormu(k.dosya ||= yeniDosyaTanimi(), { degisti: () => undefined, ad: `${no} kontrol` })) : null);
     });
@@ -1716,7 +1723,13 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     let taslakIcerik;
     try { taslakIcerik = icerikAl(); } catch (e) { mesaj.goster(e.message); return; }
     deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik, kaynakSenaryoId: senaryo?.id }, baslik.value.trim() || 'Taslak', dene,
-      (kosuId) => { sonDeneKosusu = kosuId; if (!yanitPaneli.hidden) yanitPaneliAc(kosuId); });
+      (kosuId, is) => {
+        if (kosuId) { sonDeneKosusu = kosuId; if (!yanitPaneli.hidden) yanitPaneliAc(kosuId); }
+        // Dene servisten HTTP yanıtı aldıysa ortam bağlantısı fiilen denetlenmiş olur: Hazırlık'taki "Ortam bağlantısı" güncellenir.
+        const r = is?.satirlar?.[0]?.sonuc;
+        const o = deneOrtami.secilen();
+        if (o && r && r.durumKodu) { ortamDenetimleri[o.id] = { erisilebilir: true, durumKodu: r.durumKodu, sureMs: r.sureMs, zaman: Date.now() }; ortamCiz(); }
+      });
   });
   // --- Hazırlık kontrolü (ekran senaryosundakiyle aynı liste ve metinler: hazirlik.mjs) ---------------------------------------
   // Parametreler hazır · Test verisi hazır · Kontrol tanımlı · Ortam bağlantısı. Ortam bağlantısı KENDİLİĞİNDEN denetlenmez: "Denetle"
@@ -1812,7 +1825,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     taslak ? h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' }, h('b', {}, 'Öneriden açıldı (kaydedilmedi). '), taslak.not) : null,
     alan('Başlık', baslik, { zorunlu: true }),
     talep.el,
-    h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' })),
+    h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı (toplu koşu). Dene, “Deneme ortamı”nda seçilen ortamda koşar (CANLI ortamda önce onay sorulur).' })),
     h('label', { class: 'secenek', for: dahil.id }, dahil, 'Toplu koşuya dahil'),
     i.aciklama ? h('div', { class: 'not-kutusu uyari' }, i.aciklama) : null,
     h('fieldset', {}, h('legend', {}, 'İstek'),

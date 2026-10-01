@@ -406,7 +406,7 @@ test('genel senaryo: "Tekrar analiz et" başlangıç ekranını sorar; istek met
   await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
   await d.getByRole('button', { name: 'İstek metnini kopyala' }).click();
   const kopya = await page.evaluate(() => navigator.clipboard.readText());
-  expect(kopya).toContain('"Onay (ortak)" bir ORTAK AKIŞTIR');
+  expect(kopya).toContain('"Onay (ortak)" bir GENEL SENARYODUR');
   expect(kopya).toContain('"Örnek Başvuru" ekranının adresini (/basvuru/) aç; genel senaryo bu ekranda “Başvuru onaylanır” adımından sonra başlar.');
   expect(kopya).toContain('model.tur değeri "ortakAkis" olmalı');
   expect(kopya).toContain('meta.ekran.urlYolu verilmeyebilir');

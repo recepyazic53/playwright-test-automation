@@ -46,7 +46,7 @@ test('taslak: gruplara ayrılır; yalnız elle yazılanlar; parola, dosya, boş 
   expect(kart.liste).toBeNull();
   expect(kisi.sutunlar.map((x) => x.ad)).toEqual(['Doğum tarihi', 'Telefon', 'Kimlik no']);
   expect(kisi.satir).toEqual({ 'Doğum tarihi': '13.04.1998', Telefon: '5426502153', 'Kimlik no': '45520772518' });
-  expect(kart.sutunlar.map((x) => [x.ad, x.gizli])).toEqual([['Kart üzerindeki isim', false], ['Kart numarası', true], ['Güvenlik kodu (CVV)', true]]);
+  expect(kart.sutunlar.map((x) => [x.ad, x.gizli])).toEqual([['Kart üzerindeki isim', true], ['Kart numarası', true], ['Güvenlik kodu (CVV)', true]]);
   expect(kisi.baglar.t.basvuru).toBe('${Kişi bilgileri.Telefon}');
   expect(ulke.baglar.u.basvuru).toBe('${GİDİLECEK ÜLKE.GİDİLECEK ÜLKE}');
   expect(Object.keys(kisi.baglar).concat(Object.keys(kart.baglar), Object.keys(ulke.baglar)).sort()).toEqual(['c', 'd', 'i', 'k', 'n', 't', 'u']);
@@ -59,4 +59,15 @@ test('aynı gruptaki aynı türden iki alan ayrışır; taşınacak değer yoksa
   });
   expect(t?.tablolar[0].sutunlar.map((x) => x.ad)).toEqual(['Telefon', 'Telefon 2']);
   expect(tabloTaslagiKur({ baslik: 'B', alanlar: [{ anahtar: 'a', tur: 'text', etiket: 'A' }], degerler: {} })).toBeNull();
+});
+
+test('sayı / tarih alanı (kişi / kart dışı) tek sütunlu tablo açmaz; doğum tarihi kişi tablosunda kalır', () => {
+  const t = tabloTaslagiKur({
+    baslik: 'C',
+    alanlar: [{ anahtar: 'a', tur: 'number', etiket: 'Adet' }, { anahtar: 't', tur: 'date', etiket: 'Teslimat tarihi' }, { anahtar: 'd', tur: 'date', etiket: 'Doğum tarihi' }],
+    degerler: { a: { deger: '3', kaynak: 'elle' }, t: { deger: '2026-10-05', kaynak: 'elle' }, d: { deger: '1990-01-01', kaynak: 'elle' } }
+  });
+  expect(t?.tablolar.map((x) => x.tabloAdi)).toEqual(['Kişi bilgileri']);
+  expect(t?.tablolar[0].satir).toEqual({ 'Doğum tarihi': '1990-01-01' });
+  expect(tabloTaslagiKur({ baslik: 'C', alanlar: [{ anahtar: 'a', tur: 'number', etiket: 'Adet' }], degerler: { a: { deger: '3', kaynak: 'elle' } } })).toBeNull();
 });

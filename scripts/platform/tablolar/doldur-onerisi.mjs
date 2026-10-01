@@ -6,6 +6,9 @@
 //              boşluk ve noktalama fark etmez — tablo-benzerligi.mjs > baslikNormal; "Adı aynı sütunlara bağla" ile aynı fikir).
 //   3) liste : seçim alanında, liste tablosunun (Ekran listeleri) değerleri alanın seçenekleriyle uyan sütunu (sütunun karşılıkları —
 //              sayfa değeri — da sayılır).
+//   4) benzer: adı birebir değil ama BENZER sütunlar — biri ötekinin kısaltması / başı (en az 4 harf; "TEL" ↔ "Telefon") ya da küçük
+//              eş anlam sözlüğünde aynı kavram (doğum tarihi: "D.TARİHİ" ↔ "Doğum tarihi"; telefon: tel / gsm / cep; kimlik: T.C. / kimlik no;
+//              vergi no; e-posta). YALNIZ ADAYDIR: tek aday olsa bile kendiliğinden doldurulmaz, kullanıcı seçer.
 // Seçim alanına gizli sütun önerilmez (seçenekleri listelenir); kimlik / kart / CVV / parola gibi alanlar da yalnız tablodan dolar.
 // Aday satırlar: ortamda geçerli, aynı gruptaki (tablo + etiket) satır seçimi ve bağlı diğer alanların düz değerleriyle uyan, sütunu
 // dolu satırlar. Gizli sütunun değeri gösterilmez: sunucunun kısmi maskesi (satir.gizliMaskeleri) ya da "•••"; hassas alanda açık
@@ -23,7 +26,7 @@ import { baslikNormal, tabloTuru } from './tablo-benzerligi.mjs';
  * @typedef {{ ad: string; gizli?: boolean; karsiliklar?: Record<string, { sayfa?: string; servis?: string }> }} DoldurSutunu
  * @typedef {{ id: string; ad: string; sutunlar: DoldurSutunu[]; satirlar: DoldurSatiri[]; baglam?: boolean; kaynak?: { tur?: string; tabloTuru?: string } | null }} DoldurTablosu
  * @typedef {{ satirId: string; sira: number; ad: string; gosterim: string; kosul: Record<string, string> }} AdaySatiri
- * @typedef {{ anahtar: string; tabloId: string; tablo: string; sutun: string; etiket: string; neden: 'bagli' | 'ad' | 'liste'; gizli: boolean;
+ * @typedef {{ anahtar: string; tabloId: string; tablo: string; sutun: string; etiket: string; neden: 'bagli' | 'ad' | 'liste' | 'benzer'; gizli: boolean;
  *   grup: string; deger: string; basvuru: string; coklu: boolean; satirlar: AdaySatiri[] }} DoldurAdayi
  * @typedef {{ aday: DoldurAdayi; deger: string; basvuru: string; satir: AdaySatiri | null; tabloSecimi: { anahtar: string; kosul: Record<string, string> } | null }} DoldurSecimi
  * @typedef {{ alan: DoldurAlani; tablolar: DoldurTablosu[]; bag?: DoldurBagi | null; ortamId?: string | null;
@@ -32,7 +35,30 @@ import { baslikNormal, tabloTuru } from './tablo-benzerligi.mjs';
  */
 
 /** Adaylarda görünen neden metinleri (arayüz). */
-export const NEDEN_METINLERI = Object.freeze({ bagli: 'bağlı sütun', ad: 'adı uyan sütun', liste: 'liste tablosu' });
+export const NEDEN_METINLERI = Object.freeze({ bagli: 'bağlı sütun', ad: 'adı uyan sütun', liste: 'liste tablosu', benzer: 'adı benzeyen sütun — kontrol edip seçin' });
+
+/** Küçük eş anlam sözlüğü (normal ad üzerinde): aynı kavramdaki adlar benzer sayılır. Genel kavramlar; ürün / site adı yok. */
+const KAVRAMLAR = /** @type {const} */ ([
+  ['dogumTarihi', /(dogum|^dtarih|^dt$|^dogtar|birth|^dob$)/],
+  ['telefon', /(telefon|^tel(no|num)?$|^tel[^a-z]|gsm|^cep|phone|mobile)/],
+  ['kimlikNo', /(^tc$|^tc(no|kn|kimlik)|kimlik|identity|nationalid)/],
+  ['vergiNo', /(vergi|^vkn)/],
+  ['eposta', /(eposta|email|^mail)/],
+  ['adSoyad', /(adsoyad|adisoyadi|fullname)/]
+]);
+/** @param {string} n normal ad @returns {string[]} */
+const kavramlari = (n) => KAVRAMLAR.filter(([, d]) => d.test(n)).map(([k]) => k);
+/**
+ * İki ad benzer mi (birebir aynı değil): aynı kavram ya da biri ötekinin başı (kısa olanı en az 4 harf, kısaltma noktası yok sayılır).
+ * @param {string} a normal ad @param {string} b normal ad
+ */
+export function benzerAdMi(a, b) {
+  if (!a || !b || a === b) return false;
+  const ka = kavramlari(a);
+  if (ka.length && kavramlari(b).some((k) => ka.includes(k))) return true;
+  const [kisa, uzun] = a.length <= b.length ? [a, b] : [b, a];
+  return kisa.length >= 4 && uzun.startsWith(kisa);
+}
 
 const bos = (/** @type {unknown} */ v) => v === undefined || v === null || v === '';
 /** @param {DoldurAlani} alan */
@@ -87,7 +113,7 @@ function grupSuzgecleri(tablolar, liste) {
 
 /**
  * Bir sütunun adayı (satırlarıyla). @param {DoldurGirdisi} g @param {DoldurTablosu} t @param {DoldurSutunu} c @param {string} etiket
- * @param {'bagli' | 'ad' | 'liste'} neden @param {Record<string, Record<string, string>>} suzgecler @returns {DoldurAdayi}
+ * @param {'bagli' | 'ad' | 'liste' | 'benzer'} neden @param {Record<string, Record<string, string>>} suzgecler @returns {DoldurAdayi}
  */
 function adayKur(g, t, c, etiket, neden, suzgecler) {
   const grup = grupAnahtari(t.id, etiket);
@@ -138,6 +164,16 @@ export function doldurAdaylari(g) {
       if (a.satirlar.length && !eklendi.has(a.anahtar)) { adaylar.push(a); eklendi.add(a.anahtar); }
     }
   }
+  // Benzer adlı sütunlar (yalnız aday; kendiliğinden doldurulmaz).
+  for (const t of tablolar) {
+    for (const c of t.sutunlar) {
+      if (secimAlani && c.gizli) continue;
+      const n = baslikNormal(c.ad);
+      if (adlar.has(n) || ![...adlar].some((x) => benzerAdMi(x, n))) continue;
+      const a = adayKur(g, t, c, '', 'benzer', suzgecler);
+      if (a.satirlar.length && !eklendi.has(a.anahtar)) { adaylar.push(a); eklendi.add(a.anahtar); }
+    }
+  }
   if (secimAlani && liste.length) {
     for (const t of tablolar) {
       if (tabloTuru(t) !== 'liste') continue;
@@ -172,6 +208,8 @@ export function adaySecimi(aday, satirId = null) {
 export function tekAnlamliSecim(adaylar) {
   if (adaylar.length !== 1) return null;
   const a = adaylar[0];
+  // Benzer ad yalnız öneridir: kullanıcı seçmeden doldurulmaz.
+  if (a.neden === 'benzer') return null;
   if (!a.satirlar.length) return null;
   if (a.coklu) return adaySecimi(a, null);
   return a.satirlar.length === 1 ? adaySecimi(a, a.satirlar[0].satirId) : null;

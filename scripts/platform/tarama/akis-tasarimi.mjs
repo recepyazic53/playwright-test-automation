@@ -565,8 +565,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       return;
     }
     if (b.tur === 'ortak') {
-      if (!/^[a-z0-9][a-z0-9-]*\.model\.json$/.test(b.dosya)) { hata(i, 'Eklenecek ortak akışı seçin.'); return; }
-      if (bekleyen) { hata(i, 'Ortak akış, isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+      if (!/^[a-z0-9][a-z0-9-]*\.model\.json$/.test(b.dosya)) { hata(i, 'Eklenecek genel senaryoyu seçin.'); return; }
+      if (bekleyen) { hata(i, 'Genel senaryo, isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
       const ad = b.ad || b.dosya.replace(/\.model\.json$/, '');
       if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
       adlar.add(ad);

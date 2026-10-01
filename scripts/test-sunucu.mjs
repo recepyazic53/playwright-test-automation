@@ -1174,7 +1174,8 @@ platformKosucusunuAyarla({
     const denemeYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}model-${Date.now()}-${randomBytes(6).toString('hex')}.json`);
     try {
       writeFileSync(denemeYolu, JSON.stringify(istek.denemeSenaryosu), { encoding: 'utf-8', mode: 0o600 });
-      const ekOrtamDegiskenleri = { TEST_SUNUCU_MODEL_DENEME_DOSYASI: denemeYolu };
+      // TEST_SUNUCU_DENEME: raporlayıcı koşuyu "Dene" koşusu olarak işaretler (koşu geçmişinde varsayılan gizli).
+      const ekOrtamDegiskenleri = { TEST_SUNUCU_MODEL_DENEME_DOSYASI: denemeYolu, TEST_SUNUCU_DENEME: '1' };
       const liste = await senaryolariListele(istek.ortam, [], undefined, ekOrtamDegiskenleri, istek.genel);
       const eslesen = liste.filter((s) => s.dosya === istek.dosya && Array.isArray(s.etiketler) && s.etiketler.includes(istek.etiket));
       if (eslesen.length !== 1) {
@@ -1272,12 +1273,13 @@ async function istegiIsle(req, res) {
   // Nöbetçi'nin "canlı koşu paneli", bir satıra tıklandığında bu ucu saniyede bir
   // (~1000-1500ms) sorgular — o an çalışan senaryonun fixtures.ts > canliIzlemeYayini
   // tarafından yazılan en güncel ekran görüntüsünü döner. Henüz dosya yazılmamışsa
-  // (koşu daha yeni başladıysa) veya senaryo hiç çalışmıyorsa 404 döner; istemci bunu
+  // (koşu daha yeni başladıysa) veya senaryo hiç çalışmıyorsa 204 döner; istemci bunu
   // "henüz görüntü yok" olarak yorumlayıp bir sonraki tikte tekrar dener.
   // Canlı adım listesi (çalışan koşu): raporlayıcının yazdığı { adimlar } JSON'u; dosya yoksa boş liste.
   if (req.method === 'GET' && req.url && req.url.startsWith('/adim-durumu')) {
     const url = new URL(req.url, 'http://127.0.0.1');
-    if (!tokenGecerli(url.searchParams.get('token'))) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
+    const basliktaki = req.headers['x-test-sunucu-token'];
+    if (!tokenGecerli((typeof basliktaki === 'string' && basliktaki) || url.searchParams.get('token'))) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
     const kayit = calisanSurecler.get(url.searchParams.get('kosuId') ?? '');
     let adimlar = [];
     try { if (kayit?.adimYolu && existsSync(kayit.adimYolu)) adimlar = JSON.parse(readFileSync(kayit.adimYolu, 'utf-8')).adimlar ?? []; } catch { adimlar = []; }
@@ -1285,9 +1287,12 @@ async function istegiIsle(req, res) {
     return;
   }
 
+  // Token BAŞLIKTA (X-Test-Sunucu-Token; arayüz fetch ile ister, adres çubuğuna / geçmişe token düşmez); eski istemciler için
+  // sorgu dizesindeki token da kabul edilir. Kare henüz yoksa 204 (içerik yok): olağan durumdur, tarayıcı konsoluna hata düşmez.
   if (req.method === 'GET' && req.url && req.url.startsWith('/canli')) {
     const url = new URL(req.url, 'http://127.0.0.1');
-    const token = url.searchParams.get('token');
+    const basliktaki = req.headers['x-test-sunucu-token'];
+    const token = (typeof basliktaki === 'string' && basliktaki) || url.searchParams.get('token');
     const kosuId = url.searchParams.get('kosuId');
 
     if (!tokenGecerli(token)) {
@@ -1300,17 +1305,15 @@ async function istegiIsle(req, res) {
     }
 
     const kayit = calisanSurecler.get(kosuId);
-    if (!kayit?.canliYolu || !existsSync(kayit.canliYolu)) {
-      jsonGonder(res, 404, { basarili: false, mesaj: 'Henüz canlı görüntü yok.' });
-      return;
-    }
+    const kareYok = () => { res.writeHead(204, { 'Cache-Control': 'no-store' }); res.end(); };
+    if (!kayit?.canliYolu || !existsSync(kayit.canliYolu)) { kareYok(); return; }
 
     try {
       const veri = readFileSync(kayit.canliYolu);
       res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
       res.end(veri);
     } catch {
-      jsonGonder(res, 404, { basarili: false, mesaj: 'Canlı görüntü okunamadı.' });
+      kareYok();
     }
     return;
   }

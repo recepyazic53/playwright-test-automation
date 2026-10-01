@@ -15,7 +15,7 @@
 // henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
-  degisiklikleriBirak, parolaAlani, rozet, s, temaDugmesi, yerlestir
+  degisiklikleriBirak, kaydirmaKenarlariniIzle, kasaDurumunuBildir, parolaAlani, rozet, s, temaDugmesi, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberBaglaminiAyarla, rehberDugmesi, rehberOtomatikDene, sayfaRehberiBaglantisiKur } from './rehber.js';
@@ -109,6 +109,7 @@ export async function yonlendir() {
     return;
   }
   durum.sunucu = d;
+  kasaDurumunuBildir(Boolean(d.kasa && d.kasa.olusturuldu && d.kasa.acik));
   await modulleriYukle();
   // Açık çalışma alanı yok (kapatıldı / ilk kurulum) → başlangıç ekranı. Sabit veritabanıyla (PLATFORM_VERITABANI)
   // başlatılan sunucuda çalışma alanı her zaman açıktır. (undefined = eski sunucu: tek veritabanı gibi davranılır.)
@@ -502,6 +503,7 @@ function sihirbazKasa() {
     if (!anladim.checked) { mesaj.goster('Devam etmek için parolanın kurtarılamayacağını onaylayın.'); anladim.focus(); return; }
     try {
       await mesgulIken(gonder, 'Kasa oluşturuluyor…', () => api('/platform/kasa/olustur', { govde: { parola: p1.girdi.value } }));
+      kasaDurumunuBildir(true);
       p1.girdi.value = ''; p2.girdi.value = '';
       if (durum.sunucu) durum.sunucu = { ...durum.sunucu, kasa: { ...(durum.sunucu.kasa || {}), olusturuldu: true, acik: true } };
       durum.kullanimModu = VARSAYILAN_MOD;
@@ -643,7 +645,9 @@ function sihirbazTamam() {
   const ortamNotu = () => h('div', { class: 'not-kutusu bilgi siradaki-adim', role: 'note' },
     h('p', {}, h('strong', {}, 'Sıradaki: ortamı tanımlayın. '),
       'Testlerin çalışacağı adresi (ör. TEST) Ayarlar > Proje ve ortamlar bölümünden ekleyin; ortam eklenene kadar tarama ve koşu başlamaz. ',
-      giris === 'evet' ? 'Ortamı ekledikten sonra giriş tarifini kaydedebilirsiniz.' : 'Giriş tarifi ortam eklendikten sonra kaydedilir.'),
+      giris === 'evet' ? 'Ortamı ekledikten sonra giriş tarifini kaydedebilirsiniz.'
+        : giris === 'hayir' ? 'Giriş gerekmiyor olarak işaretlendi; fikriniz değişirse Ayarlar > Giriş profilleri\'nden tarif tanımlayabilirsiniz.'
+          : 'Giriş tarifi ortam eklendikten sonra kaydedilir.'),
     h('div', { class: 'dugmeler' }, ortamBaglantisi));
   const ortamBaglantisi = h('a', { class: 'dugme birincil', href: '#/ayarlar/proje', onclick: (o) => { o.preventDefault(); location.hash = ortamBaglantisi.getAttribute('href'); yonlendir(); } },
     ikon('ag'), 'Ortamı tanımla');
@@ -740,6 +744,7 @@ function kilitEkrani(beklemeSaniye) {
     if (!parola.girdi.value) { alanHatasi(parola.girdi, 'Parolayı girin.'); parola.girdi.focus(); return; }
     try {
       await mesgulIken(gonder, 'Açılıyor…', () => api('/platform/kasa/ac', { govde: { parola: parola.girdi.value }, kilitOlayiYok: true }));
+      kasaDurumunuBildir(true);
       parola.girdi.value = '';
       durdur();
       yonlendir();
@@ -904,7 +909,7 @@ function anaDuzen() {
   const ust = h('header', { class: `ust-cubuk${basit ? ' basit-mod' : ''}` },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar]),
+    kaydirmaKenarlariniIzle(h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar])),
     basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
     hizliAramaDugmesi(aramaBaglami), sunucu, basit ? modAnahtari('basit', (hedef) => moduDegistir(hedef)) : null, rehberDugmesi(), temaDugmesi(), kilitle, hesap);

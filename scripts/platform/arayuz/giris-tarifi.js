@@ -193,6 +193,18 @@ function adimDuzenleyici(s) {
 export async function girisTarifiBolumu(kapsayici, baglam) {
   const proje = baglam.durum.proje;
   const veri = await api(`/platform/giris-tarifleri?projeId=${encodeURIComponent(proje.id)}`);
+  // Kurulumda (ya da Başlarken'de) "Giriş gerekmiyor" seçildiyse tarifsiz ortam "Tanımlı değil" uyarısı yerine bunu söyler.
+  let girisGerekmez = await api(`/platform/baslarken?projeId=${encodeURIComponent(proje.id)}`)
+    .then((y) => Boolean(y.baslarken?.adimlar?.find((a) => a.anahtar === 'giris')?.atlandi)).catch(() => false);
+  const girisGerekmezGeriAl = async (/** @type {HTMLButtonElement} */ dugme) => {
+    dugme.disabled = true;
+    try {
+      await api('/platform/baslarken/kaydet', { govde: { projeId: proje.id, girisGerekmez: false } });
+      girisGerekmez = false;
+      ciz();
+      bildir('"Giriş gerekmiyor" seçimi geri alındı; tarifsiz ortamlarda giriş yapılamaz.');
+    } catch (e) { dugme.disabled = false; if (!(e && e.durum === 423)) bildir(e.message || String(e), 'hata'); }
+  };
   const girisIslemleri = veri.girisAdimIslemleri || [
     { islem: 'kullaniciAdi', etiket: 'Kullanıcı adını yaz' }, { islem: 'parola', etiket: 'Parolayı yaz' }, { islem: 'gonder', etiket: 'Giriş düğmesine bas' },
     ...veri.adimIslemleri
@@ -218,11 +230,16 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
   new MutationObserver(() => duzenleneniIsaretle()).observe(formAlani, { childList: true });
   const ciz = () => {
     liste.replaceChildren(...veri.ortamlar.map((o) => {
-      const [rozetMetni, rozetTuru] = KAYNAK_ROZETI[o.kaynak] || KAYNAK_ROZETI.yok;
+      const gerekmiyor = !o.tarif && girisGerekmez;
+      const [rozetMetni, rozetTuru] = gerekmiyor ? ['Giriş gerekmiyor', ''] : KAYNAK_ROZETI[o.kaynak] || KAYNAK_ROZETI.yok;
       return h('li', { 'data-ortam': o.ortamId },
         h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('anahtar')),
         h('div', { class: 'kayit-ana' }, h('strong', {}, o.ortamAd, ' ', rozet(rozetMetni, rozetTuru)),
-          h('div', { class: 'kayit-meta' }, ozet(o.tarif)),
+          gerekmiyor
+            ? h('div', { class: 'kayit-meta giris-gerekmiyor' }, 'Giriş gerekmiyor (kurulumda seçildi) · ',
+              h('button', { type: 'button', class: 'baglanti-dugmesi', 'aria-label': `Tarif tanımla — ${o.ortamAd} giriş tarifi`, onclick: () => tarifFormu(o) }, 'Tarif tanımla'), ' · ',
+              h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: (ev) => girisGerekmezGeriAl(/** @type {HTMLButtonElement} */ (ev.currentTarget)) }, 'Geri al'))
+            : h('div', { class: 'kayit-meta' }, ozet(o.tarif)),
           o.tarif ? h('div', { class: 'kayit-meta giris-ozet-satiri' }, girisAdimlariOzeti(o.tarif).map((x, i) => `${i + 1}. ${x.metin}`).join(' · ')) : null,
           o.hatalar && o.hatalar.length ? h('div', { class: 'kayit-meta hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null,
           o.tarif && oturumAdresiGirisleAyniMi(o.tarif, o.tabanUrl)

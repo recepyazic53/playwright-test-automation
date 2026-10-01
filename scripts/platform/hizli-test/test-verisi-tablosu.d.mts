@@ -2,8 +2,10 @@ export declare const KISI_TABLOSU: string;
 export declare const KART_TABLOSU: string;
 export declare function adTemizle(m: unknown, en?: number): string;
 export declare function alanGrubu(a: Record<string, any>): { tablo: string; sutun: string };
+export declare function hassasAlanMi(a: Record<string, any>, yer: { tablo: string; sutun: string }, ekler?: ReadonlyArray<string>): boolean;
+export declare function tumSecenekler(a: Record<string, any>): Array<{ metin: string; kod: string }>;
 export declare function tabloTaslagiKur(g: {
-  baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }>;
+  baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string>;
 }): {
   satirAdi: string;
   tablolar: Array<{

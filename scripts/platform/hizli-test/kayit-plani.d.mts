@@ -23,7 +23,7 @@ export type PlanOnizlemesi = {
 };
 export type SenaryoOnerisi = { indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean; alt: { planAdi: string; sutun: string; deger: string; etiket: string } | null };
 
-export declare function planKur(g: { baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }> }): KayitPlani;
+export declare function planKur(g: { baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string> }): KayitPlani;
 export declare function planOnizle(vt: Veritabani, projeId: string, plan: KayitPlani, ekranId: string | null, anahtarlar: Record<string, string>): PlanOnizlemesi;
 export declare function varsayilanSecim(onizleme: PlanOnizlemesi): { tablolar: Record<string, { islem: string }>; baglantilar: string[] };
 export declare function planYaz(vt: Veritabani, projeId: string, plan: KayitPlani, secim: PlanSecimi, bilgi: { ekranAdi: string }): YazilanTablo[];

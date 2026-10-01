@@ -37,13 +37,20 @@ export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; en
     }
     return k('beklemeMetni').test(katla(m)) ? 'bekleme' : 'normal';
   };
-  const ATLA = 'script, style, noscript, template, svg, button, a, label, legend, select, option, textarea, [role="button"], [id^="nobetci"]';
+  const ATLA = 'script, style, noscript, template, svg, button, a, label, legend, select, option, textarea, [role="button"], [role="link"], [id^="nobetci"]';
+  // Sayfanın üst çubuğu / menüsü / altbilgisi (kullanıcı adı, menü, telif satırı) sonuç metni değildir. <header> / <footer> yalnız sayfa
+  // düzeyindeyse (main, section, article, form, fieldset, pencere içinde değilse) sayılır.
+  const ustBantta = (e: Element): boolean => {
+    const bant = e.closest('header, nav, footer, [role="banner"], [role="navigation"], [role="contentinfo"], .navbar, .topbar, .top-bar');
+    if (!bant) return false;
+    return !(bant.matches('header, footer') && bant.parentElement?.closest('main, section, article, form, fieldset, aside, dialog, [role="main"], [role="dialog"]'));
+  };
   const alinan = new Set<Element>();
   const gorulen = new Set<string>();
   const sonuc: Array<{ metin: string; tur: Tur }> = [];
   for (const e of Array.from(document.body.querySelectorAll('*')).slice(0, 8000)) {
     if (sonuc.length >= ayar.enCok) break;
-    if (e.closest(ATLA)) continue;
+    if (e.closest(ATLA) || ustBantta(e)) continue;
     // Üst öğesi alınmışsa metni zaten o bloğun içindedir.
     let ust = e.parentElement;
     let altinda = false;
@@ -125,7 +132,7 @@ export function hizliSecimSeridiKur(ayar: { kopru: string; kimlik: string; isare
     if (e.type !== 'click') return;
     const hedef = e.composedPath().find((x): x is Element => typeof x === 'object' && x !== null && (x as Node).nodeType === 1) ?? null;
     if (!hedef) return;
-    const oge = hedef.closest('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], a[href], [onclick]') ?? hedef;
+    const oge = hedef.closest('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [role="link"], a, [onclick]') ?? hedef;
     const bilgi = w.__nobetciOgeBilgisi as ((el: Element, isaret: string) => { adaylar: SeciciAdayi[]; metin: string | null }) | undefined;
     if (typeof bilgi !== 'function') return;
     const b = bilgi(oge, ayar.isaret);

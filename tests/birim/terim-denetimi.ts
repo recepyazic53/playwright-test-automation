@@ -140,7 +140,13 @@ export const TERIM_KURALLARI: readonly TerimKurali[] = [
     bul: (m) => /"Koşuda"|^\s*Koşuda\s*$|Koşuda (?:açık|kapalı|AÇIK|KAPALI)|Koşuda \(|Koşuda:|(?<![Tt]oplu )Koşudan çıkar|(?<![Tt]oplu )[Kk]oşuya (?:dahil|ekle)(?! ed)/u.test(m)
   },
   // Kod bilmeyen kullanıcıya "Playwright test adı" denmez; başlık raporlarda görünen test adıdır.
-  { ad: '"Playwright test adı" yerine "raporlarda görünen test adı"', bul: (m) => /Playwright test adı/u.test(m) }
+  { ad: '"Playwright test adı" yerine "raporlarda görünen test adı"', bul: (m) => /Playwright test adı/u.test(m) },
+  // "Ortak akış" eski terim: kullanıcıya görünen metinde (arayüz, sunucu mesajı, PDF, yapay zekâ istek metni) "Genel senaryo".
+  // İç kimlikler (ortakAkis, 'ortak-akis', ortak_akis) boşluk / Türkçe harf taşımadığından takılmaz.
+  { ad: '"ortak akış" yerine "genel senaryo"', bul: (m) => /(^|[^\p{L}])(ortak akış|Ortak akış|ORTAK AKIŞ)/u.test(m) },
+  // Sonuçlarda ölçü birimi ekrandır ("Her ekranın son tam koşusu"); sonuç anlamında "Testi kaldır" değil "Testi başarısız say".
+  { ad: 'sonuçlarda "ürün" yerine "ekran"', bul: (m) => /Her ürünün son|[Bb]u ürünü içeren/u.test(m) },
+  { ad: '"Testi kaldır" yerine "Testi başarısız say"', bul: (m) => /Testi kaldır|testi kaldırır/u.test(m) }
 ];
 
 /** Tek bir dize değişmezini tüm kurallara karşı dener; takılan kuralların adları. */

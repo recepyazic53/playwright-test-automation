@@ -70,7 +70,7 @@ test.describe('hazırlık kuralları (saf)', () => {
     const plan = modelKosuPlani(m, { baslik: 'X', ad: 'a' }, {});
     expect(plan.hatalar).toEqual([NEDENLER.ortakAkisYok('Bilgiler', 'Ödeme')]);
     expect(eylemDenetimi(m).engeller).toEqual(plan.hatalar);
-    expect(planHatasiMetni('Örnek', plan.hatalar)).toBe('"Örnek": Bu senaryo çalıştırılamıyor çünkü “Bilgiler” adımının ortak akışı (“Ödeme”) bu projede bulunamadı. Tarayıcı açılmadı.');
+    expect(planHatasiMetni('Örnek', plan.hatalar)).toBe('"Örnek": Bu senaryo çalıştırılamıyor çünkü “Bilgiler” adımının genel senaryosu (“Ödeme”) bu projede bulunamadı. Tarayıcı açılmadı.');
     expect(planHatasiMetni('Örnek', [NEDENLER.hataMesajiYok])).toBe('"Örnek": Bu senaryo çalıştırılamıyor çünkü beklenen iş kuralı hatasının mesajı yazılmamış. Tarayıcı açılmadı.');
   });
 

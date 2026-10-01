@@ -146,6 +146,19 @@ test.describe('son yanıttan kontrol önerme arayüzü', () => {
     await kapat();
   });
 
+  test('değer gerekmeyen kontrol türünde değer sütununda not durur; × düğmesi boş çubuğa yayılmaz', async () => {
+    const { page, kapat } = await sayfa();
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/${senaryoId}`);
+    const satir = page.locator('.kontrol-satiri').first();
+    await satir.getByRole('combobox', { name: /kontrol türü$/ }).selectOption('soapYaniti');
+    const ilk = page.locator('.kontrol-satiri').first();
+    await expect(ilk.locator('.kontrol-degersiz')).toHaveText('değer gerekmez');
+    await expect(ilk.getByRole('textbox')).toHaveCount(0);
+    const kaldir = ilk.getByRole('button', { name: /kontrolü kaldır$/ });
+    expect((await kaldir.boundingBox())!.width).toBeLessThan(60);
+    await kapat();
+  });
+
   test('düzenleyicide "Dene" (onayla): biten denemenin yanıtı "Son yanıttan kontrol öner"de açılır', async () => {
     test.setTimeout(60_000);
     const { page, hatalar, kapat } = await sayfa();
@@ -153,7 +166,9 @@ test.describe('son yanıttan kontrol önerme arayüzü', () => {
     const once = servis.postSayisi();
     await page.getByRole('button', { name: 'Dene', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Dene' }).click();
-    await expect(page.getByRole('region', { name: 'Servis koşu paneli' })).toContainText('Servis koşusu bitti');
+    await expect(page.getByRole('region', { name: 'Servis koşu paneli' })).toContainText('Deneme bitti');
+    // Dene yanıt aldı: Hazırlık'taki "Ortam bağlantısı" artık "Denetlenmedi" demez.
+    await expect(page.locator('.servis-hazirligi [data-madde="ortam"]')).toContainText('Erişildi (');
     expect(servis.postSayisi()).toBe(once + 1);
     await page.getByRole('button', { name: 'Son yanıttan kontrol öner' }).click();
     const panel = page.getByRole('region', { name: 'Son yanıttan kontrol öner' });

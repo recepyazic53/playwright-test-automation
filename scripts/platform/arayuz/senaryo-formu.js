@@ -15,7 +15,7 @@
 // Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
 // değişince form o akışın modeliyle yeniden çizilir, girilen değerler korunur (yeni akışta olmayanlar uyarıyla kaldırılır).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
+import { api, canliKareAl, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
 import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle, kabulListesi } from './dosya-yukleme.js';
 import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
@@ -77,7 +77,8 @@ export async function senaryoFormu(icerik, s) {
     modelFormu(icerik, s, senaryo, { ...baglam, dosyaBilgileri });
   } catch (hata) {
     if (hata && hata.durum === 423) return;
-    yerlestir(icerik, sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : 'Senaryoyu düzenle', null), hataKutusu(hata));
+    yerlestir(icerik, sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : 'Senaryoyu düzenle', null), hataKutusu(hata),
+      h('div', { class: 'dugmeler' }, h('a', { class: 'dugme', href: '#/senaryolar' }, ikon('geri'), 'Senaryolara dön')));
   }
 }
 
@@ -1494,7 +1495,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const dogrulamaOzeti = h('div', { class: 'dogrulama-ozeti', role: 'status' });
   const genelHatalar = h('ul', { class: 'not-kutusu hata', hidden: true });
   const kaydetDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), s.mod === 'yeni' ? 'Senaryoyu oluştur' : 'Değişiklikleri kaydet');
-  const deneDugmesi = h('button', { type: 'button' }, ikon('oynat'), 'Dene');
+  const deneDugmesi = h('button', { type: 'button', title: 'Formdaki güncel değerlerle (kaydedilmemiş değişiklikler dahil) dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene');
   const vazgecDugmesi = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
   const denemeAlani = h('section', { class: 'kart', hidden: true, 'aria-labelledby': 'deneme-baslik', 'aria-live': 'polite' });
 
@@ -1779,7 +1780,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
     s.geri();
   });
 
-  // --- Dene (deneme koşusu; taslak kaydedilmez) -----------------------------------------------
+  // --- Dene (deneme koşusu) -------------------------------------------------------------------
+  // Dene FORMDAKİ GÜNCEL değerlerle (kaydedilmemiş değişiklikler dahil) koşar: veri, satır seçimleri, giriş ve adım görüntüsü seçimi
+  // istekte gider (sunucu kayıtlı senaryoyu okumaz); senaryo kaydedilmez. Sonuç kartı hangi hâliyle denendiğini açıkça yazar.
   let deneme = null;
   deneDugmesi.addEventListener('click', async () => {
     gonderildi = true;
@@ -1797,7 +1800,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     // Riskli ortam (tek tanım: ortam-riski.mjs): açık onay; sunucu istekte canliOnay: true ister (+ canlı ortam izni).
     if (!(await canliOnayIste(ortam, 'Deneme'))) return;
     const kosuId = kimlikUret();
-    deneme = { kosuId, bitti: false };
+    deneme = { kosuId, bitti: false, kaydedilmemis: degisti || !senaryo };
     deneDugmesi.disabled = true;
     kaydetDugmesi.disabled = true;
     denemeCiz({ durum: 'calisiyor', kosuId, ortam });
@@ -1826,7 +1829,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   function denemeCiz(d) {
     clearInterval(canliZamanlayici);
     denemeAlani.hidden = false;
-    const baslik = h('div', { class: 'kart-basligi' }, h('h3', { id: 'deneme-baslik' }, ikon('oynat'), 'Deneme'), h('span', { class: 'alt' }, `${d.ortam.ad} · taslak kaydedilmez`));
+    const hali = deneme && deneme.kaydedilmemis ? 'formdaki kaydedilmemiş değişikliklerle denendi' : 'formdaki hâliyle denendi';
+    const baslik = h('div', { class: 'kart-basligi' }, h('h3', { id: 'deneme-baslik' }, ikon('oynat'), 'Deneme'), h('span', { class: 'alt' }, `${d.ortam.ad} · ${hali} · senaryo kaydedilmez`));
     if (d.durum === 'calisiyor') {
       const img = h('img', { alt: 'Deneme: canlı ekran görüntüsü' });
       const bos = h('div', { class: 'medya-bos' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Deneme başlatıldı; canlı görüntü bekleniyor…');
@@ -1836,10 +1840,15 @@ function modelFormu(icerik, s, senaryo, baglam) {
         durdur.textContent = 'Durduruluyor…';
         try { await api('/durdur', { govde: { kosuId: d.kosuId } }); } catch (e) { bildir(e.message, 'hata'); }
       });
+      // Kare fetch ile (token başlıkta, adreste değil); ilk kare gelmeden sunucu 204 döner (konsolda hata yok).
       const yukle = () => {
-        const on = new Image();
-        on.onload = () => { img.src = on.src; if (bos.isConnected) bos.replaceWith(img); };
-        on.src = `/canli?token=${encodeURIComponent(TOKEN)}&kosuId=${encodeURIComponent(d.kosuId)}&t=${Date.now()}`;
+        void canliKareAl(d.kosuId).then((src) => {
+          if (!src) return;
+          const onceki = img.src && img.src.startsWith('blob:') ? img.src : null;
+          img.src = src;
+          if (bos.isConnected) bos.replaceWith(img);
+          if (onceki) setTimeout(() => URL.revokeObjectURL(onceki), 1000);
+        });
       };
       canliZamanlayici = setInterval(() => { if (!denemeAlani.isConnected || deneme?.bitti) { clearInterval(canliZamanlayici); return; } yukle(); }, 1200);
       yukle();
@@ -1885,6 +1894,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
         y.hataMesaji || (!y.basarili && y.mesaj) ? h('div', { class: 'hata-ozeti' }, h('b', {}, 'Hata: '), String(y.hataMesaji || y.mesaj).split('\n').find((x) => x.trim()) || '') : null,
         y.basarisizAdim ? h('p', { class: 'soluk kucuk' }, `Başarısız adım: ${y.basarisizAdim}`) : null,
         oneri ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, `Görülen mesaj: “${oneri.mesaj}”`), kullan) : null));
+    // Sonuç yapışkan sağ sütunun (kendi kaydırması olan .ozet-sutunu) altında kalabilir: sonuç kartı görünür alana getirilir
+    // (sütun ve gerekirse sayfa kaydırılır); kullanıcı sonucu aramak zorunda kalmaz.
+    requestAnimationFrame(() => { if (denemeAlani.isConnected) denemeAlani.scrollIntoView({ block: 'nearest' }); });
   }
 
   // --- Akış diyagramı (sekme) -------------------------------------------------------------------
@@ -2105,7 +2117,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const meta = [
     h('span', {}, ikon('katman'), `${sema.modelAdi || baglam.ekran.ad} modeli${baglam.modelSurumu ? ` · sürüm ${baglam.modelSurumu}` : ''}`),
     h('span', {}, ikon('ag'), `doğrulama bağlamı: ${s.ortam.ad}`),
-    senaryo ? h('span', { class: 'mono cok-soluk' }, senaryo.id) : null
+    // Ham kimlik başlıkta gösterilmez; gerekirse kopyalanır (tam kimlik düğmenin ipucunda).
+    senaryo ? h('button', {
+      type: 'button', class: 'kucuk-dugme hayalet kimlik-kopyala', title: `Senaryo kimliği: ${senaryo.id}`,
+      onclick: async () => {
+        try { await navigator.clipboard.writeText(senaryo.id); bildir('Senaryo kimliği kopyalandı.'); } catch { bildir(`Senaryo kimliği: ${senaryo.id}`, 'uyari'); }
+      }
+    }, ikon('kopya'), 'Kimliği kopyala') : null
   ];
   // Playwright koduna dışa aktar: KAYDEDİLMİŞ senaryodan (kaydedilmemiş değişiklikler dosyaya girmez); senaryonun kayıtlı ortamlarından biri.
   // İndirmeden önce açıklamalı onay (playwright-disa-aktarma.js). Yeni senaryoda düğme görünür ama kapalıdır (önce kaydedilir).

@@ -91,7 +91,9 @@ export function araligiKaydet(deger, anahtar = SONUC_ARALIGI) {
 
 /**
  * Süzgeç bileşeni. degisti(yeniDeger) yalnız geçerli seçimde çağrılır; seçim (anahtar verilirse) oturumda saklanır.
- * @param {{ deger?: object; degisti: (d: object) => void; anahtar?: string | null; etiket?: string }} secenek
+ * tumuMetni: "Tümü" seçiliyken düğmede ve hızlı seçimde gösterilecek metin (ör. Özet "Tümü"de sabit son 30 günü kullanır; seçici
+ * "Tüm zamanlar" deyip başlıkla çelişmesin).
+ * @param {{ deger?: object; degisti: (d: object) => void; anahtar?: string | null; etiket?: string; tumuMetni?: string }} secenek
  */
 export function tarihAraligiSecici(secenek) {
   let deger = temizle(secenek.deger ?? (secenek.anahtar === null ? TUMU : kayitliAralik(secenek.anahtar || SONUC_ARALIGI)));
@@ -113,11 +115,12 @@ export function tarihAraligiSecici(secenek) {
   };
   const metniCiz = () => {
     const c = araligiCoz(deger);
-    const ozet = deger.hizli && deger.hizli !== 'tumu' ? `${aralikMetni(deger)} · ${kisa(c.baslangic)} → şimdi` : aralikMetni(deger);
+    const ozet = deger.hizli && deger.hizli !== 'tumu' ? `${aralikMetni(deger)} · ${kisa(c.baslangic)} → şimdi`
+      : deger.hizli === 'tumu' && secenek.tumuMetni ? secenek.tumuMetni : aralikMetni(deger);
     metin.textContent = ozet;
   };
   // Düğmeler bir kez oluşturulur; seçimde yalnız aria-pressed güncellenir.
-  hizli.append(...HIZLI_SECIMLER.map(([a, m]) => h('button', { type: 'button', 'data-aralik': a, onclick: () => sec({ hizli: a }) }, m)));
+  hizli.append(...HIZLI_SECIMLER.map(([a, m]) => h('button', { type: 'button', 'data-aralik': a, onclick: () => sec({ hizli: a }) }, a === 'tumu' && secenek.tumuMetni ? `Tümü (${secenek.tumuMetni})` : m)));
   const hizliCiz = () => { for (const d of hizli.children) d.setAttribute('aria-pressed', d.getAttribute('data-aralik') === deger.hizli ? 'true' : 'false'); };
   const ac = (goster) => { panel.hidden = !goster; tetik.setAttribute('aria-expanded', String(goster)); if (goster) alanlariDoldur(); };
   const sec = (yeni, kaynak = 'hizli') => {

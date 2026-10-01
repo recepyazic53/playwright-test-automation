@@ -11,3 +11,20 @@ export declare function servisSonucDosyasi(vt: Veritabani, q: URLSearchParams): 
 export declare const SERVIS_SONUC_UCLARI: Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>;
 /** Servis koşu kaydının gösterimi: istekte adı gizli alanların değeri maskeli (kayıt değişmez). */
 export declare function servisKosusuGosterimi<K extends { sonuc?: unknown }>(kosu: K, ekler: ReadonlyArray<string>): K;
+/** Servis / akış koşusunun özeti (sonuç sayfası; satır kimlikleri dönmez). */
+export interface ServisKosuOzeti {
+  id: string; tur: 'servis' | 'akis'; kaynakId: string | null; baslik: string; ortamId: string | null; ortam: string; calistirma: 'kosu' | 'dene';
+  baslangic: string; bitis: string; sureMs: number; toplam: number; basarili: number; basarisiz: number; hata: number; atlanan: number; durduruldu: number;
+}
+/** Her kaynağın (servis / akış) son koşusunun toplamı. */
+export interface SonDurum {
+  basarili: number; basarisiz: number; hata: number; atlanan: number; durduruldu: number; toplam: number; sureMs: number;
+  kaynak: number; basarisizKaynak: number; servis: number; akis: number;
+}
+export declare function sonDurumOzeti(kosular: ReadonlyArray<ServisKosuOzeti>): { simdi: SonDurum | null; onceki: SonDurum | null; seri: SonDurum[] };
+export declare function servisSonucOzeti(vt: Veritabani, q: URLSearchParams): {
+  sonDurum: { simdi: SonDurum | null; onceki: SonDurum | null; seri: SonDurum[] };
+  kosular: ServisKosuOzeti[];
+  servisler: Array<{ id: string; ad: string; son: Record<string, unknown> | null }>;
+  akislar: Array<{ id: string; baslik: string; son: Record<string, unknown> | null }>;
+} & Record<string, unknown>;

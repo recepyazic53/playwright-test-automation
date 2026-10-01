@@ -451,6 +451,10 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .ust-nav a:hover { color: var(--metin); background: var(--panel-2); }
 .ust-nav a[aria-current="page"] { color: var(--metin); background: var(--vurgu-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vurgu) 38%, transparent); }
 .ust-nav a[aria-current="page"] svg { color: var(--vurgu); }
+/* Dar ekranda menü yana kayar: taşan kenar solar (devamı var; kaydırılabilir). Sınıflar ortak.js > kaydirmaKenarlariniIzle. */
+.ust-nav.sag-tasma { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+.ust-nav.sol-tasma { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px); mask-image: linear-gradient(90deg, transparent, #000 40px); }
+.ust-nav.sol-tasma.sag-tasma { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
 .ust-nav .nav-pasif { cursor: not-allowed; color: var(--metin-3); }
 .ust-nav .nav-pasif .yakinda-etiketi { font: 600 9.5px var(--yazi-mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--cizgi-2); color: var(--metin-3); }
 .bosluk { flex: 1; }
@@ -2431,10 +2435,20 @@ a.son-sonuc { text-decoration: none; }
 .yapistir-kutusu { margin: 0 0 10px; }
 .yapistir-kutusu textarea { width: 100%; margin: 8px 0; font-family: var(--yazi-mono); }
 .veri-tablosu-kap { min-height: 320px; max-height: calc(100vh - 330px); overflow: auto; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); }
+/* Yana kaydırma ipucu (ortak.js > yatayKaydirmaIpucu): taşan kenarda gölge; altta "N sütundan M'si görünüyor". */
+.yatay-kaydirma-sarmali { position: relative; min-width: 0; }
+.yatay-kaydirma-sarmali::before, .yatay-kaydirma-sarmali::after {
+  content: ''; position: absolute; top: 1px; bottom: 1px; width: 28px; pointer-events: none; z-index: 3; opacity: 0; transition: opacity .15s;
+}
+.yatay-kaydirma-sarmali::before { left: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--metin) 22%, transparent), transparent); border-radius: var(--yaricap-m) 0 0 var(--yaricap-m); }
+.yatay-kaydirma-sarmali::after { right: 1px; background: linear-gradient(270deg, color-mix(in srgb, var(--metin) 22%, transparent), transparent); border-radius: 0 var(--yaricap-m) var(--yaricap-m) 0; }
+.yatay-kaydirma-sarmali.sol-tasma::before, .yatay-kaydirma-sarmali.sag-tasma::after { opacity: 1; }
+.yatay-kaydirma-sarmali:has(> .kaydirma-bilgisi:not([hidden]))::before, .yatay-kaydirma-sarmali:has(> .kaydirma-bilgisi:not([hidden]))::after { bottom: 24px; }
+.kaydirma-bilgisi { margin-top: 4px; }
 .veri-tablosu { border-collapse: collapse; width: 100%; }
 .veri-tablosu th, .veri-tablosu td { border-bottom: 1px solid var(--cizgi); padding: 4px 6px; vertical-align: middle; }
 .veri-tablosu thead th { position: sticky; top: 0; z-index: 1; background: var(--panel-kati); text-align: left; }
-.veri-tablosu td input, .veri-tablosu td select { min-width: 150px; min-height: 36px; padding: 6px 10px; font-family: var(--yazi-mono); font-size: 13px; }
+.veri-tablosu td input, .veri-tablosu td select { min-width: 130px; min-height: 36px; padding: 6px 10px; font-family: var(--yazi-mono); font-size: 13px; }
 .veri-tablosu th.sira, .veri-tablosu td.sira { width: 40px; color: var(--metin-3); font: 500 11.5px var(--yazi-mono); text-align: right; }
 .veri-tablosu td.eylem, .veri-tablosu th.eylem { width: 1%; white-space: nowrap; }
 .veri-tablosu .ortam-sutunu { width: 130px; }
@@ -2442,7 +2456,7 @@ a.son-sonuc { text-decoration: none; }
 .tablo-listesi .kucuk-rozet { margin-left: 6px; font-size: 10.5px; padding: 1px 6px; }
 .veri-tablosu tr.degisti td.sira { color: var(--vurgu); }
 /* Sütun başlığı: üstte ad + sil (×), altta Gizli + Karşılıklar. Başlık hücresi büyük harf / tek satır kuralını devralmaz. */
-.veri-tablosu thead th.veri-sutunu { text-transform: none; letter-spacing: 0; font: 500 12px var(--yazi); white-space: normal; min-width: 180px; vertical-align: top; }
+.veri-tablosu thead th.veri-sutunu { text-transform: none; letter-spacing: 0; font: 500 12px var(--yazi); white-space: normal; min-width: 150px; vertical-align: top; }
 .sutun-basligi { display: grid; gap: 4px; min-width: 0; }
 .sutun-basligi-ust { display: flex; gap: 4px; align-items: center; min-width: 0; }
 .sutun-basligi-ust input[type="text"] { flex: 1 1 auto; min-width: 0; width: 100%; font-weight: 600; min-height: 34px; padding: 4px 8px; font-family: var(--yazi); text-transform: none; }
@@ -3379,7 +3393,9 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 
 /* Senaryo tablosu dar alanda kaydırmaya düşmesin: rozetler kırılabilir; 1280px altında Ekran sütunu gizlenir (ad başlığın altında). */
 /* Uzun beklenen metni rozetin içinde satır kaydırır: sabit yükseklik yerine en az yükseklik (metin kutudan taşmaz). */
-.senaryo-tablosu .beklenen-hucresi .rozet { white-space: normal; max-width: 160px; text-align: left; height: auto; min-height: 21px; padding: 3px 8px; line-height: 1.35; overflow-wrap: anywhere; }
+.senaryo-tablosu .beklenen-hucresi .rozet { white-space: normal; max-width: 160px; text-align: left; height: auto; min-height: 21px; padding: 3px 8px; line-height: 1.35; overflow-wrap: break-word; word-break: normal; hyphens: manual; }
+/* Sözcük ortasından kırılmasın ("Teslima / t"): hücrenin en az genişliği; çok uzun tek sözcük yine rozetin içinde kırılır (break-word). */
+.senaryo-tablosu td.beklenen-hucresi { min-width: 128px; }
 .senaryo-tablosu .ekran-alt-bilgi { display: none; font-size: 11.5px; color: var(--metin-3); }
 @media (max-width: 1280px) {
   .senaryo-tablosu .ekran-sutunu, .senaryo-tablosu .ekran-hucresi { display: none; }

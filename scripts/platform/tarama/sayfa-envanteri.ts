@@ -219,8 +219,19 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   const kar = (m: string): string => m.replace(/\s+/g, '').toLocaleLowerCase('tr');
 
 
-  /** "Seçiniz" türü boş seçenek metni. */
-  const BOS_SECENEK = /^\s*(-+\s*)?(lütfen\s+)?(seç(iniz|in|im)?|please select|select|choose)\b|^\s*[-–—.…]+\s*$/iu;
+  /**
+   * Yer tutucu (placeholder) seçenek: "SEÇİNİZ", "Seçiniz", "-- Lütfen seçin --", "Ülke seçiniz", "Please select", "--", boş metin; ya da
+   * listenin İLK seçeneği değeri "" / "0" / "-1" ve metninde rakam yok. Böyle bir seçenekte kalan liste DOLDURULMASI GEREKEN alandır
+   * (sayfada hazır gelen değer sayılmaz). Türkçe büyük harf (İ) için yerel küçük harfe çevrilerek bakılır.
+   * (Sunucu tarafındaki eşi: tarama/yer-tutucu-secenek.mjs > yerTutucuSecenekMi — sayfa içinde içe aktarma olmadığı için aynı kural.)
+   */
+  const yerTutucuMu = (metin: string, deger: string, ilk: boolean): boolean => {
+    const n = metin.toLocaleLowerCase('tr').replace(/[\s\-–—.…*:_()[\]<>«»"'!]+/g, ' ').trim();
+    if (!n) return true;
+    if (/^(?:(?:\p{L}+ ){0,3})?(?:lütfen )?(?:bir )?(?:seç|seçiniz|seçin|seçim yapınız|seçim yapın|seçiniz lütfen)$/u.test(n)) return true;
+    if (/^(?:please )?(?:select|choose)(?: (?:one|an? \p{L}+|\p{L}+))?$/u.test(n)) return true;
+    return ilk && ['', '0', '-1'].includes(deger.trim()) && !/\d/.test(n);
+  };
   /** Alanın sayfada HAZIR gelen değeri (dolu mu) — değer yalnız degerOku iken metin olarak da döner. */
   const hazirBilgisi = (el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, tur: string): { hazir: boolean; mevcut: string | null } => {
     const kes = (m: string): string | null => (degerOku && m ? m.slice(0, 80) : null);
@@ -229,7 +240,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       const sec = el.selectedOptions[0];
       if (!sec) return { hazir: false, mevcut: null };
       const metin = bosluk(sec.label || sec.text);
-      const bos = el.multiple ? false : sec.value === '' || BOS_SECENEK.test(metin);
+      const bos = el.multiple ? false : sec.value === '' || yerTutucuMu(metin, sec.value, sec.index === 0);
       return { hazir: !bos, mevcut: bos ? null : kes(el.multiple ? [...el.selectedOptions].map((o) => bosluk(o.label || o.text)).join(', ') : metin) };
     }
     if (tur === 'checkbox') return { hazir: (el as HTMLInputElement).checked, mevcut: (el as HTMLInputElement).checked ? kes('İşaretli') : null };
@@ -266,8 +277,17 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     return { metin: null, kaynak: null, yildiz: false };
   };
 
-  const basliklar = [...document.querySelectorAll('h2,h3,h4,h5,h6,[role="heading"]')].filter((b) => gorunurMu(b) && saltMetin(b));
-  const anaBaslik = [...document.querySelectorAll('h1')].find((b) => gorunurMu(b) && saltMetin(b)) ?? null;
+  /**
+   * Sayfanın üst çubuğu / menüsü / altbilgisi (oturum açmış kullanıcının adı, menü, telif satırı): bölüm başlığı buradan alınmaz.
+   * <header> / <footer> yalnız sayfa düzeyindeyse (main, section, article, form, fieldset, pencere içinde değilse) sayılır.
+   */
+  const ustBantta = (e: Element): boolean => {
+    const bant = e.closest('header, nav, footer, [role="banner"], [role="navigation"], [role="contentinfo"], .navbar, .topbar, .top-bar');
+    if (!bant) return false;
+    return !(bant.matches('header, footer') && bant.parentElement?.closest('main, section, article, form, fieldset, aside, dialog, [role="main"], [role="dialog"]'));
+  };
+  const basliklar = [...document.querySelectorAll('h2,h3,h4,h5,h6,[role="heading"]')].filter((b) => gorunurMu(b) && saltMetin(b) && !ustBantta(b));
+  const anaBaslik = [...document.querySelectorAll('h1')].find((b) => gorunurMu(b) && saltMetin(b) && !ustBantta(b)) ?? null;
   const bolumBul = (el: Element, fieldsetHaric: Element | null = null): HamAlan['bolum'] => {
     let fs = el.closest('fieldset');
     if (fs && fs === fieldsetHaric) fs = fs.parentElement ? fs.parentElement.closest('fieldset') : null;

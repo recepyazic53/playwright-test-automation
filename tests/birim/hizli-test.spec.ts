@@ -305,7 +305,8 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   expect(JSON.stringify(s)).toContain('${Kişi bilgileri.Vergi no}');
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${kayitli.ekranId}`)) as Nesne;
   const baglar = Object.values(bag.baglar as Record<string, Nesne>);
-  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
+  // Sayfada hazır gelen "Kanal" da modelde (değersiz) olduğu için kendi liste tablosuna bağlanır (yetim tablo kalmaz).
+  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kanal.Kanal', 'Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
 });
 
 test('kaydedilen senaryo normal koşuda (model-senaryolari.spec.ts) aynı zinciri yürütür ve Bitti\'de başarılı olur', async () => {
@@ -463,7 +464,7 @@ test('kayıt formu: telefon maskesi + alandan çıkınca silen sayfa + sonradan 
   expect(ulke.satirlar.map((x: Nesne) => x.degerler['Gidilecek ülke'])).toEqual(['A.B.D', 'Fransa', 'Almanya']);
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${r.ekranId}`)) as Nesne;
   expect(Object.values(bag.baglar as Record<string, Nesne>).map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort())
-    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon']);
+    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon', 'Ödeyen.Ödeyen']); // hazır gelen Ödeyen radyosu da bağlı
   // Senaryolardan yeniden başlat ("Testi koş"): aynı değerler, tablodan çözülerek, telefon dahil.
   const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: r.senaryoId, ortamId });
   expect(y.basarili, y.mesaj).toBe(true);
@@ -499,6 +500,85 @@ test('kayıt formu: kullanıcının verdiği doldurma sırası izlenir (telefon 
   const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: r.senaryoId, ortamId });
   expect(y.basarili, y.mesaj).toBe(true);
   expect(uygulama.kayitlar.at(-1)).toMatchObject({ ulke: 'DE', dogum: '01.02.1990', tel: '(555) 111-2233', tc: '10000000146', sira: ['tc', 'ulke', 'dogum', 'tel'] });
+});
+
+/**
+ * /maskeli/ gönderiminin kanıtları: maskeli alanlar hiçbir zaman "yaz-sil-yaz" yapmadı (değer geçmişinde boşalma yok, her değer bir
+ * öncekinin uzantısı), keyup sorgusu (11 hane) bir kez tetiklendi ve adı doldurdu, alanlar kısa sürede doldu (uzun yoklamaya rağmen).
+ */
+function maskeliKaniti(k: Nesne, ad: string): void {
+  expect(k, ad).toMatchObject({ dogum: '13.04.1998', tel: '(542) 650-2153', tc: '45520772518', ad: 'D*** K***', sorgular: 1 });
+  for (const alan of ['dogum', 'tel', 'tc']) {
+    const g = k.gecmis[alan] as string[];
+    expect(g, `${ad} ${alan} geçmişi`).not.toContain('');
+    g.forEach((v, i) => { if (i) expect(v.replace(/\D/g, '').startsWith(g[i - 1].replace(/\D/g, '')), `${ad} ${alan}: ${JSON.stringify(g)}`).toBe(true); });
+  }
+  // Üç alan (ilk girdiden Gönder'e): alan başı 3 sn'den az (uzun yoklama beklenmez).
+  expect(k.dolumMs, `${ad} doldurma süresi`).toBeGreaterThan(0);
+  expect(k.dolumMs, `${ad} doldurma süresi`).toBeLessThan(9_000);
+}
+
+test('maskeli alanlar ve uzun yoklama: gerçek tuşlarla yazılır (yaz-sil-yaz yok), 11 hanede sorgu tetiklenir, alan başı bekleme kısa; doğrulama koşusu adım adım izlenir; normal koşu aynı', async () => {
+  test.setTimeout(300_000);
+  await isBitsin();
+  const once = uygulama.maskeliKayitlar.length;
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/maskeli/', ekranAdi: 'Maskeli form', izin: 'sor' })).id);
+  let o = await bekle(id, ['veri'], 120);
+  const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
+  const bas = Date.now();
+  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Doğum tarihi')]: deger('13.04.1998'), [alan('Telefon')]: deger('5426502153'), [alan('T.C. kimlik no')]: deger('45520772518') } });
+  o = await bekle(id, ['karar', 'veri', 'hataSorusu'], 120);
+  const dolumSn = (Date.now() - bas) / 1000;
+  expect(o.durum, JSON.stringify({ soru: o.soru, gunluk: o.gunluk })).toBe('karar');
+  // Uzun yoklama (20 sn açık) varken üç alan: eskiden alan başına 15 sn beklenirdi.
+  expect(dolumSn, 'doldurma turu (sn)').toBeLessThan(15);
+  // Hızlı test tarayıcısında: sorgu tetiklendi, telefonun değer geçmişinde boşalma yok.
+  const t = await hizliSayfa('/maskeli/');
+  try {
+    const d = await t.sayfa.evaluate(() => ({ ad: (document.getElementById('adSoyad') as HTMLInputElement).value, gecmis: (window as unknown as { __gecmis: Record<string, string[]> }).__gecmis }));
+    expect(d.ad).toBe('D*** K***');
+    expect(d.gecmis.tel).not.toContain('');
+    expect(d.gecmis.tel.at(-1)).toBe('(542) 650-2153');
+  } finally { await t.tarayici.close(); }
+  const gonder = o.soru.adaylar.find((a: Nesne) => a.metin === 'Gönder');
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bas', secici: gonder.secici });
+  await bekle(id, ['onay']);
+  await basarili('/platform/hizli-test/onay', { id, cevap: true });
+  o = await bekle(id, ['karar'], 90);
+  expect(uygulama.maskeliKayitlar.length).toBe(once + 1);
+  maskeliKaniti(uygulama.maskeliKayitlar.at(-1) as Nesne, 'hızlı test');
+  expect(o.adimlar[0].fark.sureMs, 'basıştan sonra sayfa izleme (ms)').toBeLessThan(10_000);
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir' });
+  o = await bekle(id, ['bitis']);
+  await basarili('/platform/hizli-test/bitis', { id, etiketler: { ...o.soru.etiketler, 'Kayıt tamam': 'bitti' } });
+  await bekle(id, ['kaydet']);
+  // Doğrulama koşusu: adımlar listelenir ve hangi adımda olunduğu ilerledikçe görünür (sürüyor → tamam).
+  await basarili('/platform/hizli-test/dogrula', { id });
+  const gorulenler: string[] = [];
+  const adimDurumlari = new Set<string>();
+  for (const son = Date.now() + 120_000; ;) {
+    o = await oturum(id);
+    if (o.calisiyor) gorulenler.push(String(o.calisiyor));
+    for (const [i, x] of (o.dogrulamaAdimlari ?? []).entries()) adimDurumlari.add(`${i}:${x.durum}`);
+    if (o.durum === 'kaydet' || Date.now() > son) break;
+    await new Promise((c) => setTimeout(c, 100));
+  }
+  expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
+  expect(o.dogrulamaAdimlari.map((x: Nesne) => [x.metin, x.durum])).toEqual([['1. 3 alan doldur, sonra “Gönder” bas', 'tamam'], ['Bitiş koşulu', 'tamam']]);
+  expect(gorulenler.some((m) => /1\/1\. adım: “(Doğum tarihi|Telefon|T\.C\. kimlik no)” dolduruluyor/.test(m)), JSON.stringify([...new Set(gorulenler)])).toBe(true);
+  expect(adimDurumlari.has('0:suruyor'), JSON.stringify([...adimDurumlari])).toBe(true);
+  expect(uygulama.maskeliKayitlar.length).toBe(once + 2);
+  maskeliKaniti(uygulama.maskeliKayitlar.at(-1) as Nesne, 'doğrulama koşusu');
+  // Kaydet ve normal koşu (model-kosucu.ts): aynı ortak yazma kuralı.
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Maskeli bir', tabloOlustur: false });
+  expect(k.kaydedildi).toBe(true);
+  await isBitsin();
+  const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: String(k.senaryoId), ortamId });
+  expect(y.basarili, y.mesaj).toBe(true);
+  const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
+  expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
+  expect(uygulama.maskeliKayitlar.length).toBe(once + 3);
+  maskeliKaniti(uygulama.maskeliKayitlar.at(-1) as Nesne, 'normal koşu');
 });
 
 test('Bana sor: her basıştan önce onay (Hayır → basılmaz); "Başka düğmeye bas" sayfada seçilir (tıklama iletilmez); beklenen uyarı → olumsuz senaryo', async () => {
@@ -650,15 +730,54 @@ test('düzenleme kipi (aynı ekran): yeni model sürümü; kaydetmeden önce far
   o = await bekle(id, ['bitis']);
   await basarili('/platform/hizli-test/bitis', { id, etiketler: o.soru.etiketler });
   await bekle(id, ['kaydet']);
-  const surumOnce = ((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum;
+  const surum = async (): Promise<number> => Number(((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum);
+  const surumOnce = await surum();
+  const senaryoBasliklari = async (): Promise<string[]> => ((await api(`/platform/senaryolar?projeId=${projeId}`)).senaryolar as Nesne[])
+    .filter((x) => x.ekranId === kayitli?.ekranId).map((x) => String(x.baslik)).sort();
+  const onceSenaryolar = await senaryoBasliklari();
+  expect(onceSenaryolar).toContain('Başvuru formu — kurumsal');
+  // Aynı başlıklı senaryo varsa üzerine yazmadan önce sorulur: hiçbir şey yazılmadan döner.
+  expect(await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — kurumsal' })).toMatchObject({ senaryoVar: true, baslik: 'Başvuru formu — kurumsal' });
+  expect(await surum()).toBe(surumOnce);
   const f = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — bireysel' });
   expect(f.onayGerekli).toBe(true);
   expect((f.farklar as Nesne).senaryolar).toEqual(expect.arrayContaining(['Başvuru formu — kurumsal']));
   expect((f.farklar as Nesne).ozet.toplam).toBeGreaterThan(0);
-  expect(((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum).toBe(surumOnce);
-  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Başvuru formu — bireysel', onay: true });
-  expect(k).toMatchObject({ kaydedildi: true, ekranId: kayitli?.ekranId });
-  expect(((await api(`/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`)) as Nesne).surum).toBe(Number(surumOnce) + 1);
+  expect(await surum()).toBe(surumOnce);
+  // Arayüz: özet kendi sekmesinde; aynı adlı senaryo için "Üzerine yaz / Yeni adla kaydet / Vazgeç" penceresi.
+  const oz = (await basarili('/platform/hizli-test/ozet', { id, baslik: 'Başvuru formu — kurumsal' })).ozet as Nesne;
+  expect(oz).toMatchObject({ senaryoVar: true, tercih: { tabloOlustur: true, kosuyaDahil: true } });
+  const tarayici = await korumaliTarayici();
+  try {
+    const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } })).newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/hizli-test/ozet/${id}`);
+    const ozet = page.locator('.hizli-ozet-karti');
+    await expect(ozet).toContainText('“Başvuru formu — kurumsal” adlı senaryo bu ekranda zaten var', { timeout: 30_000 });
+    for (const r of await ozet.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
+    await ozet.getByRole('button', { name: 'Farkları onayla ve kaydet' }).click();
+    const pencere = page.locator('dialog[open]');
+    await expect(pencere.getByRole('heading')).toHaveText('“Başvuru formu — kurumsal” senaryosu var');
+    await expect(pencere.getByRole('button')).toHaveText(['Vazgeç', 'Üzerine yaz', 'Yeni adla kaydet']);
+    await tasmaYok(page, 'Senaryo var penceresi');
+    // Vazgeç: hiçbir şey yazılmaz.
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toHaveCount(0);
+    expect(await surum()).toBe(surumOnce);
+    // Yeni adla kaydet: aynı ad kabul edilmez; yeni adla kaydedilir, eski senaryoya dokunulmaz.
+    await ozet.getByRole('button', { name: 'Farkları onayla ve kaydet' }).click();
+    await pencere.getByLabel('Yeni ad').fill('Başvuru formu — kurumsal');
+    await pencere.getByRole('button', { name: 'Yeni adla kaydet' }).click();
+    await expect(pencere.getByRole('alert')).toHaveText('Farklı bir ad yazın.');
+    await pencere.getByLabel('Yeni ad').fill('Başvuru formu — bireysel');
+    await pencere.getByRole('button', { name: 'Yeni adla kaydet' }).click();
+    await expect(page.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.hizli-soru')).toContainText('senaryo “Başvuru formu — bireysel” kaydedildi');
+    expect(hatalar).toEqual([]);
+  } finally { await tarayici.close(); }
+  expect(await surum()).toBe(surumOnce + 1);
+  expect(await senaryoBasliklari()).toEqual([...new Set([...onceSenaryolar, 'Başvuru formu — bireysel'])].sort());
   await isBitsin();
 });
 
@@ -748,12 +867,12 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
     await expect(soru.locator('.hizli-alan').filter({ hasText: 'Vergi no' })).toHaveCount(0);
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
-    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     // Evet + cümlede "Hesapla": basılır; yeni alan için veri durağı.
     await expect(soru.getByRole('heading', { name: 'Adım 2: veri gerekli' })).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.hizli-yan img.hizli-goruntu')).toBeVisible();
     await soru.getByLabel('Ödeme şekli').selectOption('havale');
-    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
     await expect(soru.locator('.hizli-fark')).toContainText('Tutar: 1.250,00 TL');
     await expect(soru.getByLabel('Basılacak düğme')).toHaveValue(/Onayla/);
@@ -768,31 +887,66 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     const satir = (m: string) => soru.locator('.hizli-bitis-satiri').filter({ hasText: m });
     await expect(satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' })).toHaveAttribute('aria-checked', 'true');
     await expect(satir('Hesaplanıyor…').getByRole('radio', { name: 'Devam' })).toHaveAttribute('aria-checked', 'true');
+    // Radyo: seçili "Bitti"ye tıklamak seçimi kaldırmaz; "Etiketsiz" seçilince tek "Bitti" kalmaz → "Devam et" pasif + gerekçe
+    // (sunucuya 400 alacak istek gitmez); yeniden "Bitti" seçilince açılır.
+    const bitti = satir('Başvurunuz alındı').getByRole('radio', { name: 'Bitti' });
+    await bitti.click();
+    await expect(bitti).toHaveAttribute('aria-checked', 'true');
+    const bitisIstekleri: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/platform/hizli-test/bitis')) bitisIstekleri.push(r.url()); });
+    await satir('Başvurunuz alındı').getByRole('radio', { name: 'Etiketsiz' }).click();
+    await expect(bitti).toHaveAttribute('aria-checked', 'false');
+    await expect(soru.getByRole('button', { name: 'Devam et', exact: true })).toBeDisabled();
+    await expect(soru.locator('#hizli-bitis-eksik')).toContainText('En az bir metni “Bitti” etiketleyin');
+    expect(bitisIstekleri).toEqual([]);
+    await bitti.click();
+    await expect(soru.getByRole('button', { name: 'Devam et', exact: true })).toBeEnabled();
     await tasmaYok(page, 'Bitiş koşulu');
-    await soru.getByRole('button', { name: 'Devam et' }).click();
+    await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     // Kaydet: H3 sorusu.
     await expect(soru.getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible();
     await expect(soru).toContainText('Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı?');
     await tasmaYok(page, 'Kaydet');
-    await soru.getByRole('button', { name: 'Hayır, kaydet' }).click();
-    // Özet ayrı sekmede açılır.
-    await expect(soru.getByRole('tab', { name: 'Özet' })).toHaveAttribute('aria-selected', 'true');
+    // Özet YENİ SEKMEDE kendi adresiyle açılır (sayfanın altına dizilmez); kaydet sekmesi yerinde kalır.
+    const oturumId = decodeURIComponent(page.url().split('#/hizli-test/o/')[1]);
+    const [ozetSekmesi] = await Promise.all([baglam.waitForEvent('page'), soru.getByRole('button', { name: 'Hayır, kaydet' }).click()]);
+    ozetSekmesi.on('pageerror', (e) => hatalar.push(String(e)));
+    await expect(ozetSekmesi).toHaveURL(new RegExp(`#/hizli-test/ozet/${oturumId}$`));
+    await expect(soru.getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible();
+    await expect(soru.locator('.hizli-ozet-karti')).toHaveCount(0);
     // Özet ekranı: hiçbir şey yazılmadan tablolar, senaryo önerileri; onay olmadan kaydedilmez.
-    await expect(soru.getByRole('heading', { name: /Özet/ })).toBeVisible();
-    await expect(soru.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();
-    await tasmaYok(page, 'Özet');
+    const ozet = ozetSekmesi.locator('.hizli-ozet-karti');
+    await expect(ozet.getByRole('heading', { name: /Kayıt özeti/ })).toBeVisible({ timeout: 30_000 });
+    await expect(ozet).toContainText('Arayüz başvurusu');
+    await expect(ozet.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();
+    await tasmaYok(ozetSekmesi, 'Özet');
     // Önceki testlerden aynı adlı tablolar var: karar verilmeden onaylanamaz; "Birleştir" seçilince açılır.
-    await expect(soru.getByRole('button', { name: 'Onayla ve kaydet' })).toBeDisabled();
-    await expect(soru).toContainText('karar bekleniyor');
-    for (const r of await soru.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
-    await expect(soru.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
-    await soru.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeDisabled();
+    await expect(ozet).toContainText('karar bekleniyor');
+    for (const r of await ozet.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
+    await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
+    // Aynı özet ikinci sekmede de açık: kayıt ilkinde onaylanınca ikinci sekme görünür olduğunda durumu sorar, "Onayla" kapanır.
+    const ikinciSekme = await baglam.newPage();
+    await ikinciSekme.goto(`/#/hizli-test/ozet/${encodeURIComponent(oturumId)}`);
+    await expect(ikinciSekme.locator('.hizli-ozet-karti')).toBeVisible({ timeout: 30_000 });
+    await ozet.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(ozetSekmesi.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
+    await ikinciSekme.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(ikinciSekme.getByText('Bu kayıt başka bir sekmede onaylandı')).toBeVisible();
+    await expect(ikinciSekme.locator('.hizli-ozet-karti').getByRole('button', { name: /Onayla ve kaydet/ })).toBeDisabled();
+    await ikinciSekme.close();
+    await ozetSekmesi.close();
+    // Kaydet sekmesi de (yoklamayla) kaydedildi durumuna geçer.
     await expect(page.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.hizli-hazirlik li.eksik')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Akış diyagramında aç' })).toBeVisible();
     await tasmaYok(page, 'Kaydedildi');
+    // Gelişmiş modda Basit mod sayfası ("Testlerim") bağlantısı yok; "Senaryolara git" Senaryolar'ı açar.
+    await expect(page.getByRole('link', { name: 'Testlerim' })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Senaryolara git' }).click();
+    await expect(page).toHaveURL(/#\/senaryolar$/);
     // Testlerim: Hayır izniyle (basılmadan) kaydedilen, henüz çalışmamış test "Doğrulanmadı" rozetiyle.
-    await page.getByRole('link', { name: 'Testlerim' }).click();
+    await page.goto('/#/testlerim');
     await expect(page.locator('.test-satiri').filter({ hasText: 'Başvuru formu basılmadan' }).locator('.rozet').filter({ hasText: 'Doğrulanmadı' })).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();

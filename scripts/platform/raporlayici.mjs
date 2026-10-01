@@ -404,6 +404,8 @@ export default class PlatformRaporlayici {
     await baglam.yazici.kosuKaydet({
       id: kosuId, projeId: baglam.projeId, ortamId: baglam.ortamId, tur: tur === 'tekil' ? 'tekil' : 'tam', kapsam,
       baslangic: new Date(this.baslangicMs).toISOString(),
+      // Senaryo formundaki "Dene" (sunucu TEST_SUNUCU_DENEME=1 verir): koşu geçmişinde deneme olarak işaretlenir.
+      ...(process.env.TEST_SUNUCU_DENEME === '1' ? { denemeKosusu: true } : {}),
       // Başarısızları tekrar çalıştırma: "Tekrar: <önceki koşu>" bağı.
       ...(process.env[TEKRAR_KAYNAGI_DEGISKENI] ? { tekrarKaynagi: process.env[TEKRAR_KAYNAGI_DEGISKENI] } : {}),
       // Test edilen uygulamanın sürümü (koşu başlatılırken girilen ya da ortam ayarındaki; sunucu koyar — PDF rapor A4).

@@ -35,7 +35,7 @@ export const KALIPLAR = Object.freeze({
   /** Hata metni. */
   hataMetni: '(hata\\w*|gecersiz|zorunlu|eksik|bos birakilamaz|uygun degil|basarisiz|error|invalid|required|failed|\\bmust\\b)',
   /** Bekleme metni. */
-  beklemeMetni: '(yukleniyor|bekleyin|hesaplaniyor|isleniyor|gonderiliyor|sorgulaniyor|loading|please wait|processing|calculating)',
+  beklemeMetni: '(yukleniyor|bekleyin|hesaplaniyor|isleniyor|gonderiliyor|sorgulaniyor|onaylaniyor|hazirlaniyor|olusturuluyor|kaydediliyor|dogrulaniyor|aktariliyor|kontrol ediliyor|loading|please wait|processing|calculating|^\\d{1,3} ?%$)',
   /** Başarı kutusu sınıf parçası. */
   basariSinifi: '(^|[-_])(success|basari|basarili)([-_]|$)',
   /** Hata kabı sınıf parçası (form alanının kendisi hariç). */

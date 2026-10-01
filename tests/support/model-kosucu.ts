@@ -24,7 +24,8 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
-import { alandanCik } from '../../scripts/platform/tarama/alan-cikisi';
+import { alanaYaz } from '../../scripts/platform/tarama/alan-cikisi';
+import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
@@ -513,8 +514,9 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
           e.dispatchEvent(new Event('change', { bubbles: true }));
         }, String(deger));
       } else {
-        await l.fill(String(deger));
-        await alandanCik(l);
+        // Ortak yazma kuralı (alan-cikisi.ts > alanaYaz): metin kutusundaki tarih (maskeli "gg.aa.yyyy") gerçek tuşlarla yazılır;
+        // tarayıcının tarih denetimi (type=date) doğrudan.
+        await alanaYaz(l, String(deger), { zamanAsimiMs: alanTiklamaSuresiMs() });
       }
       return;
     case 'dosya':
@@ -523,21 +525,14 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
     default: {
       const metin = String(deger);
       if (alan.doldurucu === 'secimGerekirse' && (await l.inputValue().catch(() => null)) === metin) return;
-      if (alan.doldurucu === 'tuslayarakYaz' || alan.doldurucu === 'telefonTuslama') {
-        await l.fill('');
-        await l.pressSequentially(metin, { delay: 25 });
-      } else {
-        await l.fill(metin);
-      }
-      // Kullanıcı gibi alandan çık: change/blur (ve buna bağlı sorgu / doğrulama) tetiklenir. Sayfa değeri alandan çıkınca silerse
-      // (ör. tuş olayı bekleyen maske) gerçek tuşlarla yeniden yazılır.
-      await alandanCik(l);
-      if (!(await l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim() && metin.trim()) {
-        await l.click({ timeout: 3_000 }).catch(() => undefined);
-        await l.fill('');
-        await l.pressSequentially(metin, { delay: 35 });
-        await alandanCik(l);
-      }
+      // Hızlı testle AYNI yazma kuralı (alan-cikisi.ts > alanaYaz): kısa tek satırlı metin gerçek tuşlarla (maske / keyup sorgusu çalışır,
+      // "yaz-sil-yaz" olmaz), uzun metin doğrudan; alandan çıkılır (change / blur ve bağlı sorgu), sayfa değeri silerse bir kez yeniden
+      // tuşlanır. Doldurucu tuşlama istiyorsa (tuslayarakYaz / telefonTuslama) her zaman tuşlanır; maske parametresiyle biçimlenmiş değer
+      // (kalıba göre tek seferde yazılması amaçlanır) doğrudan yazılır.
+      const tuslayarak = alan.doldurucu === 'tuslayarakYaz' || alan.doldurucu === 'telefonTuslama';
+      await alanaYaz(l, metin, {
+        tuslayarak, aralikMs: tuslayarak ? 25 : undefined, kip: ham.parametreler.maske ? 'dogrudan' : 'otomatik', zamanAsimiMs: alanTiklamaSuresiMs()
+      });
     }
   }
 }
@@ -655,32 +650,20 @@ export const alanSonrasiEnCokMs = (): number => sureAyari('NOBETCI_ARKA_PLAN_BEK
 const alanTiklamaSuresiMs = (): number => sureAyari('NOBETCI_ALAN_BEKLEME_MS', 15_000);
 /** İstek bittikten sonra yeni bir istek başlamadan geçmesi gereken süre (zincirleme istekler için). */
 const SESSIZLIK_MS = 150;
-type AgIzi = { suren: Map<Request, number>; son: number };
-const agIzleri = new WeakMap<Page, AgIzi>();
+/**
+ * Hızlı testle aynı ağ sakinliği kuralı (ag-sakinligi.ts): yalnız XHR / fetch sayılır; UZUN_ISTEK_MS'den uzun bekleyen istek (uzun yoklama,
+ * keep-alive) sayılmaz ve adresi öğrenilir — sürekli açık isteği olan sitede her alanda en çok süre beklenmez.
+ */
+const agIzleri = new WeakMap<Page, AgIzleyici>();
 function agIzle(page: Page): void {
-  if (agIzleri.has(page)) return;
-  const iz: AgIzi = { suren: new Map(), son: 0 };
-  agIzleri.set(page, iz);
-  page.on('request', (r) => {
-    if (r.resourceType() !== 'xhr' && r.resourceType() !== 'fetch') return;
-    iz.suren.set(r, Date.now());
-    iz.son = Date.now();
-  });
-  const bitti = (r: Request): void => { if (iz.suren.delete(r)) iz.son = Date.now(); };
-  page.on('requestfinished', bitti);
-  page.on('requestfailed', bitti);
+  if (!agIzleri.has(page)) agIzleri.set(page, new AgIzleyici(page, { yalnizXhr: true }));
 }
 /** baslangic'tan sonra başlayan arka plan istekleri bitene (ve kısa bir sessizlik olana) kadar bekler. */
 async function arkaPlanIstekleriniBekle(page: Page, baslangic: number): Promise<void> {
   const iz = agIzleri.get(page);
   if (!iz) return;
   const bitis = Date.now() + alanSonrasiEnCokMs();
-  for (;;) {
-    const suren = [...iz.suren.values()].some((t) => t >= baslangic);
-    const sessiz = Date.now() - Math.max(baslangic, iz.son) >= SESSIZLIK_MS;
-    if ((!suren && sessiz) || Date.now() >= bitis) return;
-    await page.waitForTimeout(50);
-  }
+  while (!iz.sakinMi(baslangic, { sessizlikMs: SESSIZLIK_MS }) && Date.now() < bitis) await page.waitForTimeout(50);
 }
 
 /**
@@ -1208,6 +1191,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         const sureSn = adim.kosu?.zamanAsimiSn ?? adimSuresiSn();
         const gorunmeyenKaldirir = gorunmeyenAlanDavranisi() === 'kaldir';
         const doldurulanMetinler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
+        const doldurulanSecimler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
         for (const alan of adim.alanlar) {
           if (alan.atla) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, alan.atla));
@@ -1251,6 +1235,17 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
           if (!zorla && !['secim', 'okluSecim', 'radyo', 'onayKutusu', 'dosya'].includes(alan.tip)) doldurulanMetinler.push({ alan, l, k });
+          if (alan.tip === 'secim') doldurulanSecimler.push({ alan, l, k });
+        }
+        // Sonraki bir alanın sorgusu / yeniden çizimi açılır listeyi ilk seçeneğine ("SEÇİNİZ") döndürmüş olabilir: değeri artık
+        // seçilen değer olmayan listeler bir kez yeniden seçilir (metin alanlarındaki yeniden doldurmanın açılır liste karşılığı).
+        for (const d of doldurulanSecimler) {
+          const s = secenekBul(d.alan.secenekler, d.alan.deger);
+          const simdi = await d.l.evaluate((e) => (e instanceof HTMLSelectElement ? { deger: e.value, metin: (e.selectedOptions[0]?.text ?? '').trim() } : null)).catch(() => null);
+          if (!simdi || simdi.deger === s.deger || simdi.metin === s.metin) continue;
+          const yenidenBaslangic = Date.now();
+          await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
+          await arkaPlanIstekleriniBekle(page, yenidenBaslangic);
         }
         // Sonraki alanların sorgusu / sayfanın yeniden çizmesi önceki alanı silmiş olabilir (ör. satır yenilenir): boş kalan metin
         // alanları bir kez yeniden doldurulur (kullanıcının elle yazdığında olduğu gibi).

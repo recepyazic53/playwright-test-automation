@@ -197,6 +197,11 @@ test('alan türleri koşucunun eylemleriyle: seçim (value → label), oklu seç
   const sade = playwrightKoduUret(girdi({ girisGerekli: false, plan: { ...genisPlan(), adimlar: [adim('tek', [alan('ad', 'metin', 'x')], { sonAdim: true })] } }));
   expect(sade.icerik).not.toContain('function okluSec');
   expect(sade.icerik).not.toContain('function basariBekle');
+  // Açılır liste: alanlar bittikten sonra seçili değer istenen değilse bir kez yeniden seçilir (koşucuyla aynı); liste yoksa yardımcı yok.
+  expect(r.icerik).toContain('async function yenidenSec(page: Page, secici: string, deger: string, metin: string, cerceve: string[] = [])');
+  expect(r.icerik).toMatch(/await yenidenSec\(page, "[^"]+", "B", "İkinci ürün"\);/);
+  expect(r.icerik.indexOf('await yenidenSec(')).toBeGreaterThan(r.icerik.indexOf('await secimYap(page, l, "B", "İkinci ürün", true);'));
+  expect(sade.icerik).not.toContain('yenidenSec');
 });
 
 test('SQL adımı: "Nöbetçi\'de koşar" yorumu + açık TODO (test.skip yok); beklenen iş kuralı hatası yardımcısı', () => {

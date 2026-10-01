@@ -413,7 +413,7 @@ function bulguGorunumu(b) {
 export function paketOnizle(vt, projeId, ham, secenekler = {}) {
   acikAnahtar(vt);
   if (secenekler.olusturulacak === 'ortakAkis' && ((secenekler.mod ?? 'yeni') !== 'yeni' || secenekler.ekranId)) {
-    throw new DepoHatasi('Ortak akış yalnız yeni oluştururken seçilir (Ekranlar > Ekran ekle).');
+    throw new DepoHatasi('Genel senaryo yalnız yeni oluştururken seçilir (Ekranlar > Ekran ekle).');
   }
   const paket = secenekler.olusturulacak === 'ortakAkis' ? ortakAkisPaketineCevir(ham) : ham;
   // Projenin tabloları (ad + sütun; değer yok): öneri değerlerindeki ${Tablo.Sütun} başvuruları ve "Gereken tablo" durumu için.
@@ -737,7 +737,7 @@ export async function sayfaEkle(vt, projeId, ham, secenekler) {
       projeId, anahtar: String(ekranMeta.anahtar), ad: String(ekranMeta.ad), aciklama: typeof model.aciklama === 'string' ? model.aciklama : null
     });
     const ekran = ekranGetir(vt, projeId, ekranId);
-    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: `${model.tur === 'ortakAkis' ? 'Ortak akış olarak' : 'Ekran paketiyle'} oluşturuldu (${kaynak})` });
+    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: `${model.tur === 'ortakAkis' ? 'Genel senaryo olarak' : 'Ekran paketiyle'} oluşturuldu (${kaynak})` });
     const { ayarlar, analiz } = analizDurumu(vt, ekranId);
     analizYaz(vt, ekran, ayarlar, {
       ...analiz, sonBaglamProfilleri: Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : [],
@@ -1121,10 +1121,10 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     : '';
   const baslangicMetni = !ortakAkis ? ''
     : baslangic
-      ? `"${ekran.ad}" bir ORTAK AKIŞTIR (kendi adresi yok): "${baslangic.ad}" ekranının adresini (${baslangic.urlYolu}) aç; ortak akış bu ekranda ${baslangicYeri}. Oraya kadar ilerle, yalnızca ortak akışın adımlarını incele. `
-      : `"${ekran.ad}" bir ORTAK AKIŞTIR (kendi adresi yok) ve henüz hiçbir ekranda kullanılmıyor: ortak akışın açıldığı ekranı bana sor. `;
+      ? `"${ekran.ad}" bir GENEL SENARYODUR (kendi adresi yok): "${baslangic.ad}" ekranının adresini (${baslangic.urlYolu}) aç; genel senaryo bu ekranda ${baslangicYeri}. Oraya kadar ilerle, yalnızca genel senaryonun adımlarını incele. `
+      : `"${ekran.ad}" bir GENEL SENARYODUR (kendi adresi yok) ve henüz hiçbir ekranda kullanılmıyor: genel senaryonun açıldığı ekranı bana sor. `;
   const ortakPaketKurali = ortakAkis
-    ? 'Üreteceğin paketin model.tur değeri "ortakAkis" olmalı (semaSurumu 2; ekranUrl, specDosyasi, pageObject yazma; içine alt model ya da başka ortak akış koyma); meta.ekran.urlYolu verilmeyebilir, meta.ekran.anahtar ortak akışın anahtarıdır. '
+    ? 'Üreteceğin paketin model.tur değeri "ortakAkis" olmalı (semaSurumu 2; ekranUrl, specDosyasi, pageObject yazma; içine alt model ya da başka genel senaryo koyma); meta.ekran.urlYolu verilmeyebilir, meta.ekran.anahtar genel senaryonun anahtarıdır. '
     : '';
   // Ekranın mevcut alan bağlantıları ve bağlı tabloların adları / sütunları (DEĞER YOK; gizli sütunun yalnız adı ve işareti):
   // Araç yeni pakette aynı tablo ve sütun adlarını kullansın.

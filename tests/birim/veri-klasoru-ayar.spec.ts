@@ -8,4 +8,8 @@ test('varsayılan ayar dosyası: macOS Application Support, Linux ~/.config; ana
   expect(varsayilanAyarDosyasi({ HOME: '/home/deneme' }, 'linux')).toBe('/home/deneme/.config/Nöbetçi/ayar.json');
   expect(varsayilanAyarDosyasi({ HOME: '/home/deneme', XDG_CONFIG_HOME: '/etc/xdg' }, 'linux')).toBe('/etc/xdg/Nöbetçi/ayar.json');
   expect(varsayilanAyarDosyasi({}, 'linux')).toBeNull();
+  // Yol kuralı hedef platformun: hangi makinede sınanırsa sınansın aynı sonuç.
+  expect(varsayilanAyarDosyasi({ LOCALAPPDATA: 'C:\\Users\\deneme\\AppData\\Local' }, 'win32')).toBe('C:\\Users\\deneme\\AppData\\Local\\Nöbetçi\\ayar.json');
+  expect(varsayilanAyarDosyasi({ USERPROFILE: 'C:\\Users\\deneme' }, 'win32')).toBe('C:\\Users\\deneme\\AppData\\Local\\Nöbetçi\\ayar.json');
+  expect(varsayilanAyarDosyasi({ HOME: 'goreli/klasor' }, 'linux')).toBeNull();
 });

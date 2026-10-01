@@ -51,7 +51,8 @@ export async function servisKosusuBaslat(s) {
   const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...canliOnayEki(s.ortamId),
     ...(s.tekrar ? { tekrar: s.tekrar } : s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }),
     ...(s.uygulamaSurumu && !s.tekrar && !s.taslak ? { uygulamaSurumu: s.uygulamaSurumu } : {}) } });
-  durum = { projeId: s.proje.id, is, secili: is.satirlar.find((x) => x.durum !== 'atlandi')?.senaryoId ?? is.satirlar[0]?.senaryoId, kucuk: false, bitti: s.bitti };
+  // deneme: taslak (Dene) — panel başlığı "Deneme" der, "Servis koşusu" değil.
+  durum = { projeId: s.proje.id, is, secili: is.satirlar.find((x) => x.durum !== 'atlandi')?.senaryoId ?? is.satirlar[0]?.senaryoId, kucuk: false, bitti: s.bitti, deneme: Boolean(s.taslak) };
   acikKutular.clear();
   ciz();
   sorgula();
@@ -134,7 +135,7 @@ function ciz() {
   const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Paneli kapat', title: 'Kapat', onclick: () => { durum = null; ciz(); } }, ikon('carpi'));
   const baslik = h('div', { class: 'panel-baslik' },
     h('div', { class: 'satir' },
-      h('h2', {}, is.bitti ? ikon('onay') : h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), is.bitti ? 'Servis koşusu bitti' : 'Servis koşusu sürüyor'),
+      h('h2', {}, is.bitti ? ikon('onay') : h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), durum.deneme ? (is.bitti ? 'Deneme bitti' : 'Deneme sürüyor') : is.bitti ? 'Servis koşusu bitti' : 'Servis koşusu sürüyor'),
       h('div', { class: 'dugmeler' },
         !is.bitti ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => durdur() }, h('span', { class: 'kare-simge', 'aria-hidden': 'true' }), 'Tümünü durdur') : null,
         kucult, is.bitti ? kapat : null)),

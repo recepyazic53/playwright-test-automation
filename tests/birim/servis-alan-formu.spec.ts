@@ -344,7 +344,7 @@ test.describe('alan formu uçtan uca', () => {
     await expect(panel).toBeVisible();
     await expect(panel.locator('.kosu-listesi li')).toHaveCount(1);
     await expect(panel).toContainText('Kaydedilmemiş deneme');
-    await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
+    await expect(panel).toContainText('Deneme bitti', { timeout: 10_000 });
     await expect(panel.locator('.servis-adimlari')).toContainText('Cevap geldi (HTTP 200');
     expect(await sayi()).toBe(once);
     // CANLI ortamda taslak (Dene): onaysız 409; arayüzde CANLI seçilince yalnız tek tip CANLI onayı — Vazgeç'te istek yok, Evet'te canliOnay ile başlar.
@@ -366,7 +366,7 @@ test.describe('alan formu uçtan uca', () => {
     await expect.poll(() => baslatmalar.length).toBe(1);
     expect(JSON.parse(baslatmalar[0])).toMatchObject({ ortamId: canli, canliOnay: true });
     await expect(panel.locator('.kosu-listesi li')).toHaveCount(1);
-    await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
+    await expect(panel).toContainText('Deneme bitti', { timeout: 10_000 });
     expect(soap.istekler.length).toBeGreaterThan(soapOnce);
     expect(await sayi()).toBe(once);
     expect(hatalar).toEqual([]);

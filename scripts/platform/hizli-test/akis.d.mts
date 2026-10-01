@@ -12,6 +12,7 @@ export declare function cumleyiOku(cumle: unknown): { mesajlar: string[]; dugmel
 export declare function tekAday<T extends { secici: string; metin: string | null }>(adaylar: T[], cumleDugmeleri?: string[]): T | null;
 export declare function basmaKarari(g: { izin: string; adaySayisi: number; kullaniciSecti?: boolean }): 'bas' | 'sor' | 'basma';
 export declare function beklemeMetniMi(metin: unknown): boolean;
+export declare function degiskenMetinMi(metin: unknown): boolean;
 export declare function varsayilanEtiketler(gorulenler: Array<{ metin: string; tur: string; basis: number }>, sonBasis: number): Record<string, BitisEtiketi | null>;
 export declare function sabitKisim(m: string): string;
 export declare function bitisKosulu(g: { etiketler: Record<string, string | null>; adres?: string | null; olumsuz?: { mesaj: string } | null }): {
@@ -33,3 +34,5 @@ export declare function adayMesajlari(
 ): Array<{ metin: string; tur: 'basari' | 'hata' | 'bekleme'; kaynak: 'aday' | 'cumle' }>;
 export declare function eksikAlanlar<T extends { anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean }>(alanlar: T[], degerler: Record<string, unknown>): T[];
 export declare function sayfaUyarisi(hedefYol: string, anlikYol: string): string | null;
+/** Hızlı testin önerdiği senaryo başlığı: ekran adı zaten "hızlı test" içeriyorsa ek konmaz. */
+export declare function hizliSenaryoBasligi(ekranAdi: string): string;

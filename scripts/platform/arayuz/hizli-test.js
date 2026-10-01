@@ -3,7 +3,7 @@
 // ("Şimdi ne yapayım?", Bana sor onayı, hata sorusu) → 5 Bitiş koşulu (Bitti / Devam / Hata) → 6 Kaydet (doğrulama sorusu, farklar).
 // Sunucu: /platform/hizli-test/* (hizli-test/yonetici.mjs) — durum makinesi sunucudadır; bu sayfa durumu yoklar ve soruyu çizer.
 // Adresler: #/hizli-test (yeni), #/hizli-test/duzenle/<ekranId> (düzenleme kipi: ekranın adresiyle başlar, kayıt yeni model sürümü),
-// #/hizli-test/o/<oturumId> (süren sihirbaz; sayfa yenilense de sürer). Değer ÜRETİLMEZ: alanlara yalnız kullanıcı yazar ya da
+// #/hizli-test/o/<oturumId> (süren sihirbaz; sayfa yenilense de sürer), #/hizli-test/ozet/<oturumId> (kayıt özeti; kendi sekmesinde açılır). Değer ÜRETİLMEZ: alanlara yalnız kullanıcı yazar ya da
 // "Doldur" ile tablodan seçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesajKutusu, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { doldurDugmesi } from './doldur.js';
@@ -17,6 +17,12 @@ const IZIN_SECENEKLERI = [
   { deger: 'hayir', baslik: 'Hayır', aciklama: 'Hiçbir düğmeye basmam; düğmeyi ve mesajı siz seçersiniz, test “doğrulanmadı” olarak kaydedilir.' }
 ];
 const ETIKETLER = [['bitti', 'Bitti'], ['devam', 'Devam'], ['hata', 'Hata']];
+/** Kullanım modu Basit mi (hızlı test iki modda da açılır): kayıt sonrası / vazgeç bağlantısı moda göre. */
+let basitMod = false;
+/** Basit'te "Testlerim" (Basit mod sayfası), Gelişmiş'te "Senaryolar". */
+const listeHedefi = () => (basitMod ? { adres: '#/testlerim', ad: 'Testlerim' } : { adres: '#/senaryolar', ad: 'Senaryolara git' });
+/** Bitiş durağındaki radyo seçenekleri: üç etiket + "Etiketsiz" (seçili radyoya tıklamak seçimi kaldırmaz; etiketi kaldırmak için bu seçilir). */
+const ETIKET_SECENEKLERI = [...ETIKETLER, [null, 'Etiketsiz']];
 /** Süren işlerde yoklama aralığı (ms). */
 const YOKLAMA_MS = 1000;
 
@@ -37,11 +43,14 @@ function durakSeridi(etkin) {
  */
 export function hizliTestEkrani(icerik, parcalar, baglam) {
   const proje = baglam.durum && baglam.durum.proje;
+  basitMod = Boolean(baglam.durum && baglam.durum.kullanimModu && baglam.durum.kullanimModu.mod === 'basit');
   const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
     h('h2', { id: 'bolum-basligi', tabindex: '-1' }, 'Hızlı test'),
     h('p', { class: 'soluk' }, 'Sayfanın adresini verin: Nöbetçi alanları bulur, eksik veriyi size sorar, düğmelere yalnız izin verdiğiniz kadar basar ve sonunda testi kaydeder.')));
   const govde = h('div', { class: 'hizli-test' });
   icerik.replaceChildren(baslik, govde);
+  // Kayıt özeti kendi sekmesinde: oturum kimliği yeter (proje oturumdan gelir).
+  if (parcalar[0] === 'ozet' && parcalar[1]) { void ozetEkrani(govde, parcalar[1]); return; }
   if (!proje) {
     govde.replaceChildren(h('div', { class: 'not-kutusu uyari', role: 'note' }, 'Önce bir proje seçin (üst çubuk).'));
     return;
@@ -94,7 +103,7 @@ async function baslatEkrani(govde, proje, ekranId) {
       h('div', { class: 'yardim' }, 'Kalıp gerekmez, normal yazın. Örnekler: “Hesapla butonuna tıklayacağım”; “Başvurunuz alındı yazısını görünce bitir”; “Toplam tutarı yazısı gelmeli”. Anlaşılmayan kısım yok sayılır.')),
     h('fieldset', { class: 'hizli-izinler' }, h('legend', {}, 'Nöbetçi sayfadaki düğmelere basabilir mi?'), izinler.map((x) => x.el)),
     h('div', { class: 'dugmeler' }, baslat,
-      h('a', { class: 'dugme hayalet', href: '#/testlerim' }, 'Vazgeç')));
+      h('a', { class: 'dugme hayalet', href: listeHedefi().adres }, 'Vazgeç')));
   form.addEventListener('submit', async (olay) => {
     olay.preventDefault();
     mesaj.temizle();
@@ -164,7 +173,7 @@ function oturumEkrani(govde, id) {
   const hemen = () => { if (zamanlayici) clearTimeout(zamanlayici); imza = ''; void yenile(); };
   /** @param {any} o */
   const ciz = (o) => {
-    const yeniImza = JSON.stringify([o.durum, o.soru, o.calisiyor, o.sonHata, o.hata]);
+    const yeniImza = JSON.stringify([o.durum, o.soru, o.calisiyor, o.sonHata, o.hata, o.dogrulamaAdimlari]);
     yerlestir(serit, durakSeridi(o.durak || 1));
     durumSatiri.textContent = o.calisiyor ? o.calisiyor : '';
     const yeniYan = JSON.stringify([o.adimlar, o.gunluk.length, (o.goruntu || '').length]);
@@ -236,7 +245,10 @@ function soruCiz(o, y) {
     return kart(o.durum === 'dogrulama' ? 'Doğrulama koşusu' : o.durum === 'kesif' ? 'Keşfediliyor…' : 'Çalışıyor…', 'pusula',
       h('p', { class: 'hizli-bekliyor' }, h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), o.calisiyor || 'Bekleyin…'),
       o.durum === 'kesif' ? h('p', { class: 'soluk' }, 'Bu adımda hiçbir düğmeye basılmaz: alanlar, koşullar, düğme ve mesaj adayları okunur.') : null,
-      adimlar.length ? h('ul', { class: 'hizli-is-adimlari kucuk' }, adimlar.map((a) => h('li', {}, `${a.etiket}: ${a.durum === 'tamam' ? 'tamam' : a.durum === 'atlandi' ? 'atlandı' : a.durum === 'hata' ? 'hata' : a.durum === 'suruyor' ? 'sürüyor' : 'bekliyor'}${a.mesaj ? ` — ${a.mesaj}` : ''}`))) : null);
+      // Doğrulama koşusu: zincirin adımları ve hangisinde olunduğu (motorun ilerleme bildirimleri).
+      o.durum === 'dogrulama' && o.dogrulamaAdimlari ? dogrulamaAdimListesi(o.dogrulamaAdimlari) : null,
+      // İşin (hazırlık / giriş) adımları yalnız keşifte anlamlı; sonrasında eski ileti (ör. "Tarayıcı hazır") yanıltır.
+      o.durum === 'kesif' && adimlar.length ? h('ul', { class: 'hizli-is-adimlari kucuk' }, adimlar.map((a) => h('li', {}, `${a.etiket}: ${a.durum === 'tamam' ? 'tamam' : a.durum === 'atlandi' ? 'atlandı' : a.durum === 'hata' ? 'hata' : a.durum === 'suruyor' ? 'sürüyor' : 'bekliyor'}${a.mesaj ? ` — ${a.mesaj}` : ''}`))) : null);
   }
   const m = mesajKutusu();
 
@@ -334,7 +346,7 @@ function soruCiz(o, y) {
         h('span', { 'aria-hidden': 'true' }, x.durum === 'tamam' ? '✓' : x.durum === 'yok' ? '–' : '!'), ` ${x.baslik}: ${x.ayrinti}`))) : null,
       s.hazirlik && s.hazirlik.neden ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.hazirlik.neden) : null,
       h('div', { class: 'dugmeler' },
-        h('a', { class: 'dugme birincil', href: '#/testlerim' }, ikon('liste'), 'Testlerim'),
+        h('a', { class: 'dugme birincil', href: listeHedefi().adres }, ikon('liste'), listeHedefi().ad),
         h('a', { class: 'dugme', href: `#/ekranlar/e/${encodeURIComponent(s.ekranId)}/akis` }, ikon('katman'), 'Akış diyagramında aç'),
         h('a', { class: 'dugme hayalet', href: '#/hizli-test' }, ikon('artiYalin'), 'Yeni hızlı test')));
   }
@@ -489,9 +501,11 @@ function bitisDuragi(o, s, kart, m, gonder) {
   const satirlar = s.gorulenler.map((g, i) => {
     const grup = h('div', { class: 'hizli-etiketler', role: 'radiogroup', 'aria-label': `“${g.metin}” etiketi` });
     const ciz = () => {
-      yerlestir(grup, ...ETIKETLER.map(([deger, ad]) => h('button', {
-        type: 'button', role: 'radio', 'aria-checked': String(etiketler[g.metin] === deger), class: `hizli-etiket e-${deger}${etiketler[g.metin] === deger ? ' secili' : ''}`,
-        onclick: () => { etiketler[g.metin] = etiketler[g.metin] === deger ? null : deger; ciz(); olumsuzGuncelle(); }
+      const secili = etiketler[g.metin] ?? null;
+      yerlestir(grup, ...ETIKET_SECENEKLERI.map(([deger, ad]) => h('button', {
+        type: 'button', role: 'radio', 'aria-checked': String(secili === deger), class: `hizli-etiket e-${deger ?? 'yok'}${secili === deger ? ' secili' : ''}`,
+        // Radyo: tıklama yalnız seçer (seçili olana tıklamak seçimi KALDIRMAZ); etiketi kaldırmak için "Etiketsiz".
+        onclick: () => { if (secili === deger) return; etiketler[g.metin] = deger; ciz(); olumsuzGuncelle(); }
       }, ad)));
     };
     ciz();
@@ -509,26 +523,40 @@ function bitisDuragi(o, s, kart, m, gonder) {
     olumsuzKutusu.hidden = !hatalar.length;
     if (!hatalar.length) olumsuz.checked = false;
     olumsuzMesaj.disabled = !olumsuz.checked;
+    gecerlilikGuncelle();
   };
+  // İstemci doğrulaması (sunucudaki kuralın aynısı): en az bir "Bitti", ya da bitiş adresi, ya da olumsuz senaryo. Yoksa "Devam et"
+  // pasif ve gerekçe yazılı (sunucuya 400 alacak istek gitmez).
+  const eksikNotu = h('span', { class: 'soluk kucuk', id: 'hizli-bitis-eksik', role: 'status' });
+  const devam = h('button', { type: 'button', class: 'birincil', 'aria-describedby': 'hizli-bitis-eksik' }, 'Devam et', ikon('ok'));
+  function gecerlilikGuncelle() {
+    const gecerli = Object.values(etiketler).includes('bitti') || Boolean(adres.value.trim()) || (olumsuz.checked && Boolean(olumsuzMesaj.value));
+    devam.disabled = !gecerli;
+    eksikNotu.textContent = gecerli ? '' : 'En az bir metni “Bitti” etiketleyin (ya da “Adres şu olursa bitti”yi yazın).';
+  }
   olumsuz.addEventListener('change', olumsuzGuncelle);
+  olumsuzMesaj.addEventListener('change', gecerlilikGuncelle);
+  adres.addEventListener('input', gecerlilikGuncelle);
   olumsuzGuncelle();
-  const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
   devam.addEventListener('click', () => void gonder(devam, 'bitis', {
     etiketler, adres: adres.value.trim() || null, olumsuz: olumsuz.checked && olumsuzMesaj.value ? { mesaj: olumsuzMesaj.value } : null
   }, m));
   const tara = h('button', { type: 'button', class: 'hayalet' }, 'Sayfayı yeniden tara');
   tara.title = 'Tarayıcıda şu an görünen yeni mesajları (ör. sonradan çıkan hata / başarı) listeye ekler; verdiğiniz etiketler korunur.';
   tara.addEventListener('click', () => void gonder(tara, 'yeniden-tara', { etiketler }, m));
+  // Geri dönüş: zincire devam (etiketler saklanır; yeniden "Burada bitir" denince korunur).
+  const zincireDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Adım adım’a dön: zincire devam et');
+  zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
   return kart('Bitiş koşulu: ne görülünce biter?', 'hedef',
     h('p', {}, 'Akış boyunca görülen metinler. Her birine bir etiket verin:'),
     h('ul', { class: 'hizli-bitis', 'aria-label': 'Görülen metinler' }, satirlar),
     h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
     olumsuzKutusu,
-    m.kutu, h('div', { class: 'dugmeler' }, devam, tara));
+    m.kutu, h('div', { class: 'dugmeler' }, devam, tara, zincireDon), eksikNotu);
 }
 
-/** 6. durak: kaydet (H3 doğrulama sorusu; aynı ekran varsa farklar). */
+/** 6. durak: kaydet (H3 doğrulama sorusu; aynı ekran varsa farklar). Özet kendi sekmesinde açılır (#/hizli-test/ozet/<id>). */
 function kaydetDuragi(o, s, kart, m, gonder) {
   const oz = s.ozet;
   const baslikGirdi = h('input', { type: 'text', id: 'hizli-senaryo-basligi', maxlength: 200, value: s.baslik || '' });
@@ -541,51 +569,22 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       oz.bitis.hata.length && !oz.olumsuz ? ` · Hata: ${oz.bitis.hata.map((x) => `“${x}”`).join(', ')}` : null,
       oz.bitis.devam.length ? ` · Devam: ${oz.bitis.devam.map((x) => `“${x}”`).join(', ')}` : null) : null);
   const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Kaydet — özeti göster');
-  const ozetAlani = h('div', { class: 'hizli-kayit-ozeti', 'aria-live': 'polite' });
-  /** @type {(ozet: boolean) => void} */
-  let sekmeyiSec = () => undefined;
+  const ozetAdresi = `#/hizli-test/ozet/${encodeURIComponent(o.id)}`;
   kaydet.addEventListener('click', async () => {
-    // Özet yalnız okunur (oturum değişmez): kartın yeniden çizilmesi özeti silmesin diye gonder() (yenileyen) kullanılmaz.
+    // Seçimler oturuma yazılır (özet sekmesi okur; veritabanına hiçbir şey yazılmaz), sonra özet YENİ SEKMEDE açılır: uzun tablo listesi
+    // bu sayfanın altına dizilmez. Tarayıcı yeni sekmeyi engellerse bağlantı gösterilir.
     try {
-      const r = await mesgulIken(kaydet, 'Özet hazırlanıyor…', () => api('/platform/hizli-test/ozet', { govde: { id: o.id, baslik: baslikGirdi.value.trim() } }));
-      if (r && r.ozet) ozetCiz(r.ozet);
+      await mesgulIken(kaydet, 'Özet hazırlanıyor…', () => api('/platform/hizli-test/ozet', {
+        govde: { id: o.id, baslik: baslikGirdi.value.trim(), kosuyaDahil: dahil.checked, tabloOlustur: tabloOlustur.checked }
+      }));
+      degisiklikleriBirak();
+      const sekme = window.open(ozetAdresi, '_blank');
+      if (!sekme) {
+        m.goster('Tarayıcı yeni sekmeyi engelledi.', 'uyari');
+        m.kutu.replaceChildren('Tarayıcı yeni sekmeyi engelledi: ', h('a', { href: ozetAdresi, target: '_blank' }, 'özeti yeni sekmede açın'), '.');
+      } else bildir('Özet yeni sekmede açıldı; kaydı oradan onaylayın.', 'basari');
     } catch (e) { if (!(e && e.durum === 423)) m.goster(hataMetni(e)); }
   });
-  /** Özet ekranı (yapay zekâ paketinin önizlemesiyle aynı sistem): tablolar / birleştirme kararı / bağlantılar / senaryo önerileri; onaylamadan hiçbir şey yazılmaz. */
-  const ozetCiz = (oz) => {
-    const tv = testVerisiSecimi(tabloOlustur.checked ? oz.onizleme : null, () => guncelle(), { kompakt: true });
-    const oneriler = oz.senaryolar.filter((x) => x.indeks > 0);
-    const secili = new Set(oneriler.filter((x) => x.varsayilanSecili).map((x) => x.indeks));
-    const onayla = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), oz.farklar ? 'Farkları onayla ve kaydet' : 'Onayla ve kaydet');
-    const neden = h('p', { class: 'kucuk soluk', role: 'status' });
-    const guncelle = () => {
-      const bekleyen = tv.bekleyenler();
-      onayla.disabled = !tv.hazir();
-      neden.textContent = bekleyen.length ? bekleyen.map((x) => x.metin).join(' · ') : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo`;
-    };
-    const senaryoListesi = h('ul', { class: 'hizli-oneriler' },
-      h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': 'Yaptığınız senaryo' }), ' ', h('b', {}, oz.baslik), h('span', { class: 'kucuk soluk' }, ' — hızlı testte yaptığınız akış'))),
-      oneriler.map((x) => {
-        const k = h('input', { type: 'checkbox', checked: secili.has(x.indeks), 'aria-label': `${x.baslik} senaryosunu ekle` });
-        k.addEventListener('change', () => { if (k.checked) secili.add(x.indeks); else secili.delete(x.indeks); guncelle(); });
-        return h('li', {}, h('label', {}, k, ' ', h('b', {}, x.baslik), h('span', { class: 'kucuk soluk' }, ` — ${x.gerekce}`)));
-      }));
-    onayla.addEventListener('click', async () => {
-      const r = await gonder(onayla, 'kaydet', {
-        baslik: baslikGirdi.value.trim(), kosuyaDahil: dahil.checked, tabloOlustur: tabloOlustur.checked, ...(tabloOlustur.checked ? { secim: tv.govde() } : {}),
-        senaryoIndeksleri: [...secili], ...(oz.farklar ? { onay: true } : {})
-      }, m);
-      if (r && r.onayGerekli) bildir('Bu ekran zaten var: farkları gözden geçirip onaylayın.', 'uyari');
-    });
-    yerlestir(ozetAlani, h('div', { class: 'hizli-ozet-karti' },
-      h('h4', {}, 'Özet — onaylamadan hiçbir şey yazılmaz'),
-      h('p', {}, `Ekran “${oz.ekran.ad}” ${oz.ekran.mevcut ? '(mevcut: yeni model sürümü)' : '(yeni)'} · ortam ${oz.ortam.ad} · ${oz.dogrulandi ? 'doğrulandı' : 'doğrulanmadı'}`),
-      tabloOlustur.checked ? tv.bolum : h('p', { class: 'kucuk soluk' }, 'Test verisi tablosu oluşturulmaz: değerler senaryoda düz değer olarak kalır.'),
-      h('div', { class: 'ara-baslik' }, `Senaryolar (${1 + oneriler.length} öneri)`), senaryoListesi,
-      neden, h('div', { class: 'dugmeler' }, onayla)));
-    guncelle();
-    sekmeyiSec(true);
-  };
   const dogrula = h('button', { type: 'button', class: s.dogrulama ? 'hayalet' : 'birincil' }, ikon('oynat'), s.dogrulama ? 'Yeniden doğrula' : 'Evet, doğrula');
   dogrula.addEventListener('click', () => void gonder(dogrula, 'dogrula', {}, m));
   const d = s.dogrulama;
@@ -595,12 +594,18 @@ function kaydetDuragi(o, s, kart, m, gonder) {
       h('p', {}, h('b', {}, 'Kaydetmeden önce baştan sona bir doğrulama koşusu yapayım mı? '), '(yeni kayıt oluşabilir)'),
       h('div', { class: 'dugmeler' }, dogrula, kaydetHayirDugmesi(kaydet)))
       : h('div', { class: `not-kutusu ${d.durum === 'basarili' ? 'basari' : 'hata'}`, role: 'status' },
-        `Doğrulama koşusu ${d.durum === 'basarili' ? 'başarılı' : 'başarısız'}: ${d.mesaj}`);
+        `Doğrulama koşusu ${d.durum === 'basarili' ? 'başarılı' : 'başarısız'}: ${d.mesaj}`,
+        o.dogrulamaAdimlari && d.durum !== 'basarili' ? dogrulamaAdimListesi(o.dogrulamaAdimlari) : null);
+  // Geri dönüş: bitiş koşulunu düzenle / adım adım zincire dön (doğrulama sonucu geçersiz olur).
+  const bitiseDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Bitiş koşulunu düzenle');
+  bitiseDon.addEventListener('click', () => void gonder(bitiseDon, 'geri', { hedef: 'bitis' }, m));
+  const zincireDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Adım adım’a dön: zincire devam et');
+  zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
   const farklar = s.farklar ? h('div', { class: 'not-kutusu uyari hizli-farklar', role: 'note' },
     h('p', {}, h('b', {}, `“${oz.ekranAdi}” ekranı zaten var. `), `Kaydedince yeni model sürümü oluşur (${s.farklar.ozet.toplam} fark).`),
     s.farklar.maddeler.length ? h('ul', {}, s.farklar.maddeler.slice(0, 12).map((x) => h('li', {}, x))) : null,
     s.farklar.senaryolar.length ? h('p', {}, `Etkilenebilecek senaryolar: ${s.farklar.senaryolar.join(', ')}`) : null) : null;
-  const kaydetPaneli = h('div', { class: 'hizli-sekme-paneli', role: 'tabpanel', id: 'hizli-panel-kaydet', 'aria-labelledby': 'hizli-sekme-kaydet' },
+  return kart('Kaydedilecekler', 'onay',
     zincir,
     h('ul', { class: 'hizli-ozet kucuk' },
       h('li', {}, h('b', {}, 'Ekrana: '), 'alanlar, koşullar, düğme zinciri, bitiş ve hata mesajları'),
@@ -609,25 +614,154 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     h('label', { class: 'onay-satiri', for: 'hizli-kosuya-dahil' }, dahil, 'Toplu koşuya dahil'),
     h('label', { class: 'onay-satiri', for: 'hizli-tablo-olustur' }, tabloOlustur, 'Girdiğim değerleri test verisi tablosu olarak kaydet ve ekranın test verisine bağla'),
     dogrulamaKutusu, farklar, m.kutu,
-    (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null);
-  // Özet ayrı sekmede: uzun tablo listesi kaydet formunu uzatmaz.
-  ozetAlani.setAttribute('role', 'tabpanel');
-  ozetAlani.setAttribute('id', 'hizli-panel-ozet');
-  ozetAlani.setAttribute('aria-labelledby', 'hizli-sekme-ozet');
-  ozetAlani.hidden = true;
-  const sekmeKaydet = h('button', { type: 'button', role: 'tab', id: 'hizli-sekme-kaydet', class: 'hizli-sekme', 'aria-controls': 'hizli-panel-kaydet', 'aria-selected': 'true' }, 'Kaydet');
-  const sekmeOzet = h('button', { type: 'button', role: 'tab', id: 'hizli-sekme-ozet', class: 'hizli-sekme', 'aria-controls': 'hizli-panel-ozet', 'aria-selected': 'false', disabled: true, title: '“Kaydet — özeti göster” ile açılır' }, 'Özet');
-  sekmeyiSec = (ozet) => {
-    sekmeKaydet.setAttribute('aria-selected', String(!ozet));
-    sekmeOzet.setAttribute('aria-selected', String(ozet));
-    sekmeOzet.disabled = false;
-    kaydetPaneli.hidden = ozet;
-    ozetAlani.hidden = !ozet;
-    if (ozet) ozetAlani.scrollIntoView?.({ block: 'start' });
+    (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null,
+    h('p', { class: 'kucuk soluk' }, 'Özet yeni bir sekmede açılır; kaydı orada onaylarsınız. Onaylamadan hiçbir şey yazılmaz.'),
+    h('div', { class: 'dugmeler hizli-geri' }, bitiseDon, zincireDon));
+}
+
+/** Doğrulama koşusunun adımları ve durumları (bekliyor / sürüyor / tamam / hata). @param {Array<{ metin: string; durum: string; ayrinti: string | null }>} liste */
+function dogrulamaAdimListesi(liste) {
+  const ad = { tamam: 'tamam', suruyor: 'sürüyor', hata: 'hata', bekliyor: 'bekliyor' };
+  const isaret = { tamam: '✓', suruyor: '…', hata: '✗', bekliyor: '·' };
+  return h('ol', { class: 'hizli-dogrulama-adimlari', 'aria-label': 'Doğrulama adımları' }, liste.map((x) => h('li', { class: `d-${x.durum}`, 'aria-current': x.durum === 'suruyor' ? 'step' : null },
+    h('span', { class: 'hizli-dogrulama-isaret', 'aria-hidden': 'true' }, isaret[x.durum] || '·'),
+    h('span', {}, x.metin, ' ', h('span', { class: 'gorunmez' }, `(${ad[x.durum] || x.durum})`),
+      x.durum === 'suruyor' && x.ayrinti ? h('small', { class: 'blok soluk' }, x.ayrinti) : null))));
+}
+
+/**
+ * Kayıt özeti — KENDİ SEKMESİNDE (#/hizli-test/ozet/<oturumId>): tablolar / birleştirme kararı / bağlantılar / senaryo önerileri; onaylamadan
+ * hiçbir şey yazılmaz. Kaydet sekmesindeki seçimler (senaryo adı, toplu koşu, tablo) oturumdan okunur.
+ * @param {HTMLElement} govde @param {string} id
+ */
+async function ozetEkrani(govde, id) {
+  const oturumAdresi = `#/hizli-test/o/${encodeURIComponent(id)}`;
+  govde.replaceChildren(h('p', { class: 'soluk' }, 'Özet hazırlanıyor…'));
+  let oz;
+  try {
+    oz = (await api('/platform/hizli-test/ozet', { govde: { id } })).ozet;
+  } catch (e) {
+    if (e && e.durum === 423) return;
+    govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hataMetni(e)), h('p', {}, h('a', { href: oturumAdresi }, 'Hızlı teste dön')));
+    return;
+  }
+  const m = mesajKutusu();
+  const tercih = oz.tercih || { kosuyaDahil: true, tabloOlustur: true };
+  let baslik = oz.baslik;
+  const tv = testVerisiSecimi(tercih.tabloOlustur ? oz.onizleme : null, () => guncelle(), { kompakt: true });
+  const oneriler = oz.senaryolar.filter((x) => x.indeks > 0);
+  const secili = new Set(oneriler.filter((x) => x.varsayilanSecili).map((x) => x.indeks));
+  const onayla = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), oz.farklar ? 'Farkları onayla ve kaydet' : 'Onayla ve kaydet');
+  const neden = h('p', { class: 'kucuk soluk', role: 'status' });
+  /** Kayıt başka sekmede onaylandı (görünür olunca durum sorulur): Onayla kapalı kalır. */
+  let baskaSekmedeKaydedildi = false;
+  const guncelle = () => {
+    const bekleyen = tv.bekleyenler();
+    onayla.disabled = baskaSekmedeKaydedildi || !tv.hazir();
+    neden.textContent = bekleyen.length ? bekleyen.map((x) => x.metin).join(' · ') : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo`;
   };
-  sekmeKaydet.addEventListener('click', () => sekmeyiSec(false));
-  sekmeOzet.addEventListener('click', () => sekmeyiSec(true));
-  return kart('Kaydedilecekler', 'onay', h('div', { class: 'hizli-sekmeler', role: 'tablist', 'aria-label': 'Kaydet ve özet' }, sekmeKaydet, sekmeOzet), kaydetPaneli, ozetAlani);
+  const baslikSatiri = h('b', {}, baslik);
+  const senaryoListesi = h('ul', { class: 'hizli-oneriler' },
+    h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': 'Yaptığınız senaryo' }), ' ', baslikSatiri, h('span', { class: 'kucuk soluk' }, String(baslik).toLocaleLowerCase('tr').includes('hızlı test') ? ' — yaptığınız akış' : ' — hızlı testte yaptığınız akış'))),
+    oneriler.map((x) => {
+      const k = h('input', { type: 'checkbox', checked: secili.has(x.indeks), 'aria-label': `${x.baslik} senaryosunu ekle` });
+      k.addEventListener('change', () => { if (k.checked) secili.add(x.indeks); else secili.delete(x.indeks); guncelle(); });
+      return h('li', {}, h('label', {}, k, ' ', h('b', {}, x.baslik), h('span', { class: 'kucuk soluk' }, ` — ${x.gerekce}`)));
+    }));
+  /** Kaydet; aynı başlıklı senaryo varsa (düzenleme kipi) önce sorulur. @param {Record<string, unknown>} ek */
+  const kaydet = async (ek = {}) => {
+    let r;
+    try {
+      r = await mesgulIken(onayla, 'Kaydediliyor…', () => api('/platform/hizli-test/kaydet', {
+        govde: {
+          id, baslik, kosuyaDahil: tercih.kosuyaDahil, tabloOlustur: tercih.tabloOlustur, ...(tercih.tabloOlustur ? { secim: tv.govde() } : {}),
+          senaryoIndeksleri: [...secili], ...(oz.farklar ? { onay: true } : {}), ...ek
+        }
+      }));
+    } catch (e) { if (!(e && e.durum === 423)) m.goster(hataMetni(e)); return; }
+    degisiklikleriBirak();
+    if (r && r.senaryoVar) {
+      const karar = await senaryoVarSorusu(baslik);
+      if (!karar) return;
+      if (karar.tur === 'uzerineYaz') { await kaydet({ uzerineYaz: true }); return; }
+      baslik = karar.baslik;
+      baslikSatiri.textContent = baslik;
+      await kaydet();
+      return;
+    }
+    if (r && r.onayGerekli) { bildir('Bu ekran zaten var: farkları gözden geçirip onaylayın.', 'uyari'); return; }
+    if (r && r.kaydedildi) {
+      yerlestir(govde, h('section', { class: 'kart hizli-soru' },
+        h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon('onay'), 'Test kaydedildi'),
+          h('span', { class: 'sag' }, rozet(r.dogrulandi ? 'Doğrulandı' : 'Doğrulanmadı', r.dogrulandi ? 'basari' : 'uyari'))),
+        h('p', {}, `Ekran “${oz.ekran.ad}” ve senaryo “${r.senaryoBasligi || baslik}” kaydedildi. Bu sekmeyi kapatabilirsiniz.`),
+        h('div', { class: 'dugmeler' },
+          h('a', { class: 'dugme birincil', href: listeHedefi().adres }, ikon('liste'), listeHedefi().ad),
+          h('a', { class: 'dugme', href: `#/ekranlar/e/${encodeURIComponent(String(r.ekranId))}/akis` }, ikon('katman'), 'Akış diyagramında aç'),
+          h('a', { class: 'dugme hayalet', href: oturumAdresi }, 'Hızlı teste dön'))));
+      const odak = govde.querySelector('[data-odak]');
+      if (odak instanceof HTMLElement) odak.focus();
+    }
+  };
+  onayla.addEventListener('click', () => void kaydet());
+  govde.replaceChildren(h('section', { class: 'kart hizli-soru hizli-ozet-karti' },
+    h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon('onay'), 'Kayıt özeti — onaylamadan hiçbir şey yazılmaz'), h('span', { class: 'sag' }, rozet('6 / 6'))),
+    h('p', {}, `Ekran “${oz.ekran.ad}” ${oz.ekran.mevcut ? '(mevcut: yeni model sürümü)' : '(yeni)'} · ortam ${oz.ortam.ad} · ${oz.dogrulandi ? 'doğrulandı' : 'doğrulanmadı'}`),
+    oz.senaryoVar ? h('div', { class: 'not-kutusu uyari', role: 'note' }, `“${baslik}” adlı senaryo bu ekranda zaten var: kaydederken üzerine yazmak ya da yeni adla kaydetmek sorulur.`) : null,
+    tercih.tabloOlustur ? tv.bolum : h('p', { class: 'kucuk soluk' }, 'Test verisi tablosu oluşturulmaz: değerler senaryoda düz değer olarak kalır.'),
+    h('div', { class: 'ara-baslik' }, `Senaryolar (${1 + oneriler.length} öneri)`), senaryoListesi,
+    m.kutu, neden, h('div', { class: 'dugmeler' }, onayla, h('a', { class: 'dugme hayalet', href: oturumAdresi }, 'Hızlı teste dön'))));
+  guncelle();
+  const odak = govde.querySelector('[data-odak]');
+  if (odak instanceof HTMLElement) odak.focus();
+  // Kayıt başka sekmede onaylandıysa (aynı özet iki sekmede açık) bu sekme görünür olunca durumu sorar: ikinci "Onayla" 409 almasın.
+  const gorununceDenetle = async () => {
+    if (!govde.isConnected) { document.removeEventListener('visibilitychange', gorununceDenetle); return; }
+    if (document.visibilityState !== 'visible' || !onayla.isConnected || baskaSekmedeKaydedildi) return;
+    try {
+      const o = (await api(`/platform/hizli-test/durum?id=${encodeURIComponent(id)}`)).oturum;
+      if (o && o.durum === 'kaydedildi' && onayla.isConnected) {
+        baskaSekmedeKaydedildi = true;
+        onayla.disabled = true;
+        m.goster('Bu kayıt başka bir sekmede onaylandı; yeniden onaylamanız gerekmez.', 'bilgi');
+      }
+    } catch { /* bir sonraki görünüşte yeniden sorulur */ }
+  };
+  document.addEventListener('visibilitychange', gorununceDenetle);
+}
+
+/**
+ * Düzenleme kipi: aynı başlıklı senaryo var → "Üzerine yaz / Yeni adla kaydet / Vazgeç". Promise: { tur: 'uzerineYaz' } |
+ * { tur: 'yeniAd', baslik } | null (Vazgeç / Esc). @param {string} baslik
+ */
+function senaryoVarSorusu(baslik) {
+  return new Promise((coz) => {
+    /** @type {{ tur: 'uzerineYaz' } | { tur: 'yeniAd'; baslik: string } | null} */
+    let sonuc = null;
+    const yeniAd = h('input', { type: 'text', id: 'hizli-yeni-senaryo-adi', maxlength: 200, value: `${baslik} (2)`.slice(0, 200), autocomplete: 'off' });
+    const uyari = h('p', { class: 'alan-hatasi', role: 'alert', hidden: true });
+    const uzerine = h('button', { type: 'button', class: 'tehlike' }, 'Üzerine yaz');
+    const yeni = h('button', { type: 'button', class: 'birincil' }, 'Yeni adla kaydet');
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'hizli-senaryo-var-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'hizli-senaryo-var-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('uyari')), `“${baslik}” senaryosu var`),
+        h('p', { class: 'soluk' }, 'Bu ekranda aynı adlı bir senaryo zaten var. Üzerine yazarsanız eski senaryonun değerleri ve bitiş koşulu değişir.'),
+        h('div', { class: 'alan' }, h('label', { for: 'hizli-yeni-senaryo-adi' }, 'Yeni ad'), yeniAd), uyari),
+      h('div', { class: 'diyalog-alt' }, vazgec, uzerine, yeni));
+    uzerine.addEventListener('click', () => { sonuc = { tur: 'uzerineYaz' }; diyalog.close(); });
+    yeni.addEventListener('click', () => {
+      const ad = yeniAd.value.trim();
+      if (!ad || ad === baslik) { uyari.textContent = 'Farklı bir ad yazın.'; uyari.hidden = false; yeniAd.focus(); return; }
+      sonuc = { tur: 'yeniAd', baslik: ad };
+      diyalog.close();
+    });
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(sonuc); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    vazgec.focus();
+  });
 }
 
 /** H3'te "Hayır, kaydet": doğrulamadan kaydeder (sihirbaz koşusu doğrulama sayılmaz; "doğrulanmadı" rozeti). @param {HTMLButtonElement} kaydet */

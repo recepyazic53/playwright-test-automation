@@ -13,7 +13,7 @@ import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { baslikNormal, benzerTablolar } from '../tablolar/tablo-benzerligi.mjs';
 import { birlestirmePlani } from '../tablolar/paket-test-verisi.mjs';
 import { degerBasvurusuYaz, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
-import { adTemizle, tabloTaslagiKur } from './test-verisi-tablosu.mjs';
+import { adTemizle, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Nesne */
@@ -23,12 +23,12 @@ const EN_COK_LISTE_TABLOSU = 12;
 const EN_COK_ALTERNATIF = 8;
 
 /**
- * @param {{ baslik: string; alanlar: Nesne[]; degerler: Record<string, { deger: unknown; kaynak?: string }> }} g
+ * @param {{ baslik: string; alanlar: Nesne[]; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string> }} g
  * @returns {{ satirAdi: string; tablolar: Array<{ ad: string; tur: 'kayit' | 'liste'; sutunlar: Array<{ ad: string; gizli: boolean; karsiliklar: Record<string, { sayfa: string }> }>;
  *   satirlar: Array<Record<string, string | null>>; secilen: Record<string, string> | null; alanlar: Array<{ oturumAnahtar: string; sutun: string; etiket: string; degerli: boolean }> }> }}
  */
 export function planKur(g) {
-  const t = tabloTaslagiKur({ baslik: g.baslik, alanlar: g.alanlar, degerler: g.degerler });
+  const t = tabloTaslagiKur({ baslik: g.baslik, alanlar: g.alanlar, degerler: g.degerler, ekGizliAdlar: g.ekGizliAdlar });
   const satirAdi = adTemizle(g.baslik || 'Hızlı test') || 'Hızlı test';
   /** @type {ReturnType<typeof planKur>['tablolar']} */
   const tablolar = [];
@@ -54,18 +54,12 @@ export function planKur(g) {
   for (const a of g.alanlar) {
     if (ek >= EN_COK_LISTE_TABLOSU) break;
     if (kullanilanAlanlar.has(a.anahtar) || !['select', 'select-one', 'radio'].includes(String(a.tur)) || a.devreDisi || a.saltOkunur) continue;
-    const liste = a.tur === 'radio' ? (Array.isArray(a.radyolar) ? a.radyolar : []) : (Array.isArray(a.secenekler) ? a.secenekler : []);
     /** @type {Map<string, { metin: string; kod: string }>} */
-    const secenekler = new Map();
-    for (const s of liste) {
-      const kod = String(s.deger ?? '');
-      const metin = typeof s.metin === 'string' && s.metin.trim() ? s.metin.trim() : kod;
-      if (kod !== '' && metin && !secenekler.has(kucuk(metin))) secenekler.set(kucuk(metin), { metin, kod });
-    }
+    const secenekler = new Map(tumSecenekler(a).map((x) => [kucuk(x.metin), x]));
     const etiket = String(a.etiket ?? '');
     const ad = adTemizle(etiket);
-    if (secenekler.size < 2 || secenekler.size > EN_COK_SECENEK || !ad || kullanilanAdlar.has(kucuk(ad)) || gizliAdMi(ad)) continue;
-    const gizli = gizliAdMi(ad);
+    if (secenekler.size < 2 || secenekler.size > EN_COK_SECENEK || !ad || kullanilanAdlar.has(kucuk(ad)) || gizliAdMi(ad, g.ekGizliAdlar ?? [])) continue;
+    const gizli = false;
     tablolar.push({
       ad, tur: 'liste', sutunlar: [{ ad, gizli, karsiliklar: Object.fromEntries([...secenekler.values()].filter((s) => s.metin !== s.kod).map((s) => [s.metin, { sayfa: s.kod }])) }],
       satirlar: [...secenekler.values()].map((s) => ({ [ad]: s.metin })), secilen: null,

@@ -724,7 +724,7 @@ export function akislariListele(vt, projeId, ekranId) {
 /** Ortak akış ekranının model dosyası adı ("<anahtar>.model.json"; adımlardaki başvuru). @param {Veritabani} vt @param {string} projeId @param {string} ekranId */
 function ortakAkisDosyasi(vt, projeId, ekranId) {
   const { ekran, model } = ekranModeli(vt, projeId, ekranId);
-  if (model.tur !== 'ortakAkis') throw new DepoHatasi('Bu ekran bir ortak akış değil.');
+  if (model.tur !== 'ortakAkis') throw new DepoHatasi('Bu ekran bir genel senaryo değil.');
   return { ekran, dosya: `${ekran.anahtar}.model.json` };
 }
 
@@ -785,7 +785,7 @@ export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
   const { ortakAkis, ekranlar } = ortakAkisAdaylari(vt, projeId, ortakEkranId);
   // Boş başlatılmış (henüz adımı olmayan) ortak akış ekranlara eklenmez: önce akışı diyagramda oluşturulur.
   if (!ekranModeli(vt, projeId, ortakEkranId).model.adimlar.length) {
-    throw new DepoHatasi(`“${ortakAkis.ad}” ortak akışının henüz adımı yok; önce Akışlar sekmesinde “Düzenle” ile akışını oluşturun.`);
+    throw new DepoHatasi(`“${ortakAkis.ad}” genel senaryosunun henüz adımı yok; önce Akışlar sekmesinde “Düzenle” ile akışını oluşturun.`);
   }
   const idler = Array.isArray(g.ekranIdleri) ? [...new Set(g.ekranIdleri.filter((x) => typeof x === 'string'))] : [];
   if (!idler.length) throw new DepoHatasi('En az bir ekran seçin.');
@@ -826,7 +826,7 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
   const d = akisDuzenlenebilirMi(model);
   if (!d.duzenlenebilir) throw new DepoHatasi(/** @type {string} */ (d.neden));
   const ortakAkis = model.tur === 'ortakAkis';
-  if (ortakAkis && !s.akisId) throw new DepoHatasi('Ortak akışın tek akışı vardır; yeni akış eklenmez, mevcut akış düzenlenir.');
+  if (ortakAkis && !s.akisId) throw new DepoHatasi('Genel senaryonun tek akışı vardır; yeni akış eklenmez, mevcut akış düzenlenir.');
   const env = modeldenAkisEnvanteri(model);
   const liste = akisListesi(model);
   const kaynakId = s.akisId || s.kopya || null;
@@ -855,12 +855,12 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
  */
 export function bosOrtakAkisOlustur(vt, projeId, g) {
   const ad = typeof g.ad === 'string' ? g.ad.replace(/\s+/g, ' ').trim() : '';
-  if (!ad || ad.length > 120) throw new DepoHatasi('Ortak akışın adını yazın (en fazla 120 karakter).');
+  if (!ad || ad.length > 120) throw new DepoHatasi('Genel senaryonun adını yazın (en fazla 120 karakter).');
   const anahtar = typeof g.anahtar === 'string' && g.anahtar.trim() ? g.anahtar.trim() : ekranAnahtariOner(ad);
   if (!EKRAN_ANAHTARI_DESENI.test(anahtar)) throw new DepoHatasi('Anahtar küçük harf, rakam ve "-" içermeli (ör. odeme-adimlari).');
   const ayni = ekranlariListele(vt, projeId).find((e) => e.anahtar === anahtar);
   if (ayni) throw new DepoHatasi(`“${ayni.ad}” bu anahtarla (${anahtar}) zaten var; başka bir ad ya da anahtar verin.`);
-  const aciklama = `${ad} (ortak akış; adımları akış diyagramında eklenir)`;
+  const aciklama = `${ad} (genel senaryo; adımları akış diyagramında eklenir)`;
   const model = {
     semaSurumu: 2, tur: 'ortakAkis', id: anahtar, ad, aciklama, kosullar: {}, adimlar: [],
     senaryoDuzeyi: { alanlar: [] }, urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
@@ -868,7 +868,7 @@ export function bosOrtakAkisOlustur(vt, projeId, g) {
   modeliDogrula(vt, projeId, model, `${anahtar}.model.json`);
   return vt.islem(() => {
     const ekranId = ekranKaydet(vt, { projeId, anahtar, ad, aciklama });
-    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: 'Boş ortak akış oluşturuldu' });
+    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: 'Boş genel senaryo oluşturuldu' });
     return { ekranId, surum, akisId: ANA_AKIS_ID };
   });
 }
@@ -1100,7 +1100,7 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const mevcutAkis = g.akisId ? liste.find((a) => a.id === g.akisId) : null;
   if (g.akisId && !mevcutAkis) throw new DepoHatasi('Akış bulunamadı.');
   const ortakAkis = tam.tur === 'ortakAkis';
-  if (ortakAkis && !mevcutAkis) throw new DepoHatasi('Ortak akışın tek akışı vardır; yeni akış eklenmez, mevcut akış düzenlenir.');
+  if (ortakAkis && !mevcutAkis) throw new DepoHatasi('Genel senaryonun tek akışı vardır; yeni akış eklenmez, mevcut akış düzenlenir.');
   /** @type {Array<{ blok: number | null; mesaj: string }>} */
   const hatalar = [];
   if (!ad) hatalar.push({ blok: null, mesaj: 'Akışın adını yazın.' });
@@ -1110,7 +1110,7 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const env = elle.envanter;
   const ayik = bloklariAyikla(g.bloklar);
   hatalar.push(...ayik.hatalar);
-  if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Ortak akışın içine ortak akış eklenemez.' }); });
+  if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Genel senaryonun içine genel senaryo eklenemez.' }); });
   // Ekran kendini (doğrudan ya da başka bir ekran üzerinden) içeremez.
   if (!ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak' && basvuruZincirindeMi(vt, projeId, b.dosya, `${ekran.anahtar}.model.json`)) hatalar.push({ blok: i, mesaj: 'Bir ekran kendi içine (ya da kendini kullanan bir ekrana) eklenemez.' }); });
   // Alanların değer kuralları ("Sınırlar"): yalnız sayı / tarih / metin alanında; ekran modeli doğrulayıcısının kurallarıyla.
@@ -1142,8 +1142,8 @@ export function akisKaydet(vt, projeId, ekranId, g) {
     let bastakiSayi = 0;
     while (bastakiSayi < ayik.bloklar.length && ortakBlokMu(ayik.bloklar[bastakiSayi])) bastakiSayi++;
     if (!Number.isInteger(k) || k < 0 || k > ayik.bloklar.length) hatalar.push({ blok: null, mesaj: '“Ekran açılır”ın yeri okunamadı; diyagramı yeniden açın.' });
-    else if (k > bastakiSayi) hatalar.push({ blok: bastakiSayi, mesaj: '“Ekran açılır”ın üstünde yalnız ortak akış blokları olabilir (ekran açılmadan önce yalnız ortak akışlar koşar); bu bloğu “Ekran açılır”ın altına taşıyın.' });
-    else if (k > 0 && k < bastakiSayi) hatalar.push({ blok: k, mesaj: 'Baştaki ortak akışların hepsi “Ekran açılır”ın üstünde (ekran açılmadan önce) ya da hepsi altında (ekran açıldıktan sonra) olmalı.' });
+    else if (k > bastakiSayi) hatalar.push({ blok: bastakiSayi, mesaj: '“Ekran açılır”ın üstünde yalnız genel senaryo blokları olabilir (ekran açılmadan önce yalnız genel senaryolar koşar); bu bloğu “Ekran açılır”ın altına taşıyın.' });
+    else if (k > 0 && k < bastakiSayi) hatalar.push({ blok: k, mesaj: 'Baştaki genel senaryoların hepsi “Ekran açılır”ın üstünde (ekran açılmadan önce) ya da hepsi altında (ekran açıldıktan sonra) olmalı.' });
     else bastakiAyar = bastakiSayi > 0 && k === 0 ? 'sonra' : 'once';
   }
   const cevrim = ayik.hatalar.length || elle.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar, { satirSiniri: sqlSatirSiniriOku(vt), korunanlar: korunan.parcalar });

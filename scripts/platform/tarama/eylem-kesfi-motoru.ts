@@ -63,15 +63,26 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   const kendiMetni = (e: Element): string => bosluk([...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' '));
   const tumMetin = (e: Element): string => bosluk((e as HTMLElement).innerText || e.textContent);
 
-  // 1) Düğmeler (görünür): button, düğme türü girdiler, role=button, onclick'li öğeler, eylem metinli bağlantılar.
-  const dugmeler = [...document.querySelectorAll('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [onclick], a[href]')]
-    .filter((e) => !nobetcininMi(e) && gorunur(e));
+  // 1) Düğmeler (görünür): button, düğme türü girdiler, role=button / role=link, onclick'li öğeler, bağlantılar ve BAĞLANTI BİÇİMLİ
+  // eylem düğmeleri (href'siz ya da "#" / "javascript:" adresli <a>, işaretçi imleçli "btn" / "button" sınıflı ya da odaklanabilir öğe;
+  // tıklama dinleyiciyle bağlanmış olabilir). Yerel olmayan öğe yalnız işaretçi imleci ve kısa kendi metniyle aday olur.
+  const yerelEylem = (e: Element): boolean => e.matches('button, input[type="submit"], input[type="button"], input[type="image"], a[href], [role="button"], [role="link"], [onclick]');
+  const isaretciMi = (e: Element): boolean => getComputedStyle(e).cursor === 'pointer';
+  const dugmeler = [...document.querySelectorAll('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [role="link"], [onclick], a, [class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"])')]
+    .filter((e) => !nobetcininMi(e) && gorunur(e) && !e.matches('select, textarea, option, label, input:not([type="submit"]):not([type="button"]):not([type="image"])'))
+    .filter((e) => yerelEylem(e) || (isaretciMi(e) && !e.querySelector('input, select, textarea') && tumMetin(e).length > 0 && tumMetin(e).length <= 40));
+  /** Adres bir gezinme değil (href yok, "#", "javascript:"): bağlantı biçimli eylem düğmesi. */
+  const eylemBaglantisi = (e: Element): boolean => {
+    const h = (e.getAttribute('href') ?? '').trim();
+    return e.getAttribute('role') === 'link' || !h || h === '#' || /^javascript:/i.test(h);
+  };
   for (const e of dugmeler) {
     if (izler.filter((i) => i.tur === 'dugme').length >= ayar.enCok.dugme) { notlar.push(`İlk ${ayar.enCok.dugme} düğme değerlendirildi.`); break; }
     const etiket = e.tagName.toLowerCase();
     const tip = etiket === 'input' ? ((e as HTMLInputElement).type || '').toLowerCase() : etiket === 'button' ? ((e.getAttribute('type') || 'submit').toLowerCase()) : '';
     const metin = bosluk(etiket === 'input' ? e.getAttribute('value') || e.getAttribute('alt') : tumMetin(e)) || bosluk(e.getAttribute('aria-label') || e.getAttribute('title'));
-    if (etiket === 'a' && !e.hasAttribute('onclick') && e.getAttribute('role') !== 'button') {
+    if (etiket === 'a' && !e.hasAttribute('href') && !e.hasAttribute('onclick') && !e.hasAttribute('role') && !isaretciMi(e)) continue;
+    if (etiket === 'a' && !e.hasAttribute('onclick') && e.getAttribute('role') !== 'button' && !eylemBaglantisi(e)) {
       // Bağlantı: yalnız yönlendirme adayı (eylem metinliyse düğme adayı da olur).
       const hedef = yol(e.getAttribute('href'));
       if (hedef) yonlendirmeler.push({ adres: hedef, kaynak: 'baglanti', metin: metin || null });

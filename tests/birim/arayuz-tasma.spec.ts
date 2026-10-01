@@ -159,6 +159,27 @@ test.describe('tüm ekranlar taşmasız', () => {
     expect(olcum.yukseklik, 'uzun metin birden çok satıra kayar').toBeGreaterThan(24);
     expect(olcum.tasmaY).toBeLessThanOrEqual(1);
     expect(olcum.tasmaX).toBeLessThanOrEqual(1);
+    // Tüm senaryolar (Ekran sütunu da görünür, sütunlar dar): sözcük ortasından kırılmaz ("Teslima / t / bilgile / ri" değil).
+    await page.goto('/#/senaryolar');
+    await bekle(page);
+    const tumunde = page.locator('.senaryo-tablosu td.beklenen-hucresi .rozet').first();
+    await expect(tumunde).toBeVisible();
+    const bolunen = await tumunde.evaluate((r) => {
+      r.textContent = 'Teslimat bilgileri';
+      const metin = r.firstChild as Text;
+      const sonuc: string[] = [];
+      let i = 0;
+      for (const s of 'Teslimat bilgileri'.split(' ')) {
+        const aralik = document.createRange();
+        aralik.setStart(metin, i);
+        aralik.setEnd(metin, i + s.length);
+        const satirlar = new Set([...aralik.getClientRects()].map((x) => Math.round(x.top)));
+        if (satirlar.size > 1) sonuc.push(s);
+        i += s.length + 1;
+      }
+      return sonuc;
+    });
+    expect(bolunen, 'sözcük satır ortasından bölünmemeli').toEqual([]);
     await baglam.close();
   });
 
@@ -177,6 +198,98 @@ test.describe('tüm ekranlar taşmasız', () => {
     await expect(page.getByRole('button', { name: 'Sil — CANLI: sil', exact: true })).toBeEnabled();
     for (const tur of ['düzenle', 'sil']) expect(await olcu(`TEST: ${tur}`), tur).toEqual(await olcu(`CANLI: ${tur}`));
     expect(await olcu('TEST ortam türü: değişiklik geçmişi')).toEqual(await olcu('CANLI ortam türü: değişiklik geçmişi'));
+    await baglam.close();
+  });
+
+  test('Servis sonuçları: koşu trendi ekseninde aynı gün tekrar etmez (sonraki koşularda saat); başlık rozeti her servisin son koşusundan', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar/servisler');
+    await bekle(page);
+    const etiketler = await page.locator('.trend-kapsayici .eksen-yazisi').allTextContents();
+    expect(etiketler.length).toBeGreaterThan(1);
+    const gunler = etiketler.filter((x) => /^\d\d\.\d\d$/.test(x));
+    expect(new Set(gunler).size, etiketler.join(' | ')).toBe(gunler.length);
+    // Y1: kart altı her servisin / akışın son koşusundan söz eder (tek koşudan değil).
+    await expect(page.locator('.kart-kaynak')).toContainText('Her servisin ve akışın son koşusu');
+    await baglam.close();
+  });
+
+  test('390 px üst menü: taşan kenar işaretli (kaydırılabilir); etkin sayfanın bağlantısı görünür alana kayar', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 390, height: 844 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/senaryolar');
+    await bekle(page);
+    const nav = page.getByRole('navigation', { name: 'Ana menü' });
+    await expect(nav).toHaveClass(/sag-tasma/);
+    await page.goto('/#/ayarlar/proje');
+    await bekle(page);
+    const ayarlar = nav.getByRole('link', { name: 'Ayarlar' });
+    await expect(ayarlar).toHaveAttribute('aria-current', 'page');
+    await expect.poll(async () => {
+      const [n, a] = [await nav.boundingBox(), await ayarlar.boundingBox()];
+      return Boolean(n && a && a.x >= n.x - 1 && a.x + a.width <= n.x + n.width + 1);
+    }).toBe(true);
+    await expect(nav).toHaveClass(/sol-tasma/);
+    await baglam.close();
+  });
+
+  test('Koşu karşılaştırma: farklı ortamlardaki koşularda ortam farkı notu; olmayan kimlikte geri dönüş bağlantısı', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    // Fikstürde 3. koşu CANLI, diğerleri TEST.
+    await page.goto(`/#/sonuclar/karsilastir/${z.kosuIdleri[2]}/${z.kosuIdleri[3]}`);
+    await expect(page.locator('.kars-ortam-notu')).toContainText('A ve B farklı ortamlarda koştu (TEST ↔ CANLI)');
+    await page.goto(`/#/sonuclar/karsilastir/${z.kosuIdleri[1]}/${z.kosuIdleri[2]}`);
+    await expect(page.getByRole('heading', { name: 'Koşu karşılaştırması' })).toBeVisible();
+    await expect(page.locator('.kars-ortam-notu')).toHaveCount(0);
+    // Olmayan kayıt 404 (400 değil; istek biçimi doğru, kayıt yok).
+    const y = await fetch(`${z.nobetci.adres}/platform/servis?projeId=${z.projeId}&id=00000000-0000-4000-8000-000000000000`, { headers: { 'X-Test-Sunucu-Token': z.nobetci.token } });
+    expect(y.status).toBe(404);
+    expect(await y.json()).toMatchObject({ basarili: false, kod: 'BULUNAMADI' });
+    // Olmayan kimlik: mesajın altında geri dönüş bağlantısı (çıkmaz sokak yok).
+    for (const [adres, baglanti, hedef] of [
+      ['/#/ekranlar/e/olmayan-kimlik', 'Ekranlara dön', '#/ekranlar'], ['/#/servisler/s/olmayan-kimlik', 'Servislere dön', '#/servisler'],
+      ['/#/senaryolar/duzenle/olmayan-kimlik', 'Senaryolara dön', '#/senaryolar']
+    ] as const) {
+      await page.goto(adres);
+      await expect(page.locator('main').getByRole('link', { name: baglanti }), adres).toHaveAttribute('href', hedef);
+    }
+    await baglam.close();
+  });
+
+  test('Oluştur menüsü: Servis testleri grubunda "Uçtan uca akış" → #/akislar/yeni', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/senaryolar');
+    await bekle(page);
+    await page.getByRole('button', { name: 'Oluştur menüsü' }).click();
+    const grup = page.getByRole('menu', { name: 'Oluştur' }).getByRole('group', { name: 'Servis testleri' });
+    await grup.getByRole('menuitem', { name: /^Uçtan uca akış/ }).click();
+    await expect(page).toHaveURL(/#\/akislar\/yeni$/);
+    await baglam.close();
+  });
+
+  test('"Başarısız testler" kartı yalnız son sonucu başarısız olanları sayar; düzelenler ayrı kapalı bölümde', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar/ekranlar');
+    await bekle(page);
+    const kart = page.locator('section[aria-labelledby="basarisiz-basligi"]');
+    await expect(kart).toBeVisible();
+    const tumu = kart.getByRole('button', { name: /^Tümünü göster/ });
+    if (await tumu.count()) await tumu.click();
+    const ana = kart.locator(':scope > ul.degisim-listesi > li');
+    const anaSayisi = await ana.count();
+    expect(anaSayisi).toBeGreaterThan(0);
+    await expect(ana.filter({ hasText: 'Düzeldi' })).toHaveCount(0);
+    await expect(kart.locator('h3 .rozet')).toHaveText(String(anaSayisi));
+    const duzelen = kart.locator('details.duzelen-testler');
+    if (await duzelen.count()) {
+      await expect(duzelen).not.toHaveAttribute('open', '');
+      await expect(duzelen.locator('summary')).toHaveText(/^Önceki koşuya göre düzelen testler \(\d+\)$/);
+      expect(await duzelen.locator('li').count()).toBe(Number(/\((\d+)\)/.exec(await duzelen.locator('summary').innerText())?.[1]));
+    }
     await baglam.close();
   });
 

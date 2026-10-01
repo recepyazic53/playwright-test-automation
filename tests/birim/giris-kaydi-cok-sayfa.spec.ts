@@ -193,7 +193,8 @@ test('çok sayfalı giriş kaydı: adres çubuğuyla gidilen sayfalar algılanı
 
   // Onay ekranı: her sayfa değişimi ve o sayfadaki alanlar sırayla; roller önerilmiş.
   const kutu = page.getByRole('region', { name: 'Giriş kaydı: Deneme' });
-  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeVisible({ timeout: 60_000 });
+  // Yönerge paragrafı başlığın "?" düğmesinin arkasında (bolumAciklamalariniSimgeye): DOM'da olmalı.
+  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeAttached({ timeout: 60_000 });
   const rol = (n: number) => kutu.getByRole('combobox', { name: `Kayıt adımı ${n}: ne?` });
   await expect(rol(1)).toHaveValue('kullaniciAdi');
   await expect(rol(2)).toHaveValue('parola');
@@ -289,7 +290,8 @@ async function girisKaydiYap(akis: (sayfa: Page) => Promise<void>): Promise<{ pa
     await kayit.close().catch(() => undefined);
   }
   const kutu = page.getByRole('region', { name: 'Giriş kaydı: Deneme' });
-  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeVisible({ timeout: 60_000 });
+  // Yönerge paragrafı başlığın "?" düğmesinin arkasında (bolumAciklamalariniSimgeye): DOM'da olmalı.
+  await expect(kutu.getByText('Nöbetçi girişi böyle anladı')).toBeAttached({ timeout: 60_000 });
   return { page, kutu, kapat: () => baglam.close() };
 }
 

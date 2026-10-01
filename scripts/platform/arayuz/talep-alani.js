@@ -8,8 +8,9 @@ import { api, h, ikon, oneriListesi, yeniKimlik } from './ortak.js';
 import { TALEP_EN_COK, TALEP_EN_UZUN, benzerTalep, talepEslesir, talepKucuk, talepTemizle } from './talepler.mjs';
 
 /**
- * @param {{ projeId: string; degerler?: string[]; degisti?: () => void; sinif?: string }} s
+ * @param {{ projeId: string; degerler?: string[]; degisti?: () => void; sinif?: string; ne?: string }} s
  *   sinif: dış kabın sınıfı (senaryo formu 'model-alani genis', diğer formlar 'alan').
+ *   ne: yardım metnindeki nesne ("senaryonun" varsayılan; uçtan uca akışta "akışın").
  * @returns {{ el: HTMLElement; degerler: () => string[]; girdi: HTMLInputElement }}
  */
 export function talepAlani(s) {
@@ -90,7 +91,7 @@ export function talepAlani(s) {
   const el = h('div', { class: `${s.sinif || 'alan'} talep-alani` },
     h('div', { class: 'alan-ust' }, h('label', { for: id }, 'Talep no', h('span', { class: 'soluk' }, ' (isteğe bağlı)'))),
     h('div', { class: 'talep-kutusu', onclick: (/** @type {MouseEvent} */ o) => { if (o.target === o.currentTarget) girdi.focus(); } }, cipler, girdi),
-    h('div', { class: 'yardim', id: `${id}-yardim` }, 'Bu senaryonun karşıladığı talep numaraları (serbest metin; birden çok olabilir). Sonuçlar > Raporlar > Kapsam matrisi ve listelerdeki "Talep" süzgeci bunları kullanır.'),
+    h('div', { class: 'yardim', id: `${id}-yardim` }, `Bu ${s.ne || 'senaryonun'} karşıladığı talep numaraları (serbest metin; birden çok olabilir). Sonuçlar > Raporlar > Kapsam matrisi ve listelerdeki "Talep" süzgeci bunları kullanır.`),
     not, hata);
   return {
     el, girdi,
