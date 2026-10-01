@@ -102,6 +102,8 @@ export type ProfilEnvanteri = {
   notlar: string[];
   /** Eylem ve doğrulama keşfi (basmadan; öneri — modele yazılmaz, "Düğmeyi ve sonucu işaretle"de seçenek olur). */
   eylemAdaylari?: import('./eylem-kesfi.mjs').EylemAdaylari;
+  /** Bağlı liste zinciri keşfi (zincir-motoru.ts): ilişkiler, her seçim yolunda alt listelerin seçenekleri, bulgular. */
+  zincir?: import('./zincir-kesfi.mjs').ZincirSonucu | null;
 };
 
 export type EngellenenIstek = { yontem: string; adres: string; asama: string; neden: 'yazma' | 'yasakli' | 'izinsiz-koken' | 'websocket' };
@@ -197,6 +199,10 @@ export type KayitEnvanteri = {
   notlar: string[];
   /** Kayıtta gözlenen seçim listeleri (test verisi tablolarına çevrilir). */
   secenekGozlemleri?: SecenekGozlemi[];
+  /** Bağlı listeler (hızlı testin zincir keşfi): alt listenin anahtarı üst listeninkine bağlıdır; modelde bagimlilik olur. */
+  bagliListeler?: Array<{ ust: string; alt: string; yuklenmeMs?: number | null }>;
+  /** Zincir keşfinin sayfa bulguları (kullanıcıya gösterilen cümleler); bilinmeyenlere yazılır. */
+  zincirBulgulari?: string[];
 };
 
 export type PaketMetasi = {

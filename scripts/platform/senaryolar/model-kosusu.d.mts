@@ -34,6 +34,10 @@ export type PlanAlani = {
   secenekler: PlanSecenegi[];
   parametreler: Record<string, unknown>;
   mutlakaGorunmeli: boolean;
+  /** Bağlı liste: gözlenen olağan dolma süresi (ms; modelde bagimlilik.yuklenmeMs). Koşucu bekleme sınırını buna göre kurar. */
+  yuklenmeMs?: number | null;
+  /** Bağlı liste: üst alanın kimliği (modelde bagimlilik.alan); dolma süresi üst alanın doldurulduğu andan ölçülür. */
+  ustId?: string | null;
   /** Doldurulamayacaksa nedeni (koşuda atlanan alan olarak kaydedilir). */
   atla: string | null;
   /** Değeri olmayan "mutlaka görünmeli" alanı: yalnızca görünürlüğü denetlenir. */

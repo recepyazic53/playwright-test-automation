@@ -5,7 +5,7 @@
 //                  (TÜM seçenekler), kullanıcının yazdığı değerler tek satır (senaryo satırı).
 //   planOnizle     önizleme (paketTestVerisiOnizle ile aynı biçim): mevcut aynı adlı / benzer tablo, eklenecek satır / sütun, bağlantılar.
 //   planYaz        seçimle yazar: yeni / birleştir / yeni ad / atla; senaryonun kendi satırına sabitlenmesi (pin), alan → sütun başvuruları.
-//   senaryoOnerileri  kaydedilen senaryo + seçim alanlarının diğer seçenekleriyle alternatif senaryolar.
+//   senaryoOnerileri  kaydedilen senaryo + az sayıda farklı alternatif (bağlı listeler geçerli birleşimle birlikte, diğer seçimler ilk/son/aradan).
 // Değer ÜRETİLMEZ: yalnız kullanıcının yazdıkları ve sayfadan okunan seçenekler. Gizli sütun değerleri önizlemede görünmez.
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
@@ -14,13 +14,15 @@ import { baslikNormal, benzerTablolar } from '../tablolar/tablo-benzerligi.mjs';
 import { birlestirmePlani } from '../tablolar/paket-test-verisi.mjs';
 import { degerBasvurusuYaz, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
 import { adTemizle, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
+import { ornekDegerler } from '../tarama/zincir-kesfi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Nesne */
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
 const EN_COK_SECENEK = 60;
 const EN_COK_LISTE_TABLOSU = 12;
-const EN_COK_ALTERNATIF = 8;
+/** Hızlı test kaydında önerilen alternatif senaryo sayısı (Ayarlar > Koşu > Tarama ve akış kaydı > hizliOneriSayisi). */
+export const VARSAYILAN_ONERI_SAYISI = 5;
 
 /**
  * @param {{ baslik: string; alanlar: Nesne[]; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string> }} g
@@ -184,24 +186,111 @@ export const basvuruYaz = (tabloAdi, sutun) => degerBasvurusuYaz(tabloAdi, sutun
 export const pinAnahtari = (tabloId) => grupAnahtari(tabloId, '');
 
 /**
- * Senaryo önerileri: [0] kaydedilen (hızlı testte yapılan) senaryo; sonra kullanıcının seçtiği liste alanlarının DİĞER seçenekleriyle
- * alternatifler (aynı değerler, o alan başka seçenekle). Alternatifler varsayılan olarak seçili değildir.
+ * Senaryo önerileri (YZ YOK, kurallı): [0] kaydedilen (hızlı testte yapılan) senaryo; sonra az sayıda, birbirinden FARKLI alternatif.
+ *  - Bağlı listeler (il → ilçe → mahalle…) hep BİRLİKTE değişir: keşfin / doldurmanın gözlediği geçerli bir yol (kökten yaprağa) alınır;
+ *    yalnız üst değişip altların eski kalması (gerçekte olmayan birleşim) önerilmez. Kullanıcının doldurduğu her bağlı listeyi kapsamayan
+ *    yol önerilmez. Kökte farklı değerler (ilk, son, aradan) öne alınır.
+ *  - Diğer seçim alanları (liste / radyo): şimdiki değer dışındaki seçeneklerden ilk, son ve aradan. Bir değer, değeri girilmemiş bir
+ *    metin alanını açıyorsa (görünürlük koşulu) önerilmez: o senaryo eksik veriyle koşardı.
+ *  - Birleştirme: k. öneri her değişkenin k. adayını alır (her aday en az bir kez denenir; az senaryoyla çok kapsama). Öneri sayısı enCok.
+ * Değer ÜRETİLMEZ: adaylar yalnız sayfadan okunan seçenekler ve gözlenen bağlı liste yollarıdır. s verilmezse (eski çağrı) yalnız değeri
+ * seçilmiş liste tabloları değişken sayılır.
  * @param {ReturnType<typeof planKur>} plan @param {string} baslik
- * @returns {Array<{ indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean; alt: { planAdi: string; sutun: string; deger: string; etiket: string } | null }>}
+ * @param {{ enCok?: number; alanlar?: Nesne[]; iliskiler?: ReadonlyArray<{ ust: string; alt: string }>;
+ *   gozlemler?: ReadonlyArray<{ anahtar: string; secimler: Record<string, string>; secenekler: ReadonlyArray<{ deger: string; metin?: string | null }> }>;
+ *   degerler?: Record<string, unknown> }} [s]
+ * @returns {Array<{ indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean;
+ *   alt: { degisiklikler: Array<{ planAdi: string; sutun: string; deger: string; etiket: string; oturumAnahtar: string }> } | null }>}
  */
-export function senaryoOnerileri(plan, baslik) {
+export function senaryoOnerileri(plan, baslik, s = {}) {
+  const enCok = Number.isInteger(s.enCok) && Number(s.enCok) > 0 ? Number(s.enCok) : VARSAYILAN_ONERI_SAYISI;
   /** @type {ReturnType<typeof senaryoOnerileri>} */
   const liste = [{ indeks: 0, baslik, gerekce: 'Hızlı testte yaptığınız ve kaydettiğiniz akış', varsayilanSecili: true, alt: null }];
+  const alanlar = s.alanlar ?? [];
+  const alan = (/** @type {string} */ k) => alanlar.find((a) => a.anahtar === k);
+  /** Oturum alanı → liste tablosu + sütun (değişiklik o tablonun satırı seçilerek yapılır). */
+  /** @type {Map<string, { t: ReturnType<typeof planKur>['tablolar'][number]; sutun: string; etiket: string }>} */
+  const yer = new Map();
   for (const t of plan.tablolar) {
-    if (t.tur !== 'liste' || !t.secilen || t.satirlar.length < 2) continue;
-    const sutun = t.sutunlar[0].ad;
-    const secilen = t.secilen[sutun];
-    const etiket = t.alanlar[0]?.etiket ?? t.ad;
-    for (const d of t.satirlar) {
-      const v = String(d[sutun] ?? '');
-      if (!v || v === secilen || liste.length > EN_COK_ALTERNATIF) continue;
-      liste.push({ indeks: liste.length, baslik: `${baslik} — ${etiket}: ${v}`.slice(0, 200), gerekce: `“${etiket}” alanında “${v}” seçeneğini dener; diğer değerler aynı`, varsayilanSecili: false, alt: { planAdi: t.ad, sutun, deger: v, etiket } });
+    if (t.tur !== 'liste') continue;
+    for (const a of t.alanlar) if (!t.sutunlar.find((c) => c.ad === a.sutun)?.gizli) yer.set(a.oturumAnahtar, { t, sutun: a.sutun, etiket: a.etiket });
+  }
+  const tablodakiler = (/** @type {string} */ k) => { const y = yer.get(k); return y ? y.t.satirlar.map((r) => String(r[y.sutun] ?? '')).filter(Boolean) : []; };
+  const simdiki = (/** @type {string} */ k) => { const y = yer.get(k); return y?.t.secilen?.[y.sutun] ?? null; };
+  // Kod → görünen metin (tablolar metinle tutulur; gözlemler seçenek değeriyle).
+  /** @type {Map<string, Map<string, string>>} */
+  const metinler = new Map();
+  const metinEkle = (/** @type {string} */ k, /** @type {string} */ kod, /** @type {string} */ m) => { if (!metinler.has(k)) metinler.set(k, new Map()); metinler.get(k)?.set(kod, m); };
+  for (const a of alanlar) for (const x of tumSecenekler(a)) metinEkle(a.anahtar, x.kod, x.metin);
+  for (const g of s.gozlemler ?? []) for (const x of g.secenekler ?? []) metinEkle(g.anahtar, String(x.deger), String(x.metin ?? x.deger));
+  const metni = (/** @type {string} */ k, /** @type {string} */ kod) => metinler.get(k)?.get(kod) ?? kod;
+  const etiketi = (/** @type {string} */ k) => yer.get(k)?.etiket ?? String(alan(k)?.etiket ?? k);
+
+  /** @type {Array<{ ad: string; adaylar: Array<Array<{ k: string; metin: string }>> }>} */
+  const degiskenler = [];
+  // 1) Bağlı liste zinciri: gözlenen yollar (kökten yaprağa; yaprakta listenin aradan bir seçeneği).
+  const ustu = new Map((s.iliskiler ?? []).map((i) => [i.alt, i.ust]));
+  const zincir = new Set([...ustu.keys(), ...ustu.values()]);
+  if (zincir.size) {
+    /** @type {Array<Record<string, string>>} */
+    const yollar = [];
+    for (const g of s.gozlemler ?? []) {
+      if (!zincir.has(g.anahtar)) continue;
+      const l = (g.secenekler ?? []).filter((x) => String(x.deger) !== '');
+      if (!l.length) continue;
+      yollar.push({ ...g.secimler, [g.anahtar]: String(l[Math.floor(l.length / 2)].deger) });
     }
+    const altKume = (/** @type {Record<string, string>} */ a, /** @type {Record<string, string>} */ b) => Object.keys(a).length < Object.keys(b).length && Object.entries(a).every(([k, v]) => b[k] === v);
+    const enUzun = [...new Map(yollar.filter((a) => !yollar.some((b) => altKume(a, b))).map((a) => [JSON.stringify(Object.entries(a).sort()), a])).values()];
+    // Kullanıcının doldurduğu (tabloda seçili satırı olan) her bağlı liste yolda olmalı; yoldaki değerler tabloda bulunmalı.
+    const gereken = [...zincir].filter((k) => simdiki(k) !== null);
+    const kokler = [...zincir].filter((k) => !ustu.has(k));
+    // Yol, kendi zincirinde kullanıcının doldurduğu her listeyi kapsamalı (yoksa o listede eski yolun değeri kalırdı).
+    const ayniZincir = (/** @type {string} */ k, /** @type {string} */ kok) => { for (let u = k; u; u = ustu.get(u)) if (u === kok) return true; return false; };
+    const gecerli = enUzun.filter((a) => {
+      const kok = kokler.find((x) => x in a);
+      return Boolean(kok) && gereken.filter((k) => ayniZincir(k, /** @type {string} */ (kok))).every((k) => k in a)
+        && Object.entries(a).every(([k, v]) => !yer.has(k) || tablodakiler(k).includes(metni(k, v)));
+    });
+    // Her zincir (kökü ayrı: il → ilçe…, marka → model…) ayrı bir değişkendir. Kökü farklı yollar önce (keşif kökte ilk, son ve aradan
+    // değerleri dener; gözlem sırası bu sıradır), sonra kalanlar.
+    for (const kok of kokler) {
+      const yolu = gecerli.filter((a) => kok in a && metni(kok, a[kok]) !== simdiki(kok));
+      const tekKok = [...new Map(yolu.map((a) => [a[kok], a])).values()];
+      const adaylar = [...tekKok, ...yolu.filter((a) => !tekKok.includes(a))]
+        .map((a) => Object.entries(a).filter(([k]) => yer.has(k)).map(([k, v]) => ({ k, metin: metni(k, v) })));
+      if (adaylar.length) degiskenler.push({ ad: `zincir:${kok}`, adaylar });
+    }
+  }
+  // 2) Diğer seçim alanları (zincir dışı): şimdiki değer dışındaki seçeneklerden ilk, son, aradan.
+  for (const [k, y] of yer) {
+    if (zincir.has(k)) continue;
+    const a = alan(k);
+    if (a && (a.kosul || !['select', 'select-one', 'radio'].includes(String(a.tur)))) continue;
+    if (!a && !y.t.secilen) continue;
+    const su = simdiki(k) ?? (a?.mevcut ? String(a.mevcut) : null);
+    const kodu = (/** @type {string} */ m) => y.t.sutunlar.find((c) => c.ad === y.sutun)?.karsiliklar[m]?.sayfa ?? (a ? tumSecenekler(a).find((x) => x.metin === m)?.kod : undefined) ?? m;
+    // Değeri girilmemiş metin alanını açan seçenek önerilmez (senaryo eksik veriyle koşardı).
+    const eksikAcar = (/** @type {string} */ m) => alanlar.some((x) => x.kosul?.secim === k && Array.isArray(x.kosul.degerler) && x.kosul.degerler.includes(kodu(m))
+      && !['select', 'select-one', 'radio', 'checkbox'].includes(String(x.tur)) && !x.hazir && !(s.degerler && s.degerler[x.anahtar]));
+    const secenekler = tablodakiler(k).filter((m) => m !== su && kodu(m) !== su && !eksikAcar(m)).map((m) => ({ deger: m, metin: m }));
+    const adaylar = ornekDegerler(secenekler, 3).map((x) => [{ k, metin: x.metin }]);
+    if (adaylar.length) degiskenler.push({ ad: k, adaylar });
+  }
+  // 3) Birleştirme: k. öneri her değişkenin k. adayını alır.
+  for (let i = 0; liste.length <= enCok; i++) {
+    const secim = degiskenler.filter((d) => i < d.adaylar.length).map((d) => d.adaylar[i]);
+    if (!secim.length) break;
+    const degisiklikler = secim.flat().map((x) => {
+      const y = /** @type {NonNullable<ReturnType<typeof yer.get>>} */ (yer.get(x.k));
+      return { planAdi: y.t.ad, sutun: y.sutun, deger: x.metin, etiket: y.etiket, oturumAnahtar: x.k };
+    });
+    const ozet = secim.map((p) => (p.length > 1 ? `${etiketi(p[0].k)}: ${p.map((x) => x.metin).join(' / ')}` : `${etiketi(p[0].k)}: ${p[0].metin}`));
+    liste.push({
+      indeks: liste.length, baslik: `${baslik} — ${ozet.join(' · ')}`.slice(0, 200),
+      gerekce: `Farklı: ${degisiklikler.map((d) => `“${d.etiket}” = “${d.deger}”`).join(', ')}; diğer değerler aynı${secim.some((p) => p.length > 1) ? ' (bağlı listeler gözlenen geçerli bir birleşimle birlikte değişir)' : ''}`.slice(0, 600),
+      varsayilanSecili: false, alt: { degisiklikler }
+    });
   }
   return liste;
 }

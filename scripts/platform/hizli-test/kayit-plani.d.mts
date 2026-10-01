@@ -21,7 +21,11 @@ export type PlanOnizlemesi = {
   }>;
   baglantilar: Array<{ alanId: string; alanEtiketi: string; tablo: string; sutun: string; modeldeVar: boolean; mevcut: { tablo: string; sutun: string } | null }>;
 };
-export type SenaryoOnerisi = { indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean; alt: { planAdi: string; sutun: string; deger: string; etiket: string } | null };
+export type SenaryoOnerisi = {
+  indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean;
+  alt: { degisiklikler: Array<{ planAdi: string; sutun: string; deger: string; etiket: string; oturumAnahtar: string }> } | null;
+};
+export declare const VARSAYILAN_ONERI_SAYISI: number;
 
 export declare function planKur(g: { baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string> }): KayitPlani;
 export declare function planOnizle(vt: Veritabani, projeId: string, plan: KayitPlani, ekranId: string | null, anahtarlar: Record<string, string>): PlanOnizlemesi;
@@ -29,4 +33,8 @@ export declare function varsayilanSecim(onizleme: PlanOnizlemesi): { tablolar: R
 export declare function planYaz(vt: Veritabani, projeId: string, plan: KayitPlani, secim: PlanSecimi, bilgi: { ekranAdi: string }): YazilanTablo[];
 export declare function basvuruYaz(tabloAdi: string, sutun: string): string;
 export declare function pinAnahtari(tabloId: string): string;
-export declare function senaryoOnerileri(plan: KayitPlani, baslik: string): SenaryoOnerisi[];
+export declare function senaryoOnerileri(plan: KayitPlani, baslik: string, s?: {
+  enCok?: number; alanlar?: Array<Record<string, any>>; iliskiler?: ReadonlyArray<{ ust: string; alt: string }>;
+  gozlemler?: ReadonlyArray<{ anahtar: string; secimler: Record<string, string>; secenekler: ReadonlyArray<{ deger: string; metin?: string | null }> }>;
+  degerler?: Record<string, unknown>;
+}): SenaryoOnerisi[];
