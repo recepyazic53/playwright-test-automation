@@ -256,3 +256,5 @@ export declare function temizMetin(m: unknown, sayac: { gizlenen: number }, uzun
 export declare function alanDonusturucu(sayac: { gizlenen: number }): {
   taslakAlan: (a: HamAlan, id: string) => Record<string, unknown>; etiketsizler: string[]; cokluDegerliler: string[];
 };
+/** Senaryo verisinin meta anahtarları (başlık): sayfa alanının kimliği / senaryo anahtarı olamaz (önekli: alanBaslik). */
+export declare const SENARYO_META_ANAHTARLARI: readonly string[];

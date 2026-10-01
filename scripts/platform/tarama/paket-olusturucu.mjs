@@ -185,13 +185,22 @@ function kabulUzantisi(accept) {
 }
 
 /**
- * Alanın temel model kimliği: id → (onay kutusu grubunda ad + değer) → name → etiket → tür.
+ * Senaryo verisinde meta alanların anahtarları (senaryonun başlığı "baslik"): sayfa alanının kimliği / senaryo anahtarı OLAMAZ — olursa
+ * senaryo kaydedilirken alanın değeri senaryo adıyla ezilir (ör. <input id="baslik">). Böyle bir alan "alan" önekiyle adlandırılır
+ * ("alanBaslik"); meta anahtarlar ayrı kalır (göç gerekmez: yalnız yeni / yeniden kaydedilen alanlar etkilenir).
+ */
+export const SENARYO_META_ANAHTARLARI = Object.freeze(['baslik']);
+/** Meta anahtarla çakışan kimliğe önek. @param {string} id */
+const metaDisi = (id) => (SENARYO_META_ANAHTARLARI.includes(id) ? `alan${id.charAt(0).toUpperCase()}${id.slice(1)}` : id);
+
+/**
+ * Alanın temel model kimliği: id → (onay kutusu grubunda ad + değer) → name → etiket → tür. Senaryonun meta anahtarlarıyla çakışmaz.
  * @param {import('./paket-olusturucu.d.mts').HamAlan} a
  */
 function temelKimlik(a) {
-  if (a.kimlik) return kimlikUret(a.kimlik);
+  if (a.kimlik) return metaDisi(kimlikUret(a.kimlik));
   const grupDegeri = a.grup && a.anahtar.includes('=') ? a.anahtar.slice(a.anahtar.indexOf('=') + 1) : '';
-  return kimlikUret(grupDegeri ? `${a.ad} ${grupDegeri}` : a.ad || a.etiket || a.tur, a.tur === 'radio' ? 'secenek' : 'alan');
+  return metaDisi(kimlikUret(grupDegeri ? `${a.ad} ${grupDegeri}` : a.ad || a.etiket || a.tur, a.tur === 'radio' ? 'secenek' : 'alan'));
 }
 
 /**
@@ -449,7 +458,7 @@ export function taramaPaketiOlustur(meta, envanter) {
   }
 
   // 3) Taslak alanlar (kimlikler üretilir; mevcut modelle birleştirmede yeniden adlandırılabilir).
-  const kullanilan = new Set();
+  const kullanilan = new Set(SENARYO_META_ANAHTARLARI);
   /** @type {Map<string, string>} ham anahtar → alan kimliği */
   const kimlikler = new Map();
   for (const [anahtar, a] of hamlar) kimlikler.set(anahtar, benzersiz(temelKimlik(a), kullanilan));
@@ -922,6 +931,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   const mevcutAlanlar = [...anaAlanlar, ...digerAlanlar];
   // Mevcut kimlikler ayrılır: yeni alan/düğme kimlikleri eşleşmeyen eski bir alanın kimliğini almaz.
   const kullanilanIdler = new Set([
+    ...SENARYO_META_ANAHTARLARI,
     ...mevcutAlanlar.map((a) => String(a.id)),
     ...(mevcut && nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar)
       ? mevcut.senaryoDuzeyi.alanlar.filter(nesneMi).map((/** @type {Record<string, any>} */ a) => String(a.id)) : [])
@@ -972,6 +982,13 @@ export function kayitPaketiOlustur(meta, envanter) {
     const adaylar = new Set([h.secici, ...h.adaySeciciler].map(seciciNormal));
     const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && (TARANABILIR_TIPLER.has(a.tip) || a.tip === 'okluSecim') && nesneMi(a.konum) && typeof a.konum.secici === 'string'
       && cerceveAyni(a.konum.cerceve, h.cerceve) && adaylar.has(seciciNormal(a.konum.secici)));
+    // Mevcut modelde senaryo anahtarı meta anahtarla (başlık) çakışan alan: yeniden kaydedilirken yeni (önekli) kimlik alır — değeri
+    // senaryo adıyla ezilmiş eski anahtar bırakılır (senaryolar bu alana yeniden değer verir).
+    if (e && nesneMi(e.eslesme) && SENARYO_META_ANAHTARLARI.includes(String(e.eslesme.senaryo ?? e.id))) {
+      eslesenMevcut.add(e);
+      yeniAlanSayisi++;
+      return taslakAlan(h, benzersiz(temelKimlik(h), kullanilanIdler));
+    }
     if (e) {
       eslesenMevcut.add(e);
       eslesenSayisi++;
