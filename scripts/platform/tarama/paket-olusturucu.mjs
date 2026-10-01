@@ -198,7 +198,9 @@ const metaDisi = (id) => (SENARYO_META_ANAHTARLARI.includes(id) ? `alan${id.char
  * @param {import('./paket-olusturucu.d.mts').HamAlan} a
  */
 function temelKimlik(a) {
-  if (a.kimlik) return metaDisi(kimlikUret(a.kimlik));
+  // Kimlik sayfada tek değilse (ör. her gölge bileşende id="i"; seçici kimlikle kurulamadı) name tercih edilir.
+  const kimlikSecici = typeof a.secici === 'string' && a.secici.includes('#');
+  if (a.kimlik && (kimlikSecici || !a.ad)) return metaDisi(kimlikUret(a.kimlik));
   const grupDegeri = a.grup && a.anahtar.includes('=') ? a.anahtar.slice(a.anahtar.indexOf('=') + 1) : '';
   return metaDisi(kimlikUret(grupDegeri ? `${a.ad} ${grupDegeri}` : a.ad || a.etiket || a.tur, a.tur === 'radio' ? 'secenek' : 'alan'));
 }

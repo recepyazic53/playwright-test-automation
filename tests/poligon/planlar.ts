@@ -199,7 +199,8 @@ export const PLANLAR: EkranPlani[] = [
       { etiket: /^Ad soyad$/, tablo: 'Ad soyad' }, { etiket: /^Telefon$/, deger: '05001112233' }, { etiket: /^Doğrulama kodu$/, deger: '1234' },
       { etiket: /^Tercih edilen gün$/, deger: 'Cumartesi' }
     ],
-    basilacak: [/^Ara$/, /^İncele$/, /Randevu talep et/, /Talebi gönder/],
+    // Aynı metinli “İncele” düğmeleri yakın yazılarıyla ayırt edilir (“İncele (18.500 TL / ay)”).
+    basilacak: [/^Ara$/, /^İncele( |$)/, /Randevu talep et/, /Talebi gönder/],
     bitti: /Randevu talebiniz iletildi/,
     gonderim: { kod: '1234', gun: 'Cumartesi' }
   },

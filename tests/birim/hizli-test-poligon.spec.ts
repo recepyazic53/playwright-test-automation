@@ -131,6 +131,17 @@ async function kontrol(bolum: string, ad: string, is: () => Promise<string | voi
 }
 const UZUN = { timeout: 150_000 };
 const soruKarti = (page: Page) => page.locator('.hizli-soru');
+/**
+ * "Doldur" panelinde uydurma "Kişiler" tablosunun satırı (önceki ekranların yazdığı tablolar da listelenir; aynı tablonun farklı
+ * satırlarından değer seçilmesin), yoksa ilk aday.
+ */
+const kisilerSatiri = (panel: ReturnType<Page['locator']>): { click: () => Promise<void> } => ({
+  click: async () => {
+    // Kişiler tablosunun satır adı "Birinci" (kurulum); düğme yazısı "Birinci — <değer>" ya da tablo adını içerir.
+    const k = panel.getByRole('button').filter({ hasText: /Kişiler ›|Birinci/ });
+    await ((await k.count()) ? k.first() : panel.getByRole('button').first()).click();
+  }
+});
 async function baslatArayuz(page: Page, ad: string, adres: string, izin: 'Evet' | 'Bana sor' | 'Hayır', ekranId?: string): Promise<void> {
   // Önceki (yarıda kalan) oturum yeni başlatmayı engeller: kapatılır.
   const s = (await api(`/platform/hizli-test/secenekler?projeId=${projeId}`)) as Nesne;
@@ -195,7 +206,7 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
         await expect(deger.or(panel.getByRole('button').first())).toBeVisible();
         if (await deger.isVisible()) return '(tek anlamlı: doğrudan seçildi)';
         const m = (await panel.innerText()).replace(/\s+/g, ' ').slice(0, 250);
-        await panel.getByRole('button').first().click();
+        await kisilerSatiri(panel).click();
         return m;
       };
       const paneldekiler = await sec();
@@ -212,7 +223,7 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
       await satir.getByRole('button', { name: 'Doldur', exact: true }).click();
       const panel = satir.locator('.doldur-paneli');
       const metin = (await panel.isVisible().catch(() => false)) ? await panel.innerText() : `doğrudan seçildi: ${await satir.locator('.hizli-tablo-degeri').innerText().catch(() => '?')}`;
-      if (await panel.isVisible().catch(() => false)) await panel.getByRole('button').first().click();
+      if (await panel.isVisible().catch(() => false)) await kisilerSatiri(panel).click();
       return metin.replace(/\s+/g, ' ').slice(0, 200);
     });
     await kontrol(B, 'Elle yazma + “Devam et”: sayfada yeni sıra ile doldurulur (Soyad → E-posta → Ad)', async () => {
