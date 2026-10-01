@@ -301,6 +301,20 @@ function soruCiz(o, y) {
       h('div', { class: 'dugmeler' }, evet, hayir));
   }
 
+  // Bana sor: basışta sayfa onay / soru penceresi açtı (tarayıcıda pencere açık bekliyor). Yanıt modele aksiyonun pencere yanıtı olarak
+  // yazılır; doğrulama ve normal koşu aynı yanıtı verir.
+  if (s.tur === 'diyalog') {
+    const tamam = h('button', { type: 'button', class: 'birincil', 'data-odak': '' }, 'Tamam (onayla)');
+    const iptalEt = h('button', { type: 'button', class: 'hayalet' }, 'İptal');
+    tamam.addEventListener('click', () => void gonder(tamam, 'diyalog', { cevap: 'kabul' }, m));
+    iptalEt.addEventListener('click', () => void gonder(iptalEt, 'diyalog', { cevap: 'iptal' }, m));
+    return kart('Şimdi ne yapayım? Sayfa bir pencere açtı', 'soru', m.kutu,
+      h('p', {}, s.dugme ? h('span', {}, h('b', {}, `“${s.dugme.metin || s.dugme.secici}”`), ' düğmesine basınca sayfa bir ', s.diyalogTuru === 'prompt' ? 'soru' : 'onay', ' penceresi açtı:') : 'Sayfa bir pencere açtı:'),
+      h('blockquote', { class: 'hizli-diyalog-metni' }, s.mesaj || '(metinsiz pencere)'),
+      h('p', { class: 'soluk kucuk' }, 'Seçiminiz teste yazılır: doğrulama ve normal koşu bu pencereye aynı yanıtı verir.'),
+      h('div', { class: 'dugmeler' }, tamam, iptalEt));
+  }
+
   if (s.tur === 'hata') {
     const sec = (cevap, metin, sinif) => {
       const b = h('button', { type: 'button', class: sinif }, metin);
@@ -372,6 +386,10 @@ function farkCiz(a) {
     h('p', {}, h('b', {}, `“${a.bas ? a.bas.metin || a.bas.secici : '?'}”`), ` düğmesine basıldı; ${sn} sn sonra sayfa:`,
       f.zamanAsimi ? h('span', { class: 'soluk' }, ' (bekleme 60 sn’de kesildi)') : null),
     f.tiklamaNotu ? h('p', { class: 'kucuk' }, `Not: ${f.tiklamaNotu}.`) : null,
+    // Basışta açılan tarayıcı pencereleri (alert / confirm / prompt) ve verilen yanıt.
+    Array.isArray(f.diyaloglar) && f.diyaloglar.length ? h('ul', { class: 'hizli-diyaloglar kucuk', 'aria-label': 'Tarayıcı pencereleri' }, f.diyaloglar.map((x) => h('li', {},
+      `${x.tur === 'alert' ? 'Bilgi' : x.tur === 'prompt' ? 'Soru' : 'Onay'} penceresi: “${x.mesaj}” → `,
+      h('b', {}, x.tur === 'alert' ? 'Tamam' : x.yanit === 'kabul' ? 'Tamam (onaylandı)' : 'İptal')))) : null,
     f.beklemeMetinleri.length ? h('p', { class: 'kucuk soluk' }, `Beklerken: ${f.beklemeMetinleri.join(' · ')}`) : null,
     f.yeniMetinler.length ? h('ul', { class: 'hizli-metinler', 'aria-label': 'Yeni metinler' }, f.yeniMetinler.slice(0, 12).map((m) => h('li', {},
       h('span', { class: `hizli-cip${m.tur === 'hata' ? ' e-hata' : m.tur === 'basari' ? ' e-bitti' : ''}` }, m.metin)))) : h('p', { class: 'soluk kucuk' }, 'Yeni metin görülmedi.'),

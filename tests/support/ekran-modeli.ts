@@ -203,6 +203,8 @@ export type AdimAksiyonu = {
   zamanAsimiSn?: number;
   /** Öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri. */
   cerceve?: Cerceve;
+  /** Yalnızca "tikla": bu tıklamada açılan tarayıcı onay / soru penceresine yanıt (kabul: Tamam, iptal: İptal); açılan pencereler beklenen sayılır. */
+  diyalog?: 'kabul' | 'iptal';
 };
 
 /** Adımın başarı göstergesi (sürüm 2): metin (secici verilirse o öğede), eleman (görünür), url (desen). */

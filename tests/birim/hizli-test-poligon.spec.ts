@@ -1,23 +1,21 @@
 // HIZLI TEST POLİGONU — yalnız POLIGON=1 ile koşar (normal `npm test`'i yavaşlatmaz). tests/poligon/ altındaki sahte uygulama (127.0.0.1)
-// üzerinde Nöbetçi'nin hızlı testini her ekranda baştan sona sürer: izin "Evet", veri durağı (elle / "Doldur" ile tablodan), zincir,
-// bitiş etiketi, doğrulama koşusu, kaydet, ardından kaydedilen senaryonun normal koşusu. Sapmalar BULGU olarak POLIGON_RAPOR_KLASORU'na
-// (sonuclar.json + ekran görüntüleri) yazılır; test bu aşamada bulgu yüzünden KIRMIZI olmaz (poligonun kendisi ve kurulum hariç).
-// Ayrı Nöbetçi örneği, GEÇİCİ veri kökü (NOBETCI_VERI_KOKU) ve geçici veritabanı; kurulum sihirbazı arayüzden uydurma değerlerle
-// geçilir. Kullanıcının veri/ klasörüne ve çalışan Nöbetçi'sine dokunulmaz; tarayıcılar yalnız 127.0.0.1'e çözümler.
+// üzerinde Nöbetçi'nin hızlı testini her ekranda baştan sona sürer (sürücü: tests/poligon/surucu.ts): izin "Evet", veri durağı (elle /
+// "Doldur" ile tablodan), zincir, bitiş etiketi, doğrulama koşusu, kaydet, ardından kaydedilen senaryonun normal koşusu. Sapmalar BULGU
+// olarak POLIGON_RAPOR_KLASORU'na (sonuclar.json + ekran görüntüleri) yazılır; test bu aşamada bulgu yüzünden KIRMIZI olmaz (poligonun
+// kendisi ve kurulum hariç). Ayrı Nöbetçi örneği, GEÇİCİ veri kökü (NOBETCI_VERI_KOKU) ve geçici veritabanı; kurulum sihirbazı arayüzden
+// uydurma değerlerle geçilir. Kullanıcının veri/ klasörüne ve çalışan Nöbetçi'sine dokunulmaz; tarayıcılar yalnız 127.0.0.1'e çözümler.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { adaySecimi, doldurAdaylari, type DoldurTablosu } from '../../scripts/platform/tablolar/doldur-onerisi.mjs';
-import { poligonBaslat } from '../poligon/sunucu.mjs';
 import { INSAN_YOLLARI } from '../poligon/insan-yollari';
 import { PLANLAR, type EkranPlani } from '../poligon/planlar';
+import {
+  ekranKos, isBitsin as isBitsinO, kisilerTablosu, oturumBekle, oturumOku, planDegeri, poligonOrtami, secenekDegeri, type Nesne, type PoligonOrtami
+} from '../poligon/surucu';
 import { korumaliTarayici } from './giris-fikstur';
-import { izinleriAcApi, nobetciApi, nobetciBaslat, type Nobetci, type Yanit } from './nobetci-sunucusu';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- oturum / model JSON'u serbestçe gezilir
-type Nesne = Record<string, any>;
+import { izinleriAcApi, type Nobetci, type Yanit } from './nobetci-sunucusu';
 
 const ETKIN = process.env.POLIGON === '1';
 test.skip(!ETKIN, 'Poligon koşusu yalnız POLIGON=1 ile (uzun sürer).');
@@ -28,52 +26,28 @@ const RAPOR = process.env.POLIGON_RAPOR_KLASORU ?? join(tmpdir(), 'hizli-test-po
 const SECILI = (process.env.POLIGON_EKRAN ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const PAROLA = `Gecici-Poligon-${randomBytes(6).toString('hex')}`;
 
-let poligon: Awaited<ReturnType<typeof poligonBaslat>>;
+let po: PoligonOrtami;
 let nobetci: Nobetci;
-let veriKoku = '';
 let projeId = '';
 let ortamId = '';
 const sonuclar: Nesne[] = [];
 
-const api = (yol: string, govde?: Nesne): Promise<Yanit> => nobetciApi(nobetci, yol, govde);
+const api = (yol: string, govde?: Nesne): Promise<Yanit> => po.api(yol, govde);
 async function basarili(yol: string, govde: Nesne): Promise<Yanit> {
   const y = await api(yol, govde);
   expect(y.basarili, `${yol}: ${y.mesaj ?? ''} ${JSON.stringify(y).slice(0, 400)}`).toBe(true);
   return y;
 }
-const oturum = async (id: string): Promise<Nesne> => (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
-const SORU_DURUMLARI = ['veri', 'karar', 'hataSorusu', 'onay', 'bitis', 'kaydet', 'hayirSecim', 'kaydedildi', 'hata', 'iptal'];
-async function bekle(id: string, durumlar = SORU_DURUMLARI, sn = 150): Promise<Nesne> {
-  const son = Date.now() + sn * 1000;
-  for (;;) {
-    const o = await oturum(id);
-    if (durumlar.includes(o.durum) || ['hata', 'iptal'].includes(o.durum)) return o;
-    if (Date.now() > son) throw new Error(`zaman aşımı: beklenen ${durumlar.join('/')}, olan ${o.durum} (${o.calisiyor ?? ''})`);
-    await new Promise((c) => setTimeout(c, 300));
-  }
-}
-async function isBitsin(): Promise<void> {
-  for (const son = Date.now() + 60_000; Date.now() < son; await new Promise((c) => setTimeout(c, 300))) {
-    if (!(await api('/platform/tarama/aktif')).is) return;
-  }
-}
-function goruntuKaydet(ad: string, b64: string | null | undefined): string | null {
-  if (!b64) return null;
-  const dosya = `${ad.replace(/[^a-z0-9-]+/gi, '-')}.jpg`;
-  writeFileSync(join(RAPOR, dosya), Buffer.from(b64, 'base64'));
-  return dosya;
-}
-const sayac = (kok: string): Nesne => poligon.sayaclar()[kok] as Nesne;
+const oturum = (id: string): Promise<Nesne> => oturumOku(po, id);
+const bekle = (id: string, durumlar?: string[], sn?: number): Promise<Nesne> => oturumBekle(po, id, durumlar, sn);
+const isBitsin = (): Promise<void> => isBitsinO(po);
+const sayac = (kok: string): Nesne => po.sayac(kok);
 
 test.beforeAll(async () => {
   test.setTimeout(240_000);
   mkdirSync(RAPOR, { recursive: true });
-  poligon = await poligonBaslat();
-  veriKoku = mkdtempSync(join(process.env.POLIGON_GECICI_KOK ?? tmpdir(), 'poligon-veri-'));
-  nobetci = await nobetciBaslat(veriKoku, join(veriKoku, 'platform.db'), {
-    NOBETCI_VERI_KOKU: veriKoku, NOBETCI_KAYIT_BASSIZ: '1', NOBETCI_TARAMA_IZINLI_KOKENLER: poligon.adres,
-    NOBETCI_KAYIT_ZAMAN_ASIMI_SN: '300', NOBETCI_REHBER_OTOMATIK: '0'
-  });
+  po = await poligonOrtami({ kasaArayuzu: true, geciciKok: process.env.POLIGON_GECICI_KOK });
+  nobetci = po.nobetci;
   // Kurulum sihirbazı (arayüz; uydurma değerler).
   const tarayici = await korumaliTarayici();
   try {
@@ -89,7 +63,9 @@ test.beforeAll(async () => {
     await expect(page.getByRole('button', { name: 'Atla' })).toBeVisible();
     const { projeler } = (await api('/platform/projeler')) as unknown as { projeler: Array<{ id: string }> };
     projeId = projeler[0].id;
-    ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Poligon', tabanUrl: poligon.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
+    ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Poligon', tabanUrl: po.poligon.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
+    po.projeId = projeId;
+    po.ortamId = ortamId;
     await page.getByRole('button', { name: 'Atla' }).click();
     await page.getByRole('radio', { name: /^Gelişmiş — tüm özellikler/ }).check();
     await page.getByRole('button', { name: 'Devam' }).click();
@@ -99,22 +75,12 @@ test.beforeAll(async () => {
   } finally { await tarayici.close(); }
   await izinleriAcApi(nobetci);
   // "Doldur" için test verisi (uydurma).
-  await basarili('/platform/tablo/kaydet', {
-    projeId, ad: 'Kişiler', tur: 'kayit',
-    sutunlar: ['Ad', 'Soyad', 'Ad soyad', 'E-posta', 'Cep telefonu', 'Doğum tarihi', 'Açık adres'].map((ad) => ({ ad })).concat([{ ad: 'Kimlik no', gizli: true } as never, { ad: 'IBAN', gizli: true } as never]),
-    satirlar: [{ ad: 'Birinci', degerler: {
-      Ad: 'Deneme', Soyad: 'Kişi', 'Ad soyad': 'Deneme Kişi', 'E-posta': 'deneme@ornek.test', 'Cep telefonu': '05001112233', 'Doğum tarihi': '01.02.1990',
-      'Açık adres': 'Deneme sokak 1', 'Kimlik no': '10000000146', IBAN: 'TR120006200000000123456789'
-    } }]
-  });
+  await kisilerTablosu(po);
 });
 
 test.afterAll(async () => {
   if (sonuclar.length) writeFileSync(join(RAPOR, 'sonuclar.json'), JSON.stringify(sonuclar, null, 2));
-  nobetci?.surec.kill('SIGTERM');
-  await poligon?.kapat();
-  await new Promise((c) => setTimeout(c, 1500));
-  if (veriKoku) rmSync(veriKoku, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  await po?.kapat();
 });
 
 test('poligon: her ekran insan yoluyla baştan sona tamamlanır (sayaç: tam bir gönderim)', async () => {
@@ -123,7 +89,7 @@ test('poligon: her ekran insan yoluyla baştan sona tamamlanır (sayaç: tam bir
   try {
     for (const [kok, yol] of Object.entries(INSAN_YOLLARI)) {
       const once = sayac(kok).gonderim;
-      const page = await (await tarayici.newContext({ baseURL: poligon.adres })).newPage();
+      const page = await (await tarayici.newContext({ baseURL: po.poligon.adres })).newPage();
       const hatalar: string[] = [];
       page.on('pageerror', (e) => hatalar.push(String(e)));
       await page.goto(`${kok}/`);
@@ -135,299 +101,12 @@ test('poligon: her ekran insan yoluyla baştan sona tamamlanır (sayaç: tam bir
   } finally { await tarayici.close(); }
 });
 
-/** Veri durağı alanı için plandaki değer (etikete göre). */
-function planDegeri(p: EkranPlani, etiket: string, ilkSoru: boolean, secenekler: Nesne[] | null = null): { deger?: string | boolean; tablo?: string } | null {
-  // Adı görünmeyen seçim grubu: plan etiketi seçeneklerin metniyle eşlenir (kullanıcı seçeneklere bakarak tanır).
-  const d = p.degerler.find((x) => x.etiket.test(etiket))
-    ?? (/^Adı görünmeyen alan/.test(etiket) && secenekler ? p.degerler.find((x) => secenekler.some((s) => x.etiket.test(String(s.metin ?? '')))) : undefined);
-  if (!d) return null;
-  if (ilkSoru && d.ilk !== undefined) return { deger: d.ilk };
-  return d.tablo ? { tablo: d.tablo } : { deger: d.deger };
-}
-
-/** Seçim alanında plan değerini (değer ya da metin) seçeneğin değerine çevirir. */
-function secenekDegeri(a: Nesne, d: string | boolean): string | boolean | null {
-  if (typeof d === 'boolean' || !Array.isArray(a.secenekler) || !a.secenekler.length) return d;
-  const k = (v: unknown): string => String(v).toLocaleLowerCase('tr');
-  const s = (a.secenekler as Nesne[]).find((x) => k(x.deger) === k(d) || k(x.metin) === k(d));
-  return s ? String(s.deger) : null;
-}
-
-async function ekranKos(p: EkranPlani): Promise<Nesne> {
-  const r: Nesne = {
-    kok: p.kok, ekranAdi: p.ekranAdi, asamalar: {}, bulgular: [] as string[], veriDuraklari: [] as Nesne[], kararlar: [] as Nesne[], hataSorulari: [] as Nesne[],
-    sureler: {}, goruntuler: [] as string[], doldurma: {}, sayac: {}
-  };
-  const bulgu = (m: string): void => { r.bulgular.push(m); };
-  const t0 = Date.now();
-  const s0 = sayac(p.kok).gonderim;
-  const d0 = sayac(p.kok).doldurma.length;
-  let id = '';
-  try {
-    const b = await api('/platform/hizli-test/baslat', { projeId, ortamId, hedef: `${p.kok}/`, ekranAdi: p.ekranAdi, izin: 'evet' });
-    if (!b.basarili) { bulgu(`Başlatılamadı: ${b.mesaj}`); r.asamalar.kesif = false; return r; }
-    id = String(b.id);
-    let o = await bekle(id);
-    r.sureler.kesifMs = Date.now() - t0;
-    r.kesif = o.kesif;
-    r.zincir = o.zincir;
-    r.bulgularNobetci = o.bulgular;
-    r.goruntuler.push(goruntuKaydet(`${p.kok.slice(1)}-1-kesif`, o.goruntu));
-    // Keşif: ilk veri durağında beklenen alanlar.
-    const ilkAlanlar: string[] = o.durum === 'veri' ? (o.soru.alanlar as Nesne[]).map((a) => String(a.etiket)) : [];
-    const eksikKesif = p.kesif.filter((k) => !ilkAlanlar.some((e) => k.test(e)));
-    r.asamalar.kesif = o.durum !== 'hata' && eksikKesif.length === 0;
-    if (eksikKesif.length) bulgu(`Keşifte görünmeyen alanlar: ${eksikKesif.map(String).join(', ')} (keşfedilen: ${JSON.stringify(ilkAlanlar)})`);
-    let durakNo = 0;
-    let planSira = 0;
-    let veriOk = true;
-    let eylemOk = true;
-    const ayniDurak = new Map<string, number>();
-    const sorulanlar = new Set<string>();
-    const ilkSorulanlar = new Set<string>();
-    /** Beklenmeyen hata sorusuyla sonuçlanan basışların adım numaraları (plan sırasında sayılmaz; düğmeye yeniden basılır). */
-    const hataliBasislar = new Set<number>();
-    const denemeler = new Map<string, number>();
-    for (let tur = 0; tur < 40; tur++) {
-      if (o.durum === 'hata' || o.durum === 'iptal') { bulgu(`Oturum ${o.durum}: ${JSON.stringify(o.hata)}`); eylemOk = false; break; }
-      if (o.durum === 'veri') {
-        durakNo++;
-        const alanlar = o.soru.alanlar as Nesne[];
-        r.veriDuraklari.push({
-          no: durakNo, not: o.soru.not, alanlar: alanlar.map((a) => ({
-            etiket: a.etiket, tur: a.tur, zorunlu: a.zorunlu, hazir: a.hazir, mevcut: a.mevcut, kosul: a.kosul?.metin ?? null, bagli: a.bagli ? `${a.bagli.ustEtiket}${a.bagli.bekliyor ? ' (bekliyor)' : ''}` : null,
-            hata: a.hata, secenekSayisi: Array.isArray(a.secenekler) ? a.secenekler.length : null
-          }))
-        });
-        for (const a of alanlar) sorulanlar.add(String(a.etiket));
-        const imza = alanlar.map((a) => `${a.anahtar}:${a.hata ?? ''}`).join('|');
-        ayniDurak.set(imza, (ayniDurak.get(imza) ?? 0) + 1);
-        if ((ayniDurak.get(imza) ?? 0) > 2) { bulgu(`Veri durağı aynı alanlarla tekrar tekrar açılıyor (${o.soru.not ?? ''}); ilerlenemedi.`); veriOk = false; break; }
-        const degerler: Nesne = {};
-        let tablolar: DoldurTablosu[] | null = null;
-        for (const a of alanlar) {
-          const ilkSoru = !ilkSorulanlar.has(String(a.anahtar));
-          ilkSorulanlar.add(String(a.anahtar));
-          const pd = planDegeri(p, String(a.etiket), ilkSoru, Array.isArray(a.secenekler) ? a.secenekler : null);
-          if (pd && /^Adı görünmeyen alan/.test(String(a.etiket)) && ilkSoru) bulgu(`Etiketsiz alan: “${a.etiket}” (seçenekler: ${(a.secenekler ?? []).map((x: Nesne) => x.metin).join(' / ')}) — plan değeri seçeneklerden tanındı`);
-          if (a.hata) bulgu(`Alan doldurulamadı: “${a.etiket}” — ${a.hata}`);
-          if (!pd) {
-            if (a.zorunlu && !a.hazir && !a.deger) bulgu(`Planda olmayan zorunlu alan soruldu: “${a.etiket}” (${a.tur})`);
-            continue;
-          }
-          // Doldurulamayan alana ikinci kez değer gönderilmez (ilerlemek için boş bırakılır).
-          if (a.hata && (ayniDurak.get(imza) ?? 0) > 1) { degerler[a.anahtar] = { deger: null }; continue; }
-          if (pd.tablo) {
-            tablolar ??= ((await api(`/platform/tablolar?projeId=${projeId}&secim=1`)).tablolar as DoldurTablosu[]);
-            const tip = ({ select: 'secim', radio: 'radyo', checkbox: 'onayKutusu', date: 'tarih', number: 'sayi', tel: 'telefon' } as Record<string, string>)[String(a.tur)] ?? 'metin';
-            const adaylar = doldurAdaylari({ alan: { id: a.anahtar, etiket: a.etiket, tip, hassas: a.gizli, secenekler: null }, tablolar, ortamId });
-            const aday = adaylar.find((x) => x.sutun === pd.tablo);
-            r.doldur = [...(r.doldur ?? []), { alan: a.etiket, istenen: pd.tablo, adaylar: adaylar.map((x) => `${x.tablo}.${x.sutun} (${x.neden})`) }];
-            if (!aday || !aday.satirlar.length) { bulgu(`“Doldur”: “${a.etiket}” için “Kişiler.${pd.tablo}” aday değil (adaylar: ${adaylar.map((x) => x.sutun).join(', ') || 'yok'}); elle yazıldı.`); }
-            else {
-              const sec = adaySecimi(aday, aday.satirlar[0].satirId);
-              degerler[a.anahtar] = { deger: sec.deger, kaynak: 'tablo', tabloSecimi: sec.tabloSecimi };
-              continue;
-            }
-            const satir = (tablolar.find((t) => t.ad === 'Kişiler')?.satirlar[0]?.degerler ?? {}) as Record<string, string | null>;
-            degerler[a.anahtar] = { deger: satir[pd.tablo] ?? '', kaynak: 'elle' };
-            continue;
-          }
-          if (pd.deger === undefined) continue;
-          const v = secenekDegeri(a, pd.deger);
-          if (v === null) { bulgu(`“${a.etiket}” listesinde “${String(pd.deger)}” seçeneği yok (seçenekler: ${JSON.stringify((a.secenekler ?? []).slice(0, 8).map((x: Nesne) => x.metin))})`); continue; }
-          if (a.hazir && a.mevcut === v) continue;
-          degerler[a.anahtar] = { deger: v === '' ? null : v, kaynak: 'elle' };
-        }
-        const y = await api('/platform/hizli-test/veri', { id, degerler });
-        if (!y.basarili) {
-          bulgu(`Veri durağı reddedildi: ${y.mesaj}`);
-          veriOk = false;
-          // Eksik zorunlu alanlara (planda yoksa) uydurma değer: zincirin geri kalanını görebilmek için.
-          const eksikler = ((y as Nesne).eksikler ?? []) as string[];
-          if (!eksikler.length) break;
-          for (const k of eksikler) {
-            const a = alanlar.find((x) => x.anahtar === k);
-            degerler[k] = { deger: a?.tur === 'checkbox' ? true : a?.secenekler?.[0]?.deger ?? 'Deneme', kaynak: 'elle' };
-          }
-          const y2 = await api('/platform/hizli-test/veri', { id, degerler });
-          if (!y2.basarili) { bulgu(`Veri durağı yine reddedildi: ${y2.mesaj}`); break; }
-        }
-        o = await bekle(id);
-        continue;
-      }
-      if (o.durum === 'hataSorusu') {
-        const metinler = o.soru.metinler as string[];
-        const plan = p.hataCevaplari?.find((h) => metinler.some((m) => h.metin.test(m)));
-        r.hataSorulari.push({ metinler, cevap: plan?.cevap ?? 'onemsiz', beklenen: Boolean(plan) });
-        if (!plan) {
-          bulgu(`Beklenmeyen hata sorusu: ${JSON.stringify(metinler)} (önemsiz denildi; düğmeye yeniden basılacak)`);
-          eylemOk = false;
-          const son = (o.adimlar as Nesne[]).filter((x) => x.bas).at(-1);
-          if (son) hataliBasislar.add(Number(son.no));
-        }
-        await basarili('/platform/hizli-test/hata-cevabi', { id, cevap: plan?.cevap ?? 'onemsiz' });
-        o = await bekle(id);
-        continue;
-      }
-      if (o.durum === 'onay') { await basarili('/platform/hizli-test/onay', { id, cevap: true }); o = await bekle(id); continue; }
-      if (o.durum === 'karar') {
-        const adaylar = (o.soru.adaylar as Nesne[]).map((x) => ({ secici: String(x.secici), metin: String(x.metin ?? '') }));
-        const basilanlar = (o.adimlar as Nesne[]).filter((x) => x.bas).map((x) => String(x.bas.metin ?? x.bas.secici));
-        r.kararlar.push({ basilanlar, adaylar: adaylar.map((x) => x.metin), seciciler: adaylar.map((x) => x.secici), oneri: adaylar.find((x) => x.secici === o.soru.oneri)?.metin ?? null });
-        // Plan sırası: basılmış düğmeler (otomatik basılan dahil; metin ya da seçiciyle) planın başından eşlenir.
-        planSira = 0;
-        const basisAdimlari = (o.adimlar as Nesne[]).filter((x) => x.bas);
-        if (basisAdimlari.length > 25) { bulgu('25\'ten çok basış: döngü kesildi.'); eylemOk = false; break; }
-        for (const x of basisAdimlari) {
-          if (hataliBasislar.has(Number(x.no))) continue;
-          if (planSira < p.basilacak.length && (p.basilacak[planSira].test(String(x.bas.metin ?? '')) || p.basilacak[planSira].test(String(x.bas.secici)))) planSira++;
-        }
-        if (planSira >= p.basilacak.length) break;
-        const hedef = p.basilacak[planSira];
-        let aday = adaylar.find((x) => hedef.test(x.metin));
-        // Görünen metinle bulunamazsa seçicide (aria-label vb.) aranır: kullanıcı listede yalnız metni görür (bulgu).
-        if (!aday) {
-          aday = adaylar.find((x) => hedef.test(x.secici));
-          if (aday) bulgu(`${String(hedef)} aday listesinde yalnız seçiciyle ayırt edilebiliyor (görünen metin “${aday.metin}”; seçici ${aday.secici})`);
-        }
-        if (!aday) {
-          bulgu(`Aday listesinde ${String(hedef)} yok (adaylar: ${JSON.stringify(adaylar.map((x) => x.metin))})`);
-          eylemOk = false;
-          r.goruntuler.push(goruntuKaydet(`${p.kok.slice(1)}-aday-yok-${planSira}`, o.goruntu));
-          break;
-        }
-        const deneme = `${planSira}:${basisAdimlari.length}`;
-        denemeler.set(deneme, (denemeler.get(deneme) ?? 0) + 1);
-        if ((denemeler.get(deneme) ?? 0) > 2) {
-          bulgu(`“${aday.metin}” basışı iki kez sonuçsuz kaldı (son hata: ${o.sonHata ?? 'yok'}); zincir kesildi.`);
-          eylemOk = false;
-          r.goruntuler.push(goruntuKaydet(`${p.kok.slice(1)}-basis-hatasi-${planSira}`, o.goruntu));
-          break;
-        }
-        await basarili('/platform/hizli-test/karar', { id, karar: 'bas', secici: aday.secici });
-        o = await bekle(id);
-        continue;
-      }
-      if (o.durum === 'bitis' || o.durum === 'kaydet') break;
-      bulgu(`Beklenmeyen durum: ${o.durum}`);
-      break;
-    }
-    r.sorulanAlanlar = [...sorulanlar];
-    r.adimlar = (o.adimlar as Nesne[]).map((a) => ({
-      no: a.no, alanlar: a.alanlar.map((x: Nesne) => `${x.etiket}${x.kosul ? ` [koşul: ${x.kosul.metin}]` : ''}`), bas: a.bas?.metin ?? null,
-      fark: a.fark ? { sureMs: a.fark.sureMs, yeniMetinler: a.fark.yeniMetinler.map((m: Nesne) => `${m.metin} (${m.tur})`), yeniAlanlar: a.fark.yeniAlanlar, adres: a.fark.adres, bekleme: a.fark.beklemeMetinleri } : null
-    }));
-    r.gunluk = (o.gunluk as Nesne[]).map((g) => g.metin);
-    const eksikSonradan = p.sonradan.filter((x) => ![...sorulanlar].some((e) => x.etiket.test(e)));
-    for (const x of eksikSonradan) bulgu(`Sonradan beliren alan veri durağında sorulmadı: ${String(x.etiket)} (${x.neden})`);
-    r.asamalar.veri = veriOk && eksikSonradan.length === 0 && !r.bulgular.some((m: string) => /Planda olmayan zorunlu|doldurulamadı|seçeneği yok/.test(m));
-    r.asamalar.eylem = eylemOk && planSira >= p.basilacak.length - 1 && ['karar', 'bitis', 'kaydet'].includes(o.durum);
-    r.sureler.zincirMs = Date.now() - t0;
-    r.goruntuler.push(goruntuKaydet(`${p.kok.slice(1)}-2-zincir-sonu`, o.goruntu));
-    r.sayac.hizli = sayac(p.kok).gonderim - s0;
-    // Bitiş.
-    if (o.durum === 'karar') {
-      const y = await api('/platform/hizli-test/karar', { id, karar: 'bitir' });
-      if (!y.basarili) { bulgu(`“Burada bitir” reddedildi: ${y.mesaj}`); r.asamalar.bitis = false; return r; }
-      o = await bekle(id);
-    }
-    if (o.durum === 'bitis') {
-      let gorulen = (o.soru.gorulenler as Nesne[]).map((g) => String(g.metin));
-      if (!gorulen.some((m) => p.bitti.test(m))) {
-        await basarili('/platform/hizli-test/yeniden-tara', { id, etiketler: o.soru.etiketler });
-        o = await bekle(id);
-        gorulen = (o.soru.gorulenler as Nesne[]).map((g) => String(g.metin));
-        if (gorulen.some((m) => p.bitti.test(m))) bulgu('Bitiş metni ancak “Sayfayı yeniden tara” ile görüldü.');
-      }
-      r.bitis = { gorulenler: o.soru.gorulenler, onerilenEtiketler: o.soru.etiketler, onerilenAdres: o.soru.onerilenAdres };
-      const etiketler: Record<string, string | null> = { ...(o.soru.etiketler as Record<string, string | null>) };
-      const bittiMetni = gorulen.find((m) => p.bitti.test(m));
-      if (!bittiMetni) {
-        bulgu(`Bitiş metni görülmedi: ${String(p.bitti)} (görülen: ${JSON.stringify(gorulen)})`);
-        r.asamalar.bitis = false;
-      } else {
-        if (!p.olumsuz && etiketler[bittiMetni] !== 'bitti') bulgu(`Bitiş metni “${bittiMetni}” varsayılan olarak Bitti önerilmedi (öneri: ${etiketler[bittiMetni]})`);
-        if (!p.olumsuz) etiketler[bittiMetni] = 'bitti';
-      }
-      const yb = await api('/platform/hizli-test/bitis', { id, etiketler, ...(p.olumsuz && bittiMetni ? { olumsuz: { mesaj: o.olumsuz?.mesaj ?? bittiMetni } } : {}) });
-      if (!yb.basarili) { bulgu(`Bitiş koşulu reddedildi: ${yb.mesaj}`); r.asamalar.bitis = false; return r; }
-      r.asamalar.bitis ??= true;
-      o = await bekle(id);
-    }
-    if (o.durum !== 'kaydet') { bulgu(`Kaydet adımına gelinemedi (${o.durum})`); return r; }
-    // Doğrulama koşusu.
-    const sd = sayac(p.kok).gonderim;
-    const td = Date.now();
-    await basarili('/platform/hizli-test/dogrula', { id });
-    o = await bekle(id, ['kaydet'], 240);
-    r.sureler.dogrulamaMs = Date.now() - td;
-    r.dogrulama = { ...o.soru.dogrulama, adimlar: o.dogrulamaAdimlari };
-    r.asamalar.dogrulama = o.soru.dogrulama?.durum === 'basarili';
-    if (!r.asamalar.dogrulama) { bulgu(`Doğrulama koşusu başarısız: ${o.soru.dogrulama?.mesaj}`); r.goruntuler.push(goruntuKaydet(`${p.kok.slice(1)}-3-dogrulama`, o.goruntu)); }
-    r.sayac.dogrulama = sayac(p.kok).gonderim - sd;
-    // Kaydet.
-    const oz = await api('/platform/hizli-test/ozet', { id, baslik: p.ekranAdi });
-    r.ozet = oz.basarili ? { tablolar: ((oz.ozet as Nesne).onizleme?.tablolar ?? []).map((t: Nesne) => `${t.ad}: ${t.sutunlar.map((s: Nesne) => s.ad).join(', ')}`), baglantilar: ((oz.ozet as Nesne).onizleme?.baglantilar ?? []).map((x: Nesne) => `${x.alanEtiketi}→${x.tablo}.${x.sutun}`) } : oz.mesaj;
-    const k = await api('/platform/hizli-test/kaydet', { id, baslik: p.ekranAdi, ...(oz.basarili ? { secim: (oz.ozet as Nesne).secim } : {}), onay: true });
-    if (!k.kaydedildi) { bulgu(`Kaydedilemedi: ${k.mesaj ?? JSON.stringify(k).slice(0, 300)}`); r.asamalar.kayit = false; return r; }
-    r.asamalar.kayit = true;
-    id = '';
-    await isBitsin();
-    const model = ((await api(`/platform/ekran?projeId=${projeId}&id=${String(k.ekranId)}`)) as Nesne).model as Nesne;
-    r.model = {
-      adimlar: (model?.adimlar ?? []).map((a: Nesne) => ({
-        ad: a.ad ?? a.baslik ?? null,
-        alanlar: (a.bolumler ?? []).flatMap((b: Nesne) => (b.alanlar ?? []).map((x: Nesne) => `${x.etiket?.ekran ?? x.anahtar}${x.gorunurluk || x.kosul ? ' [koşullu]' : ''}${x.tip ? ` (${x.tip})` : ''}`)),
-        eylemler: (a.eylemler ?? a.dugmeler ?? []).map((x: Nesne) => x.metin ?? x.ad ?? x.secici ?? '?')
-      })),
-      bagliListeler: model?.bagliListeler ?? null, kosu: model?.kosu ?? null
-    };
-    writeFileSync(join(RAPOR, `${p.kok.slice(1)}-model.json`), JSON.stringify(model, null, 2));
-    const sen = (await api(`/platform/senaryo?id=${String(k.senaryoId)}&ortamId=${ortamId}`)) as Nesne;
-    writeFileSync(join(RAPOR, `${p.kok.slice(1)}-senaryo.json`), JSON.stringify(sen.senaryo ?? sen, null, 2));
-    // Normal koşu (koşucu).
-    const sn = sayac(p.kok).gonderim;
-    const dn = sayac(p.kok).doldurma.length;
-    const tn = Date.now();
-    const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: String(k.senaryoId), ortamId });
-    r.sureler.normalMs = Date.now() - tn;
-    if (!y.basarili) { bulgu(`Normal koşu başlatılamadı: ${y.mesaj}`); r.asamalar.normal = false; }
-    else {
-      const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
-      r.normal = { durum: sonuc.durum, hata: sonuc.hataMesaji ?? null };
-      r.asamalar.normal = sonuc.durum === 'basarili';
-      if (!r.asamalar.normal) bulgu(`Normal koşu ${sonuc.durum}: ${String(sonuc.hataMesaji ?? '').slice(0, 400)}`);
-    }
-    r.sayac.normal = sayac(p.kok).gonderim - sn;
-    r.doldurma.normal = sayac(p.kok).doldurma.slice(dn).map((x: Nesne) => x.alan);
-    const son = sayac(p.kok).gonderimler.at(-1) as Nesne | undefined;
-    r.sonGonderim = son ?? null;
-    const beklenen = p.gonderimSayisi ?? 1;
-    const sapmalar = Object.entries(p.gonderim ?? {}).filter(([kk, v]) => JSON.stringify(son?.[kk]) !== JSON.stringify(v)).map(([kk, v]) => `${kk}: beklenen ${JSON.stringify(v)}, gelen ${JSON.stringify(son?.[kk])}`);
-    r.asamalar.sayac = r.sayac.hizli === beklenen && r.sayac.dogrulama === beklenen && r.sayac.normal === beklenen && sapmalar.length === 0;
-    if (r.sayac.hizli !== beklenen || r.sayac.dogrulama !== beklenen || r.sayac.normal !== beklenen) bulgu(`Gönderim sayıları (hızlı / doğrulama / normal): ${r.sayac.hizli} / ${r.sayac.dogrulama} / ${r.sayac.normal} (beklenen ${beklenen} / ${beklenen} / ${beklenen})`);
-    if (sapmalar.length) bulgu(`Son gönderimdeki değerler: ${sapmalar.join('; ')}`);
-  } catch (e) {
-    bulgu(`İstisna: ${String(e instanceof Error ? e.message : e).slice(0, 400)}`);
-  } finally {
-    r.doldurma.hizli = sayac(p.kok).doldurma.slice(d0).map((x: Nesne) => x.alan);
-    r.sureler.toplamMs = Date.now() - t0;
-    if (id) {
-      try { const o = await oturum(id); r.sonDurum = o?.durum; r.goruntuler.push(goruntuKaydet(`${p.kok.slice(1)}-son`, o?.goruntu)); r.gunluk ??= (o?.gunluk ?? []).map((g: Nesne) => g.metin); } catch { /* yok */ }
-      await api('/platform/hizli-test/iptal', { id }).catch(() => undefined);
-      await isBitsin();
-    }
-    r.goruntuler = r.goruntuler.filter(Boolean);
-  }
-  return r;
-}
-
 for (const p of PLANLAR) {
   test(`hızlı test: ${p.kok}`, async () => {
     test.skip(SECILI.length > 0 && !SECILI.includes(p.kok), 'seçili değil');
     test.setTimeout(600_000);
-    const r = await ekranKos(p);
+    const r = await ekranKos(po, p, { rapor: RAPOR });
+    delete r.modelHam;
     sonuclar.push(r);
     writeFileSync(join(RAPOR, 'sonuclar.json'), JSON.stringify(sonuclar, null, 2));
     console.log(`[${p.kok}] ${JSON.stringify(r.asamalar)} — ${r.bulgular.length} bulgu`);

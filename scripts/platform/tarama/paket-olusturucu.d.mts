@@ -120,7 +120,8 @@ export type TaramaEnvanteri = {
 
 /** Akış kaydında bir öğe: adımın ilerleme düğmesi ya da başarı göstergesi (seçici + ekrandaki metni; değer değil). */
 /** cerceve: öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe; HamAlan.cerceve ile aynı). */
-export type KayitOgesi = { secici: string; metin: string | null; cerceve?: string[] };
+/** diyalog: bu düğmeye basınca açılan tarayıcı onay / soru penceresine verilecek yanıt (hızlı testte görülen; aksiyonun "diyalog"u). */
+export type KayitOgesi = { secici: string; metin: string | null; cerceve?: string[]; diyalog?: 'kabul' | 'iptal' };
 /**
  * Başarı göstergesi: aranan metni kullanıcı belirler (undefined: öneri — metnin sabit kısmı; null: yalnızca öğe görünür).
  * secici null: öğe seçilmedi, metin sayfanın tamamında aranır (akış tasarımında elle yazılan beklenen mesaj).

@@ -142,7 +142,19 @@ export type TaramaSonucu =
 /** Basma izni: evet (tek aday varsa basar), sor (her basıştan önce onay), hayir (hiç basmaz). */
 export type HizliIzin = 'evet' | 'sor' | 'hayir';
 /** Sayfada görülen metin (değer değil: görünen yazı). tur: hata / uyarı kutusu, bekleme, başarı kutusu ya da sıradan metin. */
-export type HizliMetin = { metin: string; tur: 'hata' | 'bekleme' | 'basari' | 'normal' };
+export type HizliMetin = {
+  metin: string; tur: 'hata' | 'bekleme' | 'basari' | 'normal';
+  /**
+   * Sonuç niteliği (varsayılan "Bitti" yalnız bunlara önerilir): başarı kalıbı / başarı kutusu, role=status / canlı bölge / output,
+   * bildirim (toast), başlık (h1-h3; yönlendirme ya da başlık değişimi), tarayıcı bilgi penceresi (alert). Sekme / anahtar / liste seçeneği
+   * etiketleri sonuç değildir.
+   */
+  sonuc?: boolean;
+  /** Başlık öğesi (h1-h3 / role=heading). */
+  baslik?: boolean;
+};
+/** Tarayıcı penceresi (alert / confirm / prompt) ve verilen yanıt (kabul: Tamam; iptal: İptal). */
+export type HizliDiyalog = { tur: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; mesaj: string; yanit: 'kabul' | 'iptal' };
 /** Görünen düğme adayı (eylem keşfinin gönderim adayları; basılmadan). */
 export type HizliDugme = { secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean };
 /** Sayfanın o anki okuması (alan DEĞERİ okunmaz). goruntu: JPEG base64 (yalnız bellekte). */
@@ -154,6 +166,10 @@ export type HizliFark = {
   basilan: { secici: string; metin: string | null }; sureMs: number; zamanAsimi: boolean; beklemeMetinleri: string[];
   yeniMetinler: HizliMetin[]; yeniAlanlar: HamAlan[]; kaybolanAlanlar: string[]; yeniDugmeler: HizliDugme[];
   adres: { once: string; sonra: string } | null; anlik: HizliAnlik;
+  /** Basış sırasında açılan tarayıcı pencereleri ve verilen yanıtlar (izin kipine göre ya da kullanıcının seçimi). */
+  diyaloglar?: HizliDiyalog[];
+  /** Basış bir yazma isteği (POST / PUT / PATCH / DELETE) gönderdi ya da sayfa başka bir belgeye gitti mi? */
+  gonderim?: boolean;
   /** Güvenli basış notu (guvenli-tiklama.ts): ilk basış etkisiz kalıp bir kez daha basıldı ya da basış hiçbir şeyi değiştirmedi; yoksa null. */
   tiklamaNotu?: string | null;
 };
@@ -175,13 +191,15 @@ export type HizliKesif = {
 export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | boolean };
 /** Doğrulama koşusu planı: adımlar baştan sona (doldur → bas), sonra bitiş koşulu. */
 export type HizliPlan = {
-  adimlar: Array<{ alanlar: HizliDoldurulan[]; bas: { secici: string; metin: string | null } | null }>;
+  adimlar: Array<{ alanlar: HizliDoldurulan[]; bas: { secici: string; metin: string | null; diyalog?: 'kabul' | 'iptal' } | null }>;
   bitis: { bitti: string[]; devam: string[]; hata: string[]; adres: string | null }; zamanAsimiSn: number;
 };
 /** Sunucu → alt süreç. */
 export type HizliKomut =
   | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[] }
   | { no: number; tur: 'bas'; secici: string; metin: string | null }
+  /** Bana sor: basış sırasında açılan onay / soru penceresine kullanıcının yanıtı. */
+  | { no: number; tur: 'diyalogYaniti'; yanit: 'kabul' | 'iptal' }
   | { no: number; tur: 'secimAc' }
   | { no: number; tur: 'oku' }
   | { no: number; tur: 'dogrula'; plan: HizliPlan }
@@ -196,6 +214,8 @@ export type HizliOlay =
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }
   | { olay: 'okundu'; no: number; anlik: HizliAnlik }
+  /** Bana sor: basış sırasında sayfa onay / soru penceresi açtı; kullanıcıya sorulur (komut sürer; yanıt "diyalogYaniti" komutuyla). */
+  | { olay: 'diyalog'; no: number; tur: HizliDiyalog['tur']; mesaj: string }
   | { olay: 'dogrulandi'; no: number; sonuc: 'basarili' | 'basarisiz'; mesaj: string; gorulen: string[] }
   /** Süren komutun ilerlemesi (doldurma / doğrulama koşusu): adim 1'den başlar (doğrulamada planın adımı; 0 = sayfa açılıyor, toplam+1 = bitiş bekleniyor). */
   | { olay: 'ilerleme'; no: number; mesaj: string; adim?: number; toplam?: number }

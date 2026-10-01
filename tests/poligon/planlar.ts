@@ -26,6 +26,8 @@ export type EkranPlani = {
   basilacak: RegExp[];
   /** Başarı (Bitti) metni. */
   bitti: RegExp;
+  /** Sonuç olmayan, "Bitti" ÖNERİLMEMESİ gereken metinler (sekme / anahtar etiketleri, liste seçenekleri). */
+  bittiDegil?: RegExp;
   /** Olumsuz senaryo: beklenen hata metni ("Beklenen uyarı" olarak işaretlenir). */
   olumsuz?: RegExp;
   /** Doldururken / basışta çıkan beklenen hata (ör. alınmış kullanıcı adı): cevap. */
@@ -179,6 +181,7 @@ export const PLANLAR: EkranPlani[] = [
     ],
     basilacak: [/^Bildirimler$/, /SMS bildirimleri/, /^Gizlilik$/, /Değişiklikleri kaydet/],
     bitti: /Ayarlar kaydedildi/,
+    bittiDegil: /E-posta bildirimleri|SMS bildirimleri|Özet e-postası|Profil görünürlüğü|Herkese açık|Yalnız bağlantılarım|^Gizli$/,
     gonderim: { gorunurluk: 'baglantilar', biyografi: 'Deneme biyografi' }
   },
   {
@@ -207,6 +210,7 @@ export const PLANLAR: EkranPlani[] = [
     ],
     basilacak: [/Etiket/, /^Kişisel$/, /Notu kaydet/],
     bitti: /Not kaydedildi/,
+    bittiDegil: /^(İş|Kişisel|Acil)$/,
     gonderim: { etiket: 'Kişisel', saat: '18:00' }
   },
   {

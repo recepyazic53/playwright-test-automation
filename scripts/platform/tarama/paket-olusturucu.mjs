@@ -1236,7 +1236,9 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (p.once) aksiyonlar.push({ tur: 'bekle', sureSn: p.once });
     if (p.tikla) {
       const aciklama = temizMetin(p.tikla.metin, sayac, 120);
-      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}), ...cerceveEki(p.tikla.cerceve) });
+      // diyalog: basışta açılan tarayıcı penceresine verilecek yanıt (hızlı testte görülen; koşucu aynı yanıtı verir).
+      const diyalog = p.tikla.diyalog === 'kabul' || p.tikla.diyalog === 'iptal' ? { diyalog: p.tikla.diyalog } : {};
+      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}), ...cerceveEki(p.tikla.cerceve), ...diyalog });
     }
     if (p.sonra) aksiyonlar.push({ tur: 'bekle', sureSn: p.sonra });
     // Yalnız görünürse basılan düğmeler (ör. bazı ekranlarda çıkan ara pencere): kısa sürede görünmezse atlanır.

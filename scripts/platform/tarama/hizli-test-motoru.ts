@@ -16,7 +16,7 @@
 // reddedilir), sayfaya form gönderimi ve düğme tıklaması korumaları konur, GET/HEAD dışındaki istekler engellenir. Diğer izinlerde
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
-import type { Browser, Locator, Page } from '@playwright/test';
+import type { Browser, Dialog, Locator, Page, Request } from '@playwright/test';
 import { alanaYaz, alanZatenDolu } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, sakinlikBekle } from './guvenli-tiklama';
@@ -30,7 +30,7 @@ import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaram
 import type { EngellenenIstek, HamAlan } from './paket-olusturucu.mjs';
 import {
   HIZLI_BASIS_BEKLEME_EN_COK_MS, HIZLI_SECIM_KIMLIGI, HIZLI_SECIM_KOPRUSU, taramaTarayiciAyarlari,
-  type HizliAnlik, type HizliDoldurulan, type HizliDugme, type HizliFark, type HizliKesif, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
+  type HizliAnlik, type HizliDiyalog, type HizliDoldurulan, type HizliDugme, type HizliFark, type HizliKesif, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
   type HizliTestSonucu, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi
 } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
@@ -107,10 +107,69 @@ export async function hizliTestiYurut(
   await olay({ tur: 'adim', adim: 'hazirlik', durum: 'tamam' });
 
   const notlar: string[] = [];
-  /** Sayfanın tarayıcı uyarıları (alert / confirm): metinleri sonraki farka girer; pencere kapatılır (onay verilmez). */
+  /** Sayfanın tarayıcı pencerelerinin (alert / confirm / prompt) metinleri: sonraki farka / bitiş denetimine girer. */
   const diyaloglar: string[] = [];
+  /** Pencereler ve verilen yanıtlar (bu komut boyunca): basışın farkına ve modele (aksiyonun diyalog yanıtı) gider. */
+  const diyalogKayitlari: HizliDiyalog[] = [];
   let kapandi = false;
   let secimCevabi: ((v: Record<string, unknown>) => void) | null = null;
+  /** Komut kuyruğu: pencere sorusu / seçim beklenirken gelen başka komutlar sırayla işlenir. */
+  const kuyruk: HizliKomut[] = [];
+  /** Yanıt bekleyen açık pencere (yanıtlanınca çözülür). */
+  let acikDiyalog: Promise<void> | null = null;
+  /** Tıklama yarışı: pencere açılınca tıklama "tamam" sayılır (pencere yanıtlanana kadar tıklama dönmez). */
+  let diyalogAcildi: (() => void) | null = null;
+  /** Doğrulama koşusunda o anki basışın kaydedilmiş pencere yanıtı (yoksa izin kuralı). */
+  let planYaniti: 'kabul' | 'iptal' | null = null;
+  /** Bana sor: pencereyi kullanıcıya soracak komutun numarası (yalnız basış sırasında; diğer anlarda izin kuralı). */
+  let soruNo: number | null = null;
+
+  /**
+   * Pencere sorusu (Bana sor): sunucuya bildirilir, kullanıcının yanıtı "diyalogYaniti" komutuyla gelir. Bu arada gelen başka komutlar
+   * kuyruğa alınır; "bitir" gelirse ya da tarayıcı kapanırsa pencere iptal edilir (hiçbir yerde takılı kalınmaz).
+   */
+  async function kullaniciyaSor(no: number, tur: HizliDiyalog['tur'], mesaj: string): Promise<'kabul' | 'iptal'> {
+    await gonder({ olay: 'diyalog', no, tur, mesaj }).catch(() => undefined);
+    for (;;) {
+      if (kapandi) return 'iptal';
+      const k = await komutAl();
+      if (!k) continue;
+      if (k.tur === 'diyalogYaniti') return k.yanit === 'kabul' ? 'kabul' : 'iptal';
+      kuyruk.push(k);
+      if (k.tur === 'bitir') return 'iptal';
+    }
+  }
+
+  /**
+   * TEK pencere işleyicisi (sayfa açılır açılmaz kurulur; ana sekme ve açılan sekmeler): alert her zaman "Tamam"; confirm / prompt
+   * doğrulama koşusunda kaydedilen yanıtla, değilse izne göre — Evet: kabul (prompt varsayılan değeriyle), Bana sor: basış sırasında
+   * kullanıcıya sorulur (başka anlarda iptal), Hayır: iptal. Sayfadan ayrılma uyarısı (beforeunload) kabul edilir.
+   */
+  const diyalogIsle = (d: Dialog): void => {
+    const tur = (['alert', 'confirm', 'prompt', 'beforeunload'].includes(d.type()) ? d.type() : 'alert') as HizliDiyalog['tur'];
+    const mesaj = d.message().replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (mesaj) diyaloglar.push(mesaj);
+    let bitti!: () => void;
+    const p = new Promise<void>((c) => { bitti = c; });
+    acikDiyalog = p;
+    diyalogAcildi?.();
+    void (async () => {
+      let yanit: 'kabul' | 'iptal';
+      if (tur === 'alert' || tur === 'beforeunload') yanit = 'kabul';
+      else if (planYaniti) yanit = planYaniti;
+      else if (izin === 'evet') yanit = 'kabul';
+      else if (izin === 'sor' && soruNo !== null) yanit = await kullaniciyaSor(soruNo, tur, mesaj);
+      else yanit = 'iptal';
+      diyalogKayitlari.push({ tur, mesaj, yanit });
+      await (yanit === 'kabul' ? d.accept(tur === 'prompt' ? d.defaultValue() : undefined) : d.dismiss()).catch(() => undefined);
+      if (acikDiyalog === p) acikDiyalog = null;
+      bitti();
+    })();
+  };
+  /** Açık pencere yanıtlanana kadar bekler (pencere açıkken sayfa okunamaz). */
+  const diyalogBitsin = async (): Promise<void> => { while (acikDiyalog && !kapandi) await acikDiyalog; };
+  /** Pencere yanıtının günlükteki adı. */
+  const yanitAdi = (x: HizliDiyalog): string => (x.tur === 'alert' ? 'Tamam' : x.yanit === 'kabul' ? 'Tamam (onaylandı)' : 'İptal');
 
   try {
     // "Başka düğmeye bas" köprüsü (şerit yalnız secimAc komutunda kurulur).
@@ -124,11 +183,17 @@ export async function hizliTestiYurut(
       await baglam.addInitScript(formGonderimKorumasi);
       await baglam.addInitScript(dugmeTiklamaKorumasi);
     }
-    const islem = await baglam.newPage();
+    // Pencere işleyicisi sayfa OLUŞTURULUR OLUŞTURULMAZ kurulur (ana sekme dahil): açılışta / ilk basışta çıkan confirm de yakalanır.
+    const dinlenen = new WeakSet<Page>();
+    const sayfayiDinle = (p: Page): void => { if (dinlenen.has(p)) return; dinlenen.add(p); p.on('dialog', diyalogIsle); };
+    let ilkSayfa: Page | null = null;
     baglam.on('page', (p: Page) => {
-      p.on('dialog', (d) => { diyaloglar.push(d.message().replace(/\s+/g, ' ').trim().slice(0, 200)); void d.dismiss().catch(() => undefined); });
-      if (p !== islem) notlar.push('Sayfa yeni bir sekme / pencere açtı; hızlı test ilk sekmede sürer.');
+      sayfayiDinle(p);
+      if (ilkSayfa && p !== ilkSayfa) notlar.push('Sayfa yeni bir sekme / pencere açtı; hızlı test ilk sekmede sürer.');
     });
+    const islem = await baglam.newPage();
+    ilkSayfa = islem;
+    sayfayiDinle(islem);
     islem.on('close', () => { kapandi = true; });
     browser.on('disconnected', () => { kapandi = true; });
     if (g.tarif) {
@@ -326,18 +391,38 @@ export async function hizliTestiYurut(
       await hedef.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
       await sakinlikBekle(page, hedef, { ag });
       durum.asama = 'kayit';
-      const t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false });
+      // Tıklama ile pencere yarışır: tıklama bir pencere açarsa (confirm / alert) pencere yanıtlanana kadar dönmez; pencere açılınca
+      // tıklama yapılmış sayılır, pencerenin yanıtı (izin / kullanıcı) beklenir, sonra izleme sürer.
+      const tikla = async (oge: Locator, ms: number): Promise<void> => {
+        const acildi = new Promise<'diyalog'>((c) => { diyalogAcildi = () => c('diyalog'); });
+        const t = oge.click({ timeout: ms });
+        try {
+          const r = await Promise.race([t.then(() => 'tamam' as const), acildi]);
+          if (r === 'diyalog') t.catch(() => undefined);
+        } finally { diyalogAcildi = null; }
+      };
+      const t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false, tikla });
+      await diyalogBitsin();
       return { not: t.etkisiz ? etkisizTiklamaMetni(metin ?? secici, t.tekrarlandi) : t.tekrarlandi ? TEKRAR_NOTU : null, etkisiz: t.etkisiz };
     }
 
     /** Düğmeye basar, sonucu bekler ve farkı çıkarır. */
-    async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik): Promise<HizliFark> {
+    async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik, no: number): Promise<HizliFark> {
       const onceAdres = yolu(page.url());
       const bas = Date.now();
       diyaloglar.length = 0;
+      diyalogKayitlari.length = 0;
+      soruNo = no;
       let sonuc: { metinler: string[]; zamanAsimi: boolean };
       const onceMetinler = new Set(once.metinler.map((m) => m.metin));
       let tiklamaNotu: string | null = null;
+      // Gönderim izi: basış sırasında yazma isteği (POST / PUT / PATCH / DELETE) ya da belge gezinmesi (bitiş önerisinin denetimi).
+      let gonderim = false;
+      const istekIzi = (r: Request): void => {
+        if (r.isNavigationRequest() && r.frame() === page.mainFrame()) gonderim = true;
+        else if (!['GET', 'HEAD', 'OPTIONS'].includes(r.method()) && ['xhr', 'fetch', 'document', 'other'].includes(r.resourceType())) gonderim = true;
+      };
+      baglam.on('request', istekIzi);
       try {
         tiklamaNotu = (await guvenliBas(page, secici, metin)).not;
         sonuc = await basisiIzle(page, bas);
@@ -364,11 +449,23 @@ export async function hizliTestiYurut(
         }
       } finally {
         durum.asama = okumaAsamasi;
+        baglam.off('request', istekIzi);
+        soruNo = null;
       }
+      await diyalogBitsin();
       const sonra = await anlikOku(page, true);
+      const adresDegisti = onceAdres !== sonra.yol;
+      // Sonuç niteliği: yönlendirmeden sonra (adres değişti) ya da yeni beliren başlık sayfanın sonucudur (başlık değişimi).
+      const yeniler = sonra.metinler.filter((m) => !onceMetinler.has(m.metin)).map((m) => (m.baslik ? { ...m, sonuc: true } : m));
+      const pencereler = diyalogKayitlari.splice(0);
+      const pencereMetinleri = new Set(pencereler.map((x) => x.mesaj));
       const yeniMetinler: HizliMetin[] = [
-        ...sonra.metinler.filter((m) => !onceMetinler.has(m.metin)),
-        ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
+        ...yeniler,
+        // Tarayıcı penceresinin metni: bilgi penceresi (alert) basışın sonucudur; onay / soru penceresi (confirm / prompt) bir sorudur.
+        ...diyaloglar.splice(0).map((m): HizliMetin => ({
+          metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal',
+          sonuc: pencereler.some((x) => x.mesaj === m && x.tur === 'alert') || !pencereMetinleri.has(m)
+        }))
       ];
       const onceAlanlar = new Set(once.alanlar.map((a) => a.anahtar));
       const sonraAlanlar = new Set(sonra.alanlar.map((a) => a.anahtar));
@@ -378,7 +475,8 @@ export async function hizliTestiYurut(
         yeniMetinler, yeniAlanlar: sonra.alanlar.filter((a) => !onceAlanlar.has(a.anahtar)),
         kaybolanAlanlar: once.alanlar.filter((a) => !sonraAlanlar.has(a.anahtar)).map((a) => a.anahtar),
         yeniDugmeler: sonra.dugmeler.filter((d) => !onceDugmeler.has(d.secici)),
-        adres: onceAdres !== sonra.yol ? { once: onceAdres, sonra: sonra.yol } : null, anlik: sonra, tiklamaNotu
+        adres: adresDegisti ? { once: onceAdres, sonra: sonra.yol } : null, anlik: sonra, tiklamaNotu,
+        diyaloglar: pencereler, gonderim: gonderim || adresDegisti
       };
     }
 
@@ -506,6 +604,8 @@ export async function hizliTestiYurut(
         await page.waitForTimeout(200);
         if (!adim.bas) continue;
         await ilerle(i + 1, `${onEk}: “${adim.bas.metin ?? adim.bas.secici}” düğmesine basıldı; sayfa izleniyor…`);
+        // Bu basışta açılan pencereye hızlı testte verilen yanıt (normal koşu da aynı yanıtı verir: aksiyonun "diyalog"u).
+        planYaniti = adim.bas.diyalog ?? null;
         try {
           const t = await guvenliBas(page, adim.bas.secici, adim.bas.metin);
           sonEtkisiz = t.etkisiz && t.not ? `${i + 1}. adımda ${t.not}` : null;
@@ -638,12 +738,12 @@ export async function hizliTestiYurut(
     await islem.bringToFront().catch(() => undefined);
 
     // ---- Komut döngüsü ----
-    let siradaki: HizliKomut | null = null;
     for (;;) {
       if (kapandi) throw new TaramaHatasi('IPTAL', 'Hızlı test tarayıcısı kapatıldı.');
-      const k = siradaki ?? await komutAl();
-      siradaki = null;
+      const k = kuyruk.shift() ?? await komutAl();
       if (!k) continue;
+      // Sorusu kapanmış pencerenin geç kalan yanıtı: yok sayılır.
+      if (k.tur === 'diyalogYaniti') continue;
       try {
         if (k.tur === 'bitir') break;
         if (k.tur === 'oku') {
@@ -651,6 +751,7 @@ export async function hizliTestiYurut(
           await gonder({ olay: 'okundu', no: k.no, anlik: sonAnlik });
         } else if (k.tur === 'doldur') {
           diyaloglar.length = 0;
+          diyalogKayitlari.length = 0;
           beklemeler = {};
           const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
           for (const [j, d] of k.alanlar.entries()) {
@@ -662,6 +763,8 @@ export async function hizliTestiYurut(
           await sakinles(islem, 5_000);
           hatalar.push(...await bosKalanlariYenile(islem, k.alanlar, hatalar.map((x) => x.anahtar)));
           await sakinles(islem, 5_000);
+          await diyalogBitsin();
+          for (const x of diyalogKayitlari.splice(0)) notlar.push(`Doldururken sayfa ${x.tur === 'alert' ? 'bilgi' : 'onay'} penceresi açtı (“${x.mesaj}”): ${yanitAdi(x)}.`);
           const once = new Set(sonAnlik.metinler.map((m) => m.metin));
           sonAnlik = await anlikOku(islem, false);
           // Doldururken sayfanın gösterdiği yeni mesajlar (ör. alandan çıkınca gelen doğrulama uyarısı): kullanıcıya sorulur.
@@ -672,20 +775,24 @@ export async function hizliTestiYurut(
           await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
-          const fark = await bas(islem, k.secici, k.metin, sonAnlik);
+          const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no);
           sonAnlik = fark.anlik;
           // Basıştan sonra beliren (henüz boş) seçim alanları da denenir: içlerinde koşullu alan var mı? (Sayfa yeniden açılmaz.)
           const yeniSecimler = fark.yeniAlanlar.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);
           const kesifler = yeniSecimler.length ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
           await gonder({ olay: 'basildi', no: k.no, fark, kesifler });
         } else if (k.tur === 'secimAc') {
-          siradaki = await sec(islem, k.no);
+          const s = await sec(islem, k.no);
+          if (s) kuyruk.unshift(s);
         } else if (k.tur === 'dogrula') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: doğrulama koşusu yapılmaz.' }); continue; }
+          diyaloglar.length = 0;
+          diyalogKayitlari.length = 0;
           const r = await dogrula(islem, k.plan, async (adim, mesaj) => {
             bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `Doğrulama koşusu — ${mesaj}` });
             await gonder({ olay: 'ilerleme', no: k.no, adim, toplam: k.plan.adimlar.length, mesaj }).catch(() => undefined);
-          });
+          }).finally(() => { planYaniti = null; });
+          await diyalogBitsin();
           bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `Doğrulama koşusu ${r.sonuc === 'basarili' ? 'başarılı' : 'başarısız'}; tarayıcı hazır.` });
           sonAnlik = await anlikOku(islem, true);
           await gonder({ olay: 'dogrulandi', no: k.no, ...r });

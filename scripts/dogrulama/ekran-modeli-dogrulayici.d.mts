@@ -8,6 +8,8 @@ export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle', 'ekranaDon', '
 export declare const AKSIYON_KOSULLARI: readonly ['gorunurse'];
 /** "gorunurse" tıklamasında varsayılan kısa bekleme (sn). */
 export declare const GORUNURSE_BEKLEME_SN: number;
+/** Tıklamada açılan tarayıcı penceresine verilecek yanıtlar (aksiyonun diyalog'u). */
+export declare const DIYALOG_YANITLARI: readonly ['kabul', 'iptal'];
 /** Bitiş koşulunda (kosu.bitisKosulu.devam) en çok "Devam" metni. */
 export declare const DEVAM_METNI_EN_COK: number;
 export declare const SQL_BEKLENEN_TURLERI: readonly string[];

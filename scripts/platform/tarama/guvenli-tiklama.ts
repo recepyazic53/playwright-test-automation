@@ -112,9 +112,19 @@ function etkiIzle(page: Page): { etki: () => string | null; birak: () => void } 
   let etki: string | null = null;
   const istek = (r: Request): void => { const t = r.resourceType(); if (t === 'xhr' || t === 'fetch' || t === 'document') etki ??= 'istek'; };
   const sekme = (): void => { etki ??= 'sekme'; };
-  // Gözlemci: uyarıyı kapatmaz (sayfanın kendi dinleyicisi — koşucu / motor / dışa aktarma — kapatır).
-  const uyari = (_d: Dialog): void => { etki ??= 'uyari'; };
   const baglam: BrowserContext = page.context();
+  // Gözlemci: uyarıyı sayfanın kendi dinleyicisi (koşucu / motor / dışa aktarma) yanıtlar. Playwright, sayfada ya da bağlamda HERHANGİ
+  // bir 'dialog' dinleyicisi varsa pencereyi kendiliğinden kapatmaz; bu gözlemci tek dinleyiciyse pencere açık kalıp tıklama hiç
+  // dönmezdi. Bu yüzden başka dinleyici yoksa Playwright'ın varsayılanı (kapat) burada uygulanır: sayfa hiçbir durumda takılı kalmaz.
+  // Sayılamıyorsa (beklenmedik sürüm) başka dinleyici var sayılır: önceki davranış korunur.
+  const dinleyiciSayisi = (o: unknown): number => {
+    const f = (o as { listenerCount?: (ad: string) => number }).listenerCount;
+    return typeof f === 'function' ? f.call(o, 'dialog') : 99;
+  };
+  const uyari = (d: Dialog): void => {
+    etki ??= 'uyari';
+    if (dinleyiciSayisi(page) <= 1 && dinleyiciSayisi(baglam) === 0) void d.dismiss().catch(() => undefined);
+  };
   page.on('request', istek);
   page.on('dialog', uyari);
   baglam.on('page', sekme);
