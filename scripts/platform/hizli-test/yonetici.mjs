@@ -44,6 +44,7 @@ import { TaramaHatasi, taramaYoneticisiAl } from '../tarama/yonetici.mjs';
 import { HedefHatasi, ekKokenleri, hedefCoz } from '../tarama/koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturucu.mjs';
 import { katla } from '../tarama/eylem-kesfi.mjs';
+import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
 import { senaryoKaydet } from '../senaryolar/senaryo-servisi.mjs';
@@ -466,7 +467,9 @@ export function hizliTestYoneticisiOlustur(s) {
         // Etiket yalnız sayfada GÖRÜNEN addır; teknik ad (name / id) etiket olmaz (yalnız ipucu olarak teknikAd).
         anahtar: a.anahtar, etiket: a.etiket ?? adsizEtiket(a), etiketBulundu: Boolean(a.etiket), teknikAd: a.ad ?? a.kimlik ?? null, tur: a.tur, zorunlu: a.zorunlu === true,
         hazir: a.hazir === true, mevcut: gizliAlan(a) ? null : a.mevcut ?? null,
-        secenekler: a.tur === 'radio' ? (a.radyolar ?? []).map((/** @type {Nesne} */ r) => ({ deger: r.deger, metin: r.metin ?? r.deger })) : a.secenekler ?? null,
+        // Açılır listede yer tutucu ("SEÇİNİZ", ilk seçenek ""/"0"/"-1") seçilebilir bir değer değildir: veri durağında listelenmez.
+        secenekler: a.tur === 'radio' ? (a.radyolar ?? []).map((/** @type {Nesne} */ r) => ({ deger: r.deger, metin: r.metin ?? r.deger }))
+          : Array.isArray(a.secenekler) ? a.secenekler.filter((/** @type {Nesne} */ x, /** @type {number} */ i) => !yerTutucuSecenekMi(x.metin, x.deger, i === 0)) : null,
         yeni: o.alanlar.get(a.anahtar)?.yeni === true, hata: o.alanHatalari?.[a.anahtar] ?? null,
         // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa koşul (görünen metinle) ve seçim alanlarının ilk değeri.
         kosul: a.kosul ? { secim: a.kosul.secim, degerler: a.kosul.degerler, metin: kosulMetni(o, a.kosul), ilk: o.kesifIlk?.[a.kosul.secim] ?? null } : null, ilk: o.kesifIlk?.[a.anahtar] ?? null,

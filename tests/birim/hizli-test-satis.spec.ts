@@ -190,6 +190,10 @@ test('hızlı test: çok adımlı satış formu baştan sona (1.12, 1.11, 1.14, 
   const bul = (etiket: string): Nesne => alanlar0.find((a) => a.etiket === etiket) as Nesne;
   // 1.12: "SEÇİNİZ"de kalan liste sorulur (hazır sayılmaz); gerçekten seçili "Standart" hazırdır.
   expect(bul('GİDİLECEK ÜLKE')).toMatchObject({ tur: 'select', hazir: false, mevcut: null });
+  // Yer tutucu ("SEÇİNİZ") veri durağının açılır listesinde seçenek olarak listelenmez; ilk seçenek gerçek bir ülke.
+  const ulkeSecenekleri = bul('GİDİLECEK ÜLKE').secenekler as Nesne[];
+  expect(ulkeSecenekleri.some((x) => /seçiniz/i.test(String(x.metin)))).toBe(false);
+  expect(ulkeSecenekleri.length).toBeGreaterThan(200);
   expect(bul('ALTERNATİF')).toMatchObject({ hazir: true, mevcut: 'Standart' });
   // 1.8 (arayüz): "D.TARİHİ" için "Doldur" benzer adlı sütunu ADAY gösterir, kendiliğinden doldurmaz.
   await arayuz(async (page) => {
