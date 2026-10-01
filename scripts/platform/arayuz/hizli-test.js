@@ -360,6 +360,7 @@ function farkCiz(a) {
   return h('div', { class: 'hizli-fark' },
     h('p', {}, h('b', {}, `“${a.bas ? a.bas.metin || a.bas.secici : '?'}”`), ` düğmesine basıldı; ${sn} sn sonra sayfa:`,
       f.zamanAsimi ? h('span', { class: 'soluk' }, ' (bekleme 60 sn’de kesildi)') : null),
+    f.tiklamaNotu ? h('p', { class: 'kucuk' }, `Not: ${f.tiklamaNotu}.`) : null,
     f.beklemeMetinleri.length ? h('p', { class: 'kucuk soluk' }, `Beklerken: ${f.beklemeMetinleri.join(' · ')}`) : null,
     f.yeniMetinler.length ? h('ul', { class: 'hizli-metinler', 'aria-label': 'Yeni metinler' }, f.yeniMetinler.slice(0, 12).map((m) => h('li', {},
       h('span', { class: `hizli-cip${m.tur === 'hata' ? ' e-hata' : m.tur === 'basari' ? ' e-bitti' : ''}` }, m.metin)))) : h('p', { class: 'soluk kucuk' }, 'Yeni metin görülmedi.'),

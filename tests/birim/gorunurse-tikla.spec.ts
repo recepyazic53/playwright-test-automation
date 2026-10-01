@@ -167,9 +167,10 @@ test('dışa aktarma: görünürse tıklama kısa bekleme + isVisible ile koşul
   });
   expect(r.icerik).toContain('const oge = page.locator("#yontemA").filter({ visible: true }).first();');
   expect(r.icerik).toContain("await oge.waitFor({ state: 'visible', timeout: 5000 }).catch(() => undefined);");
-  expect(r.icerik).toMatch(/if \(await oge\.isVisible\(\)\) await oge\.click\(\{ timeout: \d+ \}\);/);
-  // Düz tıklama değişmez.
-  expect(r.icerik).toContain('page.locator("#onayla").filter({ visible: true }).first().click(');
+  // Görünürse güvenli tıklamayla basılır (başarı göstergesi denetimi: "veya" öğeleri).
+  expect(r.icerik).toMatch(/if \(await oge\.isVisible\(\)\) await guvenliTikla\(page, oge, \d+, async \(\) => \(await page\.locator\("#adSoyad"\)/);
+  // Düz tıklama da güvenli tıklamayla.
+  expect(r.icerik).toContain('await guvenliTikla(page, page.locator("#onayla").filter({ visible: true }).first(), ');
 });
 
 // ---- Koşucu: 127.0.0.1'deki iki sahte sayfa ------------------------------------------------------------------------------------

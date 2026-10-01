@@ -26,6 +26,7 @@ import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
 import { alanaYaz } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
+import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
@@ -615,10 +616,24 @@ async function cerceveTiklamaSonrasi(page: Page, k: Kapsam, isaret: string, once
   await k.locator('html').first().evaluate((e) => e.removeAttribute('data-nobetci-tik'), undefined, { timeout: 500 }).catch(() => undefined);
 }
 
-/** Adım başında: önceki adımın tarayıcı uyarıları ve sayfa içi pencere mesajları temizlenir. */
+/**
+ * Adımın aksiyon tıklamalarının etkisi (guvenli-tiklama.ts): notlar (ilk tıklama etkisiz kaldı, bir kez daha tıklandı) adımdan sonra
+ * adım ayrıntısına yazılır; etkisiz (son tıklamadan sonra da hiçbir şey değişmedi) tıklama, başarı göstergesi görünmezse hata iletisine.
+ */
+type TiklamaIzi = { notlar: string[]; etkisiz: { ad: string; tekrar: boolean } | null };
+const tiklamaIzleri = new WeakMap<Page, TiklamaIzi>();
+function tiklamaIzi(page: Page): TiklamaIzi {
+  let iz = tiklamaIzleri.get(page);
+  if (!iz) { iz = { notlar: [], etkisiz: null }; tiklamaIzleri.set(page, iz); }
+  return iz;
+}
+
+/** Adım başında: önceki adımın tarayıcı uyarıları, sayfa içi pencere mesajları ve etkisiz tıklama izi temizlenir. */
 function adimMesajlariniTemizle(page: Page): void {
   tarayiciUyarilari.get(page)?.splice(0);
   pencereMesajlari.get(page)?.splice(0);
+  const iz = tiklamaIzleri.get(page);
+  if (iz) iz.etkisiz = null;
 }
 
 /**
@@ -777,15 +792,27 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
       await oge.click({ timeout: zamanMs });
       await cerceveTiklamaSonrasi(page, k, isaret, once, kosu, a.cerceve);
     };
+    // Güvenli tıklama (guvenli-tiklama.ts): sayfa sakinleşince basılır; tıklama etkisiz kalırsa (istek yok, görünüm aynı, başarı
+    // göstergesi yok) bir kez daha basılır — istek başlatan / sayfayı değiştiren tıklama asla tekrarlanmaz.
+    const ad = a.aciklama || a.metin || a.secici;
+    const guvenliBas = async (oge: Locator, zamanMs: number): Promise<void> => {
+      const r = await guvenliTikla(page, oge, {
+        zamanMs, ag: agIzleri.get(page) ?? null, tikla: cerceveliTikla,
+        ...(kosu?.basariGostergesi ? { basariVarMi: () => basariVarMi(page, kosu) } : {})
+      });
+      const iz = tiklamaIzi(page);
+      if (r.tekrarlandi) iz.notlar.push(`“${ad}”: ${TEKRAR_NOTU}`);
+      iz.etkisiz = r.etkisiz ? { ad, tekrar: r.tekrarlandi } : null;
+    };
     if (a.tur === 'tikla' && a.kosul === 'gorunurse') {
       const oge = l.filter({ visible: true }).first();
       const gorundu = await oge.waitFor({ state: 'visible', timeout: (a.zamanAsimiSn ?? GORUNURSE_BEKLEME_SN) * 1000 }).then(() => true, () => false);
-      if (gorundu) await cerceveliTikla(oge, sureSn * 1000);
-      else atlanan.push({ alan: `“${a.aciklama || a.metin || a.secici}” düğmesi`, neden: 'atlandı (görünmedi)' });
+      if (gorundu) await guvenliBas(oge, sureSn * 1000);
+      else atlanan.push({ alan: `“${ad}” düğmesi`, neden: 'atlandı (görünmedi)' });
       continue;
     }
     const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
-    if (a.tur === 'tikla') await cerceveliTikla(l.filter({ visible: true }).first(), zaman);
+    if (a.tur === 'tikla') await guvenliBas(l.filter({ visible: true }).first(), zaman);
     else if (a.durum === 'dolu') await doluBekle(page, a.secici, zaman, 'Aksiyon', undefined, null, k);
     else await l.first().waitFor({ state: a.durum === 'gizli' ? 'hidden' : 'visible', timeout: zaman });
   }
@@ -841,7 +868,10 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
         throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu),
           `Bitiş mesajı görülmedi (${Math.round(sureMs / 1000)} sn${uzatildi ? ' + uzatma' : ''}; sayfa: ${new URL(page.url()).pathname}${sonDevam ? `; son görülen: “${sonDevam}”` : ''})`));
       }
-      throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), `${Math.round(sureMs / 1000)} sn içinde başarı göstergesi görünmedi (sayfa: ${new URL(page.url()).pathname})`));
+      // Son aksiyon tıklaması hiçbir şey değiştirmediyse (öğe hazır olmadan tıklanmış olabilir) ileti bunu söyler.
+      const etkisiz = tiklamaIzleri.get(page)?.etkisiz;
+      const neden = etkisiz ? `${etkisizTiklamaMetni(etkisiz.ad, etkisiz.tekrar)}; ` : '';
+      throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), `${neden}${Math.round(sureMs / 1000)} sn içinde başarı göstergesi görünmedi (sayfa: ${new URL(page.url()).pathname})`));
     }
     await page.waitForTimeout(250);
   }
@@ -1365,11 +1395,16 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           await test.step(`${adim.baslik} (canlı ortam: atlandı)`, async () => undefined);
           continue;
         }
-        await test.step(adim.baslik, async () => {
-          simdikiAdim = adim.baslik;
-          adimAdiniBildir(page, adim.baslik);
-          await kurtarmayla(adim);
-        });
+        try {
+          await test.step(adim.baslik, async () => {
+            simdikiAdim = adim.baslik;
+            adimAdiniBildir(page, adim.baslik);
+            await kurtarmayla(adim);
+          });
+        } finally {
+          // Tıklama notları ("ilk tıklama etkisizdi, bir kez daha tıklandı") adım ayrıntısına ayrı satır olarak (adım başarısız olsa da).
+          for (const n of tiklamaIzi(page).notlar.splice(0)) await test.step(`${adim.baslik} — ${n}`, async () => undefined);
+        }
         tamamlanan.push(adim);
         simdikiAdim = null;
         if (adim.sonAdim) return true;

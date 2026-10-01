@@ -150,6 +150,8 @@ export type HizliFark = {
   basilan: { secici: string; metin: string | null }; sureMs: number; zamanAsimi: boolean; beklemeMetinleri: string[];
   yeniMetinler: HizliMetin[]; yeniAlanlar: HamAlan[]; kaybolanAlanlar: string[]; yeniDugmeler: HizliDugme[];
   adres: { once: string; sonra: string } | null; anlik: HizliAnlik;
+  /** Güvenli basış notu (guvenli-tiklama.ts): ilk basış etkisiz kalıp bir kez daha basıldı ya da basış hiçbir şeyi değiştirmedi; yoksa null. */
+  tiklamaNotu?: string | null;
 };
 /** Doldurulacak alan (değer yalnız bellekte; tablodan gelen başvuru sunucuda çözülmüş olarak gelir). */
 /**

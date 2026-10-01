@@ -328,6 +328,111 @@ async function zorlaIsaretle(l: Locator, isaretli: boolean): Promise<void> {
   expect(await l.isChecked({ timeout: 5_000 })).toBe(isaretli);
 }`
   },
+  guvenliTikla: {
+    gerekir: ['sayfa'],
+    // Nöbetçi koşucusuyla (tarama/guvenli-tiklama.ts) aynı kural; üretilen dosya kendi başına çalışsın diye kopyası yazılır.
+    kod: `/** Görünüm parmak izinin değişmeden kalması gereken süre; basmadan önceki sakinlik beklemesinin üst sınırı; tıklamanın etkisine bakma süresi. */
+const GORUNUM_SAKINLIK_MS = 700;
+const SAKINLIK_EN_COK_MS = 5_000;
+const ETKI_BEKLEME_MS = 3_000;
+
+/** Belgenin görünüm parmak izi: görünür metin uzunluğu, görünür alan / düğme / bağlantı sayısı, açık pencereler (metin + saydamlık), yol (# hariç). */
+function belgeParmakIzi(): string {
+  const gorunur = (e: Element): boolean => {
+    const r = e.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const s = getComputedStyle(e);
+    return s.display !== 'none' && s.visibility !== 'hidden';
+  };
+  const saydamlik = (e: Element | null): number => {
+    let o = 1;
+    for (let x = e; x; x = x.parentElement) { const v = parseFloat(getComputedStyle(x).opacity); o *= Number.isNaN(v) ? 1 : v; }
+    return o;
+  };
+  const govde = document.body;
+  if (!govde) return 'bos|' + location.pathname + location.search;
+  const ogeler = [...document.querySelectorAll('input,select,textarea,button,a[href],[role="button"],[role="link"]')].filter(gorunur).length;
+  const pencereler = [...document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],.modal')]
+    .filter(gorunur).map((p) => (p as HTMLElement).innerText.length + ':' + saydamlik(p).toFixed(2));
+  return [govde.innerText.length, ogeler, pencereler.join(','), location.pathname + location.search].join('|');
+}
+
+/** Öğenin (ve atalarının) sonlu animasyonu sürüyorsa 'anim', yoksa etkin saydamlığı. */
+function ogeHareketi(e: Element): string {
+  let o = 1;
+  for (let x: Element | null = e; x; x = x.parentElement) {
+    for (const a of x.getAnimations()) {
+      const son = a.effect?.getComputedTiming().endTime;
+      if (a.playState === 'running' && typeof son === 'number' && Number.isFinite(son)) return 'anim';
+    }
+    const v = parseFloat(getComputedStyle(x).opacity);
+    o *= Number.isNaN(v) ? 1 : v;
+  }
+  return o.toFixed(3);
+}
+
+/** Sayfanın (ana belge + çerçeveler) parmak izi; okunamazsa (gezinme sürüyor) null. */
+async function sayfaParmakIzi(page: Page): Promise<string | null> {
+  try {
+    const cerceveler = page.frames().slice(0, 10);
+    const izler = await Promise.all(cerceveler.map((f) => (f === page.mainFrame() ? f.evaluate(belgeParmakIzi) : f.evaluate(belgeParmakIzi).catch(() => '-'))));
+    return cerceveler.length + '#' + izler.join('#');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Güvenli tıklama: basmadan önce sayfa sakinleşir (istekler + görünüm + öğenin animasyonu; en çok 5 sn). Tıklama etkisiz kalırsa (3 sn
+ * içinde yeni istek yok, görünüm aynı, başarı göstergesi yok) aynı öğeye BİR kez daha basılır. İstek başlatan ya da sayfayı değiştiren
+ * tıklama ASLA tekrarlanmaz (çift gönderim / ödeme riski).
+ */
+async function guvenliTikla(page: Page, oge: Locator, zamanMs: number, basariVarMi?: () => Promise<boolean>): Promise<void> {
+  await oge.waitFor({ state: 'visible', timeout: zamanMs }).catch(() => undefined);
+  const bitis = Date.now() + SAKINLIK_EN_COK_MS;
+  let oncekiIz: string | null = null;
+  let oncekiHareket: string | null = null;
+  let sabit = Date.now();
+  while (Date.now() < bitis) {
+    const iz = await sayfaParmakIzi(page);
+    const hareket = await oge.evaluate(ogeHareketi, undefined, { timeout: 1_000 }).catch(() => 'yok');
+    const durgun = iz !== null && iz === oncekiIz && hareket !== 'anim' && hareket === oncekiHareket;
+    if (!durgun) { oncekiIz = iz; oncekiHareket = hareket; sabit = Date.now(); }
+    const agSakin = surenIstekler.size === 0 && Date.now() - sonIstek >= 300;
+    if (durgun && agSakin && Date.now() - sabit >= GORUNUM_SAKINLIK_MS) break;
+    await page.waitForTimeout(100);
+  }
+  const basariOnce = basariVarMi ? await basariVarMi().catch(() => false) : false;
+  const once = await sayfaParmakIzi(page);
+  let etki = false;
+  const istek = (r: Request): void => { if (['xhr', 'fetch', 'document'].includes(r.resourceType())) etki = true; };
+  const olay = (): void => { etki = true; };
+  page.on('request', istek);
+  page.on('dialog', olay);
+  page.context().on('page', olay);
+  const etkiBekle = async (): Promise<boolean> => {
+    const son = Date.now() + ETKI_BEKLEME_MS;
+    for (;;) {
+      if (etki) return true;
+      const iz = await sayfaParmakIzi(page);
+      if (iz === null || iz !== once) return true;
+      if (basariVarMi && (await basariVarMi().catch(() => false))) return true;
+      if (Date.now() >= son) return false;
+      await page.waitForTimeout(150);
+    }
+  };
+  try {
+    await oge.click({ timeout: zamanMs });
+    if (basariOnce || once === null || (await etkiBekle())) return;
+    console.log('Tıklama notu: ilk tıklama etkisizdi, bir kez daha tıklandı.');
+    await oge.click({ timeout: Math.min(zamanMs, 5_000) }).catch(() => undefined);
+  } finally {
+    page.off('request', istek);
+    page.off('dialog', olay);
+    page.context().off('page', olay);
+  }
+}`
+  },
   doluBekle: {
     gerekir: ['degerOku'],
     kod: `/** Öğe dolana (metni / değeri boş değil) kadar bekler; icermez: dolu sayılmayan geçici metin (ör. "Aranıyor"). */
@@ -386,7 +491,7 @@ function totpKodu(anahtar: string, zaman = Date.now()): string {
 }`
   }
 };
-const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge', 'okluSec', 'secimYap', 'yenidenSec', 'degerJs', 'zorla', 'doluBekle', 'maske', 'regexKacis', 'goreliTarih', 'totp'];
+const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge', 'okluSec', 'secimYap', 'yenidenSec', 'degerJs', 'zorla', 'guvenliTikla', 'doluBekle', 'maske', 'regexKacis', 'goreliTarih', 'totp'];
 
 // ---------------------------------------------------------------------------------------
 // Üretici
@@ -755,6 +860,14 @@ export function playwrightKoduUret(g) {
   const aksiyonSatirlari = (kosu, sureSn) => {
     /** @type {string[]} */
     const satirlar = [];
+    // Güvenli tıklamanın başarı göstergesi denetimi (öğe / adres göstergeleri; metin göstergesi görünümü zaten değiştirir).
+    const bg = kosu?.basariGostergesi;
+    const basariSecenekleri = (!bg ? [] : bg.tur === 'veya' ? bg.secenekler : [bg]).filter((/** @type {any} */ x) => x.tur === 'eleman' || x.tur === 'url');
+    const basariIfadesi = basariSecenekleri.length
+      ? `, async () => ${basariSecenekleri.map((/** @type {any} */ x) => (x.tur === 'url'
+        ? `new RegExp(${s(x.deger)}).test(page.url())`
+        : `(await ${kapsamIfadesi(x.cerceve)}.locator(${s(x.deger)}).filter({ visible: true }).count()) > 0`)).join(' || ')}`
+      : '';
     for (const a of kosu?.aksiyonlar ?? []) {
       if (a.aciklama) satirlar.push(`${ic}// ${yorum(a.aciklama)}`);
       if (a.tur === 'bekle' && a.sureSn && !a.secici) { satirlar.push(`${ic}await page.waitForTimeout(${Number(a.sureSn) * 1000});`); continue; }
@@ -769,15 +882,17 @@ export function playwrightKoduUret(g) {
       const l = `${kapsamIfadesi(a.cerceve)}.locator(${s(a.secici)})${a.metin ? `.filter({ hasText: ${s(a.metin)} })` : ''}`;
       if (a.cerceve?.length && a.durum === 'dolu') satirlar.push(`${ic}// TODO: öğe bir çerçevede (${yorum(a.cerceve.join(' › '))}); doluBekle ana sayfada arar.`);
       // Görünürse bas (ör. her ekranda çıkmayan ara pencere düğmesi): kısa bekleme, görünmezse atlanır.
+      // Tıklamalar güvenli tıklamayla (sakinlik + etkisiz tıklamanın bir kez tekrarı; Nöbetçi koşucusuyla aynı kural).
+      if (a.tur === 'tikla') yardimcilar.add('guvenliTikla');
       if (a.tur === 'tikla' && a.kosul === 'gorunurse') {
         const kisa = (a.zamanAsimiSn ?? GORUNURSE_BEKLEME_SN) * 1000;
         satirlar.push(`${ic}{`, `${ic}  const oge = ${l}.filter({ visible: true }).first();`,
           `${ic}  await oge.waitFor({ state: 'visible', timeout: ${kisa} }).catch(() => undefined);`,
-          `${ic}  if (await oge.isVisible()) await oge.click({ timeout: ${sureSn * 1000} });`, `${ic}}`);
+          `${ic}  if (await oge.isVisible()) await guvenliTikla(page, oge, ${sureSn * 1000}${basariIfadesi});`, `${ic}}`);
         continue;
       }
       const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
-      if (a.tur === 'tikla') satirlar.push(`${ic}await ${l}.filter({ visible: true }).first().click({ timeout: ${zaman} });`);
+      if (a.tur === 'tikla') satirlar.push(`${ic}await guvenliTikla(page, ${l}.filter({ visible: true }).first(), ${zaman}${basariIfadesi});`);
       else if (a.durum === 'dolu') { yardimcilar.add('doluBekle'); satirlar.push(`${ic}await doluBekle(page, ${s(a.secici)}, ${zaman});`); }
       else satirlar.push(`${ic}await ${l}.first().waitFor({ state: '${a.durum === 'gizli' ? 'hidden' : 'visible'}', timeout: ${zaman} });`);
     }
