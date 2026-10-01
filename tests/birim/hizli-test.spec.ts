@@ -924,11 +924,16 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(ozet).toContainText('Arayüz başvurusu');
     await expect(ozet.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();
     await tasmaYok(ozetSekmesi, 'Özet');
-    // Önceki testlerden aynı adlı tablolar var: karar verilmeden onaylanamaz; "Birleştir" seçilince açılır.
-    await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeDisabled();
-    await expect(ozet).toContainText('karar bekleniyor');
-    for (const r of await ozet.getByRole('radio', { name: /^Birleştir/ }).all()) await r.check();
+    // Önceki testlerden aynı adlı tablolar var: varsayılan "Birleştir" (yeni satır) seçili gelir, Onayla açıktır; seçim açıkça
+    // değiştirilebilir ("Yeni adla yaz" adı boşsa yine kapanır).
+    const birlestir = ozet.getByRole('radio', { name: /^Birleştir/ });
+    expect(await birlestir.count()).toBeGreaterThan(0);
+    for (const r of await birlestir.all()) await expect(r).toBeChecked();
+    await expect(ozet).toContainText('Varsayılan: yeni satır olarak birleştir');
     await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
+    await ozet.getByRole('radio', { name: /^Atla/ }).first().check();
+    await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
+    await birlestir.first().check();
     // Aynı özet ikinci sekmede de açık: kayıt ilkinde onaylanınca ikinci sekme görünür olduğunda durumu sorar, "Onayla" kapanır.
     const ikinciSekme = await baglam.newPage();
     await ikinciSekme.goto(`/#/hizli-test/ozet/${encodeURIComponent(oturumId)}`);

@@ -34,7 +34,7 @@ import { servisIstegiKuruCoz } from '../servisler/servis-islemleri.mjs';
 import { BAGLAM_ONEKI, EN_COK_SATIR, EN_COK_SUTUN, TABLO_ADI, tabloKaydet, tabloSil, tablolariListele } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi } from './ekran-basvurulari.mjs';
-import { basvuru, basvuruCoz, degerBasvurusu, grupAnahtari, secilenSatir, sutunBul } from './tablo-secimi.mjs';
+import { SATIR_KIMLIGI, basvuru, basvuruCoz, degerBasvurusu, grupAnahtari, secilenSatir, sutunBul } from './tablo-secimi.mjs';
 import { baslikNormal, birlestirmeOnerileri, sutunEslemesiOner, tabloTuru } from './tablo-benzerligi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 
@@ -177,7 +177,7 @@ export function tabloKullanimlari(vt, projeId) {
       const t = idle.get(anahtar.split('|')[0]);
       if (!t) { kirik.push({ tur: 'satir-secimi', yer, basvuru: anahtar.split('|')[1] ? `[${anahtar.split('|')[1]}]` : 'satır seçimi', neden: 'seçimdeki tablo silinmiş', git }); continue; }
       say(t.id, 'satirSecimleri');
-      for (const s of Object.keys(secim ?? {})) if (!sutunBul(t, s)) kirik.push({ tur: 'satir-secimi', yer, basvuru: `${t.ad}.${s}`, neden: `"${t.ad}" tablosunda "${s}" sütunu yok`, git });
+      for (const s of Object.keys(secim ?? {})) if (s === SATIR_KIMLIGI ? !t.satirlar.some((r) => r.id === secim[s]) : !sutunBul(t, s)) kirik.push({ tur: 'satir-secimi', yer, basvuru: `${t.ad}.${s}`, neden: s === SATIR_KIMLIGI ? `"${t.ad}" tablosunda seçilen satır yok` : `"${t.ad}" tablosunda "${s}" sütunu yok`, git });
     }
   };
   for (const ekran of ekranlariListele(vt, projeId)) {

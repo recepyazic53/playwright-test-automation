@@ -10,6 +10,9 @@ export type PlanDegeri = {
   deger?: string | boolean;
   /** "Doldur" ile tablodan (sütun adı; tablo ve satır sürücüde aranır). */
   tablo?: string;
+  /** Dosya alanı: sürücünün test fikstürü olarak oluşturduğu küçük örnek dosyanın adı (içerik "örnek"; kullanıcı verisi değil). "Dosya seç"
+   *  yoluyla (hızlı testin yükleme ucu) şifreli depoya yüklenir, alana başvurusu verilir. */
+  dosya?: string;
   /** Yalnız ilk veri durağında verilecek değer (ör. önce hatalı değer, sonra düzeltme). */
   ilk?: string;
 };
@@ -110,11 +113,12 @@ export const PLANLAR: EkranPlani[] = [
     degerler: [
       { etiket: /^Ad$/, tablo: 'Ad' }, { etiket: /^Soyad$/, tablo: 'Soyad' }, { etiket: /^E-posta$/, tablo: 'E-posta' },
       { etiket: /^Pozisyon$/, deger: 'yazilim' }, { etiket: /^Kod deposu adresi$/, deger: 'https://depo.ornek.test/deneme' }, { etiket: /^Deneyim/, deger: '4' },
-      { etiket: /^Beceriler/, deger: 'TypeScript' }, { etiket: /Bilgilerimin doğruluğunu/, deger: true }
+      { etiket: /^Beceriler/, deger: 'TypeScript' }, { etiket: /^Özgeçmiş/, dosya: 'ozgecmis-ornek.txt' },
+      { etiket: /Bilgilerimin doğruluğunu/, deger: true }
     ],
     basilacak: [/^İleri$/, /^İleri$/, /Başvuruyu gönder/],
     bitti: /Başvurunuz alındı/,
-    gonderim: { ad: 'Deneme', pozisyon: 'yazilim', depo: 'https://depo.ornek.test/deneme' }
+    gonderim: { ad: 'Deneme', pozisyon: 'yazilim', depo: 'https://depo.ornek.test/deneme', dosyalar: [{ alan: 'ozgecmis', ad: 'ozgecmis-ornek.txt', boyut: 6 }] }
   },
   {
     kok: '/anket', ekranAdi: 'Poligon anket',
@@ -195,7 +199,7 @@ export const PLANLAR: EkranPlani[] = [
       { etiket: /^Doğrulama kodu$/, neden: 'Telefon alanından çıkınca (blur; zorunlu)' }
     ],
     degerler: [
-      { etiket: /^Konum$/, deger: 'Çınarlı' }, { etiket: /^Oda sayısı$/, deger: '' }, { etiket: /^Eşyalı$/, deger: false }, { etiket: /^Balkonlu$/, deger: false },
+      { etiket: /^Konum$/, deger: 'Çınarlı' }, { etiket: /^Oda sayısı$/, deger: '2+1' }, { etiket: /^Eşyalı$/, deger: false }, { etiket: /^Balkonlu$/, deger: false },
       { etiket: /^Ad soyad$/, tablo: 'Ad soyad' }, { etiket: /^Telefon$/, deger: '05001112233' }, { etiket: /^Doğrulama kodu$/, deger: '1234' },
       { etiket: /^Tercih edilen gün$/, deger: 'Cumartesi' }
     ],

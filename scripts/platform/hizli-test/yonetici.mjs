@@ -23,6 +23,9 @@
 //   POST /platform/hizli-test/veri { id, degerler, zincir?, zinciriAtla? }   veri durağı: { anahtar: { deger, kaynak: 'elle' | 'tablo', tabloSecimi? } };
 //        zincir: üst liste anahtarı → yalnız o seçim (ve sayfaya uygulanmamış üstleri) uygulanır, bağlı alt listeler gelince aynı durak
 //        yeniden sorulur (eksik denetlenmez, düğmeye basılmaz); zinciriAtla: getirilmemiş bağlı listeler sorulmadan devam edilir.
+//        Dosya alanı: { deger: "nobetci-dosya://<kimlik>/<ad>", kaynak: 'dosya' } (şifreli depodaki dosya; tarayıcıya oturuma özel geçici kopya).
+//   POST /platform/hizli-test/dosya-yukle?id=&alan=           ham dosya gövdesi + X-Dosya-Adi → { dosya: { id, ad, boyut, referans } } (şifreli depoya)
+//   GET  /platform/hizli-test/dosyalar?id=                    projenin şifreli senaryo dosyaları ("Depodan seç"; içerik dönmez)
 //   POST /platform/hizli-test/karar { id, karar: 'bas' | 'baska' | 'bitir' | 'duzelt', secici?, metin?, dugme?, mesajlar? }
 //   POST /platform/hizli-test/onay { id, cevap }               Bana sor: "X'e basayım mı?"
 //   POST /platform/hizli-test/diyalog { id, cevap: 'kabul' | 'iptal' }   Bana sor: basışta açılan onay / soru penceresinin yanıtı
@@ -58,9 +61,13 @@ import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-ba
 import { karsiliklariEkrandanAl } from '../tablolar/karsiliklar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
-import { basvuruYaz, pinAnahtari, planKur, planOnizle, planYaz, senaryoOnerileri, varsayilanSecim } from './kayit-plani.mjs';
+import { KAYIT_ETIKETI, basvuruYaz, pinAnahtari, pinSecimi, planKur, planOnizle, planYaz, senaryoOnerileri, varsayilanSecim } from './kayit-plani.mjs';
 import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
-import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
+import {
+  DOSYA_BOYUT_SINIRI, dosyaSahipleriniBagla, hizliTestKaynagi, projeSenaryoDosyalari, referansCoz, referanslariCoz, senaryoDosyasiBilgisi, senaryoDosyasiEkle
+} from '../dosyalar/senaryo-dosyalari.mjs';
+import { kosuKlasoruOlustur, kosuKlasorunuSil } from '../dosyalar/gecici-dosyalar.mjs';
+import { degerBasvurusu, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, bitisUyarilari, canliOnayMetni, cumleyiOku,
   eksikAlanlar, hizliSenaryoBasligi, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
@@ -115,9 +122,19 @@ export function hizliTestYoneticisiOlustur(s) {
   /** @type {Map<string, Nesne>} */
   const oturumlar = new Map();
 
+  /**
+   * Oturumun geçici dosya klasörü (seçilen dosyaların koşu anı düz kopyaları; gecici-dosyalar.mjs) silinir: kayıt / iptal / süre dolumu.
+   * @param {Nesne} o
+   */
+  const dosyaKlasorunuSil = (o) => {
+    if (!o.dosyaKlasoru) return;
+    try { kosuKlasorunuSil(o.dosyaKlasoru.klasor, o.dosyaKlasoru.kok); } catch { /* sunucu açılışında artık klasör temizliği siler */ }
+    o.dosyaKlasoru = null;
+    o.dosyaYollari = {};
+  };
   const temizle = () => {
     const sinir = Date.now() - OTURUM_SAKLAMA_MS;
-    for (const [id, o] of oturumlar) if (Date.parse(o.sonErisim) < sinir) oturumlar.delete(id);
+    for (const [id, o] of oturumlar) if (Date.parse(o.sonErisim) < sinir) { dosyaKlasorunuSil(o); oturumlar.delete(id); }
   };
   /** @param {string} id */
   const oturumGetir = (id) => {
@@ -666,7 +683,9 @@ export function hizliTestYoneticisiOlustur(s) {
           ust: a.bagli.ust, ustEtiket: alanAdi(o, a.bagli.ust), bekliyor: bagliBekliyor(a), getirildi: bagliGetirildi(o, a),
           bos: bagliBekliyor(a) && Boolean(o.degerler[a.bagli.ust]) && o.uygulanan[a.bagli.ust] === o.degerler[a.bagli.ust]?.deger
         } : null,
-        deger: v ? (gizliAlan(a) && v.kaynak === 'elle' ? '••••••' : v.deger) : null, kaynak: v?.kaynak ?? null, gizli: gizliAlan(a)
+        deger: v ? (gizliAlan(a) && v.kaynak === 'elle' ? '••••••' : v.deger) : null, kaynak: v?.kaynak ?? null, gizli: gizliAlan(a),
+        // Dosya alanı: kabul edilen uzantılar (sayfanın accept'i; "Dosya seç" süzgeci).
+        ...(a.tur === 'file' ? { kabul: typeof a.kabul === 'string' && a.kabul ? a.kabul : null } : {})
       };
     };
     const adimlar = o.adimlar.map((/** @type {Nesne} */ a, i) => ({
@@ -844,10 +863,28 @@ export function hizliTestYoneticisiOlustur(s) {
   }
 
   /**
-   * Veri durağı: kullanıcının girdiği değerler (elle ya da tablodan). Tablo başvuruları tarayıcıya gitmeden önce çözülür (yalnız bellekte).
-   * @param {Veritabani} vt @param {Nesne} g
+   * Dosya alanının değeri: Nöbetçi'nin şifreli senaryo dosyası deposundaki dosyanın başvurusu ("nobetci-dosya://<kimlik>/<ad>"; kullanıcı
+   * bilgisayarından yükledi ya da depodan seçti — değer üretilmez). Tarayıcıya giden: dosyanın oturuma özel geçici klasördeki düz kopyası
+   * (yalnız oturum boyunca; kayıt / iptal / süre dolunca silinir). Senaryoya başvuru yazılır; normal koşu aynı başvuruyu kendi geçici
+   * klasörüne çözer (veri-oku.mjs) ve setInputFiles ile yükler.
+   * @param {Veritabani} vt @param {Nesne} o @param {Nesne} a alan @param {string} referans @param {{ medyaKlasoru?: string; dosyaKoku?: string }} c
    */
-  function veri(vt, g) {
+  async function dosyaYolunuCoz(vt, o, a, referans, c) {
+    const r = referansCoz(referans);
+    if (!r) throw new HizliTestHatasi('DOSYA', `“${a.etiket ?? a.anahtar}”: dosya seçin (bilgisayarınızdan ya da Nöbetçi'nin dosya deposundan).`);
+    if (!senaryoDosyasiBilgisi(vt, r.id)) throw new HizliTestHatasi('DOSYA', `“${a.etiket ?? a.anahtar}”: seçilen dosya depoda yok (silinmiş olabilir); yeniden seçin.`);
+    if (!c.medyaKlasoru || !c.dosyaKoku) throw new HizliTestHatasi('DOSYA', 'Dosya bu sunucuda hazırlanamadı (geçici klasör yok).', 500);
+    if (!o.dosyaKlasoru) o.dosyaKlasoru = { kok: c.dosyaKoku, klasor: kosuKlasoruOlustur(c.dosyaKoku, `hizli-${o.id}`) };
+    const cozum = await referanslariCoz(vt, referans, { medyaKlasoru: c.medyaKlasoru, hedefKlasor: o.dosyaKlasoru.klasor });
+    if (cozum.eksikler.length) throw new HizliTestHatasi('DOSYA', `“${a.etiket ?? a.anahtar}”: “${cozum.eksikler[0]}” şifreli depoda bulunamadı; yeniden seçin.`);
+    return String(cozum.deger);
+  }
+
+  /**
+   * Veri durağı: kullanıcının girdiği değerler (elle, tablodan ya da dosya). Tablo başvuruları tarayıcıya gitmeden önce çözülür (yalnız bellekte).
+   * @param {Veritabani} vt @param {Nesne} g @param {{ medyaKlasoru?: string; dosyaKoku?: string }} [c]
+   */
+  async function veri(vt, g, c = {}) {
     const o = oturumGetir(String(g.id ?? ''));
     durumda(o, ['veri']);
     const girilen = nesneMi(g.degerler) ? g.degerler : {};
@@ -863,9 +900,17 @@ export function hizliTestYoneticisiOlustur(s) {
       const v = girilen[a.anahtar];
       if (v === undefined) continue;
       if (!nesneMi(v) || v.deger === null || v.deger === '') { yeni[a.anahtar] = null; continue; }
-      const kaynak = v.kaynak === 'tablo' ? 'tablo' : 'elle';
+      const kaynak = v.kaynak === 'tablo' ? 'tablo' : v.kaynak === 'dosya' || a.tur === 'file' ? 'dosya' : 'elle';
       const deger = typeof v.deger === 'boolean' ? v.deger : String(v.deger).slice(0, 2000);
       if (kaynak === 'tablo' && !degerBasvurusu(deger)) throw new HizliTestHatasi('DEGER', `“${a.etiket ?? a.anahtar}”: tablodan gelen değer bir tablo başvurusu olmalı.`);
+      if (kaynak === 'dosya') {
+        if (a.tur !== 'file') throw new HizliTestHatasi('DEGER', `“${a.etiket ?? a.anahtar}” bir dosya alanı değil.`);
+        // Dosya yolu (oturuma özel geçici kopya) değer değişmediyse yeniden çözülmez.
+        if (!(o.degerler[a.anahtar]?.deger === deger && o.dosyaYollari?.[a.anahtar])) {
+          const yol = await dosyaYolunuCoz(vt, o, a, String(deger), c);
+          o.dosyaYollari = { ...(o.dosyaYollari ?? {}), [a.anahtar]: yol };
+        }
+      }
       // Parolalı alanda "••••••" (maske) gelirse mevcut değer korunur.
       if (gizliAlan(a) && deger === '••••••' && o.degerler[a.anahtar]) { yeni[a.anahtar] = o.degerler[a.anahtar]; continue; }
       yeni[a.anahtar] = { deger, kaynak };
@@ -923,7 +968,9 @@ export function hizliTestYoneticisiOlustur(s) {
     // Doğrulama koşusu aynı çözülmüş değerleri kullanır (yalnız bellekte).
     o.cozulmus = { ...(o.cozulmus ?? {}), ...Object.fromEntries(Object.keys(cozulecek).map((k) => [k, String(cozulmus[k] ?? '')])) };
     const doldurulan = (/** @type {Nesne} */ a) => ({
-      anahtar: a.anahtar, alan: a, deger: o.degerler[a.anahtar].kaynak === 'tablo' ? /** @type {string} */ (String(o.cozulmus?.[a.anahtar] ?? cozulmus[a.anahtar] ?? '')) : o.degerler[a.anahtar].deger
+      anahtar: a.anahtar, alan: a,
+      deger: o.degerler[a.anahtar].kaynak === 'tablo' ? /** @type {string} */ (String(o.cozulmus?.[a.anahtar] ?? cozulmus[a.anahtar] ?? ''))
+        : o.degerler[a.anahtar].kaynak === 'dosya' ? String(o.dosyaYollari?.[a.anahtar] ?? '') : o.degerler[a.anahtar].deger
     });
     // Yalnız yeni / değişen alanlar yazılır: sayfaya aynı değerle uygulanmış alan yeniden yazılmaz (seçimi yeniden yapmak bağlı alt listeleri
     // sıfırlayabilir). Onlar yalnız denetlenir: sayfa boşaltmışsa (yeniden çizim) motor bir kez yeniden yazar.
@@ -1174,7 +1221,10 @@ export function hizliTestYoneticisiOlustur(s) {
     durumda(o, ['kaydet']);
     if (o.izin === 'hayir') throw new HizliTestHatasi('IZIN', 'Hayır izninde doğrulama koşusu yapılmaz (düğmeye basılmaz).');
     const adimlar = o.adimlar.map((/** @type {Nesne} */ a) => ({
-      alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x))).map((/** @type {Nesne} */ x) => ({ anahtar: x.anahtar, alan: x, deger: o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger })),
+      alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x))).map((/** @type {Nesne} */ x) => ({
+        anahtar: x.anahtar, alan: x,
+        deger: o.degerler[x.anahtar].kaynak === 'dosya' ? String(o.dosyaYollari?.[x.anahtar] ?? '') : o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger
+      })),
       bas: a.bas ? { secici: a.bas.secici, metin: a.bas.metin, ...(a.bas.diyalog ? { diyalog: a.bas.diyalog } : {}), ...(a.bas.cerceve?.length ? { cerceve: a.bas.cerceve } : {}) } : null
     })).filter((/** @type {Nesne} */ a) => a.alanlar.length || a.bas);
     const bitis = o.bitis.olumsuz
@@ -1337,8 +1387,14 @@ export function hizliTestYoneticisiOlustur(s) {
     try {
       const yazilan = planYaz(vt, o.projeId, plan, secim, { ekranAdi: o.ekran.ad });
       for (const y of yazilan) {
-        if (y.pin && Object.keys(y.pin).length) o.tabloSecimleri[pinAnahtari(y.id)] = Object.fromEntries(Object.entries(y.pin).map(([k, v]) => [k, String(v).slice(0, 200)]));
-        for (const a of y.plan.alanlar) if (a.degerli) o.degerler[a.oturumAnahtar] = { deger: basvuruYaz(y.ad, y.hedef(a.sutun)), kaynak: 'tablo' };
+        // Senaryo kendi satırına sabitlenir: kayıt tablosunda satır kimliğiyle (gizli sütun değerinden bağımsız), listede değerle.
+        const pin = pinSecimi(y);
+        // Aynı tablodan "Doldur" ile başka bir satır zaten seçilmişse (o alanlar o satırdan gelir) yazılan satır ayrı bir grupla
+        // (${Tablo[senaryo].Sütun}) kullanılır: iki satır birbirini ezmez.
+        const onceki = o.tabloSecimleri[pinAnahtari(y.id)];
+        const etiket = pin && y.tur !== 'liste' && onceki && JSON.stringify(onceki) !== JSON.stringify(pin) ? KAYIT_ETIKETI : '';
+        if (pin) o.tabloSecimleri[grupAnahtari(y.id, etiket)] = pin;
+        for (const a of y.plan.alanlar) if (a.degerli) o.degerler[a.oturumAnahtar] = { deger: basvuruYaz(y.ad, y.hedef(a.sutun), etiket), kaynak: 'tablo' };
       }
       return { plan, yazilan };
     } catch (h) {
@@ -1434,6 +1490,8 @@ export function hizliTestYoneticisiOlustur(s) {
       ...(ayni ? { id: String(ayni.id) } : {}), projeId: o.projeId, ekranId, baslik, veri, ortamIdleri: [o.ortam.id], kosuyaDahil: g.kosuyaDahil !== false,
       tabloSecimleri: Object.keys(o.tabloSecimleri).length ? o.tabloSecimleri : undefined, hizliTest: hizli
     }, { kosuyorMu: c.kosuyorMu });
+    // Seçilen dosyalar (şifreli depo) senaryoya bağlanır: sahipsiz dosya temizliği silmez.
+    dosyaSahipleriniBagla(vt, 'senaryo', String(s2.id), veri);
     // Senaryo önerilerinden seçilenler: her değişiklik ilgili liste tablosunun satırını seçer (bağlı listeler birlikte). Senaryoda değeri olmayan
     // alan (sayfada hazır gelen radyo / liste) tablo başvurusuyla senaryoya eklenir; satır seçimi o değere sabitlenir.
     /** @type {Array<{ id: string; baslik: string }>} */
@@ -1468,6 +1526,7 @@ export function hizliTestYoneticisiOlustur(s) {
     o.ekran = { ...o.ekran, id: ekranId };
     o.durum = 'kaydedildi';
     o.calisiyor = null;
+    dosyaKlasorunuSil(o);
     gunluk(o, `Kaydedildi: ekran “${o.ekran.ad}”, senaryo “${baslik}”${hizli.dogrulandi ? '' : ' (doğrulanmadı)'}.`);
     // Tarayıcı kapatılır (iş biter).
     try { gonder(o, { tur: 'bitir' }); } catch { /* iş zaten bitti */ }
@@ -1475,10 +1534,38 @@ export function hizliTestYoneticisiOlustur(s) {
     return { kaydedildi: true, ...o.kayit };
   }
 
+  /** Oturumun veri durağındaki dosya alanı. @param {Nesne} o @param {unknown} anahtar */
+  const dosyaAlani = (o, anahtar) => {
+    const a = typeof anahtar === 'string' ? o.alanlar.get(anahtar)?.alan : undefined;
+    if (!a || a.tur !== 'file') throw new HizliTestHatasi('DOSYA', 'Bu alan bir dosya alanı değil.');
+    return a;
+  };
+
+  /**
+   * "Dosya seç" (kullanıcının bilgisayarından): dosya bellekte şifrelenip Nöbetçi'nin şifreli senaryo dosyası deposuna yazılır (düz metin
+   * diske yazılmaz; uzantı alanın "accept"inden). Başvuru döner; değer veri durağında "Devam et" ile gider.
+   * @param {Veritabani} vt @param {{ id: string; alan: unknown; ad: string; icerik: Buffer }} g @param {string} medyaKlasoru
+   */
+  async function dosyaYukle(vt, g, medyaKlasoru) {
+    const o = oturumGetir(g.id);
+    durumda(o, ['veri']);
+    const a = dosyaAlani(o, g.alan);
+    const d = await senaryoDosyasiEkle(vt, { klasor: medyaKlasoru, icerik: g.icerik, ad: g.ad, kabul: typeof a.kabul === 'string' && a.kabul ? a.kabul : undefined, sahipTuru: null, kaynak: hizliTestKaynagi(o.projeId) });
+    gunluk(o, `“${a.etiket ?? a.anahtar}” için dosya şifreli depoya yüklendi (${d.ad}).`);
+    return { dosya: d };
+  }
+
+  /** "Depodan seç": projenin şifreli senaryo dosyaları (ad, boyut, başvuru; içerik dönmez). @param {Veritabani} vt @param {string} id */
+  function dosyalar(vt, id) {
+    const o = oturumGetir(id);
+    return { dosyalar: projeSenaryoDosyalari(vt, o.projeId) };
+  }
+
   /** @param {Nesne} g */
   function iptal(g) {
     const o = oturumGetir(String(g.id ?? ''));
     if (['kaydedildi', 'iptal'].includes(o.durum)) return { iptal: true };
+    dosyaKlasorunuSil(o);
     o.durum = 'iptal';
     o.hata = { kod: 'IPTAL', mesaj: 'Hızlı test iptal edildi; hiçbir şey kaydedilmedi.' };
     try { tarama().iptal(o.isId); } catch { /* iş zaten bitti */ }
@@ -1491,6 +1578,8 @@ export function hizliTestYoneticisiOlustur(s) {
     baslat,
     durum: (/** @type {string} */ id) => gorunum(oturumGetir(id)),
     veri,
+    dosyaYukle,
+    dosyalar,
     karar,
     onay,
     diyalogCevabi,
@@ -1513,7 +1602,9 @@ let varsayilan = null;
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res
  * @param {{ token: string; disTokenGecerli: boolean; jsonGonder: (res: import('node:http').ServerResponse, durum: number, govde: unknown) => void;
  *   jsonGovde: (sinir?: number) => Promise<Record<string, unknown> | null>; acikVeritabani: () => Promise<Veritabani>; projeKoku: string;
- *   medyaKlasoru: () => string; kosuyorMu?: (dosya: string, ad: string) => boolean }} b
+ *   medyaKlasoru: () => string; kosuyorMu?: (dosya: string, ad: string) => boolean;
+ *   ikiliGovdeOku?: (req: import('node:http').IncomingMessage, sinir: number) => Promise<Buffer>; dosyaKoku?: () => string }} b
+ *   dosyaKoku: seçilen dosyaların oturuma özel geçici kopyalarının kökü (gecici-dosyalar.mjs > geciciDosyaKoku)
  */
 export async function hizliTestIsteginiIsle(req, res, b) {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -1536,10 +1627,34 @@ export async function hizliTestIsteginiIsle(req, res, b) {
         return true;
       }
       if (yol === '/platform/hizli-test/durum') { gonder(200, { basarili: true, oturum: y.durum(String(q.get('id') ?? '')) }); return true; }
+      if (yol === '/platform/hizli-test/dosyalar') { gonder(200, { basarili: true, ...y.dosyalar(await b.acikVeritabani(), String(q.get('id') ?? '')) }); return true; }
       gonder(404, { basarili: false, mesaj: 'Bilinmeyen hızlı test uç noktası.' });
       return true;
     }
     if (req.method !== 'POST') { gonder(405, { basarili: false, mesaj: 'Yöntem desteklenmiyor.' }); return true; }
+    // "Dosya seç": ham dosya gövdesi (X-Dosya-Adi başlığı; ?id=<oturum>&alan=<alan anahtarı>). Yalnız bellekte; şifreli depoya yazılır.
+    if (yol === '/platform/hizli-test/dosya-yukle') {
+      if (!b.disTokenGecerli) { res.setHeader('Connection', 'close'); gonder(401, { basarili: false, mesaj: 'Geçersiz token.' }); return true; }
+      if (!b.ikiliGovdeOku) { gonder(500, { basarili: false, mesaj: 'Dosya yükleme bu sunucuda kullanılamıyor.' }); return true; }
+      let icerik;
+      try {
+        icerik = await b.ikiliGovdeOku(req, DOSYA_BOYUT_SINIRI);
+      } catch (h) {
+        const cokBuyuk = Boolean(/** @type {{ cokBuyuk?: boolean }} */ (h).cokBuyuk);
+        res.setHeader('Connection', 'close');
+        gonder(cokBuyuk ? 413 : 400, { basarili: false, mesaj: cokBuyuk ? `Dosya en fazla ${DOSYA_BOYUT_SINIRI / 1024 / 1024} MB olabilir.` : 'Dosya okunamadı.' });
+        return true;
+      }
+      try {
+        let ad = '';
+        try { ad = decodeURIComponent(String(req.headers['x-dosya-adi'] ?? '')); } catch { ad = ''; }
+        const db = await b.acikVeritabani();
+        gonder(200, { basarili: true, ...(await y.dosyaYukle(db, { id: String(url.searchParams.get('id') ?? ''), alan: url.searchParams.get('alan'), ad, icerik }, b.medyaKlasoru())) });
+      } finally {
+        icerik.fill(0);
+      }
+      return true;
+    }
     const govde = await b.jsonGovde();
     if (!govde) return true;
     if (govde.token !== b.token && !b.disTokenGecerli) { gonder(401, { basarili: false, mesaj: 'Geçersiz token.' }); return true; }
@@ -1551,7 +1666,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
         console.log(`[platform] Hızlı test başlatıldı (${sonuc.id}).`);
         return sonuc;
       },
-      '/platform/hizli-test/veri': () => y.veri(db, govde),
+      '/platform/hizli-test/veri': () => y.veri(db, govde, { medyaKlasoru: b.medyaKlasoru(), dosyaKoku: b.dosyaKoku?.() }),
       '/platform/hizli-test/karar': () => y.karar(govde),
       '/platform/hizli-test/onay': () => y.onay(govde),
       '/platform/hizli-test/diyalog': () => y.diyalogCevabi(govde),

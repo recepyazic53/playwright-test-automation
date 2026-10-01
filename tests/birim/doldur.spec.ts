@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
-import { adaySecimi, doldurAdaylari, tekAnlamliSecim, tumunuDoldur, type DoldurTablosu } from '../../scripts/platform/tablolar/doldur-onerisi.mjs';
+import { adaySecimi, doldurAdaylari, kisiAdKavrami, kokEslesirMi, sozcukKoku, tekAnlamliSecim, tumunuDoldur, type DoldurTablosu } from '../../scripts/platform/tablolar/doldur-onerisi.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { sahteSoapSunucusu } from './servis-fikstur';
@@ -145,6 +145,32 @@ test.describe('saf eşleme (doldur-onerisi.mjs)', () => {
     expect(r.kalanlar.every((k) => k.neden === 'yok')).toBe(true);
     expect(r.tabloSecimleri).toEqual({});
     for (const x of alanlar) expect(tekAnlamliSecim(doldurAdaylari({ alan: x.alan, tablolar: [] }))).toBeNull();
+  });
+
+  test('kök / "X adı · soyadı" kalıbı: Yolcu adı ↔ Ad, Müşteri soyadı ↔ Soyad yalnız aday; kullanıcı adı ↔ Ad değil; adı uyan varken eklenmez', () => {
+    expect(sozcukKoku('adi')).toBe('ad');
+    expect(sozcukKoku('soyadi')).toBe('soyad');
+    expect(kisiAdKavrami('Yolcu adı')).toBe('ad');
+    expect(kisiAdKavrami('Kişi soyadı')).toBe('soyad');
+    expect(kisiAdKavrami('yolcuSoyad')).toBe('soyad');
+    expect(kisiAdKavrami('Kullanıcı adı')).toBeNull();
+    expect(kokEslesirMi('Müşteri adı', 'Adı')).toBe(true);
+    expect(kokEslesirMi('Yolcu adı', 'Soyad')).toBe(false);
+    expect(kokEslesirMi('Doğum tarihi', 'Ad')).toBe(false);
+    const kisiler: DoldurTablosu[] = [{
+      id: 't-k', ad: 'Kişiler', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }],
+      satirlar: [{ id: 'k1', ad: 'Bir', ortamId: null, degerler: { Ad: 'Deneme', Soyad: 'Kişi' } }]
+    }];
+    const ad = doldurAdaylari({ alan: { id: 'yolcuAdi', etiket: 'Yolcu adı' }, tablolar: kisiler });
+    expect(ad.map((a) => [a.tablo, a.sutun, a.neden])).toEqual([['Kişiler', 'Ad', 'benzer']]);
+    expect(tekAnlamliSecim(ad)).toBeNull();
+    expect(doldurAdaylari({ alan: { id: 'yolcuSoyadi', etiket: 'Yolcu soyadı' }, tablolar: kisiler }).map((a) => a.sutun)).toEqual(['Soyad']);
+    expect(doldurAdaylari({ alan: { id: 'kadi', etiket: 'Kullanıcı adı' }, tablolar: kisiler })).toEqual([]);
+    // Adı birebir uyan sütun varken kök adayı eklenmez (tek anlamlı doldurma bozulmaz).
+    const ikisi: DoldurTablosu[] = [...kisiler, { id: 't-y', ad: 'Yolcu', sutunlar: [{ ad: 'Yolcu adı' }], satirlar: [{ id: 'y1', ortamId: null, degerler: { 'Yolcu adı': 'Deneme' } }] }];
+    const tek = doldurAdaylari({ alan: { id: 'yolcuAdi', etiket: 'Yolcu adı' }, tablolar: ikisi });
+    expect(tek.map((a) => [a.tablo, a.neden])).toEqual([['Yolcu', 'ad']]);
+    expect(tekAnlamliSecim(tek)).not.toBeNull();
   });
 });
 

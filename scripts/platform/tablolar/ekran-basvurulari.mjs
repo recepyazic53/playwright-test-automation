@@ -15,7 +15,7 @@
 //     tanınmazsa anlaşılır hata. Dosya: değer (sayfa karşılığı) dosya ADIDIR; alanın uzantı kuralı (kabul) ve verilirse dosyaDenetle
 //     (izinli klasör / varlık; veri-oku.mjs) uygulanır; gizli sütundan dosya alınmaz.
 // Düz metin değerler aynen kalır (geriye uyum; senaryolar göç ettirilmez). Saf modül (vt yok).
-import { basvuruCoz, basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { SATIR_KIMLIGI, basvuruCoz, basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { modelAlanlari } from './paket-tablolari.mjs';
 import { senaryoAyariAlanlari } from '../senaryolar/deger-listesi-modeli.mjs';
 
@@ -304,6 +304,16 @@ export function tabloSecimleriniAyikla(v, tablolar) {
     const temiz = {};
     for (const [sutun, d] of Object.entries(/** @type {Record<string, unknown>} */ (secim))) {
       if (d === '' || d === null || d === undefined) continue;
+      if (sutun === SATIR_KIMLIGI) {
+        // Satır kimliğiyle sabitleme: satır tabloda olmalı (satırlar verilmişse denetlenir).
+        const satirlar = /** @type {{ satirlar?: ReadonlyArray<{ id?: string }> }} */ (t).satirlar;
+        if (typeof d !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(d) || (satirlar && !satirlar.some((r) => r.id === d))) {
+          hatalar.push(`"${t.ad}" tablosunda satır seçimindeki satır yok (silinmiş olabilir).`);
+          continue;
+        }
+        temiz[SATIR_KIMLIGI] = d;
+        continue;
+      }
       const c = t.sutunlar.find((x) => kucuk(x.ad) === kucuk(sutun));
       if (!c) { hatalar.push(`"${t.ad}" tablosunda "${sutun}" sütunu yok (satır seçimi).`); continue; }
       if (c.gizli === true) { hatalar.push(`"${t.ad}" tablosunun gizli "${c.ad}" sütunu satır seçiminde kullanılamaz.`); continue; }

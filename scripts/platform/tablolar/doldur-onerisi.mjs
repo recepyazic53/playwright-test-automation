@@ -15,7 +15,7 @@
 // sütunun değeri de kısmi maskelenir.
 // Seçilen değer tablo bağlantısı olarak yazılır (${Tablo.Sütun} / ${Tablo[etiket].Sütun}); satır seçilirse grubun satır seçimi
 // (tabloSecimleri["<tabloId>|<etiket>"] = satırın açık sütun değerleri) — koşu ve saklama biçimi değişmez.
-import { basvuru, degerBasvurusuYaz, grupAnahtari, kismiMaske, sayfaDegeri, sutunBul, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { basvuru, degerBasvurusuYaz, grupAnahtari, kismiMaske, satirSabitlemesi, sayfaDegeri, sutunBul, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { baslikNormal, tabloTuru } from './tablo-benzerligi.mjs';
 
 /**
@@ -60,6 +60,54 @@ export function benzerAdMi(a, b) {
   return kisa.length >= 4 && uzun.startsWith(kisa);
 }
 
+/** Etiketin sözcükleri (normal; boşluk / noktalama / camelCase sınırından bölünür). @param {string} s @returns {string[]} */
+const sozcukler = (s) => String(s ?? '').replace(/([a-zçğıöşü])([A-ZÇĞİÖŞÜ])/g, '$1 $2').split(/[^\p{L}\p{N}]+/u).map(baslikNormal).filter(Boolean);
+/**
+ * Sözcük kökü: Türkçe iyelik / tamlama eki atılır ("adı" → "ad", "soyadı" → "soyad", "numarası" → "numara", "yolcunun" → "yolcu").
+ * Kök en az 2 harf kalır. @param {string} w normal sözcük
+ */
+export function sozcukKoku(w) {
+  const m = /^(.{2,}?)(nin|nun|in|un|si|su|i|u)$/.exec(w);
+  return m ? m[1] : w;
+}
+/** Adı kişi adı olmayan "X adı" kalıpları (kullanıcı adı, dosya adı, şirket adı …): Ad / Soyad önerilmez. Genel dil; ürün adı yok. */
+const KISI_DISI = /^(kullanici|user|dosya|firma|sirket|kurum|urun|proje|sehir|il|ilce|mahalle|sokak|cadde|banka|sube|hesap|etkinlik|oturum|tarife|paket|ekran|alan|tablo|rapor|adres|kategori|marka|model|cihaz|bilgisayar|alanadi)$/;
+/** Sütun adı kişi adı / soyadı kavramı mı. @param {string} n normal sütun adı @returns {'ad' | 'soyad' | null} */
+function sutunKisiKavrami(n) {
+  if (/^(ad|adi|isim|ismi|firstname|givenname)$/.test(n)) return 'ad';
+  if (/^(soyad|soyadi|soyisim|soyismi|lastname|surname|familyname)$/.test(n)) return 'soyad';
+  return null;
+}
+/**
+ * Etiket "X adı" / "X soyadı" (yolcu adı, müşteri adı, kişi adı …) kalıbında mı: son sözcüğün kökü ad / soyad, önceki sözcük kişi
+ * dışı bir şey değil (kullanıcı adı, dosya adı …). Yalnız aday üretir. @param {string} etiket @returns {'ad' | 'soyad' | null}
+ */
+export function kisiAdKavrami(etiket) {
+  const w = sozcukler(etiket);
+  if (w.length < 2) return null;
+  const son = sozcukKoku(w[w.length - 1]);
+  const onceki = sozcukKoku(w[w.length - 2]);
+  if (KISI_DISI.test(onceki) || KISI_DISI.test(w[w.length - 2])) return null;
+  if (son === 'ad' || son === 'isim' || son === 'name') return 'ad';
+  if (son === 'soyad' || son === 'soyisim' || son === 'surname' || son === 'lastname') return 'soyad';
+  return null;
+}
+/**
+ * Kök eşleşmesi (adı / benzeri tutmadığında son çare aday): etiketin son sözcüğünün kökü, tek sözcüklü sütun adının köküyle aynı
+ * ("Yolcu adı" ↔ "Ad"), ya da "X adı / soyadı" kalıbı ↔ Ad / Soyad sütunu. @param {string} etiket @param {string} sutunAdi
+ */
+export function kokEslesirMi(etiket, sutunAdi) {
+  const sw = sozcukler(sutunAdi);
+  if (sw.length !== 1) return false;
+  const kav = kisiAdKavrami(etiket);
+  const sk = sutunKisiKavrami(sw[0]);
+  if (kav || sk) return Boolean(kav) && kav === sk;
+  const w = sozcukler(etiket);
+  if (w.length < 2) return false;
+  const kok = sozcukKoku(w[w.length - 1]);
+  return kok.length >= 3 && kok === sozcukKoku(sw[0]);
+}
+
 const bos = (/** @type {unknown} */ v) => v === undefined || v === null || v === '';
 /** @param {DoldurAlani} alan */
 const secimMi = (alan) => alan.tip === 'secim' || alan.tip === 'okluSecim' || alan.tip === 'radyo';
@@ -88,6 +136,8 @@ function satirKosulu(t, r) {
   /** @type {Record<string, string>} */
   const k = {};
   for (const c of t.sutunlar) if (!c.gizli && !bos(r.degerler[c.ad])) k[c.ad] = String(r.degerler[c.ad]);
+  // Açık değeri olmayan satır (yalnız gizli sütunu dolu) satır kimliğiyle sabitlenir; yoksa seçim "ilk satır"a düşerdi.
+  if (!Object.keys(k).length && r.id) return satirSabitlemesi(String(r.id));
   return k;
 }
 
@@ -172,6 +222,19 @@ export function doldurAdaylari(g) {
       if (adlar.has(n) || ![...adlar].some((x) => benzerAdMi(x, n))) continue;
       const a = adayKur(g, t, c, '', 'benzer', suzgecler);
       if (a.satirlar.length && !eklendi.has(a.anahtar)) { adaylar.push(a); eklendi.add(a.anahtar); }
+    }
+  }
+  // Son çare: sözcük kökü / "X adı · soyadı" kalıbı ("Yolcu adı" ↔ Ad). Yalnız hiç aday yokken ve yalnız aday (kendiliğinden dolmaz);
+  // böylece daha önce tek anlamlı olan alanlar etkilenmez.
+  if (!adaylar.length) {
+    const etiketler = [g.alan.etiket, String(g.alan.id ?? '').split(/[/.]/).pop() ?? ''].filter(Boolean);
+    for (const t of tablolar) {
+      for (const c of t.sutunlar) {
+        if (secimAlani && c.gizli) continue;
+        if (!etiketler.some((e) => kokEslesirMi(e, c.ad))) continue;
+        const a = adayKur(g, t, c, '', 'benzer', suzgecler);
+        if (a.satirlar.length && !eklendi.has(a.anahtar)) { adaylar.push(a); eklendi.add(a.anahtar); }
+      }
     }
   }
   if (secimAlani && liste.length) {

@@ -12,7 +12,7 @@ import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { baslikNormal, benzerTablolar } from '../tablolar/tablo-benzerligi.mjs';
 import { birlestirmePlani } from '../tablolar/paket-test-verisi.mjs';
-import { degerBasvurusuYaz, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
+import { degerBasvurusuYaz, grupAnahtari, satirSabitlemesi } from '../tablolar/tablo-secimi.mjs';
 import { adTemizle, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
 import { ornekDegerler } from '../tarama/zincir-kesfi.mjs';
 
@@ -110,6 +110,12 @@ export function planOnizle(vt, projeId, plan, ekranId, anahtarlar) {
   };
 }
 
+/** Yazılan satırın kimliği (satır adı tabloda tekildir: kayitSatiri). @param {Veritabani} vt @param {string} projeId @param {string} tabloId @param {string} ad */
+function satirKimligi(vt, projeId, tabloId, ad) {
+  const r = tablolariListele(vt, projeId).find((x) => x.id === tabloId)?.satirlar.find((s) => kucuk(s.ad) === kucuk(ad));
+  return r?.id ? String(r.id) : null;
+}
+
 /** Seçim yoksa varsayılan: aynı adlı tablo varsa birleştir, yoksa yeni; tüm bağlantılar. @param {ReturnType<typeof planOnizle>} onizleme */
 export function varsayilanSecim(onizleme) {
   return {
@@ -123,8 +129,9 @@ export function varsayilanSecim(onizleme) {
  * değişmez: eksik sütunlar, olmayan satırlar ve eksik karşılıklar eklenir. Senaryonun kullandığı satır (secilen) pin olarak döner.
  * @param {Veritabani} vt @param {string} projeId @param {ReturnType<typeof planKur>} plan
  * @param {{ tablolar?: Record<string, { islem: string; yeniAd?: string; hedefId?: string }> }} secim @param {{ ekranAdi: string }} bilgi
+ * satirId: kayıt tablosunda senaryonun satırı (yeni / eklenen ya da birebir aynı mevcut satır) — senaryo buna satır kimliğiyle sabitlenir.
  * @returns {Array<{ planAdi: string; ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number; hedef: (sutun: string) => string;
- *   pin: Record<string, string> | null; tur: 'kayit' | 'liste'; plan: ReturnType<typeof planKur>['tablolar'][number] }>}
+ *   pin: Record<string, string> | null; satirId: string | null; tur: 'kayit' | 'liste'; plan: ReturnType<typeof planKur>['tablolar'][number] }>}
  */
 export function planYaz(vt, projeId, plan, secim, bilgi) {
   /** @type {ReturnType<typeof planYaz>} */
@@ -146,12 +153,16 @@ export function planYaz(vt, projeId, plan, secim, bilgi) {
       if (!ad) throw new Error(`"${t.ad}" tablosu için yeni ad yazın.`);
       if (sec.islem === 'yeni' && mevcut) throw new Error(`"${t.ad}" adında bir tablo zaten var: birleştir, yeni ad ya da atla seçin.`);
       const kullanilan = new Set();
+      const kayitSatirlari = t.tur === 'liste' ? [] : t.satirlar.map((d) => kayitSatiri(kullanilan, d));
       const id = tabloKaydet(vt, {
         projeId, ad, tur: t.tur, kaynak,
         sutunlar: t.sutunlar.map((x) => ({ ad: x.ad, gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar }) })),
-        satirlar: t.tur === 'liste' ? t.satirlar.map((d) => ({ ad: String(Object.values(d)[0] ?? ''), ortamId: null, degerler: d })) : t.satirlar.map((d) => kayitSatiri(kullanilan, d))
+        satirlar: t.tur === 'liste' ? t.satirlar.map((d) => ({ ad: String(Object.values(d)[0] ?? ''), ortamId: null, degerler: d })) : kayitSatirlari
       });
-      sonuc.push({ planAdi: t.ad, ad, id, islem: sec.islem, eklenenSatir: t.satirlar.length, eklenenSutun: t.sutunlar.length, hedef: (s) => s, pin: t.secilen, tur: t.tur, plan: t });
+      sonuc.push({
+        planAdi: t.ad, ad, id, islem: sec.islem, eklenenSatir: t.satirlar.length, eklenenSutun: t.sutunlar.length, hedef: (s) => s, pin: t.secilen,
+        satirId: kayitSatirlari.length ? satirKimligi(vt, projeId, id, kayitSatirlari[0].ad) : null, tur: t.tur, plan: t
+      });
       continue;
     }
     if (!mevcut) throw new Error(`"${t.ad}" adında birleştirilecek tablo yok.`);
@@ -172,18 +183,41 @@ export function planYaz(vt, projeId, plan, secim, bilgi) {
       return t.tur === 'liste' ? { ad: String(Object.values(d)[0] ?? ''), ortamId: null, degerler: esli } : { ...kayitSatiri(kullanilan, d), degerler: esli };
     });
     const id = tabloKaydet(vt, { projeId, id: mevcut.id, ad: mevcut.ad, sutunlar, satirlar: yeniSatirlar });
+    // Senaryonun satırı (kayıt tablosu): birleştirmede EKLENEN yeni satır; aynısı zaten varsa (gizli değeri olmayan, açık değerleri
+    // birebir aynı satır) o mevcut satır. Senaryo bu satıra satır kimliğiyle sabitlenir (gizli / açık değerden bağımsız).
+    let satirId = null;
+    if (t.tur !== 'liste' && t.satirlar.length) {
+      const ilk = t.satirlar[0];
+      const i = p.eklenecek.indexOf(ilk);
+      if (i >= 0) satirId = satirKimligi(vt, projeId, id, String(yeniSatirlar[i].ad));
+      else {
+        const esli = Object.entries(ilk).filter(([, v]) => v !== null).map(([k, v]) => [hedef(k), String(v)]);
+        satirId = mevcut.satirlar.find((r) => esli.every(([k, v]) => String(r.degerler[k] ?? '') === v))?.id ?? null;
+      }
+    }
     sonuc.push({
       planAdi: t.ad, ad: mevcut.ad, id, islem: 'birlestir', eklenenSatir: p.eklenecek.length, eklenenSutun: p.yeniSutunlar.length, hedef,
-      pin: t.secilen ? Object.fromEntries(Object.entries(t.secilen).map(([k, v]) => [hedef(k), v])) : null, tur: t.tur, plan: t
+      pin: t.secilen ? Object.fromEntries(Object.entries(t.secilen).map(([k, v]) => [hedef(k), v])) : null, satirId: satirId ? String(satirId) : null, tur: t.tur, plan: t
     });
   }
   return sonuc;
 }
 
-/** Senaryonun tablodan aldığı değere alan başvurusu. @param {string} tabloAdi @param {string} sutun */
-export const basvuruYaz = (tabloAdi, sutun) => degerBasvurusuYaz(tabloAdi, sutun);
+/** Senaryonun tablodan aldığı değere alan başvurusu. @param {string} tabloAdi @param {string} sutun @param {string} [etiket] */
+export const basvuruYaz = (tabloAdi, sutun, etiket = '') => degerBasvurusuYaz(tabloAdi, sutun, etiket);
+/** Aynı tablodan "Doldur" ile başka satır seçilmişken hızlı test kaydının kendi satırının grup etiketi (${Tablo[senaryo].Sütun}). */
+export const KAYIT_ETIKETI = 'senaryo';
 /** Satır seçimi (pin) anahtarı. @param {string} tabloId */
 export const pinAnahtari = (tabloId) => grupAnahtari(tabloId, '');
+/**
+ * Yazılan tablonun senaryo satır seçimi: kayıt tablosunda satır KİMLİĞİYLE (gizli / açık değerden bağımsız; yalnız gizli sütunu dolu
+ * satırda da kurulur), liste tablosunda seçilen değerle. Yoksa null.
+ * @param {{ satirId?: string | null; pin: Record<string, string> | null; tur: 'kayit' | 'liste' }} y @returns {Record<string, string> | null}
+ */
+export function pinSecimi(y) {
+  if (y.tur !== 'liste' && y.satirId) return satirSabitlemesi(y.satirId);
+  return y.pin && Object.keys(y.pin).length ? Object.fromEntries(Object.entries(y.pin).map(([k, v]) => [k, String(v).slice(0, 200)])) : null;
+}
 
 /**
  * Senaryo önerileri (YZ YOK, kurallı): [0] kaydedilen (hızlı testte yapılan) senaryo; sonra az sayıda, birbirinden FARKLI alternatif.

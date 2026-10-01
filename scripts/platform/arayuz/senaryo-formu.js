@@ -23,7 +23,7 @@ import {
 } from './model-formu.mjs';
 import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { doldurDugmesi, tumunuDoldurDugmesi } from './doldur.js';
-import { basvuru, basvurununTekDegeri, degerBasvurusuYaz, formSuzgecleri, grupAnahtari, satirUyumu, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { SATIR_KIMLIGI, basvuru, basvurununTekDegeri, degerBasvurusuYaz, formSuzgecleri, grupAnahtari, satirUyumu, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
@@ -249,10 +249,15 @@ function modelFormu(icerik, s, senaryo, baglam) {
       .finally(() => { satirSecimiCiz(true); kayitGruplariniYenile(); tablodanBagliListeleriYenile(); planla(); });
     return tabloIstegi;
   }
-  /** Satırın açık sütun değerleri (satır seçiminin koşulları; gizli sütun koşula girmez). */
-  const satirKosulu = (t, r) => Object.fromEntries(t.sutunlar.filter((c) => !c.gizli && r.degerler[c.ad] !== null && r.degerler[c.ad] !== undefined && r.degerler[c.ad] !== '')
-    .map((c) => [c.ad, String(r.degerler[c.ad])]));
+  /** Satırın açık sütun değerleri (satır seçiminin koşulları; gizli sütun koşula girmez). Açık değeri yoksa satır kimliği (yalnız gizli dolu satır). */
+  const satirKosulu = (t, r) => {
+    const k = Object.fromEntries(t.sutunlar.filter((c) => !c.gizli && r.degerler[c.ad] !== null && r.degerler[c.ad] !== undefined && r.degerler[c.ad] !== '')
+      .map((c) => [c.ad, String(r.degerler[c.ad])]));
+    return Object.keys(k).length || !r.id ? k : { [SATIR_KIMLIGI]: String(r.id) };
+  };
   const ayniKosul = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+  /** Seçim bu satıra mı sabit: satır kimliğiyle (SATIR_KIMLIGI; gizli / açık değerden bağımsız) ya da satırın açık değerleriyle. */
+  const satiraSabitMi = (t, r, secim) => (secim[SATIR_KIMLIGI] ? String(secim[SATIR_KIMLIGI]) === String(r.id) : ayniKosul(satirKosulu(t, r), secim));
   const ortamdaGecerli = (r) => !r.ortamId || r.ortamId === s.ortam.id;
   /**
    * Satır seçim listesindeki ad: satır adı (yoksa gizli olmayan ilk sütunların özeti); gizli sütunda yalnız sunucunun kısmi maskesi
@@ -276,7 +281,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     if (ayar && ayar.kip === 'tumu') return { anahtar, secim, mod: 'tumu', idler: [] };
     if (ayar && ayar.kip === 'secili') return { anahtar, secim, mod: 'coklu', idler: [...ayar.satirlar] };
     if (!Object.keys(secim).length) return { anahtar, secim, mod: 'ilk', idler: [] };
-    const r = t.satirlar.find((x) => ayniKosul(satirKosulu(t, x), secim));
+    const r = t.satirlar.find((x) => satiraSabitMi(t, x, secim));
     return r ? { anahtar, secim, mod: 'satir', idler: [r.id] } : { anahtar, secim, mod: 'kosul', idler: [] };
   }
   /** Özetlerde gösterilen satır: seçilen (ilk) satır; yoksa bu ortamda koşullara uyan ilk satır. */
@@ -1354,7 +1359,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     const secim = tabloSecimleri[anahtar] || {};
     const secimVar = Object.keys(secim).length > 0;
     const acik = t.sutunlar.filter((c) => !c.gizli);
-    const secilenSatir = secimVar ? t.satirlar.find((r) => ayniKosul(satirKosulu(t, r), secim)) : null;
+    const secilenSatir = secimVar ? t.satirlar.find((r) => satiraSabitMi(t, r, secim)) : null;
     const id = yeniId('satir');
     const sel = h('select', { id },
       h('option', { value: '', selected: !secimVar }, 'Otomatik (bağlı alanlar ve ortamla uyan ilk satır)'),

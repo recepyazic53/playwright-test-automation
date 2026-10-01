@@ -6,7 +6,7 @@
 // poligonOrtami: ayrı Nöbetçi örneği (boş port, GEÇİCİ veri kökü ve veritabanı; kasa API ile), poligon sunucusu (127.0.0.1), proje + ortam
 // + "Kişiler" test verisi tablosu (uydurma). Kullanıcının veri/ klasörüne ve çalışan Nöbetçi'sine dokunulmaz.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
@@ -109,13 +109,32 @@ export async function isBitsin(o: PoligonOrtami): Promise<void> {
 }
 
 /** Veri durağı alanı için plandaki değer (etikete göre). */
-export function planDegeri(p: EkranPlani, etiket: string, ilkSoru: boolean, secenekler: Nesne[] | null = null): { deger?: string | boolean; tablo?: string } | null {
+export function planDegeri(p: EkranPlani, etiket: string, ilkSoru: boolean, secenekler: Nesne[] | null = null): { deger?: string | boolean; tablo?: string; dosya?: string } | null {
   // Adı görünmeyen seçim grubu: plan etiketi seçeneklerin metniyle eşlenir (kullanıcı seçeneklere bakarak tanır).
   const d = p.degerler.find((x) => x.etiket.test(etiket))
     ?? (/^Adı görünmeyen alan/.test(etiket) && secenekler ? p.degerler.find((x) => secenekler.some((s) => x.etiket.test(String(s.metin ?? '')))) : undefined);
   if (!d) return null;
   if (ilkSoru && d.ilk !== undefined) return { deger: d.ilk };
-  return d.tablo ? { tablo: d.tablo } : { deger: d.deger };
+  return d.tablo ? { tablo: d.tablo } : d.dosya ? { dosya: d.dosya } : { deger: d.deger };
+}
+
+/** Örnek dosya fikstürünün içeriği (kullanıcı verisi değil). */
+export const ORNEK_DOSYA_ICERIGI = 'örnek';
+
+/**
+ * "Dosya seç": test fikstürü olarak küçük örnek dosya (içerik ORNEK_DOSYA_ICERIGI) poligonun geçici veri kökünde oluşturulur ve hızlı
+ * testin yükleme ucuna ham gövdeyle gönderilir (arayüzün yaptığı gibi). Başvuru ("nobetci-dosya://…") döner; yüklenemezse ''.
+ */
+export async function dosyaYukle(o: PoligonOrtami, oturumId: string, alan: string, ad: string): Promise<string> {
+  const klasor = join(o.veriKoku, 'fikstur');
+  mkdirSync(klasor, { recursive: true });
+  const yol = join(klasor, ad);
+  writeFileSync(yol, ORNEK_DOSYA_ICERIGI, 'utf8');
+  const r = await fetch(`${o.nobetci.adres}/platform/hizli-test/dosya-yukle?id=${encodeURIComponent(oturumId)}&alan=${encodeURIComponent(alan)}`, {
+    method: 'POST', headers: { 'x-test-sunucu-token': o.nobetci.token, 'x-dosya-adi': encodeURIComponent(ad), 'content-type': 'application/octet-stream' }, body: readFileSync(yol)
+  });
+  const j = (await r.json().catch(() => ({}))) as Nesne;
+  return j.basarili && j.dosya?.referans ? String(j.dosya.referans) : '';
 }
 
 /** Seçim alanında plan değerini (değer ya da metin) seçeneğin değerine çevirir. */
@@ -232,6 +251,14 @@ export async function ekranKos(o: PoligonOrtami, p: EkranPlani, ayar: SurucuAyar
             }
             const satir = (tablolar.find((t) => t.ad === 'Kişiler')?.satirlar[0]?.degerler ?? {}) as Record<string, string | null>;
             degerler[a.anahtar] = { deger: satir[pd.tablo] ?? '', kaynak: 'elle' };
+            continue;
+          }
+          if (pd.dosya) {
+            // Dosya alanı: test fikstürü (sürücünün oluşturduğu küçük örnek dosya) "Dosya seç" ucuyla şifreli depoya yüklenir.
+            if (a.tur !== 'file') { bulgu(`“${a.etiket}” bir dosya alanı değil (tür: ${a.tur}).`); continue; }
+            const ref = String(a.deger ?? '') || await dosyaYukle(o, id, String(a.anahtar), pd.dosya);
+            if (!ref) { bulgu(`“${a.etiket}” için dosya yüklenemedi.`); continue; }
+            degerler[a.anahtar] = { deger: ref, kaynak: 'dosya' };
             continue;
           }
           if (pd.deger === undefined) continue;

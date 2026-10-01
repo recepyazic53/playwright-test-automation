@@ -72,12 +72,24 @@ export const tabloBul = (tablolar, ad) => adla(tablolar, ad);
 export const sutunBul = (tablo, ad) => adla(tablo.sutunlar, ad);
 
 /**
- * Seçimlerle (ve ortamla) uyuşan satırlar. haric: bu sütunun kendi seçimi yok sayılır (seçeneklerini hesaplarken).
+ * SATIR KİMLİĞİYLE SABİTLEME: satır seçiminde ({ Sütun: değer }) bu ayrılmış anahtar satırın kimliğidir — değerlerden (açık ya da gizli)
+ * bağımsız olarak o satır seçilir (ör. yalnız gizli sütunu dolu satır; hızlı test kaydında senaryonun kendi satırı). "$" sütun adında
+ * kullanılamadığından (AD_KALIBI) bir sütunla çakışmaz.
+ */
+export const SATIR_KIMLIGI = '$satir';
+/** Satır kimliğiyle sabitleme seçimi. @param {string} satirId @returns {Record<string, string>} */
+export const satirSabitlemesi = (satirId) => ({ [SATIR_KIMLIGI]: String(satirId) });
+
+/**
+ * Seçimlerle (ve ortamla) uyuşan satırlar. haric: bu sütunun kendi seçimi yok sayılır (seçeneklerini hesaplarken). Seçimde satır
+ * kimliği (SATIR_KIMLIGI) varsa yalnız o satır uyar.
  * @param {Tablo} tablo @param {Record<string, string>} [secim] @param {{ ortamId?: string | null; haric?: string }} [s]
  */
 export function uyanSatirlar(tablo, secim = {}, s = {}) {
-  const kosullar = Object.entries(secim).filter(([sutun, d]) => d !== '' && d !== undefined && d !== null && kucuk(sutun) !== kucuk(s.haric ?? '\u0000'));
+  const kosullar = Object.entries(secim).filter(([sutun, d]) => d !== '' && d !== undefined && d !== null && sutun !== SATIR_KIMLIGI && kucuk(sutun) !== kucuk(s.haric ?? '\u0000'));
+  const kimlik = secim[SATIR_KIMLIGI];
   return tablo.satirlar.filter((r) => (!r.ortamId || !s.ortamId || r.ortamId === s.ortamId)
+    && (!kimlik || String(r.id ?? '') === String(kimlik))
     && kosullar.every(([sutun, d]) => {
       const gercek = tablo.sutunlar.find((x) => kucuk(x.ad) === kucuk(sutun));
       return gercek ? String(r.degerler[gercek.ad] ?? '') === String(d) : true;
@@ -139,6 +151,7 @@ export function formSuzgecleri(tablo, secim, alanlar) {
  */
 export function satirUyumu(tablo, satir, secim, suzgecler = []) {
   const nedenler = Object.entries(secim || {}).filter(([, d]) => d !== '' && d !== null && d !== undefined).map(([k, d]) => {
+    if (k === SATIR_KIMLIGI) return `satır: ${/** @type {{ ad?: string }} */ (satir).ad || d}`;
     const s = tablo.sutunlar.find((x) => kucuk(x.ad) === kucuk(k));
     return `${s ? s.ad : k} = ${d}`;
   });
