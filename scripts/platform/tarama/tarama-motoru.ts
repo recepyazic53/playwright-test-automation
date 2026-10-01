@@ -313,7 +313,7 @@ async function profilTara(
   const acilan = yolu(sayfa.url());
   if (acilan !== g.hedefYol) notlar.push(`Hedef ${g.hedefYol} yerine ${acilan} açıldı (yönlendirme).`);
   const envanter = await envanterOku(sayfa);
-  if (envanter.ozelBilesenSayisi) notlar.push(`${envanter.ozelBilesenSayisi} özel bileşen (role=combobox/listbox/textbox, contenteditable) alan olarak çıkarılamadı.`);
+  if (envanter.ozelBilesenSayisi) notlar.push(`${envanter.ozelBilesenSayisi} özel bileşen (role=combobox/listbox) alan olarak çıkarılamadı.`);
   const cercevedeki = envanter.alanlar.filter((a) => a.cerceve?.length).length;
   if (cercevedeki) notlar.push(`${cercevedeki} alan çerçeve (iframe) içinde okundu; modelde alanın konum.cerceve'si olur.`);
   if (envanter.okunamayanCerceveSayisi) {

@@ -333,7 +333,10 @@ export function kayitEnvanteriKur(o, bitis) {
       ad: i === 0 ? 'Form' : `${bosluk(adimlar[i - 1].bas?.metin) || 'Önceki düğme'} sonrası`.slice(0, 80),
       // Basışta açılan tarayıcı penceresine verilen yanıt (kabul / iptal): aksiyonun "diyalog"u olur (normal koşu aynı yanıtı verir).
       yol: o.yol, baslik: o.baslik, alanlar: a.alanlar,
-      ilerleme: a.bas ? { secici: a.bas.secici, metin: a.bas.metin, ...(a.bas.diyalog === 'kabul' || a.bas.diyalog === 'iptal' ? { diyalog: a.bas.diyalog } : {}) } : null,
+      ilerleme: a.bas ? {
+        secici: a.bas.secici, metin: a.bas.metin, ...(a.bas.diyalog === 'kabul' || a.bas.diyalog === 'iptal' ? { diyalog: a.bas.diyalog } : {}),
+        ...(Array.isArray(a.bas.cerceve) && a.bas.cerceve.length ? { cerceve: a.bas.cerceve } : {})
+      } : null,
       ...(a.okumalar?.length ? { okumalar: a.okumalar } : {}),
       // Veri durağında gözlenen koşullar (beliren alan → seçim + değer); yalnız bu adımdaki alanlar için.
       ...(a.kosullar && Object.keys(a.kosullar).some((k) => a.alanlar.some((x) => x.anahtar === k))

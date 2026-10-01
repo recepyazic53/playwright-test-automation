@@ -80,7 +80,8 @@ export const PLANLAR: EkranPlani[] = [
       { etiket: /^Nereden$/, deger: 'Kuzeykent (KZK)' }, { etiket: /^Nereye$/, deger: 'Batıkent (BTK)' }, { etiket: /^Gidiş tarihi$/, deger: '2026-11-20' },
       { etiket: /^Yolcu$/, deger: '1' }, { etiket: /^Yolcu adı$/, tablo: 'Ad' }, { etiket: /^Yolcu soyadı$/, tablo: 'Soyad' }, { etiket: /^Doğum tarihi/, tablo: 'Doğum tarihi' }
     ],
-    basilacak: [/Uçuşları ara/, /^Seç$/, /4B/, /Yolcu bilgilerini gir/, /Rezervasyonu tamamla/],
+    // Aynı metinli “Seç” düğmeleri yakın yazılarıyla ayırt edilir (“Seç (07:40 · PG 101 · 1.250 TL)”).
+    basilacak: [/Uçuşları ara/, /^Seç\b/, /4B/, /Yolcu bilgilerini gir/, /Rezervasyonu tamamla/],
     bitti: /PNR/,
     gonderim: { nereden: 'Kuzeykent (KZK)', nereye: 'Batıkent (BTK)', koltuk: '4B', dogum: '01.02.1990' }
   },
@@ -123,13 +124,15 @@ export const PLANLAR: EkranPlani[] = [
       { etiket: /Neden memnun kalmadınız/, deger: 'Teslimat gecikti' }, { etiket: /Teslimat/, deger: 'İyi' }, { etiket: /Paketleme/, deger: 'İyi' },
       { etiket: /İletişim/, deger: 'İyi' }, { etiket: /Eklemek|Yorum|İsteğe bağlı/, deger: 'Yok' }
     ],
-    basilacak: [/2\. yıldız|yıldız|^$/, /Anketi gönder/],
+    // Simge (svg) yıldızlar aday listesinde grubun yakın yazısı ve sırasıyla görünür (“Genel puanınız (2/5)”).
+    basilacak: [/Genel puanınız \(2\/5\)/, /Anketi gönder/],
     bitti: /yanıtınız kaydedildi/,
     gonderim: { puan: 2, neden: 'Teslimat gecikti' }
   },
   {
     kok: '/destek', ekranAdi: 'Poligon destek bileti',
-    kesif: [/^Kategori$/, /^Alt kategori$/, /^Konu$/, /^Açıklama$/],
+    // Alt kategori başta devre dışıdır (bağlı liste): kategori seçilince sorulur (sonradan).
+    kesif: [/^Kategori$/, /^Konu$/, /^Açıklama$/],
     sonradan: [{ etiket: /^Alt kategori$/, neden: 'Kategori seçilince seçenekleri gelir (bağlı liste, iframe içinde)' }],
     degerler: [
       { etiket: /^Kategori$/, deger: 'teknik' }, { etiket: /^Alt kategori$/, deger: 'Yavaşlık' }, { etiket: /^Öncelik|^Acil$|^Normal$/, deger: 'acil' },
@@ -172,12 +175,12 @@ export const PLANLAR: EkranPlani[] = [
     kok: '/ayarlar', ekranAdi: 'Poligon hesap ayarları',
     kesif: [/^Görünen ad$/, /^Hakkımda$/],
     sonradan: [
-      { etiket: /Görünürlük|Yalnız bağlantılarım|Herkese açık/, neden: '“Gizlilik” sekmesine geçince' },
+      { etiket: /[Gg]örünürlü|Yalnız bağlantılarım|Herkese açık/, neden: '“Gizlilik” sekmesine geçince' },
       { etiket: /^Cep telefonu$/, neden: '“SMS bildirimleri” anahtarı açılınca (zorunlu)' }
     ],
     degerler: [
       { etiket: /^Hakkımda$/, deger: 'Deneme biyografi' }, { etiket: /^Cep telefonu$/, tablo: 'Cep telefonu' },
-      { etiket: /Görünürlük|Yalnız bağlantılarım|Herkese açık/, deger: 'baglantilar' }, { etiket: /Arama motorlarında/, deger: false }, { etiket: /Özet e-postası/, deger: '7' }
+      { etiket: /[Gg]örünürlü|Yalnız bağlantılarım|Herkese açık/, deger: 'baglantilar' }, { etiket: /Arama motorlarında/, deger: false }, { etiket: /Özet e-postası/, deger: '7' }
     ],
     basilacak: [/^Bildirimler$/, /SMS bildirimleri/, /^Gizlilik$/, /Değişiklikleri kaydet/],
     bitti: /Ayarlar kaydedildi/,

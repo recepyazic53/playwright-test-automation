@@ -16,7 +16,7 @@
 // reddedilir), sayfaya form gönderimi ve düğme tıklaması korumaları konur, GET/HEAD dışındaki istekler engellenir. Diğer izinlerde
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
-import type { Browser, Dialog, Locator, Page, Request } from '@playwright/test';
+import type { Browser, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
 import { alanaYaz, alanZatenDolu } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, sakinlikBekle } from './guvenli-tiklama';
@@ -269,15 +269,37 @@ export async function hizliTestiYurut(
       }
     }
 
+    /** Aynı kökenli çerçeveler (iframe; en çok 10): sonuç metinleri ve doğrulamada aranan metin onların içinde de olabilir. */
+    const ayniKokenCerceveler = (page: Page): Frame[] => {
+      let koken = '';
+      try { koken = new URL(page.url()).origin; } catch { return []; }
+      return page.frames().filter((f) => f !== page.mainFrame()).filter((f) => { try { return new URL(f.url()).origin === koken; } catch { return false; } }).slice(0, 10);
+    };
+    /** Görünen metinler: ana belge + aynı kökenli çerçeveler (aynı metin bir kez). */
+    async function metinleriTopla(page: Page): Promise<HizliMetin[]> {
+      const ayar = { kaliplar: { ...KALIPLAR }, enCok: 150 };
+      const l = (await page.evaluate(hizliMetinleriTopla, ayar).catch(() => [])) as HizliMetin[];
+      for (const f of ayniKokenCerceveler(page)) {
+        for (const m of ((await f.evaluate(hizliMetinleriTopla, ayar).catch(() => [])) as HizliMetin[])) if (!l.some((x) => x.metin === m.metin)) l.push(m);
+      }
+      return l.slice(0, 150);
+    }
+    /** Sayfanın tüm görünen yazısı (ana belge + aynı kökenli çerçeveler): bitiş / hata metni aranır. */
+    async function govdeMetni(page: Page): Promise<string> {
+      const parcalar = [await page.locator('body').innerText().catch(() => '')];
+      for (const f of ayniKokenCerceveler(page)) parcalar.push(await f.locator('body').innerText({ timeout: 1_000 }).catch(() => ''));
+      return parcalar.filter(Boolean).join('\n');
+    }
+
     /** Sayfanın okuması (değer yok). goruntu: JPEG ekran görüntüsü (yalnız bellekte; sunucuya gider). */
     async function anlikOku(page: Page, goruntu: boolean): Promise<HizliAnlik> {
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
       const envanter = await envanterOku(page, { degerOku: true }).catch(() => ({ alanlar: [] as HamAlan[], baslik: '' }));
       // "Devam et" listesi: sayfadaki tüm görünür düğmeler (sonradan beliren düğmeler puan sınırına takılmasın).
-      const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
-      const metinler = (await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[];
+      const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60, cerceveler: true });
+      const metinler = await metinleriTopla(page);
       const dugmeler: HizliDugme[] = eylem.gonderim.map((a) => ({
-        secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi
+        secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {})
       }));
       let resim: string | null = null;
       if (goruntu) resim = await page.screenshot({ type: 'jpeg', quality: 55, timeout: 10_000 }).then((b) => b.toString('base64'), () => null);
@@ -389,9 +411,14 @@ export async function hizliTestiYurut(
      * başlatan / sayfayı değiştiren basış asla tekrarlanmaz. Not: tekrar ya da etkisizlik (yoksa null); etkisiz: son basıştan sonra da
      * hiçbir şey değişmedi.
      */
-    async function guvenliBas(page: Page, secici: string, metin: string | null): Promise<{ not: string | null; etkisiz: boolean }> {
-      let l = page.locator(secici);
-      if (metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: metin });
+    async function guvenliBas(page: Page, secici: string, metin: string | null, cerceve: string[] | null = null): Promise<{ not: string | null; etkisiz: boolean }> {
+      // Düğme aynı kökenli bir çerçevedeyse (iframe) çerçeve seçicileriyle.
+      let l = alanKapsami(page, cerceve).locator(secici);
+      // Seçici birden çok öğe buluyorsa yazıyla daraltılır (yazı aday listesindeki ayırt edici ekleri taşıyabilir: bulunmazsa daraltılmaz).
+      if (metin && (await l.count().catch(() => 0)) > 1) {
+        const d = l.filter({ hasText: metin });
+        if ((await d.count().catch(() => 0)) > 0) l = d;
+      }
       const hedef = l.filter({ visible: true }).first();
       await hedef.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
       await sakinlikBekle(page, hedef, { ag });
@@ -412,7 +439,7 @@ export async function hizliTestiYurut(
     }
 
     /** Düğmeye basar, sonucu bekler ve farkı çıkarır. */
-    async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik, no: number): Promise<HizliFark> {
+    async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik, no: number, cerceve: string[] | null = null): Promise<HizliFark> {
       const onceAdres = yolu(page.url());
       const bas = Date.now();
       diyaloglar.length = 0;
@@ -429,11 +456,11 @@ export async function hizliTestiYurut(
       };
       baglam.on('request', istekIzi);
       try {
-        tiklamaNotu = (await guvenliBas(page, secici, metin)).not;
+        tiklamaNotu = (await guvenliBas(page, secici, metin, cerceve)).not;
         sonuc = await basisiIzle(page, bas);
         // Basıştan sonra hiç yeni metin görülmediyse (ör. pencere önce yalnız "Kapat" düğmesiyle açılıp içi sonra çizilir) kısa bir süre
         // daha bakılır; yeni metin belirince görünüm yeniden sakinleşene kadar beklenir.
-        const yeniMetinVar = async (): Promise<boolean> => ((await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[])
+        const yeniMetinVar = async (): Promise<boolean> => (await metinleriTopla(page))
           .some((m) => !onceMetinler.has(m.metin) && m.tur !== 'bekleme');
         const pencereAcik = (): Promise<boolean> => page.evaluate(() => [...document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],.modal')]
           .some((d) => {
@@ -476,7 +503,7 @@ export async function hizliTestiYurut(
       const sonraAlanlar = new Set(sonra.alanlar.map((a) => a.anahtar));
       const onceDugmeler = new Set(once.dugmeler.map((d) => d.secici));
       return {
-        basilan: { secici, metin }, sureMs: Date.now() - bas, zamanAsimi: sonuc.zamanAsimi, beklemeMetinleri: sonuc.metinler,
+        basilan: { secici, metin, ...(cerceve?.length ? { cerceve } : {}) }, sureMs: Date.now() - bas, zamanAsimi: sonuc.zamanAsimi, beklemeMetinleri: sonuc.metinler,
         yeniMetinler, yeniAlanlar: sonra.alanlar.filter((a) => !onceAlanlar.has(a.anahtar)),
         kaybolanAlanlar: once.alanlar.filter((a) => !sonraAlanlar.has(a.anahtar)).map((a) => a.anahtar),
         yeniDugmeler: sonra.dugmeler.filter((d) => !onceDugmeler.has(d.secici)),
@@ -577,7 +604,7 @@ export async function hizliTestiYurut(
       /** Son basış etkisiz kaldıysa (iki kez basıldı, hiçbir şey değişmedi) bitiş görülmezse iletiye eklenen açıklama. */
       let sonEtkisiz: string | null = null;
       const hataVar = async (): Promise<string | null> => {
-        const govde = `${await page.locator('body').innerText().catch(() => '')}\n${diyaloglar.join('\n')}`;
+        const govde = `${await govdeMetni(page)}\n${diyaloglar.join('\n')}`;
         return plan.bitis.hata.find((h) => iceriyor(govde, h)) ?? null;
       };
       for (const [i, adim] of plan.adimlar.entries()) {
@@ -612,7 +639,7 @@ export async function hizliTestiYurut(
         // Bu basışta açılan pencereye hızlı testte verilen yanıt (normal koşu da aynı yanıtı verir: aksiyonun "diyalog"u).
         planYaniti = adim.bas.diyalog ?? null;
         try {
-          const t = await guvenliBas(page, adim.bas.secici, adim.bas.metin);
+          const t = await guvenliBas(page, adim.bas.secici, adim.bas.metin, adim.bas.cerceve ?? null);
           sonEtkisiz = t.etkisiz && t.not ? `${i + 1}. adımda ${t.not}` : null;
           if (t.not) await ilerle(i + 1, `${onEk}: “${adim.bas.metin ?? adim.bas.secici}” — ${t.not}`);
           const s = await basisiIzle(page, Date.now());
@@ -628,7 +655,7 @@ export async function hizliTestiYurut(
       await ilerle(toplam + 1, 'Bitiş koşulu bekleniyor…');
       const son = Date.now() + plan.zamanAsimiSn * 1000;
       for (;;) {
-        const govde = `${await page.locator('body').innerText().catch(() => '')}\n${diyaloglar.join('\n')}`;
+        const govde = `${await govdeMetni(page)}\n${diyaloglar.join('\n')}`;
         const h = plan.bitis.hata.find((x) => iceriyor(govde, x));
         if (h) return { sonuc: 'basarisiz', mesaj: `Hata mesajı göründü: “${h}”.`, gorulen: [...gorulen, h] };
         const b = plan.bitis.bitti.find((x) => iceriyor(govde, x));
@@ -780,7 +807,7 @@ export async function hizliTestiYurut(
           await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
-          const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no);
+          const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no, k.cerceve ?? null);
           sonAnlik = fark.anlik;
           // Basıştan sonra beliren (henüz boş) seçim alanları da denenir: içlerinde koşullu alan var mı? (Sayfa yeniden açılmaz.)
           const yeniSecimler = fark.yeniAlanlar.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);

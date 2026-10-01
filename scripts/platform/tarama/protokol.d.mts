@@ -156,14 +156,14 @@ export type HizliMetin = {
 /** Tarayıcı penceresi (alert / confirm / prompt) ve verilen yanıt (kabul: Tamam; iptal: İptal). */
 export type HizliDiyalog = { tur: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; mesaj: string; yanit: 'kabul' | 'iptal' };
 /** Görünen düğme adayı (eylem keşfinin gönderim adayları; basılmadan). */
-export type HizliDugme = { secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean };
+export type HizliDugme = { secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean; cerceve?: string[] };
 /** Sayfanın o anki okuması (alan DEĞERİ okunmaz). goruntu: JPEG base64 (yalnız bellekte). */
 export type HizliAnlik = {
   yol: string; baslik: string; alanlar: HamAlan[]; metinler: HizliMetin[]; dugmeler: HizliDugme[]; eylem: EylemAdaylari; goruntu: string | null;
 };
 /** Basıştan sonra ne değişti. */
 export type HizliFark = {
-  basilan: { secici: string; metin: string | null }; sureMs: number; zamanAsimi: boolean; beklemeMetinleri: string[];
+  basilan: { secici: string; metin: string | null; cerceve?: string[] }; sureMs: number; zamanAsimi: boolean; beklemeMetinleri: string[];
   yeniMetinler: HizliMetin[]; yeniAlanlar: HamAlan[]; kaybolanAlanlar: string[]; yeniDugmeler: HizliDugme[];
   adres: { once: string; sonra: string } | null; anlik: HizliAnlik;
   /** Basış sırasında açılan tarayıcı pencereleri ve verilen yanıtlar (izin kipine göre ya da kullanıcının seçimi). */
@@ -191,13 +191,13 @@ export type HizliKesif = {
 export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | boolean };
 /** Doğrulama koşusu planı: adımlar baştan sona (doldur → bas), sonra bitiş koşulu. */
 export type HizliPlan = {
-  adimlar: Array<{ alanlar: HizliDoldurulan[]; bas: { secici: string; metin: string | null; diyalog?: 'kabul' | 'iptal' } | null }>;
+  adimlar: Array<{ alanlar: HizliDoldurulan[]; bas: { secici: string; metin: string | null; diyalog?: 'kabul' | 'iptal'; cerceve?: string[] } | null }>;
   bitis: { bitti: string[]; devam: string[]; hata: string[]; adres: string | null }; zamanAsimiSn: number;
 };
 /** Sunucu → alt süreç. */
 export type HizliKomut =
   | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[] }
-  | { no: number; tur: 'bas'; secici: string; metin: string | null }
+  | { no: number; tur: 'bas'; secici: string; metin: string | null; cerceve?: string[] }
   /** Bana sor: basış sırasında açılan onay / soru penceresine kullanıcının yanıtı. */
   | { no: number; tur: 'diyalogYaniti'; yanit: 'kabul' | 'iptal' }
   | { no: number; tur: 'secimAc' }

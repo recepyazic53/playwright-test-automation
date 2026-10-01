@@ -46,7 +46,7 @@ import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
 import { TaramaHatasi, taramaYoneticisiAl } from '../tarama/yonetici.mjs';
 import { HedefHatasi, ekKokenleri, hedefCoz } from '../tarama/koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturucu.mjs';
-import { katla } from '../tarama/eylem-kesfi.mjs';
+import { kalipVar, katla } from '../tarama/eylem-kesfi.mjs';
 import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { bulguMetni, gercekSecenekler, olaganYuklenme, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
@@ -104,6 +104,8 @@ const adsizEtiket = (a) => {
 };
 /** Parola türündeki alanın değeri görünümde maskelenir. @param {Nesne} a */
 const gizliAlan = (a) => String(a.tur) === 'password';
+/** Gönderim olmayan düğme (geri, sil, vazgeç, kapat, iptal…; yalnız "×" / "✕" simgesi): öneri olmaz. @param {unknown} m */
+const olumsuzDugme = (m) => typeof m === 'string' && (kalipVar('olumsuz', m) || /^\s*[×✕✖✗]\s*$/u.test(m));
 
 /**
  * @param {{ projeKoku: string; yonetici?: import('../tarama/yonetici.d.mts').TaramaYoneticisi }} s
@@ -316,7 +318,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const a = tekAday(adaylar, o.cumle.dugmeler);
       if (a && basmaKarari({ izin: o.izin, adaySayisi: 1 }) === 'bas') {
         gunluk(o, `Evet izni: tek aday “${a.metin ?? a.secici}”; basılıyor.`);
-        basmayaBasla(o, { secici: a.secici, metin: a.metin });
+        basmayaBasla(o, { secici: a.secici, metin: a.metin, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {}) });
         return;
       }
     }
@@ -329,7 +331,7 @@ export function hizliTestYoneticisiOlustur(s) {
     o.basiliyor = d;
     o.durum = 'calisiyor';
     o.calisiyor = `“${d.metin ?? d.secici}” düğmesine basıldı; sayfa izleniyor…`;
-    gonder(o, { tur: 'bas', secici: d.secici, metin: d.metin });
+    gonder(o, { tur: 'bas', secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}) });
   };
   /** Basıştan sonra (hata sorusu yanıtlandıysa): yeni alanlar → yeni adım + veri durağı; yoksa yeni (alansız) adım + karar. @param {Nesne} o */
   const basistanSonra = (o) => {
@@ -670,11 +672,16 @@ export function hizliTestYoneticisiOlustur(s) {
     // Yerinde zincir isteği sürerken aynı veri durağı gösterilir (kart yerinde kalır; düğme "getiriliyor" durumunda).
     else if (o.durum === 'zincir' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: null, getiriliyor: o.zincirIstegi ?? null };
     else if (o.durum === 'karar') {
-      // Öneri: son basışta beliren düğme (zincirin devamı), yoksa cümlenin adını verdiği / tek aday, yoksa en olası aday.
-      const yeniDugme = (o.sonFark?.yeniDugmeler ?? []).find((/** @type {Nesne} */ d) => adaylar.some((/** @type {Nesne} */ x) => x.secici === d.secici));
+      // Öneri: son basışta beliren düğme (zincirin devamı), yoksa cümlenin adını verdiği / tek aday, yoksa en olası aday. Geri / sil / vazgeç /
+      // kapat kalıplı düğmeler ve az önce basılan düğme önerilmez (listede yine seçilebilir).
+      const sonBasilan = [...o.adimlar].reverse().find((/** @type {Nesne} */ a) => a.bas)?.bas?.secici ?? null;
+      const onerilir = (/** @type {Nesne | null | undefined} */ x) => Boolean(x) && !olumsuzDugme(x?.metin) && x?.secici !== sonBasilan;
+      const yeniDugme = (o.sonFark?.yeniDugmeler ?? []).map((/** @type {Nesne} */ d) => adaylar.find((/** @type {Nesne} */ x) => x.secici === d.secici)).find(onerilir);
+      const cumleden = tekAday(adaylar, o.cumle.dugmeler);
       soru = {
         tur: 'karar', adaylar, bitirilebilir: o.basisNo > 0,
-        oneri: yeniDugme?.secici ?? tekAday(adaylar, o.cumle.dugmeler)?.secici ?? adaylar.find((/** @type {Nesne} */ x) => x.enOlasi)?.secici ?? null
+        oneri: yeniDugme?.secici ?? (onerilir(cumleden) ? cumleden?.secici : null) ?? adaylar.find((/** @type {Nesne} */ x) => x.enOlasi && onerilir(x))?.secici
+          ?? adaylar.find(onerilir)?.secici ?? null
       };
     }
     else if (o.durum === 'onay') soru = { tur: 'onay', dugme: o.onayBekleyen };
@@ -977,7 +984,7 @@ export function hizliTestYoneticisiOlustur(s) {
     if (k === 'bas') {
       const aday = (o.sonAnlik?.dugmeler ?? []).find((/** @type {Nesne} */ x) => x.secici === g.secici);
       if (!aday) throw new HizliTestHatasi('DUGME', 'Basılacak düğmeyi adaylardan seçin (listede yoksa “Başka bir düğmeye bas…”).');
-      const d = { secici: aday.secici, metin: aday.metin };
+      const d = { secici: aday.secici, metin: aday.metin, ...(aday.cerceve?.length ? { cerceve: aday.cerceve } : {}) };
       if (basmaKarari({ izin: o.izin, adaySayisi: 1, kullaniciSecti: true }) === 'sor') { o.onayBekleyen = { ...d, kayitOlusturabilir: aday.kayitOlusturabilir }; o.durum = 'onay'; }
       else basmayaBasla(o, d);
       return { tamam: true };
@@ -1010,7 +1017,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const d = o.onayBekleyen;
     o.onayBekleyen = null;
     if (g.cevap !== true) { gunluk(o, `“${d.metin ?? d.secici}” basılmadı (onay verilmedi).`); o.durum = 'karar'; return { basildi: false }; }
-    basmayaBasla(o, { secici: d.secici, metin: d.metin });
+    basmayaBasla(o, { secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}) });
     return { basildi: true };
   }
 
@@ -1143,7 +1150,7 @@ export function hizliTestYoneticisiOlustur(s) {
     if (o.izin === 'hayir') throw new HizliTestHatasi('IZIN', 'Hayır izninde doğrulama koşusu yapılmaz (düğmeye basılmaz).');
     const adimlar = o.adimlar.map((/** @type {Nesne} */ a) => ({
       alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x))).map((/** @type {Nesne} */ x) => ({ anahtar: x.anahtar, alan: x, deger: o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger })),
-      bas: a.bas ? { secici: a.bas.secici, metin: a.bas.metin, ...(a.bas.diyalog ? { diyalog: a.bas.diyalog } : {}) } : null
+      bas: a.bas ? { secici: a.bas.secici, metin: a.bas.metin, ...(a.bas.diyalog ? { diyalog: a.bas.diyalog } : {}), ...(a.bas.cerceve?.length ? { cerceve: a.bas.cerceve } : {}) } : null
     })).filter((/** @type {Nesne} */ a) => a.alanlar.length || a.bas);
     const bitis = o.bitis.olumsuz
       // Olumsuz senaryo: beklenen hata mesajı "bitti" sayılır.
