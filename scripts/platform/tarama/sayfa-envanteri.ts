@@ -27,8 +27,41 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   const bosluk = (m: string | null | undefined): string => (m ?? '').replace(/\s+/g, ' ').trim();
   const kacis = (d: string): string => CSS.escape(d);
   const tirnak = (d: string): string => d.replace(/["\\]/g, '\\$&');
+  // ---- Açık gölge kökleri (shadow DOM): alanlar ve seçicilerin tekilliği gölge köklerin içinde de aranır (Playwright'ın CSS ve rol
+  // seçicileri açık gölge köklerini deler). Kapalı kökler okunamaz. ----
+  const golgeKokleri: ShadowRoot[] = [];
+  const kokleriTopla = (k: ParentNode, n = 0): void => {
+    for (const e of Array.from(k.querySelectorAll('*'))) {
+      // Nöbetçi'nin kendi arayüzü (kayıt paneli, seçme şeridi; kimliği "nobetci" ile başlar) okunmaz.
+      if (e.shadowRoot && !e.closest('[id^="nobetci"]') && golgeKokleri.length < 200) { golgeKokleri.push(e.shadowRoot); if (n < 5) kokleriTopla(e.shadowRoot, n + 1); }
+    }
+  };
+  kokleriTopla(document);
+  /** Belge + açık gölge kökleri boyunca, sayfa (düz ağaç) sırasıyla eşleşen öğeler. */
+  const derinSec = (s: string): Element[] => {
+    if (!golgeKokleri.length) return [...document.querySelectorAll(s)];
+    const l: Element[] = [];
+    const yuru = (k: ParentNode): void => {
+      for (const e of Array.from(k.children)) {
+        if (e.matches(s)) l.push(e);
+        if (e.shadowRoot && !e.closest('[id^="nobetci"]')) yuru(e.shadowRoot);
+        yuru(e);
+      }
+    };
+    yuru(document);
+    return l;
+  };
   const tekMi = (s: string): boolean => {
-    try { return document.querySelectorAll(s).length === 1; } catch { return false; }
+    try {
+      let n = document.querySelectorAll(s).length;
+      for (const k of golgeKokleri) { n += k.querySelectorAll(s).length; if (n > 1) return false; }
+      return n === 1;
+    } catch { return false; }
+  };
+  /** Öğenin kökündeki (belge ya da gölge kök) kimlikli öğe. */
+  const kokteBul = (el: Element, id: string): Element | null => {
+    const kok = el.getRootNode() as Document | ShadowRoot;
+    return typeof kok.getElementById === 'function' ? kok.getElementById(id) : document.getElementById(id);
   };
   const gorunurMu = (el: Element | null): boolean => {
     if (!(el instanceof HTMLElement)) return false;
@@ -81,7 +114,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     return null;
   };
   const ozelKaplar = new Map<HTMLSelectElement, { kap: HTMLElement; tik: HTMLElement }>();
-  for (const s of document.querySelectorAll('select')) {
+  for (const s of derinSec('select') as HTMLSelectElement[]) {
     const b = ozelBilesen(s);
     if (b) ozelKaplar.set(s, b);
   }
@@ -94,8 +127,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     return bosluk(k.textContent);
   };
   const etiketTemizle = (m: string): string => bosluk(m).replace(/[\s:*：]+$/u, '').replace(/^[\s*]+/, '').trim().slice(0, 160);
-  const idMetni = (ids: string | null): string => (ids ?? '').split(/\s+/).filter(Boolean)
-    .map((id) => { const e = document.getElementById(id); return e ? saltMetin(e) : ''; }).filter(Boolean).join(' ');
+  const idMetni = (ids: string | null, kaynak: Element | null = null): string => (ids ?? '').split(/\s+/).filter(Boolean)
+    .map((id) => { const e = kaynak ? kokteBul(kaynak, id) : document.getElementById(id); return e ? saltMetin(e) : ''; }).filter(Boolean).join(' ');
 
   /** Form denetimleri (gizli alanlar sayılmaz). */
   const denetimleri = (e: Element): Element[] => (e.matches('input,select,textarea') ? [e] : [...e.querySelectorAll('input,select,textarea')])
@@ -278,7 +311,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       return { hazir: !bos, mevcut: bos ? null : kes(el.multiple ? [...el.selectedOptions].map((o) => bosluk(o.label || o.text)).join(', ') : metin) };
     }
     if (tur === 'checkbox') return { hazir: (el as HTMLInputElement).checked, mevcut: (el as HTMLInputElement).checked ? kes('İşaretli') : null };
-    const v = bosluk(el.value);
+    // Zengin metin alanı (contenteditable): görünen yazısı.
+    const v = bosluk(tur === 'contenteditable' ? (el as unknown as HTMLElement).innerText : el.value);
     return { hazir: v !== '', mevcut: kes(v) };
   };
 
@@ -289,7 +323,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       const ham = saltMetin(l);
       if (ham) return { metin: etiketTemizle(ham), kaynak: l.contains(el) ? 'sarmalayan' : 'label', yildiz: ham.includes('*') };
     }
-    const aria = idMetni(el.getAttribute('aria-labelledby')) || bosluk(el.getAttribute('aria-label'));
+    const aria = idMetni(el.getAttribute('aria-labelledby'), el) || bosluk(el.getAttribute('aria-label'));
     if (aria) return { metin: etiketTemizle(aria), kaynak: 'aria', yildiz: aria.includes('*') };
     let yakin = secimliMi ? sonrakiMetin(el) ?? yakinMetin(el) : yakinMetin(el);
     // Yan yana sütun başlıkları tek metin olarak gelmişse (ya da hiç gelmemişse) alanın kendi sütununun başlığı alınır.
@@ -398,32 +432,52 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     return a;
   };
   const onayAdlari = new Map<string, number>();
-  for (const c of document.querySelectorAll('input[type="checkbox"][name]')) {
+  for (const c of derinSec('input[type="checkbox"][name]')) {
     const ad = c.getAttribute('name') ?? '';
     onayAdlari.set(ad, (onayAdlari.get(ad) ?? 0) + 1);
   }
 
   const alanlar: HamAlan[] = [];
-  const islenenRadyolar = new Set<string>();
-  const ogeler = [...document.querySelectorAll('input, select, textarea')] as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
+  const islenenRadyoOgeleri = new Set<Element>();
+  // Form alanları + zengin metin alanları (contenteditable / role=textbox; iç içe olanın yalnız en dıştaki). Gölge köklerin içi dahil.
+  const ZENGIN = '[contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], [role="textbox"]:not(input):not(textarea)';
+  const zenginMi = (e: Element): boolean => !(e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement);
+  const ogeler = derinSec(`input, select, textarea, ${ZENGIN}`)
+    .filter((e) => !zenginMi(e) || !e.parentElement?.closest(ZENGIN)) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
   ogeler.forEach((el, sira) => {
     const etiketAdi = el.tagName.toLowerCase();
-    const tur = el instanceof HTMLInputElement ? (el.getAttribute('type') || 'text').toLowerCase() : etiketAdi;
+    const tur = zenginMi(el) ? 'contenteditable' : el instanceof HTMLInputElement ? (el.getAttribute('type') || 'text').toLowerCase() : etiketAdi;
     if (['hidden', 'submit', 'button', 'reset', 'image'].includes(tur)) return;
     if (ozelIcinde(el)) return;
     const devreDisi = el.matches(':disabled');
     const zorunluOzellik = el.required || el.getAttribute('aria-required') === 'true';
 
     if (tur === 'radio') {
-      const ad = el.getAttribute('name') || `#${el.id || sira}`;
-      if (islenenRadyolar.has(ad)) return;
-      const grup = (el.getAttribute('name')
-        ? [...document.querySelectorAll(`input[type="radio"][name="${tirnak(ad)}"]`)]
-        : [el]) as HTMLInputElement[];
+      if (islenenRadyoOgeleri.has(el)) return;
+      const gercekAd = el.getAttribute('name');
+      // Grup: aynı name'li radyolar; name yoksa aynı kaptaki (radiogroup / fieldset; yoksa radyonun yalnız kendisini saran kabın üstü)
+      // name'siz radyolar — kimliği (id) olmayan gruplar da tek alan olarak okunur.
+      let grup: HTMLInputElement[];
+      // (aynı kökte: belge ya da gölge kök)
+      if (gercekAd) grup = [...(el.getRootNode() as Document | ShadowRoot).querySelectorAll(`input[type="radio"][name="${tirnak(gercekAd)}"]`)] as HTMLInputElement[];
+      else {
+        let kap: Element | null = el.closest('[role="radiogroup"], fieldset') ?? el.parentElement;
+        const adsizlar = (k: Element): HTMLInputElement[] => [...k.querySelectorAll('input[type="radio"]:not([name])')] as HTMLInputElement[];
+        for (let i = 0; kap && i < 3 && adsizlar(kap).length < 2 && !kap.matches('form, body, main, [role="radiogroup"], fieldset'); i++) kap = kap.parentElement;
+        const radyo = el as HTMLInputElement;
+        grup = kap ? adsizlar(kap) : [radyo];
+        if (!grup.includes(radyo)) grup = [radyo];
+      }
+      for (const r of grup) islenenRadyoOgeleri.add(r);
       const gorunenler = grup.filter((r) => gorunurMu(r) || (r.labels ? [...r.labels].some(gorunurMu) : false));
       if (!gorunenler.length) return;
-      islenenRadyolar.add(ad);
-      // Grup etiketi: yalnızca bu grubu içeren fieldset'in legend'ı, radiogroup'un aria adı ya da grubun önündeki metin.
+      const secenekMetni = (r: HTMLInputElement): string | null => {
+        const lm = r.labels && r.labels.length ? saltMetin(r.labels[0]) : sonrakiMetin(r);
+        return lm ? etiketTemizle(lm) : null;
+      };
+      const secenekMetinleri = new Set(grup.map((r) => kar(secenekMetni(r) ?? '')).filter(Boolean));
+      // Grup etiketi: yalnızca bu grubu içeren fieldset'in legend'ı, radiogroup'un aria adı, grubun ilk radyosunun önündeki metin (ör.
+      // "<span>Biçim:</span> <label><input> PDF</label>"; tablo satırında satırın başlık hücresi) ya da yalnız bu grubu saran kabın önündeki metin.
       let etiket: string | null = null;
       let kaynak: HamAlan['etiketKaynagi'] = null;
       let grupFieldset: Element | null = null;
@@ -434,24 +488,30 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       }
       const rg = el.closest('[role="radiogroup"]');
       if (!etiket && rg) {
-        const t = idMetni(rg.getAttribute('aria-labelledby')) || bosluk(rg.getAttribute('aria-label'));
+        const t = idMetni(rg.getAttribute('aria-labelledby'), rg) || bosluk(rg.getAttribute('aria-label'));
         if (t) { etiket = etiketTemizle(t); kaynak = 'aria'; }
+      }
+      // Seçeneğin kendi yazısı grup adı olamaz.
+      const grupAdi = (t: string | null): string | null => (t && !secenekMetinleri.has(kar(etiketTemizle(t))) ? t : null);
+      if (!etiket) {
+        const t = grupAdi(yakinMetin(grup[0]));
+        if (t) { etiket = etiketTemizle(t); kaynak = 'yakin'; }
       }
       if (!etiket) {
         let kap: Element | null = el.parentElement;
         while (kap && !grup.every((r) => kap?.contains(r))) kap = kap.parentElement;
-        const t = kap ? yakinMetin(kap) : null;
+        const yalnizGrup = kap ? denetimleri(kap).every((x) => grup.includes(x as HTMLInputElement)) : false;
+        const t = kap && yalnizGrup ? grupAdi(yakinMetin(kap)) : null;
         if (t) { etiket = etiketTemizle(t); kaynak = 'yakin'; }
       }
+      // Seçeneğin seçicisi: kimlik → name + value → rol + yazı → CSS yolu (kimliği olmayan radyo da seçilebilir).
       const radyolar: HamRadyo[] = grup.map((r) => {
-        const lm = r.labels && r.labels.length ? saltMetin(r.labels[0]) : sonrakiMetin(r);
-        const rid = r.getAttribute('id');
-        return { deger: r.value, metin: lm ? etiketTemizle(lm) : null, secici: rid && tekMi(`#${kacis(rid)}`) ? `#${kacis(rid)}` : null };
+        const metin = secenekMetni(r);
+        return { deger: r.value, metin, secici: seciciOner(r, metin, 'radio').secici };
       });
-      const gercekAd = el.getAttribute('name');
       const secici = gercekAd ? `input[type="radio"][name="${tirnak(gercekAd)}"]` : seciciOner(el, etiket, 'radio').secici;
       alanlar.push({
-        anahtar: anahtarVer(gercekAd ? `radyo:${gercekAd}` : `radyo:${el.id || sira}`), tur: 'radio', etiket, etiketKaynagi: kaynak,
+        anahtar: anahtarVer(gercekAd ? `radyo:${gercekAd}` : `radyo:${el.id || etiket || sira}`), tur: 'radio', etiket, etiketKaynagi: kaynak,
         kimlik: null, ad: gercekAd, secici, kirilganlik: gercekAd ? 'dusuk' : 'yuksek',
         adaySeciciler: gercekAd ? [secici, `input[name="${tirnak(gercekAd)}"]`, `[name="${tirnak(gercekAd)}"]`] : [secici],
         zorunlu: grup.some((r) => r.required) || rg?.getAttribute('aria-required') === 'true', devreDisi: grup.every((r) => r.disabled),
@@ -473,7 +533,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     const id = el.getAttribute('id');
     const ad = el.getAttribute('name');
     const grup = tur === 'checkbox' && ad && (onayAdlari.get(ad) ?? 0) > 1 ? ad : null;
-    const temelAnahtar = id ? `#${id}` : ad ? `@${ad}${grup ? `=${(el as HTMLInputElement).value}` : ''}` : e.metin ? `~${e.metin}` : `${etiketAdi}:${sira}`;
+    // Kimlik gölge bileşenlerde tekrarlanabilir (her bileşende id="i"): yalnız sayfada tekse anahtar olur, değilse name.
+    const temelAnahtar = id && (tekMi(`#${kacis(id)}`) || !ad) ? `#${id}` : ad ? `@${ad}${grup ? `=${(el as HTMLInputElement).value}` : ''}` : e.metin ? `~${e.metin}` : `${etiketAdi}:${sira}`;
     const alan: HamAlan = {
       anahtar: anahtarVer(temelAnahtar), tur, etiket: e.metin, etiketKaynagi: e.kaynak, kimlik: id, ad, secici, kirilganlik, adaySeciciler: adaylar,
       zorunlu: zorunluOzellik || e.yildiz, devreDisi,
@@ -484,6 +545,23 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       alan.secenekler = [...el.options].slice(0, 300).map((o) => ({ deger: o.value, metin: bosluk(o.label || o.text) }));
     }
     if (tur === 'file') alan.kabul = el.getAttribute('accept') || null;
+    const metinTuru = el instanceof HTMLInputElement && ['text', 'search', ''].includes(tur);
+    // Salt okunur ama yalnız takvimden seçilen tarih alanı: adı / yer tutucusu / sınıfı tarih ya da takvim çağrıştırıyor ya da açılır pencere
+    // (aria-haspopup) bildiriyor. Doldurulabilir sayılır (değer + olaylar; olmazsa takvimden).
+    if (metinTuru && alan.saltOkunur && !devreDisi) {
+      const ipucu = `${e.metin ?? ''} ${el.getAttribute('placeholder') ?? ''} ${el.getAttribute('name') ?? ''} ${id ?? ''} ${el.getAttribute('class') ?? ''}`.toLocaleLowerCase('tr');
+      if (/tarih|date|takvim|calendar|datepicker|gün|day/.test(ipucu) || ['dialog', 'grid', 'true'].includes(el.getAttribute('aria-haspopup') ?? '')) alan.takvimden = true;
+    }
+    // "Yazıp Enter'a basın" (etiket / beceri girdisi): değer Enter ile eklenir; doldurduktan sonra Enter (modelde doldurucuParametreleri.tus).
+    // ("Enter your name" gibi İngilizce yönergeler sayılmaz: yalnız Enter'a basma yönergesi.)
+    if (metinTuru && /enter['’]?\s*(?:a|e|ya|ye)?\s*bas|enter\s*tuşu|enter\s+ile\s+ekle|(?:press|hit)\s+enter/i.test(`${e.metin ?? ''} ${el.getAttribute('placeholder') ?? ''} ${idMetni(el.getAttribute('aria-describedby'), el)}`)) alan.tus = 'Enter';
+    // Otomatik tamamlama: yazınca öneri listesi açılan alan (aria-autocomplete, role=combobox, list, bağlı liste kutusu ya da yanında liste).
+    if (metinTuru && !alan.saltOkunur) {
+      const bagliIdler = `${el.getAttribute('aria-controls') ?? ''} ${el.getAttribute('aria-owns') ?? ''}`.split(/\s+/).filter(Boolean);
+      const bagliListe = bagliIdler.some((x) => kokteBul(el, x)?.matches('[role="listbox"], ul, ol, datalist'));
+      const yanindaListe = Boolean(el.parentElement?.querySelector(':scope > [role="listbox"]'));
+      if (['list', 'both'].includes(el.getAttribute('aria-autocomplete') ?? '') || el.getAttribute('role') === 'combobox' || el.hasAttribute('list') || bagliListe || yanindaListe) alan.oneri = true;
+    }
     if (ozel) {
       alan.ozelBilesen = true;
       alan.bilesen = seciciOner(ozel.kap, null, null).secici;
@@ -491,7 +569,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     alanlar.push(alan);
   });
 
-  const ozelBilesenSayisi = [...document.querySelectorAll('[role="combobox"]:not(input):not(select),[role="listbox"]:not(select),[contenteditable="true"],[role="textbox"]:not(input):not(textarea)')]
+  // Alan olarak okunamayan özel bileşenler (combobox / listbox; zengin metin alanları artık alan olarak okunur).
+  const ozelBilesenSayisi = derinSec('[role="combobox"]:not(input):not(select),[role="listbox"]:not(select)')
     .filter((x) => gorunurMu(x) && !ozelIcinde(x)).length;
 
   // ---- Çerçeveler (iframe / frame): aynı kökenli olanların içi, çerçevenin kendi penceresindeki okuyucuyla. ----

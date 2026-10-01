@@ -58,7 +58,7 @@ export type PlanAlani = {
 /** cerceve: öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe). */
 /** kosul 'gorunurse' (yalnız tikla): öğe kısa sürede (varsayılan 5 sn / zamanAsimiSn) görünmezse tıklama atlanır, raporda not. */
 /** tur 'git': yol — ekranın ortamının adresine göre açılacak yol (ör. /liste). */
-export type PlanAksiyonu = { tur: 'tikla' | 'bekle' | 'ekranaDon' | 'git'; yol?: string; secici?: string; metin?: string; durum?: 'gorunur' | 'gizli' | 'dolu'; kosul?: 'gorunurse'; aciklama?: string; zamanAsimiSn?: number; sureSn?: number; cerceve?: string[] };
+export type PlanAksiyonu = { tur: 'tikla' | 'bekle' | 'ekranaDon' | 'git'; yol?: string; secici?: string; metin?: string; durum?: 'gorunur' | 'gizli' | 'dolu'; kosul?: 'gorunurse'; aciklama?: string; zamanAsimiSn?: number; sureSn?: number; cerceve?: string[]; diyalog?: 'kabul' | 'iptal' };
 
 export type PlanBasariGostergesi = { tur: 'metin' | 'eleman' | 'url' | 'desen'; deger: string; secici?: string; cerceve?: string[] };
 

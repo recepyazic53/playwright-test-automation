@@ -181,7 +181,12 @@ export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri',
 const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'tekrarDenenebilir', 'not', 'bitisKosulu']);
 /** Bitiş koşulunda (kosu.bitisKosulu.devam) en çok "Devam" metni. */
 export const DEVAM_METNI_EN_COK = 10;
-const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve', 'yol']);
+const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve', 'yol', 'diyalog']);
+/**
+ * Tıklamada açılan tarayıcı penceresine (confirm / prompt) verilecek yanıt: kabul (Tamam; prompt varsayılan değeriyle) ya da iptal.
+ * Bu tıklamada açılan pencereler (bilgi penceresi dahil) beklenen sayılır, adımın hatası olmaz (hızlı testte görülüp yanıtlandı).
+ */
+export const DIYALOG_YANITLARI = Object.freeze(['kabul', 'iptal']);
 
 /**
  * "cerceve": öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri, dıştan içe — 1–CERCEVE_EN_DERIN boş olmayan metinden
@@ -513,6 +518,7 @@ function kosuTanimiDogrula(h, yer, kosu) {
       if (a.kosul !== undefined && a.tur !== 'ekranaDon' && a.tur !== 'git' && (a.tur !== 'tikla' || !listedeMi(AKSIYON_KOSULLARI, a.kosul))) h.ekle(aYer, `"kosul" yalnızca "tikla" aksiyonunda ${AKSIYON_KOSULLARI.join(' | ')} olabilir`);
       if (a.durum !== undefined && (a.tur !== 'bekle' || !['gorunur', 'gizli', 'dolu'].includes(a.durum))) h.ekle(aYer, '"durum" yalnızca "bekle" aksiyonunda gorunur | gizli | dolu olabilir');
       if (a.aciklama !== undefined && typeof a.aciklama !== 'string') h.ekle(aYer, '"aciklama" metin olmalı');
+      if (a.diyalog !== undefined && (a.tur !== 'tikla' || !listedeMi(DIYALOG_YANITLARI, a.diyalog))) h.ekle(aYer, `"diyalog" yalnızca "tikla" aksiyonunda ${DIYALOG_YANITLARI.join(' | ')} olabilir`);
       if (a.cerceve !== undefined && a.secici === undefined) h.ekle(aYer, '"cerceve" yalnızca seçicili aksiyonda olur');
       cerceveDogrula(h, aYer, a.cerceve);
       sure(a.zamanAsimiSn, aYer);

@@ -225,8 +225,11 @@ export function degiskenMetinMi(metin) {
 }
 
 /**
- * Görülen metinlerin varsayılan etiketleri (H2 kararı: öner, kullanıcı değiştirir).
- * @param {Array<{ metin: string; tur: string; basis: number }>} gorulenler basis: kaçıncı basıştan sonra görüldü (0 = keşif)
+ * Görülen metinlerin varsayılan etiketleri (H2 kararı: öner, kullanıcı değiştirir). "Bitti" YALNIZ son basıştan sonra beliren ve sonuç
+ * niteliği taşıyan metne önerilir (sonuc: başarı kalıbı / kutusu, durum bölgesi, bildirim, başlık, bilgi penceresi; tur 'basari'):
+ * sekme / anahtar etiketleri, liste seçenekleri ve sıradan yazılar etiketsiz kalır. Sahte başarıyı önleyen kural: basıştan ÖNCE de sayfada
+ * görünen metin (onceGorundu) "Bitti" önerilmez.
+ * @param {Array<{ metin: string; tur: string; basis: number; sonuc?: boolean; onceGorundu?: boolean }>} gorulenler basis: kaçıncı basıştan sonra görüldü (0 = keşif)
  * @param {number} sonBasis son basışın numarası
  * @returns {Record<string, 'bitti' | 'devam' | 'hata' | null>}
  */
@@ -237,10 +240,30 @@ export function varsayilanEtiketler(gorulenler, sonBasis) {
     if (g.tur === 'hata' || (g.tur !== 'basari' && new RegExp(KALIPLAR.hataMetni, 'i').test(katla(g.metin)))) e[g.metin] = 'hata';
     else if (g.tur === 'bekleme' || beklemeMetniMi(g.metin)) e[g.metin] = 'devam';
     // Değişken değer (tutar, tarih, maskeli ad) bitiş olarak önerilmez: her koşuda başka olur.
-    else if (g.basis === sonBasis && sonBasis > 0 && !degiskenMetinMi(g.metin)) e[g.metin] = 'bitti';
+    else if (g.basis === sonBasis && sonBasis > 0 && (g.sonuc === true || g.tur === 'basari') && g.onceGorundu !== true && !degiskenMetinMi(g.metin)) e[g.metin] = 'bitti';
     else e[g.metin] ??= null;
   }
   return e;
+}
+
+/**
+ * Bitiş koşulu adımının uyarıları (engellemez; kullanıcıya gösterilir). gonderimVar: herhangi bir basışta yazma isteği (POST / PUT / PATCH /
+ * DELETE) gitti ya da sayfa başka belgeye geçti. Gönderim hiç olmadıysa "Bitti" seçilen metin gerçek bir sonucu göstermeyebilir; basıştan
+ * önce de görünen bir metin "Bitti" seçildiyse o metin her koşuda zaten vardır (sahte başarı).
+ * @param {{ izin: string; gonderimVar: boolean; gorulenler: Array<{ metin: string; onceGorundu?: boolean }>; etiketler: Record<string, string | null> }} g
+ * @returns {string[]}
+ */
+export function bitisUyarilari(g) {
+  /** @type {string[]} */
+  const l = [];
+  const bitti = Object.entries(g.etiketler ?? {}).filter(([, e]) => e === 'bitti').map(([m]) => m);
+  if (g.izin !== 'hayir' && !g.gonderimVar) {
+    l.push('Hiçbir basışta sunucuya kayıt / gönderim isteği gitmedi ve sayfa başka bir sayfaya geçmedi: “Bitti” seçtiğiniz metin gerçek bir sonucu göstermeyebilir (ör. sekme, anahtar ya da liste yazısı). Formu gönderen düğmeye basıldığından emin olun.');
+  }
+  for (const m of bitti) {
+    if (g.gorulenler.some((x) => x.metin === m && x.onceGorundu === true)) l.push(`“${bosluk(m).slice(0, 80)}”: Bu metin düğmeye basmadan da görünüyordu; bitiş için basıştan sonra beliren bir sonuç metni seçin.`);
+  }
+  return l;
 }
 
 /**
@@ -308,7 +331,12 @@ export function kayitEnvanteriKur(o, bitis) {
     kip: 'kayit', profil: o.profil, engellenenler: [], notlar: [], basariGostergesi: gosterge(bitis.bitti),
     adimlar: adimlar.map((a, i) => ({
       ad: i === 0 ? 'Form' : `${bosluk(adimlar[i - 1].bas?.metin) || 'Önceki düğme'} sonrası`.slice(0, 80),
-      yol: o.yol, baslik: o.baslik, alanlar: a.alanlar, ilerleme: a.bas ? { secici: a.bas.secici, metin: a.bas.metin } : null,
+      // Basışta açılan tarayıcı penceresine verilen yanıt (kabul / iptal): aksiyonun "diyalog"u olur (normal koşu aynı yanıtı verir).
+      yol: o.yol, baslik: o.baslik, alanlar: a.alanlar,
+      ilerleme: a.bas ? {
+        secici: a.bas.secici, metin: a.bas.metin, ...(a.bas.diyalog === 'kabul' || a.bas.diyalog === 'iptal' ? { diyalog: a.bas.diyalog } : {}),
+        ...(Array.isArray(a.bas.cerceve) && a.bas.cerceve.length ? { cerceve: a.bas.cerceve } : {})
+      } : null,
       ...(a.okumalar?.length ? { okumalar: a.okumalar } : {}),
       // Veri durağında gözlenen koşullar (beliren alan → seçim + değer); yalnız bu adımdaki alanlar için.
       ...(a.kosullar && Object.keys(a.kosullar).some((k) => a.alanlar.some((x) => x.anahtar === k))
@@ -415,7 +443,9 @@ export function adayMesajlari(eylem, cumleMesajlari = []) {
  * @param {Array<{ anahtar: string; zorunlu: boolean; devreDisi?: boolean; saltOkunur?: boolean; hazir?: boolean }>} alanlar @param {Record<string, unknown>} degerler
  */
 export function eksikAlanlar(alanlar, degerler) {
-  return alanlar.filter((a) => a.zorunlu && !a.hazir && !a.devreDisi && !a.saltOkunur && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
+  // Dosya alanı hızlı testte doldurulmaz (senaryo formunda yüklenir): eksik sayılmaz.
+  return alanlar.filter((a) => a.zorunlu && !a.hazir && !a.devreDisi && !a.saltOkunur && /** @type {any} */ (a).tur !== 'file'
+    && (degerler[a.anahtar] === undefined || degerler[a.anahtar] === '' || degerler[a.anahtar] === null));
 }
 
 /**

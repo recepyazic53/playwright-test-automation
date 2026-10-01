@@ -17,6 +17,7 @@
 //     ödeme riski). Başarı göstergesi tıklamadan önce zaten görünüyorsa da tekrar yoktur.
 import type { BrowserContext, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
 import type { AgIzleyici } from './ag-sakinligi';
+import { bosNokta } from './alan-cikisi';
 
 /** Görünüm parmak izinin değişmeden kalması gereken süre (ms). */
 export const GORUNUM_SAKINLIK_MS = 700;
@@ -112,9 +113,19 @@ function etkiIzle(page: Page): { etki: () => string | null; birak: () => void } 
   let etki: string | null = null;
   const istek = (r: Request): void => { const t = r.resourceType(); if (t === 'xhr' || t === 'fetch' || t === 'document') etki ??= 'istek'; };
   const sekme = (): void => { etki ??= 'sekme'; };
-  // Gözlemci: uyarıyı kapatmaz (sayfanın kendi dinleyicisi — koşucu / motor / dışa aktarma — kapatır).
-  const uyari = (_d: Dialog): void => { etki ??= 'uyari'; };
   const baglam: BrowserContext = page.context();
+  // Gözlemci: uyarıyı sayfanın kendi dinleyicisi (koşucu / motor / dışa aktarma) yanıtlar. Playwright, sayfada ya da bağlamda HERHANGİ
+  // bir 'dialog' dinleyicisi varsa pencereyi kendiliğinden kapatmaz; bu gözlemci tek dinleyiciyse pencere açık kalıp tıklama hiç
+  // dönmezdi. Bu yüzden başka dinleyici yoksa Playwright'ın varsayılanı (kapat) burada uygulanır: sayfa hiçbir durumda takılı kalmaz.
+  // Sayılamıyorsa (beklenmedik sürüm) başka dinleyici var sayılır: önceki davranış korunur.
+  const dinleyiciSayisi = (o: unknown): number => {
+    const f = (o as { listenerCount?: (ad: string) => number }).listenerCount;
+    return typeof f === 'function' ? f.call(o, 'dialog') : 99;
+  };
+  const uyari = (d: Dialog): void => {
+    etki ??= 'uyari';
+    if (dinleyiciSayisi(page) <= 1 && dinleyiciSayisi(baglam) === 0) void d.dismiss().catch(() => undefined);
+  };
   page.on('request', istek);
   page.on('dialog', uyari);
   baglam.on('page', sekme);
@@ -175,4 +186,40 @@ export async function guvenliTikla(page: Page, oge: Locator, s: {
   } finally {
     izle.birak();
   }
+}
+
+/**
+ * Düğmenin ortasında başka bir öğe varsa (örten: açık kalan öneri listesi, açılır menü, pencere) kısa tanımı; yoksa null. Gölge kökteki
+ * düğmede kendi kökü sorulur (kabuk öğe örten sayılmaz).
+ */
+export async function ortuBul(hedef: Locator): Promise<string | null> {
+  await hedef.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => undefined);
+  return hedef.evaluate((e) => {
+    const r = e.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return null;
+    const kok = e.getRootNode() as Document | ShadowRoot;
+    const ust = (typeof kok.elementFromPoint === 'function' ? kok : e.ownerDocument).elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (!ust || ust === e || e.contains(ust) || ust.contains(e)) return null;
+    const kap = ust.closest('[role="listbox"], [role="menu"], [role="dialog"], [role="tooltip"], ul, ol, dialog') ?? ust;
+    const ad = kap.getAttribute('role') ?? kap.tagName.toLowerCase();
+    const yazi = ((ust as HTMLElement).innerText || ust.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    return `${ad}${yazi ? `: “${yazi}”` : ''}`;
+  }).catch(() => null);
+}
+
+/**
+ * Düğmeyi örten öğeyi kapatmayı dener (Escape → sayfanın boş bir yerine tıklama); kapanmazsa örten öğeyi söyleyen açık hata fırlatır
+ * (ham "locator.click: Timeout" yerine). Örten yoksa hiçbir şey yapmaz.
+ */
+export async function ortuyuKaldir(page: Page, hedef: Locator, ad: string): Promise<void> {
+  let ortu = await ortuBul(hedef);
+  if (!ortu) return;
+  await page.keyboard.press('Escape').catch(() => undefined);
+  await page.waitForTimeout(250);
+  if (!(ortu = await ortuBul(hedef))) return;
+  const nokta = await bosNokta(page);
+  if (nokta) await page.mouse.click(nokta.x, nokta.y).catch(() => undefined);
+  await page.waitForTimeout(250);
+  if (!(ortu = await ortuBul(hedef))) return;
+  throw new Error(`“${ad}” düğmesine basılamadı: başka bir öğe düğmeyi örtüyor (${ortu}). Escape ve sayfanın boş bir yerine tıklama denendi, kapanmadı; önce o öğede seçim yapın ya da pencereyi kapatan düğmeye basın.`);
 }

@@ -30,6 +30,8 @@ export type HamEylemIzi = {
   adet?: number;
   /** Sayfada aria-invalid taşıyan alan sayısı (hata izine eklenir). */
   ariaInvalid?: number;
+  /** Öğe aynı kökenli bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe). */
+  cerceve?: string[];
 };
 export type HamYonlendirme = { adres: string; kaynak: 'form' | 'baglanti' | 'betik'; metin: string | null };
 export type HamEylemIzleri = { sayfaYolu: string; izler: HamEylemIzi[]; yonlendirmeler: HamYonlendirme[]; notlar?: string[] };
@@ -54,6 +56,8 @@ export type EylemAdayi = {
   /** Türünün en olası adayı (listenin ilki). */
   enOlasi: boolean;
   oge: SecilenOge | null;
+  /** Öğe aynı kökenli bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe). */
+  cerceve?: string[];
 };
 export type YonlendirmeAdayi = { adres: string; kaynak: 'form' | 'baglanti' | 'betik'; metin: string | null; guven: 'tahmin' };
 export type EylemAdaylari = {

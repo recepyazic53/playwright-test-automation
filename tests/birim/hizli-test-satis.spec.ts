@@ -125,7 +125,8 @@ test.describe('saf kurallar', () => {
     for (const m of ['İşleminiz onaylanırken lütfen bekleyiniz…', '40%', 'Onaylanıyor 0 / 1', 'İşleniyor', 'Yükleniyor']) expect(beklemeMetniMi(m), m).toBe(true);
     const e = varsayilanEtiketler([
       { metin: '6.78 EUR', tur: 'normal', basis: 2 }, { metin: 'D*** K***', tur: 'normal', basis: 2 }, { metin: 'Onaylanıyor 0 / 1', tur: 'normal', basis: 2 },
-      { metin: '40%', tur: 'normal', basis: 2 }, { metin: 'Kaydınız oluşturuldu. Kayıt no: 9001', tur: 'normal', basis: 2 }
+      // Sayfa okuması başarı kalıplı metni "sonuç" işaretler (hizli-test-sayfasi.ts); varsayılan Bitti yalnız sonuç metnine.
+      { metin: '40%', tur: 'normal', basis: 2 }, { metin: 'Kaydınız oluşturuldu. Kayıt no: 9001', tur: 'normal', basis: 2, sonuc: true }
     ], 2);
     expect(e).toEqual({ '6.78 EUR': null, 'D*** K***': null, 'Onaylanıyor 0 / 1': 'devam', '40%': 'devam', 'Kaydınız oluşturuldu. Kayıt no: 9001': 'bitti' });
     expect(bitisKosulu({ etiketler: { '377.56 TL': 'bitti', 'Tamam': 'bitti' } }).hatalar.join(' ')).toContain('yalnız değişken değer');

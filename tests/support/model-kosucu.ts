@@ -24,7 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
-import { alanaYaz } from '../../scripts/platform/tarama/alan-cikisi';
+import { alanaYaz, alandanCik, oneridenYaz, takvimdenYaz } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
@@ -574,6 +574,12 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       await l.setChecked(deger === true || deger === 'true');
       return;
     case 'tarih':
+      // Takvimden seçilen (salt okunur) alan: değer + olaylar, olmazsa takvimden gün (hızlı testle aynı kural: alan-cikisi.ts > takvimdenYaz).
+      if (alan.parametreler.takvim === true) {
+        const h = await takvimdenYaz(l, String(deger), alanTiklamaSuresiMs());
+        if (h) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${String(deger)}" seçilir`, h));
+        return;
+      }
       if (alan.doldurucu === 'tarihJs') {
         await l.evaluate((e, v) => {
           (e as HTMLInputElement).value = v;
@@ -596,6 +602,13 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       // "yaz-sil-yaz" olmaz), uzun metin doğrudan; alandan çıkılır (change / blur ve bağlı sorgu), sayfa değeri silerse bir kez yeniden
       // tuşlanır. Doldurucu tuşlama istiyorsa (tuslayarakYaz / telefonTuslama) her zaman tuşlanır; maske parametresiyle biçimlenmiş değer
       // (kalıba göre tek seferde yazılması amaçlanır) doğrudan yazılır.
+      // Otomatik tamamlama (hızlı testte öneriden seçildi): yaz → öneri listesini bekle → eşleşen öneriyi seç (alan-cikisi.ts > oneridenYaz).
+      if (alan.parametreler.oneri === true) {
+        const r = await oneridenYaz(l, metin, alanTiklamaSuresiMs());
+        if (r !== 'secildi' && r !== 'liste-yok') throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${metin}" öneriden seçilir`, r));
+        await alandanCik(l);
+        return;
+      }
       const tuslayarak = alan.doldurucu === 'tuslayarakYaz' || alan.doldurucu === 'telefonTuslama';
       await alanaYaz(l, metin, {
         tuslayarak, aralikMs: tuslayarak ? 25 : undefined, kip: ham.parametreler.maske ? 'dogrudan' : 'otomatik', zamanAsimiMs: alanTiklamaSuresiMs()
@@ -632,8 +645,21 @@ export async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Pr
     for (let i = 0; i < n; i++) metinler.push(await l.nth(i).innerText().catch(() => ''));
     mesajYakalayicisi(page)?.gostergeMetinleri(`hata:${secici}`, metinler);
   }
-  metinler.push(...(tarayiciUyarilari.get(page) ?? []), ...(pencereMesajlari.get(page) ?? []));
+  metinler.push(...hataSayilanUyarilar(page, kosu), ...(pencereMesajlari.get(page) ?? []));
   return metinler.map((m) => m.trim()).filter(Boolean);
+}
+
+/**
+ * Tarayıcı pencerelerinden (alert / confirm / prompt) adımın HATASI sayılanlar. Hızlı test ve doğrulama koşusuyla aynı kural:
+ *  - aksiyonunda "diyalog" yanıtı olan tıklamanın açtığı pencereler beklenendir (hızlı testte görüldü, yanıtlandı): hata değildir;
+ *  - bitiş koşullu adımda (hızlı test; kosu.bitisKosulu) pencere metni bitiş etiketleriyle değerlendirilir: "Bitti" metniyse başarı,
+ *    "Hata" metniyse (kosu.uyarilar) hata (ikisi de sayfa metninde aranır: sayfaMetni pencereleri de okur); etiketsiz pencere hata değildir;
+ *  - diğer modellerde (eski davranış) görülen her pencere adımın hatasıdır.
+ */
+function hataSayilanUyarilar(page: Page, kosu: PlanKosuTanimi | null): string[] {
+  if (kosu?.bitisKosulu) return [];
+  const beklenen = beklenenUyarilar.get(page);
+  return (tarayiciUyarilari.get(page) ?? []).filter((m) => !beklenen?.has(m));
 }
 
 /**
@@ -697,6 +723,8 @@ function tiklamaIzi(page: Page): TiklamaIzi {
 /** Adım başında: önceki adımın tarayıcı uyarıları, sayfa içi pencere mesajları ve etkisiz tıklama izi temizlenir. */
 function adimMesajlariniTemizle(page: Page): void {
   tarayiciUyarilari.get(page)?.splice(0);
+  beklenenUyarilar.get(page)?.clear();
+  aksiyonDiyaloglari.delete(page);
   pencereMesajlari.get(page)?.splice(0);
   const iz = tiklamaIzleri.get(page);
   if (iz) iz.etkisiz = null;
@@ -708,6 +736,10 @@ function adimMesajlariniTemizle(page: Page): void {
  * davranışıyla aynı) ya da onaylanır (prompt varsayılan değeriyle). Hata göstergesi ve beklenen mesaj bunları da okur.
  */
 const tarayiciUyarilari = new WeakMap<Page, string[]>();
+/** Aksiyonun "diyalog" yanıtıyla açılan (beklenen) pencerelerin metinleri: adımın hatası sayılmaz. */
+const beklenenUyarilar = new WeakMap<Page, Set<string>>();
+/** Son tıklama aksiyonunun pencere yanıtı (aksiyonun "diyalog"u; adım başında temizlenir). */
+const aksiyonDiyaloglari = new WeakMap<Page, 'kabul' | 'iptal'>();
 export function tarayiciUyarilariniDinle(page: Page): void {
   if (tarayiciUyarilari.has(page)) return;
   const liste: string[] = [];
@@ -715,7 +747,15 @@ export function tarayiciUyarilariniDinle(page: Page): void {
   page.on('dialog', (d) => {
     liste.push(d.message());
     mesajYakalayicisi(page)?.yakala('diyalog', d.message());
-    const onayla = (d.type() === 'confirm' || d.type() === 'prompt') && onayPenceresiDavranisi() === 'onayla';
+    // Aksiyonun yanıtı (hızlı testte verilen) varsa o; yoksa Ayarlar > Koşu > Tarayıcı onay pencereleri kararı.
+    const aksiyonYaniti = aksiyonDiyaloglari.get(page);
+    if (aksiyonYaniti) {
+      const s = beklenenUyarilar.get(page) ?? new Set<string>();
+      beklenenUyarilar.set(page, s);
+      s.add(d.message());
+    }
+    const soru = d.type() === 'confirm' || d.type() === 'prompt';
+    const onayla = soru && (aksiyonYaniti ? aksiyonYaniti === 'kabul' : onayPenceresiDavranisi() === 'onayla');
     void (onayla ? d.accept(d.type() === 'prompt' ? d.defaultValue() : undefined) : d.dismiss()).catch(() => undefined);
   });
 }
@@ -846,6 +886,9 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
     if (!a.secici) continue;
     // Öğeye dokunan / bekleyen aksiyon: ekrandan sonra sayfa değişmiş olabilir.
     if (a.tur === 'tikla') ekranaDonuldu = false;
+    // Tıklamada açılacak tarayıcı penceresine hızlı testte verilen yanıt (aksiyonun "diyalog"u): adımın sonuna kadar geçerli; açılan
+    // pencereler beklenen sayılır (doğrulama koşusuyla aynı kural).
+    if (a.tur === 'tikla' && (a.diyalog === 'kabul' || a.diyalog === 'iptal')) aksiyonDiyaloglari.set(page, a.diyalog);
     // Öğe bir çerçevede olabilir (aksiyonun cerceve'si).
     const k = kapsam(page, a.cerceve);
     let l = k.locator(a.secici);
@@ -931,8 +974,10 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
         if (devamlar.some((d) => mesajIceriyorMu(sayfa, d))) { uzatildi = true; son = Date.now() + Math.min(60_000, sureMs); continue; }
       }
       if (kosu.bitisKosulu) {
+        // Etiketsiz tarayıcı penceresi (hata sayılmadı) bilgi olarak iletiye eklenir.
+        const pencereler = (tarayiciUyarilari.get(page) ?? []).map((m) => m.replace(/\s+/g, ' ').trim()).filter(Boolean).slice(-2);
         throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu),
-          `Bitiş mesajı görülmedi (${Math.round(sureMs / 1000)} sn${uzatildi ? ' + uzatma' : ''}; sayfa: ${new URL(page.url()).pathname}${sonDevam ? `; son görülen: “${sonDevam}”` : ''})`));
+          `Bitiş mesajı görülmedi (${Math.round(sureMs / 1000)} sn${uzatildi ? ' + uzatma' : ''}; sayfa: ${new URL(page.url()).pathname}${sonDevam ? `; son görülen: “${sonDevam}”` : ''}${pencereler.length ? `; tarayıcı penceresi: ${pencereler.map((m) => `“${m}”`).join(', ')}` : ''})`));
       }
       // Son aksiyon tıklaması hiçbir şey değiştirmediyse (öğe hazır olmadan tıklanmış olabilir) ileti bunu söyler.
       const etkisiz = tiklamaIzleri.get(page)?.etkisiz;
@@ -1354,6 +1399,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         for (const d of doldurulanMetinler) {
           const bos = !(await d.l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
           if (!bos || !String(d.alan.deger ?? '').trim()) continue;
+          // "Yaz + Enter" alanı (etiket / beceri girdisi): Enter değeri ekleyip alanı boşaltır; boş kalması beklenir.
+          if (d.alan.parametreler.tus === 'Enter') continue;
           const yenidenBaslangic = Date.now();
           await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
           await arkaPlanIstekleriniBekle(page, yenidenBaslangic);

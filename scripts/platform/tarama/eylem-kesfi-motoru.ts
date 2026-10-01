@@ -6,7 +6,7 @@
 // denetiminden geçer. Hata kapları grup seçicisiyle (ör. .invalid-feedback) verilir; koşucu hata göstergesinin görünen tüm
 // öğelerini okur. Yalnız ana belge okunur (çerçevelerin içi okunmaz).
 // Kullanım: otomatik tarama (tarama-motoru.ts > profilTara) ve ileride hızlı test; sunucu ucu gerekmez.
-import type { Page } from '@playwright/test';
+import type { Frame, FrameLocator, Page } from '@playwright/test';
 import { KALIPLAR, eylemAdaylariniDegerlendir, type EylemAdaylari, type HamEylemIzi, type HamYonlendirme } from './eylem-kesfi.mjs';
 import { ogeBilgisi, type SeciciAdayi } from './oge-secme-paneli';
 
@@ -63,24 +63,75 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   const kendiMetni = (e: Element): string => bosluk([...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' '));
   const tumMetin = (e: Element): string => bosluk((e as HTMLElement).innerText || e.textContent);
 
-  // 1) Düğmeler (görünür): button, düğme türü girdiler, role=button / role=link, onclick'li öğeler, bağlantılar ve BAĞLANTI BİÇİMLİ
-  // eylem düğmeleri (href'siz ya da "#" / "javascript:" adresli <a>, işaretçi imleçli "btn" / "button" sınıflı ya da odaklanabilir öğe;
-  // tıklama dinleyiciyle bağlanmış olabilir). Yerel olmayan öğe yalnız işaretçi imleci ve kısa kendi metniyle aday olur.
-  const yerelEylem = (e: Element): boolean => e.matches('button, input[type="submit"], input[type="button"], input[type="image"], a[href], [role="button"], [role="link"], [onclick]');
-  const isaretciMi = (e: Element): boolean => getComputedStyle(e).cursor === 'pointer';
-  const dugmeler = [...document.querySelectorAll('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [role="link"], [onclick], a, [class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"])')]
+  // 0) Açık gölge kökleri (shadow DOM): düğmeler gölge köklerin içinde de aranır (Playwright'ın rol / CSS seçicileri onları deler).
+  const golgeKokleri: ShadowRoot[] = [];
+  const kokleriTopla = (k: ParentNode, n = 0): void => {
+    for (const e of Array.from(k.querySelectorAll('*'))) {
+      // Nöbetçi'nin kendi arayüzü (kayıt paneli, seçme şeridi; kimliği "nobetci" ile başlar) okunmaz.
+      if (e.shadowRoot && !e.closest('[id^="nobetci"]') && golgeKokleri.length < 200) { golgeKokleri.push(e.shadowRoot); if (n < 5) kokleriTopla(e.shadowRoot, n + 1); }
+    }
+  };
+  kokleriTopla(document);
+  const derinSec = (s: string): Element[] => [...document.querySelectorAll(s), ...golgeKokleri.flatMap((k) => [...k.querySelectorAll(s)])];
+  /** Öğenin atası (gölge kökü sınırında kabuğa geçer). */
+  const ata = (e: Element): Element | null => e.parentElement ?? ((e.getRootNode() as ShadowRoot).host ?? null);
+
+  // 1) Düğmeler (görünür): button, düğme türü girdiler, role=button / role=link / role=switch / role=tab / role=option / role=menuitem /
+  // role=radio, onclick'li öğeler, bağlantılar ve BAĞLANTI BİÇİMLİ eylem düğmeleri (href'siz ya da "#" / "javascript:" adresli <a>,
+  // işaretçi imleçli "btn" / "button" sınıflı ya da odaklanabilir öğe; tıklama dinleyiciyle bağlanmış olabilir). Yerel olmayan öğe yalnız
+  // işaretçi imleci ve kısa kendi metniyle aday olur. addEventListener ile bağlanmış div / span / svg / img (öznitelik yok): imleci
+  // KENDİSİ işaretçi olan (atasından devralmayan), içinde form alanı olmayan öğe — metinsizse (simge, yıldız) de aday olur.
+  const ROLLER = '[role="button"], [role="link"], [role="switch"], [role="tab"], [role="option"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="radio"]:not(input)';
+  const yerelEylem = (e: Element): boolean => e.matches(`button, input[type="submit"], input[type="button"], input[type="image"], a[href], ${ROLLER}, [onclick]`);
+  const isaretciMi = (e: Element | null): boolean => Boolean(e) && getComputedStyle(e as Element).cursor === 'pointer';
+  /** İmleci kendisi işaretçi (atası değil) ve tıklanabilir görünen yaprak benzeri öğe. */
+  const kendiIsaretci = (e: Element): boolean => isaretciMi(e) && !isaretciMi(ata(e)) && !e.querySelector('input, select, textarea, button, a[href]');
+  const dugmeler = derinSec(`button, input[type="submit"], input[type="button"], input[type="image"], ${ROLLER}, [onclick], a, [class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"]), div, span, li, svg, img, i`)
     .filter((e) => !nobetcininMi(e) && gorunur(e) && !e.matches('select, textarea, option, label, input:not([type="submit"]):not([type="button"]):not([type="image"])'))
-    .filter((e) => yerelEylem(e) || (isaretciMi(e) && !e.querySelector('input, select, textarea') && tumMetin(e).length > 0 && tumMetin(e).length <= 40));
+    .filter((e) => {
+      if (yerelEylem(e)) return true;
+      if (e.matches('div, span, li, svg, img, i') && !e.matches('[class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"])')) {
+        // Seçim öğesi değil (etiket / seçenek / sürükleme); kendi işaretçi imleci; çok büyük kap değil.
+        if (e.closest('label, select, option, [contenteditable="true"]') || !kendiIsaretci(e)) return false;
+        const r = e.getBoundingClientRect();
+        return r.width * r.height <= 160_000 && tumMetin(e).length <= 40;
+      }
+      return isaretciMi(e) && !e.querySelector('input, select, textarea') && tumMetin(e).length > 0 && tumMetin(e).length <= 40;
+    });
   /** Adres bir gezinme değil (href yok, "#", "javascript:"): bağlantı biçimli eylem düğmesi. */
   const eylemBaglantisi = (e: Element): boolean => {
     const h = (e.getAttribute('href') ?? '').trim();
     return e.getAttribute('role') === 'link' || !h || h === '#' || /^javascript:/i.test(h);
   };
+  /** Erişilebilir ad: aria-label → aria-labelledby (aynı kökte) → title → svg <title>. */
+  const erisilebilirAd = (e: Element): string => {
+    const kok = e.getRootNode() as Document | ShadowRoot;
+    const bagli = (e.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter(Boolean)
+      .map((id) => (typeof kok.getElementById === 'function' ? kok.getElementById(id) : document.getElementById(id))).map((x) => (x ? tumMetin(x) : '')).filter(Boolean).join(' ');
+    return bosluk(e.getAttribute('aria-label')) || bosluk(bagli) || bosluk(e.getAttribute('title')) || bosluk(e.querySelector('title')?.textContent);
+  };
+  /** Aynı adlı adayları ayırt eden yakın yazı: öğenin (ya da atalarının) önceki kardeşlerindeki ilk harfli satır (ör. ürün adı, satır başlığı). */
+  const baglamMetni = (e: Element, haric: string): string | null => {
+    let d: Element | null = e;
+    for (let i = 0; d && i < 6; i++) {
+      for (let o = d.previousElementSibling; o; o = o.previousElementSibling) {
+        if (o.matches('script, style, template, input, select, textarea') || !gorunur(o)) continue;
+        const satir = ((o as HTMLElement).innerText || '').split('\n').map((x) => bosluk(x)).find((x) => /\p{L}/u.test(x) && katla(x) !== katla(haric));
+        if (satir) return satir.slice(0, 50);
+      }
+      d = ata(d);
+    }
+    return null;
+  };
+  /** Düğme izlerinin öğeleri (aynı adlıları ayırt etmek için). */
+  const dugmeOgeleri = new Map<SayfaIzi, Element>();
   for (const e of dugmeler) {
     if (izler.filter((i) => i.tur === 'dugme').length >= ayar.enCok.dugme) { notlar.push(`İlk ${ayar.enCok.dugme} düğme değerlendirildi.`); break; }
     const etiket = e.tagName.toLowerCase();
     const tip = etiket === 'input' ? ((e as HTMLInputElement).type || '').toLowerCase() : etiket === 'button' ? ((e.getAttribute('type') || 'submit').toLowerCase()) : '';
-    const metin = bosluk(etiket === 'input' ? e.getAttribute('value') || e.getAttribute('alt') : tumMetin(e)) || bosluk(e.getAttribute('aria-label') || e.getAttribute('title'));
+    // Görünen yazı simgeyse ("+", "−", "×", "▾") ya da yoksa erişilebilir ad (aria-label / aria-labelledby / title) gösterilir.
+    const gorunenYazi = bosluk(etiket === 'input' ? e.getAttribute('value') || e.getAttribute('alt') : tumMetin(e));
+    const metin = /[\p{L}\p{N}]/u.test(gorunenYazi) ? gorunenYazi : erisilebilirAd(e) || gorunenYazi;
     if (etiket === 'a' && !e.hasAttribute('href') && !e.hasAttribute('onclick') && !e.hasAttribute('role') && !isaretciMi(e)) continue;
     if (etiket === 'a' && !e.hasAttribute('onclick') && e.getAttribute('role') !== 'button' && !eylemBaglantisi(e)) {
       // Bağlantı: yalnız yönlendirme adayı (eylem metinliyse düğme adayı da olur).
@@ -96,11 +147,34 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     if (betikAdresi && yol(betikAdresi)) yonlendirmeler.push({ adres: yol(betikAdresi) as string, kaynak: 'betik', metin: metin || null });
     const t = tekOge(e);
     if (!t) continue;
-    izler.push({
+    const iz: SayfaIzi = {
       tur: 'dugme', ...t, metin: metin.slice(0, 200) || null, gizli: false, konum: konum(e),
       formIci: Boolean(form), submit: Boolean(form) && ['submit', 'image'].includes(tip), onclick: Boolean(onclick),
       devreDisi: (e as HTMLButtonElement).disabled === true || e.getAttribute('aria-disabled') === 'true'
-    });
+    };
+    izler.push(iz);
+    dugmeOgeleri.set(iz, e);
+  }
+  // Aynı adlı (ya da adsız) düğmeler kullanıcıya ayırt edilebilir gösterilir: yakın yazıyla ("+ (Kablosuz kulaklık)", "Seç (07:40 · PG 101)"),
+  // hâlâ aynıysa sırasıyla ("Genel puanınız (2/5)").
+  const gruplar = new Map<string, SayfaIzi[]>();
+  for (const iz of izler.filter((x) => x.tur === 'dugme')) {
+    const k2 = katla(iz.metin ?? '');
+    (gruplar.get(k2) ?? gruplar.set(k2, []).get(k2))?.push(iz);
+  }
+  for (const [, liste] of gruplar) {
+    if (liste.length < 2 && liste[0]?.metin) continue;
+    for (const iz of liste) {
+      const e = dugmeOgeleri.get(iz);
+      const b = e ? baglamMetni(e, iz.metin ?? '') : null;
+      if (b) iz.metin = iz.metin ? `${iz.metin} (${b})`.slice(0, 200) : b;
+    }
+    const ayni = new Map<string, SayfaIzi[]>();
+    for (const iz of liste) { const k2 = katla(iz.metin ?? ''); (ayni.get(k2) ?? ayni.set(k2, []).get(k2))?.push(iz); }
+    for (const [, l2] of ayni) {
+      if (l2.length < 2) continue;
+      l2.forEach((iz, i) => { iz.metin = `${iz.metin ?? 'Simge'} (${i + 1}/${l2.length})`.slice(0, 200); });
+    }
   }
   // Form hedefleri.
   for (const f of document.querySelectorAll('form')) {
@@ -115,7 +189,7 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     return false;
   };
   const kontrol = (e: Element): boolean => ['input', 'select', 'textarea', 'button', 'option'].includes(e.tagName.toLowerCase());
-  const tumu = [...document.body.querySelectorAll('*')].slice(0, 6000);
+  const tumu = [...document.body.querySelectorAll('*'), ...golgeKokleri.flatMap((g) => [...g.querySelectorAll('*')])].slice(0, 6000);
   const alanaBagliKimlikler = new Set<string>();
   for (const c of document.querySelectorAll('input, select, textarea')) {
     for (const id of (c.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)) alanaBagliKimlikler.add(id);
@@ -199,41 +273,115 @@ function sirala(adaylar: SeciciAdayi[], cikti: boolean): SeciciAdayi[] {
  * Açık sayfadan eylem adaylarını çıkarır — BASMAZ. Sayfa (Page) olduğu gibi kalır: yalnız geçici işaret öznitelikleri eklenip
  * kaldırılır. Sayfa kapanırsa / okunamazsa boş küme ve not döner (hata fırlatmaz).
  */
-export async function eylemAdaylariniCikar(page: Page, secenek: { dugmeSiniri?: number } = {}): Promise<EylemAdaylari> {
+/** Çerçeve öğesinin (iframe / frame) üst belgesine göre seçicisi (sayfa içi; sayfa-envanteri.ts > cerceveSecici ile aynı kural). */
+function cerceveSeciciHesapla(f: Element): string | null {
+  const tekMi = (s: string): boolean => { try { return (f.ownerDocument ?? document).querySelectorAll(s).length === 1; } catch { return false; } };
+  const tirnak = (d: string): string => d.replace(/["\\]/g, '\\$&');
+  const t = f.tagName.toLowerCase();
+  const id = f.getAttribute('id');
+  if (id && !/^\d/.test(id) && tekMi(`${t}#${CSS.escape(id)}`)) return `${t}#${CSS.escape(id)}`;
+  const ad = f.getAttribute('name');
+  if (ad && tekMi(`${t}[name="${tirnak(ad)}"]`)) return `${t}[name="${tirnak(ad)}"]`;
+  const src = (f.getAttribute('src') ?? '').split(/[?#]/)[0];
+  const son = src.split('/').filter(Boolean).pop() ?? '';
+  if (son && !/^(about:|javascript:|data:)/i.test(src) && tekMi(`${t}[src*="${tirnak(son)}"]`)) return `${t}[src*="${tirnak(son)}"]`;
+  const baslik = f.getAttribute('title');
+  if (baslik && tekMi(`${t}[title="${tirnak(baslik)}"]`)) return `${t}[title="${tirnak(baslik)}"]`;
+  const hepsi = [...(f.ownerDocument ?? document).querySelectorAll(t)];
+  return hepsi.length === 1 ? t : null;
+}
+
+/** Çerçevenin seçici zinciri (dıştan içe; en çok 2 düzey, aynı kökenli ve görünür). Kurulamazsa null. */
+async function cerceveZinciri(page: Page, f: Frame): Promise<string[] | null> {
+  let koken = '';
+  try { koken = new URL(page.url()).origin; } catch { return null; }
+  const zincir: string[] = [];
+  for (let x: Frame | null = f; x && x.parentFrame(); x = x.parentFrame()) {
+    try { if (new URL(x.url()).origin !== koken) return null; } catch { return null; }
+    const el = await x.frameElement().catch(() => null);
+    if (!el) return null;
+    const s = await el.evaluate((e) => {
+      const r = (e as Element).getBoundingClientRect();
+      return r.width > 0 && r.height > 0 ? true : null;
+    }).catch(() => null);
+    const secici = s ? await el.evaluate(cerceveSeciciHesapla).catch(() => null) : null;
+    if (!secici) return null;
+    zincir.unshift(secici);
+    if (zincir.length > 2) return null;
+  }
+  return zincir;
+}
+
+/**
+ * Açık sayfadan eylem adaylarını çıkarır — BASMAZ. Sayfa (Page) olduğu gibi kalır: yalnız geçici işaret öznitelikleri eklenip
+ * kaldırılır. Sayfa kapanırsa / okunamazsa boş küme ve not döner (hata fırlatmaz). cerceveler: aynı kökenli çerçevelerin (iframe)
+ * düğmeleri de aday olur (her biri çerçeve seçicileriyle; hızlı test).
+ */
+export async function eylemAdaylariniCikar(page: Page, secenek: { dugmeSiniri?: number; cerceveler?: boolean } = {}): Promise<EylemAdaylari> {
   const dugmeSiniri = secenek.dugmeSiniri ?? 25;
-  let ham: SayfaIzleri;
-  try {
-    // Seçici üreticisi ("Sayfada seç"le aynı) sayfaya verilir; init betiği gerekmez.
-    await page.evaluate(`window.__nobetciOgeBilgisi = ${ogeBilgisi.toString()}; 0`);
-    ham = await page.evaluate(eylemIzleriniTopla, { kaliplar: { ...KALIPLAR }, enCok: { dugme: dugmeSiniri, basari: 12, hata: 10, bekleme: 8 }, onek: ISARET_ONEKI });
-  } catch (hata) {
-    return eylemAdaylariniDegerlendir({ sayfaYolu: '', izler: [], yonlendirmeler: [], notlar: [`Eylem adayları okunamadı: ${String(hata instanceof Error ? hata.message : hata).split('\n')[0].slice(0, 200)}`] });
+  type Kapsam = { frame: Frame; cerceve: string[]; kapsam: Page | FrameLocator };
+  const kapsamlar: Kapsam[] = [{ frame: page.mainFrame(), cerceve: [], kapsam: page }];
+  if (secenek.cerceveler) {
+    for (const f of page.frames().slice(0, 12)) {
+      if (f === page.mainFrame()) continue;
+      const zincir = await cerceveZinciri(page, f);
+      if (!zincir) continue;
+      let k: Page | FrameLocator = page;
+      for (const c of zincir) k = k.frameLocator(c);
+      kapsamlar.push({ frame: f, cerceve: zincir, kapsam: k });
+    }
   }
   const izler: HamEylemIzi[] = [];
-  try {
-    for (const iz of ham.izler) {
-      const { isaret, adaylar, grupSecici, ...kalan } = iz;
-      if (grupSecici) {
-        const n = await page.locator(grupSecici).count().catch(() => 0);
-        if (n >= 1) izler.push({ ...kalan, secici: grupSecici, seciciTuru: 'css', kirilganlik: 'orta', adet: n });
-        continue;
-      }
-      if (!isaret || !adaylar?.length) continue;
-      for (const a of sirala(adaylar, iz.tur !== 'dugme')) {
-        try {
-          const l = page.locator(a.secici);
-          if ((await l.count()) !== 1) continue;
-          if ((await l.first().getAttribute('data-nobetci-secilen', { timeout: 1_000 })) !== isaret) continue;
-          izler.push({ ...kalan, secici: a.secici, seciciTuru: a.tur === 'rolAdsiz' ? 'rol' : a.tur, kirilganlik: a.kirilganlik });
-          break;
-        } catch { /* geçersiz seçici: sonraki aday */ }
-      }
+  let sayfaYolu = '';
+  const yonlendirmeler: HamYonlendirme[] = [];
+  const notlar: string[] = [];
+  for (const [i, k] of kapsamlar.entries()) {
+    const onek = `${ISARET_ONEKI}${i}x`;
+    let ham: SayfaIzleri;
+    try {
+      // Seçici üreticisi ("Sayfada seç"le aynı) belgeye verilir; init betiği gerekmez.
+      await k.frame.evaluate(`window.__nobetciOgeBilgisi = ${ogeBilgisi.toString()}; 0`);
+      ham = await k.frame.evaluate(eylemIzleriniTopla, { kaliplar: { ...KALIPLAR }, enCok: { dugme: dugmeSiniri, basari: 12, hata: 10, bekleme: 8 }, onek });
+    } catch (hata) {
+      if (i > 0) continue;
+      return eylemAdaylariniDegerlendir({ sayfaYolu: '', izler: [], yonlendirmeler: [], notlar: [`Eylem adayları okunamadı: ${String(hata instanceof Error ? hata.message : hata).split('\n')[0].slice(0, 200)}`] });
     }
-  } finally {
-    await page.evaluate((onek) => {
-      for (const e of document.querySelectorAll(`[data-nobetci-secilen^="${onek}"]`)) e.removeAttribute('data-nobetci-secilen');
-      delete (window as unknown as Record<string, unknown>).__nobetciOgeBilgisi;
-    }, ISARET_ONEKI).catch(() => undefined);
+    if (i === 0) { sayfaYolu = ham.sayfaYolu; yonlendirmeler.push(...ham.yonlendirmeler); notlar.push(...ham.notlar); }
+    try {
+      for (const iz of ham.izler) {
+        // Çerçevelerden yalnız düğmeler (sonuç / hata metinleri ayrıca sayfa metninden okunur).
+        if (i > 0 && iz.tur !== 'dugme') continue;
+        const { isaret, adaylar, grupSecici, ...kalan } = iz;
+        const ek = k.cerceve.length ? { cerceve: k.cerceve } : {};
+        if (grupSecici) {
+          const n = await k.kapsam.locator(grupSecici).count().catch(() => 0);
+          if (n >= 1) izler.push({ ...kalan, ...ek, secici: grupSecici, seciciTuru: 'css', kirilganlik: 'orta', adet: n });
+          continue;
+        }
+        if (!isaret || !adaylar?.length) continue;
+        for (const a of sirala(adaylar, iz.tur !== 'dugme')) {
+          try {
+            const l = k.kapsam.locator(a.secici);
+            if ((await l.count()) !== 1) continue;
+            if ((await l.first().getAttribute('data-nobetci-secilen', { timeout: 1_000 })) !== isaret) continue;
+            izler.push({ ...kalan, ...ek, secici: a.secici, seciciTuru: a.tur === 'rolAdsiz' ? 'rol' : a.tur, kirilganlik: a.kirilganlik });
+            break;
+          } catch { /* geçersiz seçici: sonraki aday */ }
+        }
+      }
+    } finally {
+      // İşaretler belgeden ve açık gölge köklerinden temizlenir.
+      await k.frame.evaluate((o) => {
+        const temizle = (kok: ParentNode): void => {
+          for (const e of kok.querySelectorAll('*')) {
+            if (e.getAttribute('data-nobetci-secilen')?.startsWith(o)) e.removeAttribute('data-nobetci-secilen');
+            if (e.shadowRoot) temizle(e.shadowRoot);
+          }
+        };
+        temizle(document);
+        delete (window as unknown as Record<string, unknown>).__nobetciOgeBilgisi;
+      }, onek).catch(() => undefined);
+    }
   }
-  return eylemAdaylariniDegerlendir({ sayfaYolu: ham.sayfaYolu, izler, yonlendirmeler: ham.yonlendirmeler, notlar: ham.notlar }, secenek.dugmeSiniri ? { gonderim: secenek.dugmeSiniri } : {});
+  return eylemAdaylariniDegerlendir({ sayfaYolu, izler, yonlendirmeler, notlar }, secenek.dugmeSiniri ? { gonderim: secenek.dugmeSiniri } : {});
 }

@@ -301,6 +301,20 @@ function soruCiz(o, y) {
       h('div', { class: 'dugmeler' }, evet, hayir));
   }
 
+  // Bana sor: basışta sayfa onay / soru penceresi açtı (tarayıcıda pencere açık bekliyor). Yanıt modele aksiyonun pencere yanıtı olarak
+  // yazılır; doğrulama ve normal koşu aynı yanıtı verir.
+  if (s.tur === 'diyalog') {
+    const tamam = h('button', { type: 'button', class: 'birincil', 'data-odak': '' }, 'Tamam (onayla)');
+    const iptalEt = h('button', { type: 'button', class: 'hayalet' }, 'İptal');
+    tamam.addEventListener('click', () => void gonder(tamam, 'diyalog', { cevap: 'kabul' }, m));
+    iptalEt.addEventListener('click', () => void gonder(iptalEt, 'diyalog', { cevap: 'iptal' }, m));
+    return kart('Şimdi ne yapayım? Sayfa bir pencere açtı', 'soru', m.kutu,
+      h('p', {}, s.dugme ? h('span', {}, h('b', {}, `“${s.dugme.metin || s.dugme.secici}”`), ' düğmesine basınca sayfa bir ', s.diyalogTuru === 'prompt' ? 'soru' : 'onay', ' penceresi açtı:') : 'Sayfa bir pencere açtı:'),
+      h('blockquote', { class: 'hizli-diyalog-metni' }, s.mesaj || '(metinsiz pencere)'),
+      h('p', { class: 'soluk kucuk' }, 'Seçiminiz teste yazılır: doğrulama ve normal koşu bu pencereye aynı yanıtı verir.'),
+      h('div', { class: 'dugmeler' }, tamam, iptalEt));
+  }
+
   if (s.tur === 'hata') {
     const sec = (cevap, metin, sinif) => {
       const b = h('button', { type: 'button', class: sinif }, metin);
@@ -333,9 +347,14 @@ function soruCiz(o, y) {
     bitir.addEventListener('click', () => void gonder(bitir, 'karar', { karar: 'bitir', dugme: dugme.value, mesajlar: kutular.filter((x) => x.k.checked).map((x) => x.k.value) }, m));
     const duzelt = h('button', { type: 'button', class: 'hayalet' }, 'Veriyi düzenle');
     duzelt.addEventListener('click', () => void gonder(duzelt, 'karar', { karar: 'duzelt' }, m));
+    // Aday listesinde olmayan düğme: tarayıcıda tıklanarak seçilir (tıklama sayfaya iletilmez; basılmaz).
+    const sayfadaSec = h('button', { type: 'button', class: 'hayalet' }, 'Tarayıcıda seç…');
+    sayfadaSec.addEventListener('click', () => void gonder(sayfadaSec, 'karar', { karar: 'baska' }, m));
+    bitir.disabled = !s.adaylar.length;
     return kart('Düğmeyi ve mesajı seçin', 'hedef', m.kutu,
       h('div', { class: 'not-kutusu bilgi', role: 'note' }, 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz. Seçimler adaylardandır; test “doğrulanmadı” olarak kaydedilir ve ilk koşuda doğrulanır.'),
-      h('div', { class: 'alan' }, h('label', { for: 'hizli-hayir-dugme' }, 'Formu gönderen düğme'), dugme),
+      !s.adaylar.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Sayfada düğme adayı bulunamadı. Formu gönderen düğmeyi “Tarayıcıda seç…” ile hızlı test tarayıcısında tıklayarak seçin; ya da hızlı testi iptal edip “Evet” / “Bana sor” izniyle yeniden başlatın.') : null,
+      h('div', { class: 'alan' }, h('label', { for: 'hizli-hayir-dugme' }, 'Formu gönderen düğme'), dugme, h('div', { class: 'dugmeler' }, sayfadaSec)),
       h('fieldset', { class: 'hizli-mesajlar' }, h('legend', {}, 'Başarıyı gösteren mesaj'),
         kutular.length ? kutular.map((x) => x.el) : h('p', { class: 'soluk' }, 'Mesaj adayı bulunamadı: “Ne yapılsın?” cümlesinde beklenen mesajı tırnak içinde yazıp yeniden başlatın.')),
       h('div', { class: 'dugmeler' }, bitir, duzelt));
@@ -372,6 +391,10 @@ function farkCiz(a) {
     h('p', {}, h('b', {}, `“${a.bas ? a.bas.metin || a.bas.secici : '?'}”`), ` düğmesine basıldı; ${sn} sn sonra sayfa:`,
       f.zamanAsimi ? h('span', { class: 'soluk' }, ' (bekleme 60 sn’de kesildi)') : null),
     f.tiklamaNotu ? h('p', { class: 'kucuk' }, `Not: ${f.tiklamaNotu}.`) : null,
+    // Basışta açılan tarayıcı pencereleri (alert / confirm / prompt) ve verilen yanıt.
+    Array.isArray(f.diyaloglar) && f.diyaloglar.length ? h('ul', { class: 'hizli-diyaloglar kucuk', 'aria-label': 'Tarayıcı pencereleri' }, f.diyaloglar.map((x) => h('li', {},
+      `${x.tur === 'alert' ? 'Bilgi' : x.tur === 'prompt' ? 'Soru' : 'Onay'} penceresi: “${x.mesaj}” → `,
+      h('b', {}, x.tur === 'alert' ? 'Tamam' : x.yanit === 'kabul' ? 'Tamam (onaylandı)' : 'İptal')))) : null,
     f.beklemeMetinleri.length ? h('p', { class: 'kucuk soluk' }, `Beklerken: ${f.beklemeMetinleri.join(' · ')}`) : null,
     f.yeniMetinler.length ? h('ul', { class: 'hizli-metinler', 'aria-label': 'Yeni metinler' }, f.yeniMetinler.slice(0, 12).map((m) => h('li', {},
       h('span', { class: `hizli-cip${m.tur === 'hata' ? ' e-hata' : m.tur === 'basari' ? ' e-bitti' : ''}` }, m.metin)))) : h('p', { class: 'soluk kucuk' }, 'Yeni metin görülmedi.'),
@@ -455,6 +478,11 @@ function veriDuragi(o, s, kart, m, gonder) {
       /** @type {HTMLElement} */
       let girdi;
       const secenekler = Array.isArray(a.secenekler) ? a.secenekler : null;
+      // Dosya alanı hızlı testte doldurulmaz: açıkça söylenir (dosya kaydettikten sonra senaryo formunda yüklenir).
+      if (a.tur === 'file') {
+        yerlestir(kap, h('p', { class: 'soluk kucuk hizli-dosya-notu', id }, 'Dosya alanı hızlı testte doldurulmaz (desteklenmiyor). Testi kaydettikten sonra senaryo formunda dosyayı yükleyin; sayfa dosyayı zorunlu tutuyorsa basışta uyarı görebilirsiniz.'));
+        return;
+      }
       if (a.tur === 'checkbox') {
         girdi = h('input', { type: 'checkbox', id, checked: d.deger === true || d.deger === 'true' || null });
         girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).checked, kaynak: 'elle' }; kosulGuncelle(); });
@@ -647,7 +675,7 @@ function veriDuragi(o, s, kart, m, gonder) {
   /** "Devam et" / "Bağlı alanları atla": zorunlu boş alan yoksa veri gönderilir. @param {HTMLButtonElement} dugme @param {boolean} zinciriAtla */
   const ilerle = (dugme, zinciriAtla) => {
     const degerler = degerleriTopla();
-    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
+    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
     void gonder(dugme, 'veri', { degerler, sira: siralama, ...(zinciriAtla ? { zinciriAtla: true } : {}) }, m);
   };
@@ -669,9 +697,12 @@ function veriDuragi(o, s, kart, m, gonder) {
     bekleyenDuyuru = gelen.length ? gelen.map((x) => `“${x.etiket}” seçenekleri geldi (${x.secenekler.length} seçenek).`).join(' ')
       : altlar.length ? `${altlar.map((x) => `“${x.etiket}”`).join(', ')} için seçenek gelmedi.` : '';
   }
-  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
+  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
   return kart(o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
     s.not ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, s.not) : null,
+    // Keşfin notları (ör. seçimlerin sayfada tek tek denendiği) ilk veri durağında gösterilir.
+    o.adimlar.length === 1 && o.kesif && Array.isArray(o.kesif.notlar) && o.kesif.notlar.length
+      ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
     h('p', { class: 'soluk' }, 'Sayfada boş görünen alanlar aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada zaten dolu gelenler sorulmaz, olduğu gibi kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
     gosterge, m.kutu, satirlarKap, hazirKap,
     h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
@@ -689,12 +720,23 @@ function bitisDuragi(o, s, kart, m, gonder) {
       yerlestir(grup, ...ETIKET_SECENEKLERI.map(([deger, ad]) => h('button', {
         type: 'button', role: 'radio', 'aria-checked': String(secili === deger), class: `hizli-etiket e-${deger ?? 'yok'}${secili === deger ? ' secili' : ''}`,
         // Seçili etikete yeniden tıklamak etiketi kaldırır (kullanıcı kararı); "Etiketsiz" de aynı işi görür.
-        onclick: () => { etiketler[g.metin] = secili === deger ? null : deger; ciz(); olumsuzGuncelle(); }
+        onclick: () => { etiketler[g.metin] = secili === deger ? null : deger; ciz(); olumsuzGuncelle(); uyariGuncelle(); }
       }, ad)));
     };
     ciz();
-    return h('li', { class: 'hizli-bitis-satiri', 'data-sira': String(i) }, h('span', { class: 'hizli-cip' }, g.metin), grup);
+    return h('li', { class: 'hizli-bitis-satiri', 'data-sira': String(i) }, h('span', { class: 'hizli-cip' }, g.metin), grup,
+      // Sahte başarıyı önleme: basıştan önce de görünen metin bitiş olamaz (hiçbir koşuda sonucu göstermez).
+      g.onceGorundu ? h('small', { class: 'blok soluk hizli-once-gorundu' }, 'Bu metin düğmeye basmadan da görünüyordu.') : null);
   });
+  // Uyarılar (engellemez): hiçbir basışta gönderim olmadıysa ve basıştan önce de görünen metin "Bitti" seçildiyse (sunucudaki kuralın aynısı).
+  const uyariKutusu = h('div', { class: 'not-kutusu uyari hizli-bitis-uyarisi', role: 'status' });
+  function uyariGuncelle() {
+    const l = [];
+    if (!s.gonderimVar) l.push('Hiçbir basışta sunucuya kayıt / gönderim isteği gitmedi ve sayfa başka bir sayfaya geçmedi: “Bitti” seçtiğiniz metin gerçek bir sonucu göstermeyebilir (ör. sekme, anahtar ya da liste yazısı). Formu gönderen düğmeye basıldığından emin olun.');
+    for (const g of s.gorulenler) if (g.onceGorundu && etiketler[g.metin] === 'bitti') l.push(`“${g.metin}”: Bu metin düğmeye basmadan da görünüyordu; bitiş için basıştan sonra beliren bir sonuç metni seçin.`);
+    yerlestir(uyariKutusu, ...l.map((x) => h('p', {}, x)));
+    uyariKutusu.hidden = !l.length;
+  }
   const adres = h('input', { type: 'text', id: 'hizli-bitis-adres', maxlength: 300, placeholder: s.onerilenAdres || '/…', value: s.adres || '' });
   const olumsuz = h('input', { type: 'checkbox', id: 'hizli-olumsuz', checked: s.olumsuz ? true : null });
   const olumsuzMesaj = h('select', { id: 'hizli-olumsuz-mesaj', 'aria-label': 'Beklenen hata mesajı' });
@@ -722,6 +764,7 @@ function bitisDuragi(o, s, kart, m, gonder) {
   olumsuzMesaj.addEventListener('change', gecerlilikGuncelle);
   adres.addEventListener('input', gecerlilikGuncelle);
   olumsuzGuncelle();
+  uyariGuncelle();
   devam.addEventListener('click', () => void gonder(devam, 'bitis', {
     etiketler, adres: adres.value.trim() || null, olumsuz: olumsuz.checked && olumsuzMesaj.value ? { mesaj: olumsuzMesaj.value } : null
   }, m));
@@ -733,6 +776,7 @@ function bitisDuragi(o, s, kart, m, gonder) {
   zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
   return kart('Bitiş koşulu: ne görülünce biter?', 'hedef',
     h('p', {}, 'Akış boyunca görülen metinler. Her birine bir etiket verin:'),
+    uyariKutusu,
     h('ul', { class: 'hizli-bitis', 'aria-label': 'Görülen metinler' }, satirlar),
     h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
@@ -791,6 +835,9 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     s.farklar.senaryolar.length ? h('p', {}, `Etkilenebilecek senaryolar: ${s.farklar.senaryolar.join(', ')}`) : null) : null;
   return kart('Kaydedilecekler', 'onay',
     zincir,
+    Array.isArray(s.uyarilar) && s.uyarilar.length ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.uyarilar.map((x) => h('p', {}, x))) : null,
+    // Düzenleme kipi: ekranın mevcut test verisi tablolarıyla birleştirme kararı özet sekmesinde istenir (o karar verilmeden "Onayla" pasiftir).
+    s.tabloKarariGerekebilir ? h('p', { class: 'kucuk soluk hizli-tablo-karari-notu' }, 'Projede aynı adlı test verisi tablosu varsa (bu ekranın ya da başka bir ekranın) özet sekmesinde her tablo için “Birleştir / Yeni adla yaz / Atla” kararı istenir; karar verilmeden “Onayla ve kaydet” pasif kalır. Tablo yazmak istemiyorsanız aşağıdaki “test verisi tablosu olarak kaydet” seçeneğini kaldırın.') : null,
     h('ul', { class: 'hizli-ozet kucuk' },
       h('li', {}, h('b', {}, 'Ekrana: '), 'alanlar, koşullar, düğme zinciri, bitiş ve hata mesajları'),
       h('li', {}, h('b', {}, 'Senaryoya: '), `girilen değerler, tablo bağlantıları, izin (${oz.izin}), bitiş koşulu`)),

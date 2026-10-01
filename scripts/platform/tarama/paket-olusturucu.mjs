@@ -185,13 +185,24 @@ function kabulUzantisi(accept) {
 }
 
 /**
- * Alanın temel model kimliği: id → (onay kutusu grubunda ad + değer) → name → etiket → tür.
+ * Senaryo verisinde meta alanların anahtarları (senaryonun başlığı "baslik"): sayfa alanının kimliği / senaryo anahtarı OLAMAZ — olursa
+ * senaryo kaydedilirken alanın değeri senaryo adıyla ezilir (ör. <input id="baslik">). Böyle bir alan "alan" önekiyle adlandırılır
+ * ("alanBaslik"); meta anahtarlar ayrı kalır (göç gerekmez: yalnız yeni / yeniden kaydedilen alanlar etkilenir).
+ */
+export const SENARYO_META_ANAHTARLARI = Object.freeze(['baslik']);
+/** Meta anahtarla çakışan kimliğe önek. @param {string} id */
+const metaDisi = (id) => (SENARYO_META_ANAHTARLARI.includes(id) ? `alan${id.charAt(0).toUpperCase()}${id.slice(1)}` : id);
+
+/**
+ * Alanın temel model kimliği: id → (onay kutusu grubunda ad + değer) → name → etiket → tür. Senaryonun meta anahtarlarıyla çakışmaz.
  * @param {import('./paket-olusturucu.d.mts').HamAlan} a
  */
 function temelKimlik(a) {
-  if (a.kimlik) return kimlikUret(a.kimlik);
+  // Kimlik sayfada tek değilse (ör. her gölge bileşende id="i"; seçici kimlikle kurulamadı) name tercih edilir.
+  const kimlikSecici = typeof a.secici === 'string' && a.secici.includes('#');
+  if (a.kimlik && (kimlikSecici || !a.ad)) return metaDisi(kimlikUret(a.kimlik));
   const grupDegeri = a.grup && a.anahtar.includes('=') ? a.anahtar.slice(a.anahtar.indexOf('=') + 1) : '';
-  return kimlikUret(grupDegeri ? `${a.ad} ${grupDegeri}` : a.ad || a.etiket || a.tur, a.tur === 'radio' ? 'secenek' : 'alan');
+  return metaDisi(kimlikUret(grupDegeri ? `${a.ad} ${grupDegeri}` : a.ad || a.etiket || a.tur, a.tur === 'radio' ? 'secenek' : 'alan'));
 }
 
 /**
@@ -323,15 +334,16 @@ export function alanDonusturucu(sayac) {
   const cokluDegerliler = [];
   /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string} id @returns {Record<string, unknown>} */
   const taslakAlan = (a, id) => {
-    const { tip, not } = modelTipi(a);
+    // Takvimden seçilen (salt okunur) tarih alanı: tarih olarak doldurulur (değer + olaylar, olmazsa takvimden; koşucu aynı kural).
+    const { tip, not } = a.takvimden ? { tip: 'tarih', not: 'Salt okunur, takvimden seçilen tarih alanı: değer yazılır, olmazsa takvimden gün seçilir.' } : modelTipi(a);
     const etiket = temizMetin(a.etiket, sayac, 120);
     if (!etiket) etiketsizler.push(id);
-    const dokunulmaz = a.devreDisi || a.saltOkunur;
+    const dokunulmaz = a.devreDisi || (a.saltOkunur && !a.takvimden);
     /** @type {string[]} */
     const alanNotlari = [];
     if (not) alanNotlari.push(not);
     if (a.devreDisi) alanNotlari.push('Taramada devre dışıydı.');
-    if (a.saltOkunur) alanNotlari.push('Taramada salt okunurdu.');
+    if (a.saltOkunur && !a.takvimden) alanNotlari.push('Taramada salt okunurdu.');
     if (a.grup) alanNotlari.push(`"${a.grup}" onay kutusu grubunun parçası.`);
     /** @type {Record<string, unknown>} */
     const alan = { id, tip, etiket: { ekran: etiket } };
@@ -370,6 +382,12 @@ export function alanDonusturucu(sayac) {
     }
     if (a.cerceve?.length) alanNotlari.push(`Çerçeve (iframe) içinde: ${a.cerceve.join(' › ')}.`);
     if (tip === 'tarih') alan.bicim = 'YYYY-AA-GG';
+    if (a.takvimden) {
+      alan.doldurucu = 'tarihJs';
+      alan.doldurucuParametreleri = { takvim: true };
+    }
+    // Otomatik tamamlama: koşucu yazıp öneri listesinden eşleşeni seçer (doldurucuParametreleri.oneri).
+    if (a.oneri && tip === 'metin') alan.doldurucuParametreleri = { ...(nesneMi(alan.doldurucuParametreleri) ? alan.doldurucuParametreleri : {}), oneri: true };
     if (tip === 'dosya') {
       const kabul = kabulUzantisi(a.kabul);
       if (kabul) alan.kabul = kabul;
@@ -449,7 +467,7 @@ export function taramaPaketiOlustur(meta, envanter) {
   }
 
   // 3) Taslak alanlar (kimlikler üretilir; mevcut modelle birleştirmede yeniden adlandırılabilir).
-  const kullanilan = new Set();
+  const kullanilan = new Set(SENARYO_META_ANAHTARLARI);
   /** @type {Map<string, string>} ham anahtar → alan kimliği */
   const kimlikler = new Map();
   for (const [anahtar, a] of hamlar) kimlikler.set(anahtar, benzersiz(temelKimlik(a), kullanilan));
@@ -922,6 +940,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   const mevcutAlanlar = [...anaAlanlar, ...digerAlanlar];
   // Mevcut kimlikler ayrılır: yeni alan/düğme kimlikleri eşleşmeyen eski bir alanın kimliğini almaz.
   const kullanilanIdler = new Set([
+    ...SENARYO_META_ANAHTARLARI,
     ...mevcutAlanlar.map((a) => String(a.id)),
     ...(mevcut && nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar)
       ? mevcut.senaryoDuzeyi.alanlar.filter(nesneMi).map((/** @type {Record<string, any>} */ a) => String(a.id)) : [])
@@ -972,6 +991,13 @@ export function kayitPaketiOlustur(meta, envanter) {
     const adaylar = new Set([h.secici, ...h.adaySeciciler].map(seciciNormal));
     const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && (TARANABILIR_TIPLER.has(a.tip) || a.tip === 'okluSecim') && nesneMi(a.konum) && typeof a.konum.secici === 'string'
       && cerceveAyni(a.konum.cerceve, h.cerceve) && adaylar.has(seciciNormal(a.konum.secici)));
+    // Mevcut modelde senaryo anahtarı meta anahtarla (başlık) çakışan alan: yeniden kaydedilirken yeni (önekli) kimlik alır — değeri
+    // senaryo adıyla ezilmiş eski anahtar bırakılır (senaryolar bu alana yeniden değer verir).
+    if (e && nesneMi(e.eslesme) && SENARYO_META_ANAHTARLARI.includes(String(e.eslesme.senaryo ?? e.id))) {
+      eslesenMevcut.add(e);
+      yeniAlanSayisi++;
+      return taslakAlan(h, benzersiz(temelKimlik(h), kullanilanIdler));
+    }
     if (e) {
       eslesenMevcut.add(e);
       eslesenSayisi++;
@@ -1236,7 +1262,9 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (p.once) aksiyonlar.push({ tur: 'bekle', sureSn: p.once });
     if (p.tikla) {
       const aciklama = temizMetin(p.tikla.metin, sayac, 120);
-      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}), ...cerceveEki(p.tikla.cerceve) });
+      // diyalog: basışta açılan tarayıcı penceresine verilecek yanıt (hızlı testte görülen; koşucu aynı yanıtı verir).
+      const diyalog = p.tikla.diyalog === 'kabul' || p.tikla.diyalog === 'iptal' ? { diyalog: p.tikla.diyalog } : {};
+      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}), ...cerceveEki(p.tikla.cerceve), ...diyalog });
     }
     if (p.sonra) aksiyonlar.push({ tur: 'bekle', sureSn: p.sonra });
     // Yalnız görünürse basılan düğmeler (ör. bazı ekranlarda çıkan ara pencere): kısa sürede görünmezse atlanır.

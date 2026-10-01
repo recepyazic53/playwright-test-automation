@@ -57,6 +57,13 @@ export type HamAlan = {
    * verilmezse (undefined) eşleşen mevcut tanımınki korunur.
    */
   tus?: string | null;
+  /**
+   * Salt okunur ama yalnız takvimden seçilen tarih alanı (ör. "Giriş tarihi — Takvimden seçin"): doldurulur (önce değer + input / change
+   * olayları, olmazsa takvimden gün tıklanır); modelde tip "tarih", doldurucu "tarihJs", doldurucuParametreleri.takvim.
+   */
+  takvimden?: boolean;
+  /** Yazınca öneri listesi açılan (otomatik tamamlama) alan: yazılır, öneriden seçilir; modelde doldurucuParametreleri.oneri. */
+  oneri?: boolean;
 };
 
 /**
@@ -120,7 +127,8 @@ export type TaramaEnvanteri = {
 
 /** Akış kaydında bir öğe: adımın ilerleme düğmesi ya da başarı göstergesi (seçici + ekrandaki metni; değer değil). */
 /** cerceve: öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe; HamAlan.cerceve ile aynı). */
-export type KayitOgesi = { secici: string; metin: string | null; cerceve?: string[] };
+/** diyalog: bu düğmeye basınca açılan tarayıcı onay / soru penceresine verilecek yanıt (hızlı testte görülen; aksiyonun "diyalog"u). */
+export type KayitOgesi = { secici: string; metin: string | null; cerceve?: string[]; diyalog?: 'kabul' | 'iptal' };
 /**
  * Başarı göstergesi: aranan metni kullanıcı belirler (undefined: öneri — metnin sabit kısmı; null: yalnızca öğe görünür).
  * secici null: öğe seçilmedi, metin sayfanın tamamında aranır (akış tasarımında elle yazılan beklenen mesaj).
@@ -255,3 +263,5 @@ export declare function temizMetin(m: unknown, sayac: { gizlenen: number }, uzun
 export declare function alanDonusturucu(sayac: { gizlenen: number }): {
   taslakAlan: (a: HamAlan, id: string) => Record<string, unknown>; etiketsizler: string[]; cokluDegerliler: string[];
 };
+/** Senaryo verisinin meta anahtarları (başlık): sayfa alanının kimliği / senaryo anahtarı olamaz (önekli: alanBaslik). */
+export declare const SENARYO_META_ANAHTARLARI: readonly string[];

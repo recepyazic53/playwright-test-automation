@@ -84,12 +84,20 @@ const GORUNURLUK_MS = 2_000;
 const ARKA_PLAN_EN_COK_MS = 8_000;
 /** Adım boyunca çıkan tarayıcı uyarıları (alert / confirm); uyarılar kapatılır (confirm iptal edilir). */
 const tarayiciUyarilari: string[] = [];
+/** Tıklamanın açtığı onay / soru penceresine yanıt (modelde aksiyonun "diyalog"u; hızlı testte görüldü): o pencereler beklenendir. */
+let diyalogYaniti: 'kabul' | 'iptal' | null = null;
+const beklenenUyarilar: string[] = [];
 const surenIstekler = new Map<Request, number>();
 let sonIstek = 0;
 
 /** Tarayıcı uyarılarını kaydeder ve kapatır; arka plan isteklerini izler. */
 function sayfayiHazirla(page: Page): void {
-  page.on('dialog', (d) => { tarayiciUyarilari.push(d.message()); void d.dismiss().catch(() => undefined); });
+  page.on('dialog', (d) => {
+    tarayiciUyarilari.push(d.message());
+    if (diyalogYaniti) beklenenUyarilar.push(d.message());
+    const kabul = (d.type() === 'confirm' || d.type() === 'prompt') && diyalogYaniti === 'kabul';
+    void (kabul ? d.accept(d.type() === 'prompt' ? d.defaultValue() : undefined) : d.dismiss()).catch(() => undefined);
+  });
   page.on('request', (r) => {
     if (r.resourceType() !== 'xhr' && r.resourceType() !== 'fetch') return;
     surenIstekler.set(r, Date.now());
@@ -185,7 +193,7 @@ async function hataMesajlari(page: Page, hataSecici: string | null): Promise<str
     const n = await l.count().catch(() => 0);
     for (let i = 0; i < n; i++) m.push(await l.nth(i).innerText().catch(() => ''));
   }
-  m.push(...tarayiciUyarilari);
+  m.push(...tarayiciUyarilari.filter((x) => !beklenenUyarilar.includes(x)));
   return m.map((x) => x.trim()).filter(Boolean);
 }
 
@@ -892,6 +900,8 @@ export function playwrightKoduUret(g) {
         continue;
       }
       const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
+      // Tıklamanın açacağı onay / soru penceresine verilecek yanıt (hızlı testte görüldü).
+      if (a.tur === 'tikla' && (a.diyalog === 'kabul' || a.diyalog === 'iptal')) satirlar.push(`${ic}diyalogYaniti = '${a.diyalog}';`);
       if (a.tur === 'tikla') satirlar.push(`${ic}await guvenliTikla(page, ${l}.filter({ visible: true }).first(), ${zaman}${basariIfadesi});`);
       else if (a.durum === 'dolu') { yardimcilar.add('doluBekle'); satirlar.push(`${ic}await doluBekle(page, ${s(a.secici)}, ${zaman});`); }
       else satirlar.push(`${ic}await ${l}.first().waitFor({ state: '${a.durum === 'gizli' ? 'hidden' : 'visible'}', timeout: ${zaman} });`);
@@ -1025,7 +1035,7 @@ export function playwrightKoduUret(g) {
       if (adim.sonAdim) break;
       continue;
     }
-    govde.push(`${ic}tarayiciUyarilari.length = 0;`);
+    govde.push(`${ic}tarayiciUyarilari.length = 0;`, `${ic}beklenenUyarilar.length = 0;`, `${ic}diyalogYaniti = null;`);
     const sureSn = adim.kosu?.zamanAsimiSn ?? 30;
     for (const a of adim.alanlar) {
       const etiket = s(a.etiket);

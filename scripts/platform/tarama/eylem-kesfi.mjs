@@ -174,12 +174,13 @@ export function eylemAdaylariniDegerlendir(ham, sinir = {}) {
       const { puan, guven, gerekce } = puanla(iz);
       /** @type {import('./eylem-kesfi.d.mts').EylemAdayi} */
       const a = {
-        anahtar: `${tur}:${iz.secici}`, tur, secici: iz.secici, seciciTuru: SECICI_TURLERI.includes(iz.seciciTuru) ? iz.seciciTuru : 'css',
+        anahtar: `${tur}:${iz.cerceve?.length ? `${iz.cerceve.join(' » ')} » ` : ''}${iz.secici}`, tur, secici: iz.secici, seciciTuru: SECICI_TURLERI.includes(iz.seciciTuru) ? iz.seciciTuru : 'css',
         kirilganlik: KIRILGANLIKLAR.includes(iz.kirilganlik) ? iz.kirilganlik : 'orta', metin: metin(iz.metin, 200), guven, puan, gerekce,
         gizli: iz.gizli === true, konum: iz.konum ?? null, enOlasi: false, oge: null
       };
       if (tur === 'gonderim') a.kayitOlusturabilir = kalipVar('kayit', iz.metin);
       if (tur === 'hata' && typeof iz.adet === 'number') a.adet = iz.adet;
+      if (Array.isArray(iz.cerceve) && iz.cerceve.length) a.cerceve = iz.cerceve.map(String).slice(0, 2);
       a.oge = adayOgesi(a);
       return { a, sira };
     });
@@ -234,6 +235,10 @@ export function eylemAdaylariniAyikla(ham) {
       };
       if (tur === 'gonderim') t.kayitOlusturabilir = a.kayitOlusturabilir === true;
       if (tur === 'hata' && Number.isInteger(a.adet) && a.adet > 0) t.adet = a.adet;
+      if (Array.isArray(a.cerceve) && a.cerceve.length && a.cerceve.every((c) => seciciGecerli(c))) {
+        t.cerceve = a.cerceve.map(String).slice(0, 2);
+        t.anahtar = `${tur}:${t.cerceve.join(' » ')} » ${t.secici}`;
+      }
       t.oge = adayOgesi(t);
       if (!sonuc[tur].some((x) => x.anahtar === t.anahtar)) sonuc[tur].push(t);
     }

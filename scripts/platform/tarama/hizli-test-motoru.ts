@@ -16,10 +16,10 @@
 // reddedilir), sayfaya form gönderimi ve düğme tıklaması korumaları konur, GET/HEAD dışındaki istekler engellenir. Diğer izinlerde
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
-import type { Browser, Locator, Page } from '@playwright/test';
-import { alanaYaz, alanZatenDolu } from './alan-cikisi';
+import type { Browser, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
+import { alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
-import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, sakinlikBekle } from './guvenli-tiklama';
+import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, ortuyuKaldir, sakinlikBekle, sayfaParmakIzi } from './guvenli-tiklama';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -30,7 +30,7 @@ import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaram
 import type { EngellenenIstek, HamAlan } from './paket-olusturucu.mjs';
 import {
   HIZLI_BASIS_BEKLEME_EN_COK_MS, HIZLI_SECIM_KIMLIGI, HIZLI_SECIM_KOPRUSU, taramaTarayiciAyarlari,
-  type HizliAnlik, type HizliDoldurulan, type HizliDugme, type HizliFark, type HizliKesif, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
+  type HizliAnlik, type HizliDiyalog, type HizliDoldurulan, type HizliDugme, type HizliFark, type HizliKesif, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
   type HizliTestSonucu, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi
 } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
@@ -53,6 +53,9 @@ const bekle = (ms: number): Promise<void> => new Promise((c) => setTimeout(c, ms
 const ALAN_SAKINLIK_EN_COK_MS = 8_000;
 /** Basıştan sonra bundan kısa süredir bekleyen istek sayılır (gönderim / hesaplama uzun sürebilir; uzun yoklama adresi zaten öğrenilir). */
 const BASIS_UZUN_ISTEK_MS = 20_000;
+/** Doldurmadan sonra görünümün değişmeden kalması gereken süre (ms) ve en çok bekleme: beklemeyle (debounce) beliren alanlar için. */
+const DURULMA_MS = 1_600;
+const DURULMA_EN_COK_MS = 5_000;
 /** Basıştan sonra hiç yeni metin görülmediyse ek bakma süresi (ms): pencerenin içi gecikmeli çizilebilir. */
 const YENI_METIN_BEKLEME_MS = 4_000;
 /** Metin karşılaştırması: büyük / küçük harf, Türkçe harfler ve boşluklar yok sayılır (koşucunun toleranslı içerir kuralı gibi). */
@@ -107,10 +110,69 @@ export async function hizliTestiYurut(
   await olay({ tur: 'adim', adim: 'hazirlik', durum: 'tamam' });
 
   const notlar: string[] = [];
-  /** Sayfanın tarayıcı uyarıları (alert / confirm): metinleri sonraki farka girer; pencere kapatılır (onay verilmez). */
+  /** Sayfanın tarayıcı pencerelerinin (alert / confirm / prompt) metinleri: sonraki farka / bitiş denetimine girer. */
   const diyaloglar: string[] = [];
+  /** Pencereler ve verilen yanıtlar (bu komut boyunca): basışın farkına ve modele (aksiyonun diyalog yanıtı) gider. */
+  const diyalogKayitlari: HizliDiyalog[] = [];
   let kapandi = false;
   let secimCevabi: ((v: Record<string, unknown>) => void) | null = null;
+  /** Komut kuyruğu: pencere sorusu / seçim beklenirken gelen başka komutlar sırayla işlenir. */
+  const kuyruk: HizliKomut[] = [];
+  /** Yanıt bekleyen açık pencere (yanıtlanınca çözülür). */
+  let acikDiyalog: Promise<void> | null = null;
+  /** Tıklama yarışı: pencere açılınca tıklama "tamam" sayılır (pencere yanıtlanana kadar tıklama dönmez). */
+  let diyalogAcildi: (() => void) | null = null;
+  /** Doğrulama koşusunda o anki basışın kaydedilmiş pencere yanıtı (yoksa izin kuralı). */
+  let planYaniti: 'kabul' | 'iptal' | null = null;
+  /** Bana sor: pencereyi kullanıcıya soracak komutun numarası (yalnız basış sırasında; diğer anlarda izin kuralı). */
+  let soruNo: number | null = null;
+
+  /**
+   * Pencere sorusu (Bana sor): sunucuya bildirilir, kullanıcının yanıtı "diyalogYaniti" komutuyla gelir. Bu arada gelen başka komutlar
+   * kuyruğa alınır; "bitir" gelirse ya da tarayıcı kapanırsa pencere iptal edilir (hiçbir yerde takılı kalınmaz).
+   */
+  async function kullaniciyaSor(no: number, tur: HizliDiyalog['tur'], mesaj: string): Promise<'kabul' | 'iptal'> {
+    await gonder({ olay: 'diyalog', no, tur, mesaj }).catch(() => undefined);
+    for (;;) {
+      if (kapandi) return 'iptal';
+      const k = await komutAl();
+      if (!k) continue;
+      if (k.tur === 'diyalogYaniti') return k.yanit === 'kabul' ? 'kabul' : 'iptal';
+      kuyruk.push(k);
+      if (k.tur === 'bitir') return 'iptal';
+    }
+  }
+
+  /**
+   * TEK pencere işleyicisi (sayfa açılır açılmaz kurulur; ana sekme ve açılan sekmeler): alert her zaman "Tamam"; confirm / prompt
+   * doğrulama koşusunda kaydedilen yanıtla, değilse izne göre — Evet: kabul (prompt varsayılan değeriyle), Bana sor: basış sırasında
+   * kullanıcıya sorulur (başka anlarda iptal), Hayır: iptal. Sayfadan ayrılma uyarısı (beforeunload) kabul edilir.
+   */
+  const diyalogIsle = (d: Dialog): void => {
+    const tur = (['alert', 'confirm', 'prompt', 'beforeunload'].includes(d.type()) ? d.type() : 'alert') as HizliDiyalog['tur'];
+    const mesaj = d.message().replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (mesaj) diyaloglar.push(mesaj);
+    let bitti!: () => void;
+    const p = new Promise<void>((c) => { bitti = c; });
+    acikDiyalog = p;
+    diyalogAcildi?.();
+    void (async () => {
+      let yanit: 'kabul' | 'iptal';
+      if (tur === 'alert' || tur === 'beforeunload') yanit = 'kabul';
+      else if (planYaniti) yanit = planYaniti;
+      else if (izin === 'evet') yanit = 'kabul';
+      else if (izin === 'sor' && soruNo !== null) yanit = await kullaniciyaSor(soruNo, tur, mesaj);
+      else yanit = 'iptal';
+      diyalogKayitlari.push({ tur, mesaj, yanit });
+      await (yanit === 'kabul' ? d.accept(tur === 'prompt' ? d.defaultValue() : undefined) : d.dismiss()).catch(() => undefined);
+      if (acikDiyalog === p) acikDiyalog = null;
+      bitti();
+    })();
+  };
+  /** Açık pencere yanıtlanana kadar bekler (pencere açıkken sayfa okunamaz). */
+  const diyalogBitsin = async (): Promise<void> => { while (acikDiyalog && !kapandi) await acikDiyalog; };
+  /** Pencere yanıtının günlükteki adı. */
+  const yanitAdi = (x: HizliDiyalog): string => (x.tur === 'alert' ? 'Tamam' : x.yanit === 'kabul' ? 'Tamam (onaylandı)' : 'İptal');
 
   try {
     // "Başka düğmeye bas" köprüsü (şerit yalnız secimAc komutunda kurulur).
@@ -124,11 +186,17 @@ export async function hizliTestiYurut(
       await baglam.addInitScript(formGonderimKorumasi);
       await baglam.addInitScript(dugmeTiklamaKorumasi);
     }
-    const islem = await baglam.newPage();
+    // Pencere işleyicisi sayfa OLUŞTURULUR OLUŞTURULMAZ kurulur (ana sekme dahil): açılışta / ilk basışta çıkan confirm de yakalanır.
+    const dinlenen = new WeakSet<Page>();
+    const sayfayiDinle = (p: Page): void => { if (dinlenen.has(p)) return; dinlenen.add(p); p.on('dialog', diyalogIsle); };
+    let ilkSayfa: Page | null = null;
     baglam.on('page', (p: Page) => {
-      p.on('dialog', (d) => { diyaloglar.push(d.message().replace(/\s+/g, ' ').trim().slice(0, 200)); void d.dismiss().catch(() => undefined); });
-      if (p !== islem) notlar.push('Sayfa yeni bir sekme / pencere açtı; hızlı test ilk sekmede sürer.');
+      sayfayiDinle(p);
+      if (ilkSayfa && p !== ilkSayfa) notlar.push('Sayfa yeni bir sekme / pencere açtı; hızlı test ilk sekmede sürer.');
     });
+    const islem = await baglam.newPage();
+    ilkSayfa = islem;
+    sayfayiDinle(islem);
     islem.on('close', () => { kapandi = true; });
     browser.on('disconnected', () => { kapandi = true; });
     if (g.tarif) {
@@ -204,15 +272,54 @@ export async function hizliTestiYurut(
       }
     }
 
+    /** Aynı kökenli çerçeveler (iframe; en çok 10): sonuç metinleri ve doğrulamada aranan metin onların içinde de olabilir. */
+    const ayniKokenCerceveler = (page: Page): Frame[] => {
+      let koken = '';
+      try { koken = new URL(page.url()).origin; } catch { return []; }
+      return page.frames().filter((f) => f !== page.mainFrame()).filter((f) => { try { return new URL(f.url()).origin === koken; } catch { return false; } }).slice(0, 10);
+    };
+    /** Görünen metinler: ana belge + aynı kökenli çerçeveler (aynı metin bir kez). */
+    async function metinleriTopla(page: Page): Promise<HizliMetin[]> {
+      const ayar = { kaliplar: { ...KALIPLAR }, enCok: 150 };
+      const l = (await page.evaluate(hizliMetinleriTopla, ayar).catch(() => [])) as HizliMetin[];
+      for (const f of ayniKokenCerceveler(page)) {
+        for (const m of ((await f.evaluate(hizliMetinleriTopla, ayar).catch(() => [])) as HizliMetin[])) if (!l.some((x) => x.metin === m.metin)) l.push(m);
+      }
+      return l.slice(0, 150);
+    }
+    /** Sayfanın tüm görünen yazısı (ana belge + aynı kökenli çerçeveler): bitiş / hata metni aranır. */
+    async function govdeMetni(page: Page): Promise<string> {
+      const parcalar = [await page.locator('body').innerText().catch(() => '')];
+      for (const f of ayniKokenCerceveler(page)) parcalar.push(await f.locator('body').innerText({ timeout: 1_000 }).catch(() => ''));
+      return parcalar.filter(Boolean).join('\n');
+    }
+
+    /**
+     * Doldurmadan sonra sayfa görünümünün durulmasını bekler: görünüm parmak izi (görünür metin uzunluğu, görünür alan / düğme sayısı,
+     * açık pencereler; guvenli-tiklama.ts) en az DURULMA_MS değişmeden kalana kadar, en çok DURULMA_EN_COK_MS. Alana yazdıktan bir süre
+     * sonra (debounce / zamanlayıcı + sorgu) beliren zorunlu alanlar böylece aynı veri durağında sorulur, otomatik basıştan önce görülür.
+     */
+    async function gorunumDurulsun(page: Page): Promise<void> {
+      const bas = Date.now();
+      let onceki = await sayfaParmakIzi(page);
+      let sabit = Date.now();
+      while (!kapandi && Date.now() - bas < DURULMA_EN_COK_MS) {
+        await page.waitForTimeout(200);
+        const iz = await sayfaParmakIzi(page);
+        if (iz !== onceki || !ag.sakinMi(0, { enUzunMs: UZUN_ISTEK_MS })) { onceki = iz; sabit = Date.now(); continue; }
+        if (Date.now() - sabit >= DURULMA_MS) return;
+      }
+    }
+
     /** Sayfanın okuması (değer yok). goruntu: JPEG ekran görüntüsü (yalnız bellekte; sunucuya gider). */
     async function anlikOku(page: Page, goruntu: boolean): Promise<HizliAnlik> {
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
       const envanter = await envanterOku(page, { degerOku: true }).catch(() => ({ alanlar: [] as HamAlan[], baslik: '' }));
       // "Devam et" listesi: sayfadaki tüm görünür düğmeler (sonradan beliren düğmeler puan sınırına takılmasın).
-      const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
-      const metinler = (await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[];
+      const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60, cerceveler: true });
+      const metinler = await metinleriTopla(page);
       const dugmeler: HizliDugme[] = eylem.gonderim.map((a) => ({
-        secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi
+        secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {})
       }));
       let resim: string | null = null;
       if (goruntu) resim = await page.screenshot({ type: 'jpeg', quality: 55, timeout: 10_000 }).then((b) => b.toString('base64'), () => null);
@@ -231,8 +338,13 @@ export async function hizliTestiYurut(
         if (a.tur === 'file') return 'Dosya alanı hızlı testte doldurulmaz; senaryo formunda dosya yükleyin.';
         if (a.tur === 'radio') {
           const r = (a.radyolar ?? []).find((x) => x.deger === String(deger) || (x.metin && katla(x.metin) === katla(String(deger))));
-          if (!r || !r.secici) return `“${String(deger)}” seçeneği bu alanda yok.`;
-          await k.locator(r.secici).first().check({ timeout: bekleMs });
+          if (!r) return `“${String(deger)}” seçeneği bu alanda yok (seçenekler: ${(a.radyolar ?? []).map((x) => x.metin ?? x.deger).join(', ')}).`;
+          // Seçeneğin seçicisi yoksa (eski okuma) grubun adı + değeri.
+          const secici = r.secici ?? (a.ad ? `input[type="radio"][name="${a.ad.replace(/["\\]/g, '\\$&')}"][value="${r.deger.replace(/["\\]/g, '\\$&')}"]` : null);
+          if (!secici) return `“${String(deger)}” seçeneği sayfada bulunamadı.`;
+          const l = k.locator(secici).first();
+          // Özel çizimli radyo (girdi gizli ya da örtülü): zorla işaretlenir.
+          await l.check({ timeout: bekleMs }).catch(async () => { await l.check({ timeout: 5_000, force: true }); });
           return null;
         }
         const l = k.locator(a.secici).first();
@@ -264,12 +376,29 @@ export async function hizliTestiYurut(
           if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas;
           return null;
         }
+        // Takvimden seçilen (salt okunur) tarih alanı: değer + olaylar, olmazsa takvimden gün (alan-cikisi.ts > takvimdenYaz; normal koşu aynı).
+        if (a.takvimden) {
+          const h = await takvimdenYaz(l, String(deger), bekleMs);
+          if (h) return h;
+          await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
+          return null;
+        }
         // Aynı değer sayfada zaten varsa (önceki turda girildi; site alanı sorgudan sonra kilitlemiş olabilir) yeniden yazılmaz.
         if (await alanZatenDolu(l, String(deger))) return null;
+        // Otomatik tamamlama: yaz → öneri listesini bekle → eşleşen öneriyi seç (liste açılmazsa sıradan metin gibi devam; normal koşu aynı).
+        if (a.oneri) {
+          const r = await oneridenYaz(l, String(deger), bekleMs);
+          if (r !== 'secildi' && r !== 'liste-yok') return `“${a.etiket ?? d.anahtar}”: ${r}`;
+          await alandanCik(l);
+          await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
+          return null;
+        }
         // Ortak yazma kuralı (alan-cikisi.ts > alanaYaz): kısa tek satırlı metin gerçek tuşlarla yazılır (maske / keyup sorgusu çalışır, yaz-sil-yaz
         // olmaz); uzun metin doğrudan. Alandan çıkınca sayfanın sorgusu / yeniden çizimi beklenir (kısa üst sınır; uzun istekler sayılmaz).
         const sonuc = await alanaYaz(l, String(deger), { zamanAsimiMs: bekleMs, sonra: async () => { await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); } });
         if (sonuc === 'silindi') return 'Değer yazıldı ama alandan çıkınca sayfa sildi (maske / doğrulama); alanın nasıl doldurulduğunu kontrol edin.';
+        // "Yazıp Enter'a basın" alanı (etiket / beceri girdisi): değer Enter ile eklenir (normal koşu aynı: doldurucuParametreleri.tus).
+        if (a.tus) { await l.press(a.tus, { timeout: 3_000 }); await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); }
         return null;
       } catch (hata) {
         const neden = await alanDurumu(k.locator(a.secici).first());
@@ -319,31 +448,67 @@ export async function hizliTestiYurut(
      * başlatan / sayfayı değiştiren basış asla tekrarlanmaz. Not: tekrar ya da etkisizlik (yoksa null); etkisiz: son basıştan sonra da
      * hiçbir şey değişmedi.
      */
-    async function guvenliBas(page: Page, secici: string, metin: string | null): Promise<{ not: string | null; etkisiz: boolean }> {
-      let l = page.locator(secici);
-      if (metin && (await l.count().catch(() => 0)) > 1) l = l.filter({ hasText: metin });
+    async function guvenliBas(page: Page, secici: string, metin: string | null, cerceve: string[] | null = null): Promise<{ not: string | null; etkisiz: boolean }> {
+      // Düğme aynı kökenli bir çerçevedeyse (iframe) çerçeve seçicileriyle.
+      let l = alanKapsami(page, cerceve).locator(secici);
+      // Seçici birden çok öğe buluyorsa yazıyla daraltılır (yazı aday listesindeki ayırt edici ekleri taşıyabilir: bulunmazsa daraltılmaz).
+      if (metin && (await l.count().catch(() => 0)) > 1) {
+        const d = l.filter({ hasText: metin });
+        if ((await d.count().catch(() => 0)) > 0) l = d;
+      }
       const hedef = l.filter({ visible: true }).first();
       await hedef.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
       await sakinlikBekle(page, hedef, { ag });
-      durum.asama = 'kayit';
-      const t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false });
+      // Düğmeyi örten öğe (ör. açık kalan öneri listesi / açılır menü): Escape, sonra sayfanın boş bir yerine tıklanarak kapatılır;
+      // kapanmazsa örten öğe açıkça söylenir (ham "locator.click: Timeout" yerine).
+      await ortuyuKaldir(page, hedef, metin ?? secici);
+      // Tıklama ile pencere yarışır: tıklama bir pencere açarsa (confirm / alert) pencere yanıtlanana kadar dönmez; pencere açılınca
+      // tıklama yapılmış sayılır, pencerenin yanıtı (izin / kullanıcı) beklenir, sonra izleme sürer.
+      const tikla = async (oge: Locator, ms: number): Promise<void> => {
+        const acildi = new Promise<'diyalog'>((c) => { diyalogAcildi = () => c('diyalog'); });
+        const t = oge.click({ timeout: ms });
+        try {
+          const r = await Promise.race([t.then(() => 'tamam' as const), acildi]);
+          if (r === 'diyalog') t.catch(() => undefined);
+        } finally { diyalogAcildi = null; }
+      };
+      let t: Awaited<ReturnType<typeof guvenliTikla>>;
+      try {
+        t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false, tikla });
+      } catch (hata) {
+        const m = String(hata instanceof Error ? hata.message : hata);
+        const ortu = /(<[a-z][^>]*>[^<]{0,80})(?:<\/[a-z]+>)?[^\n]*intercepts pointer events/i.exec(m)?.[1];
+        if (ortu) throw new Error(`“${metin ?? secici}” düğmesine basılamadı: başka bir öğe düğmeyi örtüyor (${ortu.replace(/\s+/g, ' ').slice(0, 120)}). Açık kalan liste / pencere kapatılamadı; önce o öğede seçim yapın ya da pencereyi kapatan düğmeye basın.`);
+        if (/Timeout \d+ms exceeded/i.test(m)) throw new Error(`“${metin ?? secici}” düğmesine 15 sn içinde basılamadı: düğme görünür ve etkin olmadı (sayfa değişmiş, düğme devre dışı ya da örtülü olabilir).`);
+        throw hata;
+      }
+      await diyalogBitsin();
       return { not: t.etkisiz ? etkisizTiklamaMetni(metin ?? secici, t.tekrarlandi) : t.tekrarlandi ? TEKRAR_NOTU : null, etkisiz: t.etkisiz };
     }
 
     /** Düğmeye basar, sonucu bekler ve farkı çıkarır. */
-    async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik): Promise<HizliFark> {
+    async function bas(page: Page, secici: string, metin: string | null, once: HizliAnlik, no: number, cerceve: string[] | null = null): Promise<HizliFark> {
       const onceAdres = yolu(page.url());
       const bas = Date.now();
       diyaloglar.length = 0;
+      diyalogKayitlari.length = 0;
+      soruNo = no;
       let sonuc: { metinler: string[]; zamanAsimi: boolean };
       const onceMetinler = new Set(once.metinler.map((m) => m.metin));
       let tiklamaNotu: string | null = null;
+      // Gönderim izi: basış sırasında yazma isteği (POST / PUT / PATCH / DELETE) ya da belge gezinmesi (bitiş önerisinin denetimi).
+      let gonderim = false;
+      const istekIzi = (r: Request): void => {
+        if (r.isNavigationRequest() && r.frame() === page.mainFrame()) gonderim = true;
+        else if (!['GET', 'HEAD', 'OPTIONS'].includes(r.method()) && ['xhr', 'fetch', 'document', 'other'].includes(r.resourceType())) gonderim = true;
+      };
+      baglam.on('request', istekIzi);
       try {
-        tiklamaNotu = (await guvenliBas(page, secici, metin)).not;
+        tiklamaNotu = (await guvenliBas(page, secici, metin, cerceve)).not;
         sonuc = await basisiIzle(page, bas);
         // Basıştan sonra hiç yeni metin görülmediyse (ör. pencere önce yalnız "Kapat" düğmesiyle açılıp içi sonra çizilir) kısa bir süre
         // daha bakılır; yeni metin belirince görünüm yeniden sakinleşene kadar beklenir.
-        const yeniMetinVar = async (): Promise<boolean> => ((await page.evaluate(hizliMetinleriTopla, { kaliplar: { ...KALIPLAR }, enCok: 150 }).catch(() => [])) as HizliMetin[])
+        const yeniMetinVar = async (): Promise<boolean> => (await metinleriTopla(page))
           .some((m) => !onceMetinler.has(m.metin) && m.tur !== 'bekleme');
         const pencereAcik = (): Promise<boolean> => page.evaluate(() => [...document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],.modal')]
           .some((d) => {
@@ -364,21 +529,34 @@ export async function hizliTestiYurut(
         }
       } finally {
         durum.asama = okumaAsamasi;
+        baglam.off('request', istekIzi);
+        soruNo = null;
       }
+      await diyalogBitsin();
       const sonra = await anlikOku(page, true);
+      const adresDegisti = onceAdres !== sonra.yol;
+      // Sonuç niteliği: yönlendirmeden sonra (adres değişti) ya da yeni beliren başlık sayfanın sonucudur (başlık değişimi).
+      const yeniler = sonra.metinler.filter((m) => !onceMetinler.has(m.metin)).map((m) => (m.baslik ? { ...m, sonuc: true } : m));
+      const pencereler = diyalogKayitlari.splice(0);
+      const pencereMetinleri = new Set(pencereler.map((x) => x.mesaj));
       const yeniMetinler: HizliMetin[] = [
-        ...sonra.metinler.filter((m) => !onceMetinler.has(m.metin)),
-        ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
+        ...yeniler,
+        // Tarayıcı penceresinin metni: bilgi penceresi (alert) basışın sonucudur; onay / soru penceresi (confirm / prompt) bir sorudur.
+        ...diyaloglar.splice(0).map((m): HizliMetin => ({
+          metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal',
+          sonuc: pencereler.some((x) => x.mesaj === m && x.tur === 'alert') || !pencereMetinleri.has(m)
+        }))
       ];
       const onceAlanlar = new Set(once.alanlar.map((a) => a.anahtar));
       const sonraAlanlar = new Set(sonra.alanlar.map((a) => a.anahtar));
       const onceDugmeler = new Set(once.dugmeler.map((d) => d.secici));
       return {
-        basilan: { secici, metin }, sureMs: Date.now() - bas, zamanAsimi: sonuc.zamanAsimi, beklemeMetinleri: sonuc.metinler,
+        basilan: { secici, metin, ...(cerceve?.length ? { cerceve } : {}) }, sureMs: Date.now() - bas, zamanAsimi: sonuc.zamanAsimi, beklemeMetinleri: sonuc.metinler,
         yeniMetinler, yeniAlanlar: sonra.alanlar.filter((a) => !onceAlanlar.has(a.anahtar)),
         kaybolanAlanlar: once.alanlar.filter((a) => !sonraAlanlar.has(a.anahtar)).map((a) => a.anahtar),
         yeniDugmeler: sonra.dugmeler.filter((d) => !onceDugmeler.has(d.secici)),
-        adres: onceAdres !== sonra.yol ? { once: onceAdres, sonra: sonra.yol } : null, anlik: sonra, tiklamaNotu
+        adres: adresDegisti ? { once: onceAdres, sonra: sonra.yol } : null, anlik: sonra, tiklamaNotu,
+        diyaloglar: pencereler, gonderim: gonderim || adresDegisti
       };
     }
 
@@ -453,7 +631,8 @@ export async function hizliTestiYurut(
           if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
           continue;
         }
-        if (['radio', 'checkbox', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen) continue;
+        // Yaz + Enter alanı Enter'dan sonra boş kalır (değer eklendi): yeniden yazılmaz.
+        if (['radio', 'checkbox', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen || d.alan.tus) continue;
         const yer = alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first();
         if ((await yer.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) continue;
         const h = await alaniDoldur(page, d);
@@ -474,7 +653,7 @@ export async function hizliTestiYurut(
       /** Son basış etkisiz kaldıysa (iki kez basıldı, hiçbir şey değişmedi) bitiş görülmezse iletiye eklenen açıklama. */
       let sonEtkisiz: string | null = null;
       const hataVar = async (): Promise<string | null> => {
-        const govde = `${await page.locator('body').innerText().catch(() => '')}\n${diyaloglar.join('\n')}`;
+        const govde = `${await govdeMetni(page)}\n${diyaloglar.join('\n')}`;
         return plan.bitis.hata.find((h) => iceriyor(govde, h)) ?? null;
       };
       for (const [i, adim] of plan.adimlar.entries()) {
@@ -490,6 +669,7 @@ export async function hizliTestiYurut(
         if (adim.alanlar.length) {
           // Sayfa doldururken alanı silmiş olabilir: sakinleşince boş kalanlar yeniden doldurulur.
           await sakinles(page, 5_000);
+          await gorunumDurulsun(page);
           const yenile = await bosKalanlariYenile(page, adim.alanlar, []);
           if (yenile[0]) {
             const d = adim.alanlar.find((x) => x.anahtar === yenile[0].anahtar);
@@ -506,8 +686,10 @@ export async function hizliTestiYurut(
         await page.waitForTimeout(200);
         if (!adim.bas) continue;
         await ilerle(i + 1, `${onEk}: “${adim.bas.metin ?? adim.bas.secici}” düğmesine basıldı; sayfa izleniyor…`);
+        // Bu basışta açılan pencereye hızlı testte verilen yanıt (normal koşu da aynı yanıtı verir: aksiyonun "diyalog"u).
+        planYaniti = adim.bas.diyalog ?? null;
         try {
-          const t = await guvenliBas(page, adim.bas.secici, adim.bas.metin);
+          const t = await guvenliBas(page, adim.bas.secici, adim.bas.metin, adim.bas.cerceve ?? null);
           sonEtkisiz = t.etkisiz && t.not ? `${i + 1}. adımda ${t.not}` : null;
           if (t.not) await ilerle(i + 1, `${onEk}: “${adim.bas.metin ?? adim.bas.secici}” — ${t.not}`);
           const s = await basisiIzle(page, Date.now());
@@ -523,7 +705,7 @@ export async function hizliTestiYurut(
       await ilerle(toplam + 1, 'Bitiş koşulu bekleniyor…');
       const son = Date.now() + plan.zamanAsimiSn * 1000;
       for (;;) {
-        const govde = `${await page.locator('body').innerText().catch(() => '')}\n${diyaloglar.join('\n')}`;
+        const govde = `${await govdeMetni(page)}\n${diyaloglar.join('\n')}`;
         const h = plan.bitis.hata.find((x) => iceriyor(govde, x));
         if (h) return { sonuc: 'basarisiz', mesaj: `Hata mesajı göründü: “${h}”.`, gorulen: [...gorulen, h] };
         const b = plan.bitis.bitti.find((x) => iceriyor(govde, x));
@@ -638,12 +820,12 @@ export async function hizliTestiYurut(
     await islem.bringToFront().catch(() => undefined);
 
     // ---- Komut döngüsü ----
-    let siradaki: HizliKomut | null = null;
     for (;;) {
       if (kapandi) throw new TaramaHatasi('IPTAL', 'Hızlı test tarayıcısı kapatıldı.');
-      const k = siradaki ?? await komutAl();
-      siradaki = null;
+      const k = kuyruk.shift() ?? await komutAl();
       if (!k) continue;
+      // Sorusu kapanmış pencerenin geç kalan yanıtı: yok sayılır.
+      if (k.tur === 'diyalogYaniti') continue;
       try {
         if (k.tur === 'bitir') break;
         if (k.tur === 'oku') {
@@ -651,6 +833,7 @@ export async function hizliTestiYurut(
           await gonder({ olay: 'okundu', no: k.no, anlik: sonAnlik });
         } else if (k.tur === 'doldur') {
           diyaloglar.length = 0;
+          diyalogKayitlari.length = 0;
           beklemeler = {};
           const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
           for (const [j, d] of k.alanlar.entries()) {
@@ -660,8 +843,13 @@ export async function hizliTestiYurut(
           }
           // Sonradan silinen / geri alınan alan (sayfa arka planda satırı yeniden çizmiş olabilir): boş kalanlar bir kez yeniden doldurulur.
           await sakinles(islem, 5_000);
-          hatalar.push(...await bosKalanlariYenile(islem, k.alanlar, hatalar.map((x) => x.anahtar)));
+          // Yazılan alanlar ve sayfaya aynı değerle önceden uygulanmış (yeniden yazılmayan) alanlar: boşalmışsa bir kez yeniden doldurulur.
+          hatalar.push(...await bosKalanlariYenile(islem, [...k.alanlar, ...(k.kontrol ?? [])], hatalar.map((x) => x.anahtar)));
           await sakinles(islem, 5_000);
+          // Beklemeyle (debounce) beliren alanlar / metinler: sayfa görünümü durulana kadar (yeni alan otomatik basıştan önce sorulsun).
+          await gorunumDurulsun(islem);
+          await diyalogBitsin();
+          for (const x of diyalogKayitlari.splice(0)) notlar.push(`Doldururken sayfa ${x.tur === 'alert' ? 'bilgi' : 'onay'} penceresi açtı (“${x.mesaj}”): ${yanitAdi(x)}.`);
           const once = new Set(sonAnlik.metinler.map((m) => m.metin));
           sonAnlik = await anlikOku(islem, false);
           // Doldururken sayfanın gösterdiği yeni mesajlar (ör. alandan çıkınca gelen doğrulama uyarısı): kullanıcıya sorulur.
@@ -672,20 +860,24 @@ export async function hizliTestiYurut(
           await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
-          const fark = await bas(islem, k.secici, k.metin, sonAnlik);
+          const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no, k.cerceve ?? null);
           sonAnlik = fark.anlik;
           // Basıştan sonra beliren (henüz boş) seçim alanları da denenir: içlerinde koşullu alan var mı? (Sayfa yeniden açılmaz.)
           const yeniSecimler = fark.yeniAlanlar.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);
           const kesifler = yeniSecimler.length ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
           await gonder({ olay: 'basildi', no: k.no, fark, kesifler });
         } else if (k.tur === 'secimAc') {
-          siradaki = await sec(islem, k.no);
+          const s = await sec(islem, k.no);
+          if (s) kuyruk.unshift(s);
         } else if (k.tur === 'dogrula') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: doğrulama koşusu yapılmaz.' }); continue; }
+          diyaloglar.length = 0;
+          diyalogKayitlari.length = 0;
           const r = await dogrula(islem, k.plan, async (adim, mesaj) => {
             bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `Doğrulama koşusu — ${mesaj}` });
             await gonder({ olay: 'ilerleme', no: k.no, adim, toplam: k.plan.adimlar.length, mesaj }).catch(() => undefined);
-          });
+          }).finally(() => { planYaniti = null; });
+          await diyalogBitsin();
           bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `Doğrulama koşusu ${r.sonuc === 'basarili' ? 'başarılı' : 'başarısız'}; tarayıcı hazır.` });
           sonAnlik = await anlikOku(islem, true);
           await gonder({ olay: 'dogrulandi', no: k.no, ...r });

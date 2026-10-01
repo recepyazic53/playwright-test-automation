@@ -11,7 +11,7 @@ import type { SeciciAdayi } from './oge-secme-paneli';
 
 type Tur = 'hata' | 'bekleme' | 'basari' | 'normal';
 
-export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; enCok: number }): Array<{ metin: string; tur: Tur }> {
+export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; enCok: number }): Array<{ metin: string; tur: Tur; sonuc?: boolean; baslik?: boolean }> {
   const k = (ad: string): RegExp => new RegExp(ayar.kaliplar[ad], 'i');
   const katla = (m: string | null | undefined): string => (m ?? '').replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase()
     .replace(/̇/g, '').replace(/ı/g, 'i').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
@@ -37,7 +37,31 @@ export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; en
     }
     return k('beklemeMetni').test(katla(m)) ? 'bekleme' : 'normal';
   };
-  const ATLA = 'script, style, noscript, template, svg, button, a, label, legend, select, option, textarea, [role="button"], [role="link"], [id^="nobetci"]';
+  /**
+   * Sonuç niteliği: başarı kalıbı (metin) ya da başarı kutusu, durum bölgesi (role=status / aria-live / output), bildirim (toast /
+   * snackbar / notification / flash sınıfı). Sekme / anahtar / liste seçeneği etiketleri ve form yazıları sonuç değildir.
+   */
+  const sonucMu = (e: Element, m: string, tur: Tur): boolean => {
+    if (tur === 'basari') return true;
+    if (tur === 'hata' || tur === 'bekleme') return false;
+    if (k('basariMetni').test(katla(m)) && !k('hataMetni').test(katla(m))) return true;
+    let a: Element | null = e;
+    for (let i = 0; a && i < 6; a = a.parentElement, i++) {
+      const rol = (a.getAttribute('role') ?? '').toLowerCase();
+      const canli = a.hasAttribute('aria-live') && a.getAttribute('aria-live') !== 'off';
+      if (rol === 'status' || canli || a.tagName === 'OUTPUT') return true;
+      if (siniflar(a).some((c) => /(^|[-_])(toast|snackbar|notification|notify|flash|bildirim)/.test(c))) return true;
+    }
+    return false;
+  };
+  const baslikMi = (e: Element): boolean => /^H[1-3]$/.test(e.tagName) || (e.getAttribute('role') ?? '').toLowerCase() === 'heading';
+  // Sekme / anahtar / liste seçeneği / menü öğesi yazıları sonuç metni değildir (ör. "Kişisel" seçeneği, "SMS bildirimleri" anahtarı).
+  const ATLA = 'script, style, noscript, template, svg, button, a, label, legend, select, option, textarea, [role="button"], [role="link"], [role="option"], [role="listbox"], [role="tab"], [role="switch"], [role="menuitem"], [role="menu"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="radio"], [role="checkbox"], [role="combobox"], [id^="nobetci"]';
+  /** Bir anahtarın / onay kutusunun adı (aria-labelledby ile bağlı yazı): sonuç değil. */
+  const bagliAdlar = new Set<string>();
+  for (const x of Array.from(document.querySelectorAll('[role="switch"][aria-labelledby], [role="checkbox"][aria-labelledby], [role="radio"][aria-labelledby], [role="tab"][aria-labelledby]'))) {
+    for (const id of (x.getAttribute('aria-labelledby') ?? '').split(/\s+/)) if (id) bagliAdlar.add(id);
+  }
   // Sayfanın üst çubuğu / menüsü / altbilgisi (kullanıcı adı, menü, telif satırı) sonuç metni değildir. <header> / <footer> yalnız sayfa
   // düzeyindeyse (main, section, article, form, fieldset, pencere içinde değilse) sayılır.
   const ustBantta = (e: Element): boolean => {
@@ -47,10 +71,10 @@ export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; en
   };
   const alinan = new Set<Element>();
   const gorulen = new Set<string>();
-  const sonuc: Array<{ metin: string; tur: Tur }> = [];
+  const sonuc: Array<{ metin: string; tur: Tur; sonuc?: boolean; baslik?: boolean }> = [];
   for (const e of Array.from(document.body.querySelectorAll('*')).slice(0, 8000)) {
     if (sonuc.length >= ayar.enCok) break;
-    if (e.closest(ATLA) || ustBantta(e)) continue;
+    if (e.closest(ATLA) || ustBantta(e) || (e.id && bagliAdlar.has(e.id))) continue;
     // Üst öğesi alınmışsa metni zaten o bloğun içindedir.
     let ust = e.parentElement;
     let altinda = false;
@@ -63,7 +87,8 @@ export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; en
     alinan.add(e);
     if (gorulen.has(m)) continue;
     gorulen.add(m);
-    sonuc.push({ metin: m, tur: turu(e, m) });
+    const tur = turu(e, m);
+    sonuc.push({ metin: m, tur, ...(sonucMu(e, m, tur) ? { sonuc: true } : {}), ...(baslikMi(e) ? { baslik: true } : {}) });
   }
   return sonuc;
 }
