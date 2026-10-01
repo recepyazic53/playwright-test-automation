@@ -4,6 +4,7 @@
 //             Marka seçilince BELİREN Model listesi, bağımsız "Yapı tarzı" listesi ve "Hesapla" düğmesi (hepsi seçiliyse "Sonuç hazır").
 //   Kasıtlı sayfa hataları (bulgu olmalı): "Boşil" ilinde ilçe listesi BOŞ gelir; "Çukurova"nın mahalle listesinde "Toros" İKİ KEZ var;
 //   "Kurtuluş" mahallesinin sokak listesi BOŞ gelir.
+//   /zincirsiz/  bağlı listesi olmayan küçük form (veri durağının eski davranışı için).
 //   Sayaçlar: hesaplamalar (GET /api/hesapla) — düğmeye basıldığının kanıtı; istekler (seçenek istekleri dahil).
 import type { FiksturIstegi, FiksturYaniti } from './giris-fikstur';
 
@@ -53,6 +54,13 @@ export const BAGLI_LISTE_SAYFASI = `<h1>Adres ve araç</h1>
   });
 </script>`;
 
+/** /zincirsiz/: bağlı listesi olmayan sayfa (veri durağı eski davranışı: "Devam et" hep etkin, zincir göstergesi yok). */
+export const ZINCIRSIZ_SAYFA = `<h1>Basit form</h1>
+<label for="ad">Ad</label><input id="ad" name="ad">
+<label for="yapi">Yapı tarzı</label>
+<select id="yapi" name="yapi"><option value="">Seçiniz</option><option value="b">Betonarme</option><option value="k">Kagir</option></select>
+<p><button type="button" id="hesapla">Hesapla</button></p>`;
+
 /**
  * Süslü açılır liste kipi (?suslu=1): gerçek <select>'ler gizlidir; her birinin yanında aramalı liste bileşenlerinin kalıbında GÖRÜNÜR bir kutu
  * (role=combobox, "select2-<id>-container") durur. Koşucu bu listeleri "özel seçim" yoluyla doldurur (bağlı listede seçeneğin gelmesini
@@ -92,6 +100,7 @@ export class BagliListeUygulamasi {
 
   /** Bu fikstürün yollarını işler; başka yolsa null (çağıran kendi yollarına bakar). */
   isle(i: FiksturIstegi): FiksturYaniti | null {
+    if (i.yol === '/zincirsiz/' && i.yontem === 'GET') { this.istekler.push('GET /zincirsiz/'); return html(ZINCIRSIZ_SAYFA); }
     if (i.yol === '/adres/' && i.yontem === 'GET') { this.istekler.push('GET /adres/'); return html(i.sorgu.get('suslu') ? suslu(BAGLI_LISTE_SAYFASI) : BAGLI_LISTE_SAYFASI); }
     if (i.yol === '/api/secenek' && i.yontem === 'GET') {
       const tur = i.sorgu.get('tur') ?? '';

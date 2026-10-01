@@ -20,7 +20,9 @@
 //   GET  /platform/hizli-test/secenekler?projeId=&ekranId=   ortamlar (canlı mı, giriş tarifi), düzenlenecek ekran, süren oturum
 //   POST /platform/hizli-test/baslat { projeId, ortamId, hedef, ekranAdi | ekranId, cumle?, izin, girissiz?, canliOnay? } → { id }
 //   GET  /platform/hizli-test/durum?id=                       oturumun görünümü (soru, zincir, görülen metinler; değer maskesiz yalnız kullanıcının yazdığı)
-//   POST /platform/hizli-test/veri { id, degerler }           veri durağı: { anahtar: { deger, kaynak: 'elle' | 'tablo', tabloSecimi? } }
+//   POST /platform/hizli-test/veri { id, degerler, zincir?, zinciriAtla? }   veri durağı: { anahtar: { deger, kaynak: 'elle' | 'tablo', tabloSecimi? } };
+//        zincir: üst liste anahtarı → yalnız o seçim (ve sayfaya uygulanmamış üstleri) uygulanır, bağlı alt listeler gelince aynı durak
+//        yeniden sorulur (eksik denetlenmez, düğmeye basılmaz); zinciriAtla: getirilmemiş bağlı listeler sorulmadan devam edilir.
 //   POST /platform/hizli-test/karar { id, karar: 'bas' | 'baska' | 'bitir' | 'duzelt', secici?, metin?, dugme?, mesajlar? }
 //   POST /platform/hizli-test/onay { id, cevap }               Bana sor: "X'e basayım mı?"
 //   POST /platform/hizli-test/hata-cevabi { id, cevap: 'hata' | 'uyari' | 'onemsiz' }
@@ -246,6 +248,15 @@ export function hizliTestYoneticisiOlustur(s) {
   const alanAdi = (o, anahtar) => o.alanlar.get(anahtar)?.alan.etiket ?? o.kesifAdlari?.get(anahtar) ?? anahtar;
   /** Bağlı liste henüz seçeneksiz mi (üst seçilince dolacak)? @param {Nesne} a */
   const bagliBekliyor = (a) => Boolean(a.bagli) && !gercekSecenekler(a.secenekler).length;
+  /**
+   * Bağlı listenin seçenekleri üstün şu anki değerine göre mi geldi? Üstün değeri girilmişse sayfaya uygulanan değerle aynı olmalı;
+   * üst sayfada hazır geliyorsa (değer girilmemiş) seçeneklerin varlığı yeter. @param {Nesne} o @param {Nesne} a
+   */
+  const bagliGetirildi = (o, a) => {
+    if (!a.bagli || bagliBekliyor(a)) return false;
+    const u = o.degerler[a.bagli.ust];
+    return !u || o.uygulanan[a.bagli.ust] === u.deger;
+  };
   /** Üst → alt ilişkisini kaydeder (paketin bagliListeler'i, alanın bagli'si). @param {Nesne} o @param {string} ust @param {string} alt */
   const bagliEkle = (o, ust, alt) => {
     if (ust === alt || o.bagliUst.has(alt)) return;
@@ -404,7 +415,7 @@ export function hizliTestYoneticisiOlustur(s) {
     if (e.olay === 'hata') {
       o.sonHata = String(e.mesaj ?? '').slice(0, 500);
       gunluk(o, `Hata: ${o.sonHata}`);
-      if (bekleyen.tur === 'doldur') veriDuragi(o);
+      if (bekleyen.tur === 'doldur') { o.zincirIstegi = null; o.zincirAtla = false; o.sonGonderilen = {}; veriDuragi(o); }
       else if (bekleyen.tur === 'dogrula') { o.dogrulama = { durum: 'basarisiz', mesaj: o.sonHata, gorulen: [] }; dogrulamaAdimlariniKapat(o, false); o.durum = 'kaydet'; }
       else o.durum = o.izin === 'hayir' ? 'hayirSecim' : 'karar';
       return;
@@ -412,8 +423,22 @@ export function hizliTestYoneticisiOlustur(s) {
     o.sonHata = null;
     if (e.olay === 'dolduruldu') {
       o.sonAnlik = e.anlik;
+      // Yerinde zincir isteği ("↓ … seçeneklerini getir") ya da "Bağlı alanları atla": bu doldurmanın amacı (bir kez kullanılır).
+      const zincirIstegi = o.zincirIstegi ?? null;
+      const atla = o.zincirAtla === true;
+      o.zincirIstegi = null;
+      o.zincirAtla = false;
       for (const [k, ms] of Object.entries(nesneMi(e.beklemeler) ? e.beklemeler : {})) if (Number.isFinite(ms)) (o.yuklenme[k] ??= []).push(Number(ms));
       o.alanHatalari = Object.fromEntries((e.hatalar ?? []).map((/** @type {Nesne} */ h) => [h.anahtar, h.mesaj]));
+      // Sayfaya uygulanan değerler: bağlı listenin gösterilen seçenekleri hangi üst değere göre geldi (yerinde düğmenin "geldi" durumu).
+      // Üst sayfada yeniden seçilince altları sayfada boşalır: bu doldurmada gönderilmeyen altların uygulanan değeri düşer.
+      const gonderilen = o.sonGonderilen ?? {};
+      o.sonGonderilen = {};
+      for (const [k, v] of Object.entries(gonderilen)) {
+        if (o.alanHatalari[k]) { delete o.uygulanan[k]; continue; }
+        o.uygulanan[k] = v;
+        for (const [alt] of o.bagliUst) if (!(alt in gonderilen) && ustleri(o, alt).includes(k)) delete o.uygulanan[alt];
+      }
       const adim = guncelAdim(o);
       const gorunen = new Set(e.anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar));
       // Koşullu alanlar: doldurunca beliren yeni alanlar aynı adıma; kaybolanlar adımdan çıkar (değerleri senaryoya yazılmaz).
@@ -425,7 +450,9 @@ export function hizliTestYoneticisiOlustur(s) {
       const yeni = yeniler.length;
       adim.alanlar = adim.alanlar.filter((/** @type {Nesne} */ a) => a.kosul || gorunen.has(a.anahtar));
       const secimler = Object.fromEntries(adim.alanlar.filter((/** @type {Nesne} */ a) => ['select', 'radio'].includes(String(a.tur)) && typeof o.degerler[a.anahtar]?.deger === 'string'
-        && !degerBasvurusu(o.degerler[a.anahtar].deger)).map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
+        && !degerBasvurusu(o.degerler[a.anahtar].deger) && (!zincirIstegi || o.uygulanan[a.anahtar] === o.degerler[a.anahtar].deger))
+        .map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
+      // (Yerinde zincir isteğinde yalnız sayfaya uygulanmış seçimler okunur; girilip henüz gönderilmeyenler sayfada yoktur.)
       // Koşullu alan: doldurmada YALNIZ BİR seçim alanı değiştiyse, beliren alan o seçimin bu değerinde görünür sayılır (gözlem; tek
       // değişiklik yoksa koşul yazılmaz — akış kaydının okuma kuralı dener).
       const onceki = adim.okumalar.length ? adim.okumalar[adim.okumalar.length - 1].secimler : {};
@@ -433,7 +460,7 @@ export function hizliTestYoneticisiOlustur(s) {
       // Bağlı listeler: üst seçilince alt listenin seçenekleri geldi mi? (Değeri henüz girilmemiş, sayfada hazır gelmeyen listeler sorulur.)
       // Üstü bu turda doldurulan, değeri boş bağlı listeler de (seçenekleri değişmemiş olsa bile: aynı seçenekler yeniden gelmiş olabilir) sorulur.
       const yuklenen = [...new Set([...secenekleriTazele(o, e.anlik, secimler, degisen), ...(o.sorulacakBagli ?? [])])]
-        .filter((k) => !o.degerler[k] && adim.alanlar.some((/** @type {Nesne} */ a) => a.anahtar === k && kosulAktif(o, a) && !a.hazir && !a.devreDisi && gercekSecenekler(a.secenekler).length));
+        .filter((k) => !atla && !o.degerler[k] && adim.alanlar.some((/** @type {Nesne} */ a) => a.anahtar === k && kosulAktif(o, a) && !a.hazir && !a.devreDisi && gercekSecenekler(a.secenekler).length));
       o.sorulacakBagli = [];
       if (yeniler.length && degisen.length === 1) {
         adim.kosullar ??= {};
@@ -444,6 +471,23 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const m of e.yeniMetinler ?? []) gorulenEkle(o, m.metin, m.tur);
       // Doldururken sayfa hata gösterdiyse (ör. alandan çıkınca gelen doğrulama uyarısı) sessizce ilerlenmez: kullanıcıya sorulur.
       const sayfaHatalari = (e.yeniMetinler ?? []).filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
+      // Yerinde zincir isteği: her durumda aynı veri durağına dönülür (düğmeye basılmaz, eksik sorulmaz); sayfa uyarısı not olur.
+      if (zincirIstegi) {
+        const ustAd = `“${alanAdi(o, zincirIstegi)}”`;
+        const altlar = [...o.bagliUst].filter(([, u]) => u === zincirIstegi).map(([alt]) => alt)
+          .filter((k) => adim.alanlar.some((/** @type {Nesne} */ a) => a.anahtar === k && kosulAktif(o, a)));
+        const gelen = altlar.filter((k) => gercekSecenekler(o.alanlar.get(k)?.alan.secenekler).length);
+        const bos = altlar.filter((k) => !gelen.includes(k));
+        const parcalar = [
+          gelen.length ? `${ustAd} seçimine göre ${gelen.map((k) => `“${alanAdi(o, k)}”`).join(', ')} seçenekleri geldi; seçin.` : '',
+          bos.length ? `${ustAd} seçimine göre ${bos.map((k) => `“${alanAdi(o, k)}”`).join(', ')} için seçenek gelmedi.` : '',
+          yeni ? `${yeni} yeni alan belirdi.` : '',
+          sayfaHatalari.length ? `Sayfa uyarı gösterdi: ${sayfaHatalari.slice(0, 3).join(' · ')}` : ''
+        ].filter(Boolean).join(' ');
+        gunluk(o, parcalar || `${ustAd} sayfaya uygulandı.`);
+        veriDuragi(o, parcalar || null);
+        return;
+      }
       if (sayfaHatalari.length) { o.hataSorusu = { metinler: sayfaHatalari, kaynak: 'doldur' }; o.durum = 'hataSorusu'; return; }
       if (yeni) { veriDuragi(o, `${yeni} yeni alan belirdi; değerlerini girin.`); return; }
       if (yuklenen.length) {
@@ -451,7 +495,8 @@ export function hizliTestYoneticisiOlustur(s) {
         veriDuragi(o, `${ustAdlari.length ? `${ustAdlari.join(', ')} seçimine göre ` : ''}${yuklenen.map((k) => `“${alanAdi(o, k)}”`).join(', ')} seçenekleri geldi; seçin.`);
         return;
       }
-      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliBekliyor(x)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
+      // "Bağlı alanları atla": değeri boş bağlı listeler eksik sayılmaz (kullanıcının kararı; sayfa uyarırsa basıştan sonra görülür).
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliBekliyor(x) && !(atla && x.bagli)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
       if (eksik.length) { veriDuragi(o, `${eksik.length} zorunlu alan boş.`); return; }
       verilerTamam(o);
       return;
@@ -563,7 +608,12 @@ export function hizliTestYoneticisiOlustur(s) {
         // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa koşul (görünen metinle) ve seçim alanlarının ilk değeri.
         kosul: a.kosul ? { secim: a.kosul.secim, degerler: a.kosul.degerler, metin: kosulMetni(o, a.kosul), ilk: o.kesifIlk?.[a.kosul.secim] ?? null } : null, ilk: o.kesifIlk?.[a.anahtar] ?? null,
         // Bağlı liste: seçenekleri üst listenin seçimine göre gelir; bekliyor: henüz seçenek yok (üst seçilip "Devam et" denince gelir).
-        bagli: a.bagli ? { ust: a.bagli.ust, ustEtiket: alanAdi(o, a.bagli.ust), bekliyor: bagliBekliyor(a) } : null,
+        // getirildi: gösterilen seçenekler üstün şu anki değerine göre sayfadan geldi (yerinde "↓ … seçeneklerini getir" gerekmez);
+        // bos: üstün şu anki değeri sayfaya uygulandı ama liste seçeneksiz kaldı.
+        bagli: a.bagli ? {
+          ust: a.bagli.ust, ustEtiket: alanAdi(o, a.bagli.ust), bekliyor: bagliBekliyor(a), getirildi: bagliGetirildi(o, a),
+          bos: bagliBekliyor(a) && Boolean(o.degerler[a.bagli.ust]) && o.uygulanan[a.bagli.ust] === o.degerler[a.bagli.ust]?.deger
+        } : null,
         deger: v ? (gizliAlan(a) && v.kaynak === 'elle' ? '••••••' : v.deger) : null, kaynak: v?.kaynak ?? null, gizli: gizliAlan(a)
       };
     };
@@ -581,7 +631,9 @@ export function hizliTestYoneticisiOlustur(s) {
     const adaylar = (yazili.length ? yazili : (o.sonAnlik?.dugmeler ?? [])).map((/** @type {Nesne} */ x) => ({ secici: x.secici, metin: x.metin, kayitOlusturabilir: x.kayitOlusturabilir, enOlasi: x.enOlasi, guven: x.guven }));
     /** @type {Nesne | null} */
     let soru = null;
-    if (o.durum === 'veri' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null };
+    if (o.durum === 'veri' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null };
+    // Yerinde zincir isteği sürerken aynı veri durağı gösterilir (kart yerinde kalır; düğme "getiriliyor" durumunda).
+    else if (o.durum === 'zincir' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: null, getiriliyor: o.zincirIstegi ?? null };
     else if (o.durum === 'karar') {
       // Öneri: son basışta beliren düğme (zincirin devamı), yoksa cümlenin adını verdiği / tek aday, yoksa en olası aday.
       const yeniDugme = (o.sonFark?.yeniDugmeler ?? []).find((/** @type {Nesne} */ d) => adaylar.some((/** @type {Nesne} */ x) => x.secici === d.secici));
@@ -613,7 +665,7 @@ export function hizliTestYoneticisiOlustur(s) {
   /** Şeritteki durak (1 Başlat … 6 Kaydet). @param {Nesne} o */
   function durakNo(o) {
     if (o.durum === 'kesif') return 2;
-    if (o.durum === 'veri') return 3;
+    if (o.durum === 'veri' || o.durum === 'zincir') return 3;
     if (['karar', 'onay', 'hataSorusu', 'secim', 'calisiyor', 'hayirSecim'].includes(o.durum)) return 4;
     if (o.durum === 'bitis') return 5;
     return ['kaydet', 'dogrulama', 'kaydedildi'].includes(o.durum) ? 6 : 1;
@@ -707,6 +759,8 @@ export function hizliTestYoneticisiOlustur(s) {
       adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
       // Bağlı listeler: alt → üst; tablolar için seçenek gözlemleri; zincir keşfinin bulguları (kullanıcıya gösterilen cümleler).
       bagliUst: new Map(), gozlemler: [], bulgular: [],
+      // Sayfaya uygulanan değerler (anahtar → değer), son doldurmada gönderilenler; yerinde zincir isteği (üst anahtarı) ve atlama.
+      uygulanan: {}, sonGonderilen: {}, zincirIstegi: null, zincirAtla: false,
       // Bağlı listelerin dolma süreleri (ms; keşif ve doldurma ölçümleri): anahtar → ölçümler. Modele "olağan yüklenme süresi" olur.
       yuklenme: {},
       basisNo: 0, sonAnlik: null, kesifAnlik: null, sonFark: null, sonGoruntu: null, gunluk: [], dogrulama: null, bitis: null, hata: null, sonHata: null,
@@ -758,14 +812,32 @@ export function hizliTestYoneticisiOlustur(s) {
     // Bu turda üstü doldurulan / seçenekleri henüz gelmemiş, değeri boş bağlı listeler: doldurmadan sonra (yeni seçeneklerle) sorulur.
     o.sorulacakBagli = adim.alanlar.filter((/** @type {Nesne} */ a) => a.bagli && !o.degerler[a.anahtar]
       && (bagliBekliyor(a) || ustleri(o, a.anahtar).some((u) => ustDegisti.includes(u)))).map((/** @type {Nesne} */ a) => a.anahtar);
-    // Seçenekleri henüz gelmemiş bağlı liste (üstü bu turda seçilecek) eksik sayılmaz: üst doldurulunca sorulur.
-    const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliBekliyor(x)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
-    if (eksik.length) {
-      throw new HizliTestHatasi('EKSIK', `Zorunlu alanlar boş: ${eksik.slice(0, 5).map((a) => a.etiket ?? a.anahtar).join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`, 400,
-        { eksikler: eksik.map((a) => a.anahtar) });
+    // Yerinde zincir isteği: üst liste bu adımda olmalı, bağlı altı bulunmalı ve değeri girilmiş olmalı.
+    /** @type {{ anahtar: string; altlar: string[] } | null} */
+    let zincir = null;
+    if (typeof g.zincir === 'string' && g.zincir) {
+      const ust = adim.alanlar.find((/** @type {Nesne} */ a) => a.anahtar === g.zincir);
+      const altlar = [...o.bagliUst].filter(([alt, u]) => u === g.zincir && adim.alanlar.some((/** @type {Nesne} */ a) => a.anahtar === alt)).map(([alt]) => alt);
+      if (!ust || !altlar.length) throw new HizliTestHatasi('ZINCIR', 'Bu alanın bağlı alanı yok.');
+      if (!o.degerler[ust.anahtar]) throw new HizliTestHatasi('ZINCIR', `Önce “${alanAdi(o, ust.anahtar)}” seçin.`);
+      zincir = { anahtar: ust.anahtar, altlar };
     }
-    // Tarayıcıya gidecek değerler: tablo başvuruları bu ortamda çözülür (değer üretilmez; çözülemezse açık hata).
-    const gidecek = bagimliSirala(adim.alanlar.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar] && kosulAktif(o, a)));
+    // Seçenekleri henüz gelmemiş bağlı liste (üstü bu turda seçilecek) eksik sayılmaz: üst doldurulunca sorulur. "Bağlı alanları atla"da
+    // değeri boş bağlı listeler de eksik sayılmaz ve yeniden sorulmaz (kullanıcının kararı). Yerinde zincir isteğinde eksik denetlenmez.
+    const atla = g.zinciriAtla === true;
+    if (atla) o.sorulacakBagli = [];
+    if (!zincir) {
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliBekliyor(x) && !(atla && x.bagli)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
+      if (eksik.length) {
+        throw new HizliTestHatasi('EKSIK', `Zorunlu alanlar boş: ${eksik.slice(0, 5).map((a) => a.etiket ?? a.anahtar).join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`, 400,
+          { eksikler: eksik.map((a) => a.anahtar) });
+      }
+    }
+    // Tarayıcıya gidecek değerler: tablo başvuruları bu ortamda çözülür (değer üretilmez; çözülemezse açık hata). Yerinde zincir isteğinde
+    // yalnız o üst liste ve sayfaya henüz uygulanmamış üstleri gider (diğer girilen değerler oturumda saklanır, "Devam et"te gider).
+    const zincirKumesi = zincir ? new Set([zincir.anahtar, ...ustleri(o, zincir.anahtar)]) : null;
+    const gidecek = bagimliSirala(adim.alanlar.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar] && kosulAktif(o, a)
+      && (!zincirKumesi || (zincirKumesi.has(a.anahtar) && (a.anahtar === zincir?.anahtar || o.uygulanan[a.anahtar] !== o.degerler[a.anahtar].deger)))));
     const cozulecek = Object.fromEntries(gidecek.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar].kaynak === 'tablo').map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
     /** @type {Record<string, unknown>} */
     let cozulmus = {};
@@ -783,8 +855,17 @@ export function hizliTestYoneticisiOlustur(s) {
       anahtar: a.anahtar, alan: a, deger: o.degerler[a.anahtar].kaynak === 'tablo' ? /** @type {string} */ (String(cozulmus[a.anahtar] ?? '')) : o.degerler[a.anahtar].deger
     }));
     o.alanHatalari = {};
-    o.durum = 'calisiyor';
-    o.calisiyor = 'Alanlar dolduruluyor…';
+    o.sonGonderilen = Object.fromEntries(gidecek.map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
+    o.zincirAtla = atla;
+    if (zincir) {
+      o.zincirIstegi = zincir.anahtar;
+      o.durum = 'zincir';
+      o.calisiyor = `${zincir.altlar.map((k) => `“${alanAdi(o, k)}”`).join(', ')} seçenekleri getiriliyor…`;
+    } else {
+      o.zincirIstegi = null;
+      o.durum = 'calisiyor';
+      o.calisiyor = 'Alanlar dolduruluyor…';
+    }
     gonder(o, { tur: 'doldur', alanlar });
     return { gonderildi: true };
   }

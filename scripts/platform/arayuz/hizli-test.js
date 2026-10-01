@@ -152,6 +152,7 @@ function oturumEkrani(govde, id) {
   govde.replaceChildren(serit, durumSatiri, h('div', { class: 'hizli-duzen' }, ana, yan));
   let imza = '';
   let yanImza = '';
+  let sonDurumMetni = '';
   /** @type {ReturnType<typeof setTimeout> | null} */
   let zamanlayici = null;
   let bitti = false;
@@ -175,14 +176,18 @@ function oturumEkrani(govde, id) {
   const ciz = (o) => {
     const yeniImza = JSON.stringify([o.durum, o.soru, o.calisiyor, o.sonHata, o.hata, o.dogrulamaAdimlari]);
     yerlestir(serit, durakSeridi(o.durak || 1));
-    durumSatiri.textContent = o.calisiyor ? o.calisiyor : '';
+    // Durum satırı yalnız iş metni değişince yazılır (araya giren duyuru her yoklamada silinmez).
+    const durumMetni = o.calisiyor ? o.calisiyor : '';
+    if (durumMetni !== sonDurumMetni) { sonDurumMetni = durumMetni; durumSatiri.textContent = durumMetni; }
     const yeniYan = JSON.stringify([o.adimlar, o.gunluk.length, (o.goruntu || '').length, o.bulgular, o.zincir]);
     if (yeniYan !== yanImza) { yanImza = yeniYan; yanCiz(yan, o); }
     if (yeniImza === imza) return;
     imza = yeniImza;
     yerlestir(ana, soruCiz(o, { hemen }));
-    const odak = ana.querySelector('[data-odak]');
+    // Öncelikli odak (ör. yerinde zincir isteğinden sonra ilk yeni alan), yoksa kartın başlığı.
+    const odak = ana.querySelector('[data-odak-oncelik]') || ana.querySelector('[data-odak]');
     if (odak instanceof HTMLElement) odak.focus();
+    if (bekleyenDuyuru) { durumSatiri.textContent = bekleyenDuyuru; bekleyenDuyuru = ''; }
   };
   void yenile();
 }
@@ -375,19 +380,38 @@ function farkCiz(a) {
     f.adres ? h('p', { class: 'kucuk' }, `Adres değişti: ${f.adres.once} → ${f.adres.sonra}`) : null);
 }
 
+/**
+ * Yerinde zincir isteğinden ("↓ … seçeneklerini getir") sonraki çizim için: hangi oturumda hangi üst liste için istendi. Seçenekler gelince
+ * odak ilk yeni alana gider ve oturum ekranının canlı durum satırında duyurulur.
+ * @type {{ id: string; ust: string } | null}
+ */
+let zincirOdagi = null;
+/** Oturum ekranının canlı durum satırında (aria-live) bir kez okunacak duyuru. */
+let bekleyenDuyuru = '';
+
 /** 3. durak: veri durağı. */
 function veriDuragi(o, s, kart, m, gonder) {
   /** @type {Record<string, { deger: string | boolean | null; kaynak: 'elle' | 'tablo' | null; tabloSecimi?: any }>} */
   const durum = {};
-  // Bağlı listeler (il → ilçe, marka → model…): seçenekleri üst listenin seçimine göre gelir. Seçeneği henüz gelmemiş ya da üstü bu
-  // ekranda değiştirilmiş liste kilitli görünür ("Önce … seçin"); üst doldurulup "Devam et" denince sunucu yeni seçeneklerle yeniden sorar.
+  /** Yerinde zincir isteği sürüyor mu (üst liste anahtarı): kart yerinde kalır, girdiler beklerken kapalıdır. */
+  const getiriliyor = s.getiriliyor || null;
+  // Bağlı listeler (il → ilçe → mahalle, marka → model…): seçenekleri üst listenin seçimine göre gelir. Üst seçilince alanın HEMEN YANINDA
+  // "↓ “İlçe” seçeneklerini getir" düğmesi etkinleşir; basınca yalnız o seçim sayfaya uygulanır, alt liste aynı kartta, üstünün altında,
+  // girintili ve seçenekleriyle belirir. Seçenekleri bu üst değere göre gelmemiş liste kilitlidir ("Önce … seçin").
+  const bul = (/** @type {string} */ k) => s.alanlar.find((x) => x.anahtar === k);
+  /** Bu duraktaki bağlı alt listeler. @param {string} ust */
+  const altlari = (ust) => s.alanlar.filter((x) => x.bagli && x.bagli.ust === ust);
+  /** Zincir bağı bu durakta mı (üst liste de burada)? */
+  const zincirde = (/** @type {any} */ a) => Boolean(a.bagli && bul(a.bagli.ust));
   /** @type {Set<string>} */
-  const kilitli = new Set(s.alanlar.filter((a) => a.bagli && a.bagli.bekliyor).map((a) => a.anahtar));
+  const kilitli = new Set(s.alanlar.filter((a) => a.bagli && (zincirde(a) ? !a.bagli.getirildi : a.bagli.bekliyor)).map((a) => a.anahtar));
   /** @type {Map<string, () => void>} */
   const cizenler = new Map();
+  /** @type {Map<string, () => void>} */
+  const zincirCizenler = new Map();
   /** Üst liste değişti: altları (ve onların altlarını) boşaltır ve kilitler. @param {string} ust */
   const altlariKilitle = (ust) => {
-    for (const a of s.alanlar.filter((x) => x.bagli && x.bagli.ust === ust)) {
+    for (const a of altlari(ust)) {
       if (durum[a.anahtar] && durum[a.anahtar].kaynak === 'tablo') continue;
       durum[a.anahtar] = { deger: null, kaynak: null };
       kilitli.add(a.anahtar);
@@ -396,6 +420,13 @@ function veriDuragi(o, s, kart, m, gonder) {
       altlariKilitle(a.anahtar);
     }
   };
+  /** Değer girilmiş mi (sayfada hazır gelen de sayılır)? */
+  const dolu = (/** @type {any} */ a) => {
+    const d = durum[a.anahtar];
+    return (d && d.deger !== null && d.deger !== '' && d.deger !== undefined) || (a.hazir && a.deger === null && !acilan.has(a.anahtar));
+  };
+  /** Alt liste hazır mı: tablodan seçildi ya da seçenekleri üstün şu anki değerine göre geldi. */
+  const altHazir = (/** @type {any} */ a) => (durum[a.anahtar] && durum[a.anahtar].kaynak === 'tablo') || !kilitli.has(a.anahtar);
   const satirYap = (a) => {
     durum[a.anahtar] = { deger: a.deger, kaynak: a.kaynak };
     const id = `hizli-alan-${Math.random().toString(36).slice(2, 9)}`;
@@ -404,17 +435,20 @@ function veriDuragi(o, s, kart, m, gonder) {
       const d = durum[a.anahtar];
       if (a.bagli && kilitli.has(a.anahtar) && d.kaynak !== 'tablo') {
         // Seçenekler henüz yok: liste kilitli; tablodan (geçerli kombinasyon satırı) yine seçilebilir.
-        const kilit = h('select', { id, disabled: true }, h('option', { value: '' }, `Önce “${a.bagli.ustEtiket}” seçin`));
+        const ust = bul(a.bagli.ust);
+        const ustSecili = ust ? dolu(ust) : false;
+        const kilit = h('select', { id, disabled: true }, h('option', { value: '' },
+          ust && ustSecili ? `“${altlari(ust.anahtar).map((x) => x.etiket).join('”, “')}” seçeneklerini getirin` : `Önce “${a.bagli.ustEtiket}” seçin`));
         const doldurKilitli = doldurDugmesi({
           projeId: o.projeId, ortamId: o.ortam.id, alan: { id: a.anahtar, etiket: a.etiket, tip: doldurTipi(a.tur), hassas: a.gizli, secenekler: null },
-          secildi: (secim) => { durum[a.anahtar] = { deger: secim.deger, kaynak: 'tablo', tabloSecimi: secim.tabloSecimi }; ciz(); }
+          secildi: (secim) => { durum[a.anahtar] = { deger: secim.deger, kaynak: 'tablo', tabloSecimi: secim.tabloSecimi }; ciz(); zincirGuncelle(); }
         });
         yerlestir(kap, kilit, doldurKilitli);
         return;
       }
       if (d.kaynak === 'tablo') {
         const elle = h('button', { type: 'button', class: 'kucuk-dugme hayalet' }, 'Elle yaz');
-        elle.addEventListener('click', () => { durum[a.anahtar] = { deger: null, kaynak: null }; ciz(); });
+        elle.addEventListener('click', () => { durum[a.anahtar] = { deger: null, kaynak: null }; ciz(); altlariKilitle(a.anahtar); kosulGuncelle(); });
         yerlestir(kap, h('span', { class: 'hizli-tablo-degeri', id }, String(d.deger)), rozet('tablodan'), elle);
         return;
       }
@@ -441,23 +475,67 @@ function veriDuragi(o, s, kart, m, gonder) {
     };
     cizenler.set(a.anahtar, ciz);
     ciz();
+    // Üst liste: alanın hemen yanında yerinde "↓ … seçeneklerini getir" düğmesi (ya da "✓ … seçenekleri geldi").
+    const zincirKap = h('div', { class: 'hizli-zincir-getir' });
+    if (altlari(a.anahtar).length) zincirCizenler.set(a.anahtar, () => zincirDugmesiCiz(a, zincirKap, id));
     // Doldurma sırası: alanlar sayfadaki sırayla listelenir ve bu sırayla doldurulur; kullanıcı yukarı / aşağı taşıyabilir.
     // Düğme adı genel ("Yukarı taşı"); hangi alan olduğu aria-describedby ile alanın etiketinden okunur (alan etiketiyle karışmaz).
-    const sira = h('span', { class: 'hizli-sira', role: 'group', 'aria-label': 'Doldurma sırası' },
+    // Bağlı alt liste üstünün altında durur (kendi sıra düğmesi yok; üstüyle birlikte taşınır).
+    const sira = zincirde(a) ? null : h('span', { class: 'hizli-sira', role: 'group', 'aria-label': 'Doldurma sırası' },
       h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-sira-yukari', 'aria-label': 'Yukarı taşı', 'aria-describedby': `${id}-etiket`, title: 'Yukarı taşı (daha önce doldurulur)', onclick: () => tasi(a, -1) }, h('span', { 'aria-hidden': 'true' }, '↑')),
       h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-sira-asagi', 'aria-label': 'Aşağı taşı', 'aria-describedby': `${id}-etiket`, title: 'Aşağı taşı (daha sonra doldurulur)', onclick: () => tasi(a, 1) }, h('span', { 'aria-hidden': 'true' }, '↓')));
-    return h('div', { class: `alan hizli-alan${a.yeni ? ' yeni' : ''}` },
+    const derinlik = Math.min(4, zincirDerinligi(a));
+    return h('div', { class: `alan hizli-alan${a.yeni ? ' yeni' : ''}${derinlik ? ` hizli-alan-bagli zd-${derinlik}` : ''}`, 'data-anahtar': a.anahtar },
       h('div', { class: 'hizli-alan-baslik' },
-        h('label', { for: id, id: `${id}-etiket`, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null }, a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
+        h('label', { for: id, id: `${id}-etiket`, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null },
+          a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
         sira),
       // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa hangi seçimde göründüğü yazılır.
       a.kosul ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
-      a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir; “${a.bagli.ustEtiket}” seçilip “Devam et” denince sorulur.`) : null,
-      kap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
+      a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,
+      kap, zincirKap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
   };
-  // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir.
+  /** Üstleri bu durakta olan bağlı listenin zincirdeki derinliği (kök 0). */
+  const zincirDerinligi = (/** @type {any} */ a) => {
+    let n = 0;
+    for (let x = a; x && zincirde(x) && n < 10; x = bul(x.bagli.ust)) n++;
+    return n;
+  };
+  /** Yerinde zincir düğmesi: üst seçilmeden pasif; seçilince "↓ … seçeneklerini getir"; gelince "✓ … seçenekleri geldi (n seçenek)". */
+  const zincirDugmesiCiz = (/** @type {any} */ a, /** @type {HTMLElement} */ zincirKap, /** @type {string} */ id) => {
+    const altlar = altlari(a.anahtar).filter((x) => aktifMi(x));
+    if (!altlar.length) { zincirKap.replaceChildren(); return; }
+    const adlar = `“${altlar.map((x) => x.etiket).join('”, “')}”`;
+    if (getiriliyor === a.anahtar) {
+      yerlestir(zincirKap, h('button', { type: 'button', class: 'kucuk-dugme hizli-zincir-dugmesi', 'aria-disabled': 'true', 'aria-busy': 'true', 'data-odak-oncelik': '' },
+        h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), `${adlar} seçenekleri getiriliyor…`));
+      return;
+    }
+    if (altlar.every(altHazir)) {
+      const parca = altlar.map((x) => (durum[x.anahtar] && durum[x.anahtar].kaynak === 'tablo' ? `“${x.etiket}” tablodan`
+        : `“${x.etiket}” seçenekleri geldi (${(x.secenekler || []).length} seçenek)`));
+      yerlestir(zincirKap, h('span', { class: 'hizli-zincir-tamam' }, h('span', { 'aria-hidden': 'true' }, '✓ '), parca.join(' · ')));
+      return;
+    }
+    const secili = dolu(a);
+    const ipucuId = `${id}-zincir-ipucu`;
+    const bos = secili && durum[a.anahtar].deger === a.deger && altlar.filter((x) => !altHazir(x)).every((x) => x.bagli.bos);
+    const dugme = h('button', {
+      type: 'button', class: 'kucuk-dugme hizli-zincir-dugmesi', disabled: !secili || null, 'aria-describedby': secili && !bos ? null : ipucuId
+    }, h('span', { 'aria-hidden': 'true' }, '↓ '), `${adlar} seçeneklerini getir`);
+    dugme.addEventListener('click', () => {
+      zincirOdagi = { id: o.id, ust: a.anahtar };
+      void gonder(/** @type {HTMLButtonElement} */ (dugme), 'veri', { degerler: degerleriTopla(), sira: siralama, zincir: a.anahtar }, m)
+        .then((r) => { if (!r) zincirOdagi = null; });
+    });
+    yerlestir(zincirKap, dugme,
+      !secili ? h('span', { class: 'soluk kucuk', id: ipucuId }, `Önce “${a.etiket}” seçin`)
+        : bos ? h('span', { class: 'hizli-zincir-bos kucuk', id: ipucuId }, `Bu seçimde ${adlar} için seçenek gelmedi; başka bir “${a.etiket}” seçin.`) : null);
+  };
+  // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir. Sayfada hazır gelen bir üst
+  // listenin bağlı altı henüz gelmediyse üst de gösterilir (yerinde düğmesi orada durur).
   const hazirlar = s.alanlar.filter((a) => a.hazir && a.deger === null);
-  const acilan = new Set();
+  const acilan = new Set(hazirlar.filter((a) => altlari(a.anahtar).some((x) => kilitli.has(x.anahtar))).map((a) => a.anahtar));
   /** @type {Map<string, HTMLElement>} */
   const satirlari = new Map();
   const satir = (/** @type {any} */ a) => { if (!satirlari.has(a.anahtar)) satirlari.set(a.anahtar, satirYap(a)); return /** @type {HTMLElement} */ (satirlari.get(a.anahtar)); };
@@ -465,7 +543,20 @@ function veriDuragi(o, s, kart, m, gonder) {
   const hazirKap = h('details', { class: 'hizli-hazir' });
   // Doldurma sırası (anahtarlar): başlangıçta sayfadaki sıra; "Devam et"te sunucuya gider, motor bu sırayla doldurur.
   const siralama = s.alanlar.map((a) => a.anahtar);
-  const alanlarSirali = () => siralama.map((k) => s.alanlar.find((a) => a.anahtar === k)).filter(Boolean);
+  /** Sıralı alanlar; bağlı alt liste üstünün hemen altında (zincir birlikte durur, üst her zaman altından önce). */
+  const alanlarSirali = () => {
+    const sirali = siralama.map((k) => bul(k)).filter(Boolean);
+    /** @type {any[]} */
+    const l = [];
+    const ekle = (/** @type {any} */ a) => {
+      if (l.includes(a)) return;
+      l.push(a);
+      for (const x of sirali.filter((y) => zincirde(y) && y.bagli.ust === a.anahtar)) ekle(x);
+    };
+    for (const a of sirali) if (!zincirde(a)) ekle(a);
+    for (const a of sirali) ekle(a);
+    return l;
+  };
   /** Koşullu alan şu an geçerli mi (seçimin değeri: yazılan, yoksa sayfanın ilk değeri; tablodan gelen değer bilinmez → geçerli). */
   const aktifMi = (/** @type {any} */ a, gorulen = new Set()) => {
     if (!a.kosul || gorulen.has(a.anahtar)) return true;
@@ -484,9 +575,11 @@ function veriDuragi(o, s, kart, m, gonder) {
   const kosulGuncelle = () => {
     const imza = sorulanlar().map((a) => a.anahtar).join('|');
     if (imza !== gorunenImza) listeyiCiz();
+    else zincirGuncelle();
   };
   const tasi = (/** @type {any} */ a, /** @type {number} */ yon) => {
-    const gorunen = sorulanlar();
+    // Taşıma kökler arasında: bağlı alt listeler üstleriyle birlikte yer değiştirir.
+    const gorunen = sorulanlar().filter((x) => !zincirde(x));
     const j = gorunen.indexOf(a) + yon;
     if (j < 0 || j >= gorunen.length) return;
     const x = siralama.indexOf(a.anahtar);
@@ -497,14 +590,48 @@ function veriDuragi(o, s, kart, m, gonder) {
     const hedef = /** @type {HTMLButtonElement} */ (dugmeler[yon < 0 ? 0 : 1]);
     (hedef.disabled ? /** @type {HTMLButtonElement} */ (dugmeler[yon < 0 ? 1 : 0]) : hedef).focus();
   };
+  // Zincir göstergesi (kartın üstünde): "Bağlı alanlar: İl → İlçe → Mahalle (1/3 tamam)".
+  const gosterge = h('div', { class: 'hizli-zincir-gostergesi' });
+  /** Getirilmemiş bağlı alanlar (zincir tamamlanmadı). */
+  const getirilmemis = () => sorulanlar().filter((a) => zincirde(a) && !altHazir(a));
+  const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
+  const devamIpucu = h('span', { class: 'soluk kucuk', id: `hizli-devam-ipucu-${Math.random().toString(36).slice(2, 9)}` });
+  const atla = h('button', { type: 'button', class: 'baglanti-dugmesi hizli-zincir-atla' }, 'Bağlı alanları atla ve devam et');
+  const zincirGuncelle = () => {
+    const gorunen = sorulanlar();
+    for (const a of gorunen) { const c = zincirCizenler.get(a.anahtar); if (c) c(); }
+    // Kökler: altı olan, kendisi bu durakta bir zincirin altı olmayan listeler.
+    const kokler = gorunen.filter((a) => !zincirde(a) && altlari(a.anahtar).some((x) => aktifMi(x)));
+    yerlestir(gosterge, ...kokler.map((k) => {
+      /** @type {any[]} */
+      const yol = [];
+      const yuru = (/** @type {any} */ a) => { yol.push(a); for (const x of altlari(a.anahtar).filter((y) => aktifMi(y))) yuru(x); };
+      yuru(k);
+      const tamam = yol.filter((a) => dolu(a) && altlari(a.anahtar).filter((x) => aktifMi(x)).every(altHazir)).length;
+      return h('p', { class: 'kucuk' }, h('b', {}, 'Bağlı alanlar: '), yol.map((a) => a.etiket).join(' → '), ` (${tamam}/${yol.length} tamam)`);
+    }));
+    gosterge.hidden = !kokler.length;
+    // "Devam et": zincirde getirilmemiş alan varsa pasif ve ne olacağını söyler; "Bağlı alanları atla" ikincil yol.
+    const eksikler = getirilmemis();
+    const kapali = Boolean(getiriliyor) || eksikler.length > 0;
+    devam.disabled = kapali;
+    yerlestir(devam, eksikler.length ? 'Devam et (önce bağlı alanları tamamlayın)' : 'Devam et', ikon('ok'));
+    devamIpucu.textContent = eksikler.length ? `Seçenekleri getirilmemiş: ${eksikler.map((a) => `“${a.etiket}”`).join(', ')}. Üst listeyi seçip yanındaki “↓ … seçeneklerini getir” düğmesine basın.` : '';
+    devamIpucu.hidden = !eksikler.length;
+    if (eksikler.length) devam.setAttribute('aria-describedby', devamIpucu.id); else devam.removeAttribute('aria-describedby');
+    atla.hidden = !eksikler.length;
+    atla.disabled = Boolean(getiriliyor);
+  };
   const listeyiCiz = () => {
     const sorulan = sorulanlar();
     gorunenImza = sorulan.map((a) => a.anahtar).join('|');
     yerlestir(satirlarKap, ...(sorulan.length ? sorulan.map(satir) : [h('p', { class: 'soluk' }, 'Sayfa hazır: sizden doldurmanızı isteyeceğim boş alan yok. Devam edebilirsiniz.')]));
-    sorulan.forEach((a, i) => {
+    const kokler = sorulan.filter((a) => !zincirde(a));
+    kokler.forEach((a, i) => {
       const d = satir(a).querySelectorAll('.hizli-sira button');
+      if (d.length < 2) return;
       /** @type {HTMLButtonElement} */ (d[0]).disabled = i === 0;
-      /** @type {HTMLButtonElement} */ (d[1]).disabled = i === sorulan.length - 1;
+      /** @type {HTMLButtonElement} */ (d[1]).disabled = i === kokler.length - 1;
     });
     const kalan = hazirlar.filter((a) => !acilan.has(a.anahtar));
     hazirKap.hidden = !kalan.length;
@@ -512,22 +639,43 @@ function veriDuragi(o, s, kart, m, gonder) {
       h('ul', { class: 'hizli-hazir-liste' }, kalan.map((a) => h('li', {},
         h('span', { class: 'hizli-hazir-ad' }, a.etiket), h('span', { class: 'hizli-hazir-deger' }, a.mevcut ?? 'dolu'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${a.etiket}: değiştir`, onclick: () => { acilan.add(a.anahtar); listeyiCiz(); } }, 'Değiştir')))));
+    zincirGuncelle();
   };
-  listeyiCiz();
-  const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
-  devam.addEventListener('click', () => {
-    const degerler = Object.fromEntries(Object.entries(durum).map(([k, d]) => [k, d.deger === null || d.deger === '' ? null
-      : { deger: d.deger, kaynak: d.kaynak || 'elle', ...(d.tabloSecimi ? { tabloSecimi: d.tabloSecimi } : {}) }]));
+  /** Ekrandaki değerler (sunucuya gidecek biçimde). */
+  const degerleriTopla = () => Object.fromEntries(Object.entries(durum).map(([k, d]) => [k, d.deger === null || d.deger === '' ? null
+    : { deger: d.deger, kaynak: d.kaynak || 'elle', ...(d.tabloSecimi ? { tabloSecimi: d.tabloSecimi } : {}) }]));
+  /** "Devam et" / "Bağlı alanları atla": zorunlu boş alan yoksa veri gönderilir. @param {HTMLButtonElement} dugme @param {boolean} zinciriAtla */
+  const ilerle = (dugme, zinciriAtla) => {
+    const degerler = degerleriTopla();
     const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
-    void gonder(devam, 'veri', { degerler, sira: siralama }, m);
-  });
+    void gonder(dugme, 'veri', { degerler, sira: siralama, ...(zinciriAtla ? { zinciriAtla: true } : {}) }, m);
+  };
+  devam.addEventListener('click', () => ilerle(devam, false));
+  atla.addEventListener('click', () => ilerle(atla, true));
+  listeyiCiz();
+  // Yerinde zincir isteği sürerken girdiler kapalıdır (sunucu sayfayı dolduruyor; sonuç gelince kart yeniden çizilir).
+  // (Getiriliyor düğmesi odakta kalabilsin diye kapatılmaz; aria-disabled taşır ve tıklaması yoktur.)
+  if (getiriliyor) for (const el of satirlarKap.querySelectorAll('select, input, button:not([aria-busy])')) /** @type {HTMLButtonElement} */ (el).disabled = true;
+  // Yerinde zincir isteğinden sonra: odak ilk yeni alana; canlı durum satırında "“İlçe” seçenekleri geldi" duyurusu.
+  if (!getiriliyor && zincirOdagi && zincirOdagi.id === o.id) {
+    const ust = bul(zincirOdagi.ust);
+    zincirOdagi = null;
+    const altlar = ust ? altlari(ust.anahtar).filter((x) => aktifMi(x)) : [];
+    const gelen = altlar.filter((x) => !kilitli.has(x.anahtar) && Array.isArray(x.secenekler) && x.secenekler.length);
+    const ilk = gelen.length ? satir(gelen[0]).querySelector('select, input') : null;
+    if (ilk) ilk.setAttribute('data-odak-oncelik', '');
+    else if (ust) { const u = satir(ust).querySelector('select, input'); if (u) u.setAttribute('data-odak-oncelik', ''); }
+    bekleyenDuyuru = gelen.length ? gelen.map((x) => `“${x.etiket}” seçenekleri geldi (${x.secenekler.length} seçenek).`).join(' ')
+      : altlar.length ? `${altlar.map((x) => `“${x.etiket}”`).join(', ')} için seçenek gelmedi.` : '';
+  }
   const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
   return kart(o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
     s.not ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, s.not) : null,
     h('p', { class: 'soluk' }, 'Sayfada boş görünen alanlar aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada zaten dolu gelenler sorulmaz, olduğu gibi kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
-    m.kutu, satirlarKap, hazirKap,
-    h('div', { class: 'dugmeler' }, devam, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null));
+    gosterge, m.kutu, satirlarKap, hazirKap,
+    h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
+    devamIpucu);
 }
 
 /** 5. durak: bitiş koşulu. */

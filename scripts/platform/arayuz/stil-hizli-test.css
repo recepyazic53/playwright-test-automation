@@ -84,6 +84,29 @@
 /* Seçim keşfi: koşullu alanın hangi seçimde göründüğü. */
 .hizli-kosul { margin: 0 0 4px; }
 
+/* Bağlı liste zinciri (il → ilçe → mahalle…): alt liste üstünün altında, girintili ve dikey zincir çizgisiyle; üstün yanında yerinde
+   "↓ … seçeneklerini getir" düğmesi; kartın üstünde zincir göstergesi. Girinti dört düzeyde durur (390 px'te taşma olmaz). */
+.hizli-alan-bagli { position: relative; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--vurgu) 55%, var(--cizgi-2)); min-width: 0; }
+.hizli-alan-bagli.zd-1 { margin-left: 10px; }
+.hizli-alan-bagli.zd-2 { margin-left: 20px; }
+.hizli-alan-bagli.zd-3 { margin-left: 30px; }
+.hizli-alan-bagli.zd-4 { margin-left: 40px; }
+@media (max-width: 520px) {
+  .hizli-alan-bagli.zd-2 { margin-left: 14px; }
+  .hizli-alan-bagli.zd-3, .hizli-alan-bagli.zd-4 { margin-left: 18px; }
+}
+/* Zincir bağı: dikey çizgiden alanın etiketine uzanan kısa yatay çizgi (yalnız görsel; adlara karışmaz). */
+.hizli-alan-bagli::before { content: ""; position: absolute; left: -2px; top: 0.75em; width: 9px; border-top: 2px solid color-mix(in srgb, var(--vurgu) 55%, var(--cizgi-2)); }
+.hizli-zincir-getir { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; min-width: 0; }
+.hizli-zincir-getir:empty { display: none; }
+.hizli-zincir-dugmesi { white-space: normal; text-align: left; max-width: 100%; overflow-wrap: anywhere; }
+.hizli-zincir-dugmesi[aria-disabled="true"] { opacity: 0.75; cursor: progress; }
+.hizli-zincir-tamam { color: var(--basari); font-size: 13px; overflow-wrap: anywhere; }
+.hizli-zincir-bos { color: var(--atlanan); overflow-wrap: anywhere; }
+.hizli-zincir-gostergesi { display: grid; gap: 2px; padding: 6px 10px; border-radius: var(--yaricap-m); background: var(--vurgu-zemin); overflow-wrap: anywhere; min-width: 0; }
+.hizli-zincir-gostergesi p { margin: 0; }
+.hizli-zincir-atla { font-size: 13px; }
+
 /* Kayıt özeti (kendi sekmesinde: #/hizli-test/ozet/<id>) */
 .hizli-ozet-karti { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* Doğrulama koşusunun adımları */
