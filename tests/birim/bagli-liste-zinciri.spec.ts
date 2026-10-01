@@ -4,6 +4,9 @@
 //  2) Otomatik tarama: zincir + kasıtlı sayfa hataları bulgu olur; pakette çok düzeyli bagimlilik ve tablo.
 //  3) Hızlı test (Nöbetçi sunucusu): keşif zinciri bulur; veri durağı zinciri üstten alta SIRAYLA sorar (alt liste üst seçilince gelen
 //     gerçek seçeneklerle); düğmeye doğru değerlerle basılır; kaydedilen modelde bağımlılıklar vardır.
+//  4) Arayüz: üst listenin yanında yerinde "↓ “İlçe” seçeneklerini getir" düğmesi; alt liste üstünün altında belirir, odak ona gider ve
+//     duyurulur; üst değişince alt temizlenir; zincir tamamlanmadan "Devam et" pasif, "Bağlı alanları atla" ikincil yol; zincirsiz sayfada
+//     eski davranış.
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez — sahte sayfa 127.0.0.1'dedir (bagli-liste-fikstur.ts), tarayıcı DNS çözümlemez ve
 // yalnız fikstürün kökenine bağlanır. Geçici veritabanı; veri/ klasörüne dokunulmaz. Tüm değerler uydurmadır.
 import { randomBytes } from 'node:crypto';
@@ -275,11 +278,21 @@ test.describe('hızlı test', () => {
     expect(JSON.stringify(sonuc)).toMatch(/listesinin seçenekleri [\d,]+ sn'de geldi \(olağan ≈ [\d,]+ sn\): yavaşlama/);
   });
 
-  test('arayüz: alt liste "Önce … seçin" diye kilitli; üst seçilip Devam denince gerçek seçeneklerle açılır; yan kartta zincir ve bulgular', async () => {
+  test('arayüz: yerinde "↓ … seçeneklerini getir" düğmesi zinciri adım adım getirir; üst değişince alt temizlenir; Devam zincir tamamlanmadan pasif; atla bağlantısı; 1440/390 px taşma yok', async () => {
     test.setTimeout(300_000);
+    const testInfo = test.info();
     for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
     const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/adres/', ekranAdi: 'Adres arayüz', izin: 'sor' })).id);
-    await bekle(id, ['veri'], 240);
+    let o = await bekle(id, ['veri'], 240);
+    // Sunucu ucu: bağlı altı olmayan alan için yerinde istek reddedilir; değeri girilmemiş üst için de.
+    const alan = (etiket: string): Nesne => o.soru.alanlar.find((a: Nesne) => a.etiket === etiket);
+    let y = await api('/platform/hizli-test/veri', { id, degerler: {}, zincir: alan('Yapı tarzı').anahtar });
+    expect(y.basarili).toBe(false);
+    expect(y.mesaj).toContain('bağlı alanı yok');
+    y = await api('/platform/hizli-test/veri', { id, degerler: {}, zincir: alan('İl').anahtar });
+    expect(y.basarili).toBe(false);
+    expect(y.mesaj).toContain('Önce “İl” seçin');
+    const hesaplamalar = uygulama.hesaplamalar.length;
     const tarayici = await korumaliTarayici();
     try {
       const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } })).newPage();
@@ -288,24 +301,125 @@ test.describe('hızlı test', () => {
       await page.goto(`/#/hizli-test/o/${id}`);
       const soru = page.locator('.hizli-soru');
       await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 30_000 });
+      const il = soru.getByLabel('İl', { exact: true });
       const ilce = soru.getByLabel('İlçe', { exact: true });
+      const mahalle = soru.getByLabel('Mahalle', { exact: true });
       await expect(ilce).toBeDisabled();
       await expect(ilce).toHaveText('Önce “İl” seçin');
-      await expect(soru.getByLabel('Mahalle', { exact: true })).toBeDisabled();
+      await expect(mahalle).toBeDisabled();
+      // Yan kart (zincir keşfi) korunur.
       const yan = page.locator('.hizli-bulgular');
       await expect(yan).toContainText('İl → İlçe → Mahalle → Sokak');
       await expect(yan).toContainText('3 bulgu');
-      await expect(yan).toContainText('“Boşil” seçilince “İlçe” listesi boş kaldı');
-      await soru.getByLabel('İl', { exact: true }).selectOption({ label: 'Ankara' });
-      await soru.getByRole('button', { name: 'Devam et' }).click();
-      await expect(soru.locator('.not-kutusu.bilgi')).toContainText('seçenekleri geldi', { timeout: 60_000 });
-      await expect(ilce).toBeEnabled();
+      // Kartın üstünde zincir göstergesi.
+      const gosterge = soru.locator('.hizli-zincir-gostergesi');
+      await expect(gosterge).toContainText('Bağlı alanlar: İl → İlçe → Mahalle → Sokak (0/4 tamam)');
+      // Yerinde düğme: İl seçilmeden pasif ve ipucu; erişilebilir adı görünen metinle başlar.
+      const ilceGetir = soru.getByRole('button', { name: '“İlçe” seçeneklerini getir', exact: true });
+      await expect(ilceGetir).toBeDisabled();
+      await expect(soru.locator('.hizli-zincir-getir').getByText('Önce “İl” seçin', { exact: true })).toBeVisible();
+      await expect(ilceGetir).toHaveAccessibleDescription('Önce “İl” seçin');
+      expect((await ilceGetir.textContent())?.replace(/^↓\s*/, '')).toBe('“İlçe” seçeneklerini getir');
+      // Devam et: zincir tamamlanmadan pasif ve ne olacağını söyler; yanında "Bağlı alanları atla ve devam et".
+      const devam = soru.getByRole('button', { name: 'Devam et (önce bağlı alanları tamamlayın)', exact: true });
+      await expect(devam).toBeDisabled();
+      await expect(devam).toHaveAccessibleDescription(/Seçenekleri getirilmemiş: “İlçe”, “Mahalle”, “Sokak”/);
+      const atla = soru.getByRole('button', { name: 'Bağlı alanları atla ve devam et', exact: true });
+      await expect(atla).toBeVisible();
+
+      // 1) İl = Ankara → "↓ İlçe" etkin → basınca yalnız İl uygulanır; İlçe seçenekleriyle İl'in hemen altında belirir, odak İlçe'ye gider.
+      await il.selectOption({ label: 'Ankara' });
+      await expect(ilceGetir).toBeEnabled();
+      await ilceGetir.click();
+      await expect(ilce).toBeEnabled({ timeout: 60_000 });
       await expect(ilce.locator('option')).toHaveText(['Seçin', 'Çankaya', 'Keçiören']);
-      // Üst ekranda değiştirilince alt yeniden kilitlenir (eski seçenekler gösterilmez).
-      await ilce.selectOption({ label: 'Çankaya' });
-      await soru.getByLabel('İl', { exact: true }).selectOption({ label: 'Adana' });
+      await expect(ilce).toBeFocused();
+      await expect(page.getByRole('status').filter({ hasText: 'seçenekleri geldi' })).toHaveText('“İlçe” seçenekleri geldi (2 seçenek).');
+      await expect(soru.locator('.hizli-zincir-tamam').first()).toHaveText('✓ “İlçe” seçenekleri geldi (2 seçenek)');
+      await expect(gosterge).toContainText('(1/4 tamam)');
+      // Aynı kartta, İl satırının hemen ardından, girintili zincir satırı.
+      const sira = await soru.locator('.hizli-alan').evaluateAll((l) => l.map((x) => [x.querySelector('label')?.textContent?.replace(/^↳\s*/, '').replace(/\s*\(zorunlu\)$/, '') ?? '', x.className]));
+      const ilSira = sira.findIndex(([ad]) => ad === 'İl');
+      expect(sira[ilSira + 1][0]).toBe('İlçe');
+      expect(sira[ilSira + 1][1]).toContain('hizli-alan-bagli');
+      expect(sira[ilSira + 2][0]).toBe('Mahalle');
+      expect(sira[ilSira + 2][1]).toContain('zd-2');
+      // Sunucu: hâlâ veri durağı; düğmeye basılmadı.
+      o = await bekle(id, ['veri']);
+      expect(alan('İl').deger).toBe('06');
+      expect(alan('İlçe').bagli.getirildi).toBe(true);
+      expect(uygulama.hesaplamalar.length).toBe(hesaplamalar);
+      await expect(devam).toBeDisabled();
+
+      // 2) İlçe = Keçiören → "↓ Mahalle" → Etlik.
+      await ilce.selectOption({ label: 'Keçiören' });
+      await soru.getByRole('button', { name: '“Mahalle” seçeneklerini getir', exact: true }).click();
+      await expect(mahalle).toBeEnabled({ timeout: 60_000 });
+      await expect(mahalle.locator('option')).toHaveText(['Seçin', 'Etlik']);
+      await expect(mahalle).toBeFocused();
+      await expect(gosterge).toContainText('(2/4 tamam)');
+      // İlçe değeri yeniden çizimde korunur.
+      await expect(ilce).toHaveValue('0602');
+
+      // Taşma yok (1440 ve 390 px); ekran görüntüsü.
+      const tasma = (): Promise<number> => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(await tasma()).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: testInfo.outputPath('zincir-yerinde-dugme-1440.png'), fullPage: true });
+      await page.setViewportSize({ width: 390, height: 900 });
+      await expect(soru.locator('.hizli-zincir-gostergesi')).toBeVisible();
+      expect(await tasma()).toBeLessThanOrEqual(0);
+      await page.screenshot({ path: testInfo.outputPath('zincir-yerinde-dugme-390.png'), fullPage: true });
+      await page.setViewportSize({ width: 1440, height: 900 });
+
+      // 3) Üst değişince alt temizlenir ve kilitlenir; düğme yeniden etkin olur.
+      await il.selectOption({ label: 'Adana' });
       await expect(ilce).toBeDisabled();
+      await expect(ilce).toHaveText('“İlçe” seçeneklerini getirin');
+      await expect(mahalle).toBeDisabled();
+      await expect(ilceGetir).toBeEnabled();
+      await expect(soru.locator('.hizli-zincir-tamam')).toHaveCount(0);
+      await expect(gosterge).toContainText('(0/4 tamam)');
+      await expect(devam).toBeDisabled();
+
+      // 4) Boş gelen liste (sayfanın kendi hatası): "seçenek gelmedi" söylenir, Devam pasif kalır.
+      await il.selectOption({ label: 'Boşil' });
+      await ilceGetir.click();
+      await expect(soru.getByText('Bu seçimde “İlçe” için seçenek gelmedi; başka bir “İl” seçin.')).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole('status').filter({ hasText: 'seçenek gelmedi' })).toHaveText('“İlçe” için seçenek gelmedi.');
+      await expect(il).toBeFocused();
+      await expect(devam).toBeDisabled();
+
+      // 5) "Bağlı alanları atla ve devam et": getirilmemiş bağlı alanlar sorulmadan ilerlenir (izin "Bana sor" → "Şimdi ne yapayım?").
+      await il.selectOption({ label: 'Ankara' });
+      await atla.click();
+      await expect(page.locator('.hizli-soru').getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
+      expect(uygulama.hesaplamalar.length).toBe(hesaplamalar);
       expect(hatalar).toEqual([]);
+    } finally {
+      await tarayici.close();
+      await api('/platform/hizli-test/iptal', { id });
+    }
+  });
+
+  test('arayüz: zincir yoksa veri durağı eski davranışta (Devam et etkin, gösterge ve atla bağlantısı yok)', async () => {
+    test.setTimeout(240_000);
+    for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
+    const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/zincirsiz/', ekranAdi: 'Zincirsiz', izin: 'sor' })).id);
+    await bekle(id, ['veri'], 240);
+    const tarayici = await korumaliTarayici();
+    try {
+      const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } })).newPage();
+      await page.goto(`/#/hizli-test/o/${id}`);
+      const soru = page.locator('.hizli-soru');
+      await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 30_000 });
+      const devam = soru.getByRole('button', { name: 'Devam et', exact: true });
+      await expect(devam).toBeEnabled();
+      await expect(soru.locator('.hizli-zincir-gostergesi')).toBeHidden();
+      await expect(soru.getByRole('button', { name: 'Bağlı alanları atla ve devam et' })).toHaveCount(0);
+      await expect(soru.locator('.hizli-zincir-dugmesi')).toHaveCount(0);
+      await soru.getByLabel('Ad', { exact: true }).fill('Deneme');
+      await devam.click();
+      await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
     } finally {
       await tarayici.close();
       await api('/platform/hizli-test/iptal', { id });
