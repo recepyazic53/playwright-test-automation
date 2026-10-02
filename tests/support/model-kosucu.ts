@@ -24,7 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
-import { alanaYaz, alandanCik, oneridenYaz, takvimdenYaz } from '../../scripts/platform/tarama/alan-cikisi';
+import { DegerIzleyici, alanaYaz, alandanCik, oneridenYaz, takvimdenYaz, yazmaHatasi } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
@@ -616,7 +616,9 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       } else {
         // Ortak yazma kuralı (alan-cikisi.ts > alanaYaz): metin kutusundaki tarih (maskeli "gg.aa.yyyy") gerçek tuşlarla yazılır;
         // tarayıcının tarih denetimi (type=date) doğrudan.
-        await alanaYaz(l, String(deger), { zamanAsimiMs: alanTiklamaSuresiMs() });
+        const r = await alanaYaz(l, String(deger), { zamanAsimiMs: alanTiklamaSuresiMs() });
+        const h = r === 'tutmadi' ? await yazmaHatasi(l, String(deger), r, alan.etiket) : null;
+        if (h) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${String(deger)}" yazılır`, h));
       }
       return;
     case 'dosya':
@@ -637,9 +639,13 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
         return;
       }
       const tuslayarak = alan.doldurucu === 'tuslayarakYaz' || alan.doldurucu === 'telefonTuslama';
-      await alanaYaz(l, metin, {
+      // Önceden dolu (varsayılan değerli) alanın üzerine de yazılır; değer sayfadakiyle karşılaştırılır (tutmazsa tümü seçilip silinerek
+      // yeniden yazılır), yine tutmazsa açık hata.
+      const r = await alanaYaz(l, metin, {
         tuslayarak, aralikMs: tuslayarak ? 25 : undefined, kip: ham.parametreler.maske ? 'dogrudan' : 'otomatik', zamanAsimiMs: alanTiklamaSuresiMs()
       });
+      const h = r === 'tutmadi' ? await yazmaHatasi(l, metin, r, alan.etiket) : null;
+      if (h) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${metin}" yazılır`, h));
     }
   }
 }
@@ -1360,6 +1366,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         const gorunmeyenKaldirir = gorunmeyenAlanDavranisi() === 'kaldir';
         const doldurulanMetinler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
         const doldurulanSecimler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
+        // Yazılan metin alanlarının değeri her alandan sonra yeniden okunur (hızlı testle ORTAK kural: alan-cikisi.ts > DegerIzleyici).
+        const izleyici = new DegerIzleyici<PlanAlani>();
         for (const alan of adim.alanlar) {
           if (alan.atla) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, alan.atla));
@@ -1413,8 +1421,13 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           if (altlar.length) await bagliListeyiOlc(alan, altlar, k, onceki);
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
-          if (!zorla && !['secim', 'okluSecim', 'radyo', 'onayKutusu', 'dosya'].includes(alan.tip)) doldurulanMetinler.push({ alan, l, k });
+          const metinAlani = !zorla && !['secim', 'okluSecim', 'radyo', 'onayKutusu', 'dosya'].includes(alan.tip);
+          if (metinAlani) doldurulanMetinler.push({ alan, l, k });
           if (alan.tip === 'secim') doldurulanSecimler.push({ alan, l, k });
+          // "Yaz + Enter" alanı Enter'dan sonra boş kalır (değer eklendi): izlenmez.
+          const yazilan = alan.parametreler.maske ? maskeUygula(alan.parametreler.maske, alan.deger) : alan.deger;
+          if (metinAlani && alan.parametreler.tus !== 'Enter' && String(yazilan ?? '').trim()) await izleyici.yazildi(alan, alan.etiket, String(yazilan), l);
+          else await izleyici.denetle(alan.etiket);
         }
         // Sonraki bir alanın sorgusu / yeniden çizimi açılır listeyi ilk seçeneğine ("SEÇİNİZ") döndürmüş olabilir: değeri artık
         // seçilen değer olmayan listeler bir kez yeniden seçilir (metin alanlarındaki yeniden doldurmanın açılır liste karşılığı).
@@ -1426,16 +1439,20 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
           await arkaPlanIstekleriniBekle(page, yenidenBaslangic);
         }
-        // Sonraki alanların sorgusu / sayfanın yeniden çizmesi önceki alanı silmiş olabilir (ör. satır yenilenir): boş kalan metin
-        // alanları bir kez yeniden doldurulur (kullanıcının elle yazdığında olduğu gibi).
-        for (const d of doldurulanMetinler) {
-          const bos = !(await d.l.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
-          if (!bos || !String(d.alan.deger ?? '').trim()) continue;
-          // "Yaz + Enter" alanı (etiket / beceri girdisi): Enter değeri ekleyip alanı boşaltır; boş kalması beklenir.
-          if (d.alan.parametreler.tus === 'Enter') continue;
+        // Sonraki alanların sorgusu / sayfanın yeniden çizmesi önceki alanı silmiş ya da değiştirmiş olabilir (ör. satır yenilenir, kimlik
+        // sorgusu tarihi doldurur): değeri yazılandan farklı metin alanları bir kez yeniden doldurulur (kullanıcının elle yazdığında olduğu
+        // gibi); yine değişirse açık hata (hangi alan doldurulunca değiştiği yazılır).
+        const degisen = await izleyici.degisenler();
+        for (const x of degisen) {
+          const d = doldurulanMetinler.find((y) => y.alan === x.oge);
+          if (!d) continue;
           const yenidenBaslangic = Date.now();
-          await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
+          await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k).catch(() => undefined);
           await arkaPlanIstekleriniBekle(page, yenidenBaslangic);
+        }
+        for (const x of degisen) {
+          const m = await izleyici.sonDurum(x.oge);
+          if (m) throw new Error(beklenenGorulenMetni(adim.baslik, `${x.etiket}: "${x.deger}" yazılır`, m));
         }
         ekranaDonuldu = await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);

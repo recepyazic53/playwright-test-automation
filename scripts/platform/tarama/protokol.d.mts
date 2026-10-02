@@ -163,7 +163,11 @@ export type HizliMetin = {
 export type HizliDiyalog = { tur: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; mesaj: string; yanit: 'kabul' | 'iptal' };
 /** Görünen düğme adayı (eylem keşfinin gönderim adayları; basılmadan). */
 /** baglanti: bağlantı mı (arayüzde "Düğmeler" grubundan sonra "Bağlantılar" grubunda gösterilir; sıralamayı değiştirmez). */
-export type HizliDugme = { secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean; baglanti?: boolean; cerceve?: string[] };
+export type HizliDugme = {
+  secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean; baglanti?: boolean; cerceve?: string[];
+  /** Açık sayfa içi pencerenin (modal) içinde / arkasında; alanın yanındaki simge (eylem-kesfi.d.mts > EylemAdayi). */
+  pencerede?: boolean; arkada?: boolean; alanIkonu?: boolean;
+};
 /** Sayfanın o anki okuması (alan DEĞERİ okunmaz). goruntu: JPEG base64 (yalnız bellekte). */
 export type HizliAnlik = {
   yol: string; baslik: string; alanlar: HamAlan[]; metinler: HizliMetin[]; dugmeler: HizliDugme[]; eylem: EylemAdaylari; goruntu: string | null;

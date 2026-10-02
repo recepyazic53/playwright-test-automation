@@ -19,7 +19,7 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import type { Browser, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
-import { alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz } from './alan-cikisi';
+import { DegerIzleyici, alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz, yazmaHatasi } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, ortuyuKaldir, sakinlikBekle, sayfaParmakIzi } from './guvenli-tiklama';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
@@ -321,7 +321,8 @@ export async function hizliTestiYurut(
       const eylem = await eylemAdaylariniCikar(page, { dugmeSiniri: 60, cerceveler: true });
       const metinler = await metinleriTopla(page);
       const dugmeler: HizliDugme[] = eylem.gonderim.map((a) => ({
-        secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi, baglanti: a.baglanti === true, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {})
+        secici: a.secici, metin: a.metin, kayitOlusturabilir: a.kayitOlusturabilir === true, guven: a.guven, enOlasi: a.enOlasi, baglanti: a.baglanti === true, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {}),
+        ...(a.pencerede ? { pencerede: true } : {}), ...(a.arkada ? { arkada: true } : {}), ...(a.alanIkonu ? { alanIkonu: true } : {})
       }));
       let resim: string | null = null;
       if (goruntu) resim = await page.screenshot({ type: 'jpeg', quality: 55, timeout: 10_000 }).then((b) => b.toString('base64'), () => null);
@@ -428,8 +429,11 @@ export async function hizliTestiYurut(
         }
         // Ortak yazma kuralı (alan-cikisi.ts > alanaYaz): kısa tek satırlı metin gerçek tuşlarla yazılır (maske / keyup sorgusu çalışır, yaz-sil-yaz
         // olmaz); uzun metin doğrudan. Alandan çıkınca sayfanın sorgusu / yeniden çizimi beklenir (kısa üst sınır; uzun istekler sayılmaz).
+        // Önceden dolu (varsayılan değerli) alanın üzerine de yazılır; değer sayfadakiyle karşılaştırılır, tutmazsa tümü seçilip silinerek
+        // yeniden yazılır, yine tutmazsa açık alan hatası.
         const sonuc = await alanaYaz(l, String(deger), { zamanAsimiMs: bekleMs, sonra: async () => { await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); } });
-        if (sonuc === 'silindi') return 'Değer yazıldı ama alandan çıkınca sayfa sildi (maske / doğrulama); alanın nasıl doldurulduğunu kontrol edin.';
+        const yh = await yazmaHatasi(l, String(deger), sonuc, a.etiket ?? d.anahtar);
+        if (yh) return yh;
         // "Yazıp Enter'a basın" alanı (etiket / beceri girdisi): değer Enter ile eklenir (normal koşu aynı: doldurucuParametreleri.tus).
         if (a.tus) { await l.press(a.tus, { timeout: 3_000 }); await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); }
         return null;
@@ -695,12 +699,60 @@ export async function hizliTestiYurut(
           if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
           continue;
         }
-        // Yaz + Enter alanı Enter'dan sonra boş kalır (değer eklendi): yeniden yazılmaz.
-        if (['radio', 'checkbox', 'select-multiple', 'file'].includes(d.alan.tur) || d.alan.ozelBilesen || d.alan.tus) continue;
-        const yer = alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first();
-        if ((await yer.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim()) continue;
+        // Metin alanları (boşalan ya da başka alan yüzünden değişen) turuDoldur'un değer izleyicisinde yeniden yazılır.
+      }
+      return hatalar;
+    }
+
+    /** Yazılan değeri sayfadan yeniden okunabilen (metin girdisi gibi) alan mı: tur sonu denetimine girer. Yaz + Enter alanı Enter'dan sonra boş kalır. */
+    const yaziAlaniMi = (d: HizliDoldurulan): boolean => typeof d.deger === 'string' && Boolean(d.deger.trim())
+      && !['radio', 'checkbox', 'select', 'select-one', 'select-multiple', 'file'].includes(d.alan.tur) && !d.alan.ozelBilesen && !d.alan.tus;
+
+    /**
+     * Bir turun alanlarını doldurur (veri durağının "Devam et"i ve doğrulama koşusunun adımı ORTAK). Her alandan sonra önceki yazılan alanlar
+     * yeniden okunur (DegerIzleyici: hangi alan hangisini değiştirdi). Tur sonunda: açılır listeler sıfırlandıysa bir kez yeniden seçilir;
+     * değeri sayfa tarafından değiştirilen / boşaltılan metin alanları bir kez yeniden yazılır, yine değişirse açık ileti (“Doğum Tarihi”
+     * 13.04.1998 yazıldı; “Kimlik No” doldurulunca sayfa 02.10.2026 yaptı). kontrol: sayfaya aynı değerle önceden uygulanmış alanlar
+     * (yeniden yazılmaz, yalnız denetlenir). ilkHatada: ilk alan hatasında durulur (doğrulama koşusu).
+     */
+    async function turuDoldur(
+      page: Page, alanlar: HizliDoldurulan[], kontrol: HizliDoldurulan[],
+      secenek: { ilerle?: (j: number, d: HizliDoldurulan) => Promise<void>; ilkHatada?: boolean; durul?: boolean } = {}
+    ): Promise<Array<{ anahtar: string; mesaj: string }>> {
+      const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
+      const izleyici = new DegerIzleyici<string>();
+      const yer = (d: HizliDoldurulan): Locator => alanKapsami(page, d.alan.cerceve).locator(d.alan.secici).first();
+      const ad = (d: HizliDoldurulan): string => d.alan.etiket ?? d.anahtar;
+      for (const d of kontrol) if (yaziAlaniMi(d)) await izleyici.yazildi(d.anahtar, ad(d), String(d.deger), yer(d));
+      for (const [j, d] of alanlar.entries()) {
+        await secenek.ilerle?.(j, d);
         const h = await alaniDoldur(page, d);
-        if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
+        if (h) {
+          hatalar.push({ anahtar: d.anahtar, mesaj: h });
+          if (secenek.ilkHatada) return hatalar;
+          await izleyici.denetle(ad(d));
+          continue;
+        }
+        if (yaziAlaniMi(d)) await izleyici.yazildi(d.anahtar, ad(d), String(d.deger), yer(d));
+        else await izleyici.denetle(ad(d));
+      }
+      // Sonradan silinen / geri alınan / değiştirilen alanlar (sayfa arka planda satırı yeniden çizmiş, sorgu alanı doldurmuş olabilir).
+      await sakinles(page, 5_000);
+      if (secenek.durul) await gorunumDurulsun(page);
+      const tumu = [...alanlar, ...kontrol];
+      hatalar.push(...await bosKalanlariYenile(page, tumu, hatalar.map((x) => x.anahtar)));
+      if (secenek.ilkHatada && hatalar.length) return hatalar;
+      const degisen = (await izleyici.degisenler()).filter((x) => !hatalar.some((h) => h.anahtar === x.oge));
+      for (const x of degisen) {
+        const d = tumu.find((y) => y.anahtar === x.oge);
+        if (d) await alaniDoldur(page, d);
+      }
+      if (degisen.length) await sakinles(page, 5_000);
+      for (const x of degisen) {
+        const m = await izleyici.sonDurum(x.oge);
+        if (m) { hatalar.push({ anahtar: x.oge, mesaj: m }); if (secenek.ilkHatada) return hatalar; continue; }
+        const bozan = izleyici.bozani(x.oge);
+        notlar.push(`“${x.etiket}” sonradan değişmişti (${x.mevcut.trim() || 'boş'}${bozan ? `; “${bozan}” doldurulunca` : ''}); yeniden yazıldı.`);
       }
       return hatalar;
     }
@@ -725,16 +777,13 @@ export async function hizliTestiYurut(
         await ilerle(i + 1, `${onEk}: başlıyor…`);
         const once = new Set((await anlikOku(page, false)).metinler.map((m) => m.metin));
         diyaloglar.length = 0;
-        for (const [j, d] of adim.alanlar.entries()) {
-          await ilerle(i + 1, `${onEk}: “${d.alan.etiket ?? d.anahtar}” dolduruluyor (${j + 1}/${adim.alanlar.length})`);
-          const h = await alaniDoldur(page, d);
-          if (h) return { sonuc: 'basarisiz', mesaj: `${i + 1}. adımda “${d.alan.etiket ?? d.anahtar}” alanı: ${h}`, gorulen: [...gorulen] };
-        }
         if (adim.alanlar.length) {
-          // Sayfa doldururken alanı silmiş olabilir: sakinleşince boş kalanlar yeniden doldurulur.
-          await sakinles(page, 5_000);
-          await gorunumDurulsun(page);
-          const yenile = await bosKalanlariYenile(page, adim.alanlar, []);
+          // Hızlı testteki turla aynı kural (turuDoldur): ilk alan hatasında durulur; sayfa doldururken alanı silmiş / değiştirmişse bir kez
+          // yeniden yazılır, yine değişirse açık ileti.
+          const yenile = await turuDoldur(page, adim.alanlar, [], {
+            ilkHatada: true, durul: true,
+            ilerle: async (j, d) => { await ilerle(i + 1, `${onEk}: “${d.alan.etiket ?? d.anahtar}” dolduruluyor (${j + 1}/${adim.alanlar.length})`); }
+          });
           if (yenile[0]) {
             const d = adim.alanlar.find((x) => x.anahtar === yenile[0].anahtar);
             return { sonuc: 'basarisiz', mesaj: `${i + 1}. adımda “${d?.alan.etiket ?? yenile[0].anahtar}” alanı: ${yenile[0].mesaj}`, gorulen: [...gorulen] };
@@ -962,16 +1011,11 @@ export async function hizliTestiYurut(
           diyalogKayitlari.length = 0;
           beklemeler = {};
           const doldurOncesi = new Set(sonAnlik.alanlar.map((a) => a.anahtar));
-          const hatalar: Array<{ anahtar: string; mesaj: string }> = [];
-          for (const [j, d] of k.alanlar.entries()) {
-            await gonder({ olay: 'ilerleme', no: k.no, mesaj: `Alanlar dolduruluyor: “${d.alan.etiket ?? d.anahtar}” (${j + 1}/${k.alanlar.length})` }).catch(() => undefined);
-            const h = await alaniDoldur(islem, d);
-            if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
-          }
-          // Sonradan silinen / geri alınan alan (sayfa arka planda satırı yeniden çizmiş olabilir): boş kalanlar bir kez yeniden doldurulur.
-          await sakinles(islem, 5_000);
-          // Yazılan alanlar ve sayfaya aynı değerle önceden uygulanmış (yeniden yazılmayan) alanlar: boşalmışsa bir kez yeniden doldurulur.
-          hatalar.push(...await bosKalanlariYenile(islem, [...k.alanlar, ...(k.kontrol ?? [])], hatalar.map((x) => x.anahtar)));
+          // Yazılan alanlar ve sayfaya aynı değerle önceden uygulanmış (yeniden yazılmayan) alanlar: tur sonunda yeniden okunur; boşalan /
+          // başka alan yüzünden değişen alan bir kez yeniden yazılır, yine değişirse alan hatası (turuDoldur).
+          const hatalar = await turuDoldur(islem, k.alanlar, k.kontrol ?? [], {
+            ilerle: async (j, d) => { await gonder({ olay: 'ilerleme', no: k.no, mesaj: `Alanlar dolduruluyor: “${d.alan.etiket ?? d.anahtar}” (${j + 1}/${k.alanlar.length})` }).catch(() => undefined); }
+          });
           await sakinles(islem, 5_000);
           // Yerinde zincir isteği: alt listelerin seçenekleri gelene kadar (geç dolan liste: istek bittikten sonra zamanlayıcıyla dolabilir).
           if (k.bekle?.length) await altListelerDolsun(k.bekle, k.bekleMs ?? ZINCIR_SECENEK_BEKLEME_MS);

@@ -42,8 +42,9 @@ test('senaryo önerileri: ilki yapılan senaryo (seçili); seçilen liste alanı
 });
 
 // Güncelleme gerekçesi: zincir artık TEK tabloda (sütun = halka, satır = gözlenen geçerli kombinasyon); planKur ilişkileri ve gözlemleri alır.
-// Öneriler: koşullu dal (Kurumsal → değeri olmayan Vergi no açılır: "veri gerekli", kaydedilmez) + zincir satırları × Yapı ikili kapsamı.
-test('senaryo önerileri: zincir yalnız zincir tablosunun SATIRLARIYLA bütün olarak değişir; koşullu dal veri gerekli; Yapı × zincir ikili kapsamı; her aday en az bir kez', () => {
+// Öneriler: koşullu dal (Kurumsal → değeri olmayan Vergi no açılır: "veri gerekli", kaydedilmez), Yapı her değeriyle; zincirin kökü farklı
+// satırları zengin önerilere katılır (tek başına öneri değil).
+test('senaryo önerileri: dal yolu, görünürlüğü değiştirmeyen seçim her değeriyle; zincir kökü farklı satırlar (tam satır) zengin önerilere katılır', () => {
   const s = (deger: string, metin = deger) => ({ deger, metin });
   const alanlar2: Array<Record<string, any>> = [
     { anahtar: 'il', tur: 'select', etiket: 'İl', secenekler: [s('', 'Seçiniz'), s('01', 'Adana'), s('06', 'Ankara'), s('34', 'İstanbul')] },
@@ -77,27 +78,87 @@ test('senaryo önerileri: zincir yalnız zincir tablosunun SATIRLARIYLA bütün 
   expect(p.tablolar.map((t) => t.ad)).not.toContain('İlçe'); // halkalar ayrı tablo değil
   const o = senaryoOnerileri(p, 'Adres', { enCok: 5, alanlar: ekli, iliskiler, gozlemler, degerler: { il: '06', ilce: '0602', mah: 'Etlik' } });
   const degisim = (x: (typeof o)[number]) => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d) => [d.oturumAnahtar, d.deger]));
-  // 1) Koşullu dal: Kurumsal → değeri girilmemiş Vergi no açılır: öneri "veri gerekli" (değer üretilmez).
-  expect(o[1]).toMatchObject({ veriGerekli: ['Vergi no'], varsayilanSecili: false });
-  expect(degisim(o[1])).toEqual({ tip: 'Kurumsal' });
-  expect(o[1].gerekce).toContain('“Müşteri tipi” = “Kurumsal” dalı (Vergi no alanları)');
-  // 2) Zincir × Yapı ikili kapsamı: her alternatif erken (Adana ve İstanbul yolları, Betonarme ve Çelik ilk iki öneride).
-  expect(o.slice(2).map(degisim)).toEqual([
-    { il: 'Adana', ilce: 'Seyhan', mah: 'Reşatbey', yapi: 'Betonarme' },
-    { il: 'İstanbul', ilce: 'Kadıköy', mah: 'Moda', yapi: 'Çelik' },
-    { il: 'Adana', ilce: 'Seyhan', mah: 'Reşatbey', yapi: 'Çelik' },
-    { il: 'İstanbul', ilce: 'Kadıköy', mah: 'Moda', yapi: 'Betonarme' }
-  ]);
-  expect(o).toHaveLength(6); // enCok = 5 alternatif
-  // Hiçbir öneride geçersiz zincir yok: zincir değişikliği tablonun bir satırının tamamı.
-  for (const x of o.slice(1)) {
-    const d = degisim(x);
-    if (d.il || d.ilce || d.mah) expect(zincir?.satirlar).toContainEqual({ 'İl': d.il, 'İlçe': d.ilce, Mahalle: d.mah });
+  // Dal (Kurumsal → değeri girilmemiş Vergi no: "veri gerekli", değer üretilmez); Yapı her değeriyle birer kez; zincirin kökü farklı her
+  // satırı (Adana, İstanbul; aynı ilden ikinci satır yok) ayrı öneri değil, en zengin önerilere katılır.
+  const d = o.slice(1).map(degisim);
+  expect(d).toHaveLength(3);
+  expect(o.slice(1).filter((x) => degisim(x).tip === 'Kurumsal').map((x) => x.veriGerekli)).toEqual([['Vergi no']]);
+  expect(d.map((x) => x.yapi).filter(Boolean).sort()).toEqual(expect.arrayContaining(['Betonarme', 'Çelik']));
+  const zincirli = o.slice(1).filter((x) => degisim(x).il);
+  expect(zincirli.map((x) => degisim(x).il).sort()).toEqual(['Adana', 'İstanbul']);
+  for (const x of zincirli) {
+    expect(zincir?.satirlar).toContainEqual({ 'İl': degisim(x).il, 'İlçe': degisim(x).ilce, Mahalle: degisim(x).mah });
+    expect(Object.keys(degisim(x)).length).toBeGreaterThan(3);
+    expect(x.gerekce).toContain('adres: farklı il');
+    expect(x.baslik).toMatch(/^Adres — Müşteri tipi: .+ · İl: (Adana|İstanbul) \/ /);
   }
-  expect(o[2].baslik).toBe('Adres — İl: Adana / Seyhan / Reşatbey · Yapı: Betonarme');
-  expect(o[2].gerekce).toBe('Farklı İl zinciri: Adana › Seyhan › Reşatbey; “Yapı” = “Betonarme” — İl zinciri × Yapı ikili kapsamı; diğer değerler aynı');
+  expect(o.find((x) => degisim(x).tip === 'Kurumsal')?.gerekce).toContain('görünürlük dalları: tüm birleşimler');
 });
 
+// Gerçek olayın genel karşılığı: iki kök dal belirleyici (Kişi tipi Ö/T; Ödeyen farklı H/E) ve E altında İÇ İÇE dal belirleyici (Ödeyen
+// tipi Ö/T; açtığı metin alanları değersiz → veri gerekli), görünürlüğü değiştirmeyen seçim (Konut durumu) ve çok satırlı adres zinciri.
+/** İki düzey koşullu radyo + görünürlüğü değiştirmeyen radyo + zincir (sahte; değerler uydurma). */
+/** Beklenen öneriler (kaydedilen + 2 × 3 dal yolunun kalan 5'i + görünürlüğü değiştirmeyen seçimin diğer değeri); adres en zengin
+ * iki öneriye (farklı iller) katılır. */
+const BEKLENEN_BASLIKLAR = [
+  'Konut',
+  'Konut — Kişi tipi: Özel · Ödeyen farklı: Evet · Ödeyen tipi: Özel · Konut durumu: Ev sahibi · İl: İstanbul / Kadıköy / Bina 1',
+  'Konut — Kişi tipi: Özel · Ödeyen farklı: Evet · Ödeyen tipi: Tüzel · Konut durumu: Ev sahibi · İl: Adana / Seyhan / Bina 2',
+  'Konut — Kişi tipi: Tüzel · Ödeyen farklı: Hayır',
+  'Konut — Kişi tipi: Tüzel · Ödeyen farklı: Evet · Ödeyen tipi: Özel',
+  'Konut — Kişi tipi: Tüzel · Ödeyen farklı: Evet · Ödeyen tipi: Tüzel',
+  'Konut — Kişi tipi: Özel · Ödeyen farklı: Hayır · Konut durumu: Ev sahibi'
+];
+/** Dalın açtığı değersiz metin alanları "veri gerekli" (iç içe dalda da). */
+const BEKLENEN_VERI = [[], ['Ödeyen kimlik no'], ['Ödeyen vergi no'], ['Vergi no'], ['Vergi no', 'Ödeyen kimlik no'], ['Vergi no', 'Ödeyen vergi no'], []];
+function dalAgaciGirdisi() {
+  const s = (deger: string, metin = deger) => ({ deger, metin });
+  const alanlar: Array<Record<string, any>> = [
+    { anahtar: 'tip', tur: 'radio', etiket: 'Kişi tipi', hazir: true, mevcut: 'Özel', radyolar: [s('O', 'Özel'), s('T', 'Tüzel')] },
+    { anahtar: 'kimlik', tur: 'text', etiket: 'Kimlik no', kosul: { secim: 'tip', degerler: ['O'] } },
+    { anahtar: 'vergi', tur: 'text', etiket: 'Vergi no', kosul: { secim: 'tip', degerler: ['T'] } },
+    { anahtar: 'farkli', tur: 'radio', etiket: 'Ödeyen farklı', hazir: true, mevcut: 'Hayır', radyolar: [s('H', 'Hayır'), s('E', 'Evet')] },
+    { anahtar: 'odeyenTipi', tur: 'radio', etiket: 'Ödeyen tipi', kosul: { secim: 'farkli', degerler: ['E'] }, radyolar: [s('O', 'Özel'), s('T', 'Tüzel')] },
+    { anahtar: 'odeyenKimlik', tur: 'text', etiket: 'Ödeyen kimlik no', kosul: { secim: 'odeyenTipi', degerler: ['O'] } },
+    { anahtar: 'odeyenVergi', tur: 'text', etiket: 'Ödeyen vergi no', kosul: { secim: 'odeyenTipi', degerler: ['T'] } },
+    { anahtar: 'durum', tur: 'radio', etiket: 'Konut durumu', hazir: true, mevcut: 'Kiracı', radyolar: [s('K', 'Kiracı'), s('S', 'Ev sahibi')] },
+    { anahtar: 'il', tur: 'select', etiket: 'İl', secenekler: [s('06', 'Ankara'), s('34', 'İstanbul'), s('01', 'Adana')] },
+    { anahtar: 'ilce', tur: 'select', etiket: 'İlçe', secenekler: [s('0602', 'Keçiören'), s('3401', 'Kadıköy'), s('0101', 'Seyhan')] },
+    { anahtar: 'bina', tur: 'select', etiket: 'Bina', secenekler: [s('b1', 'Bina 1'), s('b2', 'Bina 2'), s('b3', 'Bina 3')] }
+  ];
+  const gozlemler: Array<{ anahtar: string; secimler: Record<string, string>; secenekler: Array<{ deger: string; metin: string }> }> = [
+    { anahtar: 'ilce', secimler: { il: '06' }, secenekler: [s('0602', 'Keçiören')] },
+    { anahtar: 'bina', secimler: { il: '06', ilce: '0602' }, secenekler: [s('b1', 'Bina 1'), s('b2', 'Bina 2'), s('b3', 'Bina 3')] },
+    { anahtar: 'ilce', secimler: { il: '34' }, secenekler: [s('3401', 'Kadıköy')] },
+    { anahtar: 'bina', secimler: { il: '34', ilce: '3401' }, secenekler: [s('b1', 'Bina 1')] },
+    { anahtar: 'ilce', secimler: { il: '01' }, secenekler: [s('0101', 'Seyhan')] },
+    { anahtar: 'bina', secimler: { il: '01', ilce: '0101' }, secenekler: [s('b2', 'Bina 2')] }
+  ];
+  const iliskiler = [{ ust: 'il', alt: 'ilce' }, { ust: 'ilce', alt: 'bina' }];
+  const degerler = { kimlik: { deger: '10000000146' }, il: { deger: '06' }, ilce: { deger: '0602' }, bina: { deger: 'b1' } };
+  const ham = { kimlik: '10000000146', il: '06', ilce: '0602', bina: 'b1' };
+  return { alanlar, gozlemler, iliskiler, degerler, ham };
+}
+
+test('senaryo önerileri: görünürlük dallarının (iç içe dahil) tüm birleşimleri; görünürlüğü değiştirmeyen seçim her değeriyle; adres farklı il ile zengin öneriye katılır; başlık tam', () => {
+  const g = dalAgaciGirdisi();
+  const p = planKur({ baslik: 'Konut', alanlar: g.alanlar, degerler: g.degerler, iliskiler: g.iliskiler, gozlemler: g.gozlemler });
+  const o = senaryoOnerileri(p, 'Konut', { enCok: 10, alanlar: g.alanlar, iliskiler: g.iliskiler, gozlemler: g.gozlemler, degerler: g.ham });
+  expect(o.map((x) => x.baslik)).toEqual(BEKLENEN_BASLIKLAR);
+  expect(o.map((x) => x.veriGerekli)).toEqual(BEKLENEN_VERI);
+  const degisim = (x: (typeof o)[number]) => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d) => [d.oturumAnahtar, d.deger]));
+  // Adres yalnız kökü farklı satırlarla (aynı ilden ikinci satır yok) ve tek başına öneri değil.
+  const adresli = o.slice(1).filter((x) => degisim(x).il);
+  expect(adresli.map((x) => degisim(x).il).sort()).toEqual(['Adana', 'İstanbul']);
+  for (const x of adresli) expect(Object.keys(degisim(x)).length).toBeGreaterThan(3);
+  expect(o[1].gerekce).toContain('görünürlük dalları: tüm birleşimler');
+  expect(o.find((x) => degisim(x).durum)?.gerekce).toContain('“Konut durumu”: her değer');
+  expect(adresli[0].gerekce).toContain('adres: farklı il');
+  // Sınır küçükse: her değer dallara katılır, öneri sayısı sınırı geçmez.
+  const az = senaryoOnerileri(p, 'Konut', { enCok: 5, alanlar: g.alanlar, iliskiler: g.iliskiler, gozlemler: g.gozlemler, degerler: g.ham });
+  expect(az.length).toBeLessThanOrEqual(6);
+  expect(az.slice(1).some((x) => degisim(x).durum === 'Ev sahibi' && degisim(x).farkli)).toBe(true);
+});
 test('birleştirme: yalnız gizli sütunlu değer (Vergi no) mevcut "Kişi bilgileri"ne YENİ satır olarak eklenir, şifreli yazılır; senaryo o satıra satır kimliğiyle sabitlenir', async () => {
   const k = mkdtempSync(join(tmpdir(), 'hizli-kayit-plani-'));
   try {

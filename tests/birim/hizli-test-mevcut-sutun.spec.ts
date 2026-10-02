@@ -96,27 +96,25 @@ test.describe('saf kurallar', () => {
     const plan = planKur({ baslik: 'Konut', alanlar, degerler });
     const ham = { tc: '10000000146', yapi: 'b', alt: '1' };
     const o = senaryoOnerileri(plan, 'Konut', { enCok: 5, alanlar, degerler: ham });
-    expect(o).toHaveLength(6);
     const degisim = (x: (typeof o)[number]) => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d) => [d.oturumAnahtar, d.deger]));
-    // Dal: Tüzel (Unvan, Vergi no açılır; değerleri yok → veri gerekli, kaydedilemez).
-    expect(o[1]).toMatchObject({ veriGerekli: ['Unvan', 'Vergi no'] });
-    expect(degisim(o[1])).toEqual({ tip: 'Tüzel' });
-    expect(o[1].gerekce).toMatch(/^“Başvuran tipi” = “Tüzel” dalı \(Unvan, Vergi no alanları\) — veri gerekli/);
-    // İkili kapsam: tek düze değil (her öneri birden çok seçimi birlikte değiştirir), her alternatif değer en az bir kez, tekrar yok.
-    const ikili = o.slice(2);
-    expect(ikili).toHaveLength(4);
-    for (const x of ikili) {
-      expect(Object.keys(degisim(x)).length, x.baslik).toBeGreaterThanOrEqual(2);
-      expect(x.gerekce).toContain('Yapı tarzı × Alternatif × Kapsam ikili kapsamı');
-      expect(x.veriGerekli).toEqual([]);
-    }
+    // Görünürlük dalı (Tüzel) + görünürlüğü değiştirmeyen seçimlerin her değeri (6) sınırı (5) aşar: gerektiği kadar her değer seçimi dal
+    // önerisine katılır; her alternatif değer yine en az bir kez, tekrar yok.
+    const ikili = o.slice(1);
+    expect(ikili).toHaveLength(5);
     const gorulen = (k: string) => new Set(ikili.map((x) => degisim(x)[k]).filter(Boolean));
     expect([...gorulen('yapi')].sort()).toEqual(['Kagir', 'Çelik'].sort());
     expect([...gorulen('alt')].sort()).toEqual(['Alternatif 2', 'Alternatif 3']);
     expect([...gorulen('tem')].sort()).toEqual(['250.000', '500.000']);
     expect(new Set(o.map((x) => JSON.stringify(degisim(x)))).size).toBe(o.length);
-    // Dal belirleyici (Başvuran tipi) ikili kapsama girmez; geçersiz dal değeri yok.
-    for (const x of ikili) expect(degisim(x).tip).toBeUndefined();
+    // Dal (Tüzel: Unvan, Vergi no açılır; değerleri yok) "veri gerekli" işaretini korur ve katılan seçimlerle zenginleşir.
+    const dalli = ikili.filter((x) => degisim(x).tip);
+    expect(dalli).toHaveLength(1);
+    expect(degisim(dalli[0])).toMatchObject({ tip: 'Tüzel' });
+    expect(Object.keys(degisim(dalli[0])).length).toBeGreaterThan(1);
+    expect(dalli[0].veriGerekli).toEqual(['Unvan', 'Vergi no']);
+    expect(dalli[0].gerekce).toMatch(/^görünürlük dalları: tüm birleşimler; “.+”: her değer/);
+    expect(dalli[0].baslik).toMatch(/^Konut — Başvuran tipi: Tüzel · /);
+    for (const x of ikili.filter((y) => !degisim(y).tip)) expect(x.veriGerekli).toEqual([]);
     // Öneri sayısı ayara uyar.
     expect(senaryoOnerileri(plan, 'Konut', { enCok: 2, alanlar, degerler: ham })).toHaveLength(3);
   });
@@ -446,7 +444,7 @@ test.describe('uçtan uca', () => {
       ad: 'İl → Daire/Kapı No zinciri', zincir: ['İl', 'İlçe', 'Belde/Köy', 'Mahalle', 'Cadde/Sokak', 'Bina No', 'Daire/Kapı No']
     });
     // Koşullu dal önerisi: Tüzel (Vergi No, Unvan değersiz → veri gerekli).
-    expect((oz.senaryolar as Nesne[]).some((x) => x.veriGerekli?.length && /Tüzel/.test(x.gerekce))).toBe(true);
+    expect((oz.senaryolar as Nesne[]).some((x) => x.veriGerekli?.length && /Tüzel/.test(x.baslik) && /görünürlük dalları/.test(x.gerekce))).toBe(true);
     const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Yangın — Özel', secim: oz.secim });
     const t = (await tablolar()).find((x) => x.ad === 'İl → Daire/Kapı No zinciri') as Nesne;
     expect(t.sutunlar.map((c: Nesne) => c.ad)).toEqual(['İl', 'İlçe', 'Belde/Köy', 'Mahalle', 'Cadde/Sokak', 'Bina No', 'Daire/Kapı No']);

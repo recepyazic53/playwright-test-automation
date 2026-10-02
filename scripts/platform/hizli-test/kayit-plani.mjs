@@ -556,10 +556,11 @@ export function pinSecimi(y) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * İkili (pairwise) kapsam: her faktörün seviye sayısı (0 = şimdiki değer) → az sayıda satır (seviye indeksleri); her iki faktörün her
- * seviye çifti en az bir satırda bulunur (hepsi şimdiki olan çift kaydedilen senaryoda zaten var). Açgözlü, deterministik: önce iki
- * seviyesi de değişen kapsanmamış çift tohumlanır, diğer faktörlerde en çok yeni çift kapsayan seviye seçilir (eşitlikte değişen seviye).
- * Tek faktörde her alternatif seviye bir satır. En çok enCok satır.
+ * İkili (pairwise) kapsam — az ama anlamlı: her faktörün seviye sayısı (0 = şimdiki değer) → az sayıda satır (seviye indeksleri). Kapsanan:
+ * farklı iki faktörün ALTERNATİF seviyelerinin her çifti ve her alternatif seviye en az bir kez (şimdiki değerle eşleşen çiftler kaydedilen
+ * senaryo ve diğer satırlarla zaten görülür; onları ayrıca kapsamak öneri sayısını şişirir ve bir alternatifi "tek başına" önerir).
+ * Açgözlü, deterministik: kapsanmamış bir alternatif çifti (yoksa tek alternatif) tohumlanır; diğer faktörlerde en çok yeni çift kapsayan
+ * seviye seçilir (eşitlikte değişen ve daha az kullanılmış seviye). Tek faktörde her alternatif bir satır. En çok enCok satır.
  * @param {ReadonlyArray<number>} boyutlar @param {number} enCok @returns {number[][]}
  */
 export function ikiliKapsam(boyutlar, enCok) {
@@ -567,42 +568,82 @@ export function ikiliKapsam(boyutlar, enCok) {
   /** @type {number[][]} */
   const satirlar = [];
   if (!n || enCok <= 0) return satirlar;
-  if (n === 1) {
-    for (let a = 1; a < boyutlar[0] && satirlar.length < enCok; a++) satirlar.push([a]);
-    return satirlar;
-  }
   const anahtar = (/** @type {number} */ i, /** @type {number} */ a, /** @type {number} */ j, /** @type {number} */ b) => `${i}:${a}|${j}:${b}`;
   /** @type {Map<string, [number, number, number, number]>} */
   const acik = new Map();
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let a = 0; a < boyutlar[i]; a++) for (let b = 0; b < boyutlar[j]; b++) {
-    if (a || b) acik.set(anahtar(i, a, j, b), [i, a, j, b]);
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let a = 1; a < boyutlar[i]; a++) for (let b = 1; b < boyutlar[j]; b++) {
+    acik.set(anahtar(i, a, j, b), [i, a, j, b]);
+  }
+  /** Henüz hiçbir satırda denenmemiş alternatif seviyeler (yalnız çifti olmayan — tek alternatifli etken — için ayrıca gerekir). */
+  const ciftli = boyutlar.filter((b) => b > 1).length > 1;
+  const tekler = new Set(ciftli ? [] : boyutlar.flatMap((b, i) => Array.from({ length: Math.max(0, b - 1) }, (_, a) => `${i}:${a + 1}`)));
+  // Küçük uzay (olası satır sayısı sınırlı): tüm satırlar aday; her turda en çok yeni çift (+ yeni tek) kapsayan satır seçilir. Eşitliği
+  // bozan aday sırası birkaç kez değiştirilir (düz, ters, kaydırılmış) ve EN AZ satırlı sonuç alınır (deterministik).
+  const toplam = boyutlar.reduce((c, b) => c * b, 1);
+  if (toplam <= 20_000) {
+    /** @type {number[][]} */
+    const tum = [];
+    for (let i = 0; i < toplam; i++) {
+      const r = [];
+      let x = i;
+      for (let f = n - 1; f >= 0; f--) { r[f] = x % boyutlar[f]; x = Math.floor(x / boyutlar[f]); }
+      if (r.some((v) => v > 0)) tum.push(r);
+    }
+    const dene = (/** @type {number[][]} */ sira) => {
+      const ac = new Set(acik.keys());
+      const tk = new Set(tekler);
+      /** @type {number[][]} */
+      const sonuc = [];
+      while (ac.size || tk.size) {
+        let en = null;
+        let enPuan = 0;
+        for (const r of sira) {
+          let p = 0;
+          for (let i = 0; i < n; i++) {
+            if (r[i] > 0 && tk.has(`${i}:${r[i]}`)) p++;
+            for (let j = i + 1; j < n; j++) if (r[i] > 0 && r[j] > 0 && ac.has(anahtar(i, r[i], j, r[j]))) p += 2;
+          }
+          if (p > enPuan) { en = r; enPuan = p; }
+        }
+        if (!en) break;
+        for (let i = 0; i < n; i++) { tk.delete(`${i}:${en[i]}`); for (let j = i + 1; j < n; j++) ac.delete(anahtar(i, en[i], j, en[j])); }
+        sonuc.push(en);
+      }
+      return sonuc;
+    };
+    const siralar = [tum, [...tum].reverse(), ...[1, 2, 3, 5, 7].map((k) => { const d = Math.floor((tum.length * k) / 8); return [...tum.slice(d), ...tum.slice(0, d)]; })];
+    let enIyi = /** @type {number[][] | null} */ (null);
+    for (const s of siralar) { const r = dene(s); if (!enIyi || r.length < enIyi.length) enIyi = r; }
+    return (enIyi ?? []).slice(0, enCok);
   }
   /** Seviye kullanımı (her alternatif erken denensin: tohum ve eşitlikte en az kullanılan seçilir). */
   const kullanim = boyutlar.map((b) => Array(b).fill(0));
-  while (acik.size && satirlar.length < enCok) {
-    const adaylar = [...acik.values()];
-    const ikisi = adaylar.filter(([, a, , b]) => a && b);
-    const tohum = (ikisi.length ? ikisi : adaylar).reduce((en, x) => (kullanim[x[0]][x[1]] + kullanim[x[2]][x[3]] < kullanim[en[0]][en[1]] + kullanim[en[2]][en[3]] ? x : en));
+  while ((acik.size || tekler.size) && satirlar.length < enCok) {
     const satir = Array(n).fill(-1);
-    satir[tohum[0]] = tohum[1];
-    satir[tohum[2]] = tohum[3];
+    if (acik.size) {
+      const tohum = [...acik.values()].reduce((en, x) => (kullanim[x[0]][x[1]] + kullanim[x[2]][x[3]] < kullanim[en[0]][en[1]] + kullanim[en[2]][en[3]] ? x : en));
+      satir[tohum[0]] = tohum[1];
+      satir[tohum[2]] = tohum[3];
+    } else {
+      const [i, a] = String([...tekler][0]).split(':').map(Number);
+      satir[i] = a;
+    }
     for (let f = 0; f < n; f++) {
       if (satir[f] >= 0) continue;
       let en = 0;
-      let enPuan = -1;
-      for (let v = 0; v < boyutlar[f]; v++) {
-        let puan = 0;
+      let enPuan = 0;
+      for (let v = 1; v < boyutlar[f]; v++) {
+        let puan = tekler.has(`${f}:${v}`) ? 1 : 0;
         for (let h = 0; h < n; h++) {
-          if (h === f || satir[h] < 0) continue;
-          if (acik.has(h < f ? anahtar(h, satir[h], f, v) : anahtar(f, v, h, satir[h]))) puan++;
+          if (h === f || satir[h] < 1) continue;
+          if (acik.has(h < f ? anahtar(h, satir[h], f, v) : anahtar(f, v, h, satir[h]))) puan += 2;
         }
-        // Eşitlikte değişen ve daha az kullanılmış seviye.
-        if (puan > enPuan || (puan === enPuan && v > 0 && (en === 0 || kullanim[f][v] < kullanim[f][en]))) { en = v; enPuan = puan; }
+        if (puan > enPuan || (puan === enPuan && puan > 0 && kullanim[f][v] < kullanim[f][en])) { en = v; enPuan = puan; }
       }
       satir[f] = en;
     }
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) acik.delete(anahtar(i, satir[i], j, satir[j]));
-    satir.forEach((v, f) => { kullanim[f][v]++; });
+    satir.forEach((v, f) => { kullanim[f][v]++; tekler.delete(`${f}:${v}`); });
     if (satir.some((v) => v > 0)) satirlar.push(satir);
   }
   return satirlar;
@@ -610,13 +651,16 @@ export function ikiliKapsam(boyutlar, enCok) {
 
 /**
  * Senaryo önerileri (YZ YOK, kurallı; az ama gerekçeli): [0] kaydedilen (hızlı testte yapılan) senaryo; sonra:
- *  1) Koşullu dallar: görünürlüğü belirleyen her seçim (alanların kosul.secim'i; liste / radyo) için şimdiki daldan farklı her dal (aynı
- *     alanları açan değerler tek dal) bir öneri. Dalın açtığı seçim alanı tablonun ilk seçeneğiyle doldurulur; değeri olmayan metin
- *     alanı açılıyorsa öneri "veri gerekli" (veriGerekli: alan adları) — değer ÜRETİLMEZ, kaydedilmez; kullanıcı o dalla yeni hızlı test başlatır.
- *  2) İkili kapsam (pairwise): bağımsız seçim alanları (şimdiki dalda görünenler; dal belirleyiciler hariç) ve VARSA bağlı liste zincirleri
- *     (zincir tablosu: alternatifler yalnız gözlenen tam kombinasyon SATIRLARI — zincir bütün olarak değişir, geçersiz birleşim üretilmez;
- *     kökü farklı satırlar önce). Seviyeler: şimdiki + en çok üç başka değer (ilk, son, aradan).
- *  Aynı değişikliği yapan öneriler ayıklanır; toplam en çok enCok (dallar önce).
+ *  1) Görünürlük dalları: alan kümesini değiştiren seçimler (alanların kosul.secim'i; iç içe olanlar dahil) dal ağacıdır; kök seçimlerin
+ *     dal yollarının TÜM birleşimleri (kartezyen; aynı alanları açan değerler tek dal; dal iç içe seçim açıyorsa onun dallarıyla çarpılır).
+ *     Dalın açtığı seçim alanı tablonun ilk seçeneğiyle doldurulur; değeri olmayan metin alanı açılıyorsa "veri gerekli" (değer ÜRETİLMEZ).
+ *     Sınırı aşarsa kök seçimler üzerinden ikili kapsam (ikiliKapsam).
+ *  2) Görünürlüğü değiştirmeyen seçimler: temel yolda her değeriyle birer kez (her değer; ilk, son, aradan en çok üç). Toplam sınırı aşarsa
+ *     gerektiği kadarı dal önerilerine katılır.
+ *  3) Bağlı liste zinciri: kökü (en üst halkası) farklı her gözlenen tam satır (aynı kökten ikinci satır yok); tek başına öneri olmaz, en
+ *     zengin önerilere katılır (görünürlüğü değiştirmeyen seçimler de ilk alternatifleriyle). Başka değişken yoksa tek başına.
+ *  Başlık seçimin tüm kontrol değerlerini ve adresi söyler; gerekçe ne kapsandığını ("görünürlük dalları: tüm birleşimler", "“X”: her
+ *  değer", "adres: farklı il"). Aynı değişikliği yapan öneriler ayıklanır; toplam en çok enCok (Ayarlar).
  * Değer ÜRETİLMEZ: adaylar yalnız sayfadan okunan seçenekler ve gözlenen zincir satırlarıdır. s.alanlar verilmezse yalnız değeri seçilmiş
  * liste tabloları değişken sayılır.
  * @param {KayitPlani} plan @param {string} baslik
@@ -661,87 +705,151 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     return { planAdi: y.t.ad, sutun: y.sutun, deger: m, etiket: y.etiket, oturumAnahtar: k };
   };
 
-  /** @type {Array<{ degisiklikler: Degisiklik[]; ozet: string[]; gerekce: string; veriGerekli: string[] }>} */
-  const adaylar = [];
-  // 1) Koşullu dallar.
-  const kontroller = [...new Set(alanlar.filter((x) => x.kosul?.secim && Array.isArray(x.kosul.degerler)).map((x) => String(x.kosul.secim)))];
-  for (const k of kontroller) {
-    if (!yer.has(k)) continue;
-    const bagimlilar = alanlar.filter((x) => x.kosul?.secim === k && Array.isArray(x.kosul.degerler));
-    const acilan = (/** @type {string} */ kod) => bagimlilar.filter((x) => x.kosul.degerler.map(String).includes(kod));
-    const dalAnahtari = (/** @type {string} */ kod) => acilan(kod).map((x) => x.anahtar).sort().join('|');
-    const su = simdikiKod(k);
-    const suDal = su === null ? '' : dalAnahtari(su);
+  /** @typedef {{ k: string; m: string; kod: string }} DalAdimi */
+  /** @typedef {{ adimlar: DalAdimi[]; d: Degisiklik[]; veriGerekli: string[] }} DalYolu */
+  // 1) Görünürlük dalları: alan kümesini değiştiren seçimler (kontroller; iç içe olanlar dahil) dal ağacı olur, tüm yolların kartezyeni.
+  const kontroller = [...new Set(alanlar.filter((x) => x.kosul?.secim && Array.isArray(x.kosul.degerler)).map((x) => String(x.kosul.secim)))].filter((k) => yer.has(k));
+  const bagimlilari = (/** @type {string} */ k) => alanlar.filter((x) => x.kosul?.secim === k && Array.isArray(x.kosul.degerler));
+  const acilanlar = (/** @type {string} */ k, /** @type {string} */ kod) => bagimlilari(k).filter((x) => x.kosul.degerler.map(String).includes(kod));
+  /**
+   * Bir seçimin dal yolları: aynı alanları açan değerler tek dal (tablodaki ilk değer); dal iç içe seçim açıyorsa onun yollarıyla çarpılır.
+   * @param {string} k @param {Set<string>} gorulen @returns {DalYolu[]}
+   */
+  const dalYollari = (k, gorulen = new Set()) => {
+    if (gorulen.has(k)) return [];
+    const yeni = new Set([...gorulen, k]);
     /** @type {Map<string, { m: string; kod: string }>} */
     const dallar = new Map();
-    for (const m of tablodakiler(k)) { const kod = kodu(k, m); const d = dalAnahtari(kod); if (!dallar.has(d)) dallar.set(d, { m, kod }); }
-    for (const [d, { m, kod }] of dallar) {
-      if (d === suDal) continue;
-      const ac = acilan(kod);
-      const degisiklikler = [degisiklik(k, m)];
+    for (const m of tablodakiler(k)) {
+      const kod = kodu(k, m);
+      const anahtar = acilanlar(k, kod).map((x) => x.anahtar).sort().join('|');
+      // Şimdiki değer kendi dalının temsilcisidir (kaydedilen yol tanınsın).
+      if (!dallar.has(anahtar) || kod === simdikiKod(k)) dallar.set(anahtar, { m, kod });
+    }
+    /** @type {DalYolu[]} */
+    const yollar = [];
+    for (const { m, kod } of dallar.values()) {
+      const ac = acilanlar(k, kod);
+      const ic = ac.filter((x) => kontroller.includes(String(x.anahtar)));
+      /** @type {Degisiklik[]} */
+      const d = [degisiklik(k, m)];
       /** @type {string[]} */
       const veriGerekli = [];
       for (const x of ac) {
-        if (doluMu(x) || String(x.tur) === 'checkbox') continue;
+        if (ic.includes(x) || doluMu(x) || String(x.tur) === 'checkbox') continue;
         if (SECIM_TURLERI.includes(String(x.tur))) {
           const l = tablodakiler(x.anahtar);
-          if (l.length) { degisiklikler.push(degisiklik(x.anahtar, l[0])); continue; }
+          if (l.length) { d.push(degisiklik(x.anahtar, l[0])); continue; }
         }
         veriGerekli.push(String(x.etiket ?? x.anahtar));
       }
-      const acilanlar = ac.map((x) => String(x.etiket ?? x.anahtar));
-      adaylar.push({
-        degisiklikler, ozet: [`${etiketi(k)}: ${m}`], veriGerekli,
-        gerekce: `“${etiketi(k)}” = “${m}” dalı (${acilanlar.length ? `${acilanlar.join(', ')} alanları` : 'bu dalda ek alan açılmaz'})${veriGerekli.length ? ` — veri gerekli: ${veriGerekli.join(', ')}; bu dal için yeni hızlı test başlatın` : ''}`
-      });
+      /** @type {DalYolu[]} */
+      let alt = [{ adimlar: [{ k, m, kod }], d, veriGerekli }];
+      for (const n of ic) {
+        const nl = dalYollari(String(n.anahtar), yeni);
+        if (!nl.length) continue;
+        alt = alt.flatMap((y) => nl.map((z) => ({ adimlar: [...y.adimlar, ...z.adimlar], d: [...y.d, ...z.d], veriGerekli: [...y.veriGerekli, ...z.veriGerekli] })));
+      }
+      yollar.push(...alt);
     }
-  }
-  // 2) İkili kapsam faktörleri: zincir tabloları (varsa) ve bağımsız seçimler.
-  /** @type {Array<{ ad: string; zincir: boolean; seviyeler: Degisiklik[][] }>} */
-  const faktorler = [];
-  for (const t of plan.tablolar) {
-    if (!t.zincir || !t.secilen || !t.alanlar.length) continue;
-    const secilen = t.secilen;
-    const dolu = Object.keys(secilen);
-    const ayni = (/** @type {Record<string, string | null>} */ r) => dolu.every((c) => r[c] === secilen[c]);
-    const tam = t.satirlar.filter((r) => dolu.every((c) => !bosMu(r[c])) && !ayni(r));
-    const kok = t.alanlar[0].sutun;
-    const kokler = [...new Set(tam.map((r) => String(r[kok])))].filter((v) => v !== secilen[kok]);
-    /** @type {Array<Record<string, string | null>>} */
-    const secilenler = ornekDegerler(kokler.map((v) => ({ deger: v, metin: v })), 3).map((x) => {
-      const l = tam.filter((r) => r[kok] === x.deger);
-      return l[Math.floor(l.length / 2)];
-    });
-    for (const r of tam) if (secilenler.length < 3 && !secilenler.includes(r)) secilenler.push(r);
-    if (!secilenler.length) continue;
-    faktorler.push({
-      ad: `${t.alanlar[0].etiket} zinciri`, zincir: true,
-      seviyeler: [[], ...secilenler.map((r) => t.alanlar.filter((a) => !bosMu(r[a.sutun])).map((a) => ({ planAdi: t.ad, sutun: a.sutun, deger: String(r[a.sutun]), etiket: a.etiket, oturumAnahtar: a.oturumAnahtar })))]
-    });
-  }
+    return yollar;
+  };
+  const kokler = kontroller.filter((k) => { const a = alan(k); return !a?.kosul?.secim || !kontroller.includes(String(a.kosul.secim)); });
+  const kokYollari = kokler.map((k) => dalYollari(k)).filter((l) => l.length);
+  /** Kaydedilen yol mu (her adım şimdiki değerinde)? @param {DalYolu} y */
+  const kaydedilenMi = (y) => y.adimlar.every((a) => a.kod === simdikiKod(a.k));
+  /** @param {DalYolu[]} l @returns {DalYolu} */
+  const birlestir = (l) => ({ adimlar: l.flatMap((y) => y.adimlar), d: l.flatMap((y) => y.d), veriGerekli: [...new Set(l.flatMap((y) => y.veriGerekli))] });
+  /** @type {DalYolu[]} */
+  let tumYollar = kokYollari.reduce((/** @type {DalYolu[][]} */ c, l) => c.flatMap((x) => l.map((y) => [...x, y])), [[]]).map(birlestir);
+  if (!kokYollari.length) tumYollar = [];
+  let dalKapsami = 'tüm birleşimler';
+  let yollar = tumYollar.filter((y) => !kaydedilenMi(y));
+  // 2) Görünürlüğü değiştirmeyen seçimler: temel yolda her değeriyle birer kez (each-choice).
+  /** @type {Array<{ k: string; ad: string; m: string; d: Degisiklik[] }>} */
+  const herDeger = [];
   for (const [k, y] of yer) {
     if (kontroller.includes(k)) continue;
     const a = alan(k);
     if (a && !SECIM_TURLERI.includes(String(a.tur))) continue;
     if (!a && !y.t.secilen) continue;
-    // Koşullu alan yalnız şimdiki dalda görünüyorsa değişir.
+    // Koşullu alan yalnız şimdiki dalda görünüyorsa.
     if (a?.kosul?.secim) { const kk = simdikiKod(String(a.kosul.secim)); if (kk === null || !(a.kosul.degerler ?? []).map(String).includes(kk)) continue; }
     const su = simdiki(k);
     const digerleri = tablodakiler(k).filter((m) => m !== su && kodu(k, m) !== su);
-    const sec = ornekDegerler(digerleri.map((m) => ({ deger: m, metin: m })), 3).map((x) => x.metin);
-    if (sec.length) faktorler.push({ ad: etiketi(k), zincir: false, seviyeler: [[], ...sec.map((m) => [degisiklik(k, m)])] });
+    for (const x of ornekDegerler(digerleri.map((m) => ({ deger: m, metin: m })), 3)) herDeger.push({ k, ad: etiketi(k), m: x.metin, d: [degisiklik(k, x.metin)] });
   }
-  const kapsam = ikiliKapsam(faktorler.map((f) => f.seviyeler.length), Math.max(0, enCok * 2));
-  for (const satir of kapsam) {
-    const degisenler = satir.map((v, f) => ({ f: faktorler[f], d: faktorler[f].seviyeler[v] })).filter((x) => x.d.length);
-    const parcalar = degisenler.map((x) => (x.f.zincir ? `Farklı ${x.f.ad}: ${x.d.map((d) => d.deger).join(' › ')}` : `“${x.d[0].etiket}” = “${x.d[0].deger}”`));
-    adaylar.push({
-      degisiklikler: degisenler.flatMap((x) => x.d),
-      ozet: degisenler.map((x) => (x.f.zincir ? `${x.d[0].etiket}: ${x.d.map((d) => d.deger).join(' / ')}` : `${x.d[0].etiket}: ${x.d[0].deger}`)),
-      veriGerekli: [],
-      gerekce: `${parcalar.join('; ')}${faktorler.length > 1 ? ` — ${faktorler.map((f) => f.ad).join(' × ')} ikili kapsamı` : ''}; diğer değerler aynı`
+  // Bütçe: dal yolları + her değer önerileri sınırı aşarsa önce her değer dallara katılır; yine aşarsa dallara ikili kapsam uygulanır.
+  let katilan = false;
+  if (yollar.length + herDeger.length > enCok && yollar.length) katilan = true;
+  if (yollar.length > enCok && kokYollari.length > 1) {
+    const satirlar = ikiliKapsam(kokYollari.map((l) => l.length), enCok * 3);
+    yollar = satirlar.map((r) => birlestir(r.map((v, i) => kokYollari[i][v]))).filter((y) => !kaydedilenMi(y));
+    dalKapsami = 'ikili kapsam';
+  }
+  yollar = yollar.slice(0, enCok);
+  /** @typedef {{ degisiklikler: Degisiklik[]; parcalar: string[]; gerekce: string[]; veriGerekli: string[]; zenginlik: number }} Aday */
+  /** @param {DalYolu} y @returns {Aday} */
+  const dalAdayi = (y) => ({
+    degisiklikler: y.d.filter((x) => !(kontroller.includes(x.oturumAnahtar) && kodu(x.oturumAnahtar, x.deger) === simdikiKod(x.oturumAnahtar))),
+    parcalar: y.adimlar.map((a) => `${etiketi(a.k)}: ${a.m}`), gerekce: [`görünürlük dalları: ${dalKapsami}`], veriGerekli: y.veriGerekli, zenginlik: y.d.length
+  });
+  /** @type {Aday[]} */
+  const adaylar = yollar.map(dalAdayi);
+  // Temel yolun başlık parçaları (kontrollerin şimdiki değerleri).
+  const temelParcalar = kokler.flatMap((k) => { const m = simdiki(k); return m ? [`${etiketi(k)}: ${m}`] : []; });
+  /** Ayrı öneri olarak kalan her değer seçimleri. */
+  let kalanHerDeger = herDeger;
+  if (katilan) {
+    // Sınır aşılıyor: gerektiği kadar her değer seçimi, o seçimi henüz değiştirmeyen dal önerilerine sırayla katılır (ayrı öneri olmaz).
+    kalanHerDeger = [];
+    let j = 0;
+    herDeger.forEach((x, i) => {
+      if (adaylar.length + (herDeger.length - i) + kalanHerDeger.length <= enCok) { kalanHerDeger.push(x); return; }
+      const uygun = adaylar.filter((a) => !a.degisiklikler.some((d) => d.oturumAnahtar === x.k));
+      if (!uygun.length) { kalanHerDeger.push(x); return; }
+      const a = uygun[j++ % uygun.length];
+      a.degisiklikler.push(...x.d);
+      a.parcalar.push(`${x.ad}: ${x.m}`);
+      a.gerekce.push(`“${x.ad}”: her değer`);
+      a.zenginlik++;
     });
   }
+  for (const x of kalanHerDeger) adaylar.push({ degisiklikler: [...x.d], parcalar: [...temelParcalar, `${x.ad}: ${x.m}`], gerekce: [`“${x.ad}”: her değer`], veriGerekli: [], zenginlik: 1 });
+  // 3) Bağlı liste zinciri: kökü (en üst halkası) farklı her gözlenen satır (aynı kökten ikinci satır yok); zincir satırı tek başına öneri
+  //    olmaz, zengin bir öneriye katılır (en çok değişiklik yapan önce; her öneriye en çok bir adres).
+  /** @type {Array<{ d: Degisiklik[]; kokEtiket: string; metin: string }>} */
+  const adresler = [];
+  for (const t of plan.tablolar) {
+    if (!t.zincir || !t.secilen || !t.alanlar.length) continue;
+    const secilen = t.secilen;
+    const dolu = Object.keys(secilen);
+    const tam = t.satirlar.filter((r) => dolu.every((c) => !bosMu(r[c])) && !dolu.every((c) => r[c] === secilen[c]));
+    const kok = t.alanlar[0].sutun;
+    const kokler2 = [...new Set(tam.map((r) => String(r[kok])))].filter((v) => v !== secilen[kok]);
+    for (const v of kokler2) {
+      const l = tam.filter((r) => r[kok] === v);
+      const r = l[Math.floor(l.length / 2)];
+      const d = t.alanlar.filter((a) => !bosMu(r[a.sutun])).map((a) => ({ planAdi: t.ad, sutun: a.sutun, deger: String(r[a.sutun]), etiket: a.etiket, oturumAnahtar: a.oturumAnahtar }));
+      adresler.push({ d, kokEtiket: t.alanlar[0].etiket, metin: `${t.alanlar[0].etiket}: ${d.map((x) => x.deger).join(' / ')}` });
+    }
+  }
+  const hedefler = [...adaylar].sort((x, y) => y.zenginlik - x.zenginlik);
+  adresler.slice(0, hedefler.length).forEach((z, i) => {
+    const a = hedefler[i];
+    // Zengin profil: görünürlüğü değiştirmeyen seçimler de (henüz değişmediyse) ilk alternatifleriyle.
+    for (const x of herDeger) {
+      if (a.degisiklikler.some((d) => d.oturumAnahtar === x.k)) continue;
+      a.degisiklikler.push(...x.d);
+      a.parcalar.push(`${x.ad}: ${x.m}`);
+      a.gerekce.push(`“${x.ad}”: her değer`);
+    }
+    a.degisiklikler.push(...z.d);
+    a.parcalar.push(z.metin);
+    a.gerekce.push(`adres: farklı ${z.kokEtiket.toLocaleLowerCase('tr')}`);
+  });
+  // Başka değişken yoksa adres tek başına (tek seçenek bu).
+  if (!adaylar.length) for (const z of adresler.slice(0, enCok)) adaylar.push({ degisiklikler: [...z.d], parcalar: [...temelParcalar, z.metin], gerekce: [`adres: farklı ${z.kokEtiket.toLocaleLowerCase('tr')}`], veriGerekli: [], zenginlik: 1 });
   // Ayıklama (aynı değişiklik kümesi) ve sınır.
   const gorulen = new Set();
   for (const x of adaylar) {
@@ -749,8 +857,9 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     const imza = x.degisiklikler.map((d) => `${d.planAdi}|${d.sutun}=${d.deger}`).sort().join('\u0001');
     if (!x.degisiklikler.length || gorulen.has(imza)) continue;
     gorulen.add(imza);
+    const gerekce = [...new Set(x.gerekce), ...(x.veriGerekli.length ? [`veri gerekli: ${x.veriGerekli.join(', ')}; bu birleşim için yeni hızlı test başlatın`] : []), 'diğer değerler aynı'];
     liste.push({
-      indeks: liste.length, baslik: `${baslik} — ${x.ozet.join(' · ')}`.slice(0, 200), gerekce: x.gerekce.slice(0, 600),
+      indeks: liste.length, baslik: `${baslik} — ${x.parcalar.join(' · ')}`.slice(0, 300), gerekce: gerekce.join('; ').slice(0, 600),
       varsayilanSecili: false, alt: { degisiklikler: x.degisiklikler }, veriGerekli: x.veriGerekli
     });
   }

@@ -836,27 +836,23 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     const soru = page.locator('.hizli-soru');
     await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 60_000 });
     await tasmaYok(page, 'Veri durağı');
-    // Önce analiz: sayfada zaten dolu gelen "Kanal" sorulmaz; değeriyle hazır listesinde durur; "Değiştir" onu sorulanlara taşır.
-    await expect(soru.locator('.hizli-alan').filter({ hasText: 'Kanal' })).toHaveCount(0);
-    const hazir = soru.locator('.hizli-hazir');
-    await expect(hazir.locator('summary')).toContainText('Sayfada hazır gelen 1 değer');
-    await hazir.locator('summary').click();
-    await expect(hazir.locator('li')).toHaveCount(1);
-    await expect(hazir.locator('li')).toContainText('Kanal');
-    await expect(hazir.locator('li')).toContainText('Web');
-    await tasmaYok(page, 'Veri durağı (hazır liste açık)');
+    // Sayfada hazır gelen "Kanal" ana listede, sayfadaki sırasıyla, değeri önyazılı ve "sayfada hazır" rozetiyle (değiştirilebilir).
+    await expect(soru.locator('.hizli-hazir')).toHaveCount(0);
+    const satirKanal = soru.locator('.hizli-alan').filter({ hasText: 'Kanal' });
+    await expect(satirKanal.locator('.hizli-hazir-rozet')).toHaveText('sayfada hazır');
+    await expect(soru.getByLabel('Kanal', { exact: true })).toHaveValue('web');
     // Doldurma sırası: sayfadaki sırayla listelenir; yukarı / aşağı düğmeleriyle değişir (ilk alanda "yukarı", sonuncuda "aşağı" kapalı).
     const etiketSirasi = soru.locator('.hizli-alan .hizli-alan-baslik label');
-    await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/]);
+    await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/, /Kanal/]);
     const satirAd = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
-    const satirTip = soru.locator('.hizli-alan').filter({ hasText: 'Müşteri tipi' });
     await expect(satirAd.getByRole('button', { name: 'Yukarı taşı' })).toBeDisabled();
-    await expect(satirTip.getByRole('button', { name: 'Aşağı taşı' })).toBeDisabled();
+    await expect(satirKanal.getByRole('button', { name: 'Aşağı taşı' })).toBeDisabled();
     await satirAd.getByRole('button', { name: 'Aşağı taşı' }).click();
-    await expect(etiketSirasi).toHaveText([/Müşteri tipi/, /Ad soyad/]);
-    await expect(satirAd.getByRole('button', { name: 'Yukarı taşı' })).toBeFocused();
+    await expect(etiketSirasi).toHaveText([/Müşteri tipi/, /Ad soyad/, /Kanal/]);
+    // Odak taşınan satırın aynı düğmesinde kalır (ortada: "Aşağı taşı" etkin).
+    await expect(satirAd.getByRole('button', { name: 'Aşağı taşı' })).toBeFocused();
     await satirAd.getByRole('button', { name: 'Yukarı taşı' }).click();
-    await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/]);
+    await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/, /Kanal/]);
     const adAlani = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
     await adAlani.getByRole('button', { name: 'Doldur', exact: true }).click();
     // Önceki testlerin kaydettiği otomatik tablolar da adı uyan sütunla listelenir: "Kişi" tablosunun satırı seçilir.
@@ -864,7 +860,8 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(adAlani.locator('.hizli-tablo-degeri')).toHaveText('${Kişi.Ad soyad}');
     // Seçim keşfi: koşullu "Vergi no" yalnız Müşteri tipi = Kurumsal seçilince açılır (anında, Nöbetçi'de); Bireysel'de kapanır.
     await soru.getByLabel('Müşteri tipi').selectOption('kurumsal');
-    await expect(soru.locator('.hizli-alan').filter({ hasText: 'Vergi no' })).toContainText('Müşteri tipi: Kurumsal olunca görünür');
+    // Koşullu alan seçimin altındaki grupta (grup başlığı seçimin şu anki değeri).
+    await expect(soru.locator('.hizli-kosul-grubu').filter({ hasText: 'Vergi no' }).locator('.hizli-kosul-grubu-baslik')).toHaveText('“Müşteri tipi: Kurumsal” seçimine göre:');
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
     await expect(soru.locator('.hizli-alan').filter({ hasText: 'Vergi no' })).toHaveCount(0);
     await soru.getByLabel('Müşteri tipi').selectOption('bireysel');
