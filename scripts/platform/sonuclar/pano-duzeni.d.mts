@@ -1,0 +1,41 @@
+// scripts/platform/sonuclar/pano-duzeni.mjs için tip bildirimi.
+export type PanoKarti = { id: string; tur: string; boyut: string; ayar?: Record<string, any> };
+export type PanoDuzeni = { surum: number; kartlar: PanoKarti[] };
+export type SablonParametresi = { ad: string; etiket: string; tur: 'hedef' | 'sayi' | 'secim'; en?: number; enCok?: number; varsayilan?: string | number; secenekler?: ReadonlyArray<readonly [string, string]> };
+export type VeriSablonu = { anahtar: string; ad: string; aciklama: string; gorunum: 'sayi' | 'liste'; parametreler: ReadonlyArray<SablonParametresi> };
+
+export declare const PANO_SURUMU: number;
+export declare const EN_COK_KART: number;
+export declare const KIMLIK_DESENI: RegExp;
+export declare const BOYUTLAR: ReadonlyArray<{ anahtar: string; ad: string; sutun: number }>;
+export declare const YERLESIK_KARTLAR: ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string; varsayilan: boolean }>;
+export declare const OZEL_KART_TURLERI: ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string }>;
+export declare const SQL_GORUNUMLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
+export declare const ESIK_ISLECLERI: ReadonlyArray<string>;
+export declare const ESIK_RENKLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
+export declare const EN_COK_ESIK: number;
+export declare const EN_COK_SUTUN: number;
+export declare const SQL_EN_UZUN: number;
+export declare const NOT_EN_UZUN: number;
+export declare const EN_COK_BAGLANTI: number;
+export declare const VERI_SABLONLARI: ReadonlyArray<VeriSablonu>;
+export declare const IC_SAYFALAR: ReadonlyArray<readonly [string, string]>;
+export declare class PanoHatasi extends Error {}
+export declare function iciAdresMi(adres: unknown): boolean;
+export declare function boyutSutunu(boyut: string): number;
+export declare function turAdi(tur: string): string;
+export declare function kartAdi(kart: { tur: string; ayar?: { baslik?: string } }): string;
+export declare function yerlesikMi(tur: string): boolean;
+export declare function varsayilanDuzen(): PanoDuzeni;
+export declare function varsayilanMi(duzen: { kartlar: PanoKarti[] }): boolean;
+export declare function sablonParametreleri(anahtar: string, ham: unknown): Record<string, string | number>;
+export declare function kartTemizle(ham: unknown): PanoKarti;
+export declare function duzenTemizle(ham: unknown): PanoDuzeni;
+export declare function kartKaldir<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string): D;
+export declare function kartEkle<D extends { kartlar: PanoKarti[] }>(duzen: D, kart: { id?: string; tur: string; boyut?: string; ayar?: unknown }, konum?: number): D;
+export declare function kartAyarla<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, ayar: unknown): D;
+export declare function kartTasi<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, hedef: number | 'yukari' | 'asagi'): D;
+export declare function kartBoyutla<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, boyut: string): D;
+export declare function eksikYerlesikler(duzen: { kartlar: PanoKarti[] }): ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string; varsayilan: boolean }>;
+export declare function esikRengi(deger: number, esikler: ReadonlyArray<{ islec: string; deger: number; renk: string }>): string | null;
+export declare function sayiyaCevir(v: unknown): number | null;

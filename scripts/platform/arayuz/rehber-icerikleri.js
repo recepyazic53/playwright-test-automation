@@ -164,6 +164,17 @@ export const REHBERLER = {
         metin: ['Yeni projede ilk koşuya giden yedi adım: ortam, giriş tarifi, ilk ekran (Tara / Akışı kaydet), ilk senaryo, Dene, Koşuyu başlat ve sonuçları incelemek. Her adım projenizin verisinden işaretlenir (✓); ilk eksik adım "Sıradaki"dir ve düğmesi ilgili ekranı açar.',
           'Uygulamanız giriş istemiyorsa giriş adımında "Girişe gerek yok" deyin. Liste tamamlanınca kendiliğinden kaybolur; "Gizle" ile de kaldırabilirsiniz (proje için saklanır, Ayarlar > Arayüz\'den geri gelir).'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', alt: 'Girişi kaydet', ikon: 'anahtar' }, { baslik: 'Ekran', alt: 'tara / kaydet', ikon: 'ekran' }, { baslik: 'Senaryo', alt: 'Dene', ikon: 'liste' }, { baslik: 'Koşu', ikon: 'oynat' }, { baslik: 'Sonuç', ikon: 'grafik' }] }
+      },
+      {
+        baslik: 'Panoyu düzenle', hedef: '.pano-duzenle-dugmesi',
+        metin: ['Özet bir panodur ve proje başına saklanır. "Panoyu düzenle" ile kartın üstündeki tutamaktan sürükleyerek (ya da ↑ ↓ ile) taşıyın, boyutunu seçin (küçük, orta, geniş, tam satır) ya da × ile kaldırın. Kaldırdığınız kartı "Kart ekle"den geri eklersiniz; "Varsayılana dön" bugünkü Özet\'e döndürür. Değişiklikler "Bitti"ye basınca kaydedilir, "Vazgeç" geri alır.',
+          '"Kart ekle" ile yerleşik kartların yanında SQL sorgusu, Nöbetçi verisi (başarı oranı, bugün başarısız olanlar, talep no\'su olmayanlar, en çok başarısız olanlar) ve kısa not / bağlantı kartı eklenir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Panoyu düzenle', ikon: 'izgara' }, { baslik: 'Taşı / boyutlandır', ikon: 'genislet' }, { baslik: 'Kart ekle', ikon: 'arti' }, { baslik: 'Bitti', ikon: 'onay' }] }
+      },
+      {
+        baslik: 'SQL kartı',
+        metin: 'SQL kartı Ayarlar > Entegrasyonlar\'daki bir veritabanı bağlantısında yalnız okuma sorgusu (tek SELECT ya da WITH … SELECT) çalıştırır; yalnız "Yenile"ye basınca çalışır, sayfa açılınca çalışmaz. Kartın üstünde verinin alındığı saat ("Son veri") yazar. En çok 15 sn ve 500 satır; gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir. Bağlantı CANLI ortama aitse ilk "Yenile" onay ister; "Veritabanı okuma" izni gerekir.',
+        ipucu: 'Görünüm tek sayıysa renk eşiği verin (ör. değer > 0 ise kırmızı): sorun olduğunda kart kendiliğinden kırmızı görünür.'
       }
     ]
   },

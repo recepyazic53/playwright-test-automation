@@ -41,6 +41,8 @@ function eylemler(proje, disaAktarilacaklar) {
       eylem: () => import('./pdf-rapor.js').then((m) => m.pdfRaporDiyalogu({ id: proje.id, ad: proje.ad || '' }))
     },
     { tur: E, baslik: 'Sonuçlar', alt: 'Koşu geçmişi, eğilim, hata kalıpları', ek: 'kosu sonuc rapor', ikonAd: 'grafik', hedef: '#/sonuclar' },
+    { tur: E, baslik: 'Panoyu düzenle', alt: 'Sonuçlar › Özet · kartları kaldır, taşı, boyutlandır', ek: 'pano ozet kart duzen yerlesim', ikonAd: 'izgara', hedef: '#/sonuclar/ozet/duzenle' },
+    { tur: E, baslik: 'Kart ekle', alt: 'Sonuçlar › Özet panosu · SQL sorgusu, Nöbetçi verisi, metin ya da yerleşik kart', ek: 'pano kart ekle sql sorgu veritabani ozet', ikonAd: 'arti', hedef: '#/sonuclar/ozet/kart-ekle' },
     { tur: E, baslik: 'Ortam ekle', alt: 'Ayarlar › Proje ve ortamlar', ek: 'yeni ortam test canli adres', ikonAd: 'ag', hedef: '#/ayarlar/proje' },
     { tur: E, baslik: 'Giriş tarifi', alt: 'Ayarlar › Giriş profilleri · oturum kontrol adresi', ek: 'giris profili oturum kontrol adresi login', ikonAd: 'anahtar', hedef: '#/ayarlar/giris' },
     { tur: E, baslik: 'Oturum kontrolü (sn)', alt: 'Ayarlar › Koşu › Gelişmiş › Giriş', ek: 'oturum suresi giris bekleme', ikonAd: 'saat', hedef: '#/ayarlar/kosu/oturumKontrolSn' }

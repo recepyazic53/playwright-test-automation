@@ -174,9 +174,11 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       if (tur === 's' && seciliServis) {
         return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { servisId: seciliServis, gomulu: true }));
       }
-      // Genel > Özet (varsayılan sekme): özet kutuları + Dikkat / Bakım / Kapsam ve güvenlik kartları (sonuc-ozeti.js; ayrı yüklenir).
+      // Genel > Özet (varsayılan sekme): kullanıcının düzenleyebildiği pano — varsayılanı özet kutuları + Dikkat / Bakım / Kapsam ve
+      // güvenlik kartları (sonuc-ozeti.js + ozet-panosu.js; ayrı yüklenir). #/sonuclar/ozet/duzenle | kart-ekle: düzenleme kipi.
       if (tur === 'ozet') {
-        return import('./sonuc-ozeti.js').then((m) => m.sonucOzetiEkrani(icerik, proje, genelSekmeleri('ozet'), () => sonuclarEkrani(main, parcalar, baglam)));
+        return import('./sonuc-ozeti.js').then((m) => m.sonucOzetiEkrani(icerik, proje, genelSekmeleri('ozet'), () => sonuclarEkrani(main, parcalar, baglam),
+          kimlik ? decodeURIComponent(kimlik) : ''));
       }
       // Genel > Raporlar: kaydedilmiş PDF raporları (pdf-rapor.js).
       // Raporlar > Kapsam matrisi (#/sonuclar/raporlar/kapsam; kapsam-matrisi.js).
