@@ -25,6 +25,28 @@ export const BOYUTLAR = Object.freeze([
 ]);
 const BOYUT_ANAHTARLARI = BOYUTLAR.map((b) => b.anahtar);
 
+/**
+ * Kart yüksekliği: 'oto' (içeriğe göre; varsayılan) ya da SATIR sayısı (2–12; bir satır SATIR_YUKSEKLIGI px, satırlar arası boşluk dahil).
+ * Hazır seçimler: Küçük 3, Orta 4, Büyük 6, Çok büyük 8 satır; köşe tutamağıyla 2–12 arası her değer seçilebilir.
+ */
+export const SATIR_YUKSEKLIGI = 88;
+export const YUKSEKLIK_SINIRI = Object.freeze({ en: 2, enCok: 12 });
+export const YUKSEKLIKLER = Object.freeze([
+  Object.freeze({ anahtar: 'oto', ad: 'Otomatik' }), Object.freeze({ anahtar: 3, ad: 'Küçük' }), Object.freeze({ anahtar: 4, ad: 'Orta' }),
+  Object.freeze({ anahtar: 6, ad: 'Büyük' }), Object.freeze({ anahtar: 8, ad: 'Çok büyük' })
+]);
+/** Kartın yüksekliği (eski kayıtta yoksa 'oto'). @param {unknown} v @returns {'oto' | number} */
+export function yukseklikTemizle(v) {
+  if (v === undefined || v === null || v === '' || v === 'oto') return 'oto';
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < YUKSEKLIK_SINIRI.en || n > YUKSEKLIK_SINIRI.enCok) {
+    throw new PanoHatasi(`Kart yüksekliği ${YUKSEKLIK_SINIRI.en}–${YUKSEKLIK_SINIRI.enCok} satır ya da Otomatik olmalıdır.`);
+  }
+  return n;
+}
+/** Yüksekliğin görünen adı. @param {'oto' | number} y */
+export const yukseklikAdi = (y) => YUKSEKLIKLER.find((x) => x.anahtar === y)?.ad ?? `Özel (${y} satır)`;
+
 /** Yerleşik kartlar (mevcut Özet bileşenleri). varsayilan: varsayılan panoda var mı. */
 export const YERLESIK_KARTLAR = Object.freeze([
   Object.freeze({ tur: 'baslarken', ad: 'Başlarken', aciklama: 'İlk koşuya giden yedi adım; liste tamamlanınca ya da gizlenince kendiliğinden kaybolur.', boyut: 'tam', varsayilan: true }),
@@ -127,13 +149,14 @@ export const yerlesikMi = (tur) => YERLESIK.has(tur);
 
 /** Varsayılan düzen (bugünkü Özet). @returns {{ surum: number; kartlar: Array<{ id: string; tur: string; boyut: string }> }} */
 export function varsayilanDuzen() {
-  return { surum: PANO_SURUMU, kartlar: YERLESIK_KARTLAR.filter((k) => k.varsayilan).map((k) => ({ id: k.tur, tur: k.tur, boyut: k.boyut })) };
+  return { surum: PANO_SURUMU, kartlar: YERLESIK_KARTLAR.filter((k) => k.varsayilan).map((k) => ({ id: k.tur, tur: k.tur, boyut: k.boyut })), esitYukseklik: true };
 }
 
 /** Düzen varsayılanla aynı mı (sıra, boyut, kart). @param {{ kartlar: Array<{ id: string; tur: string; boyut: string; ayar?: unknown }> }} duzen */
 export function varsayilanMi(duzen) {
   const v = varsayilanDuzen().kartlar;
-  return duzen.kartlar.length === v.length && duzen.kartlar.every((k, i) => k.id === v[i].id && k.boyut === v[i].boyut && k.ayar === undefined);
+  return duzen.esitYukseklik !== false && duzen.kartlar.length === v.length && duzen.kartlar.every((k, i) => k.id === v[i].id && k.boyut === v[i].boyut
+    && k.ayar === undefined && (k.yukseklik === undefined || k.yukseklik === 'oto'));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -256,12 +279,15 @@ export function kartTemizle(ham) {
   const tur = typeof ham.tur === 'string' ? ham.tur : '';
   const boyut = BOYUT_ANAHTARLARI.includes(/** @type {string} */ (ham.boyut)) ? /** @type {string} */ (ham.boyut)
     : YERLESIK.get(tur)?.boyut ?? OZEL.get(tur)?.boyut ?? 'orta';
-  if (YERLESIK.has(tur)) return { id: tur, tur, boyut };
+  // Yükseklik yalnız 'oto' değilse yazılır (eski kayıtlar ve varsayılan düzen değişmez).
+  const yukseklik = yukseklikTemizle(ham.yukseklik);
+  const yk = yukseklik === 'oto' ? {} : { yukseklik };
+  if (YERLESIK.has(tur)) return { id: tur, tur, boyut, ...yk };
   if (!OZEL.has(tur)) throw new PanoHatasi(`Bilinmeyen kart türü: "${String(tur).slice(0, 40)}".`);
   const id = typeof ham.id === 'string' && KIMLIK_DESENI.test(ham.id) && !YERLESIK.has(ham.id) ? ham.id : '';
   if (!id) throw new PanoHatasi('Kart kimliği geçersiz.');
   const ayar = tur === 'sql' ? sqlAyari(ham.ayar) : tur === 'veri' ? veriAyari(ham.ayar) : metinAyari(ham.ayar);
-  return { id, tur, boyut, ayar };
+  return { id, tur, boyut, ...yk, ayar };
 }
 
 /**
@@ -277,7 +303,8 @@ export function duzenTemizle(ham) {
     if (gorulen.has(k.id)) throw new PanoHatasi(`"${kartAdi(k)}" panoda birden çok kez var.`);
     gorulen.add(k.id);
   }
-  return { surum: PANO_SURUMU, kartlar };
+  // Aynı satırdaki kartlar aynı yükseklikte (pano geneli; varsayılan açık; eski kayıtta yoksa açık).
+  return { surum: PANO_SURUMU, kartlar, esitYukseklik: ham.esitYukseklik !== false };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -334,6 +361,19 @@ export function kartTasi(duzen, id, hedef) {
 export function kartBoyutla(duzen, id, boyut) {
   if (!BOYUT_ANAHTARLARI.includes(boyut)) throw new PanoHatasi('Kart boyutu geçersiz.');
   return yeni(duzen, duzen.kartlar.map((k) => (k.id === id ? { ...k, boyut } : k)));
+}
+
+/**
+ * Kartın yüksekliğini değiştirir ('oto' ya da 2–12 satır; 'oto' kayıttan alanı kaldırır).
+ * @template {{ kartlar: Array<{ id: string }> }} D @param {D} duzen @param {string} id @param {unknown} yukseklik @returns {D}
+ */
+export function kartYukseklikle(duzen, id, yukseklik) {
+  const y = yukseklikTemizle(yukseklik);
+  return yeni(duzen, duzen.kartlar.map((k) => {
+    if (k.id !== id) return k;
+    const { yukseklik: _eski, ...kalan } = /** @type {any} */ (k);
+    return y === 'oto' ? kalan : { ...kalan, yukseklik: y };
+  }));
 }
 
 /** Panoda olmayan yerleşik kartlar ("Kart ekle" listesi). @param {{ kartlar: Array<{ id: string }> }} duzen */

@@ -564,6 +564,112 @@ test('tablo: başlığı sürükle / menüyle taşı, gizle / göster, genişlik
   await kapat();
 });
 
+test('boyutlar: eşit yükseklik anahtarı, menüden yükseklik, köşeden sürükleyerek ve klavyeyle genişlik + yükseklik (ızgaraya oturur), kaydırma / ölçekleme, çakışma yok, kalıcılık', async () => {
+  test.setTimeout(150_000);
+  const SATIR = 88; const BOSLUK = 14;
+  const satirPx = (n: number) => n * SATIR + (n - 1) * BOSLUK;
+  // Varsayılan düzen + yüksek bir grafik kartı (önbellekte sonucu olsun diye bir kez yenilenir).
+  const kartlar = [...(await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 'baslarken', tur: 'baslarken', boyut: 'tam' }, { id: 'ozetKutulari', tur: 'ozetKutulari', boyut: 'tam' },
+    { id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }, { id: 'bakim', tur: 'bakim', boyut: 'kucuk' }, { id: 'kapsam', tur: 'kapsam', boyut: 'kucuk' },
+    { id: 'b-grafik', tur: 'sql', boyut: 'orta', yukseklik: 6, ayar: { baslik: 'Günlük grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } }
+  ] } }) as Record<string, any>).duzen.kartlar];
+  expect(kartlar).toHaveLength(6);
+  expect((await nobetciApi(nobetci, '/platform/pano/sql/yenile', { projeId, kartId: 'b-grafik' })).basarili).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const sar = (id: string) => page.locator(`.pano-ogesi[data-kart-id="${id}"]`);
+  const yukseklik = async (id: string) => (await sar(id).boundingBox())!.height;
+  const cakismaYok = async () => {
+    const kutular = await page.locator('.ozet-panosu > .pano-ogesi:visible').evaluateAll((l) => l.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }));
+    for (let i = 0; i < kutular.length; i++) for (let j = i + 1; j < kutular.length; j++) {
+      const [a, b] = [kutular[i], kutular[j]];
+      expect(a[0] < b[2] - 1 && b[0] < a[2] - 1 && a[1] < b[3] - 1 && b[1] < a[3] - 1, `kart ${i} ve ${j} üst üste`).toBe(false);
+    }
+  };
+  // Eşit yükseklik (varsayılan açık): Dikkat / Bakım / Kapsam aynı boyda (Kapsam'ın içeriği daha uzun).
+  await expect.poll(async () => new Set([await yukseklik('dikkat'), await yukseklik('bakim'), await yukseklik('kapsam')]).size).toBe(1);
+  // Sabit yükseklikte grafik kartın boyuna ölçeklenir (varsayılan 200 px'ten büyük).
+  await expect.poll(() => yukseklik('b-grafik')).toBeCloseTo(satirPx(6), 0);
+  expect((await sar('b-grafik').locator('svg.pano-grafik').boundingBox())!.height).toBeGreaterThan(300);
+  await cakismaYok();
+  // Düzenleme: eşit yükseklik kapalı → kartlar kendi boyunda.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  const cubuk = page.getByRole('region', { name: 'Pano düzenleme' });
+  const esit = cubuk.getByRole('checkbox', { name: 'Aynı satırdaki kartlar aynı yükseklikte' });
+  await expect(esit).toBeChecked();
+  await esit.uncheck();
+  await expect.poll(async () => (await yukseklik('kapsam')) - (await yukseklik('dikkat'))).toBeGreaterThan(40);
+  // Menüden yükseklik: Kapsam "Küçük" (3 satır) → içerik sığmaz, kartın içinde kaydırılır.
+  await page.getByRole('combobox', { name: 'Yükseklik: Kapsam ve güvenlik' }).selectOption('3');
+  await expect.poll(() => yukseklik('kapsam')).toBeCloseTo(satirPx(3), 0);
+  const kapsamKart = sar('kapsam').locator('section.farkindalik-karti');
+  expect(await kapsamKart.evaluate((e) => e.scrollHeight > e.clientHeight + 2)).toBe(true);
+  // Köşe tutamağı: Bakım'ı sağa ~2 sütun ve aşağı sürükle → Orta (1/2) genişlik, 4 satır.
+  const kose = page.getByRole('button', { name: 'Boyutlandır: Bakım' });
+  const r = (await sar('bakim').boundingBox())!;
+  const panoG = (await page.locator('.ozet-panosu').boundingBox())!.width;
+  const sutun = (panoG + BOSLUK) / 12;
+  const k = (await kose.boundingBox())!;
+  const x0 = k.x + k.width / 2; const y0 = k.y + k.height / 2;
+  await page.mouse.move(x0, y0);
+  await page.mouse.down();
+  await page.mouse.move(x0 + sutun, y0 + 40, { steps: 3 });
+  await page.mouse.move(x0 + 2 * sutun + 10, y0 + (satirPx(4) - r.height) + 20, { steps: 5 });
+  await page.mouse.up();
+  await expect(sar('bakim')).toHaveClass(/boyut-orta/);
+  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '4');
+  await expect.poll(() => yukseklik('bakim')).toBeCloseTo(satirPx(4), 0);
+  await expect(kose).toBeFocused();
+  // Klavye: → genişlik bir adım (Geniş), ↓ bir satır, Delete otomatik.
+  await page.keyboard.press('ArrowRight');
+  await expect(sar('bakim')).toHaveClass(/boyut-genis/);
+  await page.keyboard.press('ArrowDown');
+  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '5');
+  await page.keyboard.press('ArrowUp');
+  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '4');
+  await expect(page.getByRole('combobox', { name: 'Yükseklik: Bakım' })).toHaveValue('4');
+  await cakismaYok();
+  await adlarUyumlu(page);
+  await tasmaYok(page);
+  await esit.check();
+  if (process.env.PANO_EKRAN_GORUNTUSU) {
+    mkdirSync(process.env.PANO_EKRAN_GORUNTUSU, { recursive: true });
+    await page.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-boyutlar-1440.png'), fullPage: true });
+  }
+  await cubuk.getByRole('button', { name: 'Bitti' }).click();
+  await expect(cubuk).toBeHidden();
+  // Kalıcı: yeniden yükleyince aynı genişlik / yükseklik; düzende yalnız sabit yükseklikler yazılı.
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '4');
+  await expect(sar('bakim')).toHaveClass(/boyut-genis/);
+  await expect(sar('kapsam')).toHaveAttribute('data-yukseklik', '3');
+  const p = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`) as Record<string, any>;
+  expect(p.duzen.esitYukseklik).toBe(true);
+  expect(Object.fromEntries(p.duzen.kartlar.map((x: Record<string, unknown>) => [x.id, x.yukseklik ?? 'oto'])))
+    .toEqual({ baslarken: 'oto', ozetKutulari: 'oto', dikkat: 'oto', bakim: 4, kapsam: 3, 'b-grafik': 6 });
+  await cakismaYok();
+  // 390 px: tek sütun, sabit yükseklik korunur ama içerikten kısa olmaz (Kapsam kaydırmasız, tam görünür).
+  const dar = await sayfaAc(390, 900);
+  await git(dar.page, '#/sonuclar/ozet');
+  const darKapsam = dar.page.locator('.pano-ogesi[data-kart-id="kapsam"]');
+  await expect.poll(async () => (await darKapsam.boundingBox())!.height).toBeGreaterThan(satirPx(3));
+  expect(await darKapsam.locator('section.farkindalik-karti').evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(true);
+  await tasmaYok(dar.page);
+  expect(dar.hatalar).toEqual([]);
+  await dar.kapat();
+  // Varsayılana dön: genişlik ve yükseklikler sıfırlanır.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await cubuk.getByRole('button', { name: 'Varsayılana dön' }).click();
+  await cubuk.getByRole('button', { name: 'Bitti' }).click();
+  const v = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`) as Record<string, any>;
+  expect(v.varsayilan).toBe(true);
+  expect(v.duzen.kartlar.some((x: Record<string, unknown>) => 'yukseklik' in x)).toBe(false);
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('390 px: düzenleme kipi, Kart ekle penceresi ve SQL kartı yatay taşmaz; 1440 px düzenleme kipinde de taşma yok', async () => {
   test.setTimeout(90_000);
   for (const [g, y] of [[390, 900], [1440, 1000]] as const) {

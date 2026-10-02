@@ -1,6 +1,12 @@
 // scripts/platform/sonuclar/pano-duzeni.mjs için tip bildirimi.
-export type PanoKarti = { id: string; tur: string; boyut: string; ayar?: Record<string, any> };
-export type PanoDuzeni = { surum: number; kartlar: PanoKarti[] };
+export type PanoKarti = { id: string; tur: string; boyut: string; yukseklik?: number; ayar?: Record<string, any> };
+export type PanoDuzeni = { surum: number; kartlar: PanoKarti[]; esitYukseklik?: boolean };
+export declare const SATIR_YUKSEKLIGI: number;
+export declare const YUKSEKLIK_SINIRI: Readonly<{ en: number; enCok: number }>;
+export declare const YUKSEKLIKLER: ReadonlyArray<{ anahtar: 'oto' | number; ad: string }>;
+export declare function yukseklikTemizle(v: unknown): 'oto' | number;
+export declare function yukseklikAdi(y: 'oto' | number): string;
+export declare function kartYukseklikle<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, yukseklik: unknown): D;
 export type SablonParametresi = { ad: string; etiket: string; tur: 'hedef' | 'sayi' | 'secim'; en?: number; enCok?: number; varsayilan?: string | number; secenekler?: ReadonlyArray<readonly [string, string]> };
 export type VeriSablonu = { anahtar: string; ad: string; aciklama: string; gorunum: 'sayi' | 'liste'; parametreler: ReadonlyArray<SablonParametresi> };
 
@@ -27,7 +33,7 @@ export declare function turAdi(tur: string): string;
 export declare function kartAdi(kart: { tur: string; ayar?: { baslik?: string } }): string;
 export declare function yerlesikMi(tur: string): boolean;
 export declare function varsayilanDuzen(): PanoDuzeni;
-export declare function varsayilanMi(duzen: { kartlar: PanoKarti[] }): boolean;
+export declare function varsayilanMi(duzen: { kartlar: PanoKarti[]; esitYukseklik?: boolean }): boolean;
 export declare function sablonParametreleri(anahtar: string, ham: unknown): Record<string, string | number>;
 export declare function kartTemizle(ham: unknown): PanoKarti;
 export declare function duzenTemizle(ham: unknown): PanoDuzeni;

@@ -18,7 +18,7 @@ import { gerekenIzinler } from '../../scripts/platform/guvenlik/uc-denetimi.mjs'
 import {
   BOYUTLAR, EN_COK_DILIM, EN_COK_KART, LISTE_EN_COK, VARSAYILAN_BICIM, bicimTemizle, degisimHesapla, duzenTemizle, eksikYerlesikler, esikRengi,
   hucreBicimle, kartBoyutla, kartEkle, kartKaldir, kartTasi, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
-  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, type PanoDuzeni
+  yuzdeDegeri, YUKSEKLIKLER, kartYukseklikle, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, type PanoDuzeni
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -65,6 +65,21 @@ test('düzen modülü: varsayılan bugünkü Özet; kaldır, geri ekle, taşı, 
   expect(() => duzenTemizle({ kartlar: Array.from({ length: EN_COK_KART + 1 }, (_, i) => ({ id: `k-${i}`, tur: 'metin', ayar: { baslik: 'A', not: 'x' } })) }))
     .toThrow(`en çok ${EN_COK_KART} kart`);
   expect(() => duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', sorgu: 'SELECT 1' } }] })).toThrow('bağlantısı seçin');
+  // Yükseklik: eski kayıt (yalnız genişlik) → Otomatik ve eşit yükseklik açık; 2–12 satır; 'oto' alanı kaldırır.
+  const eski = duzenTemizle({ kartlar: [{ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }] });
+  expect(eski).toEqual({ surum: 1, kartlar: [{ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }], esitYukseklik: true });
+  expect(duzenTemizle({ kartlar: [], esitYukseklik: false }).esitYukseklik).toBe(false);
+  let y = kartYukseklikle(varsayilanDuzen(), 'dikkat', 6);
+  expect(y.kartlar.find((x) => x.id === 'dikkat')).toEqual({ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk', yukseklik: 6 });
+  expect(varsayilanMi(y)).toBe(false);
+  expect(duzenTemizle(y).kartlar.find((x) => x.id === 'dikkat')?.yukseklik).toBe(6);
+  y = kartYukseklikle(y, 'dikkat', 'oto');
+  expect(y.kartlar.find((x) => x.id === 'dikkat')).toEqual({ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' });
+  expect(varsayilanMi(y)).toBe(true);
+  expect(varsayilanMi({ ...varsayilanDuzen(), esitYukseklik: false })).toBe(false);
+  expect(() => kartYukseklikle(y, 'dikkat', 13)).toThrow('2–12 satır');
+  expect(() => duzenTemizle({ kartlar: [{ id: 'dikkat', tur: 'dikkat', yukseklik: 1 }] })).toThrow('2–12 satır');
+  expect(YUKSEKLIKLER.map((x) => x.anahtar)).toEqual(['oto', 3, 4, 6, 8]);
   // Eşik: ilk tutan eşik.
   const esikler = [{ islec: '>', deger: 0, renk: 'kirmizi' }, { islec: '=', deger: 0, renk: 'yesil' }];
   expect([esikRengi(3, esikler), esikRengi(0, esikler), esikRengi(-1, esikler)]).toEqual(['kirmizi', 'yesil', null]);

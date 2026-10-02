@@ -15,13 +15,18 @@
 import { api, bildir, degisiklikleriBirak, alan, h, ikon, kayitIzi, mesgulIken, rozet, s, yatayKaydirmaIpucu, yeniKimlik, yerlestir } from './ortak.js';
 import {
   BOYUTLAR, ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
-  ORAN_SECENEKLERI, OZEL_KART_TURLERI, SQL_GORUNUMLERI, TARIH_BICIMLERI, VERI_SABLONLARI,
+  ORAN_SECENEKLERI, OZEL_KART_TURLERI, SATIR_YUKSEKLIGI, SQL_GORUNUMLERI, YUKSEKLIKLER, YUKSEKLIK_SINIRI, kartYukseklikle, yukseklikAdi, TARIH_BICIMLERI, VERI_SABLONLARI,
   bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartBoyutla, kartEkle, kartKaldir, kartTasi, kartTemizle,
   SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri
 } from './pano-duzeni.mjs';
 import { oranSaglikSinifi } from './sonuclar.js';
 
 const SQL_UCU = '/platform/pano/sql/yenile';
+/** Izgaranın ince satır birimi ve kartlar arası boşluk (px; stil-ozet-panosu.css ile aynı). */
+const IZGARA_BIRIMI = 2;
+const PANO_BOSLUK = 14;
+/** N satırlık kartın yüksekliği (px). @param {number} n */
+const satirPx = (n) => n * SATIR_YUKSEKLIGI + (n - 1) * PANO_BOSLUK;
 /** Liste kartında görünen en çok madde. */
 const LISTE_ILK = 10;
 /** CANLI onayı verilmiş SQL kartları (bu sayfa oturumunda; kart hedefi / sorgusu değişince yeniden sorulur). @type {Set<string>} */
@@ -80,9 +85,17 @@ export function ozetPanosu(kap, s0) {
   const varsayilanDugmesi = h('button', { type: 'button', class: 'hayalet pano-varsayilan' }, ikon('geri'), 'Varsayılana dön');
   const vazgecDugmesi = h('button', { type: 'button', class: 'hayalet pano-vazgec' }, 'Vazgeç');
   const bittiDugmesi = h('button', { type: 'button', class: 'birincil pano-bitti' }, ikon('onay'), 'Bitti');
+  const esitKutusu = h('input', { type: 'checkbox', class: 'pano-esit-kutusu' });
+  esitKutusu.addEventListener('change', () => {
+    calisan = { ...calisan, esitYukseklik: esitKutusu.checked };
+    degisti();
+    ciz();
+    duyur(esitKutusu.checked ? 'Aynı satırdaki kartlar aynı yükseklikte.' : 'Kartlar kendi yüksekliğinde.');
+  });
   cubuk.append(
     h('div', { class: 'pano-duzen-metni' }, h('strong', {}, 'Pano düzenleniyor'),
-      h('span', { id: yardimId, class: 'soluk kucuk' }, 'Kartı tutamaktan (⠿) sürükleyin ya da tutamak seçiliyken ↑ ↓ tuşlarıyla taşıyın. Değişiklikler "Bitti"ye basınca kaydedilir.')),
+      h('span', { id: yardimId, class: 'soluk kucuk' }, 'Kartı tutamaktan (⠿) sürükleyin ya da tutamak seçiliyken ↑ ↓ tuşlarıyla taşıyın. Sağ alt köşedeki tutamakla genişlik ve yükseklik birlikte değişir (odaktayken ← → genişlik, ↑ ↓ yükseklik). Değişiklikler "Bitti"ye basınca kaydedilir.'),
+      h('label', { class: 'pano-esit-secimi' }, esitKutusu, 'Aynı satırdaki kartlar aynı yükseklikte')),
     h('div', { class: 'dugmeler' }, kartEkleDugmesi, varsayilanDugmesi, vazgecDugmesi, bittiDugmesi));
   kartEkleDugmesi.addEventListener('click', () => kartEklePenceresi());
   varsayilanDugmesi.addEventListener('click', () => {
@@ -127,6 +140,8 @@ export function ozetPanosu(kap, s0) {
   function ciz(odak = null) {
     const duzen = etkinDuzen();
     pano.classList.toggle('duzenleniyor', duzenleniyor);
+    pano.classList.toggle('esit-yukseklik', duzen.esitYukseklik !== false);
+    esitKutusu.checked = duzen.esitYukseklik !== false;
     cubuk.hidden = !duzenleniyor;
     duzenleDugmesi.hidden = duzenleniyor;
     const n = duzen.kartlar.length;
@@ -136,6 +151,7 @@ export function ozetPanosu(kap, s0) {
       ? 'Panoda kart yok. "Kart ekle" ile kart ekleyin ya da "Varsayılana dön"e basın.'
       : 'Panoda kart yok. "Panoyu düzenle" ile kart ekleyebilirsiniz.')]));
     varsayilanDugmesi.disabled = duzenleniyor && varsayilanMi(calisan);
+    yerlesimiGuncelle();
     if (odak) {
       const el = /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(odak.id)}"] [data-rol="${odak.rol}"]`));
       if (el && !(/** @type {HTMLButtonElement} */ (el).disabled)) el.focus();
@@ -153,10 +169,136 @@ export function ozetPanosu(kap, s0) {
       ogeler.set(k.id, o);
       suruklemeBagla(o.sar, k.id);
     }
-    o.sar.className = `pano-ogesi boyut-${k.boyut}`;
+    o.sar.className = `pano-ogesi boyut-${k.boyut}${k.yukseklik ? ' yukseklik-sabit' : ''}`;
+    if (k.yukseklik) o.sar.dataset.yukseklik = String(k.yukseklik); else delete o.sar.dataset.yukseklik;
     o.sar.querySelector(':scope > .pano-arac-cubugu')?.remove();
-    if (duzenleniyor) o.sar.prepend(aracCubugu(k, i, n));
+    o.sar.querySelector(':scope > .pano-kose-tutamagi')?.remove();
+    if (duzenleniyor) { o.sar.prepend(aracCubugu(k, i, n)); o.sar.append(koseTutamagi(k)); }
     return o.sar;
+  }
+
+  // ---- Yerleşim: satır birimli ızgara ------------------------------------------------------------------------------------
+  // Izgara 12 sütun; satırlar ince birimlidir (IZGARA_BIRIMI = 2 px; 88 + 14 = 102 px tam bölünür; satır boşluğu
+  // 0, kartlar arası dikey boşluk kartın alt payı).
+  // Her kartın kapladığı satır sayısı CSS değişkeniyle (--pano-span; CSSOM, satır içi stil özniteliği yazılmaz) verilir:
+  //   Otomatik: içeriğin doğal yüksekliği (ölçüm geçişi: .olculuyor sınıfıyla kartlar bir anlığına doğal boyda ölçülür).
+  //   Sabit: N satır = N × SATIR_YUKSEKLIGI + (N − 1) × boşluk; içerik sığmazsa kartın içinde kaydırılır, grafik ölçeklenir.
+  //   Tek sütunda (≤ 860 px) sabit yükseklik korunur ama içerikten kısa olmaz.
+  //   "Aynı satırdaki kartlar aynı yükseklikte" açıkken görsel satırdaki (12 sütunu dolduran ardışık kartlar) en uzun karta eşitlenir.
+  // Izgara kartları yerleştirdiği için kartlar hiçbir durumda üst üste binmez.
+  let yerlesimBekliyor = 0;
+  function yerlesimiPlanla() {
+    cancelAnimationFrame(yerlesimBekliyor);
+    yerlesimBekliyor = requestAnimationFrame(yerlesimiGuncelle);
+  }
+  function yerlesimiGuncelle() {
+    if (!pano.isConnected) return;
+    const kartlar = /** @type {HTMLElement[]} */ ([...pano.querySelectorAll(':scope > .pano-ogesi')]).filter((e) => getComputedStyle(e).display !== 'none');
+    if (!kartlar.length) return;
+    pano.classList.add('olculuyor');
+    const dogal = kartlar.map((e) => e.getBoundingClientRect().height);
+    pano.classList.remove('olculuyor');
+    const tekSutun = window.matchMedia('(max-width: 860px)').matches;
+    const panoGenislik = pano.getBoundingClientRect().width;
+    const sutunBirimi = (panoGenislik + PANO_BOSLUK) / 12;
+    const span = (/** @type {number} */ px) => Math.max(1, Math.ceil((px + PANO_BOSLUK) / IZGARA_BIRIMI));
+    const spanlar = kartlar.map((e, i) => {
+      const y = Number(e.dataset.yukseklik) || 0;
+      if (!y) return span(dogal[i]);
+      const sabit = span(satirPx(y));
+      return tekSutun ? Math.max(sabit, span(dogal[i])) : sabit;
+    });
+    if (pano.classList.contains('esit-yukseklik')) {
+      // Görsel satırlar: sırayla 12 sütunu dolduran kartlar (genişlik ızgaradaki gerçek sütun sayısından).
+      let bas = 0; let dolu = 0;
+      const kapat = (son) => { const m = Math.max(...spanlar.slice(bas, son)); for (let j = bas; j < son; j++) spanlar[j] = m; };
+      kartlar.forEach((e, i) => {
+        const sutun = Math.max(1, Math.min(12, Math.round((e.getBoundingClientRect().width + PANO_BOSLUK) / sutunBirimi)));
+        if (dolu + sutun > 12) { kapat(i); bas = i; dolu = 0; }
+        dolu += sutun;
+      });
+      kapat(kartlar.length);
+    }
+    kartlar.forEach((e, i) => { if (e.style.getPropertyValue('--pano-span') !== String(spanlar[i])) e.style.setProperty('--pano-span', String(spanlar[i])); });
+  }
+  // İçerik değişince (veri geldi, liste açıldı, pencere boyu) yeniden ölçülür; yalnız değişen değer yazılır (döngü olmaz).
+  if (typeof ResizeObserver === 'function') {
+    const izleyici = new ResizeObserver(() => yerlesimiPlanla());
+    izleyici.observe(pano);
+    new MutationObserver((kayitlar) => {
+      yerlesimiPlanla();
+      for (const kayit of kayitlar) for (const d of kayit.addedNodes) if (d instanceof HTMLElement && d.classList.contains('pano-icerik')) izleyici.observe(d);
+    }).observe(pano, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'open', 'aria-expanded'] });
+  }
+  window.addEventListener('resize', yerlesimiPlanla);
+
+  /** Sağ alt köşe tutamağı (düzenleme kipi): sürükle → genişlik ve yükseklik ızgaraya oturur; klavye: ← → genişlik, ↑ ↓ yükseklik, Delete: otomatik yükseklik. */
+  function koseTutamagi(k) {
+    const ad = kartAdi(k);
+    const dugme = h('button', { type: 'button', class: 'pano-kose-tutamagi', 'data-rol': 'kose', 'aria-label': `Boyutlandır: ${ad}`, 'aria-describedby': yardimId,
+      title: `Sürükleyin: genişlik ve yükseklik birlikte (${BOYUTLAR.find((b) => b.anahtar === k.boyut)?.ad ?? ''}, ${yukseklikAdi(k.yukseklik ?? 'oto')})` },
+    h('span', { 'aria-hidden': 'true' }, '◢'));
+    const genislikSirasi = BOYUTLAR.map((b) => b.anahtar);
+    const anlikSatir = () => {
+      const sar = ogeler.get(k.id)?.sar;
+      return sar ? Math.round((sar.getBoundingClientRect().height + PANO_BOSLUK) / (SATIR_YUKSEKLIGI + PANO_BOSLUK)) : 4;
+    };
+    const uygula = (/** @type {string} */ boyut, /** @type {'oto' | number} */ yukseklik) => {
+      calisan = kartYukseklikle(kartBoyutla(calisan, k.id, boyut), k.id, yukseklik);
+      degisti();
+      ciz({ id: k.id, rol: 'kose' });
+      duyur(`${ad}: ${BOYUTLAR.find((b) => b.anahtar === boyut)?.ad ?? boyut}, yükseklik ${yukseklikAdi(yukseklik)}.`);
+    };
+    const sinirSatir = (/** @type {number} */ n) => Math.max(YUKSEKLIK_SINIRI.en, Math.min(YUKSEKLIK_SINIRI.enCok, Math.round(n)));
+    dugme.addEventListener('keydown', (o) => {
+      const mevcut = calisan.kartlar.find((x) => x.id === k.id) || k;
+      const gi = genislikSirasi.indexOf(mevcut.boyut);
+      if (o.key === 'ArrowRight' || o.key === 'ArrowLeft') {
+        o.preventDefault();
+        const yeniG = genislikSirasi[Math.max(0, Math.min(genislikSirasi.length - 1, gi + (o.key === 'ArrowRight' ? 1 : -1)))];
+        if (yeniG !== mevcut.boyut) uygula(yeniG, mevcut.yukseklik ?? 'oto');
+      } else if (o.key === 'ArrowUp' || o.key === 'ArrowDown') {
+        o.preventDefault();
+        const bas = mevcut.yukseklik ?? anlikSatir();
+        const yeniY = sinirSatir(bas + (o.key === 'ArrowDown' ? 1 : -1));
+        if (yeniY !== mevcut.yukseklik) uygula(mevcut.boyut, yeniY);
+      } else if (o.key === 'Delete' || o.key === 'Backspace') {
+        o.preventDefault();
+        if (mevcut.yukseklik) uygula(mevcut.boyut, 'oto');
+      }
+    });
+    // Fare / dokunma: sürüklerken canlı önizleme (sınıf + veri özniteliği), bırakınca kaydedilir. Genişlik en yakın hazır boyuta
+    // (1/3, 1/2, 2/3, tam), yükseklik satıra (2–12) oturur.
+    dugme.addEventListener('pointerdown', (o) => {
+      o.preventDefault();
+      o.stopPropagation();
+      const sar = ogeler.get(k.id)?.sar;
+      if (!sar) return;
+      const r = sar.getBoundingClientRect();
+      const sutunBirimi = (pano.getBoundingClientRect().width + PANO_BOSLUK) / 12;
+      const basX = o.clientX; const basY = o.clientY;
+      let boyut = k.boyut; let yukseklik = /** @type {'oto' | number} */ (k.yukseklik ?? 'oto');
+      dugme.setPointerCapture?.(o.pointerId);
+      const hareket = (/** @type {PointerEvent} */ e) => {
+        const sutun = (r.width + e.clientX - basX + PANO_BOSLUK) / sutunBirimi;
+        boyut = BOYUTLAR.reduce((en, b) => (Math.abs(b.sutun - sutun) < Math.abs(en.sutun - sutun) ? b : en)).anahtar;
+        if (Math.abs(e.clientY - basY) >= 6) yukseklik = sinirSatir((r.height + e.clientY - basY + PANO_BOSLUK) / (SATIR_YUKSEKLIGI + PANO_BOSLUK));
+        sar.className = `pano-ogesi boyut-${boyut}${yukseklik !== 'oto' ? ' yukseklik-sabit' : ''} boyutlaniyor`;
+        if (yukseklik !== 'oto') sar.dataset.yukseklik = String(yukseklik);
+        yerlesimiGuncelle();
+      };
+      const birak = () => {
+        dugme.removeEventListener('pointermove', hareket);
+        dugme.removeEventListener('pointerup', birak);
+        dugme.removeEventListener('pointercancel', birak);
+        if (boyut !== k.boyut || yukseklik !== (k.yukseklik ?? 'oto')) uygula(boyut, yukseklik);
+        else ciz({ id: k.id, rol: 'kose' });
+      };
+      dugme.addEventListener('pointermove', hareket);
+      dugme.addEventListener('pointerup', birak);
+      dugme.addEventListener('pointercancel', birak);
+    });
+    return dugme;
   }
 
   /** @returns {Node[]} */
@@ -196,6 +338,16 @@ export function ozetPanosu(kap, s0) {
       ciz({ id: k.id, rol: 'boyut' });
       duyur(`${ad}: boyut ${BOYUTLAR.find((b) => b.anahtar === boyut.value)?.ad ?? ''}.`);
     });
+    const yMevcut = k.yukseklik ?? 'oto';
+    const yukseklik = h('select', { class: 'pano-yukseklik', 'aria-label': `Yükseklik: ${ad}`, 'data-rol': 'yukseklik' },
+      YUKSEKLIKLER.map((y) => h('option', { value: String(y.anahtar), selected: y.anahtar === yMevcut }, y.ad)),
+      YUKSEKLIKLER.some((y) => y.anahtar === yMevcut) ? null : h('option', { value: String(yMevcut), selected: true }, yukseklikAdi(yMevcut)));
+    yukseklik.addEventListener('change', () => {
+      calisan = kartYukseklikle(calisan, k.id, yukseklik.value);
+      degisti();
+      ciz({ id: k.id, rol: 'yukseklik' });
+      duyur(`${ad}: yükseklik ${yukseklikAdi(yukseklik.value === 'oto' ? 'oto' : Number(yukseklik.value))}.`);
+    });
     const kaldir = h('button', { type: 'button', class: 'hayalet kucuk-dugme pano-kaldir', 'data-rol': 'kaldir', 'aria-label': `Kaldır: ${ad}`, title: 'Panodan kaldır ("Kart ekle"den geri eklenebilir)' },
       ikon('carpi'));
     kaldir.addEventListener('click', () => {
@@ -210,7 +362,7 @@ export function ozetPanosu(kap, s0) {
       ikon('duzenle'), 'Düzenle');
     duzenle?.addEventListener('click', () => kartPenceresi(k));
     return h('div', { class: 'pano-arac-cubugu' }, tutamak, h('span', { class: 'pano-kart-adi', title: ad }, ad),
-      h('span', { class: 'pano-araclar' }, yukari, asagi, boyut, duzenle, kaldir));
+      h('span', { class: 'pano-araclar' }, yukari, asagi, boyut, yukseklik, duzenle, kaldir));
   }
 
   /** @param {string} id @param {number | 'yukari' | 'asagi'} hedef @param {string} rol */
@@ -526,6 +678,8 @@ export function ozetPanosu(kap, s0) {
       }
       yerlestir(sonVeri, ikon('saat'), `Son veri: ${sonVeriMetni(sonuc.zaman)}`,
         sonuc.kesildi ? h('span', { class: 'pano-kesildi' }, ` · ilk ${Number(sonuc.satirSiniri || sonuc.satirlar.length).toLocaleString('tr-TR')} satır`) : null);
+      // Sayı / yüzde / değişim: sabit ya da eşitlenmiş yükseklikte dikeyde ortalanır.
+      govde.classList.toggle('dikey-orta', ['sayi', 'yuzde', 'degisim'].includes(a.gorunum));
       yerlestir(govde, a.gorunum === 'tablo' ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet }) : sonucGorunumu(a, sonuc));
       tabloOdak = null;
     };
@@ -610,6 +764,7 @@ export function ozetPanosu(kap, s0) {
     const sorgu = new URLSearchParams({ projeId: proje.id, sablon: a.sablon, p: JSON.stringify(a.parametreler || {}) });
     api(`/platform/pano/veri?${sorgu}`).then(({ sonuc }) => {
       if (sonuc.tur === 'sayi') {
+        govde.classList.add('dikey-orta');
         const sinif = sonuc.deger === null ? '' : `saglik-${oranSaglikSinifi(sonuc.deger)}`;
         const deger = h('strong', { class: 'pano-sayi-deger' }, sonuc.deger === null ? '—'
           : sonuc.birim === '%' ? yuzdeBicimle(sonuc.deger, { oran: 'yuzde' }) : sayiBicimle(sonuc.deger));
@@ -988,6 +1143,8 @@ function tabloGorunumu(a, sonuc, t) {
   // Taşıma / gizleme / genişlik / sıralama sonrası odak aynı denetime döner.
   if (t.odak) {
     requestAnimationFrame(() => {
+      // Kullanıcı bu arada başka bir denetime geçtiyse odak alınmaz (yalnız yeniden çizimle kaybolan odak geri verilir).
+      if (document.activeElement && document.activeElement !== document.body) return;
       const hedef = t.odak && t.odak.ad
         ? kap.querySelector(`th[data-sutun="${CSS.escape(t.odak.ad)}"] [data-rol="${t.odak.rol}"]`)
         : kap.querySelector('[data-rol="sutunlar"]');

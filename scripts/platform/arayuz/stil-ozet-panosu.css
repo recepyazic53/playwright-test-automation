@@ -1,11 +1,39 @@
 /* ÖZET PANOSU (Sonuçlar > Genel > Özet) — ozet-panosu.js. stil.css'ten SONRA yüklenir (index.html); yalnız panonun sınıflarını
    tanımlar. Renkler stil.css'teki tema değişkenlerinden gelir (açık / koyu ve stil seçimleri kendiliğinden uyar).
    Izgara 12 sütunludur: küçük 4, orta 6, geniş 8, tam 12 sütun. ≤ 1180 px'te küçük kartlar tam satıra, ≤ 860 px'te her kart tam
-   satıra iner (390 px'te yatay taşma yok). Kartlar kendi genişliğine göre (container query) iç düzenini daraltır. */
+   satıra iner (390 px'te yatay taşma yok). Kartlar kendi genişliğine göre (container query) iç düzenini daraltır.
+   Satırlar ince birimlidir (2 px, satır boşluğu 0): her kartın kapladığı satır sayısı --pano-span değişkeniyle (ozet-panosu.js ölçer;
+   Otomatik = içerik, sabit = N × 88 px + boşluklar); kartlar arası dikey boşluk kartın 14 px alt payıdır. Izgara yerleştirdiği için
+   kartlar üst üste binmez. "Aynı satırdaki kartlar aynı yükseklikte" açıkken satırdaki kartlar en uzuna uzar (arka plan dolu). */
 .ozet-panosu-kap { min-width: 0; }
-.ozet-panosu { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; align-items: start; min-width: 0; }
-.ozet-panosu > .iskelet { grid-column: 1 / -1; }
-.pano-ogesi { grid-column: span 12; min-width: 0; container-type: inline-size; position: relative; }
+.ozet-panosu { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 2px; column-gap: 14px; row-gap: 0; align-items: stretch; min-width: 0; }
+.ozet-panosu > .iskelet { grid-column: 1 / -1; grid-row-end: span 60; }
+.pano-ogesi { grid-column: span 12; grid-row-end: span var(--pano-span, 72); margin-bottom: 14px; min-width: 0; min-height: 0; container-type: inline-size;
+  position: relative; display: flex; flex-direction: column; }
+.pano-icerik { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pano-icerik > *, .pano-icerik > .baslarken-kap > .kart, .pano-icerik > .pano-trend > .kart { flex: 1 1 auto; min-height: 0; }
+.pano-icerik > .baslarken-kap, .pano-icerik > .pano-trend, .pano-icerik > .pano-karti { display: flex; flex-direction: column; }
+.pano-icerik > .baslarken-kap[hidden] { display: none; }
+.pano-icerik > .pano-gizli-not { flex: none; }
+/* Sabit yükseklik: içerik sığmazsa kartın içinde kaydırılır; grafik kartın yüksekliğine ölçeklenir. */
+.pano-ogesi.yukseklik-sabit .pano-icerik > .kart, .pano-ogesi.yukseklik-sabit .pano-icerik > .baslarken-kap > .kart,
+.pano-ogesi.yukseklik-sabit .pano-icerik > .pano-trend > .kart, .pano-ogesi.yukseklik-sabit .pano-icerik > .ozet-kutulari { overflow: auto; }
+.pano-karti > .pano-sql-govde, .pano-karti > .pano-veri-govde { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pano-sql-govde.dikey-orta, .pano-veri-govde.dikey-orta { justify-content: center; }
+.pano-ogesi.yukseklik-sabit .pano-grafik-kap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pano-ogesi.yukseklik-sabit .pano-grafik { flex: 1 1 auto; height: auto; min-height: 120px; }
+.pano-ogesi.yukseklik-sabit .pano-tablo, .pano-ogesi.yukseklik-sabit .pano-liste { max-height: none; }
+/* Ölçüm geçişi (bir anlık; ekrana çizilmez): kartlar doğal yüksekliklerinde. */
+.ozet-panosu.olculuyor > .pano-ogesi { grid-row-end: auto; align-self: start; }
+.ozet-panosu.olculuyor .pano-icerik, .ozet-panosu.olculuyor .pano-icerik > *, .ozet-panosu.olculuyor .pano-karti > *,
+.ozet-panosu.olculuyor .pano-grafik-kap, .ozet-panosu.olculuyor .pano-icerik > .baslarken-kap > .kart, .ozet-panosu.olculuyor .pano-icerik > .pano-trend > .kart { flex: none; }
+.ozet-panosu.olculuyor .pano-grafik { height: 200px; }
+/* Köşe tutamağı (düzenleme kipi): sürükle → genişlik + yükseklik ızgaraya oturur. */
+.pano-kose-tutamagi { all: unset; position: absolute; right: 2px; bottom: 2px; z-index: 3; width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 6px; cursor: nwse-resize; color: var(--vurgu); background: var(--panel-kati); box-shadow: var(--golge); touch-action: none; font-size: 12px; }
+.pano-kose-tutamagi:focus-visible { outline: 2px solid var(--odak); outline-offset: 1px; }
+.pano-ogesi.boyutlaniyor { outline: 2px solid var(--vurgu) !important; }
+.pano-esit-secimi { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 4px; }
 .pano-ogesi.boyut-kucuk { grid-column: span 4; }
 .pano-ogesi.boyut-orta { grid-column: span 6; }
 .pano-ogesi.boyut-genis { grid-column: span 8; }
@@ -51,7 +79,7 @@
 .pano-tutamak:active { cursor: grabbing; }
 .pano-kart-adi { font-weight: 600; font-size: 13px; min-width: 0; flex: 1 1 3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pano-araclar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px; margin-left: auto; }
-.pano-araclar select.pano-boyut { min-height: 30px; font-size: 12.5px; max-width: 8rem; padding-top: 0; padding-bottom: 0; }
+.pano-araclar select.pano-boyut, .pano-araclar select.pano-yukseklik { min-height: 30px; font-size: 12.5px; max-width: 8rem; padding-top: 0; padding-bottom: 0; }
 .pano-kaldir:hover:not(:disabled) { color: var(--hata); }
 /* Düzenlerken SQL kartı çalıştırılmaz (önce "Bitti"). */
 .ozet-panosu.duzenleniyor .pano-yenile { display: none; }
