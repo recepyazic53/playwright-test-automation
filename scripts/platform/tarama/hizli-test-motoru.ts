@@ -352,9 +352,28 @@ export async function hizliTestiYurut(
           // Seçeneğin seçicisi yoksa (eski okuma) grubun adı + değeri.
           const secici = r.secici ?? (a.ad ? `input[type="radio"][name="${a.ad.replace(/["\\]/g, '\\$&')}"][value="${r.deger.replace(/["\\]/g, '\\$&')}"]` : null);
           if (!secici) return `“${String(deger)}” seçeneği sayfada bulunamadı.`;
-          const l = k.locator(secici).first();
-          // Özel çizimli radyo (girdi gizli ya da örtülü): zorla işaretlenir.
-          await l.check({ timeout: bekleMs }).catch(async () => { await l.check({ timeout: 5_000, force: true }); });
+          // Aynı seçiciye uyan gizli kopya olabilir: görünür olan seçilir.
+          const hepsi = k.locator(secici);
+          let l = hepsi.first();
+          for (let i = 0, n = await hepsi.count(); i < n; i++) {
+            if (await hepsi.nth(i).isVisible().catch(() => false)) { l = hepsi.nth(i); break; }
+          }
+          const secili = (): Promise<boolean> => l.isChecked({ timeout: 2_000 }).catch(() => false);
+          if (await l.isVisible().catch(() => false)) {
+            await l.check({ timeout: bekleMs }).catch(async () => { await l.check({ timeout: 5_000, force: true }).catch(() => undefined); });
+          }
+          // Özel çizimli radyo (girdi gizli / sıfır boyutlu / örtülü): önce etiketine, olmazsa girdiye betikle tıklanır; tıklama sayfanın
+          // kendi olaylarını (click → input → change) üretir (normal koşu aynı: model-kosucu.ts > radyoIsaretle).
+          if (!(await secili())) {
+            await l.evaluate((e) => {
+              const r = e as HTMLInputElement;
+              const etiket = r.labels?.[0];
+              if (etiket && !etiket.contains(r)) etiket.click();
+              if (!r.checked) r.click();
+            }, undefined, { timeout: 3_000 }).catch(() => undefined);
+          }
+          if (!(await secili())) return `“${r.metin ?? r.deger}” seçeneği işaretlenemedi (tıklandı, etiketine ve betikle de denendi; seçim değişmedi).`;
+          await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
           return null;
         }
         const l = k.locator(a.secici).first();

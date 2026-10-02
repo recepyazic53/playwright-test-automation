@@ -852,7 +852,8 @@ function veriDuragi(o, s, kart, m, gonder) {
       yerlestir(dugmeKap, sayfada === null ? null : h('span', { class: 'hizli-zincir-tamam' }, h('span', { 'aria-hidden': 'true' }, '✓ '), `Sayfada “${metni(String(sayfada))}” seçili; alanlar bu seçime göre soruluyor.`));
     };
     dugmeCiz();
-    return h('div', { class: 'hizli-onsecim-alani', 'data-anahtar': a.anahtar }, girdi, dugmeKap);
+    return h('div', { class: 'hizli-onsecim-alani', 'data-anahtar': a.anahtar }, girdi, dugmeKap,
+      a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
   };
   const kontrolKap = kontroller.length ? h('section', { class: 'hizli-onsecim', 'aria-labelledby': 'hizli-onsecim-baslik' },
     h('h4', { id: 'hizli-onsecim-baslik' }, 'Önce bunu seçin'),

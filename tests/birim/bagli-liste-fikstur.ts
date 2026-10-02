@@ -129,10 +129,12 @@ function yanginSecenekleri(tur: string, ust: string, dairesiz: boolean): Array<[
 }
 
 export const YANGIN_SAYFASI = `<h1>Yangın başvurusu talebi</h1>
-<style>.izgara{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;max-width:900px}.izgara label{display:block}.kod{display:flex;gap:6px;align-items:center}.kod img{cursor:pointer;width:20px;height:20px;background:#2a2}</style>
+<style>.izgara{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;max-width:900px}.izgara label{display:block}.kod{display:flex;gap:6px;align-items:center}.kod img{cursor:pointer;width:20px;height:20px;background:#2a2}
+/* Özel çizimli radyo: girdi gizli, seçim etiketle (gerçek sitelerdeki gibi; hızlı test ve normal koşu zorla işaretler). */
+input[name="basvuranTipi"]{display:none}input[name="basvuranTipi"]+span::before{content:"○ "}input[name="basvuranTipi"]:checked+span::before{content:"● "}</style>
 <fieldset><legend>Başvuran Tipi</legend>
-<label><input type="radio" name="basvuranTipi" value="O" checked> Özel</label>
-<label><input type="radio" name="basvuranTipi" value="T"> Tüzel</label></fieldset>
+<label><input type="radio" name="basvuranTipi" value="O" checked><span>Özel</span></label>
+<label><input type="radio" name="basvuranTipi" value="T"><span>Tüzel</span></label></fieldset>
 <div id="ozel"><label for="dogum">Doğum Tarihi</label><input id="dogum" name="dogum"><label for="tc">T.C. Kimlik No</label><input id="tc" name="tc"></div>
 <div id="tuzel" hidden><label for="vergi">Vergi No</label><input id="vergi" name="vergi"><label for="unvan">Unvan</label><input id="unvan" name="unvan"></div>
 <h2>Risk adresi</h2>
