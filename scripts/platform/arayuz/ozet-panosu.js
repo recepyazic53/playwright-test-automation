@@ -941,34 +941,56 @@ function pasta(a, b, noktalar, degerAdi) {
       h('span', { class: 'pano-pasta-etiket' }, d.etiket), h('span', { class: 'pano-pasta-deger' }, `${yuzde(d.yuzde)} · ${sayiBicimle(d.deger, b)}`))))));
 }
 
-/** Basit SVG çubuk / çizgi grafik (etiketler altta). @param {any} a @param {any} b @param {Array<{ etiket: string; deger: number }>} noktalar @param {string} degerAdi */
+/**
+ * SVG çubuk / çizgi grafik (etiketler altta). Grafik GERMEZ: viewBox her zaman SVG'nin ekrandaki gerçek boyutuna eşittir ve boyut
+ * değişince (kart yüksekliği / genişliği, pencere) ResizeObserver ile yeniden çizilir; yazılar doğal oranda kalır. Yalnız tam piksel
+ * boyutu değişince çizilir (aynı boyutta yeniden çizim yok).
+ * @param {any} a @param {any} b @param {Array<{ etiket: string; deger: number }>} noktalar @param {string} degerAdi
+ */
 function grafik(a, b, noktalar, degerAdi) {
-  const G = 600; const Y = 200; const sol = 40; const alt = 34; const ust = 10;
-  const enCok = Math.max(0, ...noktalar.map((n) => n.deger));
-  const enAz = Math.min(0, ...noktalar.map((n) => n.deger));
-  const aralik = enCok - enAz || 1;
-  const y = (v) => ust + (Y - ust - alt) * (1 - (v - enAz) / aralik);
-  const adim = (G - sol - 8) / Math.max(1, noktalar.length);
-  const x = (i) => sol + adim * i + adim / 2;
-  const svg = s('svg', { viewBox: `0 0 ${G} ${Y}`, class: `pano-grafik ${a.gorunum}`, role: 'img', 'aria-label': `${a.baslik}: ${degerAdi}, ${noktalar.length} değer`, preserveAspectRatio: 'none' },
-    s('line', { x1: sol, y1: y(0), x2: G - 4, y2: y(0), class: 'eksen' }),
-    s('text', { x: sol - 6, y: ust + 8, class: 'eksen-yazi', 'text-anchor': 'end' }, sayiBicimle(enCok, { ...b, onEk: '', sonEk: '' })),
-    s('text', { x: sol - 6, y: y(0), class: 'eksen-yazi', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, '0'));
-  if (a.gorunum === 'cubuk') {
-    for (const [i, n] of noktalar.entries()) {
-      const g = Math.max(2, adim * 0.66);
-      svg.append(s('rect', { x: x(i) - g / 2, y: Math.min(y(n.deger), y(0)), width: g, height: Math.max(1, Math.abs(y(0) - y(n.deger))), class: 'cubuk', rx: 2 },
-        s('title', {}, `${n.etiket}: ${sayiBicimle(n.deger, b)}`)));
+  const svg = s('svg', { class: `pano-grafik ${a.gorunum}`, role: 'img', 'aria-label': `${a.baslik}: ${degerAdi}, ${noktalar.length} değer` });
+  let son = '';
+  const ciz = (/** @type {number} */ G, /** @type {number} */ Y) => {
+    const anahtar = `${G}x${Y}`;
+    if (anahtar === son) return;
+    son = anahtar;
+    const sol = 40; const alt = 34; const ust = 10;
+    const enCok = Math.max(0, ...noktalar.map((n) => n.deger));
+    const enAz = Math.min(0, ...noktalar.map((n) => n.deger));
+    const aralik = enCok - enAz || 1;
+    const y = (v) => ust + (Y - ust - alt) * (1 - (v - enAz) / aralik);
+    const adim = (G - sol - 8) / Math.max(1, noktalar.length);
+    const x = (i) => sol + adim * i + adim / 2;
+    svg.setAttribute('viewBox', `0 0 ${G} ${Y}`);
+    svg.replaceChildren(
+      s('line', { x1: sol, y1: y(0), x2: G - 4, y2: y(0), class: 'eksen' }),
+      s('text', { x: sol - 6, y: ust + 8, class: 'eksen-yazi', 'text-anchor': 'end' }, sayiBicimle(enCok, { ...b, onEk: '', sonEk: '' })),
+      s('text', { x: sol - 6, y: y(0), class: 'eksen-yazi', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, '0'));
+    if (a.gorunum === 'cubuk') {
+      for (const [i, n] of noktalar.entries()) {
+        const g = Math.max(2, Math.min(80, adim * 0.66));
+        svg.append(s('rect', { x: x(i) - g / 2, y: Math.min(y(n.deger), y(0)), width: g, height: Math.max(1, Math.abs(y(0) - y(n.deger))), class: 'cubuk', rx: 2 },
+          s('title', {}, `${n.etiket}: ${sayiBicimle(n.deger, b)}`)));
+      }
+    } else {
+      svg.append(s('polyline', { points: noktalar.map((n, i) => `${x(i)},${y(n.deger)}`).join(' '), class: 'cizgi', fill: 'none' }));
+      for (const [i, n] of noktalar.entries()) svg.append(s('circle', { cx: x(i), cy: y(n.deger), r: 3.5, class: 'nokta' }, s('title', {}, `${n.etiket}: ${sayiBicimle(n.deger, b)}`)));
     }
-  } else {
-    svg.append(s('polyline', { points: noktalar.map((n, i) => `${x(i)},${y(n.deger)}`).join(' '), class: 'cizgi', fill: 'none' }));
-    for (const [i, n] of noktalar.entries()) svg.append(s('circle', { cx: x(i), cy: y(n.deger), r: 3.5, class: 'nokta' }, s('title', {}, `${n.etiket}: ${sayiBicimle(n.deger, b)}`)));
-  }
-  const etiketAdimi = Math.ceil(noktalar.length / 12);
-  for (const [i, n] of noktalar.entries()) {
-    if (i % etiketAdimi) continue;
-    svg.append(s('text', { x: x(i), y: Y - alt + 16, class: 'eksen-yazi', 'text-anchor': 'middle' }, n.etiket.length > 10 ? `${n.etiket.slice(0, 9)}…` : n.etiket));
-  }
+    // Etiket sayısı genişliğe göre (yaklaşık 56 px'te bir).
+    const etiketAdimi = Math.max(1, Math.ceil(noktalar.length / Math.max(1, Math.floor((G - sol) / 56))));
+    for (const [i, n] of noktalar.entries()) {
+      if (i % etiketAdimi) continue;
+      svg.append(s('text', { x: x(i), y: Y - alt + 16, class: 'eksen-yazi', 'text-anchor': 'middle' }, n.etiket.length > 10 ? `${n.etiket.slice(0, 9)}…` : n.etiket));
+    }
+  };
+  ciz(600, 200);
+  const olc = () => {
+    if (!svg.isConnected) return;
+    const r = svg.getBoundingClientRect();
+    if (r.width >= 40 && r.height >= 40) ciz(Math.round(r.width), Math.round(r.height));
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(olc).observe(svg);
+  requestAnimationFrame(olc);
   // Ekran okuyucu için değerler (görsel olarak gizli metin özeti).
   return h('figure', { class: 'pano-grafik-kap' }, svg,
     h('figcaption', { class: 'gorunmez' }, noktalar.map((n) => `${n.etiket}: ${sayiBicimle(n.deger, b)}`).join('; ')));

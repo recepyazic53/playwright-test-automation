@@ -572,10 +572,11 @@ test('boyutlar: eşit yükseklik anahtarı, menüden yükseklik, köşeden sür�
   const kartlar = [...(await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
     { id: 'baslarken', tur: 'baslarken', boyut: 'tam' }, { id: 'ozetKutulari', tur: 'ozetKutulari', boyut: 'tam' },
     { id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }, { id: 'bakim', tur: 'bakim', boyut: 'kucuk' }, { id: 'kapsam', tur: 'kapsam', boyut: 'kucuk' },
-    { id: 'b-grafik', tur: 'sql', boyut: 'orta', yukseklik: 6, ayar: { baslik: 'Günlük grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } }
+    { id: 'b-grafik', tur: 'sql', boyut: 'orta', yukseklik: 6, ayar: { baslik: 'Günlük grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } },
+    { id: 'b-alcak', tur: 'sql', boyut: 'tam', ayar: { baslik: 'Alçak grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } }
   ] } }) as Record<string, any>).duzen.kartlar];
-  expect(kartlar).toHaveLength(6);
-  expect((await nobetciApi(nobetci, '/platform/pano/sql/yenile', { projeId, kartId: 'b-grafik' })).basarili).not.toBe(false);
+  expect(kartlar).toHaveLength(7);
+  for (const kartId of ['b-grafik', 'b-alcak']) expect((await nobetciApi(nobetci, '/platform/pano/sql/yenile', { projeId, kartId })).basarili).not.toBe(false);
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/sonuclar/ozet');
   const sar = (id: string) => page.locator(`.pano-ogesi[data-kart-id="${id}"]`);
@@ -592,6 +593,11 @@ test('boyutlar: eşit yükseklik anahtarı, menüden yükseklik, köşeden sür�
   // Sabit yükseklikte grafik kartın boyuna ölçeklenir (varsayılan 200 px'ten büyük).
   await expect.poll(() => yukseklik('b-grafik')).toBeCloseTo(satirPx(6), 0);
   expect((await sar('b-grafik').locator('svg.pano-grafik').boundingBox())!.height).toBeGreaterThan(300);
+  // Grafik gerilmez, kartın boyutunda yeniden çizilir: eksen yazısının en / boy oranı yüksek ve alçak kartta aynı.
+  const yazi = async (id: string) => { const k = (await sar(id).locator('text.eksen-yazi', { hasText: 'Pzt' }).boundingBox())!; return { oran: k.width / k.height, h: k.height }; };
+  await expect.poll(async () => Math.abs((await yazi('b-grafik')).oran - (await yazi('b-alcak')).oran)).toBeLessThan(0.05);
+  expect(Math.abs((await yazi('b-grafik')).h - (await yazi('b-alcak')).h)).toBeLessThan(1);
+  expect(await sar('b-grafik').locator('svg.pano-grafik').evaluate((e) => { const r = e.getBoundingClientRect(); return e.getAttribute('viewBox') === `0 0 ${Math.round(r.width)} ${Math.round(r.height)}`; })).toBe(true);
   await cakismaYok();
   // Düzenleme: eşit yükseklik kapalı → kartlar kendi boyunda.
   await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
@@ -648,7 +654,7 @@ test('boyutlar: eşit yükseklik anahtarı, menüden yükseklik, köşeden sür�
   const p = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`) as Record<string, any>;
   expect(p.duzen.esitYukseklik).toBe(true);
   expect(Object.fromEntries(p.duzen.kartlar.map((x: Record<string, unknown>) => [x.id, x.yukseklik ?? 'oto'])))
-    .toEqual({ baslarken: 'oto', ozetKutulari: 'oto', dikkat: 'oto', bakim: 4, kapsam: 3, 'b-grafik': 6 });
+    .toEqual({ baslarken: 'oto', ozetKutulari: 'oto', dikkat: 'oto', bakim: 4, kapsam: 3, 'b-grafik': 6, 'b-alcak': 'oto' });
   await cakismaYok();
   // 390 px: tek sütun, sabit yükseklik korunur ama içerikten kısa olmaz (Kapsam kaydırmasız, tam görünür).
   const dar = await sayfaAc(390, 900);
