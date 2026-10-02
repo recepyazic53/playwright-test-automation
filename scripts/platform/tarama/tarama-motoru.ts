@@ -394,12 +394,23 @@ function secimeTikla(el: Element): boolean {
  * etiketler) kaydedilir; sonunda ilk değer geri yüklenir. Seçim sayfayı
  * başka adrese götürürse not düşülür ve hedefe dönülür. Keşif HİÇBİR düğmeye / bağlantıya basmaz; sayfanın betiği bassa da
  * tıklama yutulur (dugmeTiklamaKorumasi) ve yazma istekleri ağ katmanında iptal edilir.
+ *
+ * İÇ İÇE KEŞİF (secenek.derinlik > 1): bir değer yeni seçim alanları (açılır liste / radyo / onay kutusu) gösteriyorsa, o değer
+ * uygulanmışken bu yeni seçimler de aynı kurallarla denenir (görünen / kaybolan, etiketler, kurallar); sonuçları kendi keşifleri olarak,
+ * üst seçim + değerle (ust) üst keşfin ARKASINA eklenir. Alt keşifte sayfayı yeniden açmak "aç + üst değeri uygula" demektir; alt
+ * seçimler sonunda ilk değerlerine, üst seçim de kendi ilk değerine geri alınır. secenek.butce: toplam iç içe keşif sayısı sınırı
+ * (paylaşılır; varsayılan 8).
  */
 export async function secimleriKesfet(
   sayfa: Page, temel: SayfaEnvanteri, notlar: string[], git: () => Promise<void>,
-  sakinles: (page: Page, ms: number) => Promise<void>, sinir: number
+  sakinles: (page: Page, ms: number) => Promise<void>, sinir: number,
+  secenek: { derinlik?: number; butce?: { kalan: number }; ust?: { secim: string; deger: string } | null } = {}
 ): Promise<Kesif[]> {
+  const derinlik = Math.max(1, Math.min(3, secenek.derinlik ?? 1));
+  const butce = secenek.butce ?? { kalan: 8 };
   const kesifler: Kesif[] = [];
+  /** İç içe keşiflerin sonuçları (üst keşiften SONRA eklenir: tüketiciler üstün alanlarını önce görür). */
+  const altKesifler: Kesif[] = [];
   const adaylar = kesifAdaylari(temel, sinir, kesifler);
   const anahtarlar = async (): Promise<SayfaEnvanteri> => envanterOku(sayfa);
   const adresAyni = (a: string, b: string): boolean => kokVeYol(a) === kokVeYol(b);
@@ -445,6 +456,7 @@ export async function secimleriKesfet(
     const kuralImzasi = (a: HamAlan): string => JSON.stringify([a.enCok ?? null, a.desen ?? null]);
     const temelKurallar = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar).map((a) => [a.anahtar, kuralImzasi(a)]));
     const degerler: KesifDegeri[] = [];
+    const buAlt: Kesif[] = [];
     for (const o of denenecek) {
       if (o.deger === ilk) continue;
       const onceki = sayfa.url();
@@ -493,6 +505,24 @@ export async function secimleriKesfet(
         ...(Object.keys(secenekler).length ? { secenekler } : {}), ...(etkinlesenler.length ? { etkinlesenler } : {}),
         ...(Object.keys(etiketler).length ? { etiketler } : {}), ...(Object.keys(kurallar).length ? { kurallar } : {})
       });
+      // İç içe: bu değerde beliren seçim alanları (değer uygulanmışken) aynı kurallarla denenir.
+      const yeniSecimler = gorunenler.filter((a) => KESIF_TURLERI.includes(a.tur) && !a.devreDisi && !a.saltOkunur);
+      if (derinlik > 1 && yeniSecimler.length && butce.kalan > 0) {
+        butce.kalan--;
+        const altGit = async (): Promise<void> => {
+          await git();
+          await uygula(o.deger);
+          await sayfa.waitForLoadState('domcontentloaded', { timeout: SECIM_BEKLEME_MS }).catch(() => undefined);
+          await sakinles(sayfa, SECIM_BEKLEME_MS);
+        };
+        try {
+          const alt = { ...simdi, alanlar: simdi.alanlar.filter((a) => yeniSecimler.some((y) => y.anahtar === a.anahtar)) };
+          const ic = await secimleriKesfet(sayfa, alt, notlar, altGit, sakinles, sinir, { derinlik: derinlik - 1, butce, ust: { secim: s.anahtar, deger: o.deger } });
+          buAlt.push(...ic.filter((k) => k.degerler.length || k.atlandi));
+        } catch (hata) {
+          notlar.push(`“${s.etiket ?? s.anahtar}” = “${o.metin}” değerinde beliren seçimler denenemedi: ${adreslerGizli(ilkSatir(hata)).slice(0, 120)}`);
+        }
+      }
     }
     let geriAlindi = false;
     try {
@@ -520,7 +550,8 @@ export async function secimleriKesfet(
       notlar.push(`"${s.etiket ?? s.anahtar}" ilk değerine geri alınamadı; sayfa yeniden açıldı.`);
       await git();
     }
-    kesifler.push({ secim: s.anahtar, ilkDeger: ilk, degerler, geriAlindi, tur, ...(kismi ? { kismi: true } : {}) });
+    kesifler.push({ secim: s.anahtar, ilkDeger: ilk, degerler, geriAlindi, tur, ...(kismi ? { kismi: true } : {}), ...(secenek.ust ? { ust: secenek.ust } : {}) });
+    altKesifler.push(...buAlt);
   }
-  return kesifler;
+  return [...kesifler, ...altKesifler];
 }

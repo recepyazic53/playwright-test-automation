@@ -102,6 +102,11 @@ export type KesifDegeri = {
 export type Kesif = {
   secim: string; ilkDeger: string | null; degerler: KesifDegeri[]; geriAlindi: boolean; atlandi?: string | null;
   tur?: 'secim' | 'radyo' | 'onay'; kismi?: boolean;
+  /**
+   * İç içe keşif: bu seçim bir üst seçimin belirli değerinde belirdi ve o değer uygulanmışken denendi (ust: üst seçim + değer; üst de
+   * iç içeyse kendi keşfinde ust'ü vardır). Yoksa seçim sayfa açılışında görünür.
+   */
+  ust?: { secim: string; deger: string } | null;
 };
 
 export type ProfilEnvanteri = {

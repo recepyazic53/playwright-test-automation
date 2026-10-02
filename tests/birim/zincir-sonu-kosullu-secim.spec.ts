@@ -4,7 +4,7 @@
 //     görsel sıradan farklı, Bina listesi seçenekler gelirken kilitli ve süslü bir kutuyla sarılı. Keşif zinciri 7. halkaya kadar kurmalı;
 //     hiç kesinleşmezse bağ "belirsiz" kalır ve veri durağında yine "↓ … seçeneklerini getir" gösterilir (seçenek gelirse kesinleşir).
 //  2) Sayfada önseçili "Başvuran tipi" (Özel / Tüzel) radyosu veri durağında EN ÜSTTE "Önce bunu seçin" ile tüm seçenekleriyle sorulur;
-//     Tüzel seçilince Tüzel alanları sorulur, Özel alanları kalkar; "↓ Bu seçime göre alanları getir" seçimi sayfaya uygular; kaydedilen
+//     Tüzel seçilince Tüzel alanları sorulur, Özel alanları kalkar; seçim getir düğmesi beklenmeden sayfaya uygulanır; kaydedilen
 //     senaryo normal koşuda Tüzel dalını yürütür. Zincirsiz / koşulsuz sayfada bu bölüm yoktur.
 // Güvenlik: yalnız 127.0.0.1'deki sahte sayfa (bagli-liste-fikstur.ts > /yangin/); geçici veritabanı; veri/ klasörüne dokunulmaz. Değerler UYDURMADIR.
 import { randomBytes } from 'node:crypto';
@@ -103,7 +103,7 @@ test.describe('hızlı test (127.0.0.1)', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('zincir 7. halkaya kadar kurulur (ilk denenen binalarda daire yok, son halka gecikmeli, Bina kilitli + süslü); Daire için getir düğmesi; Tüzel seçilince Tüzel alanları sorulur; kaydedilen senaryo normal koşuda Tüzel dalını yürütür', async () => {
+  test('zincir 7. halkaya kadar kurulur (ilk denenen binalarda daire yok, son halka gecikmeli, Bina kilitli + süslü); Daire seçenekleri getir beklenmeden gelir; Tüzel seçilince Tüzel alanları sorulur; kaydedilen senaryo normal koşuda Tüzel dalını yürütür', async () => {
     test.setTimeout(900_000);
     const id = String((await basarili('/platform/hizli-test/baslat', {
       projeId, ortamId, hedef: '/yangin/?ozel=1', ekranAdi: 'Yangın talebi', izin: 'evet', cumle: 'Talep al düğmesine bas, "Talep hazır" görünce bitir'
@@ -131,16 +131,14 @@ test.describe('hızlı test (127.0.0.1)', () => {
       expect(ilkKonum[0]).toContain('hizli-onsecim');
       await expect(soru.getByLabel('T.C. Kimlik No', { exact: true })).toBeVisible();
       await expect(soru.getByLabel('Vergi No', { exact: true })).toHaveCount(0);
-      // Zincir: her halka yerinde "↓ … seçeneklerini getir" ile; son halka (Daire) için de düğme çıkar.
+      // Zincir: her halkada üst seçilince seçim anında sayfaya uygulanır, alt listenin seçenekleri getir düğmesine basmadan gelir (son
+      // halka Daire dahil).
       const yol: Array<[string, string, string]> = [
         ['İl', 'DENİZKENT', 'İlçe'], ['İlçe', 'ATAKUM', 'Belde/Köy'], ['Belde/Köy', 'MERKEZ', 'Mahalle'], ['Mahalle', 'CUMHURİYET MH.', 'Cadde/Sokak'],
         ['Cadde/Sokak', 'LALE CD.', 'Bina No'], ['Bina No', 'No 2', 'Daire/Kapı No']
       ];
       for (const [ust, secim, alt] of yol) {
         await soru.getByLabel(ust, { exact: true }).selectOption({ label: secim });
-        const getir = soru.getByRole('button', { name: `“${alt}” seçeneklerini getir`, exact: true });
-        await expect(getir, `${ust} → ${alt}`).toBeEnabled({ timeout: 30_000 });
-        await getir.click();
         try {
           await expect(soru.getByLabel(alt, { exact: true }), alt).toBeEnabled({ timeout: 90_000 });
         } catch (h) {
@@ -151,21 +149,19 @@ test.describe('hızlı test (127.0.0.1)', () => {
       await expect(soru.getByLabel('Daire/Kapı No', { exact: true }).locator('option')).toHaveText(['Seçin', 'Daire 21', 'Daire 22']);
       await expect(soru.locator('.hizli-zincir-gostergesi')).toContainText(`Bağlı alanlar: ${ZINCIR}`);
       await soru.getByLabel('Daire/Kapı No', { exact: true }).selectOption({ label: 'Daire 21' });
-      // Tüzel: alanlar anında değişir; yerinde "↓ Bu seçime göre alanları getir".
+      // Tüzel: alanlar anında değişir ve seçim getir düğmesi beklenmeden sayfaya uygulanır (odak seçimde kalır).
       await onsecim.getByRole('radio', { name: 'Tüzel' }).check();
       await expect(soru.getByLabel('Vergi No', { exact: true })).toBeVisible();
       await expect(soru.getByLabel('Unvan', { exact: true })).toBeVisible();
       await expect(soru.getByLabel('T.C. Kimlik No', { exact: true })).toHaveCount(0);
-      const kosulGetir = onsecim.getByRole('button', { name: 'Bu seçime göre alanları getir', exact: true });
-      await expect(kosulGetir).toBeVisible();
+      await expect(onsecim.getByRole('button', { name: 'Bu seçime göre alanları getir', exact: true })).toHaveCount(0);
+      await expect(onsecim).toContainText('Sayfada “Tüzel” seçili', { timeout: 60_000 });
+      await expect(soru.locator('.not-kutusu')).toContainText('“Başvuran Tipi” = “Tüzel” sayfaya uygulandı');
+      await expect(onsecim.getByRole('radio', { name: 'Tüzel' })).toBeFocused();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       const goruntu = test.info().outputPath('kosullu-secim-zincir-1440.png');
       await page.screenshot({ path: goruntu, fullPage: true });
       if (process.env.GORUNTU_KLASORU) { mkdirSync(process.env.GORUNTU_KLASORU, { recursive: true }); copyFileSync(goruntu, join(process.env.GORUNTU_KLASORU, 'kosullu-secim-zincir-1440.png')); }
-      await kosulGetir.click();
-      await expect(onsecim).toContainText('Sayfada “Tüzel” seçili', { timeout: 60_000 });
-      await expect(soru.locator('.not-kutusu')).toContainText('“Başvuran Tipi” = “Tüzel” sayfaya uygulandı');
-      await expect(soru.getByLabel('Vergi No', { exact: true })).toBeFocused();
       await expect(soru.getByLabel('T.C. Kimlik No', { exact: true })).toHaveCount(0);
       // Zincir değerleri korunur.
       await expect(soru.getByLabel('Daire/Kapı No', { exact: true })).toHaveValue('D21');
@@ -209,7 +205,7 @@ test.describe('hızlı test (127.0.0.1)', () => {
     expect(yangin.talepler.slice(once)).toEqual([expect.objectContaining({ tip: 'T', daire: 'D21', vergi: '1234567890', unvan: 'Deneme Ticaret' })]);
   });
 
-  test('ilk denenen değerlerin HİÇBİRİNDE alt liste dolmazsa bağ "belirsiz" kalır: Devam kilitlenmez, getir düğmesi gösterilir; seçenek gelince bağ kesinleşir', async () => {
+  test('ilk denenen değerlerin HİÇBİRİNDE alt liste dolmazsa bağ "belirsiz" kalır: Devam kilitlenmez; bina seçilince seçenekler anında gelir ve bağ kesinleşir', async () => {
     test.setTimeout(600_000);
     await isBitsin();
     const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/yangin/?dairesiz=1', ekranAdi: 'Yangın dairesiz', izin: 'sor' })).id);
@@ -229,13 +225,11 @@ test.describe('hızlı test (127.0.0.1)', () => {
     const { page, kapat, hatalar } = await arayuz(id);
     try {
       const soru = page.locator('.hizli-soru');
-      await soru.getByLabel('Bina No', { exact: true }).selectOption({ label: 'No 20' });
-      const getir = soru.getByRole('button', { name: '“Daire/Kapı No” seçeneklerini getir', exact: true });
-      await expect(getir).toBeEnabled();
       await expect(soru.locator('.hizli-alan[data-anahtar="#daire"]')).toContainText('keşifte kesinleşmedi');
       // Belirsiz bağ "Devam et"i kilitlemez.
       await expect(soru.getByRole('button', { name: 'Devam et', exact: true })).toBeEnabled();
-      await getir.click();
+      // Bina seçilince anında sayfaya uygulanır; dairenin seçenekleri getir düğmesine basmadan gelir.
+      await soru.getByLabel('Bina No', { exact: true }).selectOption({ label: 'No 20' });
       await expect(soru.getByLabel('Daire/Kapı No', { exact: true })).toBeEnabled({ timeout: 60_000 });
       await expect(soru.getByLabel('Daire/Kapı No', { exact: true }).locator('option')).toHaveText(['Seçin', 'Daire 1', 'Daire 2']);
       await expect(soru.locator('.hizli-alan[data-anahtar="#daire"]')).not.toContainText('kesinleşmedi');

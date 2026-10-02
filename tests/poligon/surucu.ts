@@ -96,6 +96,8 @@ export async function oturumBekle(o: PoligonOrtami, id: string, durumlar = SORU_
   for (;;) {
     const x = await oturumOku(o, id);
     if (durumlar.includes(x.durum) || ['hata', 'iptal'].includes(x.durum)) return x;
+    // Keşif sorusu ("Keşif: “X” düğmesine basayım mı?"; sonucundan emin olunmayan düğme): poligon basmaz, akış bugünkü gibi sürer.
+    if (x.durum === 'kesifOnay') { await o.api('/platform/hizli-test/onay', { id, cevap: false }); continue; }
     if (Date.now() > son) throw new Error(`zaman aşımı: beklenen ${durumlar.join('/')}, olan ${x.durum} (${x.calisiyor ?? ''})`);
     await new Promise((c) => setTimeout(c, 300));
   }

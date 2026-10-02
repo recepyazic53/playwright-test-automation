@@ -4,7 +4,7 @@
 // Özel adıyla kalıyordu ve kayıt tablosunda Tüzel senaryosunun vergi nosu "Kimlik no" sütununa yazılıyordu.
 //  - Keşif: her değerde etiketi DEĞİŞEN alanlar da kaydedilir (anahtar aynı → etiketler); etiket değiştiren seçim "Önce bunu seçin"de çıkar.
 //  - Veri durağı: her değerin grubunda açılan / gizlenen / adı değişen alanlar; adı değişen alan yeni adıyla ve "(Özel'de: Kimlik no)";
-//    hiçbir şey değişmiyorsa açık metin; getirden sonra adlar sayfadan tazelenir. 1440 ve 390 px'te taşma yok.
+//    hiçbir şey değişmiyorsa açık metin; seçim anında sayfaya uygulanınca adlar sayfadan tazelenir. 1440 ve 390 px'te taşma yok.
 //  - Günlük: değişiklik özeti. Kayıt: sütun adı senaryonun dalındaki ad; öneri başlığı dalın adlarını söyler; normal koşu Tüzel dalını
 //    vergi no ile yürütür.
 //  - Aynı kutunun en çok karakteri de seçime göre değişir (11 → 10): keşif "kurallar", veri durağında "En çok 10 karakter." ve aşım uyarısı.
@@ -131,7 +131,7 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('Tüzel grubunda gizlenen ve adı değişen alanlar; getir sonrası adlar tazelenir; günlükte özet; tablo sütunu ve öneri başlığı dalın adıyla; normal koşu Tüzel dalını vergi no ile yürütür', async () => {
+  test('Tüzel grubunda gizlenen ve adı değişen alanlar; seçim anında uygulanınca adlar tazelenir; günlükte özet; tablo sütunu ve öneri başlığı dalın adıyla; normal koşu Tüzel dalını vergi no ile yürütür', async () => {
     test.setTimeout(600_000);
     const id = String((await basarili('/platform/hizli-test/baslat', {
       projeId, ortamId, hedef: '/etiketli/', ekranAdi: 'Başvuru', izin: 'evet', cumle: 'Kaydet düğmesine bas, "Kayıt alındı" görünce bitir'
@@ -180,9 +180,15 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
       await expect(soru.getByLabel('Hesaplanan tutar', { exact: true })).toHaveCount(0);
       await tasmaYok(page);
 
-      // Tüzel: anında Tüzel grubu — Doğum tarihi sorulmaz, adı değişen alanlar yeni adlarıyla (Özel'deki adları yanında).
+      // Tüzel: anında Tüzel grubu — Doğum tarihi sorulmaz, adı değişen alanlar yeni adlarıyla (Özel'deki adları yanında). Seçim getir
+      // düğmesi beklenmeden sayfaya uygulanır: adlar sayfadan tazelenir; not ve günlükte değişiklik özeti.
       await tipKutusu.getByRole('radio', { name: 'Tüzel' }).check();
       await expect(tipGrubu.locator('.hizli-kosul-grubu-baslik')).toHaveText('“Kişi tipi: Tüzel” seçimine göre:');
+      await expect(tipKutusu.getByRole('button', { name: 'Bu seçime göre alanları getir', exact: true })).toHaveCount(0);
+      await expect(tipKutusu).toContainText('Sayfada “Tüzel” seçili', { timeout: 60_000 });
+      const ozet = '“Kişi tipi” = “Tüzel” sayfaya uygulandı: Doğum tarihi gizlendi; Kimlik no → Vergi no (en çok 10 karakter); Cep telefonu → İş telefonu.';
+      await expect(soru.locator('.not-kutusu')).toHaveText(ozet);
+      await expect(tipKutusu.getByRole('radio', { name: 'Tüzel' })).toBeFocused();
       await expect(tipGrubu.locator('.hizli-kosul-grubu-notu')).toHaveText('Bu seçimde “Doğum tarihi” sorulmaz.');
       await expect(soru.getByLabel('Doğum tarihi', { exact: true })).toHaveCount(0);
       await expect(tipGrubu.getByLabel('Vergi no', { exact: true })).toBeVisible();
@@ -214,12 +220,8 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
       goruntuKopyala(goruntu390, 'secime-gore-etiket-390.png');
       await page.setViewportSize({ width: 1440, height: 900 });
 
-      // "↓ Bu seçime göre alanları getir": seçim sayfaya uygulanır; adlar sayfadan tazelenir; not ve günlükte değişiklik özeti.
-      await tipKutusu.getByRole('button', { name: 'Bu seçime göre alanları getir', exact: true }).click();
-      await expect(tipKutusu).toContainText('Sayfada “Tüzel” seçili', { timeout: 60_000 });
-      const ozet = '“Kişi tipi” = “Tüzel” sayfaya uygulandı: Doğum tarihi gizlendi; Kimlik no → Vergi no (en çok 10 karakter); Cep telefonu → İş telefonu.';
-      await expect(soru.locator('.not-kutusu')).toHaveText(ozet);
-      await expect(soru.getByLabel('Vergi no', { exact: true })).toBeFocused();
+      // Adres farklı da anında uygulandı (Evet, sonra Hayır: son durum Hayır).
+      await expect(farkliKutusu).toContainText('Sayfada “Hayır” seçili', { timeout: 60_000 });
       await expect(soru.getByLabel('Kimlik no', { exact: true })).toHaveCount(0);
       o = await bekle(id, ['veri']);
       expect(JSON.stringify(o.gunluk)).toContain(ozet);
