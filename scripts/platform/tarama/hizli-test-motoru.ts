@@ -32,7 +32,7 @@ import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaram
 import type { EngellenenIstek, HamAlan } from './paket-olusturucu.mjs';
 import {
   HIZLI_BASIS_BEKLEME_EN_COK_MS, HIZLI_SECIM_KIMLIGI, HIZLI_SECIM_KOPRUSU, taramaTarayiciAyarlari,
-  type HizliAnlik, type HizliDiyalog, type HizliDoldurulan, type HizliPencere, type HizliDugme, type HizliFark, type HizliKesif, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
+  type HizliAnlik, type HizliDiyalog, type HizliDoldurulan, type HizliPencere, type HizliDugme, type HizliFark, type HizliKesif, type HizliKesifDugmesi, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
   type HizliTestSonucu, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi
 } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
@@ -64,6 +64,38 @@ const YENI_METIN_BEKLEME_MS = 4_000;
 const iceriyor = (metin: string, aranan: string): boolean => Boolean(aranan.trim()) && katla(metin).includes(katla(aranan));
 /** Doğru / yanlış sayılan değerler (onay kutusu). */
 const dogruMu = (d: unknown): boolean => d === true || ['true', 'evet', '1', 'on', 'işaretli', 'isaretli'].includes(String(d).trim().toLocaleLowerCase('tr'));
+
+/**
+ * Sayfa içi: düğmenin / bağlantının keşifte basılabilir olup olmadığı ve sonucundan emin olunup olunamayacağı — YALNIZ öğenin
+ * davranışından (adı / metni kullanılmaz). Basılmaz: devre dışı / görünmez öğe, bir alanın parçası (yanında girdi olan süsleme / simge
+ * öğesi), başka belgeye giden bağlantı. Emin (yalnız sayfa içinde bir şey açar): aria-expanded / aria-controls, sekme rolü, özet
+ * (summary) öğesi, "#…" / "javascript:" bağlantısı — form göndermiyorsa. Form gönderen düğme (submit) emin değildir. Davranışı
+ * sayfadan anlaşılamayan (yalnız betikli) düğmeler keşifte denenmez (akışta kullanıcı seçer).
+ */
+function dugmeDavranisi(el: Element): { uygun: boolean; emin: boolean; neden: string } {
+  const h = el as HTMLElement;
+  const r = h.getBoundingClientRect();
+  const st = getComputedStyle(h);
+  if (!r.width || !r.height || st.visibility === 'hidden' || st.display === 'none') return { uygun: false, emin: false, neden: 'görünmüyor' };
+  if ((h as HTMLButtonElement).disabled || h.getAttribute('aria-disabled') === 'true') return { uygun: false, emin: false, neden: 'devre dışı' };
+  const ALAN = 'input:not([type=button]):not([type=submit]):not([type=reset]):not([type=image]), select, textarea';
+  if (h.parentElement?.querySelector(ALAN) || h.closest('label')) return { uygun: false, emin: false, neden: 'bir alanın parçası' };
+  // Yazısız öğe (simge): kullanıcıya neye basılacağı söylenemez.
+  const ad = (h.innerText || (h as HTMLInputElement).value || h.getAttribute('aria-label') || h.getAttribute('title') || '').trim();
+  if (!ad) return { uygun: false, emin: false, neden: 'yazısız' };
+  const etiket = h.tagName.toLowerCase();
+  const tur = (h.getAttribute('type') || '').toLowerCase();
+  const form = (h as HTMLButtonElement).form ?? null;
+  const gonderir = Boolean(form) && ((etiket === 'button' && (tur === '' || tur === 'submit')) || (etiket === 'input' && ['submit', 'image'].includes(tur)));
+  if (gonderir) return { uygun: true, emin: false, neden: 'formu gönderir' };
+  const href = etiket === 'a' ? (h.getAttribute('href') ?? '').trim() : null;
+  if (href !== null && href !== '' && !href.startsWith('#') && !/^javascript:/i.test(href)) return { uygun: false, emin: false, neden: 'başka sayfaya gider' };
+  if (h.hasAttribute('aria-expanded') || h.hasAttribute('aria-controls')) return { uygun: true, emin: true, neden: 'sayfa içinde bir bölümü açar / kapatır' };
+  if (h.getAttribute('role') === 'tab') return { uygun: true, emin: true, neden: 'sekme' };
+  if (etiket === 'summary' || h.closest('summary')) return { uygun: true, emin: true, neden: 'ayrıntıyı açar' };
+  if (href !== null && href !== '') return { uygun: true, emin: true, neden: 'sayfa içi bağlantı' };
+  return { uygun: false, emin: false, neden: 'davranışı sayfadan anlaşılamıyor' };
+}
 
 export type KomutAlici = () => Promise<HizliKomut | null>;
 export type HizliGonderici = (o: HizliOlay) => Promise<void>;
@@ -840,64 +872,36 @@ export async function hizliTestiYurut(
       }
     }
 
-    /** Seçim alanının değerini uygular (keşif: alanlar boşken seçimler tek tek denenir). */
-    async function secimiUygula(page: Page, a: HamAlan, deger: string): Promise<void> {
-      const k = alanKapsami(page, a.cerceve);
-      if (a.tur === 'select') { await k.locator(a.secici).first().selectOption({ value: deger }, { timeout: 3_000, force: a.ozelBilesen === true }); return; }
-      if (a.tur === 'checkbox') { await k.locator(a.secici).first().setChecked(deger === 'true', { timeout: 3_000 }); return; }
-      const r = a.radyolar?.find((x) => x.deger === deger);
-      const hedef = a.ad ? k.locator(`${a.secici}[value="${deger.replace(/["\\]/g, '\\$&')}"]`).first() : r?.secici ? k.locator(r.secici).first() : null;
-      if (!hedef) throw new Error('seçenek bulunamadı');
-      await hedef.check({ timeout: 3_000 });
-    }
+    /** Keşfin sonucu (seçim keşfinin tam biçimi) → hızlı testin sade biçimi (gezinen / hata veren değerler atılır; iç içe: ust). */
+    const sadeKesif = (k: import('./paket-olusturucu.mjs').Kesif): HizliKesif => ({
+      secim: k.secim, ilkDeger: k.ilkDeger, tur: String(k.tur ?? ''), ust: k.ust ?? null,
+      degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({
+        deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
+        ...(d.secenekler ? { secenekler: d.secenekler } : {}), ...(d.etkinlesenler?.length ? { etkinlesenler: d.etkinlesenler } : {}),
+        ...(d.etiketler && Object.keys(d.etiketler).length ? { etiketler: d.etiketler } : {}),
+        ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {})
+      }))
+    });
+    /** İç içe keşfin en çok derinliği (üst seçim → alt seçim → onun altı). */
+    const IC_ICE_DERINLIK = 3;
 
     /**
      * Seçim keşfi: sayfa ilk açıldığında tüm alanlar boştur; bu yüzden seçim alanlarının (açılır liste, radyo, onay kutusu) her değeri
-     * tek tek denenir ve her değerde beliren / kaybolan alanlar kaydedilir; sonunda ilk değerler geri yüklenir. İKİ DÜZEY: bir değer
-     * seçilince beliren seçim alanları da (üst seçim uygulanıp) ayrıca denenir. Hiçbir düğmeye / bağlantıya basılmaz.
+     * tek tek denenir ve her değerde beliren / kaybolan / adı değişen alanlar kaydedilir; sonunda ilk değerler geri yüklenir. İÇ İÇE: bir
+     * değer seçilince beliren seçim alanları da (üst değer uygulanmışken) aynı kurallarla denenir (en çok 3 düzey; tarama-motoru.ts >
+     * secimleriKesfet). Hiçbir düğmeye / bağlantıya basılmaz.
      */
     async function secimKesfi(): Promise<HizliKesif[]> {
       const sinir = taramaTarayiciAyarlari(g).kesifSecenekSiniri;
-      const notlar2: string[] = [];
       const sakin = async (p: Page, ms: number): Promise<void> => { await sakinles(p, ms); };
-      const sade = (k: import('./paket-olusturucu.mjs').Kesif, ust: HizliKesif['ust']): HizliKesif => ({
-        secim: k.secim, ilkDeger: k.ilkDeger, tur: String(k.tur ?? ''), ust,
-        degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({
-          deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
-          ...(d.secenekler ? { secenekler: d.secenekler } : {}), ...(d.etkinlesenler?.length ? { etkinlesenler: d.etkinlesenler } : {}),
-          ...(d.etiketler && Object.keys(d.etiketler).length ? { etiketler: d.etiketler } : {}),
-          ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {})
-        }))
-      });
       let temel;
       try { temel = await envanterOku(islem); } catch { return []; }
-      const sonuc: HizliKesif[] = [];
-      let birinci: import('./paket-olusturucu.mjs').Kesif[] = [];
-      try { birinci = await secimleriKesfet(islem, temel, notlar2, ac, sakin, sinir); } catch { birinci = []; }
-      for (const k of birinci) if (k.degerler.length) sonuc.push(sade(k, null));
-      kesifTabani = { alanlar: temel.alanlar, kesifler: birinci };
-      // 2. düzey: bir değer seçilince beliren seçim alanları.
-      let sayac = 0;
-      for (const k of birinci) {
-        const ustAlan = temel.alanlar.find((a) => a.anahtar === k.secim);
-        if (!ustAlan || kapandi) continue;
-        for (const d of k.degerler) {
-          if (d.gezinme || d.hata || d.deger === k.ilkDeger) continue;
-          const yeniSecimler = d.gorunenler.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);
-          if (!yeniSecimler.length || sayac >= 8) continue;
-          sayac++;
-          const ustuUygula = async (): Promise<void> => { await ac(); await secimiUygula(islem, ustAlan, d.deger); await sakinles(islem, 2_500); };
-          try {
-            await ustuUygula();
-            const simdi = await envanterOku(islem);
-            const alt = { ...simdi, alanlar: simdi.alanlar.filter((a) => yeniSecimler.some((y) => y.anahtar === a.anahtar)) };
-            const ikinci = await secimleriKesfet(islem, alt, notlar2, ustuUygula, sakin, sinir);
-            for (const k2 of ikinci) if (k2.degerler.length) sonuc.push(sade(k2, { secim: k.secim, deger: d.deger }));
-          } catch { /* bu dal atlanır */ }
-        }
-      }
-      if (sayac) await ac().catch(() => undefined); // temiz başlangıç durumu
-      return sonuc;
+      let tumu: import('./paket-olusturucu.mjs').Kesif[] = [];
+      try { tumu = await secimleriKesfet(islem, temel, [], ac, sakin, sinir, { derinlik: IC_ICE_DERINLIK }); } catch { tumu = []; }
+      // Bağlı liste zincirinin başlangıcı yalnız açılışta görünen seçimler (iç içe olanlar üst değer uygulanmadan sayfada yoktur).
+      kesifTabani = { alanlar: temel.alanlar, kesifler: tumu.filter((k) => !k.ust) };
+      if (tumu.some((k) => k.ust)) await ac().catch(() => undefined); // temiz başlangıç durumu
+      return tumu.filter((k) => k.degerler.length).map(sadeKesif);
     }
 
     /** Seçim keşfinin ilk okuması ve birinci düzey sonuçları (bağlı liste zincirinin başlangıcı). */
@@ -933,20 +937,18 @@ export async function hizliTestiYurut(
       }
     }
 
-    /** Basıştan sonra beliren seçim alanlarının keşfi (yalnız bu alanlar; sayfa yeniden açılmaz, zincirin durumu korunur). */
+    /**
+     * Yerinde keşif: basıştan / doldurmadan sonra beliren seçim alanları (sayfanın neresinde olursa olsun: en altta, sonradan açılan
+     * bölümde, çerçevede) ilk keşifle aynı kurallarla denenir — görünen / kaybolan, etiketler, kurallar ve iç içe seçimler. Sayfa yeniden
+     * açılmaz (akışın durumu korunur); seçimler sonunda ilk değerlerine döner.
+     */
     async function yeniAlanKesfi(yeniSecimler: HamAlan[]): Promise<HizliKesif[]> {
       const sinir = taramaTarayiciAyarlari(g).kesifSecenekSiniri;
       const simdi = await envanterOku(islem);
       const alt = { ...simdi, alanlar: simdi.alanlar.filter((a) => yeniSecimler.some((y) => y.anahtar === a.anahtar)) };
-      const sonuc = await secimleriKesfet(islem, alt, [], async () => undefined, async (p, ms) => { await sakinles(p, ms); }, sinir);
-      return sonuc.filter((k) => k.degerler.length).map((k) => ({
-        secim: k.secim, ilkDeger: k.ilkDeger, tur: String(k.tur ?? ''), ust: null,
-        degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({
-          deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
-          ...(d.etiketler && Object.keys(d.etiketler).length ? { etiketler: d.etiketler } : {}),
-          ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {})
-        }))
-      }));
+      if (!alt.alanlar.length) return [];
+      const sonuc = await secimleriKesfet(islem, alt, [], async () => undefined, async (p, ms) => { await sakinles(p, ms); }, sinir, { derinlik: IC_ICE_DERINLIK });
+      return sonuc.filter((k) => k.degerler.length).map(sadeKesif);
     }
 
     /**
@@ -989,6 +991,55 @@ export async function hizliTestiYurut(
       }
     }
 
+    /**
+     * Keşifte basılabilecek düğmeler (sayfada bir şey gösterebilecek): davranışı sayfadan okunur (dugmeDavranisi; ad / alan / sektör
+     * listesi yok). Sayfa içinde bir şey açtığı anlaşılanlar önce; en çok "Açılır liste keşif sınırı" kadar.
+     */
+    async function kesifDugmeAdaylari(dugmeler: HizliDugme[]): Promise<HizliKesifDugmesi[]> {
+      const sonuc: HizliKesifDugmesi[] = [];
+      for (const d of dugmeler) {
+        if (d.alanIkonu || d.pencerede || d.arkada || kapandi) continue;
+        const l = alanKapsami(islem, d.cerceve ?? null).locator(d.secici).filter({ visible: true }).first();
+        const b = await l.evaluate(dugmeDavranisi, undefined, { timeout: 1_000 }).catch(() => null);
+        if (!b?.uygun) continue;
+        sonuc.push({ secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), emin: b.emin, neden: b.neden });
+      }
+      return [...sonuc.filter((x) => x.emin), ...sonuc.filter((x) => !x.emin)].slice(0, taramaTarayiciAyarlari(g).kesifSecenekSiniri);
+    }
+
+    /**
+     * Keşif basışı (akışın parçası değil; kaydedilmez): yazma istekleri engellenir, açılan tarayıcı pencereleri iptal edilir; neyin
+     * değiştiği (beliren / kaybolan alanlar, açılan pencere, yeni metinler) kaydedilir, beliren seçimler iç içe keşfedilir; sonra sayfa
+     * yeniden açılarak ilk durumuna döndürülür (döndürülemezse keşif yeni durumdan sürer).
+     */
+    async function kesifBas(k: Extract<HizliKomut, { tur: 'kesifBas' }>): Promise<void> {
+      const once = await anlikOku(islem, false);
+      let fark: HizliFark | null = null;
+      let hata: string | null = null;
+      planYaniti = 'iptal';
+      try {
+        durum.asama = 'tarama';
+        fark = await bas(islem, k.secici, k.metin, once, k.no, k.cerceve ?? null);
+      } catch (h) {
+        hata = hataBilgisi(h).mesaj;
+      } finally {
+        durum.asama = okumaAsamasi;
+        planYaniti = null;
+      }
+      const yeniSecimler = (fark?.yeniAlanlar ?? []).filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);
+      const kesifler = yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
+      let geriDondu = false;
+      try {
+        await ac();
+        sonAnlik = await anlikOku(islem, true);
+        const simdi = new Set(sonAnlik.alanlar.map((a) => a.anahtar));
+        geriDondu = simdi.size === kesifAnahtarlari.size && [...simdi].every((x) => kesifAnahtarlari.has(x));
+      } catch {
+        sonAnlik = await anlikOku(islem, true).catch(() => sonAnlik);
+      }
+      await gonder({ olay: 'kesifBasildi', no: k.no, fark: fark ? { ...fark, anlik: { ...fark.anlik, goruntu: null } } : null, kesifler, geriDondu, anlik: sonAnlik, hata });
+    }
+
     // ---- Keşif (basmadan) ----
     // Tarayıcının yeniden açılması (kesifAtla): keşif yapılmaz; sayfa okunur, zinciri sunucu kendi planıyla yeniden kurar.
     const kesifAtla = g.hizliTest?.kesifAtla === true;
@@ -996,7 +1047,10 @@ export async function hizliTestiYurut(
     const secimKesifleri = kesifAtla ? [] : await secimKesfi().catch(() => [] as HizliKesif[]);
     const zincir = kesifAtla ? null : await zincirKesfi().catch(() => null);
     let sonAnlik = await anlikOku(islem, true);
-    await gonder({ olay: 'kesif', anlik: sonAnlik, kesifler: secimKesifleri, zincir });
+    // Keşifte basılabilecek düğmeler (basma iznine bağlı; Hayır'da hiç): sunucu izne göre basar ya da kullanıcıya sorar.
+    const kesifAnahtarlari = new Set(sonAnlik.alanlar.map((a) => a.anahtar));
+    const kesifDugmeleri = basabilir && !kesifAtla ? await kesifDugmeAdaylari(sonAnlik.dugmeler).catch(() => [] as HizliKesifDugmesi[]) : [];
+    await gonder({ olay: 'kesif', anlik: sonAnlik, kesifler: secimKesifleri, zincir, ...(kesifDugmeleri.length ? { kesifDugmeleri } : {}) });
     await olay({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: 'Tarayıcı hazır: soruları Nöbetçi’de yanıtlayın.' });
     await islem.bringToFront().catch(() => undefined);
 
@@ -1039,8 +1093,13 @@ export async function hizliTestiYurut(
           // Doldurunca beliren açılır listeler arasında bağlı liste zinciri (yerinde; listeler sonunda ilk değerlerine döner).
           const yeniListeler = sonAnlik.alanlar.filter((a) => !doldurOncesi.has(a.anahtar));
           const zincirYeni = !k.bekle?.length && yeniListeler.length ? await yerindeZincirKesfi(yeniListeler).catch(() => null) : null;
-          if (zincirYeni) sonAnlik = await anlikOku(islem, false);
-          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler, ...(zincirYeni ? { zincir: zincirYeni } : {}) });
+          // Yerinde keşif: doldurunca (ör. bir seçim uygulanınca) beliren, henüz keşfedilmemiş seçimler ilk keşfin kurallarıyla denenir
+          // (keşifte kaçırılmış olsalar bile; iç içe dahil). Seçimler sonunda ilk değerlerine döner.
+          const bilinen = new Set(k.kesfedilen ?? []);
+          const yeniSecimler = k.kesfedilen ? yeniListeler.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur && !bilinen.has(a.anahtar)) : [];
+          const kesifler = yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
+          if (zincirYeni || kesifler.length) sonAnlik = await anlikOku(islem, false);
+          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler, ...(zincirYeni ? { zincir: zincirYeni } : {}), ...(kesifler.length ? { kesifler } : {}) });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
           const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no, k.cerceve ?? null);
@@ -1051,6 +1110,9 @@ export async function hizliTestiYurut(
           // Basınca beliren açılır listeler arasında bağlı liste zinciri (yerinde).
           const zincirYeni = fark.yeniAlanlar.length ? await yerindeZincirKesfi(fark.yeniAlanlar).catch(() => null) : null;
           await gonder({ olay: 'basildi', no: k.no, fark, kesifler, ...(zincirYeni ? { zincir: zincirYeni } : {}) });
+        } else if (k.tur === 'kesifBas') {
+          if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: keşif hiçbir düğmeye basmaz.' }); continue; }
+          await kesifBas(k);
         } else if (k.tur === 'secimAc') {
           const s = await sec(islem, k.no, k.amac === 'bitis' ? 'bitis' : 'dugme');
           if (s) kuyruk.unshift(s);

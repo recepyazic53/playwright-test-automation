@@ -4,7 +4,7 @@
 //  2) Otomatik tarama: zincir + kasıtlı sayfa hataları bulgu olur; pakette çok düzeyli bagimlilik ve tablo.
 //  3) Hızlı test (Nöbetçi sunucusu): keşif zinciri bulur; veri durağı zinciri üstten alta SIRAYLA sorar (alt liste üst seçilince gelen
 //     gerçek seçeneklerle); düğmeye doğru değerlerle basılır; kaydedilen modelde bağımlılıklar vardır.
-//  4) Arayüz: üst listenin yanında yerinde "↓ “İlçe” seçeneklerini getir" düğmesi; alt liste üstünün altında belirir, odak ona gider ve
+//  4) Arayüz: üst seçilince seçim anında sayfaya uygulanır (yedek: yerinde "↓ “İlçe” seçeneklerini getir" düğmesi); alt liste üstünün altında belirir, odak seçimde kalır ve
 //     duyurulur; üst değişince alt temizlenir; zincir tamamlanmadan "Devam et" pasif, "Bağlı alanları atla" ikincil yol; zincirsiz sayfada
 //     eski davranış.
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez — sahte sayfa 127.0.0.1'dedir (bagli-liste-fikstur.ts), tarayıcı DNS çözümlemez ve
@@ -302,7 +302,7 @@ test.describe('hızlı test', () => {
     expect(JSON.stringify(sonuc)).toMatch(/listesinin seçenekleri [\d,]+ sn'de geldi \(olağan ≈ [\d,]+ sn\): yavaşlama/);
   });
 
-  test('arayüz: yerinde "↓ … seçeneklerini getir" düğmesi zinciri adım adım getirir; üst değişince alt temizlenir; Devam zincir tamamlanmadan pasif; atla bağlantısı; 1440/390 px taşma yok', async () => {
+  test('arayüz: üst seçilince alt listenin seçenekleri anında (getir beklenmeden) gelir, zincir adım adım; üst değişince alt temizlenir; Devam zincir tamamlanmadan pasif; atla bağlantısı; 1440/390 px taşma yok', async () => {
     test.setTimeout(300_000);
     const testInfo = test.info();
     for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
@@ -351,14 +351,14 @@ test.describe('hızlı test', () => {
       const atla = soru.getByRole('button', { name: 'Bağlı alanları atla ve devam et', exact: true });
       await expect(atla).toBeVisible();
 
-      // 1) İl = Ankara → "↓ İlçe" etkin → basınca yalnız İl uygulanır; İlçe seçenekleriyle İl'in hemen altında belirir, odak İlçe'ye gider.
+      // 1) İl = Ankara → seçim anında (getir düğmesine basmadan) sayfaya uygulanır; yalnız İl uygulanır; İlçe seçenekleriyle İl'in hemen
+      //    altında belirir; odak seçimde (İl) kalır, canlı durum satırında duyurulur.
+      await il.focus();
       await il.selectOption({ label: 'Ankara' });
-      await expect(ilceGetir).toBeEnabled();
-      await ilceGetir.click();
       await expect(ilce).toBeEnabled({ timeout: 60_000 });
       await expect(ilce.locator('option')).toHaveText(['Seçin', 'Çankaya', 'Keçiören']);
-      await expect(ilce).toBeFocused();
-      await expect(page.getByRole('status').filter({ hasText: 'seçenekleri geldi' })).toHaveText('“İlçe” seçenekleri geldi (2 seçenek).');
+      await expect(il).toBeFocused();
+      await expect(page.getByRole('status').filter({ hasText: 'seçenekleri geldi' }).first()).toContainText('“İlçe” seçenekleri geldi');
       await expect(soru.locator('.hizli-zincir-tamam').first()).toHaveText('✓ “İlçe” seçenekleri geldi (2 seçenek)');
       await expect(gosterge).toContainText('(1/4 tamam)');
       // Aynı kartta, İl satırının hemen ardından, girintili zincir satırı.
@@ -375,12 +375,12 @@ test.describe('hızlı test', () => {
       expect(uygulama.hesaplamalar.length).toBe(hesaplamalar);
       await expect(devam).toBeDisabled();
 
-      // 2) İlçe = Keçiören → "↓ Mahalle" → Etlik.
+      // 2) İlçe = Keçiören → Mahalle seçenekleri anında (Etlik).
+      await ilce.focus();
       await ilce.selectOption({ label: 'Keçiören' });
-      await soru.getByRole('button', { name: '“Mahalle” seçeneklerini getir', exact: true }).click();
       await expect(mahalle).toBeEnabled({ timeout: 60_000 });
       await expect(mahalle.locator('option')).toHaveText(['Seçin', 'Etlik']);
-      await expect(mahalle).toBeFocused();
+      await expect(ilce).toBeFocused();
       await expect(gosterge).toContainText('(2/4 tamam)');
       // İlçe değeri yeniden çizimde korunur.
       await expect(ilce).toHaveValue('0602');
@@ -395,26 +395,27 @@ test.describe('hızlı test', () => {
       await page.screenshot({ path: testInfo.outputPath('zincir-yerinde-dugme-390.png'), fullPage: true });
       await page.setViewportSize({ width: 1440, height: 900 });
 
-      // 3) Üst değişince alt temizlenir ve kilitlenir; düğme yeniden etkin olur.
+      // 3) Üst değişince alt temizlenir; yeni üstün seçenekleri anında gelir (eski Ankara ilçeleri kalmaz), alt-alt kilitli.
       await il.selectOption({ label: 'Adana' });
-      await expect(ilce).toBeDisabled();
-      await expect(ilce).toHaveText('“İlçe” seçeneklerini getirin');
       await expect(mahalle).toBeDisabled();
-      await expect(ilceGetir).toBeEnabled();
-      await expect(soru.locator('.hizli-zincir-tamam')).toHaveCount(0);
-      await expect(gosterge).toContainText('(0/4 tamam)');
+      await expect(ilce).toBeEnabled({ timeout: 60_000 });
+      await expect(ilce.locator('option', { hasText: 'Keçiören' })).toHaveCount(0);
+      await expect(ilce).toHaveValue('');
+      await expect(gosterge).toContainText('(1/4 tamam)');
       await expect(devam).toBeDisabled();
 
       // 4) Boş gelen liste (sayfanın kendi hatası): "seçenek gelmedi" söylenir, Devam pasif kalır.
+      await il.focus();
       await il.selectOption({ label: 'Boşil' });
-      await ilceGetir.click();
       await expect(soru.getByText('Bu seçimde “İlçe” için seçenek gelmedi; başka bir “İl” seçin.')).toBeVisible({ timeout: 60_000 });
-      await expect(page.getByRole('status').filter({ hasText: 'seçenek gelmedi' })).toHaveText('“İlçe” için seçenek gelmedi.');
+      await expect(page.getByRole('status').filter({ hasText: 'seçenek gelmedi' }).first()).toContainText('“İlçe” için seçenek gelmedi');
       await expect(il).toBeFocused();
       await expect(devam).toBeDisabled();
 
       // 5) "Bağlı alanları atla ve devam et": getirilmemiş bağlı alanlar sorulmadan ilerlenir (izin "Bana sor" → "Şimdi ne yapayım?").
+      await il.focus();
       await il.selectOption({ label: 'Ankara' });
+      await expect(ilce).toBeEnabled({ timeout: 60_000 });
       await atla.click();
       await expect(page.locator('.hizli-soru').getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
       expect(uygulama.hesaplamalar.length).toBe(hesaplamalar);

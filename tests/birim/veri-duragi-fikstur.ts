@@ -15,6 +15,10 @@
 //                    yeni alan (Adres). "Kaydet": POST /api/etiketli → "Kayıt alındı".
 //   /pencere/        Arka planda 70 işlem düğmesi ve alan yanındaki yazısız (::before) simgeler; "Pencereyi aç" → örtü + sabit kutu
 //                    (rolsüz): href'siz <a> "Dış sistemden devam et", onclick'li span "Kartla tamamla", "Taksit planı" listesi + "Tamamla".
+//   /ic-ice/         İki düzey seçim: "Farklı kişi" Evet → açılışta gizli ikinci kişi bölümü; onun "Kişi tipi (2)" Tüzel olunca bölümün
+//                    kutularının adı (ve en çok karakteri) değişir, doğum tarihi gizlenir. "Kaydet": POST /api/ic-ice → "Kayıt alındı".
+//   /adimli/         "İleri" → sayfanın en altına açılışta olmayan ikinci adım (Kişi tipi + adı değişen alanlar) + "Kaydet".
+//   /kesif-dugmeli/  Gizli bölümü sayfa içinde açan düğme (aria-expanded) ve formu gönderen düğme (submit).
 import type { FiksturIstegi, FiksturYaniti } from './giris-fikstur';
 
 const html = (baslik: string, govde: string): FiksturYaniti => ({
@@ -265,7 +269,119 @@ export const ETIKETLI_SAYFASI = String.raw`<style>
   });
 </script>`;
 
+/** Süslü gizli radyo (etiket satırdaki span'da; gizli girdi + görünen kutu): /ic-ice/ için. */
+const susluRadyo = (ad: string, deger: string, metin: string, secili: boolean): string => `<span class="jqTransformRadioWrapper"><a href="#" class="jqTransformRadio${secili ? ' jqTransformChecked' : ''}" rel="${ad}"></a><input type="radio" class="jqTransformHidden" id="${ad}${deger}" name="${ad}" value="${deger}"${secili ? ' checked' : ''}></span><label for="${ad}${deger}">${metin}</label>`;
+
+/**
+ * /ic-ice/: İKİ DÜZEY seçim. "Farklı kişi" (Hayır / Evet; süslü gizli radyo) Evet olunca açılışta GİZLİ ikinci kişi bölümü açılır: kendi
+ * "Kişi tipi (2)" radyosu (Özel / Tüzel) ve alanları — "Cep telefonu (2)", "Doğum tarihi (2)", "Kimlik no (2)" (en çok 11). Kişi tipi (2)
+ * Tüzel olunca bölümün AYNI kutularının adı değişir ("Vergi no (2)" en çok 10, "İş telefonu (2)") ve doğum tarihi gizlenir. Etiketler
+ * satırdaki span'da. "Kaydet": POST /api/ic-ice (görünen alanlar) → "Kayıt alındı". ?gec=1: bölüm Evet'ten sonra gecikmeli bir sorgunun
+ * (3,5 sn) yanıtıyla açılır (ilk keşif bekleme süresinde görmez; yerinde keşif görür).
+ */
+export const IC_ICE_SAYFASI = String.raw`<style>
+  .satir { margin: 6px 0; } .yLabel { display: inline-block; min-width: 140px; } .jqTransformHidden { display: none; }
+  .jqTransformRadio { display: inline-block; width: 14px; height: 14px; border: 1px solid #888; vertical-align: middle; } .jqTransformRadio.jqTransformChecked { background: #036; }
+</style>
+<h1>Başvuru</h1>
+<div class="satir"><span class="yLabel">Ad</span><input id="ad" name="ad"></div>
+<div class="satir"><span class="yLabel">Farklı kişi</span>${susluRadyo('farkli', 'H', 'Hayır', true)} ${susluRadyo('farkli', 'E', 'Evet', false)}</div>
+<div id="ikinci" hidden>
+  <div class="satir"><span class="yLabel">Kişi tipi (2)</span>${susluRadyo('tip2', 'O', 'Özel', true)} ${susluRadyo('tip2', 'T', 'Tüzel', false)}</div>
+  <div class="satir"><span class="yLabel" id="telefon2Adi">Cep telefonu (2)</span><input id="telefon2" name="telefon2"></div>
+  <div class="satir" id="dogum2Kap"><span class="yLabel">Doğum tarihi (2)</span><input id="dogum2" name="dogum2"></div>
+  <div class="satir"><span class="yLabel" id="kimlik2Adi">Kimlik no (2)</span><input id="kimlik2" name="kimlik2" maxlength="11"></div>
+</div>
+<p><button type="button" id="kaydet">Kaydet</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var sec = function (ad) { var r = document.querySelector('input[name=' + ad + ']:checked'); return r ? r.value : ''; };
+  function goster() {
+    $('ikinci').hidden = sec('farkli') !== 'E';
+    var t = sec('tip2') === 'T';
+    $('dogum2Kap').hidden = t;
+    $('kimlik2Adi').textContent = t ? 'Vergi no (2)' : 'Kimlik no (2)';
+    $('kimlik2').maxLength = t ? 10 : 11;
+    $('telefon2Adi').textContent = t ? 'İş telefonu (2)' : 'Cep telefonu (2)';
+    document.querySelectorAll('.jqTransformRadio').forEach(function (a) { a.classList.toggle('jqTransformChecked', a.nextElementSibling.checked); });
+  }
+  // ?gec=1: ikinci bölüm Evet'ten sonra gecikmeli bir sorgunun (GET /api/ic-ice-bolum) yanıtıyla açılır.
+  var gec = new URLSearchParams(location.search).get('gec') === '1';
+  document.querySelectorAll('input[name=farkli]').forEach(function (r) { r.addEventListener('change', function () {
+    if (gec && sec('farkli') === 'E') fetch('/api/ic-ice-bolum').then(function () { goster(); }); else goster();
+  }); });
+  document.querySelectorAll('input[name=tip2]').forEach(function (r) { r.addEventListener('change', goster); });
+  document.querySelectorAll('.jqTransformRadio').forEach(function (a) {
+    a.addEventListener('click', function (o) { o.preventDefault(); var r = a.nextElementSibling; r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); });
+  });
+  $('kaydet').addEventListener('click', function () {
+    var v = { ad: $('ad').value, farkli: sec('farkli') };
+    if (!$('ikinci').hidden) { v.tip2 = sec('tip2'); v.telefon2 = $('telefon2').value; v.kimlik2 = $('kimlik2').value; if (!$('dogum2Kap').hidden) v.dogum2 = $('dogum2').value; }
+    fetch('/api/ic-ice', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+  });
+</script>`;
+
+/**
+ * /adimli/: iki adımlı form. Açılışta yalnız "Ad" ve "İleri"; "İleri"ye basınca sayfanın EN ALTINA (açılışta olmayan) ikinci adım
+ * eklenir: "Kişi tipi" (Özel / Tüzel), "Doğum tarihi" (Tüzel'de gizli), "Kimlik no" (en çok 11; Tüzel'de "Vergi no", en çok 10) ve
+ * "Kaydet" (POST /api/adimli → "Kayıt alındı").
+ */
+export const ADIMLI_SAYFASI = String.raw`<h1>Başvuru</h1>
+<div><label for="ad">Ad</label><input id="ad" name="ad"></div>
+<p><button type="button" id="ileri">İleri</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  $('ileri').addEventListener('click', function () {
+    if ($('adim2')) return;
+    var d = document.createElement('div'); d.id = 'adim2';
+    d.innerHTML = '<h2>İkinci adım</h2><fieldset><legend>Kişi tipi</legend><label><input type="radio" name="tip" value="O" checked> Özel</label> <label><input type="radio" name="tip" value="T"> Tüzel</label></fieldset>'
+      + '<div id="dogumKap"><label for="dogum">Doğum tarihi</label><input id="dogum" name="dogum"></div>'
+      + '<div><label for="kimlik" id="kimlikAdi">Kimlik no</label><input id="kimlik" name="kimlik" maxlength="11"></div>'
+      + '<p><button type="button" id="kaydet">Kaydet</button></p>';
+    document.body.appendChild(d);
+    d.querySelectorAll('input[name=tip]').forEach(function (r) { r.addEventListener('change', function () {
+      var t = document.querySelector('input[name=tip]:checked').value === 'T';
+      $('dogumKap').hidden = t; $('kimlikAdi').textContent = t ? 'Vergi no' : 'Kimlik no'; $('kimlik').maxLength = t ? 10 : 11;
+    }); });
+    $('kaydet').addEventListener('click', function () {
+      var v = { ad: $('ad').value, tip: document.querySelector('input[name=tip]:checked').value, kimlik: $('kimlik').value };
+      if (!$('dogumKap').hidden) v.dogum = $('dogum').value;
+      fetch('/api/adimli', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
+        .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+    });
+  });
+</script>`;
+
+/**
+ * /kesif-dugmeli/: açılışta GİZLİ bölüm ve onu sayfa içinde açan düğme (type=button, aria-expanded / aria-controls: "Ek bölüm"), bölümde
+ * iki alan ("Ek alan 1", "Ek alan 2"); ayrıca formu gönderen düğme ("Gönder", form içinde submit: POST /api/kesif-dugmeli → "Kayıt alındı").
+ */
+export const KESIF_DUGMELI_SAYFASI = String.raw`<h1>Başvuru</h1>
+<form id="form">
+  <div><label for="ad">Ad</label><input id="ad" name="ad"></div>
+  <p><button type="button" id="ekAc" aria-expanded="false" aria-controls="ekBolum">Ek bölüm</button></p>
+  <div id="ekBolum" hidden><label for="ek1">Ek alan 1</label><input id="ek1" name="ek1"> <label for="ek2">Ek alan 2</label><input id="ek2" name="ek2"></div>
+  <p><button type="submit" id="gonder">Gönder</button></p>
+</form>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  $('ekAc').addEventListener('click', function () { var acik = $('ekBolum').hidden; $('ekBolum').hidden = !acik; this.setAttribute('aria-expanded', String(acik)); });
+  $('form').addEventListener('submit', function (o) {
+    o.preventDefault();
+    fetch('/api/kesif-dugmeli', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ad: $('ad').value }) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; }).catch(function () { $('sonuc').textContent = 'Gönderilemedi'; });
+  });
+</script>`;
+
 export class VeriDuragiUygulamasi {
+  /** /ic-ice/, /adimli/ ve /kesif-dugmeli/ gönderimleri. */
+  readonly icIceKayitlar: Array<Record<string, string>> = [];
+  readonly adimliKayitlar: Array<Record<string, string>> = [];
+  readonly kesifDugmeliKayitlar: Array<Record<string, string>> = [];
   /** /etiketli/ gönderimleri (görünen alanların değerleri). */
   readonly etiketliKayitlar: Array<Record<string, string>> = [];
   readonly istekler: string[] = [];
@@ -285,6 +401,13 @@ export class VeriDuragiUygulamasi {
     if (i.yol === '/pencere/' && i.yontem === 'GET') return html('İşlemler', PENCERE_SAYFASI);
     if (i.yol === '/dal-agaci/' && i.yontem === 'GET') return html('Başvuru', DAL_AGACI_SAYFASI);
     if (i.yol === '/etiketli/' && i.yontem === 'GET') return html('Başvuru', ETIKETLI_SAYFASI);
+    if (i.yol === '/ic-ice/' && i.yontem === 'GET') return html('Başvuru', IC_ICE_SAYFASI);
+    if (i.yol === '/adimli/' && i.yontem === 'GET') return html('Başvuru', ADIMLI_SAYFASI);
+    if (i.yol === '/kesif-dugmeli/' && i.yontem === 'GET') return html('Başvuru', KESIF_DUGMELI_SAYFASI);
+    if (i.yol === '/api/ic-ice-bolum' && i.yontem === 'GET') return { tur: 'application/json', govde: '{"tamam":true}', gecikmeMs: 3500 };
+    if (i.yol === '/api/ic-ice' && i.yontem === 'POST') { this.icIceKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
+    if (i.yol === '/api/adimli' && i.yontem === 'POST') { this.adimliKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
+    if (i.yol === '/api/kesif-dugmeli' && i.yontem === 'POST') { this.kesifDugmeliKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/etiketli' && i.yontem === 'POST') { this.etiketliKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/agac-ilce' && i.yontem === 'GET') { const a = AGAC[i.sorgu.get('il') ?? '']; return { tur: 'application/json', govde: JSON.stringify(a ? [a.ilce] : []), gecikmeMs: 150 }; }
     if (i.yol === '/api/agac-bina' && i.yontem === 'GET') { const a = AGAC[i.sorgu.get('il') ?? '']; return { tur: 'application/json', govde: JSON.stringify(a ? a.binalar : []), gecikmeMs: 150 }; }

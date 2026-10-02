@@ -168,6 +168,11 @@ export type HizliDugme = {
   /** Açık sayfa içi pencerenin (modal) içinde / arkasında; alanın yanındaki simge (eylem-kesfi.d.mts > EylemAdayi). */
   pencerede?: boolean; arkada?: boolean; alanIkonu?: boolean;
 };
+/**
+ * Keşifte basılabilecek düğme / bağlantı (sayfada bir şey gösterebilecek). emin: davranışından yalnız sayfa içinde bir şey açtığı anlaşılıyor
+ * (aria-expanded / aria-controls, sekme rolü, özet öğesi, sayfa içi bağlantı; form gönderimi yok); neden: bu yargının açıklaması.
+ */
+export type HizliKesifDugmesi = { secici: string; metin: string | null; cerceve?: string[]; emin: boolean; neden: string };
 /** Sayfanın o anki okuması (alan DEĞERİ okunmaz). goruntu: JPEG base64 (yalnız bellekte). */
 export type HizliAnlik = {
   yol: string; baslik: string; alanlar: HamAlan[]; metinler: HizliMetin[]; dugmeler: HizliDugme[]; eylem: EylemAdaylari; goruntu: string | null;
@@ -220,8 +225,11 @@ export type HizliPlan = {
 export type HizliKomut =
   /** kontrol: sayfaya aynı değerle zaten uygulanmış alanlar (yazılmaz; sayfa boşaltmışsa bir kez yeniden yazılır). */
   /** bekle: yerinde zincir isteğinde seçenekleri gelmesi beklenen alt listeler (geç dolan liste; en çok bekleMs, verilmezse varsayılan). */
-  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[]; bekle?: string[]; bekleMs?: number }
+  /** kesfedilen: yerinde keşif (doldurunca beliren seçimler denenir); bu seçimler zaten keşfedildi, yeniden denenmez. Verilmezse yapılmaz. */
+  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[]; bekle?: string[]; bekleMs?: number; kesfedilen?: string[] }
   | { no: number; tur: 'bas'; secici: string; metin: string | null; cerceve?: string[] }
+  /** Keşif basışı: akışın parçası değil (kaydedilmez); yazma istekleri engellenir, pencereler iptal edilir, sonra sayfa ilk durumuna döndürülür. */
+  | { no: number; tur: 'kesifBas'; secici: string; metin: string | null; cerceve?: string[] }
   /** Bana sor: basış sırasında açılan onay / soru penceresine kullanıcının yanıtı. */
   | { no: number; tur: 'diyalogYaniti'; yanit: 'kabul' | 'iptal' }
   /** amac 'bitis': bitiş koşulu için öğe / metin seçimi (şerit metni değişir; seçici çıktı öğesi kuralıyla seçilir). Varsayılan: düğme. */
@@ -231,12 +239,16 @@ export type HizliKomut =
   | { no: number; tur: 'bitir' };
 /** Alt süreç → sunucu (POST …/hizli). */
 export type HizliOlay =
-  | { olay: 'kesif'; anlik: HizliAnlik; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null }
+  | { olay: 'kesif'; anlik: HizliAnlik; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null; kesifDugmeleri?: HizliKesifDugmesi[] }
+  /** Keşif basışının sonucu: neyin değiştiği, beliren seçimlerin keşfi, sayfa ilk durumuna döndü mü. */
+  | { olay: 'kesifBasildi'; no: number; fark: HizliFark | null; kesifler: HizliKesif[]; geriDondu: boolean; anlik: HizliAnlik; hata?: string | null }
   | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik; yeniMetinler?: HizliMetin[];
       /** Seçeneğini beklemek gereken listeler: anahtar → bekleme (ms; bağlı listenin dolma süresi). */
       beklemeler?: Record<string, number>;
       /** Doldurunca beliren listeler arasında bulunan bağlı liste zinciri (yerinde keşif). */
-      zincir?: ZincirSonucu | null }
+      zincir?: ZincirSonucu | null;
+      /** Doldurunca beliren seçimlerin yerinde keşfi (iç içe dahil; keşifte kaçırılanlar da). */
+      kesifler?: HizliKesif[] }
   | { olay: 'basildi'; no: number; fark: HizliFark; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null }
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }
