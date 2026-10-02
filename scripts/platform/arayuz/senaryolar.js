@@ -548,6 +548,8 @@ function listeGorunumu(icerik, s) {
       // Geniş ekranda talep no kendi (ilk) sütunundadır; dar ekranda sütun gizlenir, rozet burada görünür.
       x.talepler?.length ? rozet([ikon('isaret'), x.talepler.join(', ')], 'talep-rozeti dar-goster', { kisalt: true, title: `Talep no: ${x.talepler.join(', ')}` }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
+      // "Veri bekliyor" (hızlı test önerisi): değeri girilmemiş alanlar; senaryoyu açıp "Değerleri doldur" ile doldurulur.
+      x.veriBekliyor?.length ? rozet(`veri bekliyor: ${x.veriBekliyor.join(', ')}`, 'uyari veri-bekliyor-rozeti', { kisalt: true, title: `Bu alanların değeri yok: ${x.veriBekliyor.join(', ')}. Senaryoyu açıp “Değerleri doldur” ile test verisinde doldurun; değer üretilmez.` }) : null,
       x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo toplu koşulara girmez; ▷ ile tek başına çalıştırılabilir (Ekranlar > ⋯ > Etkinleştir)' }) : null,
       x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null,
       // Sabit tarihi geçmiş (ya da bugün koşulursa sınır dışında): seçip "Tarihleri bugüne göre yap…" ile düzeltilir.

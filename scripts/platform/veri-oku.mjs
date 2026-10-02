@@ -24,6 +24,7 @@ import {
 } from './veritabani/depo.mjs';
 import { modelBaglami, ortamdaKosuyaDahil, senaryoAkisi } from './senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from './senaryolar/model-kosusu.mjs';
+import { bekleyenAlanlar, veriBekliyorMesaji } from './senaryolar/veri-bekliyor.mjs';
 import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryolar/senaryo-girisi.mjs';
 import { senaryoAdimGoruntusuAyikla } from './ayarlar/kayit-kurallari.mjs';
 import { etkinGirisTarifi } from './giris/tarif-deposu.mjs';
@@ -322,9 +323,13 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       // Senaryonun adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar; bugünkü davranış).
       adimGoruntusu: senaryoAdimGoruntusuAyikla(icerik.adimGoruntusu).secim
     };
+    // "Veri bekliyor" (hızlı test önerisi; senaryolar/veri-bekliyor.mjs): değeri girilmemiş hücreler — tarayıcı açılmadan açık hata, değer
+    // ÜRETİLMEZ ("Şu alanların değeri yok: … — test verisinde doldurun.").
+    const bekleyen = Array.isArray(icerik.veriBekliyor) ? bekleyenAlanlar(icerik.veriBekliyor, (tablolar ??= tablolariListele(vt, projeId, { cozulsun: true }))) : [];
+    const bekleyenHatalari = bekleyen.length ? [{ alan: 'veriBekliyor', mesaj: veriBekliyorMesaji(bekleyen) }] : [];
     /** @param {ReturnType<typeof basvurulariCoz>} cozum @param {{ anahtar: string | null; ad: string | null }} vk @param {Array<{ alan: string; mesaj: string }>} [ekHatalar] */
     const ekle = (cozum, vk, ekHatalar = []) => {
-      const hatalar = [...ekHatalar, ...cozum.veriHatalari];
+      const hatalar = [...bekleyenHatalari, ...ekHatalar, ...cozum.veriHatalari];
       senaryolar.push({
         ...ortak, veri: cozum.veri,
         ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),

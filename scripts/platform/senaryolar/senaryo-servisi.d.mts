@@ -105,6 +105,8 @@ export declare function senaryoKaydet(
     talepler?: unknown;
     /** Hızlı test bilgisi (izin, bitiş koşulu, doğrulandı; verilmezse mevcut korunur, null kaldırır). */
     hizliTest?: unknown;
+    /** Veri bekliyor alanları ([{ etiket, tabloId, sutun, satirId }]; verilmezse mevcut korunur, null / [] kaldırır). */
+    veriBekliyor?: unknown;
   },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[]; tabloSatirlari?: TabloSatiriEklemesi[] };

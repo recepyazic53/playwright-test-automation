@@ -451,10 +451,17 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
   ]);
   let liste = tablolar;
   const grupBilgisi = { ekranAdlari: ekranAdlari || [], ekranKullanimi: ekranKullanimi || {} };
+  // Satıra doğrudan gelindiyse (ör. "veri bekliyor" senaryosunun "Değerleri doldur"u): o tablo açılır, satır görünür ve boş hücreler vurgulanır.
+  const hedef = veriSatiriHedefi();
+  if (hedef && liste.some((t) => t.id === hedef.tabloId)) seciliId = hedef.tabloId;
   if (!liste.some((t) => t.id === seciliId)) seciliId = liste[0]?.id || '';
   let is = liste.length ? kopya(liste.find((t) => t.id === seciliId)) : null;
   let ara = '';
   let gorunur = GORUNUR_ADIM;
+  const hedefSira = hedef && is && is.id === hedef.tabloId ? is.satirlar.findIndex((r) => r.id === hedef.satirId) : -1;
+  if (hedefSira >= 0) gorunur = Math.max(gorunur, hedefSira + 1);
+  /** Satır vurgulanacak hedef mi? @param {any} r */
+  const hedefSatiriMi = (r) => Boolean(hedef && is && is.id === hedef.tabloId && r.id === hedef.satirId);
 
   const solKap = h('div', {});
   const sagKap = h('div', {});
@@ -825,15 +832,19 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
       return is.satirlar.some((r) => { const v = r.degerler[s.ad] ?? r.degerler[s.eskiAd]; return typeof v === 'string' && v.trim() !== '' && tarihDegeriCoz(v) !== null; });
     }
     function satirCiz(r, no) {
+      const hedefte = hedefSatiriMi(r);
       const hucreler = is.sutunlar.map((s) => {
         const anahtar = s.eskiAd && s.eskiAd !== s.ad && !(s.ad in r.degerler) ? s.eskiAd : s.ad;
         const secim = s.tip === 'secim';
+        // Hedef satırın beklenen boş hücresi vurgulanır (değer girilince vurgu kalkar).
+        const bekleyen = hedefte && hedef.sutunlar.includes(s.ad) && !String(r.degerler[anahtar] ?? '').trim() && !(s.gizli && r.doluGizli.has(s.eskiAd || s.ad));
         const g = h('input', {
           type: s.gizli ? 'password' : 'text', value: secim ? secimGoster(r.degerler[anahtar]) : r.degerler[anahtar] ?? '', autocomplete: s.gizli ? 'new-password' : 'off',
           title: secim ? 'Değer — metin (ör. 34 — İSTANBUL)' : null,
           placeholder: s.gizli && r.doluGizli.has(s.eskiAd || s.ad) ? '•••• kayıtlı' : '', 'aria-label': `${no}. satır ${s.ad}`
         });
         g.addEventListener('input', () => { r.degerler[s.ad] = secim ? secimYaz(g.value) : g.value; if (anahtar !== s.ad) delete r.degerler[anahtar]; r.degisti = true; durumCiz(); });
+        if (bekleyen) g.addEventListener('input', () => { g.closest('td')?.classList.toggle('veri-bekliyor-hucresi', !g.value.trim()); });
         // Tarih sütunu: hücreye sabit tarih ya da bugüne göre ifade ("bugün", "bugün+7", "ay sonu") yazılır; altında bugünkü karşılığı.
         if (!secim && !s.gizli && tarihSutunuMu(s)) {
           const onizleme = h('small', { class: 'tarih-hucre-onizleme', 'aria-live': 'polite' });
@@ -842,16 +853,16 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           g.title = 'Sabit tarih (gg.aa.yyyy) ya da bugüne göre: bugün, bugün+7, bugün-3, ay sonu, ay başı+1 — koşuda o günün tarihi yazılır';
           g.addEventListener('input', guncelle);
           guncelle();
-          return h('td', {}, h('div', { class: 'tarih-hucresi' }, g, onizleme));
+          return h('td', { class: bekleyen ? 'veri-bekliyor-hucresi' : null }, h('div', { class: 'tarih-hucresi' }, g, onizleme));
         }
-        return h('td', {}, g);
+        return h('td', { class: bekleyen ? 'veri-bekliyor-hucresi' : null }, g);
       });
       const ortam = h('select', { 'aria-label': `${no}. satır ortamı` }, h('option', { value: '' }, 'Tümü'),
         ortamlar.map((o) => h('option', { value: o.id, selected: r.ortamId === o.id }, o.ad)));
       ortam.addEventListener('change', () => { r.ortamId = ortam.value || null; r.degisti = true; durumCiz(); });
       const adG = h('input', { type: 'text', value: r.ad, maxlength: '120', 'aria-label': `${no}. satır adı`, placeholder: is.baglam ? 'zorunlu' : '' });
       adG.addEventListener('input', () => { r.ad = adG.value; r.degisti = true; durumCiz(); });
-      return h('tr', { class: r.degisti ? 'degisti' : null }, h('td', { class: 'sira' }, String(no)), h('td', { class: 'satir-adi-sutunu' }, adG), hucreler, h('td', { class: 'ortam-sutunu' }, ortam),
+      return h('tr', { class: [r.degisti ? 'degisti' : '', hedefte ? 'veri-bekliyor-satiri' : ''].join(' ').trim() || null }, h('td', { class: 'sira' }, String(no)), h('td', { class: 'satir-adi-sutunu' }, adG), hucreler, h('td', { class: 'ortam-sutunu' }, ortam),
         h('td', { class: 'eylem' }, h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${no}. satırı sil`, title: 'Satırı sil', onclick: () => {
           const i = is.satirlar.indexOf(r);
           if (i >= 0) is.satirlar.splice(i, 1);
@@ -893,4 +904,32 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
   }
 
   ciz();
+  // Hedef satır: görünür alana kaydırılır, ilk boş (vurgulu) hücreye odaklanılır.
+  if (hedefSira >= 0) {
+    const satir = sagKap.querySelector('tr.veri-bekliyor-satiri');
+    if (satir) {
+      // Sayfa başlığı odağı yerleştikten sonra (bir kare sonra) satıra kaydırılır ve ilk boş hücreye odaklanılır.
+      requestAnimationFrame(() => setTimeout(() => {
+        const s = sagKap.querySelector('tr.veri-bekliyor-satiri');
+        if (!s || !s.isConnected) return;
+        s.scrollIntoView({ block: 'center' });
+        const ilk = s.querySelector('td.veri-bekliyor-hucresi input');
+        if (ilk instanceof HTMLElement) ilk.focus({ preventScroll: true });
+      }, 0));
+      if (hedef.sutunlar.length) bildir(`Vurgulanan boş hücreleri (${hedef.sutunlar.join(', ')}) doldurup Kaydet'e basın; değer üretilmez.`);
+    }
+  } else if (hedef && is && is.id === hedef.tabloId) bildir('Bu satır tabloda artık yok: satırı ekleyip senaryonun beklediği değerleri girin.', 'uyari');
+}
+
+/**
+ * Doğrudan satır adresi (#/veri/satir/<tabloId>/<satırId>?sutun=…): açılacak tablo, satır ve vurgulanacak sütunlar; değilse null.
+ * @returns {{ tabloId: string; satirId: string; sutunlar: string[] } | null}
+ */
+function veriSatiriHedefi() {
+  const [yol, sorgu = ''] = (location.hash || '').split('?');
+  const p = yol.split('/');
+  if (p[1] !== 'veri' || p[2] !== 'satir' || !p[3] || !p[4]) return null;
+  try {
+    return { tabloId: decodeURIComponent(p[3]), satirId: decodeURIComponent(p[4]), sutunlar: new URLSearchParams(sorgu).getAll('sutun') };
+  } catch { return null; }
 }

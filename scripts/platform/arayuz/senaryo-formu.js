@@ -32,6 +32,7 @@ import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 import { tarihGirdisi } from './goreli-tarih-girdisi.js';
 import { talepAlani } from './talep-alani.js';
+import { veriBekliyorNotu } from './veri-bekliyor.js';
 import { HAZIRLIK_BASLIKLARI, alanMaddesi, eylemDenetimi, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
@@ -2151,6 +2152,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
           h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, vazgecDugmesi)),
         denemeAlani)));
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
+  // "Veri bekliyor" (hızlı test önerisi): eksik hücrelere "Değerleri doldur"; dolunca tek tıkla "Koşuya dahil et" (veri-bekliyor.js).
+  const vbNotu = s.mod === 'duzenle' ? veriBekliyorNotu({ senaryo, projeId: s.proje.id, kosuyaDahil, dahilEdildi: () => { kosuyaDahil = true; kosudaKutu.checked = true; } }) : null;
+  if (vbNotu) icerik.querySelector('.form-duzeni')?.before(vbNotu);
   beklenenCiz();
   guncelle();
   kayitGruplariniYenile();

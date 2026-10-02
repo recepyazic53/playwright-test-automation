@@ -17,6 +17,7 @@ import { etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from '../tablolar/ekran-basvurulari.mjs';
 import { satirSecimiOlustur } from '../tablolar/tablo-secimi.mjs';
 import { basvuruGruplari, veriKosusuSayisi } from '../tablolar/veri-kosulari.mjs';
+import { bekleyenAlanlar, veriBekliyorMesaji } from './veri-bekliyor.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./hazirlik.mjs').HazirlikMaddesi} HazirlikMaddesi */
@@ -89,7 +90,9 @@ function testVerisiMaddesi(vt, projeId, ekranId, model, veri, icerik, ortamId, o
     tablolar, baglar: onbellek.baglar.get(ekranId), ...modelAlanBilgisi(model), ortamId, satirSecimi, ...(tabloSecimleri ? { tabloSecimleri } : {})
   });
   const vk = veriKosusuSayisi(/** @type {any} */ (icerik.veriKosulari), { tablolar, gruplar: basvuruGruplari(veri, tablolar), ortamId, kip: null, tabloSecimleri: tabloSecimleri ?? null });
-  const sorun = r.hatalar[0]?.mesaj ?? vk.hatalar[0] ?? null;
+  // "Veri bekliyor" (hızlı test önerisi): değeri girilmemiş hücreler adlarıyla — koşu da aynı açık hatayla durur (veri-oku.mjs).
+  const bekleyen = bekleyenAlanlar(icerik.veriBekliyor, tablolar);
+  const sorun = (bekleyen.length ? veriBekliyorMesaji(bekleyen) : null) ?? r.hatalar[0]?.mesaj ?? vk.hatalar[0] ?? null;
   const satirlar = [...satirSecimi.kullanilan.entries()].map(([g, satir]) => {
     const t = tablolar.find((x) => x.id === g.split('|')[0]);
     return `${t ? t.ad : '?'}: ${satir?.ad || 'adsız satır'}`;

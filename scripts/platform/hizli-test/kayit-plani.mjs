@@ -20,7 +20,7 @@ import { GENEL_SUTUNLAR, baslikNormal, benzerTablolar } from '../tablolar/tablo-
 import { birlestirmePlani } from '../tablolar/paket-test-verisi.mjs';
 import { ayniKavramMi, benzerAdMi, kisiAdKavrami, kokEslesirMi } from '../tablolar/doldur-onerisi.mjs';
 import { degerBasvurusuYaz, grupAnahtari, satirSabitlemesi } from '../tablolar/tablo-secimi.mjs';
-import { adTemizle, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
+import { adTemizle, alanGrubu, hassasAlanMi, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
 import { gercekSecenekler, ornekDegerler } from '../tarama/zincir-kesfi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -552,6 +552,56 @@ export function pinSecimi(y) {
   return y.pin && Object.keys(y.pin).length ? Object.fromEntries(Object.entries(y.pin).map(([k, v]) => [k, String(v).slice(0, 200)])) : null;
 }
 
+/**
+ * "Veri bekliyor" önerisinin (dalın değeri olmayan alanları) test verisi satırları — değer YAZILMAZ: her alan, o dalda sorulduğu adla
+ * kaydedilseydi gideceği tabloya (alanGrubu: kişi / kart alanları gruplu, diğerleri kendi tablosu) sütun olarak eklenir (yoksa; gizli
+ * sütun kuralı hassasAlanMi) ve öneri için o tabloya BOŞ hücreli bir satır eklenir (tablo yoksa kayıt tablosu olarak açılır). Senaryo bu
+ * satıra kendi grubuyla (${Tablo[dal].Sütun}) bağlanır; kullanıcı hücreleri Test verisi'nde doldurur. Tek işlemde.
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ satirAdi: string; ekranAdi: string; ekGizliAdlar?: ReadonlyArray<string>; alanlar: ReadonlyArray<{ anahtar: string; etiket: string; alan: Nesne }> }} g
+ * @returns {Array<{ anahtar: string; etiket: string; tabloId: string; tabloAdi: string; sutun: string; satirId: string }>}
+ */
+export function veriBekleyenSatirlariYaz(vt, projeId, g) {
+  return vt.islem(() => {
+    /** @type {Map<string, { tablo: string; sutunlar: Array<{ ad: string; gizli: boolean }>; uyeler: Array<{ anahtar: string; etiket: string; sutun: string }> }>} */
+    const gruplar = new Map();
+    for (const x of g.alanlar) {
+      const a = { ...x.alan, etiket: x.etiket };
+      const yer = alanGrubu(a);
+      const k = kucuk(yer.tablo);
+      const grup = gruplar.get(k) ?? gruplar.set(k, { tablo: yer.tablo, sutunlar: [], uyeler: [] }).get(k);
+      if (!grup) continue;
+      if (!grup.sutunlar.some((s) => kucuk(s.ad) === kucuk(yer.sutun))) grup.sutunlar.push({ ad: yer.sutun, gizli: hassasAlanMi(a, yer, g.ekGizliAdlar ?? []) });
+      grup.uyeler.push({ anahtar: x.anahtar, etiket: x.etiket, sutun: yer.sutun });
+    }
+    const sonuc = [];
+    const kaynak = { tur: 'kayit', olusturan: 'Nöbetçi hızlı test', ekran: g.ekranAdi.slice(0, 120), yazilma: new Date().toISOString() };
+    for (const grup of gruplar.values()) {
+      const mevcut = tablolariListele(vt, projeId).find((t) => kucuk(t.ad) === kucuk(grup.tablo) && !t.baglam);
+      const kullanilan = new Set((mevcut?.satirlar ?? []).map((r) => kucuk(r.ad)));
+      const temel = adTemizle(g.satirAdi, 100) || 'Veri bekliyor';
+      let satirAdi = temel;
+      for (let i = 2; kullanilan.has(kucuk(satirAdi)); i++) satirAdi = `${temel.slice(0, 95)} ${i}`;
+      /** Plan sütunu → tablodaki adı (aynı adlı sütun varsa o). */
+      const hedef = new Map(grup.sutunlar.map((s) => [s.ad, mevcut?.sutunlar.find((c) => kucuk(c.ad) === kucuk(s.ad))?.ad ?? s.ad]));
+      const sutunlar = mevcut
+        ? [...mevcut.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: Boolean(c.gizli) })),
+          ...grup.sutunlar.filter((s) => !mevcut.sutunlar.some((c) => kucuk(c.ad) === kucuk(s.ad))).map((s) => ({ ad: s.ad, gizli: s.gizli }))]
+        : grup.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli }));
+      const tabloId = tabloKaydet(vt, {
+        projeId, ...(mevcut ? { id: mevcut.id } : { tur: 'kayit', kaynak }), ad: mevcut ? mevcut.ad : grup.tablo, sutunlar,
+        satirlar: [{ ad: satirAdi, ortamId: null, degerler: {} }]
+      });
+      const satirId = satirKimligi(vt, projeId, tabloId, satirAdi);
+      if (!satirId) throw new Error(`"${grup.tablo}" tablosuna satır eklenemedi.`);
+      for (const u of grup.uyeler) {
+        sonuc.push({ anahtar: u.anahtar, etiket: u.etiket, tabloId, tabloAdi: mevcut ? mevcut.ad : grup.tablo, sutun: /** @type {string} */ (hedef.get(u.sutun)), satirId });
+      }
+    }
+    return sonuc;
+  });
+}
+
 // ---------------------------------------------------------------------------------------
 // Senaryo önerileri
 // ---------------------------------------------------------------------------------------
@@ -673,8 +723,10 @@ export function ikiliKapsam(boyutlar, enCok) {
 export function senaryoOnerileri(plan, baslik, s = {}) {
   const enCok = Number.isInteger(s.enCok) && Number(s.enCok) > 0 ? Number(s.enCok) : VARSAYILAN_ONERI_SAYISI;
   /** @type {import('./kayit-plani.d.mts').SenaryoOnerisi[]} */
-  const liste = [{ indeks: 0, baslik, gerekce: 'Hızlı testte yaptığınız ve kaydettiğiniz akış', varsayilanSecili: true, alt: null, veriGerekli: [] }];
+  const liste = [{ indeks: 0, baslik, gerekce: 'Hızlı testte yaptığınız ve kaydettiğiniz akış', varsayilanSecili: true, alt: null, veriGerekli: [], eksikAlanlar: [] }];
   const alanlar = s.alanlar ?? [];
+  /** Aynı alan + ad bir kez. @param {Array<{ anahtar: string; etiket: string }>} l */
+  const tekEksik = (l) => [...new Map(l.map((x) => [`${x.anahtar}\u0001${x.etiket}`, x])).values()];
   const alan = (/** @type {string} */ k) => alanlar.find((a) => a.anahtar === k);
   /** @typedef {{ planAdi: string; sutun: string; deger: string; etiket: string; oturumAnahtar: string }} Degisiklik */
   /** Oturum alanı → tek alanlı liste tablosu + sütun (değişiklik o tablonun satırı seçilerek yapılır). */
@@ -707,7 +759,8 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   };
 
   /** @typedef {{ k: string; m: string; kod: string }} DalAdimi */
-  /** @typedef {{ adimlar: DalAdimi[]; d: Degisiklik[]; veriGerekli: string[] }} DalYolu */
+  /** @typedef {{ anahtar: string; etiket: string }} Eksik */
+  /** @typedef {{ adimlar: DalAdimi[]; d: Degisiklik[]; veriGerekli: string[]; eksik: Eksik[] }} DalYolu */
   // 1) Görünürlük dalları: alan kümesini değiştiren seçimler (kontroller; iç içe olanlar dahil) dal ağacı olur, tüm yolların kartezyeni.
   // Alanın ETİKETİNİ değiştiren seçim (etiketKosulu: aynı alan bir değerde kimlik no, diğerinde vergi no sorar) de dal açar: alan kümesi
   // aynı olsa da girilecek verinin anlamı değişir.
@@ -746,6 +799,8 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
       const d = [degisiklik(k, m)];
       /** @type {string[]} */
       const veriGerekli = [];
+      /** @type {Eksik[]} */
+      const eksik = [];
       for (const x of ac) {
         if (ic.includes(x) || doluMu(x) || String(x.tur) === 'checkbox') continue;
         if (SECIM_TURLERI.includes(String(x.tur))) {
@@ -753,6 +808,7 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
           if (l.length) { d.push(degisiklik(x.anahtar, l[0])); continue; }
         }
         veriGerekli.push(String(x.etiket ?? x.anahtar));
+        eksik.push({ anahtar: String(x.anahtar), etiket: String(x.etiket ?? x.anahtar) });
       }
       // Etiketi bu değerde değişen alan: senaryodaki değeri başka anlamın verisidir (kimlik no ≠ vergi no); değer ÜRETİLMEZ, veri gerekli.
       // Dal başlığı o değerde sorulan adları söyler ("Kişi tipi: Tüzel (Vergi no, İş telefonu)").
@@ -760,14 +816,15 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
       for (const x of yeniAdlar) {
         if (ac.includes(x) || String(x.tur) === 'checkbox' || SECIM_TURLERI.includes(String(x.tur))) continue;
         veriGerekli.push(kodEtiketi(x, kod));
+        eksik.push({ anahtar: String(x.anahtar), etiket: kodEtiketi(x, kod) });
       }
       const baslikMetni = yeniAdlar.length ? `${m} (${yeniAdlar.map((x) => kodEtiketi(x, kod)).join(', ')})` : m;
       /** @type {DalYolu[]} */
-      let alt = [{ adimlar: [{ k, m: baslikMetni, kod }], d, veriGerekli }];
+      let alt = [{ adimlar: [{ k, m: baslikMetni, kod }], d, veriGerekli, eksik }];
       for (const n of ic) {
         const nl = dalYollari(String(n.anahtar), yeni);
         if (!nl.length) continue;
-        alt = alt.flatMap((y) => nl.map((z) => ({ adimlar: [...y.adimlar, ...z.adimlar], d: [...y.d, ...z.d], veriGerekli: [...y.veriGerekli, ...z.veriGerekli] })));
+        alt = alt.flatMap((y) => nl.map((z) => ({ adimlar: [...y.adimlar, ...z.adimlar], d: [...y.d, ...z.d], veriGerekli: [...y.veriGerekli, ...z.veriGerekli], eksik: [...y.eksik, ...z.eksik] })));
       }
       yollar.push(...alt);
     }
@@ -778,7 +835,7 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   /** Kaydedilen yol mu (her adım şimdiki değerinde)? @param {DalYolu} y */
   const kaydedilenMi = (y) => y.adimlar.every((a) => a.kod === simdikiKod(a.k));
   /** @param {DalYolu[]} l @returns {DalYolu} */
-  const birlestir = (l) => ({ adimlar: l.flatMap((y) => y.adimlar), d: l.flatMap((y) => y.d), veriGerekli: [...new Set(l.flatMap((y) => y.veriGerekli))] });
+  const birlestir = (l) => ({ adimlar: l.flatMap((y) => y.adimlar), d: l.flatMap((y) => y.d), veriGerekli: [...new Set(l.flatMap((y) => y.veriGerekli))], eksik: tekEksik(l.flatMap((y) => y.eksik)) });
   /** @type {DalYolu[]} */
   let tumYollar = kokYollari.reduce((/** @type {DalYolu[][]} */ c, l) => c.flatMap((x) => l.map((y) => [...x, y])), [[]]).map(birlestir);
   if (!kokYollari.length) tumYollar = [];
@@ -807,11 +864,11 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     dalKapsami = 'ikili kapsam';
   }
   yollar = yollar.slice(0, enCok);
-  /** @typedef {{ degisiklikler: Degisiklik[]; parcalar: string[]; gerekce: string[]; veriGerekli: string[]; zenginlik: number }} Aday */
+  /** @typedef {{ degisiklikler: Degisiklik[]; parcalar: string[]; gerekce: string[]; veriGerekli: string[]; eksik: Eksik[]; zenginlik: number }} Aday */
   /** @param {DalYolu} y @returns {Aday} */
   const dalAdayi = (y) => ({
     degisiklikler: y.d.filter((x) => !(kontroller.includes(x.oturumAnahtar) && kodu(x.oturumAnahtar, x.deger) === simdikiKod(x.oturumAnahtar))),
-    parcalar: y.adimlar.map((a) => `${etiketi(a.k)}: ${a.m}`), gerekce: [`görünürlük dalları: ${dalKapsami}`], veriGerekli: y.veriGerekli, zenginlik: y.d.length
+    parcalar: y.adimlar.map((a) => `${etiketi(a.k)}: ${a.m}`), gerekce: [`görünürlük dalları: ${dalKapsami}`], veriGerekli: y.veriGerekli, eksik: tekEksik(y.eksik), zenginlik: y.d.length
   });
   /** @type {Aday[]} */
   const adaylar = yollar.map(dalAdayi);
@@ -834,7 +891,7 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
       a.zenginlik++;
     });
   }
-  for (const x of kalanHerDeger) adaylar.push({ degisiklikler: [...x.d], parcalar: [...temelParcalar, `${x.ad}: ${x.m}`], gerekce: [`“${x.ad}”: her değer`], veriGerekli: [], zenginlik: 1 });
+  for (const x of kalanHerDeger) adaylar.push({ degisiklikler: [...x.d], parcalar: [...temelParcalar, `${x.ad}: ${x.m}`], gerekce: [`“${x.ad}”: her değer`], veriGerekli: [], eksik: [], zenginlik: 1 });
   // 3) Bağlı liste zinciri: kökü (en üst halkası) farklı her gözlenen satır (aynı kökten ikinci satır yok); zincir satırı tek başına öneri
   //    olmaz, zengin bir öneriye katılır (en çok değişiklik yapan önce; her öneriye en çok bir adres).
   /** @type {Array<{ d: Degisiklik[]; kokEtiket: string; metin: string }>} */
@@ -868,7 +925,7 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     a.gerekce.push(`adres: farklı ${z.kokEtiket.toLocaleLowerCase('tr')}`);
   });
   // Başka değişken yoksa adres tek başına (tek seçenek bu).
-  if (!adaylar.length) for (const z of adresler.slice(0, enCok)) adaylar.push({ degisiklikler: [...z.d], parcalar: [...temelParcalar, z.metin], gerekce: [`adres: farklı ${z.kokEtiket.toLocaleLowerCase('tr')}`], veriGerekli: [], zenginlik: 1 });
+  if (!adaylar.length) for (const z of adresler.slice(0, enCok)) adaylar.push({ degisiklikler: [...z.d], parcalar: [...temelParcalar, z.metin], gerekce: [`adres: farklı ${z.kokEtiket.toLocaleLowerCase('tr')}`], veriGerekli: [], eksik: [], zenginlik: 1 });
   // Ayıklama (aynı değişiklik kümesi) ve sınır.
   const gorulen = new Set();
   for (const x of adaylar) {
@@ -876,10 +933,10 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     const imza = x.degisiklikler.map((d) => `${d.planAdi}|${d.sutun}=${d.deger}`).sort().join('\u0001');
     if (!x.degisiklikler.length || gorulen.has(imza)) continue;
     gorulen.add(imza);
-    const gerekce = [...new Set(x.gerekce), ...(x.veriGerekli.length ? [`veri gerekli: ${x.veriGerekli.join(', ')}; bu birleşim için yeni hızlı test başlatın`] : []), 'diğer değerler aynı'];
+    const gerekce = [...new Set(x.gerekce), ...(x.veriGerekli.length ? [`veri gerekli: ${x.veriGerekli.join(', ')}; seçilirse “veri bekliyor” olarak koşu dışı kaydedilir, değerleri test verisinde doldurursunuz`] : []), 'diğer değerler aynı'];
     liste.push({
       indeks: liste.length, baslik: `${baslik} — ${x.parcalar.join(' · ')}`.slice(0, 300), gerekce: gerekce.join('; ').slice(0, 600),
-      varsayilanSecili: false, alt: { degisiklikler: x.degisiklikler }, veriGerekli: x.veriGerekli
+      varsayilanSecili: false, alt: { degisiklikler: x.degisiklikler }, veriGerekli: x.veriGerekli, eksikAlanlar: x.eksik
     });
   }
   return liste;

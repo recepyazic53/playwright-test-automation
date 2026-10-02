@@ -74,13 +74,14 @@ import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-ba
 import { karsiliklariEkrandanAl } from '../tablolar/karsiliklar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
-import { KAYIT_ETIKETI, basvuruYaz, pinAnahtari, pinSecimi, planKur, planOnizle, planYaz, senaryoOnerileri, varsayilanSecim } from './kayit-plani.mjs';
+import { KAYIT_ETIKETI, basvuruYaz, pinAnahtari, pinSecimi, planKur, planOnizle, planYaz, senaryoOnerileri, varsayilanSecim, veriBekleyenSatirlariYaz } from './kayit-plani.mjs';
+import { VERI_BEKLIYOR_ETIKETI } from '../senaryolar/veri-bekliyor.mjs';
 import { ekranBasvurulariniCoz } from '../tablolar/ekran-basvurulari.mjs';
 import {
   DOSYA_BOYUT_SINIRI, dosyaSahipleriniBagla, hizliTestKaynagi, projeSenaryoDosyalari, referansCoz, referanslariCoz, senaryoDosyasiBilgisi, senaryoDosyasiEkle
 } from '../dosyalar/senaryo-dosyalari.mjs';
 import { kosuKlasoruOlustur, kosuKlasorunuSil } from '../dosyalar/gecici-dosyalar.mjs';
-import { degerBasvurusu, grupAnahtari } from '../tablolar/tablo-secimi.mjs';
+import { degerBasvurusu, grupAnahtari, satirSabitlemesi } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, bitisUyarilari, canliOnayMetni, cumleyiOku,
   eksikAlanlar, hizliSenaryoBasligi, kayitEnvanteriKur, sayfaUyarisi, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
@@ -2408,7 +2409,7 @@ export function hizliTestYoneticisiOlustur(s) {
     dosyaSahipleriniBagla(vt, 'senaryo', String(s2.id), veri);
     // Senaryo önerilerinden seçilenler: her değişiklik ilgili liste tablosunun satırını seçer (bağlı listeler birlikte). Senaryoda değeri olmayan
     // alan (sayfada hazır gelen radyo / liste) tablo başvurusuyla senaryoya eklenir; satır seçimi o değere sabitlenir.
-    /** @type {Array<{ id: string; baslik: string }>} */
+    /** @type {Array<{ id: string; baslik: string; veriBekliyor?: string[] }>} */
     const ek = [];
     const istenen = Array.isArray(g.senaryoIndeksleri) ? g.senaryoIndeksleri.map(Number).filter((x) => Number.isInteger(x) && x > 0) : [];
     if (uygulanan && istenen.length) {
@@ -2417,8 +2418,11 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const i of istenen) {
         const oneri = oneriler.find((x) => x.indeks === i);
         if (!oneri?.alt) continue;
-        // Veri gerektiren dal (değeri olmayan alan açar): değer üretilmez, kaydedilmez — kullanıcı o dalla yeni hızlı test başlatır.
-        if (oneri.veriGerekli?.length) { gunluk(o, `“${oneri.baslik}” önerisi kaydedilmedi: veri gerekli (${oneri.veriGerekli.join(', ')}).`); continue; }
+        // Veri gerektiren dal (değeri olmayan alan açar): değer ÜRETİLMEZ. Senaryo "veri bekliyor" olarak kaydedilir: alanlar test verisinde
+        // kendi boş satırına (${Tablo[dal].Sütun}) bağlanır, senaryo koşuya dahil edilmez; kullanıcı hücreleri doldurup koşuya alır.
+        const eksikler = (oneri.eksikAlanlar ?? []).map((x) => ({ ...x, alan: planAlanlari(o).find((/** @type {Nesne} */ a) => a.anahtar === x.anahtar) }))
+          .filter((x) => x.alan && anahtarlar[x.anahtar]);
+        if (oneri.veriGerekli?.length && !eksikler.length) { gunluk(o, `“${oneri.baslik}” önerisi kaydedilmedi: veri gerekli (${oneri.veriGerekli.join(', ')}) ama alanlar ekran modelinde yok.`); continue; }
         const pinler = structuredClone(o.tabloSecimleri);
         const veri2 = structuredClone(veri);
         let tamam = true;
@@ -2435,9 +2439,23 @@ export function hizliTestYoneticisiOlustur(s) {
           if (anahtar && veri2[anahtar] === undefined) veri2[anahtar] = basvuruYaz(y.ad, y.hedef(d.sutun));
         }
         if (!tamam) { gunluk(o, `“${oneri.baslik}” önerisi kaydedilmedi: tablosu yazılmadı (atlandı).`); continue; }
+        /** @type {ReturnType<typeof veriBekleyenSatirlariYaz>} */
+        let bekleyen = [];
+        if (eksikler.length) {
+          bekleyen = veriBekleyenSatirlariYaz(vt, o.projeId, { satirAdi: oneri.baslik, ekranAdi: o.ekran.ad, ekGizliAdlar: ekGizliAdlar(vt), alanlar: eksikler });
+          for (const b of bekleyen) {
+            pinler[grupAnahtari(b.tabloId, VERI_BEKLIYOR_ETIKETI)] = satirSabitlemesi(b.satirId);
+            veri2[anahtarlar[b.anahtar]] = basvuruYaz(b.tabloAdi, b.sutun, VERI_BEKLIYOR_ETIKETI);
+          }
+        }
         const varMi = vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ? AND ekran_id = ? AND baslik = ?', [o.projeId, ekranId, oneri.baslik])[0];
-        const e = senaryoKaydet(vt, { ...(varMi ? { id: String(varMi.id) } : {}), projeId: o.projeId, ekranId, baslik: oneri.baslik, veri: veri2, ortamIdleri: [o.ortam.id], kosuyaDahil: g.kosuyaDahil !== false, tabloSecimleri: pinler }, { kosuyorMu: c.kosuyorMu });
-        ek.push({ id: e.id, baslik: oneri.baslik });
+        const e = senaryoKaydet(vt, {
+          ...(varMi ? { id: String(varMi.id) } : {}), projeId: o.projeId, ekranId, baslik: oneri.baslik, veri: veri2, ortamIdleri: [o.ortam.id],
+          kosuyaDahil: bekleyen.length ? false : g.kosuyaDahil !== false, tabloSecimleri: pinler,
+          ...(bekleyen.length ? { veriBekliyor: bekleyen.map((b) => ({ etiket: b.etiket, tabloId: b.tabloId, sutun: b.sutun, satirId: b.satirId })) } : {})
+        }, { kosuyorMu: c.kosuyorMu });
+        if (bekleyen.length) gunluk(o, `“${oneri.baslik}” veri bekliyor olarak koşu dışı kaydedildi (${[...new Set(bekleyen.map((b) => b.etiket))].join(', ')}; değerleri test verisinde doldurun).`);
+        ek.push({ id: e.id, baslik: oneri.baslik, ...(bekleyen.length ? { veriBekliyor: [...new Set(bekleyen.map((b) => b.etiket))] } : {}) });
       }
     }
     let hazirlik = null;
