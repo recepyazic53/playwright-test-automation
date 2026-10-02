@@ -390,7 +390,8 @@ function secimeTikla(el: Element): boolean {
 /**
  * Seçim keşfi: açılır listelerde diğer seçenekler, radyo gruplarında diğer seçenekler, onay kutularında ters durum sırayla denenir
  * (Ayarlar > Koşu > Açılır liste keşif sınırı; varsayılan 8). Beliren / kaybolan alanlar, seçenekleri DEĞİŞEN diğer seçim alanları
- * (bağımlı listeler; yalnız seçenek etiketi / değeri) ve etkinleşen alanlar kaydedilir; sonunda ilk değer geri yüklenir. Seçim sayfayı
+ * (bağımlı listeler; yalnız seçenek etiketi / değeri), etkinleşen alanlar ve etiketi DEĞİŞEN alanlar (anahtar aynı, görünen ad farklı:
+ * etiketler) kaydedilir; sonunda ilk değer geri yüklenir. Seçim sayfayı
  * başka adrese götürürse not düşülür ve hedefe dönülür. Keşif HİÇBİR düğmeye / bağlantıya basmaz; sayfanın betiği bassa da
  * tıklama yutulur (dugmeTiklamaKorumasi) ve yazma istekleri ağ katmanında iptal edilir.
  */
@@ -437,6 +438,12 @@ export async function secimleriKesfet(
     // Bağımlı listeler: bu seçim değişince seçenekleri değişen diğer seçim alanları (ilk değerdeki listelere göre).
     const secenekImzasi = (a: HamAlan): string => JSON.stringify((a.secenekler ?? a.radyolar ?? []).map((x) => x.deger));
     const temelSecenekler = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar && (a.secenekler || a.radyolar)).map((a) => [a.anahtar, secenekImzasi(a)]));
+    // Etiketi değişen alanlar: anahtar (alan) aynı kalır, sayfadaki görünen adı bu seçime göre değişir (ör. aynı kutu bir değerde kimlik
+    // no, diğerinde vergi no sorar). Alan belirmez / kaybolmaz; yalnız adı değişir.
+    const temelEtiketler = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar && a.etiket).map((a) => [a.anahtar, String(a.etiket)]));
+    // Aynı alanın en çok karakter sayısı (maxlength) / deseni (pattern) de seçime göre değişebilir (ör. kimlik no 11, vergi no 10 hane).
+    const kuralImzasi = (a: HamAlan): string => JSON.stringify([a.enCok ?? null, a.desen ?? null]);
+    const temelKurallar = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar).map((a) => [a.anahtar, kuralImzasi(a)]));
     const degerler: KesifDegeri[] = [];
     for (const o of denenecek) {
       if (o.deger === ilk) continue;
@@ -471,9 +478,20 @@ export async function secimleriKesfet(
         secenekler[a.anahtar] = a.secenekler ?? (a.radyolar ?? []).map((x) => ({ deger: x.deger, metin: x.metin ?? x.deger }));
       }
       const etkinlesenler = simdi.alanlar.filter((a) => devreDisiAnahtarlar.has(a.anahtar) && !a.devreDisi).map((a) => a.anahtar);
+      const etiketler: Record<string, string> = {};
+      for (const a of simdi.alanlar) {
+        const once = temelEtiketler.get(a.anahtar);
+        if (once !== undefined && a.etiket && String(a.etiket) !== once) etiketler[a.anahtar] = String(a.etiket);
+      }
+      const kurallar: Record<string, { enCok: number | null; desen: string | null }> = {};
+      for (const a of simdi.alanlar) {
+        const once = temelKurallar.get(a.anahtar);
+        if (once !== undefined && once !== kuralImzasi(a)) kurallar[a.anahtar] = { enCok: a.enCok ?? null, desen: a.desen ?? null };
+      }
       degerler.push({
         deger: o.deger, metin: o.metin, gorunenler, kaybolanlar: [...temelAnahtarlar].filter((k) => !simdiAnahtarlar.has(k)), gezinme: null,
-        ...(Object.keys(secenekler).length ? { secenekler } : {}), ...(etkinlesenler.length ? { etkinlesenler } : {})
+        ...(Object.keys(secenekler).length ? { secenekler } : {}), ...(etkinlesenler.length ? { etkinlesenler } : {}),
+        ...(Object.keys(etiketler).length ? { etiketler } : {}), ...(Object.keys(kurallar).length ? { kurallar } : {})
       });
     }
     let geriAlindi = false;

@@ -225,7 +225,9 @@ test.describe('hızlı test ve normal koşu (127.0.0.1)', () => {
       await expect(tip.getByLabel('Vergi no', { exact: true })).toBeVisible();
       await expect(soru.getByLabel('Kimlik no', { exact: true })).toHaveCount(0);
       const farkli = soru.locator('.hizli-onsecim-alani[data-anahtar]').filter({ hasText: 'Ödeyen farklı' });
-      await expect(farkli.locator('.hizli-kosul-grubu')).toHaveCount(0);
+      // Hayır'da açılan alan yok: grup boş görünmez, bu seçimde sorulmayanları söyler.
+      await expect(farkli.locator('.hizli-kosul-grubu-notu')).toHaveText(/^Bu seçimde “Ödeyen .+” sorulmaz\.$/);
+      await expect(farkli.locator('.hizli-kosul-grubu .hizli-alan')).toHaveCount(0);
       await farkli.getByRole('radio', { name: 'Evet' }).check();
       await expect(farkli.locator('.hizli-kosul-grubu-baslik')).toHaveText('“Ödeyen farklı: Evet” seçimine göre:');
       // D (arayüz): gizli koşullu alanlar "dolu" / "sayfada hazır" gösterilmez; boş sorulur.

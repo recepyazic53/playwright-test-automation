@@ -9,6 +9,10 @@
 //                    Tüzel; Özel'de "Kimlik no", Tüzel'de "Vergi no"), Ödeyen farklı (radyo Hayır / Evet; Evet'te "Ödeyen tipi" radyosu
 //                    ve "Ödeyen doğum tarihi" belirir — sayfa onları o an ÖNDOLDURUR: keşifte "hazır" görünürler ama şu an gizlidir).
 //   /basit/          "Ad" + "Gönder": basınca GET /api/selam?ad=… → yalnız metin ("Merhaba <ad>"); yeni alan çıkmaz.
+//   /etiketli/       Kişi tipi Özel / Tüzel: Tüzel'de doğum tarihi gizlenir, AYNI kutuların adı (ve en çok karakteri) değişir (Kimlik no 11 →
+//                    Vergi no 10, Cep telefonu → İş telefonu); etiketler satırdaki span'da (for yok); süslü gizli radyo ve gizli <select> +
+//                    seçili metin kutusu; tuşla yazılamayan takvimli doğum tarihi; salt okunur hesaplanan alanlar; Adres farklı = Evet'te
+//                    yeni alan (Adres). "Kaydet": POST /api/etiketli → "Kayıt alındı".
 //   /pencere/        Arka planda 70 işlem düğmesi ve alan yanındaki yazısız (::before) simgeler; "Pencereyi aç" → örtü + sabit kutu
 //                    (rolsüz): href'siz <a> "Dış sistemden devam et", onclick'li span "Kartla tamamla", "Taksit planı" listesi + "Tamamla".
 import type { FiksturIstegi, FiksturYaniti } from './giris-fikstur';
@@ -182,7 +186,88 @@ export const DAL_AGACI_SAYFASI = String.raw`<h1>Başvuru</h1>
   $('kaydet').addEventListener('click', function () { $('sonuc').textContent = 'Kayıt alındı'; });
 </script>`;
 
+/**
+ * /etiketli/: seçime göre ETİKETİ değişen alanlar; gerçek bir formun yapısıyla (etiketler "for" ile DEĞİL, satırdaki span ile bağlı; radyo ve
+ * açılır liste gizli girdili süsleme bileşenleriyle sarılı). Kişi tipi (Özel / Tüzel): Özel'de "Doğum tarihi" görünür, kutuların adları
+ * "Kimlik no" (en çok 11) ve "Cep telefonu"; Tüzel'de doğum tarihi gizlenir, AYNI kutuların adı "Vergi no" (en çok 10) ve "İş telefonu"
+ * olur (yeni alan belirmez). Doğum tarihi takvim bileşenli, tuşla yazmayı engeller (onkeypress="return false;"), varsayılan değerli.
+ * "Seçenek no": gizli <select> + seçili metni gösteren kutu + gizli liste (değişince salt okunur "Hesaplanan tutar" ve "Ek tutar" sayfa
+ * tarafından dolar; başta boş). Adres farklı (Hayır / Evet): Evet'te gerçekten yeni alan ("Adres") açılır. "Kaydet": POST /api/etiketli
+ * (görünen alanlar) → "Kayıt alındı".
+ */
+export const ETIKETLI_SAYFASI = String.raw`<style>
+  .satir { margin: 6px 0; } .yLabel { display: inline-block; min-width: 140px; }
+  .jqTransformHidden { display: none; }
+  .jqTransformRadio, .jqTransformSelectOpen { display: inline-block; width: 14px; height: 14px; border: 1px solid #888; vertical-align: middle; }
+  .jqTransformRadio.jqTransformChecked { background: #036; }
+  .jqTransformSelectWrapper { display: inline-block; position: relative; } .jqTransformSelectWrapper > div { display: inline-block; min-width: 80px; border: 1px solid #888; padding: 2px 4px; }
+  .jqTransformSelectWrapper ul { position: absolute; background: #fff; border: 1px solid #888; list-style: none; margin: 0; padding: 0; z-index: 5; }
+</style>
+<h1>Başvuru</h1>
+<div class="satir"><span class="yLabel">Kişi tipi</span>
+  <span class="jqTransformRadioWrapper"><a href="#" class="jqTransformRadio jqTransformChecked" rel="tip"></a><input type="radio" class="jqTransformHidden" id="tipO" name="tip" value="O" checked></span><label for="tipO">Özel</label>
+  <span class="jqTransformRadioWrapper"><a href="#" class="jqTransformRadio" rel="tip"></a><input type="radio" class="jqTransformHidden" id="tipT" name="tip" value="T"></span><label for="tipT">Tüzel</label></div>
+<div class="satir"><span class="yLabel">Ad</span><input id="ad" name="ad"></div>
+<div class="satir" id="dogumKap"><span class="yLabel">Doğum tarihi</span><input id="dogum" name="dogum" class="hasDatepicker" onkeypress="return false;" value="02.10.2026"></div>
+<div class="satir"><span class="yLabel" id="kimlikAdi">Kimlik no</span><input id="kimlik" name="kimlik" maxlength="11"></div>
+<div class="satir"><span class="yLabel" id="telefonAdi">Cep telefonu</span><input id="telefon" name="telefon"></div>
+<div class="satir"><span class="yLabel">Seçenek no</span><div class="jqTransformSelectWrapper"><div><span>1</span><a href="#" class="jqTransformSelectOpen"></a></div>
+  <ul style="display:none"><li><a href="#" index="0">Lütfen seçiniz...</a></li><li><a href="#" index="1" class="selected">1</a></li><li><a href="#" index="2">2</a></li></ul>
+  <select id="secenekNo" name="secenekNo" class="jqTransformHidden"><option value="-1">Lütfen seçiniz...</option><option value="1" selected>1</option><option value="2">2</option></select></div></div>
+<div class="satir"><span class="yLabel">Hesaplanan tutar</span><input id="hesap" name="hesap" readonly></div>
+<div class="satir"><span class="yLabel">Ek tutar</span><input id="ekTutar" name="ekTutar" readonly></div>
+<fieldset><legend>Adres farklı</legend>
+  <label><input type="radio" name="farkli" value="H" checked> Hayır</label> <label><input type="radio" name="farkli" value="E"> Evet</label></fieldset>
+<div id="adresKap" hidden><label for="adres">Adres</label><input id="adres" name="adres"></div>
+<p><button type="button" id="kaydet">Kaydet</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var sec = function (ad) { var r = document.querySelector('input[name=' + ad + ']:checked'); return r ? r.value : ''; };
+  function goster() {
+    var t = sec('tip') === 'T';
+    $('dogumKap').hidden = t;
+    $('kimlikAdi').textContent = t ? 'Vergi no' : 'Kimlik no';
+    $('kimlik').maxLength = t ? 10 : 11;
+    $('telefonAdi').textContent = t ? 'İş telefonu' : 'Cep telefonu';
+    $('adresKap').hidden = sec('farkli') !== 'E';
+    document.querySelectorAll('.jqTransformRadio').forEach(function (a) { a.classList.toggle('jqTransformChecked', a.nextElementSibling.checked); });
+  }
+  document.querySelectorAll('input[type=radio]').forEach(function (r) { r.addEventListener('change', goster); });
+  // Süslü radyo: görünen kutuya tıklanınca gizli radyo seçilir.
+  document.querySelectorAll('.jqTransformRadio').forEach(function (a) {
+    a.addEventListener('click', function (o) { o.preventDefault(); var r = a.nextElementSibling; r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); });
+  });
+  // Süslü liste: kutu açılır, listedeki seçeneğe tıklanınca gizli <select> seçilir (change), kutunun yazısı güncellenir.
+  var liste = document.querySelector('.jqTransformSelectWrapper ul');
+  document.querySelector('.jqTransformSelectOpen').addEventListener('click', function (o) { o.preventDefault(); liste.style.display = liste.style.display === 'none' ? 'block' : 'none'; });
+  liste.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function (o) {
+      o.preventDefault();
+      var s = $('secenekNo'); s.selectedIndex = Number(a.getAttribute('index'));
+      document.querySelector('.jqTransformSelectWrapper > div > span').textContent = a.textContent;
+      liste.style.display = 'none';
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+  // Hesaplanan (salt okunur) alanlar: seçenek değişince sayfa doldurur.
+  $('secenekNo').addEventListener('change', function () {
+    var n = Number(this.value);
+    $('hesap').value = n > 0 ? String(n * 100) : ''; $('ekTutar').value = n > 0 ? String(n * 15) : '';
+  });
+  $('kaydet').addEventListener('click', function () {
+    var v = { tip: sec('tip'), ad: $('ad').value, kimlik: $('kimlik').value, telefon: $('telefon').value, secenekNo: $('secenekNo').value };
+    if (!$('dogumKap').hidden) v.dogum = $('dogum').value;
+    if (!$('adresKap').hidden) v.adres = $('adres').value;
+    if ($('hesap').value) v.hesap = $('hesap').value;
+    fetch('/api/etiketli', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+  });
+</script>`;
+
 export class VeriDuragiUygulamasi {
+  /** /etiketli/ gönderimleri (görünen alanların değerleri). */
+  readonly etiketliKayitlar: Array<Record<string, string>> = [];
   readonly istekler: string[] = [];
   /** /tarihli/ gönderimleri. */
   readonly tarihliKayitlar: Array<{ dogum: string; kimlik: string }> = [];
@@ -199,6 +284,8 @@ export class VeriDuragiUygulamasi {
     if (i.yol === '/api/selam' && i.yontem === 'GET') { const ad = i.sorgu.get('ad') ?? ''; this.selamlar.push(ad); return { tur: 'application/json', govde: JSON.stringify({ ad }), gecikmeMs: 200 }; }
     if (i.yol === '/pencere/' && i.yontem === 'GET') return html('İşlemler', PENCERE_SAYFASI);
     if (i.yol === '/dal-agaci/' && i.yontem === 'GET') return html('Başvuru', DAL_AGACI_SAYFASI);
+    if (i.yol === '/etiketli/' && i.yontem === 'GET') return html('Başvuru', ETIKETLI_SAYFASI);
+    if (i.yol === '/api/etiketli' && i.yontem === 'POST') { this.etiketliKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/agac-ilce' && i.yontem === 'GET') { const a = AGAC[i.sorgu.get('il') ?? '']; return { tur: 'application/json', govde: JSON.stringify(a ? [a.ilce] : []), gecikmeMs: 150 }; }
     if (i.yol === '/api/agac-bina' && i.yontem === 'GET') { const a = AGAC[i.sorgu.get('il') ?? '']; return { tur: 'application/json', govde: JSON.stringify(a ? a.binalar : []), gecikmeMs: 150 }; }
     return null;

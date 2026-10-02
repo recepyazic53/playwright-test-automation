@@ -335,7 +335,7 @@ export function alanDonusturucu(sayac) {
   /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string} id @returns {Record<string, unknown>} */
   const taslakAlan = (a, id) => {
     // Takvimden seçilen (salt okunur) tarih alanı: tarih olarak doldurulur (değer + olaylar, olmazsa takvimden; koşucu aynı kural).
-    const { tip, not } = a.takvimden ? { tip: 'tarih', not: 'Salt okunur, takvimden seçilen tarih alanı: değer yazılır, olmazsa takvimden gün seçilir.' } : modelTipi(a);
+    const { tip, not } = a.takvimden ? { tip: 'tarih', not: 'Takvimden seçilen tarih alanı (salt okunur ya da tuşla yazmayı engelliyor): değer yazılır, olmazsa takvimden gün seçilir.' } : modelTipi(a);
     const etiket = temizMetin(a.etiket, sayac, 120);
     if (!etiket) etiketsizler.push(id);
     const dokunulmaz = a.devreDisi || (a.saltOkunur && !a.takvimden);

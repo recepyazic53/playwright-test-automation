@@ -81,6 +81,23 @@
 }
 .hizli-kosul-grubu .hizli-kosul-grubu { margin-left: 6px; }
 .hizli-kosul-grubu-baslik { margin: 0; color: var(--metin-2); font-weight: 600; overflow-wrap: anywhere; }
+/* Grubun notu: bu seçimde sorulmayan (gizlenen) alanlar ya da "değişiklik yok" (grup hiç boş görünmez). */
+.hizli-kosul-grubu-notu { margin: 0; overflow-wrap: anywhere; }
+.hizli-kosul-grubu > .hizli-alanlar[hidden] { display: none; }
+/* Etiketi seçime göre değişen alan: şu anki ad etikette, diğer değerlerdeki adı yanında soluk ("(Özel'de: Kimlik no)"); dar ekranda sarar. */
+.hizli-alan-etiketli > .hizli-alan-baslik { flex-wrap: wrap; justify-content: flex-start; }
+.hizli-alan-baslik > .hizli-etiket-diger { flex: 1 1 auto; min-width: 0; margin-right: auto; overflow-wrap: anywhere; }
+.hizli-alan-baslik > .hizli-etiket-diger[hidden] { display: none; }
+/* En çok karakter ipucu (maxlength; seçime göre değişebilir); aşılınca uyarı rengi. */
+.hizli-uzunluk { margin: 2px 0 0; overflow-wrap: anywhere; }
+.hizli-uzunluk[hidden] { display: none; }
+.hizli-uzunluk.hizli-uzunluk-asim { color: var(--hata); }
+/* Sayfanın doldurduğu (salt okunur) alanlar: sorulmaz; bilgi olarak değerleriyle. */
+.hizli-salt-okunur { margin: 12px 0 0; padding: 8px 10px; border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); background: var(--panel); min-width: 0; }
+.hizli-salt-okunur > h4 { margin: 0 0 4px; }
+.hizli-salt-okunur > p { margin: 0 0 4px; }
+.hizli-salt-okunur-liste { margin: 0; padding-left: 18px; overflow-wrap: anywhere; }
+.hizli-salt-okunur-adi { font-weight: 600; }
 .hizli-onsecim-grubu:empty { display: none; }
 .hizli-onsecim-grubu > .hizli-kosul-grubu { margin: 6px 0 0; background: var(--panel); }
 @media (max-width: 520px) { .hizli-kosul-grubu { margin-left: 4px; padding: 6px 8px; } }

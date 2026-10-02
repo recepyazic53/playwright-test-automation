@@ -62,6 +62,10 @@ export type HamAlan = {
    * olayları, olmazsa takvimden gün tıklanır); modelde tip "tarih", doldurucu "tarihJs", doldurucuParametreleri.takvim.
    */
   takvimden?: boolean;
+  /** Metin alanının en çok karakter sayısı (maxlength; yoksa yok). Seçime göre değişebilir (keşif: kurallar). */
+  enCok?: number | null;
+  /** Metin alanının deseni (pattern; yoksa yok). */
+  desen?: string | null;
   /** Yazınca öneri listesi açılan (otomatik tamamlama) alan: yazılır, öneriden seçilir; modelde doldurucuParametreleri.oneri. */
   oneri?: boolean;
 };
@@ -86,6 +90,10 @@ export type KesifDegeri = {
   secenekler?: Record<string, HamSecenek[]>;
   /** Temel envanterde devre dışı olup bu seçenekte ETKİNLEŞEN alanların anahtarları (ör. il seçilince açılan ilçe listesi). */
   etkinlesenler?: string[];
+  /** Bu seçenekte görünen adı (etiketi) DEĞİŞEN alanlar: anahtar → yeni etiket (alan aynı; ör. "Kimlik no" → "Vergi no"). */
+  etiketler?: Record<string, string>;
+  /** Bu seçenekte en çok karakter sayısı (maxlength) ya da deseni (pattern) DEĞİŞEN alanlar: anahtar → yeni kurallar. */
+  kurallar?: Record<string, { enCok: number | null; desen: string | null }>;
 };
 /**
  * Seçim keşfi. tur: 'secim' (açılır liste; değer = seçenek değeri), 'radyo' (değer = radyo değeri), 'onay' (onay kutusu; değer

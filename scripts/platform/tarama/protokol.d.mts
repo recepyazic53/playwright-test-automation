@@ -201,6 +201,10 @@ export type HizliKesif = {
     secenekler?: Record<string, HamSecenek[]>;
     /** Bu değerde etkinleşen (önce devre dışı) alanlar. */
     etkinlesenler?: string[];
+    /** Bu değerde etiketi değişen alanlar (anahtar aynı): anahtar → yeni etiket. */
+    etiketler?: Record<string, string>;
+    /** Bu değerde en çok karakter sayısı / deseni değişen alanlar. */
+    kurallar?: Record<string, { enCok: number | null; desen: string | null }>;
   }>;
 };
 export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | boolean };
