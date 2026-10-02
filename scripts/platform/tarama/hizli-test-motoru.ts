@@ -864,7 +864,9 @@ export async function hizliTestiYurut(
         secim: k.secim, ilkDeger: k.ilkDeger, tur: String(k.tur ?? ''), ust,
         degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({
           deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
-          ...(d.secenekler ? { secenekler: d.secenekler } : {}), ...(d.etkinlesenler?.length ? { etkinlesenler: d.etkinlesenler } : {})
+          ...(d.secenekler ? { secenekler: d.secenekler } : {}), ...(d.etkinlesenler?.length ? { etkinlesenler: d.etkinlesenler } : {}),
+          ...(d.etiketler && Object.keys(d.etiketler).length ? { etiketler: d.etiketler } : {}),
+          ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {})
         }))
       });
       let temel;
@@ -939,7 +941,11 @@ export async function hizliTestiYurut(
       const sonuc = await secimleriKesfet(islem, alt, [], async () => undefined, async (p, ms) => { await sakinles(p, ms); }, sinir);
       return sonuc.filter((k) => k.degerler.length).map((k) => ({
         secim: k.secim, ilkDeger: k.ilkDeger, tur: String(k.tur ?? ''), ust: null,
-        degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({ deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar }))
+        degerler: k.degerler.filter((d) => !d.gezinme && !d.hata).map((d) => ({
+          deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
+          ...(d.etiketler && Object.keys(d.etiketler).length ? { etiketler: d.etiketler } : {}),
+          ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {})
+        }))
       }));
     }
 

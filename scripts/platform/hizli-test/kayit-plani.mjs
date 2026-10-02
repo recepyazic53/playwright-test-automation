@@ -271,7 +271,8 @@ export function planKur(g) {
   const zincir = zincirTablolari(g, new Set());
   // Görünürlüğü belirleyen seçim (başka alanların kosul.secim'i) kullanıcı değiştirmediyse sayfadaki değeriyle senaryonun değeri olur:
   // senaryo dalı açıkça kaydedilir ve alan liste tablosuna o satırla bağlanır (değer üretilmez: sayfada seçili gelen seçenek).
-  const kontroller = new Set(g.alanlar.map((a) => a.kosul?.secim).filter(Boolean).map(String));
+  // (Alanın ETİKETİNİ belirleyen seçim de — etiketKosulu — böyledir: senaryonun dalı alanın anlamını belirler.)
+  const kontroller = new Set(g.alanlar.flatMap((a) => [a.kosul?.secim, a.etiketKosulu?.secim]).filter(Boolean).map(String));
   /** @type {Record<string, { deger: unknown; kaynak?: string }>} */
   const degerler = { ...g.degerler };
   for (const a of g.alanlar) {
@@ -708,9 +709,17 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   /** @typedef {{ k: string; m: string; kod: string }} DalAdimi */
   /** @typedef {{ adimlar: DalAdimi[]; d: Degisiklik[]; veriGerekli: string[] }} DalYolu */
   // 1) Görünürlük dalları: alan kümesini değiştiren seçimler (kontroller; iç içe olanlar dahil) dal ağacı olur, tüm yolların kartezyeni.
-  const kontroller = [...new Set(alanlar.filter((x) => x.kosul?.secim && Array.isArray(x.kosul.degerler)).map((x) => String(x.kosul.secim)))].filter((k) => yer.has(k));
+  // Alanın ETİKETİNİ değiştiren seçim (etiketKosulu: aynı alan bir değerde kimlik no, diğerinde vergi no sorar) de dal açar: alan kümesi
+  // aynı olsa da girilecek verinin anlamı değişir.
+  const kontroller = [...new Set(alanlar.flatMap((x) => [x.kosul?.secim && Array.isArray(x.kosul.degerler) ? String(x.kosul.secim) : '',
+    x.etiketKosulu?.secim ? String(x.etiketKosulu.secim) : '']).filter(Boolean))].filter((k) => yer.has(k));
   const bagimlilari = (/** @type {string} */ k) => alanlar.filter((x) => x.kosul?.secim === k && Array.isArray(x.kosul.degerler));
   const acilanlar = (/** @type {string} */ k, /** @type {string} */ kod) => bagimlilari(k).filter((x) => x.kosul.degerler.map(String).includes(kod));
+  /** Alanın seçimin kod değerindeki etiketi (etiketKosulu; bilinmiyorsa ilk görülen). @param {Nesne} x @param {string} kod */
+  const kodEtiketi = (x, kod) => String(x.etiketKosulu?.etiketler?.[kod] ?? x.etiketKosulu?.varsayilan ?? x.etiket ?? x.anahtar);
+  /** Seçimin kod değerinde etiketi senaryodakinden FARKLI olan alanlar (o değerde görünenler). @param {string} k @param {string} kod */
+  const adiDegisenler = (k, kod) => alanlar.filter((x) => x.etiketKosulu?.secim === k && (x.kosul?.secim !== k || x.kosul.degerler.map(String).includes(kod))
+    && kodEtiketi(x, kod) !== String(x.etiket ?? x.anahtar));
   /**
    * Bir seçimin dal yolları: aynı alanları açan değerler tek dal (tablodaki ilk değer); dal iç içe seçim açıyorsa onun yollarıyla çarpılır.
    * @param {string} k @param {Set<string>} gorulen @returns {DalYolu[]}
@@ -722,7 +731,9 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     const dallar = new Map();
     for (const m of tablodakiler(k)) {
       const kod = kodu(k, m);
-      const anahtar = acilanlar(k, kod).map((x) => x.anahtar).sort().join('|');
+      // (Aynı alanları açıp farklı adlar soran değerler ayrı dallardır.)
+      const adlar = adiDegisenler(k, kod).map((x) => `${x.anahtar}=${kodEtiketi(x, kod)}`).sort().join('|');
+      const anahtar = `${acilanlar(k, kod).map((x) => x.anahtar).sort().join('|')}#${adlar}`;
       // Şimdiki değer kendi dalının temsilcisidir (kaydedilen yol tanınsın).
       if (!dallar.has(anahtar) || kod === simdikiKod(k)) dallar.set(anahtar, { m, kod });
     }
@@ -743,8 +754,16 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
         }
         veriGerekli.push(String(x.etiket ?? x.anahtar));
       }
+      // Etiketi bu değerde değişen alan: senaryodaki değeri başka anlamın verisidir (kimlik no ≠ vergi no); değer ÜRETİLMEZ, veri gerekli.
+      // Dal başlığı o değerde sorulan adları söyler ("Kişi tipi: Tüzel (Vergi no, İş telefonu)").
+      const yeniAdlar = adiDegisenler(k, kod);
+      for (const x of yeniAdlar) {
+        if (ac.includes(x) || String(x.tur) === 'checkbox' || SECIM_TURLERI.includes(String(x.tur))) continue;
+        veriGerekli.push(kodEtiketi(x, kod));
+      }
+      const baslikMetni = yeniAdlar.length ? `${m} (${yeniAdlar.map((x) => kodEtiketi(x, kod)).join(', ')})` : m;
       /** @type {DalYolu[]} */
-      let alt = [{ adimlar: [{ k, m, kod }], d, veriGerekli }];
+      let alt = [{ adimlar: [{ k, m: baslikMetni, kod }], d, veriGerekli }];
       for (const n of ic) {
         const nl = dalYollari(String(n.anahtar), yeni);
         if (!nl.length) continue;

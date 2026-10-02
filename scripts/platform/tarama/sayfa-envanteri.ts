@@ -111,8 +111,26 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       const tik = e.matches(OZEL_TIK) ? e : ([...e.querySelectorAll(OZEL_TIK)].find((x) => x !== s && gorunurMu(x)) as HTMLElement | undefined) ?? e;
       return { kap: e, tik };
     }
-    return null;
+    return seciliGosterge(s);
   };
+  /**
+   * Bileşen kütüphanesi bilinmese de: gizli <select>'in SEÇİLİ METNİNİ gösteren görünür sarmalayıcısı ya da kardeşi (içinde başka form
+   * denetimi yok, görünen yazısı tam olarak listenin bir seçeneğinin metni — genellikle seçili olanın; ör. "<div><span>1</span><a></a></div><ul hidden>…</ul><select hidden>").
+   * Tıklanacak parça içindeki görünür bağlantı / düğme, yoksa kabın kendisi. Kural ozelBilesenIsaretle ile AYNIDIR.
+   */
+  function seciliGosterge(s: HTMLSelectElement): { kap: HTMLElement; tik: HTMLElement } | null {
+    // (Gösterilen yazı bir seçeneğin metnidir: sayfa listeyi betikle değiştirince bileşen yazısını güncellemeyebilir.)
+    const metinler = new Set([...s.options].map((o) => bosluk(o.text)).filter(Boolean));
+    if (!metinler.size) return null;
+    for (const e of [s.parentElement, s.previousElementSibling, s.nextElementSibling, s.previousElementSibling?.previousElementSibling]) {
+      if (!(e instanceof HTMLElement) || e.matches('select,input,textarea,label,form,body,fieldset,option')) continue;
+      if ([...e.querySelectorAll('input,select,textarea')].some((x) => x !== s) || !gorunurMu(e)) continue;
+      if (!metinler.has(bosluk(e.innerText))) continue;
+      const tik = ([...e.querySelectorAll('a,[role="button"],button')].find((x) => gorunurMu(x)) as HTMLElement | undefined) ?? e;
+      return { kap: e, tik };
+    }
+    return null;
+  }
   const ozelKaplar = new Map<HTMLSelectElement, { kap: HTMLElement; tik: HTMLElement }>();
   for (const s of derinSec('select') as HTMLSelectElement[]) {
     const b = ozelBilesen(s);
@@ -120,7 +138,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   }
   const kaplar = [...ozelKaplar.values()].map((b) => b.kap);
   /** Öğe bir özel bileşenin (kabı ya da açılır parçası) içinde mi? (Bileşenin kendi arama kutusu ayrı alan sayılmaz.) */
-  const ozelIcinde = (el: Element): boolean => kaplar.some((k) => k.contains(el)) || !!el.closest(OZEL_ACILIR);
+  // (Kabın içindeki gizli <select>'in kendisi alandır: sarmalayıcı kap onu içerir.)
+  const ozelIcinde = (el: Element): boolean => !(el instanceof HTMLSelectElement && ozelKaplar.has(el)) && (kaplar.some((k) => k.contains(el)) || !!el.closest(OZEL_ACILIR));
   const saltMetin = (el: Element): string => {
     const k = el.cloneNode(true) as Element;
     k.querySelectorAll(`${KONTROLLER},script,style,option,noscript,template`).forEach((x) => x.remove());
@@ -156,7 +175,8 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       let o: ChildNode | null = d.previousSibling;
       while (o) {
         // Özel bileşenin kutusu ("Seçiniz…") etiket değildir: atlanır.
-        if (o instanceof Element && kaplar.includes(o as HTMLElement)) { o = o.previousSibling; continue; }
+        // (Kabın içindeki parçalar da: seçili metni gösteren kutu, gizli seçenek listesi.)
+        if (o instanceof Element && kaplar.some((k) => k === o || k.contains(o as Element))) { o = o.previousSibling; continue; }
         if (o instanceof Element && o.matches('label')) {
           const hedef = (o as HTMLLabelElement).control;
           // Atlanan yan kutunun etiketi satırın adıdır ("İl [kutu] [kutu]" → ikinci kutu "İl (2)"); değilse başka denetimin adı.
@@ -548,9 +568,25 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     const metinTuru = el instanceof HTMLInputElement && ['text', 'search', ''].includes(tur);
     // Salt okunur ama yalnız takvimden seçilen tarih alanı: adı / yer tutucusu / sınıfı tarih ya da takvim çağrıştırıyor ya da açılır pencere
     // (aria-haspopup) bildiriyor. Doldurulabilir sayılır (değer + olaylar; olmazsa takvimden).
-    if (metinTuru && alan.saltOkunur && !devreDisi) {
+    if (metinTuru && !devreDisi) {
       const ipucu = `${e.metin ?? ''} ${el.getAttribute('placeholder') ?? ''} ${el.getAttribute('name') ?? ''} ${id ?? ''} ${el.getAttribute('class') ?? ''}`.toLocaleLowerCase('tr');
-      if (/tarih|date|takvim|calendar|datepicker|gün|day/.test(ipucu) || ['dialog', 'grid', 'true'].includes(el.getAttribute('aria-haspopup') ?? '')) alan.takvimden = true;
+      const tarihIpucu = /tarih|date|takvim|calendar|datepicker|gün|day/.test(ipucu) || ['dialog', 'grid', 'true'].includes(el.getAttribute('aria-haspopup') ?? '');
+      // Salt okunur DEĞİL ama yazmayı engelleyen tarih alanı: tuş basımı sayfanın betiğiyle engelli (onkeypress / onkeydown "return false" /
+      // preventDefault) ya da takvim bileşenine bağlı (takvim kütüphanelerinin "datepicker" sınıfı ya da yanında takvim simgesi / düğmesi).
+      // Gerçek tuşlarla yazılamaz: değer + olaylarla (olmazsa takvimden) yazılır.
+      const tusEngelli = /return\s+false|preventDefault/i.test(`${el.getAttribute('onkeypress') ?? ''} ${el.getAttribute('onkeydown') ?? ''}`);
+      const simgeMi = (x: Element | null): boolean => Boolean(x) && x instanceof Element && x.matches('img,button,span,a,i')
+        && /takvim|calendar|datepicker|date-picker/i.test(`${x.getAttribute('class') ?? ''} ${x.getAttribute('alt') ?? ''} ${x.getAttribute('title') ?? ''} ${x.getAttribute('aria-label') ?? ''}`);
+      const takvimBileseni = /(^|\s)(hasDatepicker|datepicker|date-picker|flatpickr-input)(\s|$)/i.test(el.getAttribute('class') ?? '')
+        || simgeMi(el.nextElementSibling) || simgeMi(el.nextElementSibling?.nextElementSibling ?? null);
+      if (alan.saltOkunur ? tarihIpucu : (takvimBileseni || (tusEngelli && tarihIpucu))) alan.takvimden = true;
+    }
+    // En çok karakter (maxlength) ve desen (pattern): veri durağında ipucu; seçime göre değişirse keşif kaydeder.
+    if ((metinTuru || el instanceof HTMLTextAreaElement || ['tel', 'email', 'number', 'url', 'password'].includes(tur)) && !zenginMi(el)) {
+      const ml = (el as HTMLInputElement).maxLength;
+      if (Number.isInteger(ml) && ml > 0 && ml < 100_000) alan.enCok = ml;
+      const desen = el.getAttribute('pattern');
+      if (desen) alan.desen = desen.slice(0, 200);
     }
     // "Yazıp Enter'a basın" (etiket / beceri girdisi): değer Enter ile eklenir; doldurduktan sonra Enter (modelde doldurucuParametreleri.tus).
     // ("Enter your name" gibi İngilizce yönergeler sayılmaz: yalnız Enter'a basma yönergesi.)
@@ -663,6 +699,19 @@ export function ozelBilesenIsaretle(s: Element, isaret: string): boolean {
     if (e.contains(s) && (!e.matches(`${OZEL_KAP},[role="combobox"]`) || e.querySelectorAll('select').length > 1)) continue;
     if (!gorunurMu(e)) continue;
     const tik = e.matches(OZEL_TIK) ? e : [...e.querySelectorAll(OZEL_TIK)].find((x) => x !== s && gorunurMu(x)) ?? e;
+    tik.setAttribute('data-nobetci-ozel', isaret);
+    return true;
+  }
+  // Seçili metni gösteren görünür sarmalayıcı / kardeş (sayfadakiAlanlar > seciliGosterge ile AYNI kural).
+  const bosluk = (m: string | null | undefined): string => (m ?? '').replace(/\s+/g, ' ').trim();
+  const sel = s as HTMLSelectElement;
+  const metinler = new Set([...sel.options].map((o) => bosluk(o.text)).filter(Boolean));
+  if (!metinler.size) return false;
+  for (const e of [s.parentElement, s.previousElementSibling, s.nextElementSibling, s.previousElementSibling?.previousElementSibling]) {
+    if (!e || e.matches('select,input,textarea,label,form,body,fieldset,option')) continue;
+    if ([...e.querySelectorAll('input,select,textarea')].some((x) => x !== s) || !gorunurMu(e)) continue;
+    if (!metinler.has(bosluk((e as HTMLElement).innerText))) continue;
+    const tik = [...e.querySelectorAll('a,[role="button"],button')].find((x) => gorunurMu(x)) ?? e;
     tik.setAttribute('data-nobetci-ozel', isaret);
     return true;
   }
