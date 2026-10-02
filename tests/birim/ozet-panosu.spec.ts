@@ -16,8 +16,9 @@ import { veritabaniKaydet } from '../../scripts/platform/sql/veritabanlari.mjs';
 import { izinDegistir, IzinHatasi } from '../../scripts/platform/guvenlik/izinler.mjs';
 import { gerekenIzinler } from '../../scripts/platform/guvenlik/uc-denetimi.mjs';
 import {
-  BOYUTLAR, EN_COK_KART, duzenTemizle, eksikYerlesikler, esikRengi, kartBoyutla, kartEkle, kartKaldir, kartTasi, varsayilanDuzen, varsayilanMi,
-  type PanoDuzeni
+  BOYUTLAR, EN_COK_DILIM, EN_COK_KART, LISTE_EN_COK, VARSAYILAN_BICIM, bicimTemizle, degisimHesapla, duzenTemizle, eksikYerlesikler, esikRengi,
+  hucreBicimle, kartBoyutla, kartEkle, kartKaldir, kartTasi, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
+  yuzdeDegeri, type PanoDuzeni
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -67,6 +68,50 @@ test('düzen modülü: varsayılan bugünkü Özet; kaldır, geri ekle, taşı, 
   // Eşik: ilk tutan eşik.
   const esikler = [{ islec: '>', deger: 0, renk: 'kirmizi' }, { islec: '=', deger: 0, renk: 'yesil' }];
   expect([esikRengi(3, esikler), esikRengi(0, esikler), esikRengi(-1, esikler)]).toEqual(['kirmizi', 'yesil', null]);
+});
+
+test('biçim: yüzde (0,834 → %83,4; 83,4 → %83,4), binlik, ondalık, ön / son ek, tarih, değişim, pasta "Diğer"; yeni görünümler geçerli', () => {
+  expect(yuzdeBicimle(0.834)).toBe('%83,4');
+  expect(yuzdeBicimle(83.4)).toBe('%83,4');
+  expect(yuzdeBicimle(0.834, { oran: 'yuzde' })).toBe('%0,8');
+  expect(yuzdeBicimle(1, { oran: 'yuzde' })).toBe('%1');
+  expect(yuzdeBicimle(1, { oran: 'oto' })).toBe('%100');
+  expect(yuzdeBicimle(0.5, { ondalik: 2 })).toBe('%50,00');
+  expect(yuzdeDegeri(0.834)).toBeCloseTo(83.4, 9);
+  expect(sayiBicimle(1245)).toBe('1.245');
+  expect(sayiBicimle(1234567.891)).toBe('1.234.567,89');
+  expect(sayiBicimle(3.14159)).toBe('3,14');
+  expect(sayiBicimle(3.14159, { ondalik: 3 })).toBe('3,142');
+  expect(sayiBicimle(2.5, { ondalik: 0 })).toBe('3');
+  expect(sayiBicimle(12, { ondalik: 1 })).toBe('12,0');
+  expect(sayiBicimle(1245, { onEk: '₺' })).toBe('₺1.245');
+  expect(sayiBicimle(4.25, { sonEk: ' sn' })).toBe('4,25 sn');
+  expect(sayiBicimle(7, { sonEk: ' adet' })).toBe('7 adet');
+  expect(() => bicimTemizle({ ondalik: 4 })).toThrow('Ondalık hane 0–3');
+  expect(() => bicimTemizle({ hedef: '-1' })).toThrow('Hedef');
+  expect(bicimTemizle({ hedef: '95,5' }).hedef).toBe(95.5);
+  expect(tarihBicimle('2026-09-11', 'gun')).toBe('11.09.2026');
+  expect(tarihBicimle('2026-09-11 14:05:00', 'dakika')).toBe('11.09.2026 14:05');
+  expect(tarihBicimle('2026-09-11', 'yok')).toBeNull();
+  expect(hucreBicimle('Kayıt 3', { tarih: 'gun' })).toBe('Kayıt 3');
+  expect(hucreBicimle(1500.5)).toBe('1.500,5');
+  expect(degisimHesapla(12, 10)).toEqual({ fark: 2, yuzde: 20, yon: 'artis' });
+  expect(degisimHesapla(8, 10)).toMatchObject({ fark: -2, yon: 'azalis' });
+  expect(degisimHesapla(5, 0)).toMatchObject({ yuzde: null, yon: 'artis' });
+  expect(degisimHesapla(5, null)).toBeNull();
+  const dilimler = pastaDilimleri(Array.from({ length: 11 }, (_, i) => ({ etiket: `K${i + 1}`, deger: (i + 1) * 3 })));
+  expect(dilimler).toHaveLength(EN_COK_DILIM);
+  expect(dilimler.map((d) => d.etiket)).toEqual(['K11', 'K10', 'K9', 'K8', 'K7', 'K6', 'K5', 'Diğer']);
+  expect(dilimler[7]).toMatchObject({ deger: 30, diger: true });
+  expect(dilimler.reduce((t, d) => t + d.yuzde, 0)).toBeCloseTo(100, 9);
+  expect(pastaDilimleri([{ etiket: 'A', deger: 1 }, { etiket: 'B', deger: 0 }])).toHaveLength(1);
+  expect(LISTE_EN_COK).toBe(50);
+  // Yeni görünümler ve biçim kartta saklanır; eski kart (biçimsiz) varsayılan biçimle geçerli.
+  for (const gorunum of ['yuzde', 'pasta', 'degisim', 'liste', 'kutucuk']) {
+    const k = duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1', gorunum, bicim: { ondalik: 1, sonEk: ' sn', hedef: 95 } } }] }).kartlar[0];
+    expect(k.ayar).toMatchObject({ gorunum, bicim: { ondalik: 1, sonEk: ' sn', hedef: 95 } });
+  }
+  expect(duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1' } }] }).kartlar[0].ayar?.bicim).toEqual(VARSAYILAN_BICIM);
 });
 
 test.describe('pano (kasa) ve SQL kartı', () => {
@@ -232,7 +277,11 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     izinDegistir(vt, 'veritabani-okuma', false);
     await expect(panoSqlYenile(vt, projeA, 'k-test')).rejects.toBeInstanceOf(IzinHatasi);
     izinDegistir(vt, 'veritabani-okuma', true, { onay: true });
-    expect((await panoSqlYenile(vt, projeA, 'k-vtest')).satirlar).toEqual([[1]]);
+    const ilk = await panoSqlYenile(vt, projeA, 'k-vtest');
+    expect(ilk).toMatchObject({ satirlar: [[1]], onceki: null });
+    // "Sayı + değişim": ikinci yenilemede önceki yenilemenin ilk satırı (maskeli önbellekten) sonuçla gelir.
+    const ikinci = await panoSqlYenile(vt, projeA, 'k-vtest');
+    expect(ikinci.onceki).toEqual({ zaman: ilk.zaman, sutunlar: ['1'], ilkSatir: [1] });
   });
 
   test('Nöbetçi verisi şablonları: başarı oranı, bugün başarısız, talep no\'su olmayan, en çok başarısız', () => {

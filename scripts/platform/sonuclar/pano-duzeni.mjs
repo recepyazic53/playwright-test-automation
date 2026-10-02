@@ -47,7 +47,10 @@ const OZEL = new Map(OZEL_KART_TURLERI.map((k) => [k.tur, k]));
 /** SQL kartının görünümleri. */
 export const SQL_GORUNUMLERI = Object.freeze([
   Object.freeze({ anahtar: 'sayi', ad: 'Tek sayı' }), Object.freeze({ anahtar: 'tablo', ad: 'Tablo' }),
-  Object.freeze({ anahtar: 'cubuk', ad: 'Çubuk grafik' }), Object.freeze({ anahtar: 'cizgi', ad: 'Çizgi grafik' })
+  Object.freeze({ anahtar: 'cubuk', ad: 'Çubuk grafik' }), Object.freeze({ anahtar: 'cizgi', ad: 'Çizgi grafik' }),
+  Object.freeze({ anahtar: 'yuzde', ad: 'Yüzde / oran' }), Object.freeze({ anahtar: 'pasta', ad: 'Pasta / halka grafik' }),
+  Object.freeze({ anahtar: 'degisim', ad: 'Sayı + değişim' }), Object.freeze({ anahtar: 'liste', ad: 'Liste' }),
+  Object.freeze({ anahtar: 'kutucuk', ad: 'Durum kutucukları' })
 ]);
 /** Sayı eşiği işleçleri ve renkleri (ilk eşleşen eşik uygulanır). */
 export const ESIK_ISLECLERI = Object.freeze(['>', '>=', '<', '<=', '=', '!=']);
@@ -176,7 +179,7 @@ function sqlAyari(ham) {
   const sutunHam = ham.sutunlar === undefined ? [] : ham.sutunlar;
   if (!Array.isArray(sutunHam) || sutunHam.length > EN_COK_SUTUN) throw new PanoHatasi(`En çok ${EN_COK_SUTUN} sütun seçilebilir.`);
   const sutunlar = [...new Set(sutunHam.map((s) => metin(s, 'Sütun adı', 120)))];
-  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar };
+  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, bicim: bicimTemizle(ham.bicim) };
 }
 
 /**
@@ -351,4 +354,122 @@ export function sayiyaCevir(v) {
   const m = v.trim();
   const n = /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(m) ? Number(m.replace(/\./g, '').replace(',', '.')) : Number(m.replace(',', '.'));
   return Number.isFinite(n) ? n : null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Biçim (sayı içeren görünümler; saf, arayüzle ORTAK)
+// ---------------------------------------------------------------------------------------------------------------------
+// Ondalık: 'oto' (tam sayıysa 0, değilse en çok 2 hane) ya da 0–3. Binlik ayırıcı tr-TR (1.245; ondalık virgül). Ön / son ek
+// değere eklenir ("₺", " sn", " adet"). Tarih: 'yok' (olduğu gibi), 'gun' (gg.aa.yyyy), 'dakika' (gg.aa.yyyy ss:dd).
+// Yüzde: oran 'oto' (|değer| ≤ 1 ise 0–1 oran sayılır, ×100), 'oran' (her zaman ×100), 'yuzde' (değer zaten yüzde). Gösterim "%83,4".
+// EŞİK KURALI: renk eşikleri biçimden ÖNCEKİ ham sayıya uygulanır (ondalık, ön / son ek eşiği etkilemez); "Yüzde / oran"
+// görünümünde yüzde değerine (0,834 → 83,4: "> 80" eşiği tutar), "Sayı + değişim"de güncel değere, "Durum kutucukları"nda her
+// kutunun değerine uygulanır.
+
+/** Varsayılan biçim. */
+export const VARSAYILAN_BICIM = Object.freeze({ ondalik: 'oto', onEk: '', sonEk: '', tarih: 'yok', oran: 'oto', hedef: null, gosterge: 'cubuk' });
+export const ONDALIK_SECENEKLERI = Object.freeze(['oto', 0, 1, 2, 3]);
+export const TARIH_BICIMLERI = Object.freeze([['yok', 'Olduğu gibi'], ['gun', 'gg.aa.yyyy'], ['dakika', 'gg.aa.yyyy ss:dd']]);
+export const ORAN_SECENEKLERI = Object.freeze([['oto', 'Otomatik (0–1 ise oran)'], ['oran', 'Değer 0–1 oran'], ['yuzde', 'Değer zaten yüzde']]);
+export const GOSTERGE_SECENEKLERI = Object.freeze([['cubuk', 'İlerleme çubuğu'], ['ibre', 'Gösterge (ibre)']]);
+/** Pasta / halka grafikte en çok dilim (kalanı "Diğer"). */
+export const EN_COK_DILIM = 8;
+/** Liste görünümünde en çok madde. */
+export const LISTE_EN_COK = 50;
+
+/**
+ * Biçim ayarının doğrulaması (eksikler varsayılan). @param {unknown} ham
+ * @returns {{ ondalik: 'oto' | number; onEk: string; sonEk: string; tarih: string; oran: string; hedef: number | null; gosterge: string }}
+ */
+export function bicimTemizle(ham) {
+  const g = nesneMi(ham) ? ham : {};
+  const o = g.ondalik === undefined || g.ondalik === null || g.ondalik === '' || g.ondalik === 'oto' ? 'oto' : Number(g.ondalik);
+  if (o !== 'oto' && !(Number.isInteger(o) && o >= 0 && o <= 3)) throw new PanoHatasi('Ondalık hane 0–3 olmalıdır.');
+  const ek = (/** @type {unknown} */ v, /** @type {string} */ ad, /** @type {number} */ n) => {
+    const m = typeof v === 'string' ? v : '';
+    if (m.length > n || /[\u0000-\u001f\u007f]/.test(m)) throw new PanoHatasi(`${ad} en çok ${n} karakter olabilir.`);
+    return m;
+  };
+  const sec = (/** @type {unknown} */ v, /** @type {ReadonlyArray<readonly [string, string]>} */ l, /** @type {string} */ v0) => (l.some(([a]) => a === v) ? /** @type {string} */ (v) : v0);
+  /** @type {number | null} */
+  let hedef = null;
+  if (g.hedef !== undefined && g.hedef !== null && String(g.hedef).trim() !== '') {
+    hedef = typeof g.hedef === 'number' ? g.hedef : Number(String(g.hedef).replace(',', '.'));
+    if (!Number.isFinite(hedef) || hedef <= 0) throw new PanoHatasi('Hedef sıfırdan büyük bir sayı olmalıdır.');
+  }
+  return {
+    ondalik: /** @type {'oto' | number} */ (o), onEk: ek(g.onEk, 'Ön ek', 8), sonEk: ek(g.sonEk, 'Son ek', 12), tarih: sec(g.tarih, TARIH_BICIMLERI, 'yok'),
+    oran: sec(g.oran, ORAN_SECENEKLERI, 'oto'), hedef, gosterge: sec(g.gosterge, GOSTERGE_SECENEKLERI, 'cubuk')
+  };
+}
+
+/** @param {number} n @param {'oto' | number} ondalik @param {number} [otoEnCok] */
+function haneler(n, ondalik, otoEnCok = 2) {
+  if (ondalik !== 'oto') return { minimumFractionDigits: ondalik, maximumFractionDigits: ondalik };
+  return { minimumFractionDigits: 0, maximumFractionDigits: Number.isInteger(n) ? 0 : otoEnCok };
+}
+
+/** Sayı (ön / son ekli, tr-TR binlik ayırıcı): 1245 → "1.245", 3,14159 → "3,14". @param {number} n @param {unknown} [bicim] */
+export function sayiBicimle(n, bicim) {
+  const b = bicimTemizle(bicim);
+  return `${b.onEk}${n.toLocaleString('tr-TR', { ...haneler(n, b.ondalik), useGrouping: true })}${b.sonEk}`;
+}
+
+/** Ham değerin yüzde karşılığı (oran ayarına göre). @param {number} n @param {unknown} [bicim] */
+export function yuzdeDegeri(n, bicim) {
+  const o = bicimTemizle(bicim).oran;
+  const p = o === 'yuzde' ? n : o === 'oran' ? n * 100 : Math.abs(n) <= 1 ? n * 100 : n;
+  return Math.round(p * 1e9) / 1e9;
+}
+
+/** Yüzde gösterimi: 0,834 → "%83,4", 83,4 → "%83,4" (otomatik: tam sayıysa 0, değilse en çok 1 hane). @param {number} n @param {unknown} [bicim] */
+export function yuzdeBicimle(n, bicim) {
+  const b = bicimTemizle(bicim);
+  const p = yuzdeDegeri(n, b);
+  return `${b.onEk}%${p.toLocaleString('tr-TR', haneler(p, b.ondalik, 1))}${b.sonEk}`;
+}
+
+/** Tarih gibi görünen değeri biçimler; tarih değilse ya da biçim 'yok'sa null. @param {unknown} v @param {string} tarih */
+export function tarihBicimle(v, tarih) {
+  if (tarih === 'yok' || typeof v !== 'string') return null;
+  const m = v.trim();
+  if (!/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(m)) return null;
+  const t = /^\d{4}-\d{2}-\d{2}$/.test(m) ? new Date(`${m}T00:00:00`) : new Date(m.replace(' ', 'T'));
+  if (Number.isNaN(t.getTime())) return null;
+  const iki = (/** @type {number} */ x) => String(x).padStart(2, '0');
+  const gun = `${iki(t.getDate())}.${iki(t.getMonth() + 1)}.${t.getFullYear()}`;
+  return tarih === 'dakika' ? `${gun} ${iki(t.getHours())}:${iki(t.getMinutes())}` : gun;
+}
+
+/** Hücre metni: sayı → sayiBicimle; tarih biçimi seçiliyse tarih; diğerleri olduğu gibi. @param {unknown} v @param {unknown} [bicim] */
+export function hucreBicimle(v, bicim) {
+  if (v === null || v === undefined) return '';
+  const b = bicimTemizle(bicim);
+  if (typeof v === 'number' && Number.isFinite(v)) return sayiBicimle(v, b);
+  return tarihBicimle(v, b.tarih) ?? String(v);
+}
+
+/**
+ * Önceki yenilemeye göre değişim (önceki yoksa null). @param {number} simdi @param {number | null | undefined} onceki
+ * @returns {{ fark: number; yuzde: number | null; yon: 'artis' | 'azalis' | 'ayni' } | null}
+ */
+export function degisimHesapla(simdi, onceki) {
+  if (onceki === null || onceki === undefined || !Number.isFinite(onceki)) return null;
+  const fark = Math.round((simdi - onceki) * 1e9) / 1e9;
+  return { fark, yuzde: onceki === 0 ? null : (fark / Math.abs(onceki)) * 100, yon: fark > 0 ? 'artis' : fark < 0 ? 'azalis' : 'ayni' };
+}
+
+/**
+ * Pasta dilimleri: büyükten küçüğe, en çok EN_COK_DILIM dilim; fazlası tek "Diğer" diliminde toplanır. Sıfır / negatif atlanır.
+ * @param {ReadonlyArray<{ etiket: string; deger: number }>} noktalar @param {number} [enCok]
+ * @returns {Array<{ etiket: string; deger: number; yuzde: number; diger: boolean }>}
+ */
+export function pastaDilimleri(noktalar, enCok = EN_COK_DILIM) {
+  const pozitif = noktalar.filter((n) => Number.isFinite(n.deger) && n.deger > 0).slice().sort((a, b) => b.deger - a.deger);
+  const tasar = pozitif.length > enCok;
+  const ust = tasar ? pozitif.slice(0, enCok - 1) : pozitif;
+  const kalan = tasar ? pozitif.slice(enCok - 1).reduce((t, n) => t + n.deger, 0) : 0;
+  const dilimler = [...ust.map((n) => ({ etiket: n.etiket, deger: n.deger, diger: false })), ...(tasar ? [{ etiket: 'Diğer', deger: kalan, diger: true }] : [])];
+  const toplam = dilimler.reduce((t, n) => t + n.deger, 0) || 1;
+  return dilimler.map((d) => ({ ...d, yuzde: (d.deger / toplam) * 100 }));
 }

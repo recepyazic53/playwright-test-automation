@@ -8,12 +8,16 @@
 // SQL KARTI: sorgu YALNIZ "Yenile"ye basınca çalışır (sayfa açılınca ya da aralıklı çalışmaz); kartın üstünde "Son veri: gg.aa.yyyy
 //   ss:dd" (hiç alınmadıysa "Henüz yenilenmedi"). Son (maskeli) sonuç sunucuda önbellektedir. CANLI ortama ait bağlantıda ilk "Yenile"
 //   standart CANLI penceresini açar (ortak.js > api); onay bu oturumda o kart için hatırlanır.
+//   Görünümler: tek sayı, yüzde / oran (hedef çubuğu ya da ibre), sayı + değişim (önceki YENİLEMEYE göre; önbellekteki maskeli ilk
+//   satırdan), tablo, liste, durum kutucukları, çubuk, çizgi, pasta / halka (en çok 8 dilim + "Diğer"). Biçim (ondalık, ön / son ek,
+//   tarih, oran) ve eşik kuralı pano-duzeni.mjs'de (saf). Grafikler SVG özniteliğiyle çizilir (satır içi stil yok).
 // DOM'a yalnız metin yazılır (h(); innerHTML yok); bağlantılar yalnız Nöbetçi içi adreslere (#/…) gider.
 import { api, bildir, degisiklikleriBirak, alan, h, ikon, kayitIzi, mesgulIken, rozet, s, yeniKimlik, yerlestir } from './ortak.js';
 import {
-  BOYUTLAR, ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, IC_SAYFALAR, OZEL_KART_TURLERI, SQL_GORUNUMLERI, VERI_SABLONLARI,
-  eksikYerlesikler, esikRengi, kartAdi, kartAyarla, kartBoyutla, kartEkle, kartKaldir, kartTasi, kartTemizle, sayiyaCevir, turAdi,
-  varsayilanDuzen, varsayilanMi, yerlesikMi
+  BOYUTLAR, ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
+  ORAN_SECENEKLERI, OZEL_KART_TURLERI, SQL_GORUNUMLERI, TARIH_BICIMLERI, VERI_SABLONLARI,
+  bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartBoyutla, kartEkle, kartKaldir, kartTasi, kartTemizle,
+  pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri
 } from './pano-duzeni.mjs';
 import { oranSaglikSinifi } from './sonuclar.js';
 
@@ -33,8 +37,6 @@ export function sonVeriMetni(iso) {
   if (Number.isNaN(t.getTime())) return '—';
   return `${iki(t.getDate())}.${iki(t.getMonth() + 1)}.${t.getFullYear()} ${iki(t.getHours())}:${iki(t.getMinutes())}`;
 }
-/** @param {unknown} v */
-const hucreMetni = (v) => (v === null || v === undefined ? '' : typeof v === 'number' ? v.toLocaleString('tr-TR') : String(v));
 
 /**
  * Panoyu kurar.
@@ -374,14 +376,33 @@ export function ozetPanosu(kap, s0) {
     for (const e of a.esikler || []) esikSatiri(e);
     esikEkle.addEventListener('click', () => esikSatiri());
     const esikAlani = h('fieldset', { class: 'pano-esik-alani' }, h('legend', {}, 'Renk eşikleri'),
-      h('p', { class: 'soluk kucuk' }, 'Tek sayı için: ilk tutan eşiğin rengi uygulanır (ör. değer > 0 ise kırmızı).'), esikListesi, esikEkle);
-    const sutunYardimi = () => (gorunum.value === 'sayi' ? 'Değerin sütunu (boşsa ilk sütun).' : gorunum.value === 'tablo' ? 'Gösterilecek sütunlar, virgülle (boşsa tümü).'
-      : 'Önce etiket, sonra değer sütunu, virgülle (boşsa ilk iki sütun).');
+      h('p', { class: 'soluk kucuk' }, 'İlk tutan eşiğin rengi uygulanır (ör. değer > 0 ise kırmızı). Eşik biçimlenmemiş değere bakar; "Yüzde / oran"da yüzde değerine (0,834 → 83,4).'),
+      esikListesi, esikEkle);
+    // Biçim: ondalık, ön / son ek, tarih; yüzde görünümünde oran, hedef ve gösterim.
+    const b0 = bicimTemizle(a.bicim);
+    const ondalik = h('select', {}, ONDALIK_SECENEKLERI.map((o) => h('option', { value: String(o), selected: String(o) === String(b0.ondalik) }, o === 'oto' ? 'Otomatik' : String(o))));
+    const onEk = h('input', { type: 'text', maxlength: 8, value: b0.onEk, autocomplete: 'off', placeholder: 'ör. ₺' });
+    const sonEk = h('input', { type: 'text', maxlength: 12, value: b0.sonEk, autocomplete: 'off', placeholder: 'ör. " sn", " adet"' });
+    const tarih = h('select', {}, TARIH_BICIMLERI.map(([d, e]) => h('option', { value: d, selected: d === b0.tarih }, e)));
+    const oran = h('select', {}, ORAN_SECENEKLERI.map(([d, e]) => h('option', { value: d, selected: d === b0.oran }, e)));
+    const hedefDeger = h('input', { type: 'text', inputmode: 'decimal', value: b0.hedef === null ? '' : String(b0.hedef).replace('.', ','), autocomplete: 'off', placeholder: 'ör. 95' });
+    const gosterge = h('select', {}, GOSTERGE_SECENEKLERI.map(([d, e]) => h('option', { value: d, selected: d === b0.gosterge }, e)));
+    const yuzdeAlanlari = h('div', { class: 'pano-bicim-izgara' }, alan('Değer', oran), alan('Hedef (yüzde, isteğe bağlı)', hedefDeger), alan('Gösterim', gosterge));
+    const bicimAlani = h('fieldset', { class: 'pano-bicim-alani' }, h('legend', {}, 'Biçim'),
+      h('div', { class: 'pano-bicim-izgara' }, alan('Ondalık hane', ondalik), alan('Ön ek', onEk), alan('Son ek', sonEk), alan('Tarih sütunları', tarih)), yuzdeAlanlari);
+    const ESIKLI = ['sayi', 'yuzde', 'degisim', 'kutucuk'];
+    const YARDIM = {
+      sayi: 'Değerin sütunu (boşsa ilk sütun).', yuzde: 'Değerin sütunu (boşsa ilk sütun).', degisim: 'Değerin sütunu (boşsa ilk sütun); önceki yenilemedeki değerle karşılaştırılır.',
+      tablo: 'Gösterilecek sütunlar, virgülle (boşsa tümü).', liste: 'Listelenecek sütun (boşsa ilk sütun); en çok 50 madde.',
+      kutucuk: 'Önce etiket, sonra değer sütunu, virgülle (boşsa ilk sütun ve ilk sayısal sütun).', pasta: 'Önce etiket, sonra değer sütunu, virgülle; en çok 8 dilim, kalanı "Diğer".'
+    };
+    const sutunYardimi = () => YARDIM[gorunum.value] || 'Önce etiket, sonra değer sütunu, virgülle (boşsa ilk iki sütun).';
     const sutunAlani = alan('Sütunlar', sutunlar, { yardim: `${sutunYardimi()}${bilinen && bilinen.length ? ` Son sonuçtaki sütunlar: ${bilinen.join(', ')}.` : ''}` });
     const yardimYaz = () => {
       const y = sutunAlani.querySelector('.yardim');
       if (y) y.textContent = `${sutunYardimi()}${bilinen && bilinen.length ? ` Son sonuçtaki sütunlar: ${bilinen.join(', ')}.` : ''}`;
-      esikAlani.hidden = gorunum.value !== 'sayi';
+      esikAlani.hidden = !ESIKLI.includes(gorunum.value);
+      yuzdeAlanlari.hidden = gorunum.value !== 'yuzde';
     };
     gorunum.addEventListener('change', yardimYaz);
     const bos = !se.veritabanlari.length && !se.baglantilar.length;
@@ -393,6 +414,7 @@ export function ozetPanosu(kap, s0) {
       alan('Sorgu', sorgu, { zorunlu: true, yardim: `Yalnız okuma: tek SELECT ya da WITH … SELECT (INSERT, UPDATE, DELETE, DROP, EXEC ve ";" ile birden çok ifade reddedilir). Sorgu yalnız "Yenile"ye basınca çalışır; en çok ${se.sinirlar?.zamanAsimiSn ?? 15} sn ve ${se.sinirlar?.satirSiniri ?? 500} satır. Gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir.` }),
       alan('Görünüm', gorunum),
       sutunAlani,
+      bicimAlani,
       esikAlani);
     yardimYaz();
     return async () => {
@@ -401,10 +423,12 @@ export function ozetPanosu(kap, s0) {
         baslik: baslik.value.trim(), sorgu: sorgu.value, gorunum: gorunum.value,
         hedef: t === 'v' ? { veritabaniId: x, ortamId: y } : t === 'b' ? { baglantiId: x } : null,
         sutunlar: sutunlar.value.split(',').map((m) => m.trim()).filter(Boolean),
-        esikler: gorunum.value === 'sayi' ? [...esikListesi.children].map((satir) => {
+        esikler: ESIKLI.includes(gorunum.value) ? [...esikListesi.children].map((satir) => {
           const [islec, renk] = [...satir.querySelectorAll('select')].map((x2) => /** @type {HTMLSelectElement} */ (x2).value);
           return { islec, deger: /** @type {HTMLInputElement} */ (satir.querySelector('input')).value.trim(), renk };
-        }) : []
+        }) : [],
+        bicim: bicimTemizle({ ondalik: ondalik.value, onEk: onEk.value, sonEk: sonEk.value, tarih: tarih.value, oran: oran.value,
+          hedef: gorunum.value === 'yuzde' ? hedefDeger.value : '', gosterge: gosterge.value })
       };
       if (!ayarYeni.baslik) throw new Error('Kart başlığı boş olamaz.');
       if (!ayarYeni.hedef) throw new Error('SQL kartı için bir veritabanı bağlantısı seçin.');
@@ -553,7 +577,8 @@ export function ozetPanosu(kap, s0) {
     api(`/platform/pano/veri?${sorgu}`).then(({ sonuc }) => {
       if (sonuc.tur === 'sayi') {
         const sinif = sonuc.deger === null ? '' : `saglik-${oranSaglikSinifi(sonuc.deger)}`;
-        const deger = h('strong', { class: 'pano-sayi-deger' }, sonuc.deger === null ? '—' : `${sonuc.birim}${Math.round(sonuc.deger).toLocaleString('tr-TR')}`);
+        const deger = h('strong', { class: 'pano-sayi-deger' }, sonuc.deger === null ? '—'
+          : sonuc.birim === '%' ? yuzdeBicimle(sonuc.deger, { oran: 'yuzde' }) : sayiBicimle(sonuc.deger));
         yerlestir(govde, sonuc.adres
           ? h('a', { class: `pano-sayi ${sinif}`, href: sonuc.adres }, deger, h('span', { class: 'pano-sayi-alt' }, sonuc.alt))
           : h('div', { class: `pano-sayi ${sinif}` }, deger, h('span', { class: 'pano-sayi-alt' }, sonuc.alt)));
@@ -604,21 +629,41 @@ function sutunSiralari(secili, sutunlar) {
   return (secili || []).map((ad) => sutunlar.findIndex((x) => x.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'))).filter((i) => i >= 0);
 }
 
-/** @param {any} a kart ayarı @param {any} sonuc */
+/** Eşik renginin ekran okuyucu notu. @param {string | null} renk */
+const esikNotu = (renk) => (renk ? h('span', { class: 'gorunmez' }, ` (eşik: ${ESIK_RENKLERI.find((r) => r.anahtar === renk)?.ad ?? renk})`) : null);
+
+/** Değer sütunu: seçilen ilk sütun ya da ilk sütun. @param {number[]} secili */
+const degerSirasi = (secili) => (secili.length ? secili[0] : 0);
+
+/** Etiket + değer sütunları (seçilmediyse ilk sütun etiket, ilk sayısal diğer sütun değer). @param {number[]} secili @param {string[]} sutunlar @param {unknown[][]} satirlar */
+function etiketDeger(secili, sutunlar, satirlar) {
+  const etiketI = secili.length ? secili[0] : 0;
+  const degerI = secili.length > 1 ? secili[1] : sutunlar.findIndex((_, i) => i !== etiketI && satirlar.some((r) => sayiyaCevir(r[i]) !== null));
+  return { etiketI, degerI };
+}
+
+/**
+ * SQL sonucunun görünümü. Biçim (ondalık, ön / son ek, tarih) sayı içeren her görünümde uygulanır; renk eşikleri biçimden önceki ham
+ * değere (yüzde görünümünde yüzde değerine) bakar (pano-duzeni.mjs > Biçim).
+ * @param {any} a kart ayarı @param {any} sonuc
+ */
 function sonucGorunumu(a, sonuc) {
   const { sutunlar, satirlar } = sonuc;
+  const b = bicimTemizle(a.bicim);
   const gizli = new Set(sonuc.gizliSutunlar || []);
   const secili = sutunSiralari(a.sutunlar, sutunlar);
   if (!sutunlar.length) return h('p', { class: 'soluk kucuk' }, 'Sorgu sütun döndürmedi.');
-  if (a.gorunum === 'sayi') {
-    const i = secili.length ? secili[0] : 0;
+  if (a.gorunum === 'sayi' || a.gorunum === 'yuzde' || a.gorunum === 'degisim') {
+    const i = degerSirasi(secili);
     const ham = satirlar.length ? satirlar[0][i] : null;
     const n = gizli.has(sutunlar[i]) ? null : sayiyaCevir(ham);
+    if (a.gorunum === 'yuzde') return yuzdeGorunumu(a, b, n, ham, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi');
     const renk = n === null ? null : esikRengi(n, a.esikler || []);
-    return h('div', { class: `pano-sayi${renk ? ` esik-${renk}` : ''}` },
-      h('strong', { class: 'pano-sayi-deger' }, satirlar.length ? (n !== null ? n.toLocaleString('tr-TR') : hucreMetni(ham)) : '—'),
-      h('span', { class: 'pano-sayi-alt' }, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi'),
-      renk ? h('span', { class: 'gorunmez' }, ` (eşik: ${ESIK_RENKLERI.find((r) => r.anahtar === renk)?.ad ?? renk})`) : null);
+    const kutu = h('div', { class: `pano-sayi${renk ? ` esik-${renk}` : ''}` },
+      h('strong', { class: 'pano-sayi-deger' }, satirlar.length ? (n !== null ? sayiBicimle(n, b) : hucreBicimle(ham, b)) : '—'),
+      h('span', { class: 'pano-sayi-alt' }, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi'), esikNotu(renk));
+    if (a.gorunum === 'degisim') kutu.append(degisimSatiri(sonuc, sutunlar[i], n, b));
+    return kutu;
   }
   if (!satirlar.length) return h('p', { class: 'soluk kucuk' }, 'Sorgu satır döndürmedi.');
   if (a.gorunum === 'tablo') {
@@ -626,18 +671,95 @@ function sonucGorunumu(a, sonuc) {
     return h('div', { class: 'tablo-kaydirma pano-tablo', tabindex: '0', role: 'region', 'aria-label': `${a.baslik} sonucu` },
       h('table', { class: 'ozet-tablosu' },
         h('thead', {}, h('tr', {}, siralar.map((i) => h('th', { scope: 'col' }, sutunlar[i], gizli.has(sutunlar[i]) ? [' ', ikon('kilit'), h('span', { class: 'gorunmez' }, '(maskeli)')] : null)))),
-        h('tbody', {}, satirlar.map((r) => h('tr', {}, siralar.map((i) => h('td', {}, hucreMetni(r[i]))))))));
+        h('tbody', {}, satirlar.map((r) => h('tr', {}, siralar.map((i) => h('td', { class: typeof r[i] === 'number' ? 'sayi' : null }, hucreBicimle(r[i], b))))))));
   }
-  // Grafik: etiket + değer sütunu (seçilmediyse ilk sütun etiket, ilk sayısal diğer sütun değer).
-  const etiketI = secili.length ? secili[0] : 0;
-  const degerI = secili.length > 1 ? secili[1] : sutunlar.findIndex((_, i) => i !== etiketI && satirlar.some((r) => sayiyaCevir(r[i]) !== null));
-  if (degerI < 0) return h('p', { class: 'soluk kucuk' }, 'Grafik için sayısal bir değer sütunu bulunamadı ("Sütunlar"da etiket ve değer sütununu yazın).');
-  const noktalar = satirlar.slice(0, 60).map((r) => ({ etiket: hucreMetni(r[etiketI]), deger: sayiyaCevir(r[degerI]) ?? 0 }));
-  return grafik(a, noktalar, sutunlar[degerI]);
+  if (a.gorunum === 'liste') {
+    const i = degerSirasi(secili);
+    const degerler = satirlar.map((r) => hucreBicimle(r[i], b)).filter((m) => m !== '');
+    return h('div', { class: 'pano-liste-kap' },
+      h('ul', { class: 'pano-liste', 'aria-label': `${a.baslik}: ${sutunlar[i]}` }, degerler.slice(0, LISTE_EN_COK).map((m) => h('li', {}, m))),
+      degerler.length > LISTE_EN_COK ? h('p', { class: 'soluk kucuk pano-liste-fazla' }, `+${(degerler.length - LISTE_EN_COK).toLocaleString('tr-TR')} daha`) : null);
+  }
+  const { etiketI, degerI } = etiketDeger(secili, sutunlar, satirlar);
+  if (degerI < 0) return h('p', { class: 'soluk kucuk' }, 'Sayısal bir değer sütunu bulunamadı ("Sütunlar"da etiket ve değer sütununu yazın).');
+  if (a.gorunum === 'kutucuk') {
+    return h('ul', { class: 'pano-kutucuklar', 'aria-label': `${a.baslik}: ${sutunlar[degerI]}` }, satirlar.slice(0, 60).map((r) => {
+      const n = gizli.has(sutunlar[degerI]) ? null : sayiyaCevir(r[degerI]);
+      const renk = n === null ? null : esikRengi(n, a.esikler || []);
+      return h('li', { class: `pano-kutucuk${renk ? ` esik-${renk}` : ''}` },
+        h('span', { class: 'pano-kutucuk-etiket' }, hucreBicimle(r[etiketI], b)),
+        h('strong', { class: 'pano-kutucuk-deger' }, n !== null ? sayiBicimle(n, b) : hucreBicimle(r[degerI], b)), esikNotu(renk));
+    }));
+  }
+  const noktalar = satirlar.slice(0, a.gorunum === 'pasta' ? 500 : 60).map((r) => ({ etiket: hucreBicimle(r[etiketI], b), deger: sayiyaCevir(r[degerI]) ?? 0 }));
+  if (a.gorunum === 'pasta') return pasta(a, b, noktalar, sutunlar[degerI]);
+  return grafik(a, b, noktalar, sutunlar[degerI]);
 }
 
-/** Basit SVG çubuk / çizgi grafik (etiketler altta). @param {any} a @param {Array<{ etiket: string; deger: number }>} noktalar @param {string} degerAdi */
-function grafik(a, noktalar, degerAdi) {
+/** "Sayı + değişim": önceki yenilemedeki değere göre ▲ / ▼ (mutlak ve %). */
+function degisimSatiri(sonuc, sutun, n, b) {
+  const o = sonuc.onceki;
+  const j = o && Array.isArray(o.sutunlar) ? o.sutunlar.indexOf(sutun) : -1;
+  const onceki = o && o.ilkSatir && j >= 0 ? sayiyaCevir(o.ilkSatir[j]) : null;
+  const d = n === null ? null : degisimHesapla(n, onceki);
+  if (!d) return h('span', { class: 'pano-degisim notr' }, 'önceki yok');
+  const ok = d.yon === 'artis' ? '▲' : d.yon === 'azalis' ? '▼' : '=';
+  const yuzde = d.yuzde === null ? '' : ` (%${Math.abs(d.yuzde).toLocaleString('tr-TR', { maximumFractionDigits: 1 })})`;
+  return h('span', { class: `pano-degisim ${d.yon}`, title: `Önceki yenileme: ${sonVeriMetni(o.zaman)}` },
+    h('span', { 'aria-hidden': 'true' }, `${ok} `), h('span', { class: 'gorunmez' }, d.yon === 'artis' ? 'Arttı: ' : d.yon === 'azalis' ? 'Azaldı: ' : 'Değişmedi: '),
+    `${sayiBicimle(Math.abs(d.fark), b)}${yuzde}`, h('span', { class: 'pano-degisim-onceki' }, ` · önceki ${sonVeriMetni(o.zaman)}`));
+}
+
+/** "Yüzde / oran": %83,4; hedef verilmişse hedefe göre dolan çubuk ya da ibre (SVG öznitelikleri; satır içi stil yok). */
+function yuzdeGorunumu(a, b, n, ham, alt) {
+  if (n === null) {
+    return h('div', { class: 'pano-sayi' }, h('strong', { class: 'pano-sayi-deger' }, ham === null || ham === undefined ? '—' : hucreBicimle(ham, b)), h('span', { class: 'pano-sayi-alt' }, alt));
+  }
+  const p = yuzdeDegeri(n, b);
+  const renk = esikRengi(p, a.esikler || []);
+  const ust = b.hedef || 100;
+  const doluluk = Math.max(0, Math.min(1, p / ust));
+  const etiket = b.hedef ? `${yuzdeBicimle(n, b)} · hedef %${b.hedef.toLocaleString('tr-TR')} · hedefe ulaşma %${Math.round((p / b.hedef) * 100).toLocaleString('tr-TR')}` : yuzdeBicimle(n, b);
+  const kap = h('div', { class: `pano-sayi pano-yuzde${renk ? ` esik-${renk}` : ''}` },
+    h('strong', { class: 'pano-sayi-deger' }, yuzdeBicimle(n, b)), h('span', { class: 'pano-sayi-alt' }, alt), esikNotu(renk));
+  if (b.gosterge === 'ibre') {
+    // Yarım daire gösterge: yay pathLength=100 ile dash dizisi; ibre açısı doluluktan.
+    const aci = Math.PI * (1 - doluluk);
+    const x = 60 + 44 * Math.cos(aci); const y = 60 - 44 * Math.sin(aci);
+    kap.prepend(s('svg', { viewBox: '0 0 120 68', class: 'pano-ibre', role: 'img', 'aria-label': `${a.baslik}: ${etiket}` },
+      s('path', { d: 'M10 60 A50 50 0 0 1 110 60', class: 'ibre-zemin', pathLength: 100 }),
+      s('path', { d: 'M10 60 A50 50 0 0 1 110 60', class: 'ibre-dolu', pathLength: 100, 'stroke-dasharray': `${(doluluk * 100).toFixed(2)} 100` }),
+      s('line', { x1: 60, y1: 60, x2: x.toFixed(2), y2: y.toFixed(2), class: 'ibre-kol' }), s('circle', { cx: 60, cy: 60, r: 4, class: 'ibre-merkez' })));
+  } else if (b.hedef) {
+    kap.append(s('svg', { viewBox: '0 0 100 8', preserveAspectRatio: 'none', class: 'pano-ilerleme', role: 'img', 'aria-label': `${a.baslik}: ${etiket}` },
+      s('rect', { x: 0, y: 0, width: 100, height: 8, rx: 4, class: 'ilerleme-zemin' }),
+      s('rect', { x: 0, y: 0, width: (doluluk * 100).toFixed(2), height: 8, rx: 4, class: 'ilerleme-dolu' })));
+  }
+  if (b.hedef) kap.append(h('span', { class: 'pano-sayi-alt pano-hedef-notu' }, `Hedef %${b.hedef.toLocaleString('tr-TR')} · hedefe ulaşma %${Math.round((p / b.hedef) * 100).toLocaleString('tr-TR')}`));
+  return kap;
+}
+
+/** Halka grafik: en çok 8 dilim (kalanı "Diğer"); yüzdeler açıklamada. Dilimler circle + pathLength=100 dash dizisiyle (öznitelik). */
+function pasta(a, b, noktalar, degerAdi) {
+  const dilimler = pastaDilimleri(noktalar);
+  if (!dilimler.length) return h('p', { class: 'soluk kucuk' }, 'Grafik için sıfırdan büyük değer yok.');
+  const yuzde = (/** @type {number} */ x) => `%${x.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`;
+  const svg = s('svg', { viewBox: '0 0 120 120', class: 'pano-pasta', role: 'img', 'aria-label': `${a.baslik}: ${degerAdi}, ${dilimler.length} dilim` });
+  let birikim = 0;
+  for (const [i, d] of dilimler.entries()) {
+    svg.append(s('circle', { cx: 60, cy: 60, r: 42, pathLength: 100, class: `dilim dilim-${d.diger ? 'diger' : i}`, transform: 'rotate(-90 60 60)',
+      'stroke-dasharray': `${d.yuzde.toFixed(3)} ${(100 - d.yuzde).toFixed(3)}`, 'stroke-dashoffset': (-birikim).toFixed(3) },
+    s('title', {}, `${d.etiket}: ${sayiBicimle(d.deger, b)} (${yuzde(d.yuzde)})`)));
+    birikim += d.yuzde;
+  }
+  return h('figure', { class: 'pano-pasta-kap' }, svg,
+    h('figcaption', {}, h('ul', { class: 'pano-pasta-aciklama' }, dilimler.map((d, i) => h('li', {},
+      h('span', { class: `pano-renk dilim-${d.diger ? 'diger' : i}`, 'aria-hidden': 'true' }),
+      h('span', { class: 'pano-pasta-etiket' }, d.etiket), h('span', { class: 'pano-pasta-deger' }, `${yuzde(d.yuzde)} · ${sayiBicimle(d.deger, b)}`))))));
+}
+
+/** Basit SVG çubuk / çizgi grafik (etiketler altta). @param {any} a @param {any} b @param {Array<{ etiket: string; deger: number }>} noktalar @param {string} degerAdi */
+function grafik(a, b, noktalar, degerAdi) {
   const G = 600; const Y = 200; const sol = 40; const alt = 34; const ust = 10;
   const enCok = Math.max(0, ...noktalar.map((n) => n.deger));
   const enAz = Math.min(0, ...noktalar.map((n) => n.deger));
@@ -647,24 +769,24 @@ function grafik(a, noktalar, degerAdi) {
   const x = (i) => sol + adim * i + adim / 2;
   const svg = s('svg', { viewBox: `0 0 ${G} ${Y}`, class: `pano-grafik ${a.gorunum}`, role: 'img', 'aria-label': `${a.baslik}: ${degerAdi}, ${noktalar.length} değer`, preserveAspectRatio: 'none' },
     s('line', { x1: sol, y1: y(0), x2: G - 4, y2: y(0), class: 'eksen' }),
-    s('text', { x: sol - 6, y: ust + 8, class: 'eksen-yazi', 'text-anchor': 'end' }, enCok.toLocaleString('tr-TR')),
+    s('text', { x: sol - 6, y: ust + 8, class: 'eksen-yazi', 'text-anchor': 'end' }, sayiBicimle(enCok, { ...b, onEk: '', sonEk: '' })),
     s('text', { x: sol - 6, y: y(0), class: 'eksen-yazi', 'text-anchor': 'end', 'dominant-baseline': 'middle' }, '0'));
   if (a.gorunum === 'cubuk') {
     for (const [i, n] of noktalar.entries()) {
       const g = Math.max(2, adim * 0.66);
       svg.append(s('rect', { x: x(i) - g / 2, y: Math.min(y(n.deger), y(0)), width: g, height: Math.max(1, Math.abs(y(0) - y(n.deger))), class: 'cubuk', rx: 2 },
-        s('title', {}, `${n.etiket}: ${n.deger.toLocaleString('tr-TR')}`)));
+        s('title', {}, `${n.etiket}: ${sayiBicimle(n.deger, b)}`)));
     }
   } else {
     svg.append(s('polyline', { points: noktalar.map((n, i) => `${x(i)},${y(n.deger)}`).join(' '), class: 'cizgi', fill: 'none' }));
-    for (const [i, n] of noktalar.entries()) svg.append(s('circle', { cx: x(i), cy: y(n.deger), r: 3.5, class: 'nokta' }, s('title', {}, `${n.etiket}: ${n.deger.toLocaleString('tr-TR')}`)));
+    for (const [i, n] of noktalar.entries()) svg.append(s('circle', { cx: x(i), cy: y(n.deger), r: 3.5, class: 'nokta' }, s('title', {}, `${n.etiket}: ${sayiBicimle(n.deger, b)}`)));
   }
   const etiketAdimi = Math.ceil(noktalar.length / 12);
   for (const [i, n] of noktalar.entries()) {
     if (i % etiketAdimi) continue;
     svg.append(s('text', { x: x(i), y: Y - alt + 16, class: 'eksen-yazi', 'text-anchor': 'middle' }, n.etiket.length > 10 ? `${n.etiket.slice(0, 9)}…` : n.etiket));
   }
-  // Ekran okuyucu için değerler (görsel olarak gizli liste).
+  // Ekran okuyucu için değerler (görsel olarak gizli metin özeti).
   return h('figure', { class: 'pano-grafik-kap' }, svg,
-    h('figcaption', { class: 'gorunmez' }, noktalar.map((n) => `${n.etiket}: ${n.deger.toLocaleString('tr-TR')}`).join('; ')));
+    h('figcaption', { class: 'gorunmez' }, noktalar.map((n) => `${n.etiket}: ${sayiBicimle(n.deger, b)}`).join('; ')));
 }

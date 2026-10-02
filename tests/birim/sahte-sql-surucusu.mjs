@@ -4,7 +4,7 @@
 //   - geçici Nöbetçi sunucusunda: TEST_SUNUCU_SAHTE_SQL_SURUCUSU=<bu dosyanın yolu> (test-sunucu.mjs yükler)
 // SAHTE_SQL_GUNLUK verilirse her sorgu metni (SET … dahil) o dosyaya satır satır yazılır (testler "sayfa açılınca sorgu yok"u sayar).
 // Davranış kalıpları: port 9 → bağlantı reddi (adres iletide geçer), kullanıcı "yanlis" → giriş reddi, SQL'de "/* bekle:N */" → N ms
-// bekleme. Veri SAHTEDİR (belgeleme amaçlı geçerli biçimli kimlik / IBAN örnekleri).
+// bekleme, "/* artan */" → sorgudan önce sayac tablosundaki değer 1 artar (değişim görünümü). Veri SAHTEDİR (belgeleme amaçlı geçerli biçimli kimlik / IBAN örnekleri).
 // NOT: import.meta KULLANILMAZ.
 import { appendFileSync } from 'node:fs';
 import initSqlJs from 'sql.js';
@@ -26,6 +26,9 @@ function veritabani() {
         i === 1 ? `Kayıt ${SAHTE_TC} kimlik ve ${SAHTE_IBAN} hesap` : `Kayıt ${i}`, i * 10.5, `2026-09-${String(10 + i).padStart(2, '0')}`]);
     }
     for (const [gun, adet] of [['Pzt', 4], ['Sal', 7], ['Çar', 3], ['Per', 9], ['Cum', 5]]) db.run('INSERT INTO gunluk_sayim VALUES (?, ?)', [gun, adet]);
+    // Pasta testi: 11 kategori (en çok 8 dilim → 7 + "Diğer"); "Sayı + değişim": sayac her "/* artan */" sorgusunda 1 artar.
+    db.run('CREATE TABLE kategoriler (ad TEXT, adet INTEGER); CREATE TABLE sayac (n INTEGER); INSERT INTO sayac VALUES (10);');
+    for (let i = 1; i <= 11; i++) db.run('INSERT INTO kategoriler VALUES (?, ?)', [`Kategori ${i}`, i * 3]);
     return db;
   });
   return vtSozu;
@@ -53,6 +56,7 @@ export class Client {
     if (/^\s*SET\s/i.test(metin)) return { rows: [], fields: [] };
     const bekle = /\/\*\s*bekle:(\d+)\s*\*\//.exec(metin);
     if (bekle) await new Promise((coz) => setTimeout(coz, Number(bekle[1])));
+    if (/\/\*\s*artan\s*\*\//.test(metin)) this.db.run('UPDATE sayac SET n = n + 1');
     const degerler = typeof q === 'string' ? [] : q.values ?? [];
     const sonuc = this.db.exec(metin.replace(/\$(\d+)/g, '?$1'), degerler);
     const son = sonuc[sonuc.length - 1] ?? { columns: [], values: [] };

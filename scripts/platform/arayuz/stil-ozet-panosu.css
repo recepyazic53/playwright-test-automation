@@ -113,7 +113,72 @@ a.pano-sayi:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px;
 .pano-baglantilar { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .pano-baglantilar a { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
 .pano-baglantilar .ikon { width: 13px; height: 13px; flex: none; }
+/* Biçim alanları (Kart ekle / düzenle) */
+.pano-bicim-alani { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); margin: 0; padding: 10px 12px; min-width: 0; display: grid; gap: 8px; }
+.pano-bicim-alani legend { font-weight: 600; padding: 0 4px; }
+.pano-bicim-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 8px 12px; min-width: 0; }
+.pano-bicim-izgara[hidden] { display: none; }
+.pano-bicim-izgara .alan { margin: 0; min-width: 0; }
+
+/* Sayı + değişim */
+.pano-degisim { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px; margin-top: 4px; font: 600 12.5px var(--yazi-mono); overflow-wrap: anywhere; }
+.pano-degisim.artis { color: var(--basari); }
+.pano-degisim.azalis { color: var(--hata); }
+.pano-degisim.ayni, .pano-degisim.notr { color: var(--metin-3); font-weight: 500; }
+.pano-degisim-onceki { color: var(--metin-3); font: 400 11.5px var(--yazi); }
+
+/* Yüzde: ilerleme çubuğu ve ibre (SVG öznitelikleri; satır içi stil yok) */
+.pano-ilerleme { width: 100%; height: 8px; display: block; margin-top: 6px; }
+.pano-ilerleme .ilerleme-zemin { fill: var(--panel-2); stroke: var(--cizgi); stroke-width: .5; vector-effect: non-scaling-stroke; }
+.pano-ilerleme .ilerleme-dolu { fill: var(--vurgu); }
+.pano-ibre { width: min(100%, 220px); height: auto; display: block; }
+.pano-ibre .ibre-zemin, .pano-ibre .ibre-dolu { fill: none; stroke-width: 12; stroke-linecap: round; }
+.pano-ibre .ibre-zemin { stroke: var(--panel-2); }
+.pano-ibre .ibre-dolu { stroke: var(--vurgu); }
+.pano-ibre .ibre-kol { stroke: var(--metin); stroke-width: 2.5; stroke-linecap: round; }
+.pano-ibre .ibre-merkez { fill: var(--metin); }
+.pano-yuzde.esik-kirmizi .ilerleme-dolu { fill: var(--hata); }
+.pano-yuzde.esik-kirmizi .ibre-dolu { stroke: var(--hata); }
+.pano-yuzde.esik-sari .ilerleme-dolu { fill: var(--atlanan); }
+.pano-yuzde.esik-sari .ibre-dolu { stroke: var(--atlanan); }
+.pano-yuzde.esik-yesil .ilerleme-dolu { fill: var(--basari); }
+.pano-yuzde.esik-yesil .ibre-dolu { stroke: var(--basari); }
+
+/* Pasta / halka: dilim renkleri tema değişkenlerinden */
+.pano-pasta-kap { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; min-width: 0; }
+.pano-pasta { width: 140px; height: 140px; flex: none; }
+.pano-pasta .dilim { fill: none; stroke-width: 22; }
+.pano-pasta-aciklama { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; flex: 1 1 12rem; }
+.pano-pasta-aciklama li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; }
+.pano-pasta-etiket { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.pano-pasta-deger { font-family: var(--yazi-mono); color: var(--metin-2); white-space: nowrap; }
+.pano-renk { width: 10px; height: 10px; border-radius: 3px; flex: none; background: var(--metin-3); }
+.dilim-0 { --dilim: var(--vurgu); } .dilim-1 { --dilim: var(--vurgu-2); } .dilim-2 { --dilim: var(--basari); } .dilim-3 { --dilim: var(--atlanan); }
+.dilim-4 { --dilim: var(--durdu); } .dilim-5 { --dilim: var(--hata); } .dilim-6 { --dilim: color-mix(in srgb, var(--vurgu) 55%, var(--basari)); }
+.dilim-7 { --dilim: color-mix(in srgb, var(--atlanan) 55%, var(--hata)); } .dilim-diger { --dilim: var(--metin-3); }
+.pano-pasta .dilim { stroke: var(--dilim); }
+.pano-renk[class*="dilim-"] { background: var(--dilim); }
+
+/* Liste */
+.pano-liste { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; max-height: 22rem; overflow: auto; overflow-wrap: anywhere; }
+.pano-liste-fazla { margin: 6px 0 0; }
+
+/* Durum kutucukları: her satır bir kutu, renk eşikten */
+.pano-kutucuklar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 8px; }
+.pano-kutucuk { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--yaricap-m); border: 1px solid var(--cizgi); background: var(--panel-2); min-width: 0; }
+.pano-kutucuk-etiket { font-size: 12px; color: var(--metin-2); overflow-wrap: anywhere; }
+.pano-kutucuk-deger { font-size: 18px; overflow-wrap: anywhere; }
+.pano-kutucuk.esik-kirmizi { background: var(--hata-zemin); border-color: color-mix(in srgb, var(--hata) 45%, transparent); }
+.pano-kutucuk.esik-kirmizi .pano-kutucuk-deger { color: var(--hata); }
+.pano-kutucuk.esik-sari { background: var(--atlanan-zemin); border-color: color-mix(in srgb, var(--atlanan) 45%, transparent); }
+.pano-kutucuk.esik-sari .pano-kutucuk-deger { color: var(--atlanan); }
+.pano-kutucuk.esik-yesil { background: var(--basari-zemin); border-color: color-mix(in srgb, var(--basari) 45%, transparent); }
+.pano-kutucuk.esik-yesil .pano-kutucuk-deger { color: var(--basari); }
+
 @media (forced-colors: active) {
+  .pano-pasta .dilim, .pano-ibre .ibre-dolu { stroke: CanvasText; }
+  .pano-ilerleme .ilerleme-dolu { fill: CanvasText; }
+  .pano-renk { forced-color-adjust: none; }
   .pano-grafik .cubuk, .pano-grafik .nokta { fill: CanvasText; }
   .pano-grafik .cizgi { stroke: CanvasText; }
 }

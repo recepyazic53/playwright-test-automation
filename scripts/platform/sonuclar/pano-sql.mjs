@@ -181,8 +181,11 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   let gizliDegerler = [];
   try { gizliDegerler = bilinenGizliDegerler(vt, projeId).map(String); } catch { gizliDegerler = []; }
   const maskeli = sonucuMaskele({ sutunlar: r.sutunlar, satirlar: r.satirlar.slice(0, satirSiniri) }, { ekler: ekGizliAdlar(vt), gizliDegerler });
+  // "Sayı + değişim" için önceki YENİLEMENİN ilk satırı (önbellekteki maskeli sonuçtan; aynı sorgu ve hedef). İlk yenilemede null.
+  const eski = panoGetir(vt, projeId).sqlSonuclari[kartId];
+  const onceki = eski ? { zaman: eski.zaman, sutunlar: eski.sutunlar, ilkSatir: eski.satirlar[0] ?? null } : null;
   /** @type {PanoSqlSonucu} */
-  const sonuc = { zaman: (s.simdi ? s.simdi() : new Date()).toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri };
+  const sonuc = { zaman: (s.simdi ? s.simdi() : new Date()).toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri, onceki };
   sqlSonucuYaz(vt, projeId, kartId, sonuc);
   return sonuc;
 }

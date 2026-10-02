@@ -174,7 +174,8 @@ export const REHBERLER = {
       {
         baslik: 'SQL kartı',
         metin: 'SQL kartı Ayarlar > Entegrasyonlar\'daki bir veritabanı bağlantısında yalnız okuma sorgusu (tek SELECT ya da WITH … SELECT) çalıştırır; yalnız "Yenile"ye basınca çalışır, sayfa açılınca çalışmaz. Kartın üstünde verinin alındığı saat ("Son veri") yazar. En çok 15 sn ve 500 satır; gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir. Bağlantı CANLI ortama aitse ilk "Yenile" onay ister; "Veritabanı okuma" izni gerekir.',
-        ipucu: 'Görünüm tek sayıysa renk eşiği verin (ör. değer > 0 ise kırmızı): sorun olduğunda kart kendiliğinden kırmızı görünür.'
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Görünüm', alt: 'sayı, yüzde, değişim, tablo, liste, kutucuk, grafik', ikon: 'grafik' }, { baslik: 'Biçim', alt: 'ondalık, ön / son ek, tarih', ikon: 'duzenle' }, { baslik: 'Yenile', ikon: 'yenile' }] },
+        ipucu: 'Görünüm tek sayı, yüzde, değişim ya da durum kutucuklarıysa renk eşiği verin (eşik biçimlenmemiş değere, yüzdede yüzde değerine bakar; ör. değer > 0 ise kırmızı): sorun olduğunda kart kendiliğinden kırmızı görünür.'
       }
     ]
   },

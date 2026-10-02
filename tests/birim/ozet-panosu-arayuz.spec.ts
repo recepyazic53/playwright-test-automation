@@ -371,6 +371,90 @@ test('Nöbetçi verisi ve metin kartı; hızlı arama ("Panoyu düzenle", "Kart 
   await kapat();
 });
 
+test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + değişim (▲), liste, durum kutucukları; biçim; görünüm değişince aynı sonuç yeniden çizilir', async () => {
+  test.setTimeout(120_000);
+  const sql = (id: string, baslik: string, sorgu: string, gorunum: string, ek: Record<string, unknown> = {}, boyut = 'kucuk') =>
+    ({ id, tur: 'sql', boyut, ayar: { baslik, hedef: { baglantiId: bTest }, sorgu, gorunum, ...ek } });
+  const kartlar = [
+    sql('g-oran', 'Başarı oranı', 'SELECT 0.834 AS oran', 'yuzde', { bicim: { hedef: 95 }, esikler: [{ islec: '<', deger: 90, renk: 'sari' }] }),
+    sql('g-ibre', 'Doluluk', 'SELECT 0.834 AS oran', 'yuzde', { bicim: { gosterge: 'ibre', hedef: 100 } }),
+    sql('g-degisim', 'Kuyruk', '/* artan */ SELECT n AS deger FROM sayac', 'degisim', { bicim: { sonEk: ' adet' } }),
+    sql('g-pasta', 'Kategoriler', 'SELECT ad, adet FROM kategoriler', 'pasta', {}, 'orta'),
+    sql('g-kutu', 'Durumlar', 'SELECT durum, COUNT(*) AS adet FROM kayitlar GROUP BY durum ORDER BY durum', 'kutucuk',
+      { esikler: [{ islec: '>', deger: 3, renk: 'kirmizi' }, { islec: '>=', deger: 1, renk: 'yesil' }] }, 'orta'),
+    sql('g-liste', 'Açıklamalar', 'SELECT aciklama FROM kayitlar ORDER BY id', 'liste'),
+    sql('g-tutar', 'Toplam tutar', 'SELECT SUM(tutar) AS toplam FROM kayitlar', 'sayi', { bicim: { onEk: '₺', ondalik: 2 } }),
+    sql('g-tarih', 'Günler', 'SELECT id, gun FROM kayitlar ORDER BY id LIMIT 3', 'tablo', { bicim: { tarih: 'gun' } }),
+    sql('g-cubuk', 'Günlük sayım', 'SELECT gun, adet FROM gunluk_sayim', 'cubuk', { bicim: { sonEk: ' adet' } })
+  ];
+  const k = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar } });
+  expect(k.basarili, k.mesaj).not.toBe(false);
+  const once = sorgular().length;
+  const { page, hatalar, yenilemeler, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  expect(sorgular()).toHaveLength(once);
+  const kart = (ad: string) => page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: ad, exact: true }) });
+  for (const ad of ['Başarı oranı', 'Doluluk', 'Kuyruk', 'Kategoriler', 'Durumlar', 'Açıklamalar', 'Toplam tutar', 'Günler', 'Günlük sayım']) {
+    await kart(ad).getByRole('button', { name: `Yenile: ${ad}` }).click();
+    await expect(kart(ad).locator('.pano-son-veri')).toHaveText(/^Son veri:/);
+  }
+  // Yüzde: %83,4; hedefe göre çubuk; eşik yüzde değerine (83,4 < 90 → sarı).
+  await expect(kart('Başarı oranı').locator('.pano-sayi-deger')).toHaveText('%83,4');
+  await expect(kart('Başarı oranı').locator('.pano-yuzde')).toHaveClass(/esik-sari/);
+  await expect(kart('Başarı oranı').getByRole('img')).toHaveAttribute('aria-label', /hedef %95/);
+  await expect(kart('Başarı oranı')).toContainText('hedefe ulaşma %88');
+  await expect(kart('Doluluk').locator('svg.pano-ibre')).toBeVisible();
+  // Sayı + değişim: ilk yenilemede "önceki yok", ikincide ▲ (11 → 12: +1, %9,1).
+  await expect(kart('Kuyruk').locator('.pano-degisim')).toHaveText('önceki yok');
+  await kart('Kuyruk').getByRole('button', { name: 'Yenile: Kuyruk' }).click();
+  await expect(kart('Kuyruk').locator('.pano-sayi-deger')).toHaveText('12 adet');
+  await expect(kart('Kuyruk').locator('.pano-degisim')).toHaveClass(/artis/);
+  await expect(kart('Kuyruk').locator('.pano-degisim')).toContainText('▲ Arttı: 1 adet (%9,1)');
+  // Pasta: 11 kategori → 7 dilim + "Diğer"; yüzdeler açıklamada.
+  const aciklama = kart('Kategoriler').locator('.pano-pasta-aciklama li');
+  await expect(aciklama).toHaveCount(8);
+  await expect(aciklama.last()).toContainText('Diğer');
+  await expect(aciklama.first()).toContainText('Kategori 11');
+  await expect(aciklama.first()).toContainText('%16,7');
+  await expect(kart('Kategoriler').locator('svg.pano-pasta circle.dilim')).toHaveCount(8);
+  // Durum kutucukları: renk eşiklere göre (hata 4 > 3 kırmızı, bekliyor 2 ≥ 1 yeşil).
+  const kutu = (ad: string) => kart('Durumlar').locator('.pano-kutucuk').filter({ hasText: ad });
+  await expect(kutu('hata')).toHaveClass(/esik-kirmizi/);
+  await expect(kutu('bekliyor')).toHaveClass(/esik-yesil/);
+  await expect(kutu('onaylandi')).toHaveClass(/esik-kirmizi/);
+  await expect(kart('Açıklamalar').locator('.pano-liste li')).toHaveCount(12);
+  await expect(kart('Toplam tutar').locator('.pano-sayi-deger')).toHaveText('₺819,00');
+  await expect(kart('Günler').locator('tbody tr').first().locator('td').nth(1)).toHaveText('11.09.2026');
+  await expect(kart('Günlük sayım').locator('figcaption')).toContainText('Per: 9 adet');
+  expect(yenilemeler()).toBe(10);
+  if (process.env.PANO_EKRAN_GORUNTUSU) {
+    mkdirSync(process.env.PANO_EKRAN_GORUNTUSU, { recursive: true });
+    await page.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-gorunumler-1440.png'), fullPage: true });
+  }
+  await tasmaYok(page);
+  await adlarUyumlu(page);
+  // Görünüm değişince aynı (önbellekteki) sonuç yeni görünümle çizilir; sorgu çalışmaz.
+  const sorguSayisi = sorgular().length;
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Başarı oranı' }).click();
+  const pencere = page.getByRole('dialog', { name: /^Kartı düzenle/ });
+  await pencere.getByLabel('Görünüm').selectOption('sayi');
+  await pencere.getByRole('button', { name: 'Uygula' }).click();
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Bitti' }).click();
+  await expect(kart('Başarı oranı').locator('.pano-sayi-deger')).toHaveText('0,83');
+  await expect(kart('Başarı oranı').locator('.pano-son-veri')).toHaveText(/^Son veri:/);
+  expect(sorgular()).toHaveLength(sorguSayisi);
+  // 390 px: önbellekten çizilir, taşma yok, sorgu yok.
+  const dar = await sayfaAc(390, 900);
+  await git(dar.page, '#/sonuclar/ozet');
+  await expect(dar.page.locator('.pano-pasta-aciklama li')).toHaveCount(8);
+  await tasmaYok(dar.page);
+  expect(sorgular()).toHaveLength(sorguSayisi);
+  expect([...hatalar, ...dar.hatalar]).toEqual([]);
+  await dar.kapat();
+  await kapat();
+});
+
 test('390 px: düzenleme kipi, Kart ekle penceresi ve SQL kartı yatay taşmaz; 1440 px düzenleme kipinde de taşma yok', async () => {
   test.setTimeout(90_000);
   for (const [g, y] of [[390, 900], [1440, 1000]] as const) {
