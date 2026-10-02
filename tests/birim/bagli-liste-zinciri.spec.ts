@@ -153,6 +153,8 @@ test.describe('hızlı test', () => {
     const son = Date.now() + sn * 1000;
     for (;;) {
       const o = (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
+      // Keşif toplu sorusu bu testin konusu değil: "Hiçbirine basma".
+      if (o.durum === 'kesifOnay' && !durumlar.includes('kesifOnay')) { await api('/platform/hizli-test/onay', { id, cevap: false }); continue; }
       if (durumlar.includes(o.durum)) return o;
       if (['hata', 'iptal'].includes(o.durum) || Date.now() > son) throw new Error(`beklenen ${durumlar.join('/')}, olan ${o.durum}: ${JSON.stringify(o.hata ?? o.sonHata)} ${JSON.stringify(o.gunluk?.slice(-5))}`);
       await new Promise((c) => setTimeout(c, 300));

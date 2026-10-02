@@ -27,8 +27,8 @@
 //   POST /platform/hizli-test/dosya-yukle?id=&alan=           ham dosya gövdesi + X-Dosya-Adi → { dosya: { id, ad, boyut, referans } } (şifreli depoya)
 //   GET  /platform/hizli-test/dosyalar?id=                    projenin şifreli senaryo dosyaları ("Depodan seç"; içerik dönmez)
 //   POST /platform/hizli-test/karar { id, karar: 'bas' | 'baska' | 'bitir' | 'duzelt', secici?, metin?, dugme?, mesajlar? }
-//   POST /platform/hizli-test/onay { id, cevap }               Bana sor: "X'e basayım mı?"; keşif sorusu (durum kesifOnay): cevap true (Bas) /
-//        false (Basma) / 'atla' (Kalanları atla). Keşif basışı akışa yazılmaz (kaydedilen senaryoya girmez).
+//   POST /platform/hizli-test/onay { id, cevap }               Bana sor: "X'e basayım mı?"; keşif toplu sorusu (durum kesifOnay): cevap true +
+//        secilenler (seçiciler; "Seçilenlere bas") / false ("Hiçbirine basma") / 'atla' (Kalanları atla). Keşif basışı akışa yazılmaz.
 //   POST /platform/hizli-test/diyalog { id, cevap: 'kabul' | 'iptal' }   Bana sor: basışta açılan onay / soru penceresinin yanıtı
 //   POST /platform/hizli-test/hata-cevabi { id, cevap: 'hata' | 'uyari' | 'onemsiz' }
 //   POST /platform/hizli-test/bitis { id, etiketler, adres?, olumsuz?, ogeler? }   ogeler: seçili Bitti öğelerinin seçicileri (görünür olunca bitti)
@@ -611,28 +611,31 @@ export function hizliTestYoneticisiOlustur(s) {
 
   // ---- Keşif basışları (akışın parçası değil; kaydedilen senaryoya girmez) ----
   /**
-   * Keşif kuyruğundaki sıradaki düğme: Evet izninde sonucundan emin olunan (yalnız sayfa içinde bir şey açan) düğmeye sorulmadan basılır;
-   * Bana sor'da her düğme, Evet'te emin olunmayan düğme kullanıcıya sorulur ("Keşif: “X” düğmesine basayım mı?"). Kuyruk bitince akış
-   * bugünkü gibi sürer (veri durağı / karar). @param {Nesne} o
+   * Keşif kuyruğu: onay verilmiş düğmeye ve Evet izninde sonucundan emin olunan (yalnız sayfa içinde bir şey açan) düğmeye sorulmadan
+   * basılır. Kalanlar (Bana sor'da hepsi; Evet'te emin olunmayanlar: form gönderen ya da yalnız betikle çalışan) TEK toplu kartta sorulur
+   * ("Keşif için şu düğmelere basılabilir": her biri için onay kutusu). Kuyruk bitince akış bugünkü gibi sürer (veri durağı / karar).
+   * @param {Nesne} o
    */
   const kesifBasisiSurdur = (o) => {
-    const d = Array.isArray(o.kesifDugmeKuyrugu) ? o.kesifDugmeKuyrugu.shift() : null;
-    if (!d) {
-      o.kesifDugmeKuyrugu = [];
-      o.kesifOnayBekleyen = null;
-      const adim = guncelAdim(o);
-      if (adim?.alanlar.length) veriDuragi(o); else verilerTamam(o);
+    const kuyruk = Array.isArray(o.kesifDugmeKuyrugu) ? o.kesifDugmeKuyrugu : [];
+    const i = kuyruk.findIndex((/** @type {Nesne} */ d) => d.onayli === true || (o.izin === 'evet' && d.emin === true));
+    if (i >= 0) { const [d] = kuyruk.splice(i, 1); kesifBasmayaBasla(o, d); return; }
+    const sorulacak = kuyruk.filter((/** @type {Nesne} */ d) => d.soruldu !== true);
+    if (sorulacak.length) {
+      o.kesifOnayListesi = sorulacak;
+      o.durum = 'kesifOnay';
+      o.calisiyor = null;
       return;
     }
-    if (o.izin === 'evet' && d.emin === true) { kesifBasmayaBasla(o, d); return; }
-    o.kesifOnayBekleyen = d;
-    o.durum = 'kesifOnay';
-    o.calisiyor = null;
+    o.kesifDugmeKuyrugu = [];
+    o.kesifOnayListesi = null;
+    const adim = guncelAdim(o);
+    if (adim?.alanlar.length) veriDuragi(o); else verilerTamam(o);
   };
   /** @param {Nesne} o @param {Nesne} d */
   const kesifBasmayaBasla = (o, d) => {
     o.kesifBasiliyor = d;
-    o.kesifOnayBekleyen = null;
+    o.kesifOnayListesi = null;
     o.durum = 'calisiyor';
     o.calisiyor = `Keşif: “${d.metin ?? d.secici}” düğmesine basıldı; sayfada ne açıldığına bakılıyor (yazma istekleri engellenir; kaydedilen senaryoya girmez)…`;
     gunluk(o, `Keşif: “${d.metin ?? d.secici}” düğmesine basılıyor (${d.emin ? `${d.neden}; sorulmadan` : 'onay verildi'}).`);
@@ -763,8 +766,11 @@ export function hizliTestYoneticisiOlustur(s) {
       // Kesin olmayan durumlar (seçilemeyen değer, bütçe sınırı…): bulgu değil, not.
       for (const n of (Array.isArray(z?.notlar) ? z.notlar : []).slice(0, 8)) gunluk(o, `Bağlı liste notu: ${String(n)}`);
       // Keşifte basılabilecek düğmeler (sayfada bir şey gösterebilecek): basma iznine göre basılır / sorulur; Hayır'da hiç.
+      // Kullanıcının cümlesinde adı geçen düğme akışta basılacağı için keşifte denenmez (adlar kullanıcının kendi cümlesinden).
+      const cumledeki = new Set((o.cumle?.dugmeler ?? []).map((/** @type {string} */ x) => katla(String(x))));
       o.kesifDugmeKuyrugu = o.izin === 'hayir' ? [] : (Array.isArray(e.kesifDugmeleri) ? e.kesifDugmeleri : [])
-        .filter((/** @type {Nesne} */ d) => nesneMi(d) && typeof d.secici === 'string').slice(0, 20);
+        .filter((/** @type {Nesne} */ d) => nesneMi(d) && typeof d.secici === 'string' && !(d.metin && cumledeki.has(katla(String(d.metin)))))
+        .map((/** @type {Nesne} */ d) => ({ ...d })).slice(0, 20);
       kesifBasisiSurdur(o);
       return;
     }
@@ -1407,10 +1413,9 @@ export function hizliTestYoneticisiOlustur(s) {
       };
     }
     else if (o.durum === 'onay') soru = { tur: 'onay', dugme: o.onayBekleyen };
-    // Keşif sorusu: “X” düğmesine basayım mı? (neden: düğmenin davranışından; kalan: sıradaki düğme sayısı)
-    else if (o.durum === 'kesifOnay' && o.kesifOnayBekleyen) {
-      const d = o.kesifOnayBekleyen;
-      soru = { tur: 'kesifOnay', dugme: { secici: d.secici, metin: d.metin ?? null, emin: d.emin === true, neden: d.neden ?? null }, kalan: (o.kesifDugmeKuyrugu ?? []).length };
+    // Keşif toplu sorusu: "Keşif için şu düğmelere basılabilir" (her düğme: ad + davranışından neden; emin olunup olunmadığı).
+    else if (o.durum === 'kesifOnay' && Array.isArray(o.kesifOnayListesi)) {
+      soru = { tur: 'kesifOnay', dugmeler: o.kesifOnayListesi.map((/** @type {Nesne} */ d) => ({ secici: d.secici, metin: d.metin ?? null, emin: d.emin === true, neden: d.neden ?? null })) };
     }
     else if (o.durum === 'diyalog') soru = { tur: 'diyalog', diyalogTuru: o.diyalogSorusu?.tur ?? 'confirm', mesaj: o.diyalogSorusu?.mesaj ?? '', dugme: o.diyalogSorusu?.dugme ?? null };
     else if (o.durum === 'hataSorusu') soru = { tur: 'hata', metinler: o.hataSorusu?.metinler ?? [] };
@@ -1445,6 +1450,11 @@ export function hizliTestYoneticisiOlustur(s) {
         kaydedilebilir: Boolean(o.bitis) || o.izin === 'hayir' || o.basisNo > 0, bitisVar: Boolean(o.bitis),
         toplanan: { adim: o.adimlar.length, deger: Object.keys(o.degerler).length, basis: o.basisNo, etiket: Object.keys(o.etiketler ?? {}).length }
       };
+    }
+    // Keşif basışıyla açılan alanlar (ilk adımın veri durağında bilgi olarak): akışta o düğmeye basılırsa sorulur.
+    if (soru && soru.tur === 'veri' && soru.adim === 1) {
+      soru.kesifAlanlari = (o.kesifBasislari ?? []).filter((/** @type {Nesne} */ x) => Array.isArray(x.yeniAlanlar) && x.yeniAlanlar.length)
+        .map((/** @type {Nesne} */ x) => ({ dugme: String(x.dugme), alanlar: x.yeniAlanlar.slice(0, 30) }));
     }
     // Sayfanın doldurduğu (salt okunur, hesaplanan) alanlar: sorulmaz; veri durağında ve bitişte bilgi olarak, sayfadaki değerleriyle
     // ("neden sorulmadı?" — sayfa kendisi dolduruyor). Takvimden seçilen salt okunur tarih alanı sorulur (burada değil).
@@ -1835,18 +1845,21 @@ export function hizliTestYoneticisiOlustur(s) {
   function onay(g) {
     const o = oturumGetir(String(g.id ?? ''));
     durumda(o, ['onay', 'kesifOnay']);
-    // Keşif sorusu: Bas (true) / Basma (false) / Kalanları atla ("atla").
+    // Keşif toplu sorusu: "Seçilenlere bas" (cevap true + secilenler: seçicileri; secilenler yoksa listenin hepsi) / "Hiçbirine basma"
+    // (false) / "Kalanları atla" ("atla": listedekiler ve kuyrukta kalanlar). Basılmayanlar kuyruktan düşer.
     if (o.durum === 'kesifOnay') {
-      const k = o.kesifOnayBekleyen;
-      o.kesifOnayBekleyen = null;
-      if (g.cevap === true && k) { kesifBasmayaBasla(o, k); return { basildi: true }; }
-      if (g.cevap === 'atla') {
-        const kalan = [k, ...(o.kesifDugmeKuyrugu ?? [])].filter(Boolean).length;
-        o.kesifDugmeKuyrugu = [];
-        gunluk(o, `Keşif: kalan ${kalan} düğmeye basılmadı (kalanları atla).`);
-      } else if (k) gunluk(o, `Keşif: “${k.metin ?? k.secici}” düğmesine basılmadı.`);
+      const liste = Array.isArray(o.kesifOnayListesi) ? o.kesifOnayListesi : [];
+      o.kesifOnayListesi = null;
+      const secilenler = Array.isArray(g.secilenler) ? g.secilenler.map(String) : null;
+      const secilen = g.cevap === true ? liste.filter((/** @type {Nesne} */ d) => !secilenler || secilenler.includes(String(d.secici))) : [];
+      for (const d of liste) { d.soruldu = true; if (secilen.includes(d)) d.onayli = true; }
+      const basilmayan = liste.filter((/** @type {Nesne} */ d) => !secilen.includes(d));
+      const kalan = (o.kesifDugmeKuyrugu ?? []).filter((/** @type {Nesne} */ d) => !d.onayli && !liste.includes(d));
+      o.kesifDugmeKuyrugu = (o.kesifDugmeKuyrugu ?? []).filter((/** @type {Nesne} */ d) => d.onayli === true || (g.cevap !== 'atla' && !liste.includes(d)));
+      if (g.cevap === 'atla') gunluk(o, `Keşif: kalan ${basilmayan.length + kalan.length} düğmeye basılmadı (kalanları atla).`);
+      else if (basilmayan.length) gunluk(o, `Keşif: ${basilmayan.map((d) => `“${d.metin ?? d.secici}”`).join(', ')} düğmesine basılmadı.`);
       kesifBasisiSurdur(o);
-      return { basildi: false };
+      return { basildi: secilen.length > 0 };
     }
     const d = o.onayBekleyen;
     o.onayBekleyen = null;

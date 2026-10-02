@@ -152,6 +152,9 @@
 .hizli-onsecim-durum .alan-hatasi { flex-basis: 100%; }
 /* Keşif sorusu: “X” düğmesine basayım mı? */
 .hizli-kesif-sorusu p { margin: 4px 0; overflow-wrap: anywhere; }
+.hizli-kesif-dugmeleri { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.hizli-kesif-dugmesi { display: grid; gap: 2px; padding: 6px 10px; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); overflow-wrap: anywhere; min-width: 0; }
+.hizli-kesif-alanlari { display: grid; gap: 8px; min-width: 0; }
 
 /* Kayıt özeti (kendi sekmesinde: #/hizli-test/ozet/<id>) */
 .hizli-ozet-karti { display: flex; flex-direction: column; gap: 12px; min-width: 0; }

@@ -18,7 +18,7 @@
 //   /ic-ice/         İki düzey seçim: "Farklı kişi" Evet → açılışta gizli ikinci kişi bölümü; onun "Kişi tipi (2)" Tüzel olunca bölümün
 //                    kutularının adı (ve en çok karakteri) değişir, doğum tarihi gizlenir. "Kaydet": POST /api/ic-ice → "Kayıt alındı".
 //   /adimli/         "İleri" → sayfanın en altına açılışta olmayan ikinci adım (Kişi tipi + adı değişen alanlar) + "Kaydet".
-//   /kesif-dugmeli/  Gizli bölümü sayfa içinde açan düğme (aria-expanded) ve formu gönderen düğme (submit).
+//   /kesif-dugmeli/  Gizli bölümü sayfa içinde açan düğme (aria-expanded), yalnız betikle çalışan düğme ("Önizle") ve formu gönderen düğme.
 import type { FiksturIstegi, FiksturYaniti } from './giris-fikstur';
 
 const html = (baslik: string, govde: string): FiksturYaniti => ({
@@ -357,18 +357,23 @@ export const ADIMLI_SAYFASI = String.raw`<h1>Başvuru</h1>
 
 /**
  * /kesif-dugmeli/: açılışta GİZLİ bölüm ve onu sayfa içinde açan düğme (type=button, aria-expanded / aria-controls: "Ek bölüm"), bölümde
- * iki alan ("Ek alan 1", "Ek alan 2"); ayrıca formu gönderen düğme ("Gönder", form içinde submit: POST /api/kesif-dugmeli → "Kayıt alındı").
+ * iki alan ("Ek alan 1", "Ek alan 2"); yalnız betikle çalışan "Önizle" (basınca "Ek alan 3" açılır); formu gönderen düğme ("Gönder", form
+ * içinde submit: POST /api/kesif-dugmeli → "Kayıt alındı").
  */
 export const KESIF_DUGMELI_SAYFASI = String.raw`<h1>Başvuru</h1>
 <form id="form">
   <div><label for="ad">Ad</label><input id="ad" name="ad"></div>
   <p><button type="button" id="ekAc" aria-expanded="false" aria-controls="ekBolum">Ek bölüm</button></p>
   <div id="ekBolum" hidden><label for="ek1">Ek alan 1</label><input id="ek1" name="ek1"> <label for="ek2">Ek alan 2</label><input id="ek2" name="ek2"></div>
+  <p><button type="button" id="onizle">Önizle</button></p>
+  <div id="onizleBolum" hidden><label for="ek3">Ek alan 3</label><input id="ek3" name="ek3"></div>
   <p><button type="submit" id="gonder">Gönder</button></p>
 </form>
 <div id="sonuc" role="status"></div>
 <script>
   var $ = function (id) { return document.getElementById(id); };
+  // Yalnız betikle çalışan düğme (ne yaptığı sayfadan anlaşılmaz): basınca bir alan açar.
+  $('onizle').addEventListener('click', function () { $('onizleBolum').hidden = false; });
   $('ekAc').addEventListener('click', function () { var acik = $('ekBolum').hidden; $('ekBolum').hidden = !acik; this.setAttribute('aria-expanded', String(acik)); });
   $('form').addEventListener('submit', function (o) {
     o.preventDefault();

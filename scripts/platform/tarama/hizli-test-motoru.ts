@@ -69,8 +69,8 @@ const dogruMu = (d: unknown): boolean => d === true || ['true', 'evet', '1', 'on
  * Sayfa içi: düğmenin / bağlantının keşifte basılabilir olup olmadığı ve sonucundan emin olunup olunamayacağı — YALNIZ öğenin
  * davranışından (adı / metni kullanılmaz). Basılmaz: devre dışı / görünmez öğe, bir alanın parçası (yanında girdi olan süsleme / simge
  * öğesi), başka belgeye giden bağlantı. Emin (yalnız sayfa içinde bir şey açar): aria-expanded / aria-controls, sekme rolü, özet
- * (summary) öğesi, "#…" / "javascript:" bağlantısı — form göndermiyorsa. Form gönderen düğme (submit) emin değildir. Davranışı
- * sayfadan anlaşılamayan (yalnız betikli) düğmeler keşifte denenmez (akışta kullanıcı seçer).
+ * (summary) öğesi, "#…" / "javascript:" bağlantısı — form göndermiyorsa. Form gönderen düğme (submit) ve davranışı sayfadan
+ * anlaşılamayan (yalnız betikli: type=button, onclick, sayfa içi işleyici) düğme emin değildir: izne göre kullanıcıya sorulur.
  */
 function dugmeDavranisi(el: Element): { uygun: boolean; emin: boolean; neden: string } {
   const h = el as HTMLElement;
@@ -94,7 +94,8 @@ function dugmeDavranisi(el: Element): { uygun: boolean; emin: boolean; neden: st
   if (h.getAttribute('role') === 'tab') return { uygun: true, emin: true, neden: 'sekme' };
   if (etiket === 'summary' || h.closest('summary')) return { uygun: true, emin: true, neden: 'ayrıntıyı açar' };
   if (href !== null && href !== '') return { uygun: true, emin: true, neden: 'sayfa içi bağlantı' };
-  return { uygun: false, emin: false, neden: 'davranışı sayfadan anlaşılamıyor' };
+  // Yalnız betikle çalışan düğme (type=button, onclick / sayfa içi işleyici): ne yaptığı sayfadan anlaşılamaz → emin değil (sorulur).
+  return { uygun: true, emin: false, neden: 'betikle çalışıyor; ne yaptığı sayfadan anlaşılamıyor' };
 }
 
 export type KomutAlici = () => Promise<HizliKomut | null>;

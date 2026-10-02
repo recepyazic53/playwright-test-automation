@@ -44,7 +44,14 @@ async function basarili(yol: string, govde: Nesne): Promise<Yanit> {
   expect(y.basarili, `${yol}: ${y.mesaj ?? ''} ${JSON.stringify(y).slice(0, 400)}`).toBe(true);
   return y;
 }
-const oturum = async (id: string): Promise<Nesne> => (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
+/** Oturum durumu. Keşif toplu sorusu (sayfadaki emin olunmayan düğmeler) bu testin konusu değil: "Hiçbirine basma" ile geçilir. */
+const oturum = async (id: string): Promise<Nesne> => {
+  for (;;) {
+    const o = (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
+    if (o?.durum !== 'kesifOnay') return o;
+    await api('/platform/hizli-test/onay', { id, cevap: false });
+  }
+};
 async function bekle(id: string, durumlar: string[], sn = 90): Promise<Nesne> {
   const son = Date.now() + sn * 1000;
   for (;;) {
