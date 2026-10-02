@@ -9,11 +9,16 @@
 import type { Frame, FrameLocator, Page } from '@playwright/test';
 import { KALIPLAR, eylemAdaylariniDegerlendir, type EylemAdaylari, type HamEylemIzi, type HamYonlendirme } from './eylem-kesfi.mjs';
 import { ogeBilgisi, type SeciciAdayi } from './oge-secme-paneli';
+import { YER_TUTUCU_KALIPLARI, YER_TUTUCU_TEMIZLE } from './yer-tutucu-secenek.mjs';
 
 /** Sayfa içi ham iz: tek öğe (isaret + seçici adayları) ya da grup (grupSecici). */
 type SayfaIzi = Omit<HamEylemIzi, 'secici' | 'seciciTuru' | 'kirilganlik'> & { isaret?: string; adaylar?: SeciciAdayi[]; grupSecici?: string };
 type SayfaIzleri = { sayfaYolu: string; izler: SayfaIzi[]; yonlendirmeler: HamYonlendirme[]; notlar: string[] };
-type TopladiAyari = { kaliplar: Record<string, string>; enCok: { dugme: number; basari: number; hata: number; bekleme: number }; onek: string };
+type TopladiAyari = {
+  kaliplar: Record<string, string>; enCok: { dugme: number; basari: number; hata: number; bekleme: number }; onek: string;
+  /** Yer tutucu metin kalıpları (yer-tutucu-secenek.mjs; sayfa betiği içe aktaramaz). */
+  yerTutucu: { kaliplar: string[]; temizle: string };
+};
 
 /** Geçici öğe işaretinin öneki ("Sayfada seç"in s1, s2… işaretleriyle karışmaz). */
 const ISARET_ONEKI = 'ek';
@@ -86,7 +91,7 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   const isaretciMi = (e: Element | null): boolean => Boolean(e) && getComputedStyle(e as Element).cursor === 'pointer';
   /** İmleci kendisi işaretçi (atası değil) ve tıklanabilir görünen yaprak benzeri öğe. */
   const kendiIsaretci = (e: Element): boolean => isaretciMi(e) && !isaretciMi(ata(e)) && !e.querySelector('input, select, textarea, button, a[href]');
-  const dugmeler = derinSec(`button, input[type="submit"], input[type="button"], input[type="image"], ${ROLLER}, [onclick], a, [class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"]), div, span, li, svg, img, i`)
+  const hamDugmeler = derinSec(`button, input[type="submit"], input[type="button"], input[type="image"], ${ROLLER}, [onclick], a, [class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"]), div, span, li, svg, img, i`)
     .filter((e) => !nobetcininMi(e) && gorunur(e) && !e.matches('select, textarea, option, label, input:not([type="submit"]):not([type="button"]):not([type="image"])'))
     .filter((e) => {
       if (yerelEylem(e)) return true;
@@ -123,6 +128,163 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     }
     return null;
   };
+
+  // 1a) FORM DENETİMİ PARÇALARI "Devam et" adayı değildir: etiketler (label; içindeki gerçek button / input submit hariç), radyo / onay
+  // kutusu etiketleri ve sarmalayıcıları, alan etiketi / başlık hücresi metinleri, SELECT'E DAYALI özel açılır liste bileşenleri (kütüphane
+  // sınıf parçaları, gizli select'in kardeşi / kabı, select kimliğini taşıyan id / aria-controls / aria-owns, gövdeye eklenmiş sonuç
+  // listeleri), yer tutucu metinler ("Seçiniz…"; kalıp ayardan: yer-tutucu-secenek.mjs) ve seçili liste değeri gösterimleri. Doğal eylem
+  // öğeleri (button, input submit/button/image, role=button/tab/switch/menuitem, a[href]) metin kurallarından muaftır. Select'e dayanmayan
+  // özel combobox ve açık listbox seçenekleri korunur.
+  const ALAN = 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="image"]):not([type="reset"]), select, textarea';
+  const RADYO = 'input[type="radio"], input[type="checkbox"]';
+  const DOGAL = 'button, input[type="submit"], input[type="button"], input[type="image"], input[type="reset"], [role="button"], [role="tab"], [role="switch"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], a[href]';
+  /** Bilinen özel açılır liste kütüphanelerinin sınıf parçaları (genel; select'i saran bileşenler). */
+  const SECIM_SINIFI = /(^|\s)(select2[\w-]*|chosen-[\w-]+|selectize-[\w-]+|choices(__[\w-]+)?|selectric[\w-]*|nice-select[\w-]*|bootstrap-select|selectboxit[\w-]*|sumoselect|ui-selectmenu[\w-]*|ts-(wrapper|control|dropdown)[\w-]*|ss-(main|content|single|values)[\w-]*|v-select|vs__[\w-]+|react-select__[\w-]+|multiselect[\w-]*)(\s|$)/i;
+  const etiketAnahtari = (m: string | null | undefined): string => katla(m).replace(/[\s:*]+$/, '').replace(/^[\s*]+/, '');
+  const yerTutucuMu = (m: string): boolean => {
+    const n = (m ?? '').toLocaleLowerCase('tr').replace(new RegExp(ayar.yerTutucu.temizle, 'gu'), ' ').trim();
+    return Boolean(n) && ayar.yerTutucu.kaliplar.some((x) => new RegExp(x, 'u').test(n));
+  };
+  const tumAlanlar = derinSec(ALAN).slice(0, 1500);
+  /** Etiket olabilecek kardeş: kısa, görünür, etkileşimsiz yazı. */
+  const yaziKardesi = (o: Element | null): string => {
+    if (!o || o.matches(`${ALAN}, button, a, [role], [onclick], script, style, template`) || o.querySelector(`${ALAN}, button, a[href], [role]`) || !gorunur(o)) return '';
+    const m = tumMetin(o);
+    return m.length <= 60 ? m : '';
+  };
+  /** Alanın etiketi: label → aria-label → aria-labelledby → önceki başlık hücresi (td / th) → önceki kardeş yazı → placeholder → title. */
+  const alanEtiketi = (c: Element): string => {
+    const kok = c.getRootNode() as Document | ShadowRoot;
+    const lab = [...((c as HTMLInputElement).labels ?? [])].map((l) => tumMetin(l)).find(Boolean);
+    const bagli = (c.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter(Boolean)
+      .map((id) => (typeof kok.getElementById === 'function' ? kok.getElementById(id) : null)).map((x) => (x ? tumMetin(x) : '')).filter(Boolean).join(' ');
+    const hucre = c.closest('td, th');
+    const onceki = hucre?.previousElementSibling && hucre.previousElementSibling.matches('td, th') ? yaziKardesi(hucre.previousElementSibling) : '';
+    const m = lab || bosluk(c.getAttribute('aria-label')) || bosluk(bagli) || onceki || yaziKardesi(c.previousElementSibling)
+      || bosluk(c.getAttribute('placeholder')) || bosluk(c.getAttribute('title'));
+    return bosluk(m).replace(/[\s:*]+$/, '').slice(0, 60);
+  };
+  // Alan etiketi metinleri (katlanmış) ve select'lerin seçili değerleri.
+  const alanEtiketleri = new Set<string>();
+  const seciliDegerler = new Set<string>();
+  for (const c of tumAlanlar) {
+    const kok = c.getRootNode() as Document | ShadowRoot;
+    const metinler = [
+      ...[...((c as HTMLInputElement).labels ?? [])].map((l) => tumMetin(l)), c.getAttribute('aria-label') ?? '',
+      ...(c.getAttribute('aria-labelledby') ?? '').split(/\s+/).filter(Boolean).map((id) => (typeof kok.getElementById === 'function' ? kok.getElementById(id) : null)).map((x) => (x ? tumMetin(x) : '')),
+      yaziKardesi(c.previousElementSibling), c.matches(RADYO) ? yaziKardesi(c.nextElementSibling) : ''
+    ];
+    const hucre = c.closest('td, th');
+    if (hucre?.previousElementSibling?.matches('td, th')) metinler.push(yaziKardesi(hucre.previousElementSibling));
+    for (const m of metinler) { const a = etiketAnahtari(m); if (a && a.length <= 60) alanEtiketleri.add(a); }
+    if (c.tagName === 'SELECT') {
+      for (const o of [...(c as HTMLSelectElement).selectedOptions]) {
+        const t = bosluk(o.text);
+        if (t && !yerTutucuMu(t) && !(o.index === 0 && ['', '0', '-1'].includes(o.value.trim()) && !/\d/.test(t))) seciliDegerler.add(etiketAnahtari(t));
+      }
+    }
+  }
+  // Select'e dayalı bileşenler: gizli select'in (select2 vb. onu görünmez yapar) yalnız onu içeren kabı, bileşen biçimli kardeşleri ve
+  // kimliği (id / aria-controls / aria-owns / aria-labelledby içinde ayrı bir parça olarak).
+  const secimKokleri = new Set<Element>();
+  const gizliSelectKaliplari: RegExp[] = [];
+  for (const s of derinSec('select')) {
+    const r = s.getBoundingClientRect();
+    const st = getComputedStyle(s);
+    const gizli = !gorunur(s) || r.width <= 2 || r.height <= 2 || st.opacity === '0' || /hidden-accessible|visually-hidden|sr-only/i.test(s.getAttribute('class') ?? '')
+      || s.getAttribute('aria-hidden') === 'true';
+    if (!gizli) continue;
+    const p = s.parentElement;
+    if (p && !p.matches('body, html, form, main, table, tbody, thead, tr, fieldset, section, article') && p.querySelectorAll(`${ALAN}, button`).length === 1) secimKokleri.add(p);
+    for (const k2 of [s.previousElementSibling, s.nextElementSibling]) {
+      if (k2 && !k2.matches(ALAN) && (k2.matches('[role="combobox"], [role="listbox"], [aria-haspopup]') || /select|dropdown|combo/i.test(k2.getAttribute('class') ?? ''))) secimKokleri.add(k2);
+    }
+    if (s.id && s.id.length >= 2) gizliSelectKaliplari.push(new RegExp(`(^|[^\\p{L}\\p{N}])${s.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\p{L}\\p{N}]|$)`, 'u'));
+  }
+  const selectBileseni = (e: Element): boolean => {
+    let a: Element | null = e;
+    for (let i = 0; a && i < 10 && a !== document.body && a !== document.documentElement; i++, a = ata(a)) {
+      if (SECIM_SINIFI.test(a.getAttribute('class') ?? '') || secimKokleri.has(a)) return true;
+      if (gizliSelectKaliplari.length && i < 6 && (a === e || !a.querySelector(`${ALAN}, button`))) {
+        const v = ['id', 'aria-controls', 'aria-owns', 'aria-labelledby'].map((n) => a?.getAttribute(n) ?? '').join(' ').trim();
+        if (v && gizliSelectKaliplari.some((re) => re.test(v))) return true;
+      }
+    }
+    return false;
+  };
+  /** Radyo / onay kutusu parçası: içinde radyo / onay kutusu olan sarmalayıcı (iCheck benzeri) ya da (atasının) hemen yanındaki radyonun metni. */
+  const radyoParcasi = (e: Element): boolean => {
+    if (e.querySelector(RADYO)) return true;
+    let x: Element | null = e;
+    for (let i = 0; x && i < 2; i++) {
+      for (const k2 of [x.previousElementSibling, x.nextElementSibling]) {
+        if (k2 && (k2.matches(RADYO) || (k2.matches('label, span, div, ins') && k2.querySelectorAll(RADYO).length === 1 && [...k2.querySelectorAll(ALAN)].every((c) => c.matches(RADYO)) && tumMetin(k2).length <= 40))) return true;
+      }
+      const p = ata(x);
+      if (!p || p.children.length > 3) break;
+      x = p;
+    }
+    return false;
+  };
+  const formParcasi = (e: Element): boolean => {
+    if (e.closest('label') && !e.matches('button, input[type="submit"], input[type="button"], input[type="image"]')) return true;
+    if (selectBileseni(e)) return true;
+    if (e.matches(DOGAL)) return false;
+    if (radyoParcasi(e)) return true;
+    const yazi = bosluk(tumMetin(e));
+    const a = etiketAnahtari(yazi);
+    if (a && (alanEtiketleri.has(a) || seciliDegerler.has(a))) return true;
+    // Select'e dayanmayan özel combobox'ın kendi yazısı ("Etiket seçin ▾") korunur.
+    return !e.matches('[role="combobox"]') && yerTutucuMu(yazi);
+  };
+  const dugmeler = hamDugmeler.filter((e) => !formParcasi(e));
+
+  // 1b) Yalnız simgeli tıklanabilir öğeler (yenile / ara ikonu): ad aria-label → title → alt → görsel dosya adı / sınıf ipucu, yoksa
+  // "Simge"; yakın form alanının etiketi bağlam olarak eklenir ("Ara (Adres Kodu)").
+  const IKON_IPUCLARI: Array<[RegExp, string]> = [
+    [/^(refresh\w*|reload\w*|yenile\w*|sync\w*|redo)$/, 'Yenile'], [/^(query|sorgu\w*|lookup|inquiry)$/, 'Sorgula'],
+    [/^(search\w*|ara|arama|find|bul|magnif\w*|lens|loupe)$/, 'Ara'], [/^(add|plus|ekle|new|yeni|create)$/, 'Ekle'],
+    [/^(delete|remove|sil|trash\w*|bin|erase)$/, 'Sil'], [/^(edit|duzenle|pencil|pen|modify)$/, 'Düzenle'],
+    [/^(calendar\w*|takvim|datepicker|date)$/, 'Takvim'], [/^(print\w*|yazdir)$/, 'Yazdır'], [/^(download|indir)$/, 'İndir'],
+    [/^(upload|yukle)$/, 'Yükle'], [/^(info|bilgi|help|yardim|question)$/, 'Bilgi'], [/^(close|kapat|times|xmark)$/, 'Kapat'],
+    [/^(save|kaydet|floppy)$/, 'Kaydet'], [/^(clear|temizle|eraser)$/, 'Temizle'], [/^(eye|view|goster|detail\w*|detay)$/, 'Göster'],
+    [/^(copy|kopyala|clone)$/, 'Kopyala']
+  ];
+  const dosyaAdi = (u: string | null | undefined): string => ((u ?? '').split(/[?#]/)[0].split('/').pop() ?? '').replace(/\.\w+$/, '');
+  const ikonIpucu = (e: Element): string | null => {
+    const parcalar: string[] = [];
+    for (const x of [e, ...e.querySelectorAll('img, i, svg, span, use, input[type="image"]')].slice(0, 6)) {
+      parcalar.push(x.getAttribute('class') ?? '', x.id, dosyaAdi(x.getAttribute('src')));
+      if (x.tagName.toLowerCase() === 'use') parcalar.push((x.getAttribute('href') ?? x.getAttribute('xlink:href') ?? '').replace(/^.*#/, ''));
+      const arka = getComputedStyle(x).backgroundImage;
+      if (arka && arka !== 'none') parcalar.push(dosyaAdi(/url\(["']?([^"')]+)/.exec(arka)?.[1]));
+    }
+    const kelimeler = katla(parcalar.join(' ').replace(/([a-z])([A-Z])/g, '$1 $2')).split(/[^a-z0-9]+/).filter(Boolean);
+    for (const [re, ad] of IKON_IPUCLARI) if (kelimeler.some((w) => re.test(w))) return ad;
+    return null;
+  };
+  /** Yazısız ve simge biçimli (img / i / svg / arka plan görseli) öğe. */
+  const ikonBicimli = (e: Element): boolean => e.matches('img, i, svg, input[type="image"]') || Boolean(e.querySelector('img, i, svg'))
+    || (getComputedStyle(e).backgroundImage ?? 'none') !== 'none';
+  /**
+   * Öğenin yanındaki form alanı: aynı kapta (atası en çok 2 görünür alan içeriyor) ya da kabının hemen önceki / sonraki kardeşinde
+   * (ör. yan yana hücreler); tercihen öğeden önceki alan.
+   */
+  const yakinAlan = (e: Element): Element | null => {
+    const alanlari = (k: Element | null): Element[] => (k ? [...k.querySelectorAll(ALAN)].filter((x) => !x.matches(RADYO) && gorunur(x)) : []);
+    const sec = (l: Element[]): Element | null => l.filter((x) => Boolean(x.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)).pop() ?? l[0] ?? null;
+    const kap = ata(e);
+    if (!kap) return null;
+    const l = alanlari(kap);
+    if (l.length) return l.length <= 2 ? sec(l) : null;
+    for (const k2 of [kap.previousElementSibling, kap.nextElementSibling]) {
+      const l2 = [...(k2?.matches(ALAN) && gorunur(k2) && !k2.matches(RADYO) ? [k2] : []), ...alanlari(k2)];
+      if (l2.length && l2.length <= 2) return sec(l2);
+    }
+    return null;
+  };
+  /** Simge adı bağlamla verilen düğmeler (yakın yazıyla yeniden adlandırılmaz). */
+  const ikonAdlilar = new Set<SayfaIzi>();
   /** Düğme izlerinin öğeleri (aynı adlıları ayırt etmek için). */
   const dugmeOgeleri = new Map<SayfaIzi, Element>();
   for (const e of dugmeler) {
@@ -131,13 +293,28 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     const tip = etiket === 'input' ? ((e as HTMLInputElement).type || '').toLowerCase() : etiket === 'button' ? ((e.getAttribute('type') || 'submit').toLowerCase()) : '';
     // Görünen yazı simgeyse ("+", "−", "×", "▾") ya da yoksa erişilebilir ad (aria-label / aria-labelledby / title) gösterilir.
     const gorunenYazi = bosluk(etiket === 'input' ? e.getAttribute('value') || e.getAttribute('alt') : tumMetin(e));
-    const metin = /[\p{L}\p{N}]/u.test(gorunenYazi) ? gorunenYazi : erisilebilirAd(e) || gorunenYazi;
+    let metin = /[\p{L}\p{N}]/u.test(gorunenYazi) ? gorunenYazi : erisilebilirAd(e) || gorunenYazi;
+    // Yalnız simgeli öğe: adı (aria-label / title / alt / dosya adı – sınıf ipucu) ve yakın alanın etiketi. Ad ve yakın alan yoksa eski
+    // davranış (yakın yazı / sıra ile ayırt etme) sürer.
+    const ikon = tip === 'image' || (!gorunenYazi && etiket !== 'input' && ikonBicimli(e));
+    let ikonAdli = false;
+    let ikonIpucuVar = false;
+    if (ikon) {
+      const alt = bosluk(e.getAttribute('alt')) || bosluk(e.querySelector('img[alt]')?.getAttribute('alt'));
+      const ipucu = ikonIpucu(e);
+      ikonIpucuVar = Boolean(ipucu);
+      const ad = erisilebilirAd(e) || alt || ipucu || '';
+      const alan = yakinAlan(e);
+      const alanAdi = alan ? alanEtiketi(alan) : '';
+      if (alanAdi) { metin = `${ad || 'Simge'} (${alanAdi})`; ikonAdli = true; } else if (ad) metin = ad;
+    }
     if (etiket === 'a' && !e.hasAttribute('href') && !e.hasAttribute('onclick') && !e.hasAttribute('role') && !isaretciMi(e)) continue;
     if (etiket === 'a' && !e.hasAttribute('onclick') && e.getAttribute('role') !== 'button' && !eylemBaglantisi(e)) {
-      // Bağlantı: yalnız yönlendirme adayı (eylem metinliyse düğme adayı da olur).
+      // Bağlantı: yalnız yönlendirme adayı (eylem metinliyse düğme adayı da olur; yalnız simgeli bağlantı, form alanının yanındaysa ya da
+      // simge ipucu varsa).
       const hedef = yol(e.getAttribute('href'));
       if (hedef) yonlendirmeler.push({ adres: hedef, kaynak: 'baglanti', metin: metin || null });
-      if (!k('eylem').test(katla(metin))) continue;
+      if (!k('eylem').test(katla(metin)) && !(ikon && (ikonAdli || ikonIpucuVar))) continue;
     }
     // İç içe (ör. onclick'li kabın içindeki düğme): yalnız en içteki alınır.
     if (dugmeler.some((d) => d !== e && e.contains(d))) continue;
@@ -150,10 +327,13 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     const iz: SayfaIzi = {
       tur: 'dugme', ...t, metin: metin.slice(0, 200) || null, gizli: false, konum: konum(e),
       formIci: Boolean(form), submit: Boolean(form) && ['submit', 'image'].includes(tip), onclick: Boolean(onclick),
-      devreDisi: (e as HTMLButtonElement).disabled === true || e.getAttribute('aria-disabled') === 'true'
+      devreDisi: (e as HTMLButtonElement).disabled === true || e.getAttribute('aria-disabled') === 'true',
+      // Bağlantı (gerçek düğmelerden sonra listelenir): <a> / role=link; düğme biçimli (role=button, btn sınıfı) ve simge düğmeler hariç.
+      baglanti: !ikon && (etiket === 'a' || e.getAttribute('role') === 'link') && e.getAttribute('role') !== 'button' && !e.matches('[class*="btn"], [class*="button"]')
     };
     izler.push(iz);
     dugmeOgeleri.set(iz, e);
+    if (ikonAdli) ikonAdlilar.add(iz);
   }
   // Aynı adlı (ya da adsız) düğmeler kullanıcıya ayırt edilebilir gösterilir: yakın yazıyla ("+ (Kablosuz kulaklık)", "Seç (07:40 · PG 101)"),
   // hâlâ aynıysa sırasıyla ("Genel puanınız (2/5)").
@@ -165,6 +345,7 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   for (const [, liste] of gruplar) {
     if (liste.length < 2 && liste[0]?.metin) continue;
     for (const iz of liste) {
+      if (ikonAdlilar.has(iz)) continue;
       const e = dugmeOgeleri.get(iz);
       const b = e ? baglamMetni(e, iz.metin ?? '') : null;
       if (b) iz.metin = iz.metin ? `${iz.metin} (${b})`.slice(0, 200) : b;
@@ -341,7 +522,8 @@ export async function eylemAdaylariniCikar(page: Page, secenek: { dugmeSiniri?: 
     try {
       // Seçici üreticisi ("Sayfada seç"le aynı) belgeye verilir; init betiği gerekmez.
       await k.frame.evaluate(`window.__nobetciOgeBilgisi = ${ogeBilgisi.toString()}; 0`);
-      ham = await k.frame.evaluate(eylemIzleriniTopla, { kaliplar: { ...KALIPLAR }, enCok: { dugme: dugmeSiniri, basari: 12, hata: 10, bekleme: 8 }, onek });
+      ham = await k.frame.evaluate(eylemIzleriniTopla, { kaliplar: { ...KALIPLAR }, enCok: { dugme: dugmeSiniri, basari: 12, hata: 10, bekleme: 8 }, onek,
+        yerTutucu: { kaliplar: [...YER_TUTUCU_KALIPLARI], temizle: YER_TUTUCU_TEMIZLE } });
     } catch (hata) {
       if (i > 0) continue;
       return eylemAdaylariniDegerlendir({ sayfaYolu: '', izler: [], yonlendirmeler: [], notlar: [`Eylem adayları okunamadı: ${String(hata instanceof Error ? hata.message : hata).split('\n')[0].slice(0, 200)}`] });

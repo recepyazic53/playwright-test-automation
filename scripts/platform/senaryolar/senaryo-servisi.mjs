@@ -850,7 +850,14 @@ function hizliTestBilgisi(d) {
   const b = nesneMi(d.bitis) ? d.bitis : {};
   return {
     izin: String(d.izin), dogrulandi: d.dogrulandi === true,
-    bitis: { bitti: liste(b.bitti), hata: liste(b.hata), devam: liste(b.devam), adres: typeof b.adres === 'string' && b.adres.startsWith('/') ? b.adres.slice(0, 300) : null },
+    bitis: {
+      bitti: liste(b.bitti), hata: liste(b.hata), devam: liste(b.devam), adres: typeof b.adres === 'string' && b.adres.startsWith('/') ? b.adres.slice(0, 300) : null,
+      // Bitti öğeleri (seçici görünür olunca bitti): yalnız seçici ve görünen adı.
+      ...(Array.isArray(b.ogeler) && b.ogeler.length ? {
+        ogeler: b.ogeler.filter((/** @type {unknown} */ x) => nesneMi(x) && typeof x.secici === 'string' && x.secici.trim()).slice(0, 10)
+          .map((/** @type {Record<string, any>} */ x) => ({ secici: String(x.secici).slice(0, 500), metin: typeof x.metin === 'string' ? x.metin.slice(0, 120) : null }))
+      } : {})
+    },
     ...(typeof d.olusturma === 'string' ? { olusturma: d.olusturma.slice(0, 40) } : {})
   };
 }

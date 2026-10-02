@@ -26,11 +26,60 @@ const listeHedefi = () => (basitMod ? { adres: '#/testlerim', ad: 'Testlerim' } 
 const ETIKET_SECENEKLERI = [...ETIKETLER, [null, 'Etiketsiz']];
 /** Süren işlerde yoklama aralığı (ms). */
 const YOKLAMA_MS = 1000;
+/** Tarayıcının yeniden açılması: zincir baştan tekrar yürütülür (düğmelere yeniden basılır). */
+const TEKRAR_YURUTME_METNI = 'Tarayıcı yeniden açılır ve zincir baştan tekrar yürütülerek kaldığınız adıma gelinir: daha önce basılan düğmelere yeniden basılır (yeni kayıt oluşabilir).';
 
 /** Alanın "Doldur" bileşenine verilecek tipi (sayfa türü → model tipi). @param {string} tur */
 const doldurTipi = (tur) => ({ select: 'secim', radio: 'radyo', checkbox: 'onayKutusu', date: 'tarih', number: 'sayi', tel: 'telefon' })[tur] || 'metin';
 /** @param {unknown} e */
 const hataMetni = (e) => (e && typeof e === 'object' && 'message' in e ? String(/** @type {any} */ (e).message) : String(e));
+/** Uç hatasının kayıt sorunları (sunucu: hatalar[] — { mesaj, ayrinti?, duzelt? } ya da ham { yer, mesaj }); yoksa null. @param {unknown} e */
+const hataSorunlari = (e) => {
+  const l = e && typeof e === 'object' && /** @type {any} */ (e).govde && Array.isArray(/** @type {any} */ (e).govde.hatalar) ? /** @type {any} */ (e).govde.hatalar : null;
+  return l && l.length ? l.map((/** @type {any} */ x) => ({
+    mesaj: String(x.mesaj ?? ''), ayrinti: x.ayrinti ? String(x.ayrinti) : x.yer ? `${x.yer}: ${String(x.mesaj ?? '')}` : null, duzelt: x.duzelt ?? null
+  })) : null;
+};
+/**
+ * Tarayıcının yeniden açılıp zincirin tekrar yürütüleceği istek: sunucu yeniden basılacak düğmeler için onay isterse (409 onayGerekli)
+ * düğmeler adlarıyla sorulur; onaylanınca { onay: true } ile yinelenir. Vazgeçilirse null.
+ * @template T @param {(onay: boolean) => Promise<T>} istek @returns {Promise<T | null>}
+ */
+async function yenidenYurutmeOnayli(istek) {
+  try {
+    return await istek(false);
+  } catch (e) {
+    const g = /** @type {any} */ (e) && /** @type {any} */ (e).govde;
+    if (!g || !g.onayGerekli) throw e;
+    const { onayIste } = await import('./kosu-paneli.js');
+    const dugmeler = Array.isArray(g.dugmeler) ? g.dugmeler : [];
+    const evet = await onayIste({
+      baslik: 'Zincir yeniden yürütülecek', ikonAd: 'uyari', dugme: 'Evet, yeniden yürüt', tehlikeli: false,
+      metin: `Tarayıcı yeniden açılacak ve zincir baştan yürütülecek; şu düğmelere yeniden basılacak: ${dugmeler.map((/** @type {string} */ d) => `“${d}”`).join(', ')}. Bu düğmeler sayfada yeni kayıt oluşturabilir. Devam edilsin mi?`
+    });
+    return evet ? istek(true) : null;
+  }
+}
+/** "Düzelt" düğmesinin metni (hedef → hızlı testin ilgili ekranı). */
+const DUZELT_METNI = { bitis: 'Bitiş koşulunu düzenle', karar: 'Adım adım’a dön', tablo: 'Tablo kartına git' };
+
+/**
+ * Kayıt sorunları kutusu: her madde anlaşılır dille, mümkünse "Düzelt" düğmesiyle (duzelt(hedef, düğme)); teknik iletiler "Ayrıntı" altında.
+ * @param {Array<{ mesaj: string; ayrinti: string | null; duzelt: 'bitis' | 'karar' | 'tablo' | null }>} sorunlar
+ * @param {(hedef: 'bitis' | 'karar' | 'tablo', dugme: HTMLButtonElement) => void} duzelt @param {Array<'bitis' | 'karar' | 'tablo'>} hedefler gösterilebilen hedefler
+ */
+function sorunKutusu(sorunlar, duzelt, hedefler) {
+  const ayrintilar = sorunlar.map((s) => s.ayrinti).filter(Boolean);
+  return h('div', { class: 'not-kutusu hata hizli-sorunlar', role: 'alert' },
+    h('p', {}, h('b', {}, sorunlar.length === 1 ? 'Kaydetmeden önce düzeltilmesi gereken 1 sorun var:' : `Kaydetmeden önce düzeltilmesi gereken ${sorunlar.length} sorun var:`)),
+    h('ul', { 'aria-label': 'Kayıt sorunları' }, sorunlar.map((s) => {
+      const hedef = s.duzelt && hedefler.includes(s.duzelt) ? s.duzelt : null;
+      const dugme = hedef ? h('button', { type: 'button', class: 'hayalet', 'aria-label': `Düzelt: ${DUZELT_METNI[hedef]}` }, ikon('geri'), `Düzelt: ${DUZELT_METNI[hedef]}`) : null;
+      if (dugme && hedef) dugme.addEventListener('click', () => duzelt(hedef, /** @type {HTMLButtonElement} */ (dugme)));
+      return h('li', {}, h('span', {}, s.mesaj), dugme ? h('div', { class: 'dugmeler' }, dugme) : null);
+    })),
+    ayrintilar.length ? h('details', {}, h('summary', {}, 'Ayrıntı'), h('ul', { class: 'kucuk' }, ayrintilar.map((x) => h('li', {}, h('code', {}, x))))) : null);
+}
 
 /** Altı duraklı şerit. @param {number} etkin 1–6 */
 function durakSeridi(etkin) {
@@ -150,7 +199,38 @@ function oturumEkrani(govde, id) {
   const yan = h('aside', { class: 'hizli-yan', 'aria-label': 'Tarayıcıda şu an' });
   const serit = h('div', {});
   const durumSatiri = h('div', { class: 'hizli-durum', role: 'status', 'aria-live': 'polite' });
-  govde.replaceChildren(serit, durumSatiri, h('div', { class: 'hizli-duzen' }, ana, yan));
+  // Süre bandı: boşta kalma süresi dolmadan önce uyarı + "Süreyi uzat"; tarayıcı kapalıyken (tarayıcı gerektiren adımda) "Tarayıcıyı
+  // yeniden aç". Öğeler kalıcıdır (her yoklamada yalnız metin değişir; tıklama kaçmaz).
+  const sureMetni = h('span', {});
+  const uzatDugmesi = h('button', { type: 'button', class: 'ikincil' }, ikon('yenile'), 'Süreyi uzat');
+  const acDugmesi = h('button', { type: 'button', class: 'ikincil' }, ikon('oynat'), 'Tarayıcıyı yeniden aç');
+  const sureBandi = h('div', { class: 'not-kutusu uyari hizli-sure', role: 'status', hidden: true }, sureMetni, h('div', { class: 'dugmeler' }, uzatDugmesi, acDugmesi));
+  uzatDugmesi.addEventListener('click', async () => {
+    try { await mesgulIken(uzatDugmesi, 'Uzatılıyor…', () => api('/platform/hizli-test/uzat', { govde: { id } })); bildir('Süre uzatıldı.', 'basari'); } catch (e) { if (!(e && e.durum === 423)) bildir(hataMetni(e), 'hata'); }
+    hemen();
+  });
+  acDugmesi.addEventListener('click', async () => {
+    // Basılacak düğme varsa sunucu onay ister (yeniden basılacak düğmeler adlarıyla sorulur); yoksa yalnız alanlar doldurulur.
+    try { await mesgulIken(acDugmesi, 'Açılıyor…', () => yenidenYurutmeOnayli((onay) => api('/platform/hizli-test/devam', { govde: { id, kip: 'tarayici', ...(onay ? { onay: true } : {}) } }))); } catch (e) { if (!(e && e.durum === 423)) bildir(hataMetni(e), 'hata'); }
+    hemen();
+  });
+  /** @param {any} o */
+  const sureCiz = (o) => {
+    const s = o.sure;
+    const kapaliAdim = o.tarayici === 'kapali' && ['veri', 'karar', 'bitis', 'hayirSecim', 'hataSorusu', 'onay'].includes(o.durum);
+    const uyari = Boolean(s && s.uyari && o.tarayici !== 'kapali');
+    sureBandi.hidden = !uyari && !kapaliAdim;
+    if (sureBandi.hidden) return;
+    uzatDugmesi.hidden = !uyari || !s.uzatilabilir;
+    acDugmesi.hidden = !kapaliAdim;
+    const kalan = s ? Math.max(0, Math.round(s.kalanMs / 1000)) : 0;
+    const kalanYazi = kalan >= 60 ? `${Math.ceil(kalan / 60)} dk` : `${kalan} sn`;
+    const metin = kapaliAdim ? 'Tarayıcı kapalı. Bu adımda tarayıcı gerekirse yeniden açılır ve zincir baştan tekrar yürütülerek buraya gelinir.'
+      : s.sebep === 'ust' ? `Hızlı testin en uzun süresi doluyor: tarayıcı ${kalanYazi} içinde kapanacak (uzatılamaz). Toplananlar kaybolmaz.`
+        : `${kalanYazi} içinde işlem yapılmazsa tarayıcı kapanacak. Toplananlar kaybolmaz; yine de sürdürmek için süreyi uzatın.`;
+    if (sureMetni.textContent !== metin) sureMetni.textContent = metin;
+  };
+  govde.replaceChildren(serit, durumSatiri, sureBandi, h('div', { class: 'hizli-duzen' }, ana, yan));
   let imza = '';
   let yanImza = '';
   let sonDurumMetni = '';
@@ -177,6 +257,7 @@ function oturumEkrani(govde, id) {
   const ciz = (o) => {
     const yeniImza = JSON.stringify([o.durum, o.soru, o.calisiyor, o.sonHata, o.hata, o.dogrulamaAdimlari]);
     yerlestir(serit, durakSeridi(o.durak || 1));
+    sureCiz(o);
     // Durum satırı yalnız iş metni değişince yazılır (araya giren duyuru her yoklamada silinmez).
     const durumMetni = o.calisiyor ? o.calisiyor : '';
     if (durumMetni !== sonDurumMetni) { sonDurumMetni = durumMetni; durumSatiri.textContent = durumMetni; }
@@ -220,6 +301,22 @@ function yanCiz(yan, o) {
  * Sorunun çizimi. @param {any} o @param {{ hemen: () => void }} y
  * @returns {HTMLElement}
  */
+/**
+ * Düğme adaylarının seçenekleri: gerçek düğmeler önce, bağlantılar sonra (<optgroup> "Düğmeler (n)" / "Bağlantılar (m)"); her grup kendi
+ * içinde aday sırasını korur, önerilen değer seçili gelir. Boş grup çizilmez.
+ * @param {Array<{ secici: string; metin: string | null; baglanti?: boolean }>} adaylar @param {string | null} oneri
+ * @param {(a: any) => string} yazi
+ */
+function dugmeSecenekleri(adaylar, oneri, yazi) {
+  const secenek = (a) => h('option', { value: a.secici, selected: a.secici === oneri || null }, yazi(a));
+  const dugmeler = adaylar.filter((a) => !a.baglanti);
+  const baglantilar = adaylar.filter((a) => a.baglanti);
+  return [
+    dugmeler.length ? h('optgroup', { label: `Düğmeler (${dugmeler.length})` }, dugmeler.map(secenek)) : null,
+    baglantilar.length ? h('optgroup', { label: `Bağlantılar (${baglantilar.length})` }, baglantilar.map(secenek)) : null
+  ];
+}
+
 function soruCiz(o, y) {
   const s = o.soru;
   const hata = o.sonHata ? h('div', { class: 'not-kutusu hata', role: 'alert' }, o.sonHata) : null;
@@ -236,7 +333,9 @@ function soruCiz(o, y) {
   /** Uç çağrısı + hata kutusu. @param {HTMLButtonElement} dugme @param {string} uc @param {Record<string, unknown>} govde @param {{ goster: (m: string) => void }} m */
   const gonder = async (dugme, uc, govde, m) => {
     try {
-      const r = await mesgulIken(dugme, 'Gönderiliyor…', () => api(`/platform/hizli-test/${uc}`, { govde: { id: o.id, ...govde } }));
+      // Tarayıcı yeniden açılıp daha önce basılan düğmelere yeniden basılacaksa kullanıcıya düğmeler adlarıyla sorulur.
+      const r = await mesgulIken(dugme, 'Gönderiliyor…', () => yenidenYurutmeOnayli((onay) => api(`/platform/hizli-test/${uc}`, { govde: { id: o.id, ...govde, ...(onay ? { onay: true } : {}) } })));
+      if (r === null) return null;
       // Seçimler sunucuya gitti (oturumda saklanır): çıkış uyarısı gerekmez.
       degisiklikleriBirak();
       y.hemen();
@@ -254,7 +353,7 @@ function soruCiz(o, y) {
   }
   if (!s) {
     const adimlar = o.is && Array.isArray(o.is.adimlar) ? o.is.adimlar : [];
-    return kart(o.durum === 'dogrulama' ? 'Doğrulama koşusu' : o.durum === 'kesif' ? 'Keşfediliyor…' : 'Çalışıyor…', 'pusula',
+    return kart(o.durum === 'dogrulama' ? 'Doğrulama koşusu' : o.durum === 'kesif' ? 'Keşfediliyor…' : o.durum === 'yeniden' ? 'Tarayıcı yeniden açılıyor…' : 'Çalışıyor…', 'pusula',
       h('p', { class: 'hizli-bekliyor' }, h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), o.calisiyor || 'Bekleyin…'),
       o.durum === 'kesif' ? h('p', { class: 'soluk' }, 'Bu adımda hiçbir düğmeye basılmaz: alanlar, koşullar, düğme ve mesaj adayları okunur.') : null,
       // Doğrulama koşusu: zincirin adımları ve hangisinde olunduğu (motorun ilerleme bildirimleri).
@@ -264,6 +363,7 @@ function soruCiz(o, y) {
   }
   const m = mesajKutusu();
 
+  if (s.tur === 'askida') return askidaDuragi(o, s, kart, m, gonder);
   if (s.tur === 'veri') return veriDuragi(o, s, kart, m, gonder);
 
   if (s.tur === 'karar') {
@@ -273,7 +373,7 @@ function soruCiz(o, y) {
       return { r, el: h('label', { class: 'onay-satiri hizli-karar-secenegi', for: r.id }, r, h('span', {}, ...icerik)) };
     };
     const aday = h('select', { id: 'hizli-aday', 'aria-label': 'Basılacak düğme' },
-      s.adaylar.map((a) => h('option', { value: a.secici, selected: a.secici === s.oneri || null }, `${a.metin || a.secici}${a.kayitOlusturabilir ? ' (kayıt oluşturabilir)' : ''}`)));
+      dugmeSecenekleri(s.adaylar, s.oneri, (a) => `${a.metin || a.secici}${a.kayitOlusturabilir ? ' (kayıt oluşturabilir)' : ''}`));
     const bitir = secenek('bitir', h('b', {}, 'Burada bitir.'), s.bitirilebilir ? ' Görülen metinlerden bitiş koşulunu seçersiniz.' : h('small', { class: 'blok soluk' }, 'Önce en az bir düğmeye basılmalı.'));
     bitir.r.disabled = !s.bitirilebilir;
     const devam = secenek('bas', h('b', {}, 'Devam et: '), aday, h('span', {}, ' düğmesine bas.'), o.izin === 'sor' ? h('small', { class: 'blok soluk' }, 'Bana sor: basmadan önce ayrıca onayınız istenir.') : null);
@@ -330,6 +430,17 @@ function soruCiz(o, y) {
         sec('onemsiz', 'Önemli değil, devam et', 'hayalet')));
   }
 
+  // Bitiş koşulu için tarayıcıda seçim ("Sayfada seç…" / "Şu öğe görününce bitti…"): tıklama sayfaya iletilmez.
+  if (s.tur === 'bitisSecim') {
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    vazgec.addEventListener('click', () => void gonder(vazgec, 'bitis-sec', { vazgec: true }, m));
+    return kart(s.secimTuru === 'oge' ? 'Tarayıcıda bitişi gösteren öğeyi seçin' : 'Tarayıcıda bitiş metnini seçin', 'hedef', m.kutu,
+      h('p', {}, s.secimTuru === 'oge'
+        ? 'Hızlı test tarayıcısında, görününce testin bittiğini gösteren öğeye (açılan pencere, kutu, düğme) tıklayın. Tıklama sayfaya iletilmez.'
+        : 'Hızlı test tarayıcısında, görününce testin bittiğini gösteren yazıya tıklayın. Tıklama sayfaya iletilmez; yazı “Bitti” olarak eklenir.'),
+      h('div', { class: 'dugmeler' }, vazgec));
+  }
+
   if (s.tur === 'secim') {
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     vazgec.addEventListener('click', () => void gonder(vazgec, 'karar', { karar: 'vazgec' }, m));
@@ -339,7 +450,7 @@ function soruCiz(o, y) {
   }
 
   if (s.tur === 'hayirSecim') {
-    const dugme = h('select', { id: 'hizli-hayir-dugme' }, s.adaylar.map((a) => h('option', { value: a.secici, selected: a.secici === s.oneri || null }, a.metin || a.secici)));
+    const dugme = h('select', { id: 'hizli-hayir-dugme' }, dugmeSecenekleri(s.adaylar, s.oneri, (a) => a.metin || a.secici));
     const kutular = s.mesajlar.map((x, i) => {
       const k = h('input', { type: 'checkbox', id: `hizli-mesaj-${i}`, value: x.metin, checked: (x.tur === 'basari' && i === 0) || null });
       return { k, el: h('label', { class: 'onay-satiri', for: k.id }, k, h('span', {}, x.metin, ' ', rozet(x.kaynak === 'cumle' ? 'cümleden' : x.tur === 'hata' ? 'hata adayı' : x.tur === 'bekleme' ? 'bekleme adayı' : 'sayfada gizli'))) };
@@ -385,6 +496,30 @@ function soruCiz(o, y) {
 }
 
 /** Basıştan sonraki fark (yeni metinler, alanlar, düğmeler, adres). @param {any} a */
+/**
+ * Tarayıcı kapandı (boşta kalma / en uzun süre doldu, pencere kapatıldı): toplananlar duruyor. "Kaldığın yerden devam et" tarayıcıyı
+ * yeniden açıp zinciri tekrar yürütür; "Toplananları kaydet" tarayıcı açmadan bitiş koşuluna / kaydete geçer (doğrulanmadı).
+ * @param {any} o @param {any} s @param {(...a: any[]) => HTMLElement} kart @param {{ kutu: HTMLElement; goster: (m: string) => void }} m
+ * @param {(dugme: HTMLButtonElement, uc: string, govde: Record<string, unknown>, m: { goster: (m: string) => void }) => Promise<any>} gonder
+ */
+function askidaDuragi(o, s, kart, m, gonder) {
+  const t = s.toplanan || {};
+  const devam = /** @type {HTMLButtonElement} */ (h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), 'Kaldığın yerden devam et'));
+  devam.addEventListener('click', () => void gonder(devam, 'devam', { kip: 'tarayici' }, m));
+  const kaydet = s.kaydedilebilir ? /** @type {HTMLButtonElement} */ (h('button', { type: 'button', class: 'ikincil' }, ikon('onay'), 'Toplananları kaydet')) : null;
+  if (kaydet) kaydet.addEventListener('click', () => void gonder(kaydet, 'devam', { kip: 'kaydet' }, m));
+  return kart('Tarayıcı kapandı — toplananlar duruyor', 'uyari',
+    h('div', { class: 'not-kutusu uyari', role: 'alert' }, s.mesaj),
+    m.kutu,
+    h('p', {}, `Toplanan: ${t.adim ?? 0} adım, ${t.deger ?? 0} değer, ${t.basis ?? 0} düğme basışı${t.etiket ? `, ${t.etiket} etiket` : ''}${s.bitisVar ? ', bitiş koşulu' : ''}.`),
+    h('ul', { class: 'kucuk' },
+      h('li', {}, h('b', {}, 'Kaldığın yerden devam et: '), TEKRAR_YURUTME_METNI),
+      kaydet ? h('li', {}, h('b', {}, 'Toplananları kaydet: '), s.bitisVar ? 'Tarayıcı açılmadan kaydet adımına geçilir; doğrulama yapılmadıysa test “doğrulanmadı” olarak kaydedilir.'
+        : 'Tarayıcı açılmadan bitiş koşulu adımına geçilir, sonra kaydedilir; test “doğrulanmadı” olarak kaydedilir.')
+        : h('li', {}, 'Henüz hiçbir düğmeye basılmadığı için kaydedilecek bir zincir yok; devam edin.')),
+    h('div', { class: 'dugmeler' }, devam, kaydet));
+}
+
 function farkCiz(a) {
   const f = a.fark;
   const sn = (f.sureMs / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
@@ -407,7 +542,8 @@ function farkCiz(a) {
 /**
  * Yerinde zincir isteğinden ("↓ … seçeneklerini getir") sonraki çizim için: hangi oturumda hangi üst liste için istendi. Seçenekler gelince
  * odak ilk yeni alana gider ve oturum ekranının canlı durum satırında duyurulur.
- * @type {{ id: string; ust: string } | null}
+ * kosul: "Önce bunu seçin" isteği (ust = görünürlüğü belirleyen seçim).
+ * @type {{ id: string; ust: string; kosul?: boolean } | null}
  */
 let zincirOdagi = null;
 /** Oturum ekranının canlı durum satırında (aria-live) bir kez okunacak duyuru. */
@@ -575,7 +711,9 @@ function veriDuragi(o, s, kart, m, gonder) {
         sira),
       // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa hangi seçimde göründüğü yazılır.
       a.kosul ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
-      a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,
+      a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, a.bagli.belirsiz
+        ? `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelebilir (keşifte kesinleşmedi; “${a.bagli.ustEtiket}” seçip yanındaki “↓ … seçeneklerini getir” ile deneyin).`
+        : `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,
       kap, zincirKap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
   };
   /** Üstleri bu durakta olan bağlı listenin zincirdeki derinliği (kök 0). */
@@ -617,7 +755,12 @@ function veriDuragi(o, s, kart, m, gonder) {
   };
   // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir. Sayfada hazır gelen bir üst
   // listenin bağlı altı henüz gelmediyse üst de gösterilir (yerinde düğmesi orada durur).
-  const hazirlar = s.alanlar.filter((a) => a.hazir && a.deger === null);
+  // "Önce bunu seçin": görünürlüğü belirleyen (koşullu alanları açan / kapatan), sayfada önseçili seçimler (radyo, hazır liste / onay
+  // kutusu) en üstte TÜM seçenekleriyle sorulur; sayfadaki değer önseçilidir. Değiştirilince alanlar anında bu seçime göre değişir ve yerinde
+  // "↓ Bu seçime göre alanları getir" seçimi sayfaya uygular (sayfa sakinleşince o seçimin alanları — keşifte görülmeyenler dahil — sorulur).
+  const kontrolMu = (/** @type {any} */ a) => Boolean(a.kontrol) && !a.kosul && !a.bagli && !altlari(a.anahtar).length && (a.hazir || a.tur === 'radio');
+  const kontroller = s.alanlar.filter(kontrolMu);
+  const hazirlar = s.alanlar.filter((a) => a.hazir && a.deger === null && !kontrolMu(a));
   const acilan = new Set(hazirlar.filter((a) => altlari(a.anahtar).some((x) => kilitli.has(x.anahtar))).map((a) => a.anahtar));
   /** @type {Map<string, HTMLElement>} */
   const satirlari = new Map();
@@ -652,7 +795,69 @@ function veriDuragi(o, s, kart, m, gonder) {
     if (simdi === null || simdi === undefined) return true;
     return a.kosul.degerler.includes(String(simdi));
   };
-  const sorulanlar = () => alanlarSirali().filter((a) => (!hazirlar.includes(a) || acilan.has(a.anahtar)) && aktifMi(a));
+  const sorulanlar = () => alanlarSirali().filter((a) => (!hazirlar.includes(a) || acilan.has(a.anahtar)) && !kontroller.includes(a) && aktifMi(a));
+  /** Seçimin sayfadaki (uygulanmış) değeri. @param {any} a */
+  const sayfadakiDeger = (a) => (a.sayfadaki ?? a.ilk ?? null);
+  /** Seçimin şu anki değeri: girilen, yoksa sayfadaki. @param {any} a @returns {string | null} */
+  const kontrolDegeri = (a) => {
+    const d = durum[a.anahtar];
+    const v = d && d.deger !== null && d.deger !== undefined && d.deger !== '' ? d.deger : sayfadakiDeger(a);
+    return v === null || v === undefined ? null : String(v);
+  };
+  /** "Önce bunu seçin" satırı: tüm seçenekler + yerinde "↓ Bu seçime göre alanları getir". @param {any} a */
+  const kontrolSatiri = (a) => {
+    durum[a.anahtar] = { deger: a.deger, kaynak: a.kaynak };
+    const id = `hizli-onsecim-${Math.random().toString(36).slice(2, 9)}`;
+    const dugmeKap = h('div', { class: 'hizli-zincir-getir' });
+    const sec = (/** @type {string | boolean} */ v) => { durum[a.anahtar] = { deger: v, kaynak: 'elle' }; kosulGuncelle(); dugmeCiz(); };
+    /** @type {HTMLElement} */
+    let girdi;
+    if (a.tur === 'radio') {
+      girdi = h('fieldset', { class: 'hizli-onsecim-secenekler', id }, h('legend', {}, a.etiket),
+        (a.secenekler || []).map((/** @type {any} */ x) => {
+          const r = h('input', { type: 'radio', name: `${id}-ad`, value: x.deger, checked: kontrolDegeri(a) === String(x.deger) || null });
+          r.addEventListener('change', () => { if (/** @type {HTMLInputElement} */ (r).checked) sec(x.deger); });
+          return h('label', { class: 'onay-satiri' }, r, ' ', x.metin || x.deger);
+        }));
+    } else if (a.tur === 'checkbox') {
+      const c = h('input', { type: 'checkbox', id, checked: kontrolDegeri(a) === 'true' || null });
+      c.addEventListener('change', () => sec(/** @type {HTMLInputElement} */ (c).checked));
+      girdi = h('label', { class: 'onay-satiri', for: id }, c, ' ', a.etiket);
+    } else {
+      const l = h('select', { id }, (a.secenekler || []).filter((/** @type {any} */ x) => x.deger !== '')
+        .map((/** @type {any} */ x) => h('option', { value: x.deger, selected: kontrolDegeri(a) === String(x.deger) || null }, x.metin || x.deger)));
+      l.addEventListener('change', () => sec(/** @type {HTMLSelectElement} */ (l).value));
+      girdi = h('div', {}, h('label', { for: id }, a.etiket), l);
+    }
+    const metni = (/** @type {string | null} */ v) => (a.tur === 'checkbox' ? (v === 'true' ? 'işaretli' : 'işaretsiz')
+      : ((a.secenekler || []).find((/** @type {any} */ x) => String(x.deger) === v) || { metin: v }).metin);
+    const dugmeCiz = () => {
+      if (getiriliyor === a.anahtar) {
+        yerlestir(dugmeKap, h('button', { type: 'button', class: 'kucuk-dugme hizli-zincir-dugmesi', 'aria-disabled': 'true', 'aria-busy': 'true', 'data-odak-oncelik': '' },
+          h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), 'Bu seçimin alanları getiriliyor…'));
+        return;
+      }
+      const v = kontrolDegeri(a);
+      const sayfada = sayfadakiDeger(a);
+      if (v !== null && v !== (sayfada === null ? null : String(sayfada))) {
+        const dugme = h('button', { type: 'button', class: 'kucuk-dugme hizli-zincir-dugmesi hizli-onsecim-dugmesi' }, h('span', { 'aria-hidden': 'true' }, '↓ '), 'Bu seçime göre alanları getir');
+        dugme.addEventListener('click', () => {
+          zincirOdagi = { id: o.id, ust: a.anahtar, kosul: true };
+          void gonder(/** @type {HTMLButtonElement} */ (dugme), 'veri', { degerler: degerleriTopla(), sira: siralama, kosulSecimi: a.anahtar }, m)
+            .then((r) => { if (!r) zincirOdagi = null; });
+        });
+        yerlestir(dugmeKap, dugme, h('span', { class: 'soluk kucuk' }, sayfada === null ? '' : ` Sayfada şu an: “${metni(String(sayfada))}”.`));
+        return;
+      }
+      yerlestir(dugmeKap, sayfada === null ? null : h('span', { class: 'hizli-zincir-tamam' }, h('span', { 'aria-hidden': 'true' }, '✓ '), `Sayfada “${metni(String(sayfada))}” seçili; alanlar bu seçime göre soruluyor.`));
+    };
+    dugmeCiz();
+    return h('div', { class: 'hizli-onsecim-alani', 'data-anahtar': a.anahtar }, girdi, dugmeKap);
+  };
+  const kontrolKap = kontroller.length ? h('section', { class: 'hizli-onsecim', 'aria-labelledby': 'hizli-onsecim-baslik' },
+    h('h4', { id: 'hizli-onsecim-baslik' }, 'Önce bunu seçin'),
+    h('p', { class: 'soluk kucuk' }, 'Bu seçim hangi alanların sorulacağını belirler. Sayfadaki seçim önseçilidir; değiştirirseniz “↓ Bu seçime göre alanları getir” ile sayfaya uygulanır ve o seçimin alanları sorulur.'),
+    kontroller.map(kontrolSatiri)) : null;
   // Seçim değişince koşullu alanlar açılır / kapanır (görünen küme değişmediyse liste yeniden çizilmez: odak kaybolmaz).
   let gorunenImza = '';
   const kosulGuncelle = () => {
@@ -676,7 +881,8 @@ function veriDuragi(o, s, kart, m, gonder) {
   // Zincir göstergesi (kartın üstünde): "Bağlı alanlar: İl → İlçe → Mahalle (1/3 tamam)".
   const gosterge = h('div', { class: 'hizli-zincir-gostergesi' });
   /** Getirilmemiş bağlı alanlar (zincir tamamlanmadı). */
-  const getirilmemis = () => sorulanlar().filter((a) => zincirde(a) && !altHazir(a));
+  // (Belirsiz bağın alt listesi "Devam et"i kilitlemez: bağ keşifte kesinleşmedi, seçenek hiç gelmeyebilir.)
+  const getirilmemis = () => sorulanlar().filter((a) => zincirde(a) && !altHazir(a) && !a.bagli.belirsiz);
   const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
   const devamIpucu = h('span', { class: 'soluk kucuk', id: `hizli-devam-ipucu-${Math.random().toString(36).slice(2, 9)}` });
   const atla = h('button', { type: 'button', class: 'baglanti-dugmesi hizli-zincir-atla' }, 'Bağlı alanları atla ve devam et');
@@ -739,7 +945,16 @@ function veriDuragi(o, s, kart, m, gonder) {
   listeyiCiz();
   // Yerinde zincir isteği sürerken girdiler kapalıdır (sunucu sayfayı dolduruyor; sonuç gelince kart yeniden çizilir).
   // (Getiriliyor düğmesi odakta kalabilsin diye kapatılmaz; aria-disabled taşır ve tıklaması yoktur.)
-  if (getiriliyor) for (const el of satirlarKap.querySelectorAll('select, input, button:not([aria-busy])')) /** @type {HTMLButtonElement} */ (el).disabled = true;
+  if (getiriliyor) for (const kap of [satirlarKap, kontrolKap]) for (const el of kap ? kap.querySelectorAll('select, input, button:not([aria-busy])') : []) /** @type {HTMLButtonElement} */ (el).disabled = true;
+  // "Önce bunu seçin" isteğinden sonra: odak bu seçimin ilk alanına; canlı durum satırında hangi alanların geldiği duyurulur.
+  if (!getiriliyor && zincirOdagi && zincirOdagi.id === o.id && zincirOdagi.kosul) {
+    const kontrol = bul(zincirOdagi.ust);
+    zincirOdagi = null;
+    const gelen = sorulanlar().filter((x) => x.kosul && x.kosul.secim === (kontrol && kontrol.anahtar));
+    const ilk = gelen.length ? satir(gelen[0]).querySelector('select, input') : null;
+    if (ilk) ilk.setAttribute('data-odak-oncelik', '');
+    bekleyenDuyuru = kontrol ? (gelen.length ? `“${kontrol.etiket}” seçiminin alanları geldi: ${gelen.map((x) => x.etiket).join(', ')}.` : `“${kontrol.etiket}” seçiminde başka alan yok.`) : '';
+  }
   // Yerinde zincir isteğinden sonra: odak ilk yeni alana; canlı durum satırında "“İlçe” seçenekleri geldi" duyurusu.
   if (!getiriliyor && zincirOdagi && zincirOdagi.id === o.id) {
     const ust = bul(zincirOdagi.ust);
@@ -759,7 +974,7 @@ function veriDuragi(o, s, kart, m, gonder) {
     o.adimlar.length === 1 && o.kesif && Array.isArray(o.kesif.notlar) && o.kesif.notlar.length
       ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
     h('p', { class: 'soluk' }, 'Sayfada boş görünen alanlar aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada zaten dolu gelenler sorulmaz, olduğu gibi kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
-    gosterge, m.kutu, satirlarKap, hazirKap,
+    kontrolKap, gosterge, m.kutu, satirlarKap, hazirKap,
     h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
     devamIpucu);
 }
@@ -779,10 +994,53 @@ function bitisDuragi(o, s, kart, m, gonder) {
       }, ad)));
     };
     ciz();
-    return h('li', { class: 'hizli-bitis-satiri', 'data-sira': String(i) }, h('span', { class: 'hizli-cip' }, g.metin), grup,
+    return h('li', { class: 'hizli-bitis-satiri', 'data-sira': String(i) }, h('span', { class: 'hizli-cip' }, g.metin),
+      g.kaynak === 'elle' ? rozet('elle yazıldı') : g.kaynak === 'secim' ? rozet('sayfada seçildi') : null, grup,
       // Sahte başarıyı önleme: basıştan önce de görünen metin bitiş olamaz (hiçbir koşuda sonucu göstermez).
       g.onceGorundu ? h('small', { class: 'blok soluk hizli-once-gorundu' }, 'Bu metin düğmeye basmadan da görünüyordu.') : null);
   });
+  // Bitti öğeleri: seçicisi görünür olunca bitti (açılan pencere / kutu / düğme). İşaretli olanlar bitiş koşuluna girer.
+  const ogeSecili = new Set((s.ogeler || []).filter((x) => x.secili).map((x) => x.secici));
+  /** Arayüzün o anki seçimleri (sunucuya giden her bitiş isteğine eklenir; yeniden çizimde kaybolmaz). */
+  const secimler = () => ({ etiketler, ogeler: [...ogeSecili] });
+  const ogeSatirlari = (s.ogeler || []).map((x, i) => {
+    const k = h('input', { type: 'checkbox', id: `hizli-bitis-oge-${i}`, checked: ogeSecili.has(x.secici) || null });
+    k.addEventListener('change', () => { if (/** @type {HTMLInputElement} */ (k).checked) ogeSecili.add(x.secici); else ogeSecili.delete(x.secici); gecerlilikGuncelle(); });
+    const cikar = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Çıkar: ${x.metin || x.secici}` }, 'Çıkar');
+    cikar.addEventListener('click', () => void gonder(cikar, 'bitis-ekle', { ...secimler(), oge: x.secici, sil: true }, m));
+    return h('li', { class: 'hizli-bitis-oge' },
+      h('label', { class: 'onay-satiri', for: k.id }, k, h('span', {}, 'Bitti: ', h('b', {}, `“${x.metin || x.secici}”`), x.kaynak === 'pencere' ? ' penceresi görününce' : ' öğesi görününce')),
+      h('code', { class: 'kucuk soluk' }, x.secici), cikar);
+  });
+  // Listede olmayan bitiş: tarayıcıda seç (metin ya da öğe), elle metin yaz, açılan pencere önerisi.
+  const sayfadaSec = h('button', { type: 'button', class: 'hayalet', id: 'hizli-bitis-sayfada-sec' }, 'Sayfada seç…');
+  sayfadaSec.title = 'Hızlı test tarayıcısında bir yazıya tıklayın (tıklama sayfaya iletilmez); yazı “Bitti” olarak eklenir.';
+  sayfadaSec.addEventListener('click', () => void gonder(sayfadaSec, 'bitis-sec', { ...secimler(), tur: 'metin' }, m));
+  const ogeSec = h('button', { type: 'button', class: 'hayalet', id: 'hizli-bitis-oge-sec' }, 'Şu öğe görününce bitti…');
+  ogeSec.title = 'Hızlı test tarayıcısında bir öğeye (pencere, kutu, düğme) tıklayın; o öğe görününce test biter (metin seçmeden).';
+  ogeSec.addEventListener('click', () => void gonder(ogeSec, 'bitis-sec', { ...secimler(), tur: 'oge' }, m));
+  const pencereOnerisi = s.pencereOnerisi
+    ? h('button', { type: 'button', class: 'birincil', id: 'hizli-bitis-pencere' }, `Açılan pencere görününce bitti${s.pencereOnerisi.metin ? `: “${s.pencereOnerisi.metin}”` : ''}`)
+    : null;
+  if (pencereOnerisi) pencereOnerisi.addEventListener('click', () => void gonder(pencereOnerisi, 'bitis-ekle', { ...secimler(), pencere: true }, m));
+  const elleMetin = h('input', { type: 'text', id: 'hizli-bitis-metin', maxlength: 200, placeholder: 'Görününce testin bittiği yazı' });
+  const elleEkle = h('button', { type: 'button', class: 'kucuk-dugme', id: 'hizli-bitis-metin-ekle' }, 'Ekle');
+  const elleKutusu = h('div', { class: 'alan hizli-bitis-elle', hidden: true },
+    h('label', { for: 'hizli-bitis-metin' }, 'Metin yaz ', h('span', { class: 'soluk' }, '(“Bitti” olarak eklenir; doğrulama koşusu sayfada arar)')),
+    h('div', { class: 'dugmeler' }, elleMetin, elleEkle));
+  const metinYaz = h('button', { type: 'button', class: 'hayalet', id: 'hizli-bitis-metin-yaz', 'aria-expanded': 'false' }, 'Metin yaz…');
+  metinYaz.addEventListener('click', () => {
+    elleKutusu.hidden = !elleKutusu.hidden;
+    metinYaz.setAttribute('aria-expanded', String(!elleKutusu.hidden));
+    if (!elleKutusu.hidden) /** @type {HTMLInputElement} */ (elleMetin).focus();
+  });
+  const elleGonder = () => {
+    const t = /** @type {HTMLInputElement} */ (elleMetin).value.trim();
+    if (!t) { m.goster('Eklenecek metni yazın.'); return; }
+    void gonder(elleEkle, 'bitis-ekle', { ...secimler(), metin: t, etiket: 'bitti' }, m);
+  };
+  elleEkle.addEventListener('click', elleGonder);
+  elleMetin.addEventListener('keydown', (e) => { if (/** @type {KeyboardEvent} */ (e).key === 'Enter') { e.preventDefault(); elleGonder(); } });
   // Uyarılar (engellemez): hiçbir basışta gönderim olmadıysa ve basıştan önce de görünen metin "Bitti" seçildiyse (sunucudaki kuralın aynısı).
   const uyariKutusu = h('div', { class: 'not-kutusu uyari hizli-bitis-uyarisi', role: 'status' });
   function uyariGuncelle() {
@@ -811,7 +1069,7 @@ function bitisDuragi(o, s, kart, m, gonder) {
   const eksikNotu = h('span', { class: 'soluk kucuk', id: 'hizli-bitis-eksik', role: 'status' });
   const devam = h('button', { type: 'button', class: 'birincil', 'aria-describedby': 'hizli-bitis-eksik' }, 'Devam et', ikon('ok'));
   function gecerlilikGuncelle() {
-    const gecerli = Object.values(etiketler).includes('bitti') || Boolean(adres.value.trim()) || (olumsuz.checked && Boolean(olumsuzMesaj.value));
+    const gecerli = Object.values(etiketler).includes('bitti') || ogeSecili.size > 0 || Boolean(adres.value.trim()) || (olumsuz.checked && Boolean(olumsuzMesaj.value));
     devam.disabled = !gecerli;
     eksikNotu.textContent = gecerli ? '' : 'En az bir metni “Bitti” etiketleyin (ya da “Adres şu olursa bitti”yi yazın).';
   }
@@ -821,11 +1079,11 @@ function bitisDuragi(o, s, kart, m, gonder) {
   olumsuzGuncelle();
   uyariGuncelle();
   devam.addEventListener('click', () => void gonder(devam, 'bitis', {
-    etiketler, adres: adres.value.trim() || null, olumsuz: olumsuz.checked && olumsuzMesaj.value ? { mesaj: olumsuzMesaj.value } : null
+    ...secimler(), adres: adres.value.trim() || null, olumsuz: olumsuz.checked && olumsuzMesaj.value ? { mesaj: olumsuzMesaj.value } : null
   }, m));
   const tara = h('button', { type: 'button', class: 'hayalet' }, 'Sayfayı yeniden tara');
   tara.title = 'Tarayıcıda şu an görünen yeni mesajları (ör. sonradan çıkan hata / başarı) listeye ekler; verdiğiniz etiketler korunur.';
-  tara.addEventListener('click', () => void gonder(tara, 'yeniden-tara', { etiketler }, m));
+  tara.addEventListener('click', () => void gonder(tara, 'yeniden-tara', secimler(), m));
   // Geri dönüş: zincire devam (etiketler saklanır; yeniden "Burada bitir" denince korunur).
   const zincireDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Adım adım’a dön: zincire devam et');
   zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
@@ -833,7 +1091,10 @@ function bitisDuragi(o, s, kart, m, gonder) {
     h('p', {}, 'Akış boyunca görülen metinler. Her birine bir etiket verin:'),
     uyariKutusu,
     h('ul', { class: 'hizli-bitis', 'aria-label': 'Görülen metinler' }, satirlar),
-    h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
+    ogeSatirlari.length ? h('ul', { class: 'hizli-bitis hizli-bitis-ogeleri', 'aria-label': 'Bitiş öğeleri' }, ogeSatirlari) : null,
+    h('div', { class: 'dugmeler hizli-bitis-ekle' }, pencereOnerisi, sayfadaSec, ogeSec, metinYaz),
+    elleKutusu,
+    h('p', { class: 'soluk kucuk' }, 'Test çalışırken: “Devam” metinleri görüldükçe test beklemeye devam eder (en çok 60 sn). “Bitti” metni ya da öğesi görülünce başarılı biter. “Hata” görülünce başarısız biter ve mesaj rapora yazılır. Hiçbiri görünmezse süre dolunca başarısız: “Bitiş mesajı görülmedi.”'),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-bitis-adres' }, 'Adres şu olursa bitti ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), adres),
     olumsuzKutusu,
     m.kutu, h('div', { class: 'dugmeler' }, devam, tara, zincireDon), eksikNotu);
@@ -848,25 +1109,40 @@ function kaydetDuragi(o, s, kart, m, gonder) {
   const zincir = h('ol', { class: 'hizli-zincir buyuk', 'aria-label': 'Kaydedilecek adımlar' },
     oz.adimlar.filter((a) => a.alanSayisi || a.bas).map((a) => h('li', {},
       a.alanSayisi ? `${a.alanSayisi} alan doldur` : null, a.alanSayisi && a.bas ? ', sonra ' : null, a.bas ? h('span', {}, 'bas: ', h('b', {}, a.bas)) : null)),
-    oz.bitis ? h('li', {}, oz.olumsuz ? `Beklenen uyarı: “${oz.olumsuz.mesaj}”` : `Bitti: ${[...oz.bitis.bitti.map((x) => `“${x}”`), ...(oz.bitis.adres ? [`adres ${oz.bitis.adres}`] : [])].join(' veya ')}`,
+    oz.bitis ? h('li', {}, oz.olumsuz ? `Beklenen uyarı: “${oz.olumsuz.mesaj}”` : `Bitti: ${[...oz.bitis.bitti.map((x) => `“${x}”`),
+      ...(oz.bitis.ogeler || []).map((x) => `“${x.metin || x.secici}” öğesi görünür`), ...(oz.bitis.adres ? [`adres ${oz.bitis.adres}`] : [])].join(' veya ')}`,
       oz.bitis.hata.length && !oz.olumsuz ? ` · Hata: ${oz.bitis.hata.map((x) => `“${x}”`).join(', ')}` : null,
       oz.bitis.devam.length ? ` · Devam: ${oz.bitis.devam.map((x) => `“${x}”`).join(', ')}` : null) : null);
   const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Kaydet — özeti göster');
   const ozetAdresi = `#/hizli-test/ozet/${encodeURIComponent(o.id)}`;
+  // Ön denetimin (özet yanıtındaki "sorunlar") maddeleri: "Düzelt" ilgili durağa döner; tablo sorunu özetin tablo kartında düzeltilir.
+  const sorunAlani = h('div', { class: 'hizli-sorun-alani' });
+  /** @param {Array<any>} sorunlar */
+  const sorunlariGoster = (sorunlar) => yerlestir(sorunAlani, sorunKutusu(sorunlar, (hedef, dugme) => {
+    if (hedef === 'tablo') { window.open(ozetAdresi, '_blank'); return; }
+    void gonder(dugme, 'geri', { hedef }, m);
+  }, ['bitis', 'karar', 'tablo']), h('p', { class: 'kucuk' }, h('a', { href: ozetAdresi, target: '_blank' }, 'Özeti yine de aç'), ' (sorunlar giderilmeden kayıt onaylanamaz).'));
   kaydet.addEventListener('click', async () => {
     // Seçimler oturuma yazılır (özet sekmesi okur; veritabanına hiçbir şey yazılmaz), sonra özet YENİ SEKMEDE açılır: uzun tablo listesi
     // bu sayfanın altına dizilmez. Tarayıcı yeni sekmeyi engellerse bağlantı gösterilir.
     try {
-      await mesgulIken(kaydet, 'Özet hazırlanıyor…', () => api('/platform/hizli-test/ozet', {
+      const yanit = await mesgulIken(kaydet, 'Özet hazırlanıyor…', () => api('/platform/hizli-test/ozet', {
         govde: { id: o.id, baslik: baslikGirdi.value.trim(), kosuyaDahil: dahil.checked, tabloOlustur: tabloOlustur.checked }
       }));
       degisiklikleriBirak();
+      const sorunlar = yanit && yanit.ozet && Array.isArray(yanit.ozet.sorunlar) ? yanit.ozet.sorunlar : [];
+      if (sorunlar.length) { m.temizle(); sorunlariGoster(sorunlar); return; }
+      sorunAlani.replaceChildren();
       const sekme = window.open(ozetAdresi, '_blank');
       if (!sekme) {
         m.goster('Tarayıcı yeni sekmeyi engelledi.', 'uyari');
         m.kutu.replaceChildren('Tarayıcı yeni sekmeyi engelledi: ', h('a', { href: ozetAdresi, target: '_blank' }, 'özeti yeni sekmede açın'), '.');
       } else bildir('Özet yeni sekmede açıldı; kaydı oradan onaylayın.', 'basari');
-    } catch (e) { if (!(e && e.durum === 423)) m.goster(hataMetni(e)); }
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      const sorunlar = hataSorunlari(e);
+      if (sorunlar) { m.temizle(); sorunlariGoster(sorunlar); } else m.goster(hataMetni(e));
+    }
   });
   const dogrula = h('button', { type: 'button', class: s.dogrulama ? 'hayalet' : 'birincil' }, ikon('oynat'), s.dogrulama ? 'Yeniden doğrula' : 'Evet, doğrula');
   dogrula.addEventListener('click', () => void gonder(dogrula, 'dogrula', {}, m));
@@ -899,7 +1175,7 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     h('div', { class: 'alan' }, h('label', { for: 'hizli-senaryo-basligi' }, 'Senaryonun adı'), baslikGirdi),
     h('label', { class: 'onay-satiri', for: 'hizli-kosuya-dahil' }, dahil, 'Toplu koşuya dahil'),
     h('label', { class: 'onay-satiri', for: 'hizli-tablo-olustur' }, tabloOlustur, 'Girdiğim değerleri test verisi tablosu olarak kaydet ve ekranın test verisine bağla'),
-    dogrulamaKutusu, farklar, m.kutu,
+    dogrulamaKutusu, farklar, sorunAlani, m.kutu,
     (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null,
     h('p', { class: 'kucuk soluk' }, 'Özet yeni bir sekmede açılır; kaydı orada onaylarsınız. Onaylamadan hiçbir şey yazılmaz.'),
     h('div', { class: 'dugmeler hizli-geri' }, bitiseDon, zincireDon));
@@ -918,9 +1194,9 @@ function dogrulamaAdimListesi(liste) {
 /**
  * Kayıt özeti — KENDİ SEKMESİNDE (#/hizli-test/ozet/<oturumId>): tablolar / birleştirme kararı / bağlantılar / senaryo önerileri; onaylamadan
  * hiçbir şey yazılmaz. Kaydet sekmesindeki seçimler (senaryo adı, toplu koşu, tablo) oturumdan okunur.
- * @param {HTMLElement} govde @param {string} id
+ * @param {HTMLElement} govde @param {string} id @param {string | null} [yenilemeNotu] özet bir kayıt hatasından sonra yenilendiyse gösterilen not
  */
-async function ozetEkrani(govde, id) {
+async function ozetEkrani(govde, id, yenilemeNotu = null) {
   const oturumAdresi = `#/hizli-test/o/${encodeURIComponent(id)}`;
   govde.replaceChildren(h('p', { class: 'soluk' }, 'Özet hazırlanıyor…'));
   let oz;
@@ -934,6 +1210,28 @@ async function ozetEkrani(govde, id) {
   const m = mesajKutusu();
   const tercih = oz.tercih || { kosuyaDahil: true, tabloOlustur: true };
   let baslik = oz.baslik;
+  // Ön denetim sorunları (sunucu: özet.sorunlar; kaydet hatasında hatalar[]): varken "Onayla" pasif, maddeler "Düzelt" yönlendirmesiyle.
+  /** @type {Array<any>} */
+  let sorunlar = Array.isArray(oz.sorunlar) ? oz.sorunlar : [];
+  const sorunAlani = h('div', { class: 'hizli-sorun-alani' });
+  /** "Düzelt": bitiş / adım adım → sunucuda geri dönülür ve hızlı test sayfası açılır; tablo → tablo kartı. @param {'bitis' | 'karar' | 'tablo'} hedef @param {HTMLButtonElement} dugme */
+  const duzelt = async (hedef, dugme) => {
+    if (hedef === 'tablo') {
+      tv.bolum.scrollIntoView({ block: 'start' });
+      const ilk = tv.bolum.querySelector('input, select, button');
+      if (ilk instanceof HTMLElement) ilk.focus();
+      return;
+    }
+    let r;
+    try { r = await mesgulIken(dugme, 'Açılıyor…', () => yenidenYurutmeOnayli((onay) => api('/platform/hizli-test/geri', { govde: { id, hedef, ...(onay ? { onay: true } : {}) } }))); } catch (e) { if (!(e && e.durum === 423)) m.goster(hataMetni(e)); return; }
+    if (r === null) return;
+    degisiklikleriBirak();
+    location.hash = oturumAdresi;
+  };
+  const sorunlariCiz = () => {
+    if (sorunlar.length) yerlestir(sorunAlani, sorunKutusu(sorunlar, (hedef, dugme) => void duzelt(hedef, dugme), tercih.tabloOlustur ? ['bitis', 'karar', 'tablo'] : ['bitis', 'karar']));
+    else sorunAlani.replaceChildren();
+  };
   // Aynı adlı tabloda varsayılan: yeni satır olarak birleştir (senaryo eklenen kendi satırına satır kimliğiyle sabitlenir); karar açıkça değiştirilebilir.
   const tv = testVerisiSecimi(tercih.tabloOlustur ? oz.onizleme : null, () => guncelle(), { kompakt: true, varsayilanBirlestir: true });
   const oneriler = oz.senaryolar.filter((x) => x.indeks > 0);
@@ -944,17 +1242,30 @@ async function ozetEkrani(govde, id) {
   let baskaSekmedeKaydedildi = false;
   const guncelle = () => {
     const bekleyen = tv.bekleyenler();
-    onayla.disabled = baskaSekmedeKaydedildi || !tv.hazir();
-    neden.textContent = bekleyen.length ? bekleyen.map((x) => x.metin).join(' · ') : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo`;
+    onayla.disabled = baskaSekmedeKaydedildi || sorunlar.length > 0 || !tv.hazir();
+    // Karar bekleyen tablo varsa her neden ilgili tablo kartına "Göster" bağlantısıyla.
+    if (!sorunlar.length && bekleyen.length) {
+      neden.replaceChildren(...bekleyen.flatMap((x, i) => {
+        const goster = x.satir ? h('button', { type: 'button', class: 'baglanti-dugmesi' }, 'Göster') : null;
+        if (goster) goster.addEventListener('click', () => { x.satir.scrollIntoView({ block: 'center' }); const o = x.odak && x.odak(); if (o) o.focus(); });
+        return [i ? ' · ' : '', x.metin, goster ? ' ' : '', goster];
+      }));
+    } else {
+      neden.textContent = sorunlar.length ? 'Kayıt onaylanamaz: önce yukarıdaki sorunları düzeltin.' : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo`;
+    }
   };
   const baslikSatiri = h('b', {}, baslik);
   const senaryoListesi = h('ul', { class: 'hizli-oneriler' },
     h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': 'Yaptığınız senaryo' }), ' ', baslikSatiri, h('span', { class: 'kucuk soluk' }, String(baslik).toLocaleLowerCase('tr').includes('hızlı test') ? ' — yaptığınız akış' : ' — hızlı testte yaptığınız akış'))),
     oneriler.map((x) => {
-      const k = h('input', { type: 'checkbox', checked: secili.has(x.indeks), 'aria-label': `${x.baslik} senaryosunu ekle` });
+      // Veri gerektiren dal: değer üretilmez — seçilemez; kayıttan sonra o dalla yeni hızlı test başlatma bağlantısı gösterilir.
+      const veriGerekli = Array.isArray(x.veriGerekli) && x.veriGerekli.length > 0;
+      const k = h('input', { type: 'checkbox', checked: !veriGerekli && secili.has(x.indeks), disabled: veriGerekli, 'aria-label': `${x.baslik} senaryosunu ekle` });
       k.addEventListener('change', () => { if (k.checked) secili.add(x.indeks); else secili.delete(x.indeks); guncelle(); });
-      return h('li', {}, h('label', {}, k, ' ', h('b', {}, x.baslik), h('span', { class: 'kucuk soluk' }, ` — ${x.gerekce}`)));
+      return h('li', { class: veriGerekli ? 'soluk' : '' }, h('label', {}, k, ' ', h('b', {}, x.baslik), h('span', { class: 'kucuk soluk' }, ` — ${x.gerekce}`)),
+        veriGerekli ? rozet(`veri gerekli: ${x.veriGerekli.join(', ')}`, 'uyari', { title: 'Bu dalın alanlarına değer üretilmez. Kaydettikten sonra “Bu dalla yeni hızlı test” ile o değerleri girerek ekleyin.' }) : null);
     }));
+  const veriGerekenDallar = oneriler.filter((x) => Array.isArray(x.veriGerekli) && x.veriGerekli.length);
   /** Kaydet; aynı başlıklı senaryo varsa (düzenleme kipi) önce sorulur. @param {Record<string, unknown>} ek */
   const kaydet = async (ek = {}) => {
     let r;
@@ -965,7 +1276,18 @@ async function ozetEkrani(govde, id) {
           senaryoIndeksleri: [...secili], ...(oz.farklar ? { onay: true } : {}), ...ek
         }
       }));
-    } catch (e) { if (!(e && e.durum === 423)) m.goster(hataMetni(e)); return; }
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      // Test verisi tabloları özet açıldıktan sonra değişti (ör. başka bir kayıt aynı adlı tabloyu yazdı): özet yenilenir, kart güncel
+      // seçenekleri (Birleştir / Yeni adla yaz / Atla) gösterir.
+      if (e && e.kod === 'TABLO' && /zaten var|artık uygun değil/.test(hataMetni(e))) {
+        void ozetEkrani(govde, id, `${hataMetni(e)} Özet yenilendi: tablo kararlarını gözden geçirip yeniden onaylayın.`);
+        return;
+      }
+      const hs = hataSorunlari(e);
+      if (hs) { sorunlar = hs; m.temizle(); sorunlariCiz(); guncelle(); sorunAlani.scrollIntoView({ block: 'nearest' }); } else m.goster(hataMetni(e));
+      return;
+    }
     degisiklikleriBirak();
     if (r && r.senaryoVar) {
       const karar = await senaryoVarSorusu(baslik);
@@ -982,6 +1304,9 @@ async function ozetEkrani(govde, id) {
         h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon('onay'), 'Test kaydedildi'),
           h('span', { class: 'sag' }, rozet(r.dogrulandi ? 'Doğrulandı' : 'Doğrulanmadı', r.dogrulandi ? 'basari' : 'uyari'))),
         h('p', {}, `Ekran “${oz.ekran.ad}” ve senaryo “${r.senaryoBasligi || baslik}” kaydedildi. Bu sekmeyi kapatabilirsiniz.`),
+        veriGerekenDallar.length ? h('div', { class: 'not-kutusu bilgi', role: 'note' },
+          `Veri gerektiren dallar kaydedilmedi (${veriGerekenDallar.map((x) => x.gerekce.split(' — ')[0]).join('; ')}). O dalı denemek için `,
+          h('a', { href: `#/hizli-test/duzenle/${encodeURIComponent(String(r.ekranId))}` }, 'bu ekranla yeni hızlı test başlatın'), ' ve dalın alanlarına değer girin.') : null,
         h('div', { class: 'dugmeler' },
           h('a', { class: 'dugme birincil', href: listeHedefi().adres }, ikon('liste'), listeHedefi().ad),
           h('a', { class: 'dugme', href: `#/ekranlar/e/${encodeURIComponent(String(r.ekranId))}/akis` }, ikon('katman'), 'Akış diyagramında aç'),
@@ -995,9 +1320,12 @@ async function ozetEkrani(govde, id) {
     h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon('onay'), 'Kayıt özeti — onaylamadan hiçbir şey yazılmaz'), h('span', { class: 'sag' }, rozet('6 / 6'))),
     h('p', {}, `Ekran “${oz.ekran.ad}” ${oz.ekran.mevcut ? '(mevcut: yeni model sürümü)' : '(yeni)'} · ortam ${oz.ortam.ad} · ${oz.dogrulandi ? 'doğrulandı' : 'doğrulanmadı'}`),
     oz.senaryoVar ? h('div', { class: 'not-kutusu uyari', role: 'note' }, `“${baslik}” adlı senaryo bu ekranda zaten var: kaydederken üzerine yazmak ya da yeni adla kaydetmek sorulur.`) : null,
+    yenilemeNotu ? h('div', { class: 'not-kutusu uyari', role: 'alert' }, yenilemeNotu) : null,
+    sorunAlani,
     tercih.tabloOlustur ? tv.bolum : h('p', { class: 'kucuk soluk' }, 'Test verisi tablosu oluşturulmaz: değerler senaryoda düz değer olarak kalır.'),
     h('div', { class: 'ara-baslik' }, `Senaryolar (${1 + oneriler.length} öneri)`), senaryoListesi,
     m.kutu, neden, h('div', { class: 'dugmeler' }, onayla, h('a', { class: 'dugme hayalet', href: oturumAdresi }, 'Hızlı teste dön'))));
+  sorunlariCiz();
   guncelle();
   const odak = govde.querySelector('[data-odak]');
   if (odak instanceof HTMLElement) odak.focus();

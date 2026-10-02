@@ -275,17 +275,31 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
   /** Tablo adı → satırı ve odaklanacak ilk denetim (kararsız tabloya "Bölüme git" için). @type {Map<string, { satir: HTMLElement; odak: () => HTMLElement | null }>} */
   const satirlar = new Map();
   /** @type {Map<string, { islem: string | null; yeniAd: string; hedefId?: string }>} */
-  const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? (ayar.varsayilanBirlestir ? 'birlestir' : null) : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60), hedefId: '' }]));
+  // Varsayılan karar: aynı adlı tabloda (her türde: kayıt, liste, zincir) varsayilanBirlestir ise "Birleştir"; sütunu birebir eşleşen mevcut
+  // tablo varsa (bagla[0].kesin) "Mevcut tabloya bağla"; yoksa yeni tablo.
+  const ilkKarar = (x) => (x.mevcut ? { islem: ayar.varsayilanBirlestir ? 'birlestir' : null, hedefId: '' }
+    : x.bagla && x.bagla[0] && x.bagla[0].kesin ? { islem: 'bagla', hedefId: x.bagla[0].id } : { islem: 'yeni', hedefId: '' });
+  const durum = new Map(t.tablolar.map((x) => [x.ad, { ...ilkKarar(x), yeniAd: `${x.ad} 2`.slice(0, 60) }]));
   const baglar = new Set(t.baglantilar.map((b) => b.alanId));
   const yazilir = (ad) => { const d = durum.get(ad); return Boolean(d && d.islem && d.islem !== 'atla'); };
+  /** Bağlantının yazılacağı tablo / sütun (mevcut tabloya bağlanınca o tablonun eşleşen sütunu). */
+  const hedefi = (b) => {
+    const d = durum.get(b.tablo);
+    const x = t.tablolar.find((y) => y.ad === b.tablo);
+    const a = d && d.islem === 'bagla' && x && x.bagla ? x.bagla.find((y) => y.id === d.hedefId) : null;
+    if (!a) return { tablo: b.tablo, sutun: b.sutun };
+    const e = a.eslesme.find((y) => y.plan === b.sutun);
+    return { tablo: a.ad, sutun: e ? e.hedef : b.sutun };
+  };
   const bagListesi = h('ul', { class: 'tv-baglar' });
   const bagCiz = () => yerlestir(bagListesi, t.baglantilar.map((b) => {
     const acik = yazilir(b.tablo);
     const k = h('input', { type: 'checkbox', checked: acik && baglar.has(b.alanId), disabled: !acik, 'aria-label': `${b.alanEtiketi} alanını bağla` });
     k.addEventListener('change', () => { if (k.checked) baglar.add(b.alanId); else baglar.delete(b.alanId); degisti(); });
-    const degisir = b.mevcut && (b.mevcut.tablo !== b.tablo || b.mevcut.sutun !== b.sutun);
+    const hd = hedefi(b);
+    const degisir = b.mevcut && (b.mevcut.tablo !== hd.tablo || b.mevcut.sutun !== hd.sutun);
     return h('li', { class: acik ? '' : 'soluk' }, h('label', {}, k,
-      h('span', {}, h('b', {}, b.alanEtiketi), ' → ', h('code', {}, `${b.tablo} → ${b.sutun}`)),
+      h('span', {}, h('b', {}, b.alanEtiketi), ' → ', h('code', {}, `${hd.tablo} → ${hd.sutun}`)),
       degisir ? rozet(`şu an: ${b.mevcut.tablo} → ${b.mevcut.sutun} (değişir)`, 'uyari') : null,
       b.modeldeVar ? null : rozet('bulgu kabul edilince bağlanır', '', { title: 'Bulgu, yeni paketle mevcut model arasındaki bir farktır (ör. eklenen alan). Alan henüz modelde değil: bağlantı, alanın bulgusu kabul edilince yazılır; reddedilirse yazılmaz.' })));
   }));
@@ -293,7 +307,25 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
     const d = durum.get(x.ad);
     const gizliVar = x.sutunlar.some((s) => s.gizli);
     let secim;
-    if (!x.mevcut && x.benzer && x.benzer.length) {
+    if (!x.mevcut && x.bagla && x.bagla.length) {
+      // Alan(lar) mevcut bir tablonun SÜTUNUNDA zaten var: "Mevcut tabloya bağla" (birebir eşleşmede varsayılan), yeni tablo ya da atla.
+      const ad = `tv-${Math.random().toString(36).slice(2, 9)}`;
+      const secenek = (deger, hedefId, etiket, ek = null) => {
+        const r = h('input', { type: 'radio', name: ad, value: deger, checked: d.islem === deger && (d.hedefId || '') === (hedefId || '') });
+        r.addEventListener('change', () => { d.islem = deger; d.hedefId = hedefId || ''; bagCiz(); degisti(); });
+        return h('label', {}, r, h('span', {}, etiket), ek);
+      };
+      const adayMetni = (a) => `Mevcut tabloya bağla: ${a.ad} › ${a.eslesme.map((e) => e.hedef).join(', ')} (${a.satirSayisi} satır) — ${a.mevcutSatir
+        ? `değer “${a.mevcutSatir.ad}” satırında var, senaryo o satırı kullanır` : `${a.eklenecekSatir} yeni satır eklenir`}${a.yeniSutunlar.length ? `; yeni sütun: ${a.yeniSutunlar.join(', ')}` : ''}`;
+      secim = h('div', { class: 'tv-cakisma' },
+        h('div', { class: 'not-kutusu bilgi kucuk' }, x.bagla[0].kesin
+          ? 'Bu alan mevcut bir tablonun sütununda zaten var: aynı veriyi iki tabloda tutmamak için ona bağlanır (varsayılan; mevcut satırlar değişmez). İsterseniz yeni tablo olarak yazabilirsiniz.'
+          : 'Adı benzeyen mevcut sütun var: kontrol edip uygunsa ona bağlayın. Varsayılan: yeni tablo.'),
+        h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': `${x.ad}: mevcut tabloya bağla` },
+          ...x.bagla.map((a) => secenek('bagla', a.id, adayMetni(a), a.kesin ? null : rozet('adı benzeyen sütun — kontrol edin', 'uyari'))),
+          secenek('yeni', '', 'Yeni tablo olarak yaz'),
+          secenek('atla', '', 'Atla (yazma)')));
+    } else if (!x.mevcut && x.benzer && x.benzer.length) {
       // Önleme: başlıkları aynı (esnek) tablo var — onu kullan (birleştir) ya da yine de yeni oluştur. Varsayılan: yeni.
       const ad = `tv-${Math.random().toString(36).slice(2, 9)}`;
       const secenek = (deger, hedefId, etiket) => {
@@ -324,7 +356,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       secim = h('div', { class: 'tv-cakisma' },
         h('div', { class: 'not-kutusu uyari kucuk' }, `“${m.ad}” adında bir tablo zaten var (${m.sutunSayisi} sütun, ${m.satirSayisi} satır). Ne yapılsın? ${ayar.varsayilanBirlestir ? 'Varsayılan: yeni satır olarak birleştir (senaryo kendi satırını kullanır); değiştirebilirsiniz.' : 'Seçmeden kabul edilemez.'}`),
         h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': `${x.ad}: aynı adlı tablo` },
-          secenek('birlestir', `Birleştir — ${m.eklenecekSatir} yeni satır${m.yeniSutunlar.length ? `, ${m.yeniSutunlar.length} yeni sütun (${m.yeniSutunlar.join(', ')})` : ''}; mevcut satırlar değişmez`),
+          secenek('birlestir', `Birleştir — ${x.tur === 'liste' && !x.zincir ? `${m.eklenecekSatir} eksik seçenek eklenir` : `${m.eklenecekSatir} yeni satır`}${m.yeniSutunlar.length ? `, ${m.yeniSutunlar.length} yeni sütun (${m.yeniSutunlar.join(', ')})` : ''}; mevcut satırlar değişmez`),
           secenek('yeniAd', 'Yeni adla yaz:', adGirdisi),
           secenek('atla', 'Atla (yazma)')));
     }
@@ -335,9 +367,11 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       x.satirSayisi > x.ornek.length ? h('small', { class: 'cok-soluk' }, `… ve ${x.satirSayisi - x.ornek.length} satır daha`) : null);
     const satir = h('li', { class: 'tv-tablo' },
       h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
-        x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablo; Test verisi > Ekran listeleri grubunda görünür.' }) : null,
+        x.zincir ? rozet('Zincir tablosu', 'vurgu', { title: 'Bağlı listeler (üst seçilince alt listesi dolan) tek tabloda: sütunlar zincirin halkaları, her satır birlikte geçerli (gözlenen) bir kombinasyon. Senaryoda üst seçildikçe alt listeler satırlardan süzülür.' })
+          : x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablo; Test verisi > Ekran listeleri grubunda görünür.' }) : null,
         h('span', { class: 'kucuk soluk' }, `${x.sutunlar.length} sütun · ${x.satirSayisi} satır${x.tekrarSayisi ? ` (${x.tekrarSayisi} tekrar atıldı)` : ''}`),
         gizliVar ? rozet('gizli sütun: değeri Nöbetçi\'de şifreli girilir', 'uyari') : null),
+      x.zincir ? h('p', { class: 'kucuk' }, `Zincir: ${x.zincir.join(' → ')} — satırlar gözlenen geçerli kombinasyonlar`) : null,
       x.aciklama ? h('p', { class: 'kucuk soluk' }, x.aciklama) : null,
       x.bagliAlanlar.length ? h('p', { class: 'kucuk' }, 'Bağlanacak alanlar: ', x.bagliAlanlar.join(', ')) : null,
       ayar.kompakt ? h('details', { class: 'tv-katlanir' }, h('summary', {}, `Örnek satırlar (${x.ornek.length}/${x.satirSayisi})`), ornekTablo) : ornekTablo,
@@ -376,7 +410,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       return `${n ? `${n} tablo yazılır${b ? `, ${b} alan bağlanır` : ''}` : 'yazılmaz'}${bekleyen ? ' — aynı adlı tablo için seçim bekleniyor' : ''}`;
     },
     govde: () => ({
-      tablolar: Object.fromEntries([...durum].map(([ad, d]) => [ad, { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}), ...(d.islem === 'birlestir' && d.hedefId ? { hedefId: d.hedefId } : {}) }])),
+      tablolar: Object.fromEntries([...durum].map(([ad, d]) => [ad, { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}), ...((d.islem === 'birlestir' || d.islem === 'bagla') && d.hedefId ? { hedefId: d.hedefId } : {}) }])),
       baglantilar: t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).map((x) => x.alanId)
     })
   };
@@ -388,7 +422,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
  */
 export function testVerisiBildir(r) {
   if (!r || !r.tablolar.length) return;
-  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}${r.bekleyenBaglanti ? `; ${r.bekleyenBaglanti} bağlantı bulgu kabul edilince yazılır` : ''}.`);
+  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' || x.islem === 'bagla' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}${r.bekleyenBaglanti ? `; ${r.bekleyenBaglanti} bağlantı bulgu kabul edilince yazılır` : ''}.`);
 }
 
 function hataListesi(baslik, hatalar, dosyaAdi) {

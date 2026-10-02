@@ -7,6 +7,10 @@
 .hizli-duraklar li.gecti .adim-no { background: color-mix(in srgb, var(--vurgu) 30%, var(--panel-2)); color: var(--metin); }
 .hizli-durum { min-height: 1.2em; color: var(--metin-2); font-size: 13px; overflow-wrap: anywhere; }
 .hizli-durum:empty { display: none; }
+/* Süre bandı: boşta kalma uyarısı + "Süreyi uzat" / tarayıcı kapalıyken "Tarayıcıyı yeniden aç". */
+.hizli-sure { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.hizli-sure[hidden], .hizli-sure [hidden] { display: none; }
+.hizli-sure .dugmeler { margin: 0; }
 .hizli-duzen { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 @media (max-width: 900px) { .hizli-duzen { grid-template-columns: minmax(0, 1fr); } }
 .hizli-ana, .hizli-yan { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -99,6 +103,14 @@
 .hizli-alan-bagli::before { content: ""; position: absolute; left: -2px; top: 0.75em; width: 9px; border-top: 2px solid color-mix(in srgb, var(--vurgu) 55%, var(--cizgi-2)); }
 .hizli-zincir-getir { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; min-width: 0; }
 .hizli-zincir-getir:empty { display: none; }
+/* "Önce bunu seçin": görünürlüğü belirleyen seçimler (kartın en üstünde, tüm seçenekleriyle). */
+.hizli-onsecim { display: grid; gap: 8px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid color-mix(in srgb, var(--vurgu) 45%, var(--cizgi)); border-radius: var(--yaricap-m); background: var(--vurgu-zemin); min-width: 0; }
+.hizli-onsecim h4 { margin: 0; font-size: 15px; }
+.hizli-onsecim p { margin: 0; }
+.hizli-onsecim-alani { display: grid; gap: 4px; min-width: 0; }
+.hizli-onsecim-secenekler { display: flex; flex-wrap: wrap; gap: 4px 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.hizli-onsecim-secenekler legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+.hizli-onsecim-alani select { max-width: 100%; }
 .hizli-zincir-dugmesi { white-space: normal; text-align: left; max-width: 100%; overflow-wrap: anywhere; }
 .hizli-zincir-dugmesi[aria-disabled="true"] { opacity: 0.75; cursor: progress; }
 .hizli-zincir-tamam { color: var(--basari); font-size: 13px; overflow-wrap: anywhere; }
@@ -117,3 +129,8 @@
 .hizli-dogrulama-adimlari .d-tamam .hizli-dogrulama-isaret { color: var(--basari); }
 .hizli-dogrulama-adimlari .d-hata { color: var(--hata); }
 .tv-katlanir > summary { cursor: pointer; font-size: .9em; margin: 4px 0; }
+/* Kayıt sorunları (ön denetim / kaydet hatası): maddeler + "Düzelt"; teknik ayrıntı uzun yolları kırar. */
+.hizli-sorunlar ul { margin: 6px 0; padding-left: 1.2em; }
+.hizli-sorunlar li { margin: 4px 0; overflow-wrap: anywhere; }
+.hizli-sorunlar li .dugmeler { margin-top: 4px; }
+.hizli-sorunlar details code { white-space: pre-wrap; overflow-wrap: anywhere; }

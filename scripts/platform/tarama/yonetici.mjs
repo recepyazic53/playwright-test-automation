@@ -48,6 +48,10 @@
 // sayfayı açar ve keşfeder (basmadan), sonra sunucunun komutlarını uygular (doldur / bas / oku / seç / doğrula). Komut kuyruğu ve
 // sonuçları: komutGonder, GET …/is/<id>/komut (uzun yoklama), POST …/is/<id>/hizli (hizliDinle ile dinleyiciye). Kullanıcıyla
 // konuşan durum makinesi ve kayıt: hizli-test/yonetici.mjs (/platform/hizli-test/*). Ekran seçimi / hedef "Sayfada seç" gibi.
+// SÜRE: toplam süre değil BOŞTA KALMA süresi (Ayarlar > Koşu > Tarama ve akış kaydı > hizliBostaKalmaDk; testlerde NOBETCI_HIZLI_BOSTA_SN):
+// komut gönderimi, tarayıcının sonuç / ilerleme olayları, hizliUzat ("Süreyi uzat" ve her kullanıcı işlemi) sayacı sıfırlar; süre dolarken
+// tarayıcı işi sürüyorsa (dinleyicinin mesgulMu'su) etkinlik sayılır. Komut uzun yoklaması etkinlik DEĞİLDİR. Mutlak üst sınır başlangıçtan
+// (hizliUstSinirDk; NOBETCI_HIZLI_UST_SINIR_SN) uzatmayla aşılmaz. girdi.hizliTest.kesifAtla: tarayıcının yeniden açılması (keşif yok).
 // KEŞİF (tarama): varsayılan açık; CANLI ortamda keşif açıksa gövdede kesifCanliOnay: true gerekir (yoksa 409 KESIF_CANLI_ONAY).
 //   POST /platform/tarama/iptal { id }   süreç grubunu kapatır
 //   POST /platform/tarama/kod { id, kod } SMS "elle" doğrulama kodunu işe iletir (kod loglanmaz)
@@ -95,7 +99,7 @@ import { akisDuzenlenebilirMi, akisKaydet as ekranAkisiKaydet, akislariListele }
 import { ortakAkisBaslangicEkranlari } from '../ekranlar/ekran-servisi.mjs';
 import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../giris/giris-kaydi.mjs';
 import {
-  HIZLI_KOMUT_BEKLEME_MS, HIZLI_OLAY_GOVDE_SINIRI, KAYIT_BASSIZ_DEGISKENI, KAYIT_ZAMAN_ASIMI_DEGISKENI, OLAY_GOVDE_SINIRI, OTURUM_GOVDE_SINIRI, SONUC_GOVDE_SINIRI, TARAMA_GIRIS_KIPLERI, TARAMA_ADRES_DEGISKENI, TARAMA_CIKTI_DEGISKENI,
+  HIZLI_BOSTA_DEGISKENI, HIZLI_KOMUT_BEKLEME_MS, HIZLI_OLAY_GOVDE_SINIRI, HIZLI_UST_SINIR_DEGISKENI, HIZLI_UYARI_ONCESI_MS, KAYIT_BASSIZ_DEGISKENI, KAYIT_ZAMAN_ASIMI_DEGISKENI, OLAY_GOVDE_SINIRI, OTURUM_GOVDE_SINIRI, SONUC_GOVDE_SINIRI, TARAMA_GIRIS_KIPLERI, TARAMA_ADRES_DEGISKENI, TARAMA_CIKTI_DEGISKENI,
   TARAMA_DNS_KAPALI_DEGISKENI, TARAMA_GORUNUR_DEGISKENI, TARAMA_IZINLI_KOKENLER_DEGISKENI, TARAMA_TEST_SURESI_DEGISKENI, TARAMA_TOKEN_BASLIGI,
   TARAMA_TOKEN_DEGISKENI, TARAMA_ZAMAN_ASIMI_DEGISKENI, VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN, VARSAYILAN_ZAMAN_ASIMI_SN
 } from './protokol.mjs';
@@ -241,6 +245,18 @@ export function taramaYoneticisiOlustur(secenekler) {
     ?? (Number(ortam[TARAMA_ZAMAN_ASIMI_DEGISKENI]) > 0 ? Number(ortam[TARAMA_ZAMAN_ASIMI_DEGISKENI]) * 1000 : kullaniciAyari(vt, 'taramaZamanAsimiDk') ?? VARSAYILAN_ZAMAN_ASIMI_SN * 1000);
   const kayitZamanAsimiMs = (/** @type {Veritabani | undefined} */ vt) => (Number(ortam[KAYIT_ZAMAN_ASIMI_DEGISKENI]) > 0 ? Number(ortam[KAYIT_ZAMAN_ASIMI_DEGISKENI]) * 1000
     : kullaniciAyari(vt, 'kayitZamanAsimiDk') ?? VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN * 1000);
+  // Hızlı test: TOPLAM süre değil BOŞTA KALMA süresi + mutlak üst sınır (ortam değişkeni (testler) > Ayarlar > varsayılan).
+  const hizliSureleri = (/** @type {Veritabani | undefined} */ vt) => {
+    /** @type {Record<string, unknown>} */
+    let a = {};
+    try { a = vt ? kosuAyarlariniOku(vt) : {}; } catch { a = {}; }
+    const v = varsayilanKosuAyarlari();
+    const sn = (/** @type {string} */ ad) => (Number(ortam[ad]) > 0 ? Number(ortam[ad]) * 1000 : null);
+    return {
+      bostaMs: sn(HIZLI_BOSTA_DEGISKENI) ?? Number(a.hizliBostaKalmaDk ?? v.hizliBostaKalmaDk) * 60_000,
+      ustMs: sn(HIZLI_UST_SINIR_DEGISKENI) ?? Number(a.hizliUstSinirDk ?? v.hizliUstSinirDk) * 60_000
+    };
+  };
   const saklamaMs = secenekler.saklamaMs ?? IS_SAKLAMA_MS;
   const hataAyiklama = secenekler.hataAyiklama ?? ortam.NOBETCI_TARAMA_HATA_AYIKLA === '1';
   /** @type {Map<string, Nesne>} */
@@ -271,6 +287,61 @@ export function taramaYoneticisiOlustur(secenekler) {
     sinyal('SIGTERM');
     const z = setTimeout(() => { if (s.exitCode === null && s.signalCode === null) sinyal('SIGKILL'); }, SURE_SONRA_ZORLA_MS);
     z.unref();
+  }
+
+  // ---- Hızlı test süresi: boşta kalma sayacı + mutlak üst sınır ----
+  const sureMetni = (/** @type {number} */ ms) => (ms >= 60_000 ? `${Math.round(ms / 60_000)} dk` : `${Math.round(ms / 1000)} sn`);
+  /**
+   * Hızlı test işinin zamanlayıcısı: boşta kalma süresi (son etkinlikten) ya da üst sınırdan (başlangıçtan) hangisi önce dolarsa. Süre
+   * dolduğunda iş süren bir tarayıcı işindeyse (dinleyicinin mesgulMu'su) etkinlik sayılır. Her etkinlikte yeniden kurulur.
+   * @param {Nesne} is
+   */
+  function hizliZamanlayiciKur(is) {
+    clearTimeout(is.zamanlayici);
+    if (is.durum !== 'suruyor' || !is.sure) return;
+    const s = is.sure;
+    const ustBitis = s.baslangicMs + s.ustMs;
+    const bitis = Math.min(s.sonEtkinlikMs + s.bostaMs, ustBitis);
+    is.zamanlayici = setTimeout(() => {
+      if (is.durum !== 'suruyor') return;
+      const simdiMs = Date.now();
+      const ust = simdiMs >= ustBitis - 50;
+      let mesgul = false;
+      try { mesgul = Boolean(is.hizliMesgulMu?.()); } catch { mesgul = false; }
+      if (!ust && mesgul) { s.sonEtkinlikMs = simdiMs; hizliZamanlayiciKur(is); return; }
+      if (!ust && simdiMs < s.sonEtkinlikMs + s.bostaMs - 50) { hizliZamanlayiciKur(is); return; }
+      bitir(is, 'hata', {
+        kod: 'ZAMAN_ASIMI',
+        mesaj: ust
+          ? `Hızlı test ${sureMetni(s.ustMs)} en uzun süreye ulaştı; tarayıcı kapatıldı. Toplananlar duruyor: kaldığınız yerden devam edebilir ya da kaydedebilirsiniz.`
+          : `Hızlı testte ${sureMetni(s.bostaMs)} boyunca işlem yapılmadı; tarayıcı kapatıldı. Toplananlar duruyor: kaldığınız yerden devam edebilir ya da kaydedebilirsiniz.`
+      });
+      sureciKapat(is);
+    }, Math.max(0, bitis - Date.now()));
+    is.zamanlayici.unref?.();
+  }
+  /** Hızlı test etkinliği (kullanıcı işlemi ya da tarayıcı işi): boşta kalma sayacı sıfırlanır. @param {Nesne} is */
+  function hizliEtkinlik(is) {
+    if (is.kip !== 'hizliTest' || is.durum !== 'suruyor' || !is.sure) return;
+    is.sure.sonEtkinlikMs = Date.now();
+    hizliZamanlayiciKur(is);
+  }
+  /**
+   * Hızlı test işinin süre durumu (arayüz: kalan süre, "Süreyi uzat" uyarısı). uyari: bitime HIZLI_UYARI_ONCESI_MS (boşta kalma süresinin
+   * yarısını geçmez) ya da daha az kaldı. sebep: önce dolacak sınır. @param {Nesne} is
+   */
+  function hizliSureGorunumu(is) {
+    if (is.kip !== 'hizliTest' || !is.sure) return null;
+    const s = is.sure;
+    const simdiMs = Date.now();
+    const bostaKalan = Math.max(0, s.sonEtkinlikMs + s.bostaMs - simdiMs);
+    const ustKalan = Math.max(0, s.baslangicMs + s.ustMs - simdiMs);
+    const kalanMs = Math.min(bostaKalan, ustKalan);
+    const uyariOncesi = Math.min(HIZLI_UYARI_ONCESI_MS, Math.floor(s.bostaMs / 2));
+    return {
+      suruyor: is.durum === 'suruyor', bostaMs: s.bostaMs, ustMs: s.ustMs, kalanMs, ustKalanMs: ustKalan, sebep: ustKalan <= bostaKalan ? 'ust' : 'bosta',
+      uyari: is.durum === 'suruyor' && kalanMs <= uyariOncesi, uzatilabilir: is.durum === 'suruyor' && ustKalan > bostaKalan
+    };
   }
 
   /** @param {Nesne} is @param {string} durum @param {{ kod: string; mesaj: string } | null} [hata] */
@@ -559,7 +630,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     const kodYolu = join(tmpdir(), `nobetci-tarama-kod-${randomBytes(8).toString('hex')}`);
     const ciktiKlasoru = join(tmpdir(), `nobetci-tarama-${id}`);
     const izinliKokenler = String(ortam[TARAMA_IZINLI_KOKENLER_DEGISKENI] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-    const sure = kayit || sayfaIsi ? kayitZamanAsimiMs(vt) : zamanAsimiMs(vt);
+    // Hızlı test: alt sürecin (Playwright testinin) süresi mutlak üst sınırdır; asıl sınır boşta kalma sayacıdır (hizliZamanlayiciKur).
+    const hizliSure = hizliTest ? hizliSureleri(vt) : null;
+    const sure = hizliSure ? hizliSure.ustMs : kayit || sayfaIsi ? kayitZamanAsimiMs(vt) : zamanAsimiMs(vt);
     // Öğe seçmede seçilebilecek türler (akış diyagramında düğme / alan / başarı göstergesi; verilmezse hepsi).
     const ogeTurleri = ogeSecme && Array.isArray(g.ogeTurleri) ? OGE_TURLERI.filter((t) => g.ogeTurleri.includes(t)) : [];
     // Giriş kipi (Ayarlar > Koşu > Tarama ve akış kaydı): "Koşunun saklanan oturumunu kullan" YALNIZ giriş yapılan işte (tarif var,
@@ -588,13 +661,15 @@ export function taramaYoneticisiOlustur(secenekler) {
       // Öğe seçme: seçilen öğeler (sürerken canlı liste, bitince sonuç) ve seçilebilecek türler.
       ...(ogeSecme ? { ogeler: [], ogeTurleri: ogeTurleri.length ? ogeTurleri : [...OGE_TURLERI] } : {}),
       // Hızlı test: sunucudan alt sürece giden komut kuyruğu, bekleyen uzun yoklamalar ve sonuçları alan dinleyici (hizli-test/yonetici.mjs).
-      ...(hizliTest ? { komutlar: [], komutBekleyenler: [], hizliDinleyici: null } : {}),
+      ...(hizliTest ? { komutlar: [], komutBekleyenler: [], hizliDinleyici: null, hizliMesgulMu: null } : {}),
+      // Hızlı test süresi: boşta kalma sayacı (son etkinlik) ve mutlak üst sınır (başlangıçtan).
+      ...(hizliSure ? { sure: { ...hizliSure, baslangicMs: Date.now(), sonEtkinlikMs: Date.now() } } : {}),
       // Ortak akışın kaydı: başlangıç ekranı; sonuç ortak akışın (tek) akışına yazılır (akisaYaz), ekran paketi üretilmez.
       ortakAkis: ortakBaslangic ? { baslangicEkrani: ortakBaslangic } : null,
       engellenenler: [], engellenenSayisi: 0, olaylar: [],
       girdi: {
         kip: girisDenemesi ? 'girisDenemesi' : kayit ? 'kayit' : ogeSecme ? 'ogeSecme' : hizliTest ? 'hizliTest' : 'tarama', ...(girisKaydi ? { girisKaydi: true } : {}),
-        ...(hizliTest ? { hizliTest: { izin: String(g.izin) } } : {}), ...(ogeTurleri.length ? { ogeTurleri } : {}), tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
+        ...(hizliTest ? { hizliTest: { izin: String(g.izin), ...(g.kesifAtla === true ? { kesifAtla: true } : {}) } } : {}), ...(ogeTurleri.length ? { ogeTurleri } : {}), tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
         yasakKaliplari: etkinYasakAdresler(vt, ortam), izinliKokenler: izinliKokenler.length ? izinliKokenler : null, zamanAsimiMs: sure,
         // Tarayıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
         tarayici: taramaTarayiciGirdisi(vt),
@@ -656,6 +731,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       bitir(is, 'hata', { kod: 'SUREC', mesaj: `Tarama süreci sonuç bildirmeden kapandı (çıkış kodu ${kod ?? '—'}).` });
       is.cikti = '';
     });
+    if (hizliTest) { hizliZamanlayiciKur(is); return { isId: id }; }
     is.zamanlayici = setTimeout(() => {
       bitir(is, 'hata', {
         kod: 'ZAMAN_ASIMI',
@@ -719,6 +795,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     const is = hizliIs(id);
     if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', 'Hızlı test tarayıcısı artık çalışmıyor.', 409);
     is.sonErisim = simdi();
+    hizliEtkinlik(is);
     const bekleyen = is.komutBekleyenler.shift();
     if (bekleyen) bekleyen(komut); else is.komutlar.push(komut);
     return { gonderildi: true };
@@ -749,20 +826,35 @@ export function taramaYoneticisiOlustur(secenekler) {
     const is = tokenliIs(id, token);
     if (is.kip !== 'hizliTest' || is.durum !== 'suruyor') return { yoksayildi: true };
     is.sonErisim = simdi();
+    hizliEtkinlik(is);
     try { is.hizliDinleyici?.(o); } catch (e) { console.log(`[platform] Hızlı test (${is.id}): sonuç işlenemedi (${e instanceof Error ? e.message : String(e)}).`); }
     return { alindi: true };
   }
 
-  /** Sunucu: işin sonuçlarını alacak dinleyici (tek). @param {string} id @param {(o: Nesne) => void} fn */
-  function hizliDinle(id, fn) {
-    hizliIs(id).hizliDinleyici = fn;
+  /**
+   * Sunucu: işin sonuçlarını alacak dinleyici (tek). mesgulMu: süre dolarken tarayıcı işi sürüyor mu (sürüyorsa etkinlik sayılır).
+   * @param {string} id @param {(o: Nesne) => void} fn @param {() => boolean} [mesgulMu]
+   */
+  function hizliDinle(id, fn, mesgulMu) {
+    const is = hizliIs(id);
+    is.hizliDinleyici = fn;
+    is.hizliMesgulMu = mesgulMu ?? null;
+  }
+  /** Sunucu: kullanıcı işlemi / "Süreyi uzat" — boşta kalma sayacı sıfırlanır (üst sınır değişmez). @param {string} id */
+  function hizliUzat(id) {
+    const is = hizliIs(id);
+    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', 'Hızlı test tarayıcısı artık çalışmıyor.', 409);
+    hizliEtkinlik(is);
+    return hizliSureGorunumu(is);
   }
 
   /** Alt süreç: ilerleme olayı. @param {string} id @param {string} token @param {Nesne} o */
   function olayAl(id, token, o) {
     const is = tokenliIs(id, token);
     if (is.durum !== 'suruyor') return { yoksayildi: true };
-    const metin = (/** @type {unknown} */ d, n = 300) => (typeof d === 'string' ? d.slice(0, n) : null);
+    // Hızlı test: tarayıcının ilerleme olayı (giriş, keşif) etkinliktir.
+    hizliEtkinlik(is);
+    const metin =(/** @type {unknown} */ d, n = 300) => (typeof d === 'string' ? d.slice(0, n) : null);
     const DURUMLAR = ['bekliyor', 'suruyor', 'tamam', 'hata', 'atlandi'];
     if (o.tur === 'adim' && typeof o.adim === 'string' && o.adim in is.adimlar && DURUMLAR.includes(o.durum)) {
       // Giriş adımı: saklanan oturum dosyası güncellendiyse (sunucu yazdı) mesaja eklenir.
@@ -1145,6 +1237,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     komutAl,
     hizliOlayAl,
     hizliDinle,
+    hizliUzat,
+    /** Hızlı test işinin süre durumu (iş yoksa / hızlı test değilse null). @param {string} id */
+    hizliSure: (/** @type {string} */ id) => { const is = isler.get(id); return is ? hizliSureGorunumu(is) : null; },
     girdiVer,
     olayAl,
     oturumAl,

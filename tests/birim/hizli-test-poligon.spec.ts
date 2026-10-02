@@ -381,6 +381,10 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
       await soruKarti(page).getByRole('button', { name: 'Devam et', exact: true }).click();
       await expect(soruKarti(page).getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible(UZUN);
       await soruKarti(page).getByRole('button', { name: 'Bitiş koşulunu düzenle' }).click();
+      // Kaydet aşamasında tarayıcı kapalı: geri dönüş zinciri yeniden yürütür; yeniden basılacak düğmeler adlarıyla sorulur.
+      const onay = page.locator('dialog[open]');
+      await expect(onay).toContainText('şu düğmelere yeniden basılacak: “Devam”, “Hesabı oluştur”', UZUN);
+      await onay.getByRole('button', { name: 'Evet, yeniden yürüt' }).click();
       await expect(page.locator('.hizli-bitis-satiri').filter({ hasText: 'Hesabınız hazır' }).getByRole('radio', { name: 'Bitti' })).toHaveAttribute('aria-checked', 'true', UZUN);
       await soruKarti(page).getByRole('button', { name: 'Devam et', exact: true }).click();
       await expect(soruKarti(page).getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible(UZUN);

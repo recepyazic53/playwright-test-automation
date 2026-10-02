@@ -69,26 +69,98 @@ export function hizliMetinleriTopla(ayar: { kaliplar: Record<string, string>; en
     if (!bant) return false;
     return !(bant.matches('header, footer') && bant.parentElement?.closest('main, section, article, form, fieldset, aside, dialog, [role="main"], [role="dialog"]'));
   };
+  // Sayfa içi pencere (dialog / modal): içindeki bağlantı ve düğme yazıları da bitiş adayıdır (ör. açılan pencerede "… İLE DEVAM ET"
+  // bağlantısı pencerenin açıldığının kanıtıdır). Alan etiketi / seçili liste değeri pencere içinde de aday olmaz.
+  const PENCERE = 'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"], .modal';
+  const ATLA_PENCERE = 'script, style, noscript, template, svg, label, legend, select, option, textarea, [role="option"], [role="listbox"], [role="tab"], [role="switch"], [role="menuitem"], [role="menu"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="radio"], [role="checkbox"], [role="combobox"], [id^="nobetci"]';
+  const EYLEM = 'button, a, [role="button"], [role="link"]';
+  // Form alanı (değer girilen öğe): yanındaki tek yazı alanın etiketidir; seçili değeri gösteren yazı (özel açılır liste) değerdir.
+  const KONTROL = 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), select, textarea, [role="combobox"], [role="listbox"], [contenteditable="true"]';
+  /** Öğedeki seçim alanlarının (gizli olsa da) seçili seçenek yazıları ve açılır kutuların görünen değeri. */
+  const seciliDegerler = (a: Element): string[] => {
+    const l: string[] = [];
+    for (const s of Array.from(a.querySelectorAll('select')).slice(0, 20)) {
+      for (const o of Array.from((s as HTMLSelectElement).selectedOptions ?? [])) { const t = bosluk(o.textContent); if (t) l.push(t); }
+    }
+    for (const c of Array.from(a.querySelectorAll('input[role="combobox"]')).slice(0, 20)) { const t = bosluk((c as HTMLInputElement).value); if (t) l.push(t); }
+    return l;
+  };
+  /** Öğenin görünen yazısı; form alanlarının (ve seçeneklerin) içi hariç. */
+  const kontrolsuzMetin = (a: Element): string => {
+    const parca: string[] = [];
+    const yuru = (n: Node, derinlik: number): void => {
+      if (derinlik > 12 || parca.length > 60) return;
+      for (const c of Array.from(n.childNodes)) {
+        if (c.nodeType === 3) parca.push(c.textContent ?? '');
+        else if (c.nodeType === 1) {
+          const el = c as Element;
+          if (el.matches(KONTROL) || el.matches('script, style, noscript, template, option') || !gorunur(el)) continue;
+          yuru(el, derinlik + 1);
+        }
+      }
+    };
+    yuru(a, 0);
+    return bosluk(parca.join(' '));
+  };
+  /**
+   * Alan etiketi ya da seçili değer mi: metni taşıyan öğenin form alanı içeren EN YAKIN atasında (en çok 3 düzey) alanların dışındaki
+   * yazı yalnız bu metinse (seçili değer yazıları düşülünce) metin alanın etiketidir; metin o atadaki bir seçim alanının seçili değeriyse
+   * değerdir. İkisi de sonuç / bitiş metni değildir.
+   */
+  const alanaAit = (e: Element, m: string): boolean => {
+    const km = katla(m);
+    // Tablo / ızgara düzeni: yazının hemen yanındaki kardeş (ya da tek çocuklu kabının kardeşi; ör. <td>Etiket</td><td><select>) bir
+    // form alanıysa yazı o alanın etiketidir (rakamlı yazı — tutar / numara — etiket sayılmaz).
+    // Kardeş tek bir alan (ya da yalnız bir alan içeren kap) olmalı: bir formun tamamı öndeki yazıyı etiket yapmaz.
+    const alanVar = (x: Element | null): boolean => Boolean(x && (x.matches(KONTROL) || x.querySelectorAll(KONTROL).length === 1));
+    if (!/\d/.test(m) && m.length <= 60 && !e.querySelector(KONTROL)) {
+      let k: Element | null = e;
+      for (let i = 0; k && i < 2 && k !== document.body; i++, k = k.parentElement) {
+        if (alanVar(k.nextElementSibling)) return true;
+        if (k.parentElement && k.parentElement.children.length !== 1) break;
+      }
+    }
+    let a: Element | null = e.parentElement;
+    for (let i = 0; a && i < 3 && a !== document.body; a = a.parentElement, i++) {
+      const kontroller = Array.from(a.querySelectorAll(KONTROL)).filter((k) => !e.contains(k));
+      const secimler = a.querySelectorAll('select, input[role="combobox"]').length;
+      if (!kontroller.length && !secimler) continue;
+      const degerler = seciliDegerler(a);
+      if (degerler.some((d) => katla(d) === km)) return true;
+      let kalan = katla(kontrolsuzMetin(a));
+      for (const d of degerler) kalan = kalan.replace(katla(d), ' ').replace(/\s+/g, ' ').trim();
+      return kalan === km;
+    }
+    return false;
+  };
   const alinan = new Set<Element>();
   const gorulen = new Set<string>();
   const sonuc: Array<{ metin: string; tur: Tur; sonuc?: boolean; baslik?: boolean }> = [];
   for (const e of Array.from(document.body.querySelectorAll('*')).slice(0, 8000)) {
     if (sonuc.length >= ayar.enCok) break;
-    if (e.closest(ATLA) || ustBantta(e) || (e.id && bagliAdlar.has(e.id))) continue;
+    const pencerede = Boolean(e.closest(PENCERE));
+    if ((pencerede ? e.closest(ATLA_PENCERE) : e.closest(ATLA)) || ustBantta(e) || (e.id && bagliAdlar.has(e.id))) continue;
     // Üst öğesi alınmışsa metni zaten o bloğun içindedir.
     let ust = e.parentElement;
     let altinda = false;
     for (; ust; ust = ust.parentElement) if (alinan.has(ust)) { altinda = true; break; }
     if (altinda) continue;
     const kendi = bosluk([...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' '));
-    if (!kendi || !gorunur(e)) continue;
+    // Yalnız noktalama / ayraç ("·", "|") taşıyan öğe blok sayılmaz: içindeki bağlantı / yazılar ayrı ayrı alınır.
+    if (!kendi || !/[\p{L}\p{N}]/u.test(kendi) || !gorunur(e)) continue;
     const m = bosluk((e as HTMLElement).innerText || e.textContent).slice(0, 200);
     if (!m) continue;
     alinan.add(e);
     if (gorulen.has(m)) continue;
-    gorulen.add(m);
+    // Pencere içindeki bağlantı / düğme yazısı: en az iki harf (×, ok simgesi aday olmaz); sonuç niteliği taşımaz (öneri değil, seçenek).
+    const eylem = pencerede && Boolean(e.closest(EYLEM));
+    if (eylem && !/\p{L}.*\p{L}/u.test(m)) continue;
     const tur = turu(e, m);
-    sonuc.push({ metin: m, tur, ...(sonucMu(e, m, tur) ? { sonuc: true } : {}), ...(baslikMi(e) ? { baslik: true } : {}) });
+    const sonucNiteligi = !eylem && sonucMu(e, m, tur);
+    // Hata / bekleme / sonuç kutusundaki ve başlıktaki yazı alan etiketi sayılmaz (yalnız sıradan yazı).
+    if (tur === 'normal' && !sonucNiteligi && !baslikMi(e) && m.length <= 80 && alanaAit(e, m)) continue;
+    gorulen.add(m);
+    sonuc.push({ metin: m, tur, ...(sonucNiteligi ? { sonuc: true } : {}), ...(baslikMi(e) ? { baslik: true } : {}), ...(eylem ? { eylem: true } : {}) });
   }
   return sonuc;
 }
@@ -123,7 +195,8 @@ export function beklemeDurumu(ayar: { kaliplar: Record<string, string> }): { bek
   return { bekliyor, metinler: [...metinler] };
 }
 
-export function hizliSecimSeridiKur(ayar: { kopru: string; kimlik: string; isaret: string }): void {
+export function hizliSecimSeridiKur(ayar: { kopru: string; kimlik: string; isaret: string; amac?: 'dugme' | 'bitis' }): void {
+  const bitisIcin = ayar.amac === 'bitis';
   const w = window as unknown as Record<string, unknown>;
   if (document.getElementById(ayar.kimlik)) return;
   type Kopru = (veri: Record<string, unknown>) => Promise<unknown>;
@@ -140,7 +213,8 @@ export function hizliSecimSeridiKur(ayar: { kopru: string; kimlik: string; isare
       font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: #e6edf3; background: #0f1720; border: 1px solid #3fb8af;
       border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.4); }
     button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid #2a3a4a; background: #16212c; color: #e6edf3; padding: 4px 10px; }
-  </style><div class="p" role="dialog" aria-label="Nöbetçi düğme seçme"><b>Nöbetçi</b><span>Basılacak düğmeye tıklayın (tıklama sayfaya iletilmez).</span>
+  </style><div class="p" role="dialog" aria-label="Nöbetçi ${bitisIcin ? 'bitiş seçme' : 'düğme seçme'}"><b>Nöbetçi</b><span>${bitisIcin
+    ? 'Bitişi gösteren metne ya da öğeye tıklayın' : 'Basılacak düğmeye tıklayın'} (tıklama sayfaya iletilmez).</span>
   <button type="button" data-k="vazgec">Vazgeç</button></div>`;
   const OLAYLAR = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'touchstart', 'touchend', 'submit'];
   const serit = (e: Event): boolean => e.composedPath().includes(host);
@@ -157,7 +231,9 @@ export function hizliSecimSeridiKur(ayar: { kopru: string; kimlik: string; isare
     if (e.type !== 'click') return;
     const hedef = e.composedPath().find((x): x is Element => typeof x === 'object' && x !== null && (x as Node).nodeType === 1) ?? null;
     if (!hedef) return;
-    const oge = hedef.closest('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [role="link"], a, [onclick]') ?? hedef;
+    // Bitiş seçiminde tıklanan öğenin kendisi (bağlantı / düğme içindeyse o); düğme seçiminde tıklanabilir en yakın ata.
+    const oge = hedef.closest(bitisIcin ? 'button, [role="button"], [role="link"], a'
+      : 'button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], [role="link"], a, [onclick]') ?? hedef;
     const bilgi = w.__nobetciOgeBilgisi as ((el: Element, isaret: string) => { adaylar: SeciciAdayi[]; metin: string | null }) | undefined;
     if (typeof bilgi !== 'function') return;
     const b = bilgi(oge, ayar.isaret);
@@ -173,4 +249,35 @@ export function hizliSecimSeridiKur(ayar: { kopru: string; kimlik: string; isare
   window.addEventListener('keydown', tus, true);
   w.__nobetciHizliSecimKapat = kapat;
   document.documentElement.append(host);
+}
+
+/**
+ * Sayfa içi pencereler (dialog / modal; ana belge): kaydet = true iken görünen pencereler hatırlanır (basıştan ÖNCE; DOM'a dokunulmaz,
+ * yalnız sayfa belleğinde), kaydet = false iken hatırlananlarda olmayan, görünür, en dıştaki pencereler window.__nobetciOgeBilgisi ile
+ * seçici adaylarına çevrilir (öğeye geçici data-nobetci-secilen işareti konur; motor denetleyip kaldırır). "Açılan pencere görününce bitti".
+ */
+export function hizliPencereleri(ayar: { kaydet: boolean; isaret: string }): Array<{ adaylar: SeciciAdayi[]; metin: string | null; isaret: string }> {
+  const w = window as unknown as Record<string, unknown>;
+  const bosluk = (m: string | null | undefined): string => (m ?? '').replace(/\s+/g, ' ').trim();
+  const gorunur = (e: Element): boolean => {
+    const r = e.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const s = getComputedStyle(e);
+    return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) !== 0;
+  };
+  const adaylar = Array.from(document.querySelectorAll('dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"], .modal'))
+    .filter((d) => !d.closest('[id^="nobetci"]') && gorunur(d));
+  const enDis = adaylar.filter((d) => !adaylar.some((x) => x !== d && x.contains(d)));
+  if (ayar.kaydet) { w.__nobetciOncekiPencereler = new WeakSet(enDis); return []; }
+  const onceki = w.__nobetciOncekiPencereler instanceof WeakSet ? (w.__nobetciOncekiPencereler as WeakSet<Element>) : new WeakSet<Element>();
+  const bilgi = w.__nobetciOgeBilgisi as ((el: Element, isaret: string) => { adaylar: SeciciAdayi[]; metin: string | null }) | undefined;
+  if (typeof bilgi !== 'function') return [];
+  return enDis.filter((d) => !onceki.has(d)).slice(0, 3).map((d, i) => {
+    const isaret = `${ayar.isaret}-${i}`;
+    const b = bilgi(d, isaret);
+    // Pencerenin adı: erişilebilir adı (aria-label / labelledby), yoksa ilk başlığı, yoksa yazısının başı.
+    const baslik = d.querySelector('h1, h2, h3, h4, [role="heading"], .modal-title');
+    const ad = bosluk(d.getAttribute('aria-label')) || bosluk(baslik ? (baslik as HTMLElement).innerText : '') || bosluk((d as HTMLElement).innerText).slice(0, 80);
+    return { adaylar: b.adaylar, metin: ad ? ad.slice(0, 120) : null, isaret };
+  });
 }

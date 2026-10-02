@@ -48,6 +48,11 @@ const KAVRAMLAR = /** @type {const} */ ([
 ]);
 /** @param {string} n normal ad @returns {string[]} */
 const kavramlari = (n) => KAVRAMLAR.filter(([, d]) => d.test(n)).map(([k]) => k);
+/** İki normal ad eş anlam sözlüğünde aynı kavram mı (kısaltma / baş kuralı olmadan). @param {string} a @param {string} b */
+export function ayniKavramMi(a, b) {
+  const ka = kavramlari(a);
+  return ka.length > 0 && kavramlari(b).some((k) => ka.includes(k));
+}
 /**
  * İki ad benzer mi (birebir aynı değil): aynı kavram ya da biri ötekinin başı (kısa olanı en az 4 harf, kısaltma noktası yok sayılır).
  * @param {string} a normal ad @param {string} b normal ad

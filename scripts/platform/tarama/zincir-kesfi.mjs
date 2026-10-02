@@ -20,6 +20,43 @@ export const ZINCIR_SECENEK_BEKLEME_MS = 8_000;
 export const ZINCIR_EN_COK_ACILIS = 40;
 /** En çok kaç kök (zincirin ilk listesi) incelenir. */
 export const ZINCIR_EN_COK_KOK = 6;
+/**
+ * Bir katta örnek değerlerin HİÇBİRİNDE alt liste değişmediyse en çok bu kadar değer daha denenir (bazı üst değerlerin altı boştur:
+ * ör. dairesi olmayan bina). İlk değişimde durulur.
+ */
+export const ZINCIR_EK_DENEME = 6;
+/**
+ * Seçimden sonra hiçbir liste değişmediyse ve sayfada boş (yalnız yer tutuculu) liste varsa, geç dolan liste için en az bu kadar
+ * (ms) daha bakılır: liste istek bittikten sonra zamanlayıcıyla doldurulabilir (ağ sakinliği yetmez).
+ */
+export const ZINCIR_GEC_DOLMA_MS = 3_000;
+
+/**
+ * Zincir keşfinin sayfa açılış sınırı: zincir sayısı ve uzunluğuyla büyür (kök başına 1 + örnek × derinlik), en az ZINCIR_EN_COK_ACILIS,
+ * en çok 150. Uzun zincirin son halkaları sınır yüzünden sessizce düşmesin.
+ * @param {number} kokSayisi @param {number} ornek @param {number} derinlik @returns {number}
+ */
+export function acilisSiniri(kokSayisi, ornek, derinlik) {
+  const k = Math.max(1, Math.min(ZINCIR_EN_COK_KOK, Math.floor(kokSayisi)));
+  return Math.max(ZINCIR_EN_COK_ACILIS, Math.min(150, k * (1 + Math.max(1, ornek) * Math.max(1, derinlik))));
+}
+
+/**
+ * Keşifte bağlantısı kesinleşmeyen boş listeler için olası üst ("belirsiz" bağ): zincirin alt listesi bulunamayan halkalarından
+ * (yapraklar) sayfa sırasında listeden ÖNCE gelen en yakını, yoksa sırası en yakın olanı. Veri durağında bu bağ için yine
+ * "↓ … seçeneklerini getir" gösterilir (kullanıcının seçtiği değerle denenir; seçenek gelirse bağ kesinleşir).
+ * @param {ReadonlyArray<string>} yetimler boş ve hiçbir bağda olmayan listeler @param {ReadonlyArray<string>} yapraklar
+ * @param {(anahtar: string) => number} sira sayfadaki sıra @returns {Array<{ ust: string; alt: string }>}
+ */
+export function belirsizBaglar(yetimler, yapraklar, sira) {
+  if (!yapraklar.length) return [];
+  return yetimler.map((alt) => {
+    const s = sira(alt);
+    const once = yapraklar.filter((y) => sira(y) < s).sort((x, y) => sira(y) - sira(x));
+    const ust = once[0] ?? [...yapraklar].sort((x, y) => Math.abs(sira(x) - s) - Math.abs(sira(y) - s))[0];
+    return { ust, alt };
+  }).filter((b) => b.ust && b.ust !== b.alt);
+}
 
 /** @typedef {{ deger: string; metin: string }} Secenek */
 /** @typedef {import('./zincir-kesfi.d.mts').ZincirAlani} ZincirAlani */

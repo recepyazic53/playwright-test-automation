@@ -405,7 +405,9 @@ export async function ekranKos(o: PoligonOrtami, p: EkranPlani, ayar: SurucuAyar
     if (ayar.kayitYok) return r;
     // Kaydet.
     const oz = await api('/platform/hizli-test/ozet', { id, baslik: p.ekranAdi });
-    r.ozet = oz.basarili ? { tablolar: ((oz.ozet as Nesne).onizleme?.tablolar ?? []).map((t: Nesne) => `${t.ad}: ${t.sutunlar.map((s: Nesne) => s.ad).join(', ')}`), baglantilar: ((oz.ozet as Nesne).onizleme?.baglantilar ?? []).map((z: Nesne) => `${z.alanEtiketi}→${z.tablo}.${z.sutun}`) } : oz.mesaj;
+    r.ozet = oz.basarili ? { tablolar: ((oz.ozet as Nesne).onizleme?.tablolar ?? []).map((t: Nesne) => `${t.ad}: ${t.sutunlar.map((s: Nesne) => s.ad).join(', ')}`), baglantilar: ((oz.ozet as Nesne).onizleme?.baglantilar ?? []).map((z: Nesne) => `${z.alanEtiketi}→${z.tablo}.${z.sutun}`),
+      // Senaryo önerileri (öneri kalitesi raporu): başlık + gerekçe (+ veri gerekli).
+      senaryolar: (((oz.ozet as Nesne).senaryolar ?? []) as Nesne[]).slice(1).map((x) => `${x.baslik} — ${x.gerekce}${x.veriGerekli?.length ? ` [veri gerekli: ${x.veriGerekli.join(', ')}]` : ''}`) } : oz.mesaj;
     const k = await api('/platform/hizli-test/kaydet', { id, baslik: p.ekranAdi, ...(oz.basarili ? { secim: (oz.ozet as Nesne).secim } : {}), onay: true });
     if (!k.kaydedildi) { bulgu(`Kaydedilemedi: ${k.mesaj ?? JSON.stringify(k).slice(0, 300)}`); r.asamalar.kayit = false; return r; }
     r.asamalar.kayit = true;

@@ -21,6 +21,8 @@ export type HamEylemIzi = {
   submit?: boolean;
   onclick?: boolean;
   devreDisi?: boolean;
+  /** Düğme: bağlantı mı (<a> / role=link; düğme biçimli ve simge düğmeler hariç). Sunumda gerçek düğmelerden sonra listelenir. */
+  baglanti?: boolean;
   /** Başarı / hata / bekleme: eşleşen sınıf parçası, rolü, aria-live / aria-busy, alana bağlı mı, grup adedi. */
   sinif?: string | null;
   rol?: string | null;
@@ -51,6 +53,8 @@ export type EylemAdayi = {
   konum: EylemKonumu | null;
   /** Yalnız gönderim: metni kayıt oluşturabilecek bir eylem çağrıştırıyor (Kaydet, Onayla, Satın al, Öde…). */
   kayitOlusturabilir?: boolean;
+  /** Yalnız gönderim: bağlantı mı (sıralamayı değiştirmez; sunumda "Bağlantılar" grubunda gösterilir). */
+  baglanti?: boolean;
   /** Yalnız hata: grup seçicisinin sayfadaki öğe sayısı. */
   adet?: number;
   /** Türünün en olası adayı (listenin ilki). */

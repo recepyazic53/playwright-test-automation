@@ -63,6 +63,14 @@ export const SECIM_PANELI_KIMLIGI = 'nobetci-secim-paneli';
 // komutu kullanıcının izni / onayı olmadan göndermez, alt süreç de "Hayır" izninde reddeder (iki katmanlı).
 /** Komut uzun yoklamasının en uzun süresi. */
 export const HIZLI_KOMUT_BEKLEME_MS = 20_000;
+// Hızlı test süre sınırı: TOPLAM süre değil BOŞTA KALMA süresi (kullanıcı etkileşimi ya da tarayıcı işi sayacı sıfırlar) + mutlak üst
+// sınır. Varsayılanlar Ayarlar > Koşu > Tarama ve akış kaydı'ndadır (hizliBostaKalmaDk / hizliUstSinirDk); ortam değişkenleri testler içindir.
+/** Sunucu tarafı, testler: hızlı testin boşta kalma süresi (sn). */
+export const HIZLI_BOSTA_DEGISKENI = 'NOBETCI_HIZLI_BOSTA_SN';
+/** Sunucu tarafı, testler: hızlı testin mutlak üst sınırı (sn). */
+export const HIZLI_UST_SINIR_DEGISKENI = 'NOBETCI_HIZLI_UST_SINIR_SN';
+/** Süre dolmadan bu kadar önce arayüz uyarır ("Süreyi uzat"); boşta kalma süresinin yarısını geçmez. */
+export const HIZLI_UYARI_ONCESI_MS = 5 * 60_000;
 /** Hızlı test sonuç gövdesi sınırı (anlık + JPEG ekran görüntüsü). */
 export const HIZLI_OLAY_GOVDE_SINIRI = 8 * 1024 * 1024;
 /** Basıştan sonra bekleme göstergesinin kaybolmasını en çok bekleme (ms). */

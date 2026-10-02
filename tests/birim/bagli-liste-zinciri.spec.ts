@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { expect, test, type Browser } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { sutunSecenekleri } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import { taramaPaketiOlustur, type TaramaEnvanteri } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
 import type { TaramaGirdisi } from '../../scripts/platform/tarama/protokol.mjs';
@@ -103,10 +104,12 @@ test.describe('otomatik tarama', () => {
     expect(zincirMetni(z?.iliskiler ?? [], (k) => ({ '#il': 'İl', '#ilce': 'İlçe', '#mahalle': 'Mahalle', '#sokak': 'Sokak', '#marka': 'Marka', '#model': 'Model' } as Record<string, string>)[k] ?? k))
       .toEqual(['İl → İlçe → Mahalle → Sokak', 'Marka → Model']);
     const bulgular = (z?.bulgular ?? []).map((b) => bulguMetni(b, ad));
-    expect(bulgular).toEqual(expect.arrayContaining([
-      'İl = “Boşil” seçilince “İlçe” listesi boş kaldı (8 sn beklendi; başka değerlerde seçenek geliyor).',
-      'İl = “Adana”, İlçe = “Çukurova” seçilince “Mahalle” listesinde aynı seçenek birden çok kez var: “Toros”.',
-      'İl = “Adana”, İlçe = “Seyhan”, Mahalle = “Kurtuluş” seçilince “Sokak” listesi boş kaldı (8 sn beklendi; başka değerlerde seçenek geliyor).'
+    // Tekrarlayan seçenek bulgudur; bazı üst değerlerde boş gelen liste (ilçesi olmayan il, sokağı olmayan mahalle) bulgu DEĞİL, liste başına
+    // tek özet nottur (çoğu zaman verinin kendisi).
+    expect(bulgular).toEqual(['İl = “Adana”, İlçe = “Çukurova” seçilince “Mahalle” listesinde aynı seçenek birden çok kez var: “Toros”.']);
+    expect(z?.notlar).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^“İlçe” bazı “İl” değerlerinde boş geliyor \(1\/\d+ denenen değerde boş; sayfa hatası sayılmadı\)\.$/),
+      expect.stringMatching(/^“Sokak” bazı “Mahalle” değerlerinde boş geliyor \(1\/\d+ denenen değerde boş/)
     ]));
     // "Yapı tarzı" bağımsız: hiçbir zincire girmez.
     expect((z?.iliskiler ?? []).some((i) => i.ust === '#yapi' || i.alt === '#yapi')).toBe(false);
@@ -120,8 +123,9 @@ test.describe('otomatik tarama', () => {
     expect(alan('sokak').bagimlilik).toMatchObject({ alan: 'mahalle', secenekHaritasi: { 'Reşatbey': [s('1. Sokak'), s('2. Sokak')] } });
     // Kısmi harita: birleşik liste yazılmaz (denenmemiş üst değerlerin alt seçenekleri doğrulamada reddedilmesin).
     expect(alan('sokak').secenekler).toBeNull();
-    expect((paket as Nesne).bilinmeyenler).toEqual(expect.arrayContaining([expect.stringContaining('Bağlı liste bulgusu — İl = “Boşil” seçilince “İlçe” listesi boş kaldı')]));
-    expect((paket as Nesne).model.bilinmeyenler).toEqual(expect.arrayContaining([expect.stringContaining('Bağlı liste bulgusu — İl = “Boşil”')]));
+    expect((paket as Nesne).bilinmeyenler).toEqual(expect.arrayContaining([expect.stringContaining('Bağlı liste bulgusu — İl = “Adana”, İlçe = “Çukurova”')]));
+    expect((paket as Nesne).model.bilinmeyenler).toEqual(expect.arrayContaining([expect.stringContaining('Bağlı liste bulgusu — İl = “Adana”')]));
+    expect(JSON.stringify((paket as Nesne).bilinmeyenler)).not.toContain('boş kaldı');
     // Test verisi: çok düzeyli tablo (il, ilçe, mahalle, sokak birlikte; satır = geçerli kombinasyon).
     const tablolar = (paket as Nesne).testVerisi?.tablolar as Nesne[];
     const adres = tablolar.find((t) => (t.sutunlar as Nesne[]).map((c) => c.ad).join('|').startsWith('İl|İlçe|Mahalle|Sokak'));
@@ -185,11 +189,11 @@ test.describe('hızlı test', () => {
     let o = await bekle(id, ['veri'], 240);
     expect(uygulama.hesaplamalar).toEqual([]);
     expect(o.zincir).toEqual(['İl → İlçe → Mahalle → Sokak', 'Marka → Model']);
-    expect(o.bulgular).toEqual(expect.arrayContaining([
-      expect.stringContaining('İl = “Boşil” seçilince “İlçe” listesi boş kaldı'),
-      expect.stringContaining('“Mahalle” listesinde aynı seçenek birden çok kez var: “Toros”'),
-      expect.stringContaining('Mahalle = “Kurtuluş” seçilince “Sokak” listesi boş kaldı')
-    ]));
+    // Tekrarlayan seçenek bulgu; bazı değerlerde boş gelen listeler bulgu değil, günlükte liste başına tek not.
+    expect(o.bulgular).toEqual([expect.stringContaining('“Mahalle” listesinde aynı seçenek birden çok kez var: “Toros”')]);
+    const gunlukMetni = (o.gunluk as Nesne[]).map((g) => g.metin).join('\n');
+    expect(gunlukMetni).toContain('“İlçe” bazı “İl” değerlerinde boş geliyor');
+    expect(gunlukMetni).toContain('“Sokak” bazı “Mahalle” değerlerinde boş geliyor');
     const alan = (etiket: string): Nesne => o.soru.alanlar.find((a: Nesne) => a.etiket === etiket);
     for (const [alt, ust] of [['İlçe', 'İl'], ['Mahalle', 'İlçe'], ['Sokak', 'Mahalle']]) expect(alan(alt).bagli, alt).toMatchObject({ ustEtiket: ust, bekliyor: true });
     expect(alan('Model').bagli).toMatchObject({ ustEtiket: 'Marka' });
@@ -233,7 +237,22 @@ test.describe('hızlı test', () => {
     expect(oneriler.length, JSON.stringify(ozet.senaryolar)).toBeGreaterThan(0);
     expect(degisim(oneriler[0])).toEqual({ 'İl': 'Adana', 'İlçe': 'Seyhan', 'Mahalle': 'Reşatbey', 'Sokak': '2. Sokak', 'Marka': 'Alfa', 'Model': 'Alfa İki', 'Yapı tarzı': 'Kagir' });
     for (const x of oneriler) { const d = degisim(x); if (d['İl']) expect([d['İlçe'], d['Mahalle'], d['Sokak']].every(Boolean), JSON.stringify(d)).toBe(true); }
+    // Öneriler yalnız zincir tablosunun satırlarıyla bütün olarak değişir (gerekçe zincir kökünü söyler).
+    expect(oneriler[0].gerekce).toContain('Farklı İl zinciri: Adana › Seyhan › Reşatbey › 2. Sokak');
     const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Adres — hızlı test', senaryoIndeksleri: [oneriler[0].indeks] });
+    // Test verisi: zincir TEK tablo (sütun = halka, satır = gözlenen geçerli kombinasyon); halkalar ayrı ekran listesi değil.
+    const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
+    const zt = tablolar.find((t) => t.ad === 'İl - İlçe - Mahalle - Sokak') as Nesne;
+    expect(zt, JSON.stringify(tablolar.map((t) => t.ad))).toBeTruthy();
+    expect(zt.sutunlar.map((c: Nesne) => c.ad)).toEqual(['İl', 'İlçe', 'Mahalle', 'Sokak']);
+    const kombinasyonlar = (zt.satirlar as Nesne[]).map((r) => [r.degerler['İl'], r.degerler['İlçe'], r.degerler.Mahalle, r.degerler.Sokak]);
+    expect(kombinasyonlar).toEqual(expect.arrayContaining([['İstanbul', 'Kadıköy', 'Moda', 'Moda Sokak'], ['Adana', 'Seyhan', 'Reşatbey', '2. Sokak']]));
+    for (const r of kombinasyonlar) expect(r.every(Boolean), JSON.stringify(r)).toBe(true); // yalnız tam kombinasyonlar
+    expect(tablolar.some((t) => ['İl', 'İlçe', 'Mahalle', 'Sokak'].includes(t.ad))).toBe(false);
+    expect(tablolar.find((t) => t.ad === 'Marka - Model')?.sutunlar.map((c: Nesne) => c.ad)).toEqual(['Marka', 'Model']);
+    // Senaryo formu: İl seçilince İlçe yalnız o ilin satırlarından süzülür.
+    expect(sutunSecenekleri(zt as Parameters<typeof sutunSecenekleri>[0], { 'İl': 'İstanbul' }, 'İlçe')).toEqual(['Kadıköy']);
+    expect(sutunSecenekleri(zt as Parameters<typeof sutunSecenekleri>[0], { 'İl': 'Adana' }, 'İlçe')).not.toContain('Kadıköy');
     const model = ((await api(`/platform/ekran?projeId=${projeId}&id=${String(k.ekranId)}`)) as Nesne).model as Nesne;
     const alanlar = (model.adimlar as Nesne[]).flatMap((a) => (a.bolumler as Nesne[]).flatMap((b) => b.alanlar as Nesne[]));
     const m = (secici: string) => alanlar.find((a) => a.konum?.secici === secici) as Nesne;
@@ -310,7 +329,7 @@ test.describe('hızlı test', () => {
       // Yan kart (zincir keşfi) korunur.
       const yan = page.locator('.hizli-bulgular');
       await expect(yan).toContainText('İl → İlçe → Mahalle → Sokak');
-      await expect(yan).toContainText('3 bulgu');
+      await expect(yan).toContainText('1 bulgu');
       // Kartın üstünde zincir göstergesi.
       const gosterge = soru.locator('.hizli-zincir-gostergesi');
       await expect(gosterge).toContainText('Bağlı alanlar: İl → İlçe → Mahalle → Sokak (0/4 tamam)');

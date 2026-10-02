@@ -384,7 +384,10 @@ async function hedefSecenekBekle(l: Locator, s: { deger: string; metin: string }
   const bas = Date.now();
   for (const bitis = bas + listeBeklemesi(alan).sinirMs; ;) {
     const o = await hedefSecenek(l, s);
-    if (o) { yavaslamaNotu(alan, Date.now() - bas); return o; }
+    // Seçenek geldi ama liste hâlâ kilitli (seçenekler gelirken kısa süre devre dışı kalan liste): kilitliyken yazılan değerin olayı sayfaya
+    // ulaşmayabilir; etkinleşene kadar (süre sınırında) beklenir, kilitli kalırsa yine denenir.
+    const kilitli = o ? await l.evaluate((e) => (e as HTMLSelectElement).disabled === true).catch(() => false) : false;
+    if (o && (!kilitli || Date.now() >= bitis)) { yavaslamaNotu(alan, Date.now() - bas); return o; }
     if (Date.now() >= bitis) return null;
     await new Promise((c) => setTimeout(c, 250));
   }
@@ -1356,6 +1359,10 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
             continue;
           }
           if (alan.yalnizGorunurluk) continue;
+          // Bağlı liste, seçenekleri gelirken kısa süre kapalı (disabled) kalabilir: öğrenilen yüklenme beklemesi içinde etkinleşmesi beklenir.
+          if (alan.ustId && (await l.isDisabled().catch(() => false))) {
+            for (const bitis = Date.now() + listeBeklemesi(alan).sinirMs; Date.now() < bitis && (await l.isDisabled().catch(() => false));) await new Promise((c) => setTimeout(c, 250));
+          }
           // Kapalı (disabled) alan doldurulamaz: görünmeyen alan gibi atlanır (mutlaka görünmeli ise hata).
           if (await l.isDisabled().catch(() => false)) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, `${alan.etiket} alanı kapalı (disabled)`));

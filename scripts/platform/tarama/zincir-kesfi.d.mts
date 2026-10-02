@@ -4,6 +4,10 @@ export const ZINCIR_ORNEK_VARSAYILAN: number;
 export const ZINCIR_SECENEK_BEKLEME_MS: number;
 export const ZINCIR_EN_COK_ACILIS: number;
 export const ZINCIR_EN_COK_KOK: number;
+export const ZINCIR_EK_DENEME: number;
+export const ZINCIR_GEC_DOLMA_MS: number;
+export function acilisSiniri(kokSayisi: number, ornek: number, derinlik: number): number;
+export function belirsizBaglar(yetimler: ReadonlyArray<string>, yapraklar: ReadonlyArray<string>, sira: (anahtar: string) => number): Array<{ ust: string; alt: string }>;
 
 export type Secenek = { deger: string; metin: string };
 /** Zincir kurallarının okuduğu alan biçimi (HamAlan'ın alt kümesi). */
@@ -30,6 +34,11 @@ export type ZincirGozlemi = { anahtar: string; secimler: Record<string, string>;
 /** Zincir keşfinin sonucu (tarama envanterine ve hızlı test keşfine girer). */
 export type ZincirSonucu = {
   iliskiler: Array<{ ust: string; alt: string }>;
+  /**
+   * Keşifte kesinleşmeyen bağlar: denenen üst değerlerin hiçbirinde seçeneği gelmeyen boş liste ve olası üstü (zincirin alt listesi
+   * bulunamayan halkası). Veri durağında yine "↓ … seçeneklerini getir" gösterilir; modele yazılmaz.
+   */
+  belirsizler?: Array<{ ust: string; alt: string }>;
   gozlemler: ZincirGozlemi[];
   bulgular: ZincirBulgusu[];
   /** Sayfanın kaç kez yeniden açıldığı ve kaç seçim yapıldığı (rapor). */
