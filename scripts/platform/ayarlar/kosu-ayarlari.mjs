@@ -91,6 +91,14 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 5, enAz: 1, enCok: 60, birim: 'dk' },
   { anahtar: 'kayitZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Akış kaydı süre limiti', aciklama: 'Akışı kaydederken siz işlemi yaparken en çok bu kadar beklenir.',
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 180, birim: 'dk' },
+  // Hızlı test: TOPLAM süre değil boşta kalma süresi (tarama/yonetici.mjs); dolmadan 5 dk önce arayüz uyarır ("Süreyi uzat"). Süre dolsa
+  // da toplananlar kaybolmaz ("Kaldığın yerden devam et" / "Toplananları kaydet"). Üst sınır uzatmayla da aşılmaz.
+  { anahtar: 'hizliBostaKalmaDk', grup: 'Tarama ve akış kaydı', etiket: 'Hızlı test: boşta kalma süresi',
+    aciklama: 'Hızlı testte bu kadar süre hiçbir işlem yapılmazsa (Nöbetçi\'de bir seçim / yanıt ya da tarayıcıda süren bir iş) tarayıcı kapatılır. Bitmeden 5 dakika önce uyarı ve "Süreyi uzat" düğmesi çıkar. Süre dolsa da toplananlar kaybolmaz: "Kaldığın yerden devam et" tarayıcıyı yeniden açıp zinciri tekrar yürütür ya da toplananlar kaydedilir.',
+    tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 240, birim: 'dk' },
+  { anahtar: 'hizliUstSinirDk', grup: 'Tarama ve akış kaydı', etiket: 'Hızlı test: en uzun süre',
+    aciklama: 'Hızlı testin tarayıcısı, işlem sürse de, açıldıktan bu kadar sonra kapatılır ("Süreyi uzat" bunu aşmaz). Toplananlar kaybolmaz; "Kaldığın yerden devam et" yeni bir süre başlatır.',
+    tur: 'sayi', varsayilan: 240, enAz: 30, enCok: 1440, birim: 'dk' },
   { anahtar: 'taramaSayfaAcilmaSn', grup: 'Tarama ve akış kaydı', etiket: 'Sayfa açılma zaman aşımı', aciklama: 'Tarama ve akış kaydında hedef sayfa bu sürede açılmazsa iş durur.',
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 300, birim: 'sn' },
   { anahtar: 'hizliAlanIslemSn', grup: 'Tarama ve akış kaydı', etiket: 'Hızlı testte doldurma beklemesi', aciklama: 'Hızlı testte bir alan doldurulurken / seçilirken alanın görünür ve yazılabilir olması en çok bu kadar beklenir.',
@@ -225,7 +233,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 ]);
 
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
- *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
+ *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; hizliBostaKalmaDk: number; hizliUstSinirDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number; hizliAlanIslemSn: number;
  *   kesifSecenekSiniri: number; zincirDerinligi: number; zincirOrnek: number; hizliOneriSayisi: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;

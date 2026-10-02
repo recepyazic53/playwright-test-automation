@@ -68,7 +68,8 @@ export type AkisBlogu =
   | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; gorunurse?: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; tekrarDenenebilir?: boolean; korunan?: string; korunanOzet?: string[] }
   /** uyari: kabul edilen iş kuralı uyarısı (başarı değil; senaryo "uyarı bekleniyor" derken seçer). */
   /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
-  | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }
+  /** oge: "öğe görününce bitti" (metin aranmaz; seçilen mesaj öğesinin görünmesi yeter → modelde 'eleman' göstergesi). */
+  | { tur: 'mesaj'; mesaj: number | null; metin: string | null; uyari?: boolean; desen?: boolean; oge?: boolean }
   /** Ortak akış (ör. ödeme): dosya = "<ortak akış anahtarı>.model.json"; ad adımın başlığı; istegeBagli: senaryoda "“ad” dahil". */
   /** dahilVarsayilan (yalnız istegeBagli iken): yeni senaryolarda "“ad” dahil" işaretli başlar (ayar alanının varsayilan.deger). */
   | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean; dahilVarsayilan?: boolean }

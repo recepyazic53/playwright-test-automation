@@ -19,6 +19,7 @@ export interface DoldurGirdisi {
 }
 export declare const NEDEN_METINLERI: Readonly<{ bagli: string; ad: string; liste: string; benzer: string }>;
 export declare function benzerAdMi(a: string, b: string): boolean;
+export declare function ayniKavramMi(a: string, b: string): boolean;
 export declare function sozcukKoku(w: string): string;
 export declare function kisiAdKavrami(etiket: string): 'ad' | 'soyad' | null;
 export declare function kokEslesirMi(etiket: string, sutunAdi: string): boolean;

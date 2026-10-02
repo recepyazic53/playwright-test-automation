@@ -5,13 +5,23 @@
 // NOT: import.meta KULLANILMAZ. Tipler: yer-tutucu-secenek.d.mts.
 
 /**
+ * Yer tutucu metin kalıpları (normalleştirilmiş metinde, u bayrağıyla). Sayfa betikleri (eylem-kesfi-motoru.ts > eylemIzleriniTopla)
+ * içe aktaramadığı için kalıplar onlara AYAR olarak geçirilir. Normalleştirme: tr küçük harf, YER_TUTUCU_TEMIZLE → boşluk, kırp.
+ */
+export const YER_TUTUCU_KALIPLARI = Object.freeze([
+  /^(?:(?:\p{L}+ ){0,3})?(?:lütfen )?(?:bir )?(?:seç|seçiniz|seçin|seçim yapınız|seçim yapın|seçiniz lütfen)$/u.source,
+  /^(?:please )?(?:select|choose)(?: (?:one|an? \p{L}+|\p{L}+))?$/u.source
+]);
+/** Normalleştirmede boşluğa çevrilen işaretler (karakter sınıfı kaynağı; g bayrağıyla). */
+export const YER_TUTUCU_TEMIZLE = /[\s\-–—.…*:_()[\]<>«»"'!]+/u.source;
+
+/**
  * @param {unknown} metin seçeneğin görünen metni @param {unknown} deger seçeneğin değeri (value) @param {boolean} ilk listenin ilk seçeneği mi
  * @returns {boolean}
  */
 export function yerTutucuSecenekMi(metin, deger, ilk) {
-  const n = String(metin ?? '').toLocaleLowerCase('tr').replace(/[\s\-–—.…*:_()[\]<>«»"'!]+/g, ' ').trim();
+  const n = String(metin ?? '').toLocaleLowerCase('tr').replace(new RegExp(YER_TUTUCU_TEMIZLE, 'gu'), ' ').trim();
   if (!n) return true;
-  if (/^(?:(?:\p{L}+ ){0,3})?(?:lütfen )?(?:bir )?(?:seç|seçiniz|seçin|seçim yapınız|seçim yapın|seçiniz lütfen)$/u.test(n)) return true;
-  if (/^(?:please )?(?:select|choose)(?: (?:one|an? \p{L}+|\p{L}+))?$/u.test(n)) return true;
+  if (YER_TUTUCU_KALIPLARI.some((k) => new RegExp(k, 'u').test(n))) return true;
   return ilk && ['', '0', '-1'].includes(String(deger ?? '').trim()) && !/\d/.test(n);
 }

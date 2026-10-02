@@ -271,7 +271,11 @@ test('hızlı test: çok adımlı satış formu baştan sona (1.12, 1.11, 1.14, 
     const soru = page.locator('.hizli-soru');
     await expect(soru.getByRole('heading', { name: 'Kaydedilecekler' })).toBeVisible({ timeout: 30_000 });
     await soru.getByRole('button', { name: 'Bitiş koşulunu düzenle' }).click();
-    await expect(soru.getByRole('heading', { name: 'Bitiş koşulu: ne görülünce biter?' })).toBeVisible();
+    // Kaydet aşamasında tarayıcı kapalı: zincir yeniden yürütülür; yeniden basılacak düğmeler adlarıyla sorulur, onaylanınca açılır.
+    const onay = page.locator('dialog[open]');
+    await expect(onay).toContainText('şu düğmelere yeniden basılacak', { timeout: 30_000 });
+    await onay.getByRole('button', { name: 'Evet, yeniden yürüt' }).click();
+    await expect(soru.getByRole('heading', { name: 'Bitiş koşulu: ne görülünce biter?' })).toBeVisible({ timeout: 120_000 });
     await expect(soru.locator('.hizli-bitis-satiri').filter({ hasText: 'Ödeme yöntemini seçiniz' }).getByRole('radio', { name: 'Devam' })).toHaveAttribute('aria-checked', 'true');
     await soru.getByRole('button', { name: 'Adım adım’a dön: zincire devam et' }).click();
     await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible();

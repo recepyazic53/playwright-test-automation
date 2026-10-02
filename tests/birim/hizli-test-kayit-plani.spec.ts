@@ -41,7 +41,9 @@ test('senaryo önerileri: ilki yapılan senaryo (seçili); seçilen liste alanı
   expect(o.slice(1).every((x) => !x.varsayilanSecili)).toBe(true);
 });
 
-test('senaryo önerileri: bağlı listeler gözlenen geçerli yolla BİRLİKTE değişir (il değişip ilçe eski kalmaz); diğer seçimler farklı değerlerle; her aday en az bir kez', () => {
+// Güncelleme gerekçesi: zincir artık TEK tabloda (sütun = halka, satır = gözlenen geçerli kombinasyon); planKur ilişkileri ve gözlemleri alır.
+// Öneriler: koşullu dal (Kurumsal → değeri olmayan Vergi no açılır: "veri gerekli", kaydedilmez) + zincir satırları × Yapı ikili kapsamı.
+test('senaryo önerileri: zincir yalnız zincir tablosunun SATIRLARIYLA bütün olarak değişir; koşullu dal veri gerekli; Yapı × zincir ikili kapsamı; her aday en az bir kez', () => {
   const s = (deger: string, metin = deger) => ({ deger, metin });
   const alanlar2: Array<Record<string, any>> = [
     { anahtar: 'il', tur: 'select', etiket: 'İl', secenekler: [s('', 'Seçiniz'), s('01', 'Adana'), s('06', 'Ankara'), s('34', 'İstanbul')] },
@@ -61,17 +63,39 @@ test('senaryo önerileri: bağlı listeler gözlenen geçerli yolla BİRLİKTE d
   // Tablolarda zincirin gözlenen seçenekleri de bulunur (hızlı test planı kurarken ekler).
   const ekli = alanlar2.map((a) => a.anahtar === 'ilce' ? { ...a, secenekler: [...a.secenekler, s('0101', 'Seyhan'), s('0102', 'Çukurova'), s('3401', 'Kadıköy')] }
     : a.anahtar === 'mah' ? { ...a, secenekler: [...a.secenekler, s('Reşatbey'), s('Moda')] } : a);
-  const p = planKur({ baslik: 'Adres', alanlar: ekli, degerler: { il: { deger: '06' }, ilce: { deger: '0602' }, mah: { deger: 'Etlik' } } });
-  const o = senaryoOnerileri(p, 'Adres', { enCok: 5, alanlar: ekli, iliskiler: [{ ust: 'il', alt: 'ilce' }, { ust: 'ilce', alt: 'mah' }], gozlemler, degerler: { il: '06', ilce: '0602', mah: 'Etlik' } });
-  const degisim = (x: (typeof o)[number]) => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d) => [d.oturumAnahtar, d.deger]));
-  // 1. öneri: Adana yolu (il + ilçe + mahalle birlikte) + Yapı'nın başka değeri; Müşteri tipi "Kurumsal" önerilmez (değeri girilmemiş Vergi no açılırdı).
-  expect(o.slice(1).map(degisim)).toEqual([
-    { il: 'Adana', ilce: 'Seyhan', mah: 'Reşatbey', yapi: 'Betonarme' },
-    { il: 'İstanbul', ilce: 'Kadıköy', mah: 'Moda', yapi: 'Çelik' }
+  const iliskiler = [{ ust: 'il', alt: 'ilce' }, { ust: 'ilce', alt: 'mah' }];
+  const p = planKur({ baslik: 'Adres', alanlar: ekli, degerler: { il: { deger: '06' }, ilce: { deger: '0602' }, mah: { deger: 'Etlik' } }, iliskiler, gozlemler });
+  // Zincir tek tablo: kullanıcının yolu + gözlenen tam yollar (Çukurova'nın mahallesi gözlenmedi: satır yok).
+  const zincir = p.tablolar.find((t) => t.zincir);
+  expect(zincir?.ad).toBe('İl - İlçe - Mahalle');
+  expect(zincir?.sutunlar.map((s) => s.ad)).toEqual(['İl', 'İlçe', 'Mahalle']);
+  expect(zincir?.satirlar).toEqual([
+    { 'İl': 'Ankara', 'İlçe': 'Keçiören', Mahalle: 'Etlik' }, { 'İl': 'Adana', 'İlçe': 'Seyhan', Mahalle: 'Reşatbey' }, { 'İl': 'İstanbul', 'İlçe': 'Kadıköy', Mahalle: 'Moda' }
   ]);
-  // Hiçbir öneride il, ilçesi ve mahallesi olmadan değişmez.
-  for (const x of o.slice(1)) { const d = degisim(x); if (d.il) expect(d.ilce && d.mah).toBeTruthy(); }
-  expect(o[1].baslik).toBe('Adres — İl: Adana / Seyhan / Reşatbey · Yapı: Betonarme');
+  expect(zincir?.secilen).toEqual({ 'İl': 'Ankara', 'İlçe': 'Keçiören', Mahalle: 'Etlik' });
+  expect(zincir?.sutunlar[0].karsiliklar).toMatchObject({ Ankara: { sayfa: '06' }, Adana: { sayfa: '01' } });
+  expect(p.tablolar.map((t) => t.ad)).not.toContain('İlçe'); // halkalar ayrı tablo değil
+  const o = senaryoOnerileri(p, 'Adres', { enCok: 5, alanlar: ekli, iliskiler, gozlemler, degerler: { il: '06', ilce: '0602', mah: 'Etlik' } });
+  const degisim = (x: (typeof o)[number]) => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d) => [d.oturumAnahtar, d.deger]));
+  // 1) Koşullu dal: Kurumsal → değeri girilmemiş Vergi no açılır: öneri "veri gerekli" (değer üretilmez).
+  expect(o[1]).toMatchObject({ veriGerekli: ['Vergi no'], varsayilanSecili: false });
+  expect(degisim(o[1])).toEqual({ tip: 'Kurumsal' });
+  expect(o[1].gerekce).toContain('“Müşteri tipi” = “Kurumsal” dalı (Vergi no alanları)');
+  // 2) Zincir × Yapı ikili kapsamı: her alternatif erken (Adana ve İstanbul yolları, Betonarme ve Çelik ilk iki öneride).
+  expect(o.slice(2).map(degisim)).toEqual([
+    { il: 'Adana', ilce: 'Seyhan', mah: 'Reşatbey', yapi: 'Betonarme' },
+    { il: 'İstanbul', ilce: 'Kadıköy', mah: 'Moda', yapi: 'Çelik' },
+    { il: 'Adana', ilce: 'Seyhan', mah: 'Reşatbey', yapi: 'Çelik' },
+    { il: 'İstanbul', ilce: 'Kadıköy', mah: 'Moda', yapi: 'Betonarme' }
+  ]);
+  expect(o).toHaveLength(6); // enCok = 5 alternatif
+  // Hiçbir öneride geçersiz zincir yok: zincir değişikliği tablonun bir satırının tamamı.
+  for (const x of o.slice(1)) {
+    const d = degisim(x);
+    if (d.il || d.ilce || d.mah) expect(zincir?.satirlar).toContainEqual({ 'İl': d.il, 'İlçe': d.ilce, Mahalle: d.mah });
+  }
+  expect(o[2].baslik).toBe('Adres — İl: Adana / Seyhan / Reşatbey · Yapı: Betonarme');
+  expect(o[2].gerekce).toBe('Farklı İl zinciri: Adana › Seyhan › Reşatbey; “Yapı” = “Betonarme” — İl zinciri × Yapı ikili kapsamı; diğer değerler aynı');
 });
 
 test('birleştirme: yalnız gizli sütunlu değer (Vergi no) mevcut "Kişi bilgileri"ne YENİ satır olarak eklenir, şifreli yazılır; senaryo o satıra satır kimliğiyle sabitlenir', async () => {

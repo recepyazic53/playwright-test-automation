@@ -172,6 +172,35 @@ test('VEYA: art arda beklenen mesajlar bir grup (herhangi biri başarı); ara ve
     .toEqual([{ blok: 4, mesaj: 'Aynı aksiyondan sonra birden çok beklenen mesaj için mesajları art arda koyun (VEYA).' }]);
 });
 
+test('"Öğe görününce bitti": son adımın öğe göstergesi (eleman) diyagramda "öğe" işaretli mesaj bloğudur; gidiş-dönüşte aynen kalır', () => {
+  const env = envanter();
+  const { envanter: k, hatalar } = akistanKayitEnvanteri(env, [
+    { tur: 'alanlar', ad: 'Müşteri', alanlar: ['#ad'], zorunlu: [] },
+    { tur: 'aksiyon', dugme: 1, istegeBagli: false },
+    { tur: 'mesaj', mesaj: 0, metin: null, oge: true },
+    { tur: 'bitir' }
+  ]);
+  expect(hatalar).toEqual([]);
+  const paket = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket;
+  expect(sayfaPaketiniDogrula(paket, {})).toMatchObject({ gecerli: true, hatalar: [] });
+  const m = paket.model as Nesne;
+  expect(m.adimlar.at(-1).kosu.basariGostergesi).toEqual({ tur: 'eleman', deger: '#sonuc' });
+  // Modelden tasarıma: korunan parça değil, düzenlenebilir "öğe" bloğu.
+  const env2 = modeldenAkisEnvanteri(m);
+  const geri = adimlardanBloklar(m, m.adimlar, env2);
+  const blok = geri.find((b) => b.tur === 'mesaj') as Nesne;
+  expect(blok).toMatchObject({ oge: true, metin: null });
+  expect(env2.mesajlar[blok.mesaj]).toMatchObject({ secici: '#sonuc' });
+  expect(geri.some((b) => b.tur === 'korunan' || (b as Nesne).korunan)).toBe(false);
+  // Yeniden kaydedince aynı gösterge.
+  const tekrar = akistanKayitEnvanteri(env2, geri);
+  expect(tekrar.hatalar).toEqual([]);
+  expect((kayitPaketiOlustur(META, tekrar.envanter as NonNullable<typeof tekrar.envanter>).paket.model as Nesne).adimlar.at(-1).kosu.basariGostergesi).toEqual({ tur: 'eleman', deger: '#sonuc' });
+  // Öğesi seçilmeyen öğe bloğu: açık hata.
+  expect(akistanKayitEnvanteri(env, [{ tur: 'alanlar', ad: 'A', alanlar: ['#ad'], zorunlu: [] }, { tur: 'aksiyon', dugme: 1, istegeBagli: false },
+    { tur: 'mesaj', mesaj: null, metin: null, oge: true }, { tur: 'bitir' }]).hatalar).toEqual([{ blok: 2, mesaj: 'Görünmesi beklenen öğeyi seçin.' }]);
+});
+
 test('Başarı / Uyarı: uyarılar adımın kabul edilen uyarıları (VEYA grubuna girmez), beklenen sonuç alanı eklenir; senaryo uyarılardan seçer', () => {
   const env = envanter();
   const { envanter: k, hatalar } = akistanKayitEnvanteri(env, [

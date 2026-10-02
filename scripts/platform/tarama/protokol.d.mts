@@ -31,6 +31,9 @@ export declare const KAYIT_PANELI_KIMLIGI: string;
 export declare const SECIM_KOPRUSU: string;
 export declare const SECIM_PANELI_KIMLIGI: string;
 export declare const HIZLI_KOMUT_BEKLEME_MS: number;
+export declare const HIZLI_BOSTA_DEGISKENI: string;
+export declare const HIZLI_UST_SINIR_DEGISKENI: string;
+export declare const HIZLI_UYARI_ONCESI_MS: number;
 export declare const HIZLI_OLAY_GOVDE_SINIRI: number;
 export declare const HIZLI_BASIS_BEKLEME_EN_COK_MS: number;
 export declare const HIZLI_SECIM_KOPRUSU: string;
@@ -57,7 +60,8 @@ export type TaramaGirdisi = {
    */
   kip?: 'tarama' | 'kayit' | 'girisDenemesi' | 'ogeSecme' | 'hizliTest';
   /** Hızlı test (etkileşimli iş): kullanıcının basma izni (evet / sor / hayir). 'hayir' iken alt süreç hiçbir düğmeye basmaz. */
-  hizliTest?: { izin: HizliIzin };
+  /** kesifAtla: tarayıcının yeniden açılması ("Kaldığın yerden devam et", geri dönüş, doğrulama) — keşif yapılmaz; zincir sunucunun planıyla kurulur. */
+  hizliTest?: { izin: HizliIzin; kesifAtla?: boolean };
   /** Öğe seçmede seçilebilecek türler (verilmezse hepsi). */
   ogeTurleri?: SecilenOgeTuru[];
   /** Kayıt, giriş kaydı ("Girişi kaydet"): panel metinleri diyagram yerine giriş onay ekranını anlatır. */
@@ -152,11 +156,14 @@ export type HizliMetin = {
   sonuc?: boolean;
   /** Başlık öğesi (h1-h3 / role=heading). */
   baslik?: boolean;
+  /** Sayfa içi pencerede bağlantı / düğme yazısı (ör. "Kapat"): bitiş adayıdır ama pencerenin içeriği sayılmaz. */
+  eylem?: boolean;
 };
 /** Tarayıcı penceresi (alert / confirm / prompt) ve verilen yanıt (kabul: Tamam; iptal: İptal). */
 export type HizliDiyalog = { tur: 'alert' | 'confirm' | 'prompt' | 'beforeunload'; mesaj: string; yanit: 'kabul' | 'iptal' };
 /** Görünen düğme adayı (eylem keşfinin gönderim adayları; basılmadan). */
-export type HizliDugme = { secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean; cerceve?: string[] };
+/** baglanti: bağlantı mı (arayüzde "Düğmeler" grubundan sonra "Bağlantılar" grubunda gösterilir; sıralamayı değiştirmez). */
+export type HizliDugme = { secici: string; metin: string | null; kayitOlusturabilir: boolean; guven: string; enOlasi: boolean; baglanti?: boolean; cerceve?: string[] };
 /** Sayfanın o anki okuması (alan DEĞERİ okunmaz). goruntu: JPEG base64 (yalnız bellekte). */
 export type HizliAnlik = {
   yol: string; baslik: string; alanlar: HamAlan[]; metinler: HizliMetin[]; dugmeler: HizliDugme[]; eylem: EylemAdaylari; goruntu: string | null;
@@ -172,7 +179,11 @@ export type HizliFark = {
   gonderim?: boolean;
   /** Güvenli basış notu (guvenli-tiklama.ts): ilk basış etkisiz kalıp bir kez daha basıldı ya da basış hiçbir şeyi değiştirmedi; yoksa null. */
   tiklamaNotu?: string | null;
+  /** Basıştan sonra YENİ beliren sayfa içi pencereler (dialog / modal; ana belge): tek başına bulunan seçici + görünen başlık / metin özeti. */
+  pencereler?: HizliPencere[];
 };
+/** Sayfa içi pencere (dialog / modal): "Açılan pencere görününce bitti" önerisi. */
+export type HizliPencere = { secici: string; metin: string | null };
 /** Doldurulacak alan (değer yalnız bellekte; tablodan gelen başvuru sunucuda çözülmüş olarak gelir). */
 /**
  * Seçim keşfi (ilk açılışta alanlar boşken seçimler tek tek denenir): bir seçim alanının her değerinde beliren / kaybolan alanlar.
@@ -192,16 +203,21 @@ export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | 
 /** Doğrulama koşusu planı: adımlar baştan sona (doldur → bas), sonra bitiş koşulu. */
 export type HizliPlan = {
   adimlar: Array<{ alanlar: HizliDoldurulan[]; bas: { secici: string; metin: string | null; diyalog?: 'kabul' | 'iptal'; cerceve?: string[] } | null }>;
-  bitis: { bitti: string[]; devam: string[]; hata: string[]; adres: string | null }; zamanAsimiSn: number;
+  /** ogeler: Bitti öğeleri (seçici görünür olunca bitti; modelde başarı göstergesi tur 'eleman'). */
+  bitis: { bitti: string[]; devam: string[]; hata: string[]; adres: string | null; ogeler?: Array<{ secici: string; cerceve?: string[] }> }; zamanAsimiSn: number;
+  /** Zinciri yeniden kurma (tarayıcı yeniden açıldı): adımlar uygulanır, bitiş koşulu beklenmez (sonuç: başarılı ya da ilk hata). */
+  yenidenKur?: boolean;
 };
 /** Sunucu → alt süreç. */
 export type HizliKomut =
   /** kontrol: sayfaya aynı değerle zaten uygulanmış alanlar (yazılmaz; sayfa boşaltmışsa bir kez yeniden yazılır). */
-  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[] }
+  /** bekle: yerinde zincir isteğinde seçenekleri gelmesi beklenen alt listeler (geç dolan liste; en çok bekleMs, verilmezse varsayılan). */
+  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[]; bekle?: string[]; bekleMs?: number }
   | { no: number; tur: 'bas'; secici: string; metin: string | null; cerceve?: string[] }
   /** Bana sor: basış sırasında açılan onay / soru penceresine kullanıcının yanıtı. */
   | { no: number; tur: 'diyalogYaniti'; yanit: 'kabul' | 'iptal' }
-  | { no: number; tur: 'secimAc' }
+  /** amac 'bitis': bitiş koşulu için öğe / metin seçimi (şerit metni değişir; seçici çıktı öğesi kuralıyla seçilir). Varsayılan: düğme. */
+  | { no: number; tur: 'secimAc'; amac?: 'dugme' | 'bitis' }
   | { no: number; tur: 'oku' }
   | { no: number; tur: 'dogrula'; plan: HizliPlan }
   | { no: number; tur: 'bitir' };
@@ -210,8 +226,10 @@ export type HizliOlay =
   | { olay: 'kesif'; anlik: HizliAnlik; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null }
   | { olay: 'dolduruldu'; no: number; hatalar: Array<{ anahtar: string; mesaj: string }>; anlik: HizliAnlik; yeniMetinler?: HizliMetin[];
       /** Seçeneğini beklemek gereken listeler: anahtar → bekleme (ms; bağlı listenin dolma süresi). */
-      beklemeler?: Record<string, number> }
-  | { olay: 'basildi'; no: number; fark: HizliFark; kesifler?: HizliKesif[] }
+      beklemeler?: Record<string, number>;
+      /** Doldurunca beliren listeler arasında bulunan bağlı liste zinciri (yerinde keşif). */
+      zincir?: ZincirSonucu | null }
+  | { olay: 'basildi'; no: number; fark: HizliFark; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null }
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }
   | { olay: 'okundu'; no: number; anlik: HizliAnlik }

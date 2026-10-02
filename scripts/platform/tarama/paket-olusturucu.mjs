@@ -1296,6 +1296,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     // adımda koşucu alanları doldurup (alanın "Doldurduktan sonra" tuşuna basıp) mesajı bekler.
     const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
       if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
+      // Öğe göstergesi (aranan: null): metin aranmaz, öğe görünür.
+      if (x.aranan === null && x.secici) return { tur: 'eleman', deger: x.secici, ...cerceveEki(x.cerceve) };
       const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
       return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
     }) : null;
@@ -1536,7 +1538,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     a.seceneklerDurumu = 'kismi';
     a.seceneklerKaynagi = 'hızlı test keşfi (bağlı liste)';
     a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Seçenekleri "')),
-      `Seçenekleri "${u.etiket ?? u.id}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
+      `Seçenekleri "${(u.etiket && typeof u.etiket === 'object' ? u.etiket.ekran ?? u.etiket.form : u.etiket) ?? u.id}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
   }
   for (const m of envanter.zincirBulgulari ?? []) {
     const t = temizMetin(m, sayac, 400);

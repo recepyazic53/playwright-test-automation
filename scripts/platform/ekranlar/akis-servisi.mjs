@@ -136,7 +136,8 @@ const gostergeTemsilEdilir = (g, sonAdim) => {
   if (g === undefined || g === null) return true;
   if (!nesneMi(g)) return false;
   const liste = g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
-  return liste.length > 0 && liste.every((s) => nesneMi(s) && typeof s.deger === 'string' && (s.tur === 'metin' || s.tur === 'desen' || (s.tur === 'eleman' && !sonAdim)));
+  // Son adımın öğe göstergesi ("öğe görününce bitti") diyagramda "öğe" işaretli mesaj bloğudur; ara adımlarınki sonraki adımdan kurulur.
+  return liste.length > 0 && liste.every((s) => nesneMi(s) && typeof s.deger === 'string' && (s.tur === 'metin' || s.tur === 'desen' || (s.tur === 'eleman' && (!sonAdim || s.deger !== ''))));
 };
 /** Görünürlüğün ifadesi (adlandırılmış koşul ya da doğrudan ifade). @param {Nesne} model @param {unknown} g */
 const gorunurlukIfadesi = (model, g) => (nesneMi(g) ? (typeof g.kosul === 'string' ? model.kosullar?.[g.kosul]?.ifade : g.ifade) : undefined);
@@ -461,6 +462,13 @@ export function modeldenAkisEnvanteri(model) {
   const ekle = (/** @type {import('../tarama/paket-olusturucu.d.mts').KayitOgesi[]} */ liste, /** @type {import('../tarama/paket-olusturucu.d.mts').KayitOgesi} */ o) => {
     if (!liste.some((x) => x.secici === o.secici && x.metin === o.metin && JSON.stringify(x.cerceve ?? []) === JSON.stringify(o.cerceve ?? []))) liste.push(o);
   };
+  /** Akışların SON ekran adımlarının öğe göstergeleri (adim kimliği → seçiciler): yalnız bunlar diyagramda "öğe" bloğudur. */
+  const sonOgeler = new Map();
+  for (const l of [model.adimlar, ...(Array.isArray(model.akislar) ? model.akislar.map((/** @type {Nesne} */ a) => a.adimlar) : [])]) {
+    const s = siraliAdimlar(Array.isArray(l) ? l : []);
+    const son = [...s].reverse().find((x) => !nesneMi(x.ortakAkis) && !nesneMi(x.sqlKontrolu) && !nesneMi(x.dosyaKontrolu));
+    if (son && nesneMi(son.kosu)) sonOgeler.set(son.id, new Set(ogeGostergeleri(son.kosu.basariGostergesi).map((g) => g.deger)));
+  }
   for (const adim of tumAdimlar(model)) {
     for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
       for (const a of Array.isArray(b.alanlar) ? b.alanlar : []) {
@@ -506,6 +514,9 @@ export function modeldenAkisEnvanteri(model) {
     if (t && typeof t.secici === 'string') ekle(dugmeler, { secici: t.secici, metin: typeof t.aciklama === 'string' ? t.aciklama : null });
     for (const g of metinGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger, ...cerceveEki(g.cerceve) });
     for (const g of desenGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger, ...cerceveEki(g.cerceve) });
+    // Öğe göstergesi ("öğe görününce bitti"; örn. açılan pencere): sağ listede öğe olarak (metni: sonuç alanının etiketi).
+    // (Ara adımların kendiliğinden kurulan göstergesi — sonraki adımın bir alanı / düğmesi — listelenmez.)
+    for (const g of ogeGostergeleri(kosu.basariGostergesi)) if (sonOgeler.get(adim.id)?.has(g.deger)) ekle(mesajlar, { secici: g.deger, metin: ogeAdi(adim, g.deger), ...cerceveEki(g.cerceve) });
     for (const u of uyariListesi(kosu)) ekle(mesajlar, { secici: typeof u.secici === 'string' ? u.secici : '', metin: u.metin, ...cerceveEki(u.cerceve) });
   }
   return {
@@ -523,6 +534,21 @@ function cerceveEki(c) {
 function metinGostergeleri(g) {
   const liste = nesneMi(g) && g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
   return liste.filter((x) => nesneMi(x) && x.tur === 'metin' && typeof x.deger === 'string');
+}
+
+/** Başarı göstergesinin öğe ("görününce bitti") göstergeleri. @param {unknown} g @returns {Array<{ deger: string; cerceve?: unknown }>} */
+function ogeGostergeleri(g) {
+  const liste = nesneMi(g) && g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
+  return liste.filter((x) => nesneMi(x) && x.tur === 'eleman' && typeof x.deger === 'string' && x.deger);
+}
+/** Öğe göstergesinin sağ listedeki adı: aynı seçicili sonuç alanının (cikti) etiketi, yoksa "Öğe görünür". @param {Nesne} adim @param {string} secici */
+function ogeAdi(adim, secici) {
+  for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+    for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) {
+      if (nesneMi(a) && a.tip === 'cikti' && nesneMi(a.konum) && a.konum.secici === secici) { const e = etiketi(a); if (e) return `Öğe görünür: ${e}`; }
+    }
+  }
+  return 'Öğe görünür';
 }
 
 /** Başarı göstergesinin kalıp (düzenli ifade) göstergeleri. @param {unknown} g @returns {Array<{ deger: string; secici?: unknown; cerceve?: unknown }>} */
@@ -674,6 +700,14 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
       for (const g of metinGostergeleri(kosu.basariGostergesi)) {
         const m = env.mesajlar.findIndex((o) => o.metin === g.deger && o.secici === (typeof g.secici === 'string' ? g.secici : ''));
         bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: g.deger });
+      }
+      // Son adımın öğe göstergesi ("öğe görününce bitti"): "öğe" işaretli mesaj bloğu (metin aranmaz). Ara adımlarınki sonraki adımın ilk
+      // öğesinden kendiliğinden kurulur (gösterilmez).
+      if (sira === sirali.length - 1 || sirali.slice(sira + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu))) {
+        for (const g of ogeGostergeleri(kosu.basariGostergesi)) {
+          const m = env.mesajlar.findIndex((o) => o.secici === g.deger && o.metin === ogeAdi(adim, g.deger));
+          bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: null, oge: true });
+        }
       }
       // Kalıp göstergesi (ör. toplam sıfırdan farklı: [1-9]): öğesi mesajın yeri, metni düzenli ifade.
       for (const g of desenGostergeleri(kosu.basariGostergesi)) {

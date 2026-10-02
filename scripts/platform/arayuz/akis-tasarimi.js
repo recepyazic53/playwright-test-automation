@@ -788,11 +788,15 @@ export async function akisTasarimi(icerik, s) {
       metin.addEventListener('change', () => { b.metin = metin.value.trim(); sakla(); });
       const desenKutu = h('input', { type: 'checkbox', checked: Boolean(b.desen) });
       desenKutu.addEventListener('change', () => { if (desenKutu.checked) b.desen = true; else delete b.desen; degisti(); });
+      // "Öğe görününce bitti": metin aranmaz; seçilen öğenin (ör. açılan pencere) görünmesi başarıdır (modelde 'eleman' göstergesi).
+      const ogeKutu = h('input', { type: 'checkbox', checked: Boolean(b.oge) });
+      ogeKutu.addEventListener('change', () => { if (ogeKutu.checked) { b.oge = true; delete b.desen; b.metin = null; } else { delete b.oge; b.metin = ''; } degisti(); });
       return [
         tur,
         i === ilk ? alanSonrasiIpucu(i) : null,
-        h('label', { class: 'tasarim-etiketi' }, h('span', {}, b.desen ? 'Kalıp (düzenli ifade)' : 'Aranacak metin'), metin),
-        b.uyari ? null : h('label', { class: 'onay-satiri kucuk', title: 'Ör. [1-9]: mesajın yerindeki metinde sıfırdan farklı bir rakam (tutar hesaplandı).' }, desenKutu, 'Metin bir kalıp (düzenli ifade)'),
+        b.oge ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, b.desen ? 'Kalıp (düzenli ifade)' : 'Aranacak metin'), metin),
+        b.uyari || b.oge ? null : h('label', { class: 'onay-satiri kucuk', title: 'Ör. [1-9]: mesajın yerindeki metinde sıfırdan farklı bir rakam (tutar hesaplandı).' }, desenKutu, 'Metin bir kalıp (düzenli ifade)'),
+        b.uyari ? null : h('label', { class: 'onay-satiri kucuk', title: 'Metin aranmaz: seçilen öğe (ör. açılan pencere) görününce adım başarılı sayılır.' }, ogeKutu, 'Öğe görününce bitti (metin aranmaz)'),
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Mesajın yeri'), secim),
         h('p', { class: 'soluk kucuk' }, b.uyari
           ? 'Kabul edilen iş kuralı uyarısı: senaryo “uyarı bekleniyor” derken bunu seçer; başarı bekleyen senaryoda görünürse test başarısız olur.'
@@ -921,6 +925,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.tur === 'ekran' ? rozet('ekran', 'durdu') : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.yalnizTest ? rozet('yalnızca test', 'uyari') : null,
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,
+      b.tur === 'mesaj' && b.oge ? rozet('öğe görününce', 'vurgu', { title: 'Metin aranmaz: seçilen öğe görününce adım başarılı sayılır.' }) : null,
       b.tur === 'mesaj' && !b.uyari && mesajGrubu(i)[2].length > 1 ? rozet(`veya ${mesajGrubu(i)[2].indexOf(i) + 1}/${mesajGrubu(i)[2].length}`, 'vurgu') : null,
       h('span', { class: 'tasarim-denetimleri' },
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Yukarı taşı', disabled: ekranAcilis !== null && i === ekranAcilis ? !ustuneGecebilir(b) : i === 0, onclick: (o) => { o.stopPropagation(); tasi(i, -1); } }, '↑'),

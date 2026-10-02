@@ -401,7 +401,7 @@ export function bloklariAyikla(ham) {
       if (typeof b.korunan !== 'string' || !b.korunan || b.korunan.length > KORUNAN_ANAHTAR_EN_COK) { hatalar.push({ blok: i, mesaj: 'Korunan parça okunamadı; diyagramı yeniden açın.' }); return; }
       bloklar.push({ tur: 'korunan', korunan: b.korunan, ad: metin(b.ad, AD_EN_COK), kapsam: b.kapsam === 'aksiyonlar' ? 'aksiyonlar' : 'adim' });
     }
-    else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}) });
+    else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}), ...(b.oge === true ? { oge: true } : {}) });
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
     else if (b.tur === 'sql') bloklar.push({ tur: 'sql', ad: metin(b.ad, AD_EN_COK), sql: nesneMi(b.sql) ? b.sql : {} });
     else if (b.tur === 'dosya') bloklar.push({ tur: 'dosya', ad: metin(b.ad, AD_EN_COK), dugme: sayi(b.dugme), dosya: nesneMi(b.dosya) ? b.dosya : {} });
@@ -709,7 +709,12 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
     if (b.tur === 'mesaj') {
       const m = b.mesaj === null ? null : env.mesajlar[b.mesaj];
       if (b.mesaj !== null && !m) { hata(i, 'Seçilen mesaj kayıtta yok.'); return; }
-      if (!b.metin && !(m && sabitGostergeMetni(m.metin))) { hata(i, 'Beklenen mesajın aranacak metnini yazın.'); return; }
+      // "Öğe görününce bitti" (oge): metin aranmaz, seçilen öğenin (açılan pencere, kutu…) görünmesi yeter — modelde 'eleman' göstergesi.
+      if (b.oge) {
+        if (!m || !m.secici) { hata(i, 'Görünmesi beklenen öğeyi seçin.'); return; }
+        if (b.uyari || b.desen) { hata(i, 'Öğe göstergesi uyarı ya da kalıp olamaz.'); return; }
+      }
+      if (!b.oge && !b.metin && !(m && sabitGostergeMetni(m.metin))) { hata(i, 'Beklenen mesajın aranacak metnini yazın.'); return; }
       if (b.desen) {
         if (b.uyari) { hata(i, 'Uyarı mesajı kalıp (düzenli ifade) olamaz; aranacak metni yazın.'); return; }
         if (!b.metin) { hata(i, 'Kalıbı (düzenli ifade) yazın; ör. [1-9].'); return; }
@@ -717,7 +722,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       }
       /** @type {import('./paket-olusturucu.d.mts').KayitGostergesi} */
       const g = {
-        secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}),
+        secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.oge ? { aranan: null } : b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}),
         ...(m && Array.isArray(m.cerceve) && m.cerceve.length ? { cerceve: m.cerceve } : {})
       };
       const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya');

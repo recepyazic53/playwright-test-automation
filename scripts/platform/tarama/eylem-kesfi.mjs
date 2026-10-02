@@ -178,7 +178,7 @@ export function eylemAdaylariniDegerlendir(ham, sinir = {}) {
         kirilganlik: KIRILGANLIKLAR.includes(iz.kirilganlik) ? iz.kirilganlik : 'orta', metin: metin(iz.metin, 200), guven, puan, gerekce,
         gizli: iz.gizli === true, konum: iz.konum ?? null, enOlasi: false, oge: null
       };
-      if (tur === 'gonderim') a.kayitOlusturabilir = kalipVar('kayit', iz.metin);
+      if (tur === 'gonderim') { a.kayitOlusturabilir = kalipVar('kayit', iz.metin); a.baglanti = iz.baglanti === true; }
       if (tur === 'hata' && typeof iz.adet === 'number') a.adet = iz.adet;
       if (Array.isArray(iz.cerceve) && iz.cerceve.length) a.cerceve = iz.cerceve.map(String).slice(0, 2);
       a.oge = adayOgesi(a);
@@ -233,7 +233,7 @@ export function eylemAdaylariniAyikla(ham) {
         puan: Number.isFinite(a.puan) ? Number(a.puan) : 0, gerekce: (Array.isArray(a.gerekce) ? a.gerekce : []).map((g) => metin(g, 120)).filter((g) => g !== null).slice(0, 8),
         gizli: a.gizli === true, konum: k, enOlasi: a.enOlasi === true, oge: null
       };
-      if (tur === 'gonderim') t.kayitOlusturabilir = a.kayitOlusturabilir === true;
+      if (tur === 'gonderim') { t.kayitOlusturabilir = a.kayitOlusturabilir === true; t.baglanti = a.baglanti === true; }
       if (tur === 'hata' && Number.isInteger(a.adet) && a.adet > 0) t.adet = a.adet;
       if (Array.isArray(a.cerceve) && a.cerceve.length && a.cerceve.every((c) => seciciGecerli(c))) {
         t.cerceve = a.cerceve.map(String).slice(0, 2);

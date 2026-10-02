@@ -283,8 +283,10 @@ export function sabitKisim(m) {
 }
 
 /**
- * Oturumun seçimlerinden bitiş koşulu: Bitti / Hata / Devam metinleri (sabit kısımlarıyla), adres. Doğrulama hataları döner.
- * @param {{ etiketler: Record<string, string | null>; adres?: string | null; olumsuz?: { mesaj: string } | null }} g
+ * Oturumun seçimlerinden bitiş koşulu: Bitti / Hata / Devam metinleri (sabit kısımlarıyla), adres, Bitti öğeleri (seçicisi GÖRÜNÜR
+ * olunca bitti: açılan pencere / kutu / düğme; modelde başarı göstergesi tur 'eleman'). Doğrulama hataları döner.
+ * @param {{ etiketler: Record<string, string | null>; adres?: string | null; olumsuz?: { mesaj: string } | null;
+ *   ogeler?: Array<{ secici: string; metin?: string | null; cerceve?: string[] }> }} g
  */
 export function bitisKosulu(g) {
   const ayir = (/** @type {string} */ e) => [...new Set(Object.entries(g.etiketler ?? {}).filter(([, v]) => v === e).map(([k]) => sabitKisim(k)).filter(Boolean))];
@@ -301,8 +303,17 @@ export function bitisKosulu(g) {
   if (adres && !adres.startsWith('/')) hatalar.push('“Adres şu olursa bitti” bir yol olmalı (/ ile başlar).');
   const olumsuz = g.olumsuz && bosluk(g.olumsuz.mesaj) ? { mesaj: bosluk(g.olumsuz.mesaj).slice(0, METIN_EN_UZUN) } : null;
   if (olumsuz && !hata.some((h) => katla(olumsuz.mesaj).includes(katla(h)) || katla(h).includes(katla(olumsuz.mesaj)))) hatalar.push('Olumsuz senaryoda beklenen mesaj “Hata” etiketli olmalı.');
-  if (!olumsuz && !bitti.length && !adres) hatalar.push('En az bir metni “Bitti” etiketleyin (ya da “Adres şu olursa bitti”yi yazın).');
-  return { bitti, hata, devam, adres, olumsuz, hatalar };
+  /** @type {Array<{ secici: string; metin: string | null; cerceve?: string[] }>} */
+  const ogeler = [];
+  for (const x of Array.isArray(g.ogeler) ? g.ogeler : []) {
+    const secici = typeof x?.secici === 'string' ? x.secici.trim().slice(0, 500) : '';
+    if (!secici || ogeler.some((y) => y.secici === secici)) continue;
+    const cerceve = Array.isArray(x.cerceve) ? x.cerceve.filter((c) => typeof c === 'string' && c).slice(0, 2) : [];
+    ogeler.push({ secici, metin: typeof x.metin === 'string' && bosluk(x.metin) ? bosluk(x.metin).slice(0, 120) : null, ...(cerceve.length ? { cerceve } : {}) });
+  }
+  if (ogeler.length > ETIKET_EN_COK) ogeler.length = ETIKET_EN_COK;
+  if (!olumsuz && !bitti.length && !adres && !ogeler.length) hatalar.push('En az bir metni “Bitti” etiketleyin (ya da “Adres şu olursa bitti”yi yazın).');
+  return { bitti, hata, devam, adres, olumsuz, ogeler, hatalar };
 }
 
 /** Düzenli ifade kaçışı. @param {string} m */
@@ -349,16 +360,22 @@ export function kayitEnvanteriKur(o, bitis) {
 
 /**
  * Paketin modeline bitiş koşulunu uygular (son adım): Bitti (+ adres) → basariGostergesi, Devam → bitisKosulu.devam. Modeli
- * YERİNDE değiştirir ve döner. Adres göstergesi "url" düzenli ifadesi olarak yazılır (yol kaçışlı).
- * @param {Record<string, any>} model @param {{ bitti: string[]; devam: string[]; adres: string | null }} bitis
+ * YERİNDE değiştirir ve döner. Adres göstergesi "url" düzenli ifadesi olarak yazılır (yol kaçışlı). Bitti öğeleri "eleman" göstergesi
+ * (deger = seçici; öğe GÖRÜNÜR olunca başarılı; çerçevedeyse cerceve).
+ * @param {Record<string, any>} model
+ * @param {{ bitti: string[]; devam: string[]; adres: string | null; ogeler?: Array<{ secici: string; cerceve?: string[] }> }} bitis
  */
 export function bitisiUygula(model, bitis) {
   const adimlar = Array.isArray(model.adimlar) ? model.adimlar : [];
   const son = adimlar[adimlar.length - 1];
   if (!son) return model;
   son.kosu = nesneMi(son.kosu) ? son.kosu : {};
-  /** @type {Array<Record<string, string>>} */
-  const secenekler = [...bitis.bitti.map((m) => ({ tur: 'metin', deger: m })), ...(bitis.adres ? [{ tur: 'url', deger: kacis(bitis.adres) }] : [])].slice(0, 5);
+  /** @type {Array<Record<string, any>>} */
+  const secenekler = [
+    ...bitis.bitti.map((m) => ({ tur: 'metin', deger: m })),
+    ...(bitis.ogeler ?? []).map((x) => ({ tur: 'eleman', deger: x.secici, ...(x.cerceve?.length ? { cerceve: x.cerceve } : {}) })),
+    ...(bitis.adres ? [{ tur: 'url', deger: kacis(bitis.adres) }] : [])
+  ].slice(0, 5);
   if (secenekler.length === 1) son.kosu.basariGostergesi = secenekler[0];
   else if (secenekler.length > 1) son.kosu.basariGostergesi = { tur: 'veya', secenekler };
   if (son.kosu.basariGostergesi) son.kosu.bitisKosulu = { devam: bitis.devam.slice(0, 10) };

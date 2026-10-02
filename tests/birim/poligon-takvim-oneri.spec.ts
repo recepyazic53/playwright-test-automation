@@ -119,8 +119,11 @@ test.describe('poligon', () => {
     test.setTimeout(400_000);
     const r = await ekranKos(po, plan('/abonelik'));
     expect(r.asamalar, JSON.stringify(r.bulgular)).toMatchObject({ veri: true, eylem: true, bitis: true, dogrulama: true, kayit: true, normal: true, sayac: true });
-    // Bölge listesi her koşuda bir kez seçilir (hızlı test + doğrulama + normal koşu = 3; veri duraklarında yeniden yazılmaz).
-    expect((r.doldurma.hizli as string[]).filter((x) => x === 'Bölge').length, JSON.stringify(r.doldurma.hizli)).toBeLessThanOrEqual(3);
+    // Bölge listesi her koşuda bir kez seçilir; veri duraklarında yeniden yazılmaz. (Adres bölümü doldurunca belirdiği için Bölge → İlçe →
+    // Mahalle zinciri yerinde keşfedilir: o denemeler ilk doldurmadan — ilk "Açık adres"ten — öncedir; sonrasında Bölge yalnız doğrulama
+    // koşusunda ve normal koşuda bir kez seçilir.)
+    const hizli = r.doldurma.hizli as string[];
+    expect(hizli.slice(hizli.indexOf('Açık adres')).filter((x) => x === 'Bölge').length, JSON.stringify(hizli)).toBeLessThanOrEqual(2);
   });
 
   test('iş başvurusu: "Beceriler" yaz + Enter ile eklenir; dosya alanı veri durağında doldurulmaz (açık not), eksik sayılmaz', async () => {

@@ -55,7 +55,12 @@ export type IsGorunumu = {
   isaretOzeti?: import('./oge-isaretleri.mjs').IsaretOzeti;
 };
 
-export type OrtakAkisKaydi = { baslangicEkrani: { id: string; ad: string; urlYolu: string } };
+/** Hızlı test süre durumu: kalanMs = önce dolacak sınıra (boşta kalma ya da üst sınır); uyari: "Süreyi uzat" gösterilir. */
+export type HizliSureGorunumu = {
+  suruyor: boolean; bostaMs: number; ustMs: number; kalanMs: number; ustKalanMs: number; sebep: 'bosta' | 'ust'; uyari: boolean; uzatilabilir: boolean;
+};
+
+export type OrtakAkisKaydi ={ baslangicEkrani: { id: string; ad: string; urlYolu: string } };
 
 export type TaramaYoneticisi = {
   isler: Map<string, Record<string, unknown>>;
@@ -99,7 +104,11 @@ export type TaramaYoneticisi = {
   komutAl(id: string, token: string): Promise<{ komut: Record<string, unknown> | null }>;
   hizliOlayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
   /** Dinleyici alt sürecin olaylarını (HizliOlay) ve iş bitince { olay: 'isBitti', durum, hata } alır. */
-  hizliDinle(id: string, fn: (olay: Record<string, any>) => void): void;
+  hizliDinle(id: string, fn: (olay: Record<string, any>) => void, mesgulMu?: () => boolean): void;
+  /** Kullanıcı işlemi / "Süreyi uzat": boşta kalma sayacı sıfırlanır (üst sınır değişmez). */
+  hizliUzat(id: string): HizliSureGorunumu | null;
+  /** Hızlı test işinin süre durumu (iş yoksa / hızlı test değilse null). */
+  hizliSure(id: string): HizliSureGorunumu | null;
   girdiVer(id: string, token: string): unknown;
   olayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
   oturumAl(id: string, token: string, durum: unknown): { kaydedildi: boolean };
