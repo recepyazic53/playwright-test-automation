@@ -23,6 +23,10 @@ export type HamEylemIzi = {
   devreDisi?: boolean;
   /** Düğme: bağlantı mı (<a> / role=link; düğme biçimli ve simge düğmeler hariç). Sunumda gerçek düğmelerden sonra listelenir. */
   baglanti?: boolean;
+  /** Düğme: sayfa içi pencere (modal) açıkken pencerenin içinde mi / arkasındaki sayfada mı; alanın yanındaki simge mi (bilgi / ok…). */
+  pencerede?: boolean;
+  arkada?: boolean;
+  alanIkonu?: boolean;
   /** Başarı / hata / bekleme: eşleşen sınıf parçası, rolü, aria-live / aria-busy, alana bağlı mı, grup adedi. */
   sinif?: string | null;
   rol?: string | null;
@@ -55,6 +59,10 @@ export type EylemAdayi = {
   kayitOlusturabilir?: boolean;
   /** Yalnız gönderim: bağlantı mı (sıralamayı değiştirmez; sunumda "Bağlantılar" grubunda gösterilir). */
   baglanti?: boolean;
+  /** Yalnız gönderim: açık pencerenin (modal) içinde (önce sıralanır) / arkasında (sonda); alanın yanındaki simge ("Alan ikonları", en sonda). */
+  pencerede?: boolean;
+  arkada?: boolean;
+  alanIkonu?: boolean;
   /** Yalnız hata: grup seçicisinin sayfadaki öğe sayısı. */
   adet?: number;
   /** Türünün en olası adayı (listenin ilki). */

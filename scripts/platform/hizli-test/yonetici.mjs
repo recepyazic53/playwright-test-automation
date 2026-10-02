@@ -304,7 +304,9 @@ export function hizliTestYoneticisiOlustur(s) {
             if (var_.kosul && var_.kosul.secim === k.secim && !var_.kosul.degerler.includes(String(d.deger))) var_.kosul.degerler.push(String(d.deger));
             continue;
           }
-          const alan = { ...g, kosul: { secim: String(k.secim), degerler: [String(d.deger)] } };
+          // Keşifte görülen değer (seçim denenirken sayfanın o anki durumu; değer okunmadan) sayfanın ŞİMDİKİ değeri değildir: alan şu an
+          // görünmüyor. "Sayfada hazır" sayılmaz; alan gerçekten görününce (değerli okumada) hazır / değer tazelenir (hazirTazele).
+          const alan = { ...g, hazir: false, mevcut: null, kosul: { secim: String(k.secim), degerler: [String(d.deger)] } };
           o.alanlar.set(alan.anahtar, { alan, yeni: false });
           // Kontrol alanının (ve onun önceki koşullu alanlarının) hemen sonrasına.
           let konum = adim.alanlar.findIndex((/** @type {Nesne} */ x) => x.anahtar === k.secim);
@@ -431,6 +433,43 @@ export function hizliTestYoneticisiOlustur(s) {
     }
     return degisenler;
   };
+  /**
+   * Sayfanın değerli okumasında (anlık: alanların o anki değeriyle) GÖRÜNEN bilinen alanların "sayfada hazır" bilgisi ve değeri tazelenir:
+   * keşifte (seçim denenirken) görülen değer yerine sayfanın şimdiki değeri. Görünmeyen alana dokunulmaz. @param {Nesne} o @param {Nesne} anlik
+   */
+  const hazirTazele = (o, anlik) => {
+    for (const yeni of Array.isArray(anlik?.alanlar) ? anlik.alanlar : []) {
+      const kayit = nesneMi(yeni) ? o.alanlar.get(yeni.anahtar)?.alan : null;
+      if (!kayit) continue;
+      kayit.hazir = yeni.hazir === true;
+      kayit.mevcut = yeni.mevcut ?? null;
+    }
+  };
+  /**
+   * Yeni beliren alanları adımda SAYFA SIRASINA yerleştirir (veri durağının listesi = ekran sırası): her yeni alan, sayfada kendinden önce
+   * gelen ve adımda bulunan en yakın alanın hemen arkasına (onun koşullu alanlarından sonra) taşınır; kullanıcının taşıdığı diğer alanların
+   * sırası değişmez. @param {Nesne} adim @param {string[]} yeniler @param {Nesne[]} sayfaAlanlari bu okumadaki alanlar (sayfa sırası)
+   */
+  const sayfaSirasinaYerlestir = (adim, yeniler, sayfaAlanlari) => {
+    const sira = sayfaAlanlari.map((/** @type {Nesne} */ a) => a.anahtar);
+    for (const k of yeniler) {
+      const i = adim.alanlar.findIndex((/** @type {Nesne} */ a) => a.anahtar === k);
+      const p = sira.indexOf(k);
+      if (i < 0 || p < 0) continue;
+      const [alan] = adim.alanlar.splice(i, 1);
+      let konum = -1;
+      for (let j = p - 1; j >= 0 && konum < 0; j--) konum = adim.alanlar.findIndex((/** @type {Nesne} */ a) => a.anahtar === sira[j]);
+      if (konum < 0) {
+        // Sayfada öncesinde bilinen alan yok: sayfada sonrasında gelen ilk bilinen alanın önüne.
+        const sonra = sira.slice(p + 1).map((x) => adim.alanlar.findIndex((/** @type {Nesne} */ a) => a.anahtar === x)).find((x) => x >= 0);
+        adim.alanlar.splice(sonra ?? adim.alanlar.length, 0, alan);
+        continue;
+      }
+      const onceki = adim.alanlar[konum].anahtar;
+      while (konum + 1 < adim.alanlar.length && adim.alanlar[konum + 1].kosul?.secim === onceki) konum++;
+      adim.alanlar.splice(konum + 1, 0, alan);
+    }
+  };
   /** Veri durağından sonra: Hayır → düğme / mesaj seçimi; Evet + ilk adım + tek aday → basılır; diğerleri → "Şimdi ne yapayım?". @param {Nesne} o */
   const verilerTamam = (o) => {
     if (o.izin === 'hayir') { o.durum = 'hayirSecim'; return; }
@@ -459,6 +498,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const f = o.sonFark;
     const adim = { alanlar: [], bas: null, okumalar: [] };
     o.adimlar.push(adim);
+    o.duzeltAdimi = null;
     for (const a of f.yeniAlanlar.filter(doldurulabilir)) alanEkle(o, a, adim, true);
     // Basıştan sonra beliren seçim alanlarının keşfi: içlerindeki koşullu alanlar bu adıma eklenir.
     if (Array.isArray(o.sonKesif) && o.sonKesif.length) { kosulluAlanlariEkle(o, adim, o.sonKesif); o.sonKesif = []; }
@@ -630,6 +670,8 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const a of e.anlik.alanlar.filter(doldurulabilir)) {
         if (!o.alanlar.has(a.anahtar)) { alanEkle(o, a, adim, true); yeniler.push(a.anahtar); }
       }
+      sayfaSirasinaYerlestir(adim, yeniler, e.anlik.alanlar);
+      hazirTazele(o, e.anlik);
       const yeni = yeniler.length;
       // "Önce bunu seçin" isteği: seçim sayfaya uygulandı ve sayfa sakinleşti. Beliren alanlar bu seçimin değerinde, kaybolan (koşulsuz
       // bilinen) alanlar önceki değerinde görünür sayılır (gözlem); bilinen koşullu alanların değer listesi de gözleme göre düzeltilir.
@@ -810,10 +852,14 @@ export function hizliTestYoneticisiOlustur(s) {
       const adim = o.adimlar.length ? guncelAdim(o) : null;
       const yeniler = adim ? e.anlik.alanlar.filter((/** @type {Nesne} */ a) => doldurulabilir(a) && !o.alanlar.has(a.anahtar)) : [];
       for (const a of yeniler) alanEkle(o, a, adim, true);
-      if (yeniler.length) veriDuragi(o, `${yeniler.length} yeni alan belirdi; değerlerini girin.`);
-      else if (o.okumaAmaci === 'duzelt' && adim?.alanlar.length) veriDuragi(o);
-      else o.durum = o.izin === 'hayir' ? 'hayirSecim' : 'karar';
+      if (adim) sayfaSirasinaYerlestir(adim, yeniler.map((/** @type {Nesne} */ a) => a.anahtar), e.anlik.alanlar);
+      hazirTazele(o, e.anlik);
+      const duzelt = o.okumaAmaci === 'duzelt';
       o.okumaAmaci = null;
+      if (yeniler.length) veriDuragi(o, `${yeniler.length} yeni alan belirdi; değerlerini girin.`);
+      else if (duzelt && adim?.alanlar.length) veriDuragi(o);
+      else if (duzelt) gecmisVeriyiAc(o);
+      else o.durum = o.izin === 'hayir' ? 'hayirSecim' : 'karar';
       return;
     }
     if (e.olay === 'dogrulandi' && bekleyen.tur === 'yenidenKur') {
@@ -895,6 +941,78 @@ export function hizliTestYoneticisiOlustur(s) {
     if (!dugmeler.length) return;
     throw new HizliTestHatasi('ONAY_GEREKLI', `Zincir yeniden yürütülecek; şu düğmelere yeniden basılacak: ${dugmeler.map((d) => `“${d}”`).join(', ')} (kayıt oluşturabilir). Devam edilsin mi?`, 409, { onayGerekli: true, dugmeler });
   }
+  /**
+   * "Veriyi düzenle", güncel adımda alan yokken (ör. basış yalnız metin gösterdi, yeni alan çıkmadı): son alanlı adımın verisi düzenlenir —
+   * veri durağı o adımın alanlarıyla, girilen değerler önyazılı açılır. "Devam et"te değişen değer varsa zincir baştan yeniden yürütülür
+   * (gecmisVeriyiUygula). Düzenlenecek veri yoksa sessizce dönülmez: açık ileti. @param {Nesne} o
+   */
+  function gecmisVeriyiAc(o) {
+    let i = o.adimlar.length - 1;
+    while (i >= 0 && !o.adimlar[i].alanlar.length) i--;
+    if (i < 0) {
+      o.durum = o.izin === 'hayir' ? 'hayirSecim' : 'karar';
+      o.sonHata = 'Düzenlenecek veri yok: bu testte sayfada değer girilecek alan görülmedi. Sayfada yeni alan çıkarsa “Veriyi düzenle” onu sorar.';
+      gunluk(o, o.sonHata);
+      return;
+    }
+    o.duzeltAdimi = i;
+    const not = `Son basıştan sonra sayfada yeni alan çıkmadı; ${i + 1}. adımın verilerini düzenliyorsunuz (girdiğiniz değerler önyazılı). Bir değeri değiştirip “Devam et” derseniz değer sayfaya zincir baştan yeniden yürütülerek uygulanır${o.izin === 'hayir' ? '' : ' (önceki düğmelere yeniden basılır; onayınız sorulur)'}. Değiştirmezseniz kaldığınız yere dönülür.`;
+    gunluk(o, `“Veriyi düzenle”: ${i + 1}. adımın verileri açıldı (güncel adımda alan yok).`);
+    veriDuragi(o, not);
+  }
+  /**
+   * Geçmiş adımın düzenlenen verisi: değişmediyse kaldığı yere dönülür; değiştiyse (zorunlular dolu) yeniden basılacak düğmeler için onay
+   * istenir (409 ONAY_GEREKLI; Hayır izninde basışsız plan), değerler kaydedilir ve zincir AYNI tarayıcıda baştan yeniden yürütülür
+   * (doğrulama koşusunun "zinciri yeniden kur" yolu: sayfa yeniden açılır, adımlar doldurulup basılır), sonra kalınan adıma dönülür.
+   * @param {Veritabani} vt @param {Nesne} o @param {Nesne} g @param {Nesne} adim @param {Record<string, Nesne | null>} yeni
+   */
+  function gecmisVeriyiUygula(vt, o, g, adim, yeni) {
+    const geriDon = () => { o.duzeltAdimi = null; o.soruNotu = null; o.durum = o.izin === 'hayir' ? 'hayirSecim' : 'karar'; };
+    const degisen = Object.keys(yeni).filter((k) => (yeni[k]?.deger ?? null) !== (o.degerler[k]?.deger ?? null));
+    if (!degisen.length) {
+      geriDon();
+      gunluk(o, 'Veri değişmedi; kaldığınız yere dönüldü.');
+      return { tamam: true, degisen: 0 };
+    }
+    /** @type {Record<string, unknown>} */
+    const deneme = Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger]));
+    for (const [k, v] of Object.entries(yeni)) { if (v) deneme[k] = v.deger; else delete deneme[k]; }
+    const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliBekliyor(x, o)), deneme);
+    if (eksik.length) {
+      throw new HizliTestHatasi('EKSIK', `Zorunlu alanlar boş: ${eksik.slice(0, 5).map((a) => a.etiket ?? a.anahtar).join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`, 400,
+        { eksikler: eksik.map((a) => a.anahtar) });
+    }
+    // Değişen tablo başvuruları bu ortamda çözülür (zincir planı çözülmüş değeri kullanır; çözülemezse açık hata, hiçbir şey değişmez).
+    const cozulecek = Object.fromEntries(degisen.filter((k) => yeni[k]?.kaynak === 'tablo').map((k) => [k, /** @type {Nesne} */ (yeni[k]).deger]));
+    /** @type {Record<string, unknown>} */
+    let cozulmus = {};
+    if (Object.keys(cozulecek).length) {
+      const r = ekranBasvurulariniCoz(cozulecek, {
+        tablolar: tablolariListele(vt, o.projeId, { cozulsun: true }), ortamId: o.ortam.id, tabloSecimleri: o.tabloSecimleri,
+        secenekDegerleri: Object.fromEntries(Object.keys(cozulecek).map((k) => { const a = o.alanlar.get(k)?.alan; return [k, (a?.tur === 'radio' ? (a?.radyolar ?? []) : (a?.secenekler ?? [])).map((/** @type {Nesne} */ x) => String(x.deger))]; }))
+      });
+      if (r.hatalar.length) throw new HizliTestHatasi('TABLO', r.hatalar[0].mesaj.replace(/"([^"]+)" alanının/, (_, k) => `“${o.alanlar.get(k)?.alan.etiket ?? k}” alanının`));
+      cozulmus = r.veri;
+    }
+    // Yeniden basılacak düğmeler için açık onay (onay yoksa 409; değerler henüz değişmedi).
+    const eski = o.degerler;
+    o.degerler = { ...eski };
+    for (const [k, v] of Object.entries(yeni)) { if (v) o.degerler[k] = v; else delete o.degerler[k]; }
+    try { yenidenBasisOnayi(o, g); } catch (h) { o.degerler = eski; throw h; }
+    o.cozulmus = { ...(o.cozulmus ?? {}), ...Object.fromEntries(Object.keys(cozulecek).map((k) => [k, String(cozulmus[k] ?? '')])) };
+    for (const k of degisen) { if (o.degerler[k]) o.uygulanan[k] = o.degerler[k].deger; else delete o.uygulanan[k]; }
+    o.alanHatalari = {};
+    const plan = yenidenKurPlani(o);
+    const adlar = degisen.map((k) => `“${alanAdi(o, k)}”`).join(', ');
+    geriDon();
+    gunluk(o, `${adlar} değiştirildi; zincir baştan yeniden yürütülüyor${plan.some((/** @type {Nesne} */ a) => a.bas) ? ' (önceki düğmelere yeniden basılır)' : ''}.`);
+    o.yenidenAcma = { amac: 'kur', hedef: o.durum };
+    o.durum = 'calisiyor';
+    o.calisiyor = `${adlar} değişti; zincir yeniden yürütülüyor…`;
+    gonder(o, { tur: 'dogrula', plan: { adimlar: plan, bitis: { bitti: [], devam: [], hata: [], adres: null }, zamanAsimiSn: 1, yenidenKur: true } });
+    o.bekleyen.tur = 'yenidenKur';
+    return { gonderildi: true, degisen: degisen.length };
+  }
   /** Zincir tekrar yürütüldü: sayfa okunur (düğme adayları, alanlar), sonra kaldığı adıma dönülür. @param {Nesne} o */
   function yenidenKurBitti(o) {
     o.okumaAmaci = 'devam';
@@ -914,7 +1032,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const hedef = o.yenidenAcma?.hedef ?? (o.izin === 'hayir' ? 'hayirSecim' : 'karar');
     o.yenidenAcma = null;
     o.calisiyor = null;
-    gunluk(o, 'Tarayıcı yeniden açıldı; zincir tekrar yürütüldü, kaldığınız adımdasınız.');
+    gunluk(o, 'Sayfa yeniden açıldı; zincir tekrar yürütüldü, kaldığınız adımdasınız.');
     if (hedef === 'veri') { veriDuragi(o, 'Tarayıcı yeniden açıldı; kaldığınız yerden devam edin.'); return; }
     o.durum = hedef;
   }
@@ -1016,7 +1134,10 @@ export function hizliTestYoneticisiOlustur(s) {
       return {
         // Etiket yalnız sayfada GÖRÜNEN addır; teknik ad (name / id) etiket olmaz (yalnız ipucu olarak teknikAd).
         anahtar: a.anahtar, etiket: a.etiket ?? adsizEtiket(a), etiketBulundu: Boolean(a.etiket), teknikAd: a.ad ?? a.kimlik ?? null, tur: a.tur, zorunlu: a.zorunlu === true,
-        hazir: a.hazir === true, mevcut: gizliAlan(a) ? null : a.mevcut ?? null,
+        // Sayfada hazır: yalnız değeri OKUNAN ve koşulu şu an geçerli alan (keşifte görülen / şu an gizli koşullu alan "hazır" değildir;
+        // değeri okunamayan alan "dolu" diye gösterilmez). Parolalı alanın değeri gösterilmez.
+        hazir: a.hazir === true && (gizliAlan(a) || (a.mevcut !== null && a.mevcut !== undefined && a.mevcut !== '')) && kosulAktif(o, a),
+        mevcut: gizliAlan(a) ? null : a.mevcut ?? null,
         // Açılır listede yer tutucu ("SEÇİNİZ", ilk seçenek ""/"0"/"-1") seçilebilir bir değer değildir: veri durağında listelenmez.
         secenekler: a.tur === 'radio' ? (a.radyolar ?? []).map((/** @type {Nesne} */ r) => ({ deger: r.deger, metin: r.metin ?? r.deger }))
           // Bekleyen bağlı listenin (kilitli ya da üstü sayfada boş) eski seçenekleri gösterilmez: üstü seçilince yenileri gelir.
@@ -1053,10 +1174,16 @@ export function hizliTestYoneticisiOlustur(s) {
     const adim = o.adimlar.length ? guncelAdim(o) : null;
     // Yazısız düğmeler (simge / görsel: ok, takvim simgesi…) listeyi doldurur; yazılı düğme varsa yalnız onlar gösterilir.
     const yazili = (o.sonAnlik?.dugmeler ?? []).filter((/** @type {Nesne} */ x) => x.metin);
-    const adaylar = (yazili.length ? yazili : (o.sonAnlik?.dugmeler ?? [])).map((/** @type {Nesne} */ x) => ({ secici: x.secici, metin: x.metin, kayitOlusturabilir: x.kayitOlusturabilir, enOlasi: x.enOlasi, guven: x.guven, baglanti: x.baglanti === true }));
+    const adaylar = (yazili.length ? yazili : (o.sonAnlik?.dugmeler ?? [])).map((/** @type {Nesne} */ x) => ({
+      secici: x.secici, metin: x.metin, kayitOlusturabilir: x.kayitOlusturabilir, enOlasi: x.enOlasi, guven: x.guven, baglanti: x.baglanti === true,
+      ...(x.pencerede === true ? { pencerede: true } : {}), ...(x.arkada === true ? { arkada: true } : {}), ...(x.alanIkonu === true ? { alanIkonu: true } : {})
+    }));
     /** @type {Nesne | null} */
     let soru = null;
-    if (o.durum === 'veri' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null };
+    // "Veriyi düzenle" geçmiş adımda: o adımın alanları (girilen değerler önyazılı); gecmis: yerinde seçim uygulama düğmeleri gösterilmez.
+    const gecmisNo = o.durum === 'veri' && Number.isInteger(o.duzeltAdimi) && o.adimlar[o.duzeltAdimi] ? Number(o.duzeltAdimi) : null;
+    if (o.durum === 'veri' && gecmisNo !== null) soru = { tur: 'veri', adim: gecmisNo + 1, alanlar: o.adimlar[gecmisNo].alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null, gecmis: true };
+    else if (o.durum === 'veri' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null };
     // Yerinde zincir isteği sürerken aynı veri durağı gösterilir (kart yerinde kalır; düğme "getiriliyor" durumunda).
     else if (o.durum === 'zincir' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: null, getiriliyor: o.zincirIstegi ?? null };
     else if (o.durum === 'karar') {
@@ -1268,7 +1395,12 @@ export function hizliTestYoneticisiOlustur(s) {
     const o = oturumGetir(String(g.id ?? ''));
     durumda(o, ['veri']);
     const girilen = nesneMi(g.degerler) ? g.degerler : {};
-    const adim = guncelAdim(o);
+    // "Veriyi düzenle" (güncel adımda alan yok): geçmiş adımın verisi düzenleniyor.
+    const gecmis = Number.isInteger(o.duzeltAdimi) && o.adimlar[o.duzeltAdimi] ? Number(o.duzeltAdimi) : null;
+    if (gecmis !== null && ((typeof g.kosulSecimi === 'string' && g.kosulSecimi) || (typeof g.zincir === 'string' && g.zincir))) {
+      throw new HizliTestHatasi('GECMIS', 'Geçmiş adımın verisi düzenlenirken bir seçim sayfaya tek başına uygulanamaz: değeri seçip “Devam et” deyin (zincir yeniden yürütülür).');
+    }
+    const adim = gecmis !== null ? o.adimlar[gecmis] : guncelAdim(o);
     // Doldurma sırası: kullanıcının verdiği sıra (yukarı / aşağı taşıma); verilmeyenler sonda, sayfa sırasıyla kalır (kararlı sıralama).
     if (Array.isArray(g.sira)) {
       const sira = new Map(g.sira.filter((/** @type {unknown} */ k) => typeof k === 'string').map((/** @type {string} */ k, /** @type {number} */ i) => [k, i]));
@@ -1298,9 +1430,10 @@ export function hizliTestYoneticisiOlustur(s) {
         o.tabloSecimleri[v.tabloSecimi.anahtar] = Object.fromEntries(Object.entries(v.tabloSecimi.kosul).filter(([, x]) => typeof x === 'string').map(([k, x]) => [String(k).slice(0, 100), String(x).slice(0, 200)]));
       }
     }
+    if (gecmis !== null) return gecmisVeriyiUygula(vt, o, g, adim, yeni);
     // Bağlı liste: üst listenin değeri değiştiyse alt listelerin (ve onların altlarının) eski değerleri gönderilmez — alt seçenekler
     // yeni üst seçilince gelir ve yeniden sorulur.
-    const ustDegisti = Object.keys(yeni).filter((k) => (yeni[k]?.deger ?? null) !== (o.degerler[k]?.deger ?? null));
+    const ustDegisti =Object.keys(yeni).filter((k) => (yeni[k]?.deger ?? null) !== (o.degerler[k]?.deger ?? null));
     for (const [k, v] of Object.entries(yeni)) { if (v) o.degerler[k] = v; else delete o.degerler[k]; }
     for (const a of adim.alanlar) {
       if (a.bagli && ustleri(o, a.anahtar).some((u) => ustDegisti.includes(u)) && o.degerler[a.anahtar] && !ustDegisti.includes(a.anahtar)) delete o.degerler[a.anahtar];
@@ -1435,6 +1568,7 @@ export function hizliTestYoneticisiOlustur(s) {
     if (k === 'duzelt') {
       // Önce sayfa yeniden okunur: sonradan beliren alanlar da veri durağında görünür.
       o.okumaAmaci = 'duzelt';
+      o.duzeltAdimi = null;
       o.durum = 'calisiyor';
       o.calisiyor = 'Sayfa okunuyor…';
       gonder(o, { tur: 'oku' });

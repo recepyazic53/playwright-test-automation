@@ -69,14 +69,21 @@
 .hizli-test-baglantisi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 10px 0 0; color: var(--metin-2); overflow-wrap: anywhere; }
 .hizli-test-baglantisi .ikon { width: 15px; height: 15px; color: var(--vurgu); flex: none; }
 
-/* Veri durağı: sayfada zaten dolu gelen değerler (sorulmaz; olduğu gibi kullanılır). */
-.hizli-hazir { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); padding: 6px 10px; margin-top: 10px; background: var(--panel-kati); }
-.hizli-hazir > summary { cursor: pointer; color: var(--metin-2); }
-.hizli-hazir-liste { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
-.hizli-hazir-liste li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
-.hizli-hazir-ad { font-weight: 600; overflow-wrap: anywhere; }
-.hizli-hazir-deger { color: var(--metin-2); overflow-wrap: anywhere; }
-@media (max-width: 520px) { .hizli-hazir-liste li { grid-template-columns: minmax(0, 1fr) auto; } .hizli-hazir-deger { grid-column: 1; } }
+/* Veri durağı: sayfada hazır gelen değer ana listede, önyazılı ve "sayfada hazır" rozetiyle (değiştirilmezse sayfadaki kullanılır). */
+.hizli-alan-baslik > .hizli-hazir-rozet { flex: none; margin-right: auto; }
+.hizli-hazir-ipucu { margin: 0 0 4px; overflow-wrap: anywhere; }
+
+/* Koşullu alanlar: kontrol eden seçimin altında, girintili bir grup kutusunda (seçim değişince içerik değişir). 390 px'te taşmaz. */
+.hizli-kosul-grubu {
+  display: grid; gap: 8px; min-width: 0; margin: 2px 0 2px 10px; padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, var(--vurgu) 45%, var(--cizgi-2)); border-left: 3px solid color-mix(in srgb, var(--vurgu) 60%, var(--cizgi-2));
+  border-radius: var(--yaricap-m); background: var(--panel);
+}
+.hizli-kosul-grubu .hizli-kosul-grubu { margin-left: 6px; }
+.hizli-kosul-grubu-baslik { margin: 0; color: var(--metin-2); font-weight: 600; overflow-wrap: anywhere; }
+.hizli-onsecim-grubu:empty { display: none; }
+.hizli-onsecim-grubu > .hizli-kosul-grubu { margin: 6px 0 0; background: var(--panel); }
+@media (max-width: 520px) { .hizli-kosul-grubu { margin-left: 4px; padding: 6px 8px; } }
 
 /* Veri durağı: alan başlığı satırı ve doldurma sırası (yukarı / aşağı) düğmeleri. */
 .hizli-alan-baslik { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }

@@ -42,13 +42,96 @@ export async function bosNokta(sayfa: Page): Promise<{ x: number; y: number } | 
   }).catch(() => null);
 }
 
+/** Değerin karşılaştırma biçimi: yalnız harf / rakam dizisi (boşluk, nokta, tire, parantez, maske karakterleri ve büyük / küçük harf yok sayılır). */
+export const degerSade = (m: string): string => m.toLocaleLowerCase('tr').replace(/[^\p{L}\p{N}]/gu, '');
+
+/**
+ * Sayfadaki değer yazılan değeri TUTUYOR mu: harf / rakam dizisi aynı ya da sayfanın biçimlediği değer yazılanı içeriyor (maske önek /
+ * sonek ekleyebilir: "+90 (542) 650-2153", "1.000,00 TL"). Boş istenen her zaman tutar; okunamayan (null) değer tutmaz.
+ */
+export function degerTuttu(mevcut: string | null, deger: string): boolean {
+  const istenen = degerSade(deger);
+  if (!istenen) return true;
+  if (mevcut === null) return false;
+  // Tarih başka biçimde gösterilebilir (13.04.1998 ↔ 1998-04-13): gün / ay / yıl karşılaştırılır.
+  const a = tarihParcalari(deger);
+  const b = tarihParcalari(mevcut);
+  if (a && b) return a.gun === b.gun && a.ay === b.ay && a.yil === b.yil;
+  return degerSade(mevcut).includes(istenen);
+}
+
+/** Alanın sayfadaki değeri (okunamazsa null). */
+export async function alanDegeriOku(alan: Locator): Promise<string | null> {
+  // Beklemeden okunur: sayfadan kalkmış alan (koşullu bölüm kapandı) her denetimde süre doldurmasın.
+  return alan.evaluateAll((l) => {
+    const e = l[0] as HTMLInputElement | undefined;
+    return e && typeof e.value === 'string' ? e.value : null;
+  }).catch(() => null);
+}
+
 /** Alanın sayfadaki değeri istenen değerle aynı mı (biçim farkları yok sayılır: boşluk, tire, parantez, büyük/küçük harf). */
 export async function alanZatenDolu(alan: Locator, deger: string): Promise<boolean> {
-  const sade = (m: string): string => m.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-  const istenen = sade(deger);
+  const istenen = degerSade(deger);
   if (!istenen) return false;
-  const mevcut = await alan.inputValue({ timeout: 1_000 }).catch(() => null);
-  return mevcut !== null && sade(mevcut) === istenen;
+  const mevcut = await alanDegeriOku(alan);
+  return mevcut !== null && degerSade(mevcut) === istenen;
+}
+
+/**
+ * Bir turda yazılan metin alanlarının sonradan değişip değişmediğini izler (hızlı test, doğrulama koşusu ve normal koşunun ORTAK kuralı):
+ * her alan yazıldıktan sonra önceki alanlar yeniden okunur; değeri değişen alanın "bozanı" (o an yazılan alan) kaydedilir. Tur sonunda
+ * değişenler bir kez yeniden yazılır; yine değişirse açık ileti (ör. “Doğum Tarihi” 13.04.1998 yazıldı; “Kimlik No” doldurulunca sayfa
+ * 02.10.2026 yaptı). Motor genel kalır: alan adı / değer kuralı yoktur, yalnız sayfadaki değer yazılanla karşılaştırılır.
+ */
+export class DegerIzleyici<T> {
+  private readonly yazilanlar: Array<{ oge: T; etiket: string; deger: string; alan: Locator }> = [];
+  private readonly bozanlar = new Map<T, string>();
+
+  /** Alan yazıldı: önce önceki alanlar denetlenir (bu alan onları değiştirdi mi), sonra bu alan izlenmeye alınır. */
+  async yazildi(oge: T, etiket: string, deger: string, alan: Locator): Promise<void> {
+    await this.denetle(etiket);
+    if (!degerSade(deger)) return;
+    const i = this.yazilanlar.findIndex((x) => x.oge === oge);
+    if (i >= 0) this.yazilanlar.splice(i, 1);
+    this.yazilanlar.push({ oge, etiket, deger, alan });
+  }
+
+  /** Bir alanın (ya da seçimin) doldurulmasından sonra: izlenen alanlardan değeri değişenlerin bozanı (ilk görülen) kaydedilir. */
+  async denetle(bozanEtiket: string): Promise<void> {
+    for (const x of this.yazilanlar) {
+      if (this.bozanlar.has(x.oge)) continue;
+      const m = await alanDegeriOku(x.alan);
+      if (m !== null && !degerTuttu(m, x.deger)) this.bozanlar.set(x.oge, bozanEtiket);
+    }
+  }
+
+  /** Tur sonu: değeri şu an yazılandan farklı olan izlenen alanlar (sayfadaki değerle). */
+  async degisenler(): Promise<Array<{ oge: T; etiket: string; deger: string; mevcut: string }>> {
+    const l: Array<{ oge: T; etiket: string; deger: string; mevcut: string }> = [];
+    for (const x of this.yazilanlar) {
+      const m = await alanDegeriOku(x.alan);
+      if (m !== null && !degerTuttu(m, x.deger)) l.push({ oge: x.oge, etiket: x.etiket, deger: x.deger, mevcut: m });
+    }
+    return l;
+  }
+
+  /** Yeniden yazıldıktan sonra değer hâlâ tutmuyorsa açık ileti; tutuyorsa (ya da okunamıyorsa) null. */
+  async sonDurum(oge: T): Promise<string | null> {
+    const x = this.yazilanlar.find((y) => y.oge === oge);
+    if (!x) return null;
+    const m = await alanDegeriOku(x.alan);
+    if (m === null || degerTuttu(m, x.deger)) return null;
+    return degisimMesaji(x.etiket, x.deger, m, this.bozanlar.get(oge) ?? null);
+  }
+
+  /** Alanın bozanı (değerini değiştiren sonraki alanın etiketi); bilinmiyorsa null. */
+  bozani(oge: T): string | null { return this.bozanlar.get(oge) ?? null; }
+}
+
+/** Değeri sayfa tarafından değiştirilen alanın iletisi (yeniden yazıldı, yine değişti). */
+export function degisimMesaji(etiket: string, deger: string, mevcut: string, bozan: string | null): string {
+  const sonra = mevcut.trim() ? `sayfa ${mevcut.trim()} yaptı` : 'sayfa alanı boşalttı';
+  return `“${etiket}” ${deger} yazıldı; ${bozan ? `“${bozan}” doldurulunca ${sonra}` : `sonradan ${sonra}`} (yeniden yazıldı, yine değişti). Alanların sırasını ya da değerleri kontrol edin.`;
 }
 
 /** Bu uzunluğa kadar (tek satırlı) değerler varsayılan olarak GERÇEK TUŞLARLA yazılır; daha uzunları doğrudan (fill). */
@@ -86,34 +169,48 @@ export async function yazmaKipiSec(alan: Locator, deger: string, istek: 'otomati
  * görür; klavye temizleyemezse fill('') yedeği. Sonra değer tuşlanır (her karakter için keydown / keypress / input / keyup).
  */
 async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number): Promise<void> {
-  const mevcut = await alan.inputValue({ timeout: 1_000 }).catch(() => '');
-  if (mevcut) {
-    await alan.click({ timeout: 3_000 }).catch(() => undefined);
-    await alan.press('ControlOrMeta+a', { timeout: 2_000 }).catch(() => undefined);
-    await alan.press('Backspace', { timeout: 2_000 }).catch(() => undefined);
-    if (await alan.inputValue({ timeout: 1_000 }).catch(() => '')) await alan.fill('', { timeout: 2_000 }).catch(() => undefined);
-  }
+  await alanTemizle(alan);
   await alan.pressSequentially(deger, { delay: aralikMs, timeout: zamanAsimiMs });
+}
+
+/**
+ * Alanda değer varsa klavyeyle temizler: odak + tümünü seç (Ctrl/Cmd+A; sayfa engellerse betikle seçim) + sil. Hâlâ doluysa (maske
+ * seçimi bozdu / silmeyi engelledi) fill('') yedeği. Önceden dolu (varsayılan değerli) alanın üzerine yazmanın ilk adımı.
+ */
+async function alanTemizle(alan: Locator): Promise<void> {
+  const dolu = async (): Promise<boolean> => Boolean(await alan.inputValue({ timeout: 1_000 }).catch(() => ''));
+  if (!(await dolu())) return;
+  await alan.click({ timeout: 3_000 }).catch(() => undefined);
+  await alan.press('ControlOrMeta+a', { timeout: 2_000 }).catch(() => undefined);
+  await alan.press('Backspace', { timeout: 2_000 }).catch(() => undefined);
+  if (!(await dolu())) return;
+  // Kısayol engellenmiş olabilir: seçim betikle yapılır, sonra yine tuşla silinir (tuş dinleyen maske boşaldığını görür).
+  await alan.evaluate((e) => { (e as HTMLInputElement).focus(); (e as HTMLInputElement).select?.(); }, undefined, { timeout: 2_000 }).catch(() => undefined);
+  await alan.press('Delete', { timeout: 2_000 }).catch(() => undefined);
+  if (await dolu()) await alan.fill('', { timeout: 2_000 }).catch(() => undefined);
 }
 
 /**
  * Metin alanına değer yazar ve alandan çıkar — hızlı test, doğrulama koşusu ve normal koşunun (model-kosucu.ts) ORTAK yazma yolu
  * (kural tek yerde). Sıra: (1) kipe göre yaz (yazmaKipiSec: kısa metin gerçek tuşlarla, "yaz-sil-yaz" olmaz); doğrudan yazılan değer
  * hemen boş kaldıysa tuşlayarak, (2) alandan çık (+ sonra: sayfanın sakinleşmesi), (3) sayfa değeri alandan çıkınca sildiyse (ör. sonraki
- * sorgu satırı yeniden çizdi) bir kez tuşlayarak yeniden yaz ve yeniden çık. Değer sayfada biçimlenebilir (maske "(542) 650-2153"):
- * doğrulama biçimden bağımsızdır (alanZatenDolu); yalnız BOŞ kalan alan yeniden yazılır.
- * @returns 'tamam' ya da 'silindi' (tuşlanarak yazılan değer de alandan çıkınca silindi)
+ * sorgu satırı yeniden çizdi) ya da değer yazılanı TUTMUYORSA (önceden dolu alanda tuşlama eski değerin üstüne eklenmedi / maske eski
+ * değeri geri koydu) bir kez temizleyip (tümünü seç + sil) tuşlayarak yeniden yaz ve yeniden çık. Değer sayfada biçimlenebilir (maske
+ * "(542) 650-2153"): karşılaştırma biçimden bağımsızdır (degerTuttu: harf / rakam dizisi).
+ * @returns 'tamam', 'silindi' (yeniden yazılan değer de alandan çıkınca silindi) ya da 'tutmadi' (alanda yazılandan farklı bir değer kaldı;
+ * sayfadaki değer: alanDegeriOku)
  */
 export async function alanaYaz(
   alan: Locator, deger: string,
   secenek: { tuslayarak?: boolean; kip?: 'otomatik' | 'tus' | 'dogrudan'; aralikMs?: number; zamanAsimiMs: number; sonra?: () => Promise<void> }
-): Promise<'tamam' | 'silindi'> {
+): Promise<'tamam' | 'silindi' | 'tutmadi'> {
   const bos = async (): Promise<boolean> => !(await alan.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
+  const tuttu = async (): Promise<boolean> => { const m = await alanDegeriOku(alan); return m === null || degerTuttu(m, deger); };
   const aralik = secenek.aralikMs ?? TUSLAMA_ARALIGI_MS;
   const tusla = (): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs);
   // Alan henüz çizilmediyse (önceki basışın sonucu gecikmeli) görünmesi beklenir: kip, alanın kendisine bakılarak seçilir.
   await alan.waitFor({ state: 'visible', timeout: secenek.zamanAsimiMs });
-  const kip =await yazmaKipiSec(alan, deger, secenek.tuslayarak ? 'tus' : secenek.kip ?? 'otomatik');
+  const kip = await yazmaKipiSec(alan, deger, secenek.tuslayarak ? 'tus' : secenek.kip ?? 'otomatik');
   if (kip === 'tus') await tusla();
   else {
     await alan.fill(deger, { timeout: secenek.zamanAsimiMs });
@@ -121,14 +218,24 @@ export async function alanaYaz(
   }
   await alandanCik(alan);
   await secenek.sonra?.();
-  if (deger.trim() && (await bos())) {
-    await alan.click({ timeout: 3_000 }).catch(() => undefined);
-    await tusla();
-    await alandanCik(alan);
-    await secenek.sonra?.();
-    if (await bos()) return 'silindi';
-  }
-  return 'tamam';
+  if (!deger.trim() || (await tuttu())) return 'tamam';
+  // Tutmadı: tümünü seç + sil + tuşlayarak yeniden yaz (önceden dolu / maskeli alan). Tuşlama da tutmazsa (ör. her tuşta öneki yeniden
+  // ekleyen maske) değer doğrudan (tek input olayıyla) yazılır.
+  await alan.click({ timeout: 3_000 }).catch(() => undefined);
+  await tusla().catch(() => undefined);
+  if (!(await tuttu())) await alan.fill(deger, { timeout: secenek.zamanAsimiMs }).catch(() => undefined);
+  await alandanCik(alan);
+  await secenek.sonra?.();
+  if (await tuttu()) return 'tamam';
+  return (await bos()) ? 'silindi' : 'tutmadi';
+}
+
+/** alanaYaz sonucunun açık iletisi (başarılıysa null): 'silindi' ve 'tutmadi' (sayfadaki değerle). */
+export async function yazmaHatasi(alan: Locator, deger: string, sonuc: 'tamam' | 'silindi' | 'tutmadi', etiket: string): Promise<string | null> {
+  if (sonuc === 'tamam') return null;
+  if (sonuc === 'silindi') return 'Değer yazıldı ama alandan çıkınca sayfa sildi (maske / doğrulama); alanın nasıl doldurulduğunu kontrol edin.';
+  const m = ((await alanDegeriOku(alan)) ?? '').trim();
+  return `“${etiket}” ${deger} yazıldı ama alanda ${m || '(boş)'} kaldı (tümü seçilip silindi ve yeniden yazıldı; tutmadı). Alanın biçimini (maske) ya da değeri kontrol edin.`;
 }
 
 // ---- Takvimden seçilen (salt okunur) tarih alanı ve otomatik tamamlamalı alan (hızlı test, doğrulama ve normal koşu ORTAK) ----

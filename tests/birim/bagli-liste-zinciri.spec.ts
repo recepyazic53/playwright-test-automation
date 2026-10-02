@@ -229,17 +229,21 @@ test.describe('hızlı test', () => {
     const bitti = Object.keys(o.soru.etiketler).find((m) => m.startsWith('Sonuç hazır')) as string;
     await basarili('/platform/hizli-test/bitis', { id, etiketler: { ...o.soru.etiketler, [bitti]: 'bitti' } });
     await bekle(id, ['kaydet']);
-    // Senaryo önerileri: bağlı listeler gözlenen geçerli bir yolla BİRLİKTE değişir (il değişip ilçe / mahalle / sokak eski kalmaz);
-    // iki zincir (İl…, Marka…) ve bağımsız liste (Yapı tarzı) aynı öneride farklı değerlerle denenir.
+    // Senaryo önerileri: bağlı listeler gözlenen geçerli bir yolla BİRLİKTE değişir (il değişip ilçe / mahalle / sokak eski kalmaz); zincirin
+    // kökü farklı her satırı (aynı kökten ikinci satır yok) tek başına öneri değil, bağımsız seçimi (Yapı tarzı) değişen önerilere katılır.
     const ozet = ((await basarili('/platform/hizli-test/ozet', { id, baslik: 'Adres — hızlı test' })).ozet as Nesne);
     const oneriler = (ozet.senaryolar as Nesne[]).slice(1);
     const degisim = (x: Nesne): Record<string, string> => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d: Nesne) => [d.etiket, d.deger]));
     expect(oneriler.length, JSON.stringify(ozet.senaryolar)).toBeGreaterThan(0);
-    expect(degisim(oneriler[0])).toEqual({ 'İl': 'Adana', 'İlçe': 'Seyhan', 'Mahalle': 'Reşatbey', 'Sokak': '2. Sokak', 'Marka': 'Alfa', 'Model': 'Alfa İki', 'Yapı tarzı': 'Kagir' });
     for (const x of oneriler) { const d = degisim(x); if (d['İl']) expect([d['İlçe'], d['Mahalle'], d['Sokak']].every(Boolean), JSON.stringify(d)).toBe(true); }
-    // Öneriler yalnız zincir tablosunun satırlarıyla bütün olarak değişir (gerekçe zincir kökünü söyler).
-    expect(oneriler[0].gerekce).toContain('Farklı İl zinciri: Adana › Seyhan › Reşatbey › 2. Sokak');
-    const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Adres — hızlı test', senaryoIndeksleri: [oneriler[0].indeks] });
+    for (const x of oneriler) expect(degisim(x)['Yapı tarzı'], JSON.stringify(degisim(x))).toBeTruthy();
+    const iller = oneriler.map((x) => degisim(x)['İl']).filter(Boolean);
+    expect(new Set(iller).size).toBe(iller.length);
+    const adana = oneriler.find((x) => degisim(x)['İl'] === 'Adana') as Nesne;
+    expect(degisim(adana), JSON.stringify(ozet.senaryolar)).toMatchObject({ 'İl': 'Adana', 'İlçe': 'Seyhan', 'Mahalle': 'Reşatbey', 'Sokak': '2. Sokak' });
+    expect(adana.gerekce).toContain('adres: farklı il');
+    expect(adana.baslik).toContain('İl: Adana / Seyhan / Reşatbey / 2. Sokak');
+    const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Adres — hızlı test', senaryoIndeksleri: [adana.indeks] });
     // Test verisi: zincir TEK tablo (sütun = halka, satır = gözlenen geçerli kombinasyon); halkalar ayrı ekran listesi değil.
     const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
     const zt = tablolar.find((t) => t.ad === 'İl - İlçe - Mahalle - Sokak') as Nesne;
@@ -285,7 +289,8 @@ test.describe('hızlı test', () => {
     once = uygulama.hesaplamalar.length;
     sonuc = await kos(String(ekSenaryo.id));
     expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
-    expect(uygulama.hesaplamalar.slice(once)).toEqual([{ il: '01', ilce: '0101', mahalle: 'Reşatbey', sokak: '2. Sokak', model: 'Alfa İki' }]);
+    // (Adana önerisi yalnız adres zincirini ve Yapı tarzını değiştirir; araç zinciri kaydedilen değerde kalır.)
+    expect(uygulama.hesaplamalar.slice(once)).toEqual([{ il: '01', ilce: '0101', mahalle: 'Reşatbey', sokak: '2. Sokak', model: 'Beta Bir' }]);
     // Listeler yavaşlarsa (olağandan çok uzun) koşu yine bekler ve başarılı olur; adım ayrıntısına "yavaşlama" notu düşülür.
     // Gecikme ölçülen olağan sürenin 4 katı: yavaşlama eşiğinin (3 kat) üstünde, bekleme sınırının (5 kat, en az +5 sn) altında.
     const olaganlar = ['#ilce', '#mahalle', '#sokak', '#model'].map((x) => Number(m(x).bagimlilik.yuklenmeMs));

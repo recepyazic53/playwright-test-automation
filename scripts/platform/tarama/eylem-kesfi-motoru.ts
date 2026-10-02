@@ -91,10 +91,43 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   const isaretciMi = (e: Element | null): boolean => Boolean(e) && getComputedStyle(e as Element).cursor === 'pointer';
   /** İmleci kendisi işaretçi (atası değil) ve tıklanabilir görünen yaprak benzeri öğe. */
   const kendiIsaretci = (e: Element): boolean => isaretciMi(e) && !isaretciMi(ata(e)) && !e.querySelector('input, select, textarea, button, a[href]');
+
+  // 0b) Açık sayfa içi pencere (modal): bilinen rol / öğe / sınıflar (dialog, role=dialog, aria-modal, .modal.show…) ya da ekranı örten
+  // yazısız bir örtünün (backdrop) üstündeki sabit kutu. Pencere açıkken içindeki tıklanabilir HER öğe (href'siz <a>, onclick'li span / div,
+  // işaretçi imleçli, odaklanabilir) aday olur ve ÖNCE değerlendirilir; arkadaki sayfanın düğmeleri "pencerenin arkasında" işaretlenir.
+  const zSirasi = (e: Element): number => {
+    for (let a: Element | null = e; a && a !== document.body; a = a.parentElement) {
+      const z = Number.parseInt(getComputedStyle(a).zIndex, 10);
+      if (Number.isFinite(z)) return z;
+    }
+    return 0;
+  };
+  const pencereBul = (): Element | null => {
+    const saydamDegil = (e: Element): boolean => gorunur(e) && Number(getComputedStyle(e).opacity) > 0.05;
+    const bilinen = derinSec('dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"], .modal.show, .modal.in, .ui-dialog')
+      .filter((e) => !nobetcininMi(e) && saydamDegil(e) && tumMetin(e).length > 0);
+    if (bilinen.length) return bilinen.reduce((x, y) => (zSirasi(y) >= zSirasi(x) ? y : x));
+    const g = window.innerWidth, yk = window.innerHeight;
+    const sabitler = [...document.body.querySelectorAll('div, section, aside, form, dialog')].slice(0, 5000)
+      .filter((e) => !nobetcininMi(e) && getComputedStyle(e).position === 'fixed' && saydamDegil(e));
+    const ortu = sabitler.find((e) => { const r = e.getBoundingClientRect(); return r.width >= g * 0.9 && r.height >= yk * 0.9 && tumMetin(e).length < 3; });
+    if (!ortu) return null;
+    const zo = zSirasi(ortu);
+    const kutular = sabitler.filter((e) => e !== ortu && !e.contains(ortu) && tumMetin(e).length > 0 && zSirasi(e) >= zo
+      && (Boolean(e.compareDocumentPosition(ortu) & Node.DOCUMENT_POSITION_PRECEDING) || zSirasi(e) > zo));
+    const dis = kutular.filter((e) => !kutular.some((x) => x !== e && x.contains(e)));
+    return dis.length ? dis.reduce((x, y) => (zSirasi(y) >= zSirasi(x) ? y : x)) : null;
+  };
+  const pencere = pencereBul();
+  const pencerede = (e: Element): boolean => Boolean(pencere && pencere.contains(e));
   const hamDugmeler = derinSec(`button, input[type="submit"], input[type="button"], input[type="image"], ${ROLLER}, [onclick], a, [class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"]), div, span, li, svg, img, i`)
     .filter((e) => !nobetcininMi(e) && gorunur(e) && !e.matches('select, textarea, option, label, input:not([type="submit"]):not([type="button"]):not([type="image"])'))
     .filter((e) => {
       if (yerelEylem(e)) return true;
+      // Pencerenin içinde: href'siz <a>, odaklanabilir öğe ve kendi imleci işaretçi olan öğe (alan içermeyen, kısa yazılı) adaydır.
+      if (pencerede(e) && (e.matches('a, [tabindex]:not([tabindex="-1"])') || kendiIsaretci(e) || (isaretciMi(e) && e.matches('[class*="btn"], [class*="button"]')))) {
+        return !e.closest('label, select, option, [contenteditable="true"]') && !e.querySelector('input, select, textarea') && tumMetin(e).length <= 60;
+      }
       if (e.matches('div, span, li, svg, img, i') && !e.matches('[class*="btn"], [class*="button"], [tabindex]:not([tabindex="-1"])')) {
         // Seçim öğesi değil (etiket / seçenek / sürükleme); kendi işaretçi imleci; çok büyük kap değil.
         if (e.closest('label, select, option, [contenteditable="true"]') || !kendiIsaretci(e)) return false;
@@ -229,15 +262,18 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   const formParcasi = (e: Element): boolean => {
     if (e.closest('label') && !e.matches('button, input[type="submit"], input[type="button"], input[type="image"]')) return true;
     if (selectBileseni(e)) return true;
-    if (e.matches(DOGAL)) return false;
-    if (radyoParcasi(e)) return true;
     const yazi = bosluk(tumMetin(e));
     const a = etiketAnahtari(yazi);
+    // Alan etiketinin kendisi olan bağlantı biçimli öğe (href'siz / "#" adresli <a>; ör. etiketi saran ipucu bağlantısı) düğme değildir.
+    if (e.matches('a') && eylemBaglantisi(e) && a && alanEtiketleri.has(a)) return true;
+    if (e.matches(DOGAL)) return false;
+    if (radyoParcasi(e)) return true;
     if (a && (alanEtiketleri.has(a) || seciliDegerler.has(a))) return true;
     // Select'e dayanmayan özel combobox'ın kendi yazısı ("Etiket seçin ▾") korunur.
     return !e.matches('[role="combobox"]') && yerTutucuMu(yazi);
   };
-  const dugmeler = hamDugmeler.filter((e) => !formParcasi(e));
+  // Pencere açıkken önce pencerenin içindekiler (düğme sınırına arkadaki sayfa yüzünden takılmasın).
+  const dugmeler = [...hamDugmeler.filter((e) => pencerede(e)), ...hamDugmeler.filter((e) => !pencerede(e))].filter((e) => !formParcasi(e));
 
   // 1b) Yalnız simgeli tıklanabilir öğeler (yenile / ara ikonu): ad aria-label → title → alt → görsel dosya adı / sınıf ipucu, yoksa
   // "Simge"; yakın form alanının etiketi bağlam olarak eklenir ("Ara (Adres Kodu)").
@@ -250,6 +286,8 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     [/^(save|kaydet|floppy)$/, 'Kaydet'], [/^(clear|temizle|eraser)$/, 'Temizle'], [/^(eye|view|goster|detail\w*|detay)$/, 'Göster'],
     [/^(copy|kopyala|clone)$/, 'Kopyala']
   ];
+  /** Eylem bildiren simgeler (alanın yanında olsa da asıl işlem: arama, sorgu…); diğerleri (bilgi, takvim, göster…) alan ikonudur. */
+  const EYLEM_SIMGELERI = new Set(['Yenile', 'Sorgula', 'Ara', 'Ekle', 'Sil', 'Düzenle', 'Yazdır', 'İndir', 'Yükle', 'Kaydet', 'Temizle', 'Kopyala']);
   const dosyaAdi = (u: string | null | undefined): string => ((u ?? '').split(/[?#]/)[0].split('/').pop() ?? '').replace(/\.\w+$/, '');
   const ikonIpucu = (e: Element): string | null => {
     const parcalar: string[] = [];
@@ -299,6 +337,8 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
     const ikon = tip === 'image' || (!gorunenYazi && etiket !== 'input' && ikonBicimli(e));
     let ikonAdli = false;
     let ikonIpucuVar = false;
+    /** Alanın yanındaki simge (bilgi / ok / takvim…): "Alan ikonları" grubunda, listenin sonunda gösterilir. */
+    let alanIkonu = false;
     if (ikon) {
       const alt = bosluk(e.getAttribute('alt')) || bosluk(e.querySelector('img[alt]')?.getAttribute('alt'));
       const ipucu = ikonIpucu(e);
@@ -306,9 +346,24 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
       const ad = erisilebilirAd(e) || alt || ipucu || '';
       const alan = yakinAlan(e);
       const alanAdi = alan ? alanEtiketi(alan) : '';
-      if (alanAdi) { metin = `${ad || 'Simge'} (${alanAdi})`; ikonAdli = true; } else if (ad) metin = ad;
+      if (alanAdi) { metin = `${ad || 'Simge'} (${alanAdi})`; ikonAdli = true; alanIkonu = !EYLEM_SIMGELERI.has(ad); } else if (ad) metin = ad;
     }
-    if (etiket === 'a' && !e.hasAttribute('href') && !e.hasAttribute('onclick') && !e.hasAttribute('role') && !isaretciMi(e)) continue;
+    // Yazısız, simgesi tanınmayan öğe (ör. yazı tipi / ::before simgesi): yakın alanın ya da yanındaki alan etiketinin / radyo seçeneğinin
+    // adıyla "“X” yanındaki simge" olarak adlanır (etiketin kendisiymiş gibi gösterilmez) ve "Alan ikonları"na gider.
+    if (!ikonAdli && !/[\p{L}\p{N}]/u.test(metin)) {
+      const alan = yakinAlan(e);
+      const yakin = alan ? alanEtiketi(alan) : '';
+      const kap = ata(e);
+      // Ad: kabın kendi yazısı (etiket hücresi "Kişi tipi <simge>") ya da öncesindeki en yakın yazı.
+      const kendi = kap ? kendiMetni(kap) : '';
+      const bag = (/[\p{L}]/u.test(kendi) && kendi.length <= 60 ? kendi : '') || baglamMetni(e, '') || '';
+      const ust = kap ? ata(kap) : null;
+      const alanYaninda = Boolean(alan) || Boolean(kap && kap.querySelector(ALAN)) || Boolean(ust && ust !== document.body && ust.querySelectorAll(ALAN).length && ust.querySelectorAll(ALAN).length <= 4)
+        || alanEtiketleri.has(etiketAnahtari(bag));
+      const ad = (bag && alanYaninda ? bag : '') || yakin;
+      if (ad) { metin = `“${ad}” yanındaki simge`; ikonAdli = true; alanIkonu = true; }
+    }
+    if (etiket === 'a' && !e.hasAttribute('href') && !e.hasAttribute('onclick') && !e.hasAttribute('role') && !isaretciMi(e) && !pencerede(e)) continue;
     if (etiket === 'a' && !e.hasAttribute('onclick') && e.getAttribute('role') !== 'button' && !eylemBaglantisi(e)) {
       // Bağlantı: yalnız yönlendirme adayı (eylem metinliyse düğme adayı da olur; yalnız simgeli bağlantı, form alanının yanındaysa ya da
       // simge ipucu varsa).
@@ -329,7 +384,8 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
       formIci: Boolean(form), submit: Boolean(form) && ['submit', 'image'].includes(tip), onclick: Boolean(onclick),
       devreDisi: (e as HTMLButtonElement).disabled === true || e.getAttribute('aria-disabled') === 'true',
       // Bağlantı (gerçek düğmelerden sonra listelenir): <a> / role=link; düğme biçimli (role=button, btn sınıfı) ve simge düğmeler hariç.
-      baglanti: !ikon && (etiket === 'a' || e.getAttribute('role') === 'link') && e.getAttribute('role') !== 'button' && !e.matches('[class*="btn"], [class*="button"]')
+      baglanti: !ikon && (etiket === 'a' || e.getAttribute('role') === 'link') && e.getAttribute('role') !== 'button' && !e.matches('[class*="btn"], [class*="button"]'),
+      ...(pencere ? (pencerede(e) ? { pencerede: true } : { arkada: true }) : {}), ...(alanIkonu ? { alanIkonu: true } : {})
     };
     izler.push(iz);
     dugmeOgeleri.set(iz, e);

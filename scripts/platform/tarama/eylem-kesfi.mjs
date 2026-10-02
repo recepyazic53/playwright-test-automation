@@ -178,13 +178,20 @@ export function eylemAdaylariniDegerlendir(ham, sinir = {}) {
         kirilganlik: KIRILGANLIKLAR.includes(iz.kirilganlik) ? iz.kirilganlik : 'orta', metin: metin(iz.metin, 200), guven, puan, gerekce,
         gizli: iz.gizli === true, konum: iz.konum ?? null, enOlasi: false, oge: null
       };
-      if (tur === 'gonderim') { a.kayitOlusturabilir = kalipVar('kayit', iz.metin); a.baglanti = iz.baglanti === true; }
+      if (tur === 'gonderim') {
+        a.kayitOlusturabilir = kalipVar('kayit', iz.metin); a.baglanti = iz.baglanti === true;
+        if (iz.pencerede) a.pencerede = true;
+        if (iz.arkada) a.arkada = true;
+        if (iz.alanIkonu) a.alanIkonu = true;
+      }
       if (tur === 'hata' && typeof iz.adet === 'number') a.adet = iz.adet;
       if (Array.isArray(iz.cerceve) && iz.cerceve.length) a.cerceve = iz.cerceve.map(String).slice(0, 2);
       a.oge = adayOgesi(a);
       return { a, sira };
     });
-    const sonuc = liste.sort((x, y) => GUVEN_DUZEYLERI.indexOf(x.a.guven) - GUVEN_DUZEYLERI.indexOf(y.a.guven) || y.a.puan - x.a.puan || x.sira - y.sira)
+    // Gönderim kümeleri: açık pencerenin içindekiler önce, sonra sayfanın düğmeleri, pencerenin arkasındakiler, en sonda alan simgeleri.
+    const kume = (/** @type {import('./eylem-kesfi.d.mts').EylemAdayi} */ a) => (a.alanIkonu ? 3 : a.pencerede ? 0 : a.arkada ? 2 : 1);
+    const sonuc = liste.sort((x, y) => kume(x.a) - kume(y.a) || GUVEN_DUZEYLERI.indexOf(x.a.guven) - GUVEN_DUZEYLERI.indexOf(y.a.guven) || y.a.puan - x.a.puan || x.sira - y.sira)
       .map((x) => x.a).slice(0, (tur === 'gonderim' ? sinir.gonderim : undefined) ?? ADAY_EN_COK[tur]);
     if (sonuc[0]) sonuc[0].enOlasi = true;
     return sonuc;
@@ -233,7 +240,12 @@ export function eylemAdaylariniAyikla(ham) {
         puan: Number.isFinite(a.puan) ? Number(a.puan) : 0, gerekce: (Array.isArray(a.gerekce) ? a.gerekce : []).map((g) => metin(g, 120)).filter((g) => g !== null).slice(0, 8),
         gizli: a.gizli === true, konum: k, enOlasi: a.enOlasi === true, oge: null
       };
-      if (tur === 'gonderim') { t.kayitOlusturabilir = a.kayitOlusturabilir === true; t.baglanti = a.baglanti === true; }
+      if (tur === 'gonderim') {
+        t.kayitOlusturabilir = a.kayitOlusturabilir === true; t.baglanti = a.baglanti === true;
+        if (a.pencerede === true) t.pencerede = true;
+        if (a.arkada === true) t.arkada = true;
+        if (a.alanIkonu === true) t.alanIkonu = true;
+      }
       if (tur === 'hata' && Number.isInteger(a.adet) && a.adet > 0) t.adet = a.adet;
       if (Array.isArray(a.cerceve) && a.cerceve.length && a.cerceve.every((c) => seciciGecerli(c))) {
         t.cerceve = a.cerceve.map(String).slice(0, 2);

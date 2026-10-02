@@ -309,11 +309,21 @@ function yanCiz(yan, o) {
  */
 function dugmeSecenekleri(adaylar, oneri, yazi) {
   const secenek = (a) => h('option', { value: a.secici, selected: a.secici === oneri || null }, yazi(a));
-  const dugmeler = adaylar.filter((a) => !a.baglanti);
-  const baglantilar = adaylar.filter((a) => a.baglanti);
+  // Sayfa içi pencere (modal) açıksa: önce "Açılan pencerede" (düğme ve bağlantılar), en sonda "Pencerenin arkasında"; alanların yanındaki
+  // simgeler (bilgi / ok…) ayrı "Alan ikonları" grubunda, en sonda.
+  const ikonlar = adaylar.filter((a) => a.alanIkonu);
+  const kalan = adaylar.filter((a) => !a.alanIkonu);
+  const pencerede = kalan.filter((a) => a.pencerede);
+  const arkada = kalan.filter((a) => a.arkada);
+  const sayfa = kalan.filter((a) => !a.pencerede && !a.arkada);
+  const dugmeler = sayfa.filter((a) => !a.baglanti);
+  const baglantilar = sayfa.filter((a) => a.baglanti);
   return [
+    pencerede.length ? h('optgroup', { label: `Açılan pencerede (${pencerede.length})` }, pencerede.map(secenek)) : null,
     dugmeler.length ? h('optgroup', { label: `Düğmeler (${dugmeler.length})` }, dugmeler.map(secenek)) : null,
-    baglantilar.length ? h('optgroup', { label: `Bağlantılar (${baglantilar.length})` }, baglantilar.map(secenek)) : null
+    baglantilar.length ? h('optgroup', { label: `Bağlantılar (${baglantilar.length})` }, baglantilar.map(secenek)) : null,
+    arkada.length ? h('optgroup', { label: `Pencerenin arkasında (${arkada.length}; pencere açıkken basılamayabilir)` }, arkada.map(secenek)) : null,
+    ikonlar.length ? h('optgroup', { label: `Alan ikonları (${ikonlar.length})` }, ikonlar.map(secenek)) : null
   ];
 }
 
@@ -639,8 +649,28 @@ function veriDuragi(o, s, kart, m, gonder) {
   };
   /** Alt liste hazır mı: tablodan seçildi ya da seçenekleri üstün şu anki değerine göre geldi. */
   const altHazir = (/** @type {any} */ a) => (durum[a.anahtar] && durum[a.anahtar].kaynak === 'tablo') || !kilitli.has(a.anahtar);
+  /**
+   * Sayfada hazır gelen (değeri okunan, kullanıcının değer girmediği) alanın sayfadaki değeri, girdinin biçiminde: liste / radyo → seçenek
+   * değeri, onay kutusu → true, metin → yazı. Hazır değilse null. Bu değer değiştirilmezse sunucuya gitmez (sayfadaki kullanılır).
+   * @param {any} a @returns {string | boolean | null}
+   */
+  const hazirDegeri = (a) => {
+    if (!a.hazir || a.deger !== null || a.mevcut === null || a.mevcut === undefined) return null;
+    if (a.tur === 'checkbox') return true;
+    if (Array.isArray(a.secenekler)) {
+      const x = a.secenekler.find((/** @type {any} */ y) => y.metin === a.mevcut) || a.secenekler.find((/** @type {any} */ y) => String(y.deger) === a.mevcut);
+      return x ? String(x.deger) : null;
+    }
+    return String(a.mevcut);
+  };
+  /** Girilen değer sayfadaki hazır değerle aynıysa "girilmedi" sayılır (sayfadaki kullanılır, yeniden yazılmaz). @param {any} a @param {string | boolean | null} v */
+  const girilen = (a, v) => {
+    const sd = hazirDegeri(a);
+    return v === null || v === '' || (sd !== null && String(v) === String(sd)) ? { deger: null, kaynak: null } : { deger: v, kaynak: /** @type {'elle'} */ ('elle') };
+  };
   const satirYap = (a) => {
     durum[a.anahtar] = { deger: a.deger, kaynak: a.kaynak };
+    const sd = hazirDegeri(a);
     const id = `hizli-alan-${Math.random().toString(36).slice(2, 9)}`;
     const kap = h('div', { class: 'hizli-alan-girdisi' });
     const ciz = () => {
@@ -674,16 +704,23 @@ function veriDuragi(o, s, kart, m, gonder) {
         dosyaAlaniCiz(o, a, kap, id, d, (ref) => { durum[a.anahtar] = ref ? { deger: ref, kaynak: 'dosya' } : { deger: null, kaynak: null }; ciz(); }, m);
         return;
       }
+      // Sayfada hazır gelen değer önyazılı gelir (değiştirilebilir); değiştirilmezse sayfadaki değer kullanılır (yeniden yazılmaz).
+      const gosterilen = d.deger !== null && d.deger !== undefined ? d.deger : sd;
       if (a.tur === 'checkbox') {
-        girdi = h('input', { type: 'checkbox', id, checked: d.deger === true || d.deger === 'true' || null });
-        girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).checked, kaynak: 'elle' }; kosulGuncelle(); });
+        girdi = h('input', { type: 'checkbox', id, checked: gosterilen === true || gosterilen === 'true' || null });
+        girdi.addEventListener('change', () => {
+          const c = /** @type {HTMLInputElement} */ (girdi).checked;
+          durum[a.anahtar] = sd === true && c ? { deger: null, kaynak: null } : { deger: c, kaynak: 'elle' };
+          kosulGuncelle();
+        });
       } else if (secenekler) {
-        girdi = h('select', { id }, h('option', { value: '' }, 'Seçin'), secenekler.filter((x) => x.deger !== '').map((x) => h('option', { value: x.deger, selected: String(d.deger) === x.deger || null }, x.metin || x.deger)));
-        girdi.addEventListener('change', () => { durum[a.anahtar] = { deger: /** @type {HTMLSelectElement} */ (girdi).value || null, kaynak: 'elle' }; altlariKilitle(a.anahtar); kosulGuncelle(); });
+        girdi = h('select', { id }, h('option', { value: '' }, 'Seçin'), secenekler.filter((x) => x.deger !== '').map((x) => h('option', { value: x.deger, selected: gosterilen !== null && String(gosterilen) === x.deger || null }, x.metin || x.deger)));
+        girdi.addEventListener('change', () => { durum[a.anahtar] = girilen(a, /** @type {HTMLSelectElement} */ (girdi).value || null); altlariKilitle(a.anahtar); kosulGuncelle(); });
       } else {
-        girdi = h('input', { type: a.gizli ? 'password' : a.tur === 'date' ? 'date' : 'text', id, autocomplete: 'off', value: d.deger === null ? '' : String(d.deger) });
-        girdi.addEventListener('input', () => { durum[a.anahtar] = { deger: /** @type {HTMLInputElement} */ (girdi).value, kaynak: 'elle' }; });
+        girdi = h('input', { type: a.gizli ? 'password' : a.tur === 'date' ? 'date' : 'text', id, autocomplete: 'off', value: gosterilen === null || gosterilen === undefined ? '' : String(gosterilen) });
+        girdi.addEventListener('input', () => { durum[a.anahtar] = girilen(a, /** @type {HTMLInputElement} */ (girdi).value); });
       }
+      if (sd !== null) girdi.setAttribute('aria-describedby', `${id}-hazir`);
       if (a.zorunlu) girdi.setAttribute('aria-required', 'true');
       const doldur = doldurDugmesi({
         projeId: o.projeId, ortamId: o.ortam.id,
@@ -700,7 +737,8 @@ function veriDuragi(o, s, kart, m, gonder) {
     // Doldurma sırası: alanlar sayfadaki sırayla listelenir ve bu sırayla doldurulur; kullanıcı yukarı / aşağı taşıyabilir.
     // Düğme adı genel ("Yukarı taşı"); hangi alan olduğu aria-describedby ile alanın etiketinden okunur (alan etiketiyle karışmaz).
     // Bağlı alt liste üstünün altında durur (kendi sıra düğmesi yok; üstüyle birlikte taşınır).
-    const sira = zincirde(a) ? null : h('span', { class: 'hizli-sira', role: 'group', 'aria-label': 'Doldurma sırası' },
+    // Koşullu alan seçiminin grubunda durur (kendi sıra düğmesi yok; seçimden hemen sonra doldurulur).
+    const sira = zincirde(a) || grupSahibi(a) ? null : h('span', { class: 'hizli-sira', role: 'group', 'aria-label': 'Doldurma sırası' },
       h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-sira-yukari', 'aria-label': 'Yukarı taşı', 'aria-describedby': `${id}-etiket`, title: 'Yukarı taşı (daha önce doldurulur)', onclick: () => tasi(a, -1) }, h('span', { 'aria-hidden': 'true' }, '↑')),
       h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-sira-asagi', 'aria-label': 'Aşağı taşı', 'aria-describedby': `${id}-etiket`, title: 'Aşağı taşı (daha sonra doldurulur)', onclick: () => tasi(a, 1) }, h('span', { 'aria-hidden': 'true' }, '↓')));
     const derinlik = Math.min(4, zincirDerinligi(a));
@@ -708,9 +746,12 @@ function veriDuragi(o, s, kart, m, gonder) {
       h('div', { class: 'hizli-alan-baslik' },
         h('label', { for: id, id: `${id}-etiket`, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null },
           a.etiket, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
+        // "Sayfada hazır" rozeti etiketin dışında (alanın erişilebilir adı yalnız etiket kalır).
+        sd !== null ? h('span', { class: 'hizli-hazir-rozet' }, rozet('sayfada hazır', 'bilgi')) : null,
         sira),
-      // Seçim keşfi: alan bir seçimin belirli değerinde görünüyorsa hangi seçimde göründüğü yazılır.
-      a.kosul ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
+      // Seçim keşfi: koşullu alan, kontrol eden seçimin grubunda durur; seçim bu durakta değilse hangi seçimde göründüğü yazılır.
+      a.kosul && !grupSahibi(a) && !zincirde(a) ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
+      sd !== null ? h('div', { class: 'hizli-hazir-ipucu soluk kucuk', id: `${id}-hazir` }, 'Sayfada bu değerle geliyor; değiştirmezseniz sayfadaki değer kullanılır.') : null,
       a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, a.bagli.belirsiz
         ? `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelebilir (keşifte kesinleşmedi; “${a.bagli.ustEtiket}” seçip yanındaki “↓ … seçeneklerini getir” ile deneyin).`
         : `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,
@@ -725,7 +766,8 @@ function veriDuragi(o, s, kart, m, gonder) {
   /** Yerinde zincir düğmesi: üst seçilmeden pasif; seçilince "↓ … seçeneklerini getir"; gelince "✓ … seçenekleri geldi (n seçenek)". */
   const zincirDugmesiCiz = (/** @type {any} */ a, /** @type {HTMLElement} */ zincirKap, /** @type {string} */ id) => {
     const altlar = altlari(a.anahtar).filter((x) => aktifMi(x));
-    if (!altlar.length) { zincirKap.replaceChildren(); return; }
+    // Geçmiş adımın verisi düzenlenirken seçim sayfaya tek başına uygulanmaz (değer "Devam et"te zincir yeniden yürütülerek uygulanır).
+    if (!altlar.length || s.gecmis) { zincirKap.replaceChildren(); return; }
     const adlar = `“${altlar.map((x) => x.etiket).join('”, “')}”`;
     if (getiriliyor === a.anahtar) {
       yerlestir(zincirKap, h('button', { type: 'button', class: 'kucuk-dugme hizli-zincir-dugmesi', 'aria-disabled': 'true', 'aria-busy': 'true', 'data-odak-oncelik': '' },
@@ -753,11 +795,12 @@ function veriDuragi(o, s, kart, m, gonder) {
       !secili ? h('span', { class: 'soluk kucuk', id: ipucuId }, `Önce “${a.etiket}” seçin`)
         : bos ? h('span', { class: 'hizli-zincir-bos kucuk', id: ipucuId }, `Bu seçimde ${adlar} için seçenek gelmedi; başka bir “${a.etiket}” seçin.`) : null);
   };
-  // Önce analiz: sayfada zaten dolu gelen alanlar SORULMAZ (olduğu gibi kullanılır); yalnız boş olanlar istenir. Sayfada hazır gelen bir üst
-  // listenin bağlı altı henüz gelmediyse üst de gösterilir (yerinde düğmesi orada durur).
+  // Sayfada hazır gelen alanlar (bugünün tarihi gibi varsayılanlar gözden kaçmasın) ANA listede, sayfadaki sırasıyla, değeri önyazılı ve
+  // "sayfada hazır" rozetiyle durur; değiştirilmezse sayfadaki değer kullanılır. Hazır gelen üst listenin bağlı altı henüz gelmediyse üst
+  // "girilmiş" sayılmaz (yerinde düğmesi için seçilmeli).
   // "Önce bunu seçin": görünürlüğü belirleyen (koşullu alanları açan / kapatan), sayfada önseçili seçimler (radyo, hazır liste / onay
-  // kutusu) en üstte TÜM seçenekleriyle sorulur; sayfadaki değer önseçilidir. Değiştirilince alanlar anında bu seçime göre değişir ve yerinde
-  // "↓ Bu seçime göre alanları getir" seçimi sayfaya uygular (sayfa sakinleşince o seçimin alanları — keşifte görülmeyenler dahil — sorulur).
+  // kutusu) en üstte TÜM seçenekleriyle sorulur; sayfadaki değer önseçilidir. Bu seçimin koşullu alanları kutusunun İÇİNDE, altında gruplu
+  // durur ve seçim değişince anında değişir; yerinde "↓ Bu seçime göre alanları getir" seçimi sayfaya uygular.
   const kontrolMu = (/** @type {any} */ a) => Boolean(a.kontrol) && !a.kosul && !a.bagli && !altlari(a.anahtar).length && (a.hazir || a.tur === 'radio');
   const kontroller = s.alanlar.filter(kontrolMu);
   const hazirlar = s.alanlar.filter((a) => a.hazir && a.deger === null && !kontrolMu(a));
@@ -766,7 +809,6 @@ function veriDuragi(o, s, kart, m, gonder) {
   const satirlari = new Map();
   const satir = (/** @type {any} */ a) => { if (!satirlari.has(a.anahtar)) satirlari.set(a.anahtar, satirYap(a)); return /** @type {HTMLElement} */ (satirlari.get(a.anahtar)); };
   const satirlarKap = h('div', { class: 'hizli-alanlar' });
-  const hazirKap = h('details', { class: 'hizli-hazir' });
   // Doldurma sırası (anahtarlar): başlangıçta sayfadaki sıra; "Devam et"te sunucuya gider, motor bu sırayla doldurur.
   const siralama = s.alanlar.map((a) => a.anahtar);
   /** Sıralı alanlar; bağlı alt liste üstünün hemen altında (zincir birlikte durur, üst her zaman altından önce). */
@@ -795,7 +837,61 @@ function veriDuragi(o, s, kart, m, gonder) {
     if (simdi === null || simdi === undefined) return true;
     return a.kosul.degerler.includes(String(simdi));
   };
-  const sorulanlar = () => alanlarSirali().filter((a) => (!hazirlar.includes(a) || acilan.has(a.anahtar)) && !kontroller.includes(a) && aktifMi(a));
+  const sorulanlar = () => alanlarSirali().filter((a) => !kontroller.includes(a) && aktifMi(a));
+  /**
+   * Koşullu alanın grubu: görünürlüğünü belirleyen seçimin anahtarı (bağlı listede zincir kökünün koşulu); seçim bu durakta değilse null
+   * (alan ana listede, "… olunca görünür" notuyla durur).
+   * @param {any} a @returns {string | null}
+   */
+  function grupSahibi(a) {
+    let x = a;
+    for (let n = 0; x && zincirde(x) && n < 10; n++) x = bul(x.bagli.ust);
+    const k = x && x.kosul ? x.kosul.secim : null;
+    return k && k !== a.anahtar && bul(k) ? k : null;
+  }
+  /** Seçimin şu anki değerinin görünen metni ("Müşteri tipi: Kurumsal"). @param {any} k */
+  const secimMetni = (k) => {
+    const d = durum[k.anahtar];
+    if (d && d.kaynak === 'tablo') return `${k.etiket}: tablodan`;
+    const hd = hazirDegeri(k);
+    let v = d && d.deger !== null && d.deger !== undefined && d.deger !== '' ? d.deger : (k.sayfadaki ?? hd ?? k.ilk ?? null);
+    if (v === null) { const u = s.alanlar.find((/** @type {any} */ x) => x.kosul && x.kosul.secim === k.anahtar); v = u ? u.kosul.ilk : null; }
+    if (v === null || v === undefined) return k.etiket;
+    if (k.tur === 'checkbox') return `${k.etiket}: ${String(v) === 'true' ? 'işaretli' : 'işaretsiz'}`;
+    const x = (k.secenekler || []).find((/** @type {any} */ y) => String(y.deger) === String(v));
+    return `${k.etiket}: ${x ? x.metin || x.deger : String(v)}`;
+  };
+  /** @type {Map<string, { kap: HTMLElement; baslik: HTMLElement; liste: HTMLElement }>} */
+  const gruplar = new Map();
+  /** Seçimin koşullu alan grubu (yoksa kurulur); başlığı seçimin şu anki değerini söyler. @param {string} sahip @param {any[]} uyeler */
+  const grupKutusu = (sahip, uyeler) => {
+    let g = gruplar.get(sahip);
+    if (!g) {
+      const baslik = h('p', { class: 'hizli-kosul-grubu-baslik kucuk' });
+      const liste = h('div', { class: 'hizli-alanlar' });
+      g = { kap: h('div', { class: 'hizli-kosul-grubu', role: 'group' }, baslik, liste), baslik, liste };
+      gruplar.set(sahip, g);
+    }
+    yerlestir(g.liste, ...uyeler.flatMap((x) => satirVeGrubu(x, uyelerOf(x.anahtar))));
+    grupBasligi(sahip);
+    return g.kap;
+  };
+  /** @param {string} sahip */
+  const grupBasligi = (sahip) => {
+    const g = gruplar.get(sahip);
+    const k = bul(sahip);
+    if (!g || !k) return;
+    const m = `“${secimMetni(k)}” seçimine göre`;
+    // (Grubun adı görünen başlığıdır; aria-label verilmez: alanların erişilebilir adlarıyla karışmasın.)
+    g.baslik.textContent = `${m}:`;
+  };
+  /** O an sorulan alanlardan bu seçimin grubundakiler (sayfa sırasıyla). @param {string} sahip */
+  let sorulanOnbellek = /** @type {any[]} */ ([]);
+  const uyelerOf = (/** @type {string} */ sahip) => sorulanOnbellek.filter((x) => grupSahibi(x) === sahip);
+  /** Satır + (varsa) altında koşullu alan grubu. @param {any} a @param {any[]} uyeler */
+  const satirVeGrubu = (a, uyeler) => (uyeler.length ? [satir(a), grupKutusu(a.anahtar, uyeler)] : [satir(a)]);
+  /** "Önce bunu seçin" satırlarının grup kapları (seçimin kutusunun içinde, altında). @type {Map<string, HTMLElement>} */
+  const kontrolGrupKaplari = new Map();
   /** Seçimin sayfadaki (uygulanmış) değeri. @param {any} a */
   const sayfadakiDeger = (a) => (a.sayfadaki ?? a.ilk ?? null);
   /** Seçimin şu anki değeri: girilen, yoksa sayfadaki. @param {any} a @returns {string | null} */
@@ -839,6 +935,7 @@ function veriDuragi(o, s, kart, m, gonder) {
       }
       const v = kontrolDegeri(a);
       const sayfada = sayfadakiDeger(a);
+      if (s.gecmis) { yerlestir(dugmeKap); return; }
       if (v !== null && v !== (sayfada === null ? null : String(sayfada))) {
         const dugme = h('button', { type: 'button', class: 'kucuk-dugme hizli-zincir-dugmesi hizli-onsecim-dugmesi' }, h('span', { 'aria-hidden': 'true' }, '↓ '), 'Bu seçime göre alanları getir');
         dugme.addEventListener('click', () => {
@@ -852,8 +949,10 @@ function veriDuragi(o, s, kart, m, gonder) {
       yerlestir(dugmeKap, sayfada === null ? null : h('span', { class: 'hizli-zincir-tamam' }, h('span', { 'aria-hidden': 'true' }, '✓ '), `Sayfada “${metni(String(sayfada))}” seçili; alanlar bu seçime göre soruluyor.`));
     };
     dugmeCiz();
+    const grupKap = h('div', { class: 'hizli-onsecim-grubu' });
+    kontrolGrupKaplari.set(a.anahtar, grupKap);
     return h('div', { class: 'hizli-onsecim-alani', 'data-anahtar': a.anahtar }, girdi, dugmeKap,
-      a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
+      a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null, grupKap);
   };
   const kontrolKap = kontroller.length ? h('section', { class: 'hizli-onsecim', 'aria-labelledby': 'hizli-onsecim-baslik' },
     h('h4', { id: 'hizli-onsecim-baslik' }, 'Önce bunu seçin'),
@@ -868,7 +967,7 @@ function veriDuragi(o, s, kart, m, gonder) {
   };
   const tasi = (/** @type {any} */ a, /** @type {number} */ yon) => {
     // Taşıma kökler arasında: bağlı alt listeler üstleriyle birlikte yer değiştirir.
-    const gorunen = sorulanlar().filter((x) => !zincirde(x));
+    const gorunen = sorulanlar().filter((x) => !zincirde(x) && !grupSahibi(x));
     const j = gorunen.indexOf(a) + yon;
     if (j < 0 || j >= gorunen.length) return;
     const x = siralama.indexOf(a.anahtar);
@@ -911,24 +1010,30 @@ function veriDuragi(o, s, kart, m, gonder) {
     if (eksikler.length) devam.setAttribute('aria-describedby', devamIpucu.id); else devam.removeAttribute('aria-describedby');
     atla.hidden = !eksikler.length;
     atla.disabled = Boolean(getiriliyor);
+    // Koşullu alan gruplarının başlıkları seçimin şu anki değerini söyler.
+    for (const k of gruplar.keys()) grupBasligi(k);
   };
   const listeyiCiz = () => {
     const sorulan = sorulanlar();
     gorunenImza = sorulan.map((a) => a.anahtar).join('|');
-    yerlestir(satirlarKap, ...(sorulan.length ? sorulan.map(satir) : [h('p', { class: 'soluk' }, 'Sayfa hazır: sizden doldurmanızı isteyeceğim boş alan yok. Devam edebilirsiniz.')]));
-    const kokler = sorulan.filter((a) => !zincirde(a));
+    sorulanOnbellek = sorulan;
+    // Ana liste: kökler (sayfa sırasıyla); koşullu alanlar kontrol eden seçimin altında gruplu (seçim "Önce bunu seçin"deyse onun kutusunda).
+    const gosterilen = (/** @type {string} */ k) => sorulan.some((x) => x.anahtar === k) || kontroller.some((x) => x.anahtar === k);
+    const anaListe = sorulan.filter((a) => { const g = grupSahibi(a); return !g || !gosterilen(g); });
+    yerlestir(satirlarKap, ...(anaListe.length ? anaListe.flatMap((a) => satirVeGrubu(a, uyelerOf(a.anahtar)))
+      : [h('p', { class: 'soluk' }, sorulan.length ? 'Bu seçimin alanları yukarıda, seçimin altında.' : 'Sayfada sizden doldurmanızı isteyeceğim alan yok. Devam edebilirsiniz.')]));
+    for (const k of kontroller) {
+      const uyeler = uyelerOf(k.anahtar);
+      const kap = kontrolGrupKaplari.get(k.anahtar);
+      if (kap) yerlestir(kap, ...(uyeler.length ? [grupKutusu(k.anahtar, uyeler)] : []));
+    }
+    const kokler = sorulan.filter((a) => !zincirde(a) && !grupSahibi(a));
     kokler.forEach((a, i) => {
       const d = satir(a).querySelectorAll('.hizli-sira button');
       if (d.length < 2) return;
       /** @type {HTMLButtonElement} */ (d[0]).disabled = i === 0;
       /** @type {HTMLButtonElement} */ (d[1]).disabled = i === kokler.length - 1;
     });
-    const kalan = hazirlar.filter((a) => !acilan.has(a.anahtar));
-    hazirKap.hidden = !kalan.length;
-    yerlestir(hazirKap, h('summary', {}, `Sayfada hazır gelen ${kalan.length} değer (olduğu gibi kullanılacak)`),
-      h('ul', { class: 'hizli-hazir-liste' }, kalan.map((a) => h('li', {},
-        h('span', { class: 'hizli-hazir-ad' }, a.etiket), h('span', { class: 'hizli-hazir-deger' }, a.mevcut ?? 'dolu'),
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${a.etiket}: değiştir`, onclick: () => { acilan.add(a.anahtar); listeyiCiz(); } }, 'Değiştir')))));
     zincirGuncelle();
   };
   /** Ekrandaki değerler (sunucuya gidecek biçimde). */
@@ -969,13 +1074,13 @@ function veriDuragi(o, s, kart, m, gonder) {
       : altlar.length ? `${altlar.map((x) => `“${x.etiket}”`).join(', ')} için seçenek gelmedi.` : '';
   }
   const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
-  return kart(o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
+  return kart(s.gecmis ? `Adım ${s.adim}: veriyi düzenle` : o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
     s.not ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, s.not) : null,
     // Keşfin notları (ör. seçimlerin sayfada tek tek denendiği) ilk veri durağında gösterilir.
     o.adimlar.length === 1 && o.kesif && Array.isArray(o.kesif.notlar) && o.kesif.notlar.length
       ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
-    h('p', { class: 'soluk' }, 'Sayfada boş görünen alanlar aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada zaten dolu gelenler sorulmaz, olduğu gibi kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
-    kontrolKap, gosterge, m.kutu, satirlarKap, hazirKap,
+    h('p', { class: 'soluk' }, 'Sayfadaki alanlar sayfadaki sırasıyla aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada hazır gelen değerler önyazılı ve “sayfada hazır” işaretli: değiştirmezseniz sayfadaki değer kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
+    kontrolKap, gosterge, m.kutu, satirlarKap,
     h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
     devamIpucu);
 }
