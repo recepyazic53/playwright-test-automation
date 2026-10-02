@@ -202,6 +202,26 @@ function yuklenecekDosya(deger: unknown): string {
 
 /** Görünen alanı tipine/doldurucusuna göre doldurur. */
 /** Gizli olabilen (özel çizimli radyo / onay kutusu) öğe: sayfada varsa ilki. */
+/**
+ * Radyo grubu görünür mü: girdisi ya da etiketi görünen ilk radyo (özel çizimli radyonun girdisi gizlidir, seçim etiketle yapılır;
+ * hızlı testin okuması da etiketi görünen grubu alan sayar: sayfa-envanteri.ts). Görünene kadar en çok sureMs beklenir.
+ */
+async function gorunurRadyo(page: Kapsam, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
+  const hepsi = page.locator(secici);
+  for (const bitis = Date.now() + sureMs; ;) {
+    for (let i = 0, n = await hepsi.count().catch(() => 0); i < n; i++) {
+      const r = hepsi.nth(i);
+      const gorunur = await r.evaluate((e) => {
+        const gorunen = (x: Element): boolean => { const k = x.getBoundingClientRect(); const s = getComputedStyle(x); return k.width > 0 && k.height > 0 && s.visibility !== 'hidden'; };
+        return gorunen(e) || [...((e as HTMLInputElement).labels ?? [])].some(gorunen);
+      }).catch(() => false);
+      if (gorunur) return r;
+    }
+    if (Date.now() >= bitis) return null;
+    await new Promise((c) => setTimeout(c, 250));
+  }
+}
+
 async function sayfadakiOge(page: Kapsam, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
   const l = page.locator(secici).first();
   try {
@@ -569,7 +589,11 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
         ? k.locator(s.secici)
         : k.locator(alan.secici as string).and(k.locator(`[value="${cssKacis(s.deger)}"]`));
       if (alan.doldurucu === 'radyoZorla') { await zorlaIsaretle(hedef.first(), true, adimBasligi, alan); return; }
-      await hedef.first().check();
+      // Aynı seçiciye uyan gizli kopya olabilir: görünür olan seçilir. Girdi gizli / örtülüyse (özel çizimli radyo) zorla işaretlenir
+      // (hızlı testle aynı kural: hizli-test-motoru.ts > alaniDoldur).
+      const gorunen = hedef.filter({ visible: true }).first();
+      if (await gorunen.count()) { await gorunen.check(); return; }
+      await zorlaIsaretle(hedef.first(), true, adimBasligi, alan);
       return;
     }
     case 'onayKutusu':
@@ -1346,7 +1370,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           // (ozelSecim) gerçek <select>'i de gizlidir. Alan bir çerçevedeyse (konum.cerceve) o çerçevede aranır.
           const zorla = alan.doldurucu === 'radyoZorla' || alan.doldurucu === 'onayKutusuZorla' || alan.doldurucu === 'degerJs' || alan.doldurucu === 'ozelSecim';
           const k = kapsam(page, alan.cerceve);
-          const l = zorla ? await sayfadakiOge(k, alan.secici as string) : await gorunurOge(k, alan.secici as string);
+          const l = zorla ? await sayfadakiOge(k, alan.secici as string)
+            : alan.tip === 'radyo' ? await gorunurRadyo(k, alan.secici as string) : await gorunurOge(k, alan.secici as string);
           if (!l) {
             // Boş bırakılan (yalnız tuşa basılacak) alan görünmüyorsa sessizce geçilir (mutlaka görünmeli değilse).
             if (alan.yalnizTus && !alan.mutlakaGorunmeli) continue;
