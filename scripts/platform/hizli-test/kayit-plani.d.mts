@@ -9,7 +9,7 @@ export type KayitPlani = { satirAdi: string; tablolar: PlanTablosu[] };
 export type PlanSecimi = { tablolar?: Record<string, { islem: string; yeniAd?: string; hedefId?: string }>; baglantilar?: string[] };
 export type YazilanTablo = {
   planAdi: string; ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number; hedef: (sutun: string) => string;
-  pin: Record<string, string> | null; tur: 'kayit' | 'liste'; plan: PlanTablosu;
+  pin: Record<string, string> | null; satirId: string | null; tur: 'kayit' | 'liste'; plan: PlanTablosu;
 };
 export type PlanOnizlemesi = {
   kaynak: 'hizli';
@@ -31,7 +31,9 @@ export declare function planKur(g: { baslik: string; alanlar: Array<Record<strin
 export declare function planOnizle(vt: Veritabani, projeId: string, plan: KayitPlani, ekranId: string | null, anahtarlar: Record<string, string>): PlanOnizlemesi;
 export declare function varsayilanSecim(onizleme: PlanOnizlemesi): { tablolar: Record<string, { islem: string }>; baglantilar: string[] };
 export declare function planYaz(vt: Veritabani, projeId: string, plan: KayitPlani, secim: PlanSecimi, bilgi: { ekranAdi: string }): YazilanTablo[];
-export declare function basvuruYaz(tabloAdi: string, sutun: string): string;
+export declare function basvuruYaz(tabloAdi: string, sutun: string, etiket?: string): string;
+export declare const KAYIT_ETIKETI: string;
+export declare function pinSecimi(y: { satirId?: string | null; pin: Record<string, string> | null; tur: 'kayit' | 'liste' }): Record<string, string> | null;
 export declare function pinAnahtari(tabloId: string): string;
 export declare function senaryoOnerileri(plan: KayitPlani, baslik: string, s?: {
   enCok?: number; alanlar?: Array<Record<string, any>>; iliskiler?: ReadonlyArray<{ ust: string; alt: string }>;

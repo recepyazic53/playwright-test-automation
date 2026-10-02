@@ -266,14 +266,16 @@ const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
 /**
  * Test verisine yazılacaklar bölümü (paket önizlemesi ve akış kaydının "akışa yaz" onayı ortak kullanır).
  * @param {object | null} t önizlemenin testVerisi bölümü @param {() => void} degisti
- * @param {{ kompakt?: boolean }} [ayar] kompakt: örnek satırlar katlanır (çok tablolu / uzun listeli özetler için)
+ * @param {{ kompakt?: boolean; varsayilanBirlestir?: boolean }} [ayar] kompakt: örnek satırlar katlanır (çok tablolu / uzun listeli özetler
+ *   için); varsayilanBirlestir: aynı adlı tabloda karar önceden "Birleştir" (yeni satır olarak eklenir, mevcut satırlar değişmez) seçili
+ *   gelir — kullanıcı yine açıkça Yeni adla yaz / Atla seçebilir (hızlı test kaydı: senaryo eklenen KENDİ satırına sabitlenir).
  */
 export function testVerisiSecimi(t, degisti, ayar = {}) {
   if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, bekleyenler: () => [], govde: () => undefined };
   /** Tablo adı → satırı ve odaklanacak ilk denetim (kararsız tabloya "Bölüme git" için). @type {Map<string, { satir: HTMLElement; odak: () => HTMLElement | null }>} */
   const satirlar = new Map();
   /** @type {Map<string, { islem: string | null; yeniAd: string; hedefId?: string }>} */
-  const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? null : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60), hedefId: '' }]));
+  const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? (ayar.varsayilanBirlestir ? 'birlestir' : null) : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60), hedefId: '' }]));
   const baglar = new Set(t.baglantilar.map((b) => b.alanId));
   const yazilir = (ad) => { const d = durum.get(ad); return Boolean(d && d.islem && d.islem !== 'atla'); };
   const bagListesi = h('ul', { class: 'tv-baglar' });
@@ -320,7 +322,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       };
       const m = x.mevcut;
       secim = h('div', { class: 'tv-cakisma' },
-        h('div', { class: 'not-kutusu uyari kucuk' }, `“${m.ad}” adında bir tablo zaten var (${m.sutunSayisi} sütun, ${m.satirSayisi} satır). Ne yapılsın? Seçmeden kabul edilemez.`),
+        h('div', { class: 'not-kutusu uyari kucuk' }, `“${m.ad}” adında bir tablo zaten var (${m.sutunSayisi} sütun, ${m.satirSayisi} satır). Ne yapılsın? ${ayar.varsayilanBirlestir ? 'Varsayılan: yeni satır olarak birleştir (senaryo kendi satırını kullanır); değiştirebilirsiniz.' : 'Seçmeden kabul edilemez.'}`),
         h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': `${x.ad}: aynı adlı tablo` },
           secenek('birlestir', `Birleştir — ${m.eklenecekSatir} yeni satır${m.yeniSutunlar.length ? `, ${m.yeniSutunlar.length} yeni sütun (${m.yeniSutunlar.join(', ')})` : ''}; mevcut satırlar değişmez`),
           secenek('yeniAd', 'Yeni adla yaz:', adGirdisi),

@@ -21,6 +21,8 @@ export declare function senaryoDosyasiEkle(vt: Veritabani, girdi: {
   klasor: string; icerik: Buffer; ad: unknown; kabul?: unknown; sahipTuru?: 'senaryo' | 'ekran' | null; sahipId?: string | null; kaynak?: string | null;
 }): Promise<{ id: string; ad: string; boyut: number; referans: string }>;
 export declare function senaryoDosyasiBilgisi(vt: Veritabani, id: string): SenaryoDosyasiBilgisi | null;
+export declare function hizliTestKaynagi(projeId: string): string;
+export declare function projeSenaryoDosyalari(vt: Veritabani, projeId: string): Array<{ id: string; ad: string; boyut: number; olusturulma: string; referans: string }>;
 export declare function kaynaktanDosyaBul(vt: Veritabani, kaynak: string): SenaryoDosyasiBilgisi | null;
 export declare function referanslariBul(deger: unknown): Array<{ id: string; ad: string; referans: string }>;
 export declare function metinleriDonustur<T>(deger: T, donustur: (metin: string) => string): { deger: T; degisti: boolean };

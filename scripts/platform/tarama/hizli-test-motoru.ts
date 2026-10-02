@@ -16,6 +16,8 @@
 // reddedilir), sayfaya form gönderimi ve düğme tıklaması korumaları konur, GET/HEAD dışındaki istekler engellenir. Diğer izinlerde
 // yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
+import { existsSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import type { Browser, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
 import { alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
@@ -335,7 +337,15 @@ export async function hizliTestiYurut(
       const k = alanKapsami(page, a.cerceve);
       const deger = d.deger;
       try {
-        if (a.tur === 'file') return 'Dosya alanı hızlı testte doldurulmaz; senaryo formunda dosya yükleyin.';
+        // Dosya alanı: değer, kullanıcının seçtiği dosyanın (Nöbetçi'nin şifreli deposundan) oturuma özel geçici kopyasının mutlak yolu;
+        // tarayıcı dosya girdisine yüklenir (normal koşu da setInputFiles ile).
+        if (a.tur === 'file') {
+          const yol = typeof deger === 'string' ? deger : '';
+          if (!yol || !isAbsolute(yol) || !existsSync(yol)) return `“${a.etiket ?? d.anahtar}”: dosya seçilmedi ya da hazırlanamadı; veri durağında dosyayı yeniden seçin.`;
+          await k.locator(a.secici).first().setInputFiles(yol, { timeout: bekleMs });
+          await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
+          return null;
+        }
         if (a.tur === 'radio') {
           const r = (a.radyolar ?? []).find((x) => x.deger === String(deger) || (x.metin && katla(x.metin) === katla(String(deger))));
           if (!r) return `“${String(deger)}” seçeneği bu alanda yok (seçenekler: ${(a.radyolar ?? []).map((x) => x.metin ?? x.deger).join(', ')}).`;

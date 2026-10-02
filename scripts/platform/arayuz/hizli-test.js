@@ -7,6 +7,7 @@
 // "Doldur" ile tablodan seçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesajKutusu, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { doldurDugmesi } from './doldur.js';
+import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle } from './dosya-yukleme.js';
 import { testVerisiSecimi } from './sayfa-paketi.js';
 import { adresliIstek } from './adres-ayirma.js';
 
@@ -412,6 +413,58 @@ let zincirOdagi = null;
 /** Oturum ekranının canlı durum satırında (aria-live) bir kez okunacak duyuru. */
 let bekleyenDuyuru = '';
 
+/**
+ * Veri durağında dosya alanı: seçili dosyanın adı + "Dosya seç" (bilgisayardan; tarayıcı dosya girdisi → şifreli depoya yükleme) ve
+ * "Depodan seç" (projenin şifreli senaryo dosyaları). sec(başvuru | null) seçimi bildirir.
+ * @param {any} o oturum @param {any} a alan @param {HTMLElement} kap @param {string} id @param {{ deger: unknown }} d
+ * @param {(ref: string | null) => void} sec @param {{ goster: (m: string, tur?: string) => void }} m
+ */
+function dosyaAlaniCiz(o, a, kap, id, d, sec, m) {
+  const ref = dosyaReferansiCoz(d.deger);
+  const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'file', class: 'gorunmez-dosya', accept: a.kabul || null, tabindex: '-1', 'aria-hidden': 'true' }));
+  // Etiket (label for) bu düğmeyi gösterir; adı ne yaptığını ve hangi alan olduğunu söyler.
+  const sec_ = h('button', { type: 'button', id, class: 'kucuk-dugme hizli-dosya-sec', 'aria-label': `${ref ? 'Başka dosya seç' : 'Dosya seç'}: ${a.etiket}` }, ikon('yukle'), ref ? 'Başka dosya seç' : 'Dosya seç');
+  const durumSatiri = h('span', { class: 'soluk kucuk', role: 'status' });
+  sec_.addEventListener('click', () => girdi.click());
+  girdi.addEventListener('change', async () => {
+    const dosya = girdi.files && girdi.files[0];
+    if (!dosya) return;
+    const hata = dosyaOnDenetimi(dosya, a.kabul);
+    if (hata) { m.goster(hata); return; }
+    sec_.disabled = true;
+    try {
+      const r = await dosyaYukle(`/platform/hizli-test/dosya-yukle?id=${encodeURIComponent(o.id)}&alan=${encodeURIComponent(a.anahtar)}`, dosya, (y) => { durumSatiri.textContent = `Yükleniyor… %${y}`; });
+      sec(r.referans);
+    } catch (e) {
+      m.goster(e && e.message ? e.message : 'Dosya yüklenemedi.');
+      sec_.disabled = false;
+      durumSatiri.textContent = '';
+    }
+  });
+  const depo = h('button', { type: 'button', class: 'kucuk-dugme hayalet hizli-dosya-depo' }, 'Depodan seç');
+  const depoKap = h('div', { class: 'hizli-dosya-deposu' });
+  depo.addEventListener('click', async () => {
+    depo.disabled = true;
+    try {
+      const r = await api(`/platform/hizli-test/dosyalar?id=${encodeURIComponent(o.id)}`);
+      const liste = Array.isArray(r.dosyalar) ? r.dosyalar : [];
+      if (!liste.length) { yerlestir(depoKap, h('p', { class: 'soluk kucuk' }, 'Bu projenin dosya deposunda dosya yok; “Dosya seç” ile bilgisayarınızdan seçin.')); return; }
+      const secim = h('select', { 'aria-label': `${a.etiket}: depodaki dosyalar` }, h('option', { value: '' }, 'Dosya seçin'),
+        liste.map((x) => h('option', { value: x.referans }, `${x.ad} (${Math.max(1, Math.round(x.boyut / 1024))} KB)`)));
+      secim.addEventListener('change', () => { if (/** @type {HTMLSelectElement} */ (secim).value) sec(/** @type {HTMLSelectElement} */ (secim).value); });
+      yerlestir(depoKap, secim);
+      /** @type {HTMLSelectElement} */ (secim).focus();
+    } catch (e) {
+      m.goster(e && e.message ? e.message : 'Dosya deposu okunamadı.');
+    } finally { depo.disabled = false; }
+  });
+  const kaldir = ref ? h('button', { type: 'button', class: 'kucuk-dugme hayalet' }, 'Kaldır') : null;
+  if (kaldir) kaldir.addEventListener('click', () => sec(null));
+  yerlestir(kap,
+    ref ? h('span', { class: 'hizli-dosya-adi' }, ikon('dosya'), ref.ad) : h('span', { class: 'soluk kucuk' }, 'Dosya seçilmedi'),
+    ref ? rozet('şifreli depoda') : null, girdi, sec_, depo, kaldir, durumSatiri, depoKap);
+}
+
 /** 3. durak: veri durağı. */
 function veriDuragi(o, s, kart, m, gonder) {
   /** @type {Record<string, { deger: string | boolean | null; kaynak: 'elle' | 'tablo' | null; tabloSecimi?: any }>} */
@@ -478,9 +531,11 @@ function veriDuragi(o, s, kart, m, gonder) {
       /** @type {HTMLElement} */
       let girdi;
       const secenekler = Array.isArray(a.secenekler) ? a.secenekler : null;
-      // Dosya alanı hızlı testte doldurulmaz: açıkça söylenir (dosya kaydettikten sonra senaryo formunda yüklenir).
+      // Dosya alanı: kullanıcı dosyayı bilgisayarından seçer ("Dosya seç") ya da Nöbetçi'nin şifreli dosya deposundan ("Depodan seç").
+      // Dosya şifreli depoya yazılır, senaryoya başvuru ("nobetci-dosya://…") olarak kaydedilir; hızlı test / doğrulama / normal koşu
+      // tarayıcının dosya girdisine yükler. Değer üretilmez.
       if (a.tur === 'file') {
-        yerlestir(kap, h('p', { class: 'soluk kucuk hizli-dosya-notu', id }, 'Dosya alanı hızlı testte doldurulmaz (desteklenmiyor). Testi kaydettikten sonra senaryo formunda dosyayı yükleyin; sayfa dosyayı zorunlu tutuyorsa basışta uyarı görebilirsiniz.'));
+        dosyaAlaniCiz(o, a, kap, id, d, (ref) => { durum[a.anahtar] = ref ? { deger: ref, kaynak: 'dosya' } : { deger: null, kaynak: null }; ciz(); }, m);
         return;
       }
       if (a.tur === 'checkbox') {
@@ -836,8 +891,8 @@ function kaydetDuragi(o, s, kart, m, gonder) {
   return kart('Kaydedilecekler', 'onay',
     zincir,
     Array.isArray(s.uyarilar) && s.uyarilar.length ? h('div', { class: 'not-kutusu uyari', role: 'note' }, s.uyarilar.map((x) => h('p', {}, x))) : null,
-    // Düzenleme kipi: ekranın mevcut test verisi tablolarıyla birleştirme kararı özet sekmesinde istenir (o karar verilmeden "Onayla" pasiftir).
-    s.tabloKarariGerekebilir ? h('p', { class: 'kucuk soluk hizli-tablo-karari-notu' }, 'Projede aynı adlı test verisi tablosu varsa (bu ekranın ya da başka bir ekranın) özet sekmesinde her tablo için “Birleştir / Yeni adla yaz / Atla” kararı istenir; karar verilmeden “Onayla ve kaydet” pasif kalır. Tablo yazmak istemiyorsanız aşağıdaki “test verisi tablosu olarak kaydet” seçeneğini kaldırın.') : null,
+    // Aynı adlı tablo: özet sekmesinde varsayılan "Birleştir" (yeni satır) seçili gelir; kullanıcı açıkça değiştirebilir.
+    s.tabloKarariGerekebilir ? h('p', { class: 'kucuk soluk hizli-tablo-karari-notu' }, 'Projede aynı adlı test verisi tablosu varsa (bu ekranın ya da başka bir ekranın) özet sekmesinde her tablo için “Birleştir / Yeni adla yaz / Atla” seçimi gösterilir; varsayılan “Birleştir”dir: değerleriniz yeni satır olarak eklenir, mevcut satırlar değişmez ve senaryo kendi satırını kullanır. Tablo yazmak istemiyorsanız aşağıdaki “test verisi tablosu olarak kaydet” seçeneğini kaldırın.') : null,
     h('ul', { class: 'hizli-ozet kucuk' },
       h('li', {}, h('b', {}, 'Ekrana: '), 'alanlar, koşullar, düğme zinciri, bitiş ve hata mesajları'),
       h('li', {}, h('b', {}, 'Senaryoya: '), `girilen değerler, tablo bağlantıları, izin (${oz.izin}), bitiş koşulu`)),
@@ -879,7 +934,8 @@ async function ozetEkrani(govde, id) {
   const m = mesajKutusu();
   const tercih = oz.tercih || { kosuyaDahil: true, tabloOlustur: true };
   let baslik = oz.baslik;
-  const tv = testVerisiSecimi(tercih.tabloOlustur ? oz.onizleme : null, () => guncelle(), { kompakt: true });
+  // Aynı adlı tabloda varsayılan: yeni satır olarak birleştir (senaryo eklenen kendi satırına satır kimliğiyle sabitlenir); karar açıkça değiştirilebilir.
+  const tv = testVerisiSecimi(tercih.tabloOlustur ? oz.onizleme : null, () => guncelle(), { kompakt: true, varsayilanBirlestir: true });
   const oneriler = oz.senaryolar.filter((x) => x.indeks > 0);
   const secili = new Set(oneriler.filter((x) => x.varsayilanSecili).map((x) => x.indeks));
   const onayla = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), oz.farklar ? 'Farkları onayla ve kaydet' : 'Onayla ve kaydet');

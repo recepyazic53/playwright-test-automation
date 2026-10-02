@@ -114,6 +114,26 @@ export function senaryoDosyasiBilgisi(vt, id) {
   return s ? bilgiCevir(s) : null;
 }
 
+/** Hızlı testte yüklenen (henüz senaryoya bağlanmamış) dosyanın kaynak işareti: projesi bilinsin diye. @param {string} projeId */
+export const hizliTestKaynagi = (projeId) => `hizli-test:${projeId}`;
+
+/**
+ * Projenin senaryo dosyaları deposu (içerik ASLA dönmez): projenin senaryolarına / ekranlarına bağlı dosyalar ve projenin hızlı
+ * testlerinde yüklenmiş dosyalar; en yeni önce. Kullanıcı yeni dosya yüklemek yerine buradan seçebilir.
+ * @param {Veritabani} vt @param {string} projeId
+ * @returns {Array<{ id: string; ad: string; boyut: number; olusturulma: string; referans: string }>}
+ */
+export function projeSenaryoDosyalari(vt, projeId) {
+  const senaryolar = new Set(vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ?', [projeId]).map((r) => String(r.id)));
+  const ekranlar = new Set(ekranlariListele(vt, projeId).map((e) => String(e.id)));
+  const kaynak = hizliTestKaynagi(projeId);
+  return vt.tumu('SELECT * FROM medya WHERE tur = ? AND silinme IS NULL ORDER BY olusturulma DESC', [SENARYO_DOSYASI_TURU])
+    .map(bilgiCevir)
+    .filter((b) => (b.sahipTuru === 'senaryo' && b.sahipId && senaryolar.has(b.sahipId)) || (b.sahipTuru === 'ekran' && b.sahipId && ekranlar.has(b.sahipId)) || b.kaynak === kaynak)
+    .slice(0, 200)
+    .map((b) => ({ id: b.id, ad: b.ad, boyut: b.boyut, olusturulma: b.olusturulma, referans: dosyaReferansi(b.id, b.ad) }));
+}
+
 /** Eski düz metin yolundan (kaynak) taşınmış dosya. @param {Veritabani} vt @param {string} kaynak */
 export function kaynaktanDosyaBul(vt, kaynak) {
   const s = vt.tek('SELECT * FROM medya WHERE tur = ? AND kaynak = ? AND silinme IS NULL ORDER BY olusturulma LIMIT 1', [SENARYO_DOSYASI_TURU, kaynak]);

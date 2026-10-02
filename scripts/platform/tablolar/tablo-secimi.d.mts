@@ -10,6 +10,9 @@ export declare const BICIM_KALIBI: string;
 export declare function basvuruCoz(ad: string): Basvuru | null;
 export declare function basvuru(tablo: string, sutun: string, etiket?: string, bicim?: string): string;
 export declare function grupAnahtari(tabloId: string, etiket?: string): string;
+/** Satır seçiminde satır kimliğiyle sabitleme anahtarı ("$satir"). */
+export declare const SATIR_KIMLIGI: string;
+export declare function satirSabitlemesi(satirId: string): Record<string, string>;
 /** Gizli sütun değerinin satır seçimi için kısmi maskesi ("4•••••8"; 4 karakterden kısa değer "•••"). */
 export declare function kismiMaske(deger: unknown): string;
 export declare function tabloBul<T extends { ad: string }>(tablolar: T[], ad: string): T | undefined;

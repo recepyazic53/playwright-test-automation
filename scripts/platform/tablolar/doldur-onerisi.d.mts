@@ -19,6 +19,9 @@ export interface DoldurGirdisi {
 }
 export declare const NEDEN_METINLERI: Readonly<{ bagli: string; ad: string; liste: string; benzer: string }>;
 export declare function benzerAdMi(a: string, b: string): boolean;
+export declare function sozcukKoku(w: string): string;
+export declare function kisiAdKavrami(etiket: string): 'ad' | 'soyad' | null;
+export declare function kokEslesirMi(etiket: string, sutunAdi: string): boolean;
 export declare function doldurAdaylari(g: DoldurGirdisi): DoldurAdayi[];
 export declare function adaySecimi(aday: DoldurAdayi, satirId?: string | null): DoldurSecimi;
 export declare function tekAnlamliSecim(adaylar: DoldurAdayi[]): DoldurSecimi | null;

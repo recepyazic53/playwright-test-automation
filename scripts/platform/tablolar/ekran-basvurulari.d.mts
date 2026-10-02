@@ -32,6 +32,6 @@ export declare function ayarBasvurulariniDenetle(veri: Record<string, unknown>, 
 export declare function metinBasvurulariniCoz(metinler: ReadonlyArray<string>, veri: Record<string, unknown>, s: Parameters<typeof ekranBasvurulariniCoz>[1]):
   { degerler: Record<string, string>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }> };
 /** Ekran senaryosunun satır seçimlerini doğrular / temizler (gizli sütun ve olmayan tablo / sütun hata). */
-export declare function tabloSecimleriniAyikla(v: unknown, tablolar: ReadonlyArray<{ id: string; ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }>):
+export declare function tabloSecimleriniAyikla(v: unknown, tablolar: ReadonlyArray<{ id: string; ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }>; satirlar?: ReadonlyArray<{ id?: string }> }>):
   { secimler: Record<string, Record<string, string>> | undefined; hatalar: string[] };
 export declare function tabloBasvurusuVarMi(veri: unknown): boolean;

@@ -235,6 +235,7 @@ import {
 } from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { hizliTestIsteginiIsle } from './hizli-test/yonetici.mjs';
+import { geciciDosyaKoku } from './dosyalar/gecici-dosyalar.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
 import { KURTARMA_GET_UCLARI, KURTARMA_POST_UCLARI } from './ayarlar/kurtarma-kurallari.mjs';
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI, tabloKosuDenetimiAyarla } from './tablolar/tablo-uclari.mjs';
@@ -2209,7 +2210,8 @@ export async function platformIsteginiIsle(req, res, baglam) {
     // --- /platform/hizli-test/* — Hızlı test sihirbazı (hizli-test/yonetici.mjs; tarama iş yöneticisini kullanır; kendi token/gövde kontrolü) ---
     if (yol.startsWith('/platform/hizli-test/')) {
       return await hizliTestIsteginiIsle(req, res, {
-        token: baglam.token, disTokenGecerli, jsonGonder, jsonGovde, acikVeritabani, projeKoku: PROJE_KOKU, medyaKlasoru: medyaKlasoruYolu, kosuyorMu
+        token: baglam.token, disTokenGecerli, jsonGonder, jsonGovde, acikVeritabani, projeKoku: PROJE_KOKU, medyaKlasoru: medyaKlasoruYolu, kosuyorMu,
+        ikiliGovdeOku, dosyaKoku: () => geciciDosyaKoku(platformVeritabaniYolu())
       });
     }
 
