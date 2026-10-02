@@ -26,8 +26,8 @@ import { createServer } from 'node:http';
 import { spawn, execFile } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync, appendFileSync, readdirSync } from 'node:fs';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
@@ -37,6 +37,7 @@ import {
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
+import { surucuYukleyiciAyarla } from './platform/entegrasyonlar/veritabani-suruculeri.mjs';
 import { akisOrtamDegiskenleri } from './platform/akislar/uctan-uca-cikti.mjs';
 import { TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from './platform/tablolar/veri-kosulari.mjs';
 import { UYGULAMA_SURUMU_DEGISKENI, uygulamaSurumuTemizle } from './platform/ayarlar/rapor-verileri.mjs';
@@ -58,6 +59,16 @@ const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
 // YALNIZCA doğrulama/geliştirme örnekleri için: TEST_SUNUCU_KOSU_KAPALI=1 ise bu sunucu hiçbir
 // Playwright koşusu başlatmaz (▷, Koşuyu başlat, Dene); istek açık bir hatayla reddedilir.
 const KOSU_KAPALI = process.env.TEST_SUNUCU_KOSU_KAPALI === '1';
+// YALNIZ birim testleri için: TEST_SUNUCU_SAHTE_SQL_SURUCUSU = proje klasörünün tests/ dizinindeki sahte veritabanı sürücüsü modülü
+// (ör. tests/birim/sahte-sql-surucusu.mjs; bellek içi SQLite, gerçek veritabanına bağlanılmaz). tests/ dışındaki yol yok sayılır.
+const sahteSqlSurucusu = process.env.TEST_SUNUCU_SAHTE_SQL_SURUCUSU;
+if (sahteSqlSurucusu) {
+  const yol = resolve(sahteSqlSurucusu);
+  if (yol.startsWith(join(projeKoku, 'tests') + sep) && existsSync(yol)) {
+    const m = await import(pathToFileURL(yol).href);
+    surucuYukleyiciAyarla(m.yukleyici);
+  }
+}
 
 // Terminal panelinin scrollback'i sınırlı/silinebilir olduğundan (ör. aynı panelde
 // başka bir komut çalıştırılırsa), TÜM konsol çıktısını AYRICA kalıcı bir dosyaya da
@@ -343,6 +354,10 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuc-ozeti.js', { dosya: 'sonuc-ozeti.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/baslarken.js', { dosya: 'baslarken.js', tur: 'text/javascript; charset=utf-8' }],
+  // Özet panosu (Sonuçlar > Genel > Özet): pano, kendi stil dosyası ve düzen kuralları (saf modül; sunucuyla ORTAK tek kaynak).
+  ['/arayuz/ozet-panosu.js', { dosya: 'ozet-panosu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-ozet-panosu.css', { dosya: 'stil-ozet-panosu.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/pano-duzeni.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sonuclar', 'pano-duzeni.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],

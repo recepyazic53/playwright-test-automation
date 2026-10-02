@@ -4246,7 +4246,6 @@ a.ozet-kutusu:focus-visible { outline: 2px solid var(--odak); outline-offset: 2p
 .ozet-kutusu .kart-etiket .ikon { width: 14px; height: 14px; }
 .ozet-kutusu .kart-alt > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .ozet-kutusu.yukleniyor .iskelet { margin-top: 10px; }
-.farkindalik-kartlari { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .farkindalik-karti { margin-bottom: 0; min-width: 0; }
 .farkindalik-karti .kart-basligi { margin-bottom: 8px; }
 .farkindalik-karti .kart-basligi h3 { min-width: 0; }
@@ -4264,9 +4263,6 @@ a.ozet-kutusu:focus-visible { outline: 2px solid var(--odak); outline-offset: 2p
 .farkindalik-temiz { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--metin-2); }
 .farkindalik-temiz .ikon { color: var(--basari); width: 15px; height: 15px; }
 .farkindalik-notu { display: flex; align-items: flex-start; gap: 6px; margin: 12px 2px 0; overflow-wrap: anywhere; }
-@media (max-width: 1180px) {
-  .farkindalik-kartlari { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 860px) {
   .sonuc-kartlari.ozet-kutulari { grid-template-columns: minmax(0, 1fr); }
 }

@@ -79,7 +79,7 @@ test.describe('erişilebilir adlar görünen metinle uyumlu', () => {
     test.setTimeout(120_000);
     const e = encodeURIComponent(z.ekranIdleri[1]);
     const rotalar = [
-      '#/sonuclar', '#/sonuclar/ozet', '#/sonuclar/servisler', '#/sonuclar/uctan-uca', `#/sonuclar/kosu/${z.kosuIdleri[3]}`,
+      '#/sonuclar', '#/sonuclar/ozet', '#/sonuclar/ozet/duzenle', '#/sonuclar/servisler', '#/sonuclar/uctan-uca', `#/sonuclar/kosu/${z.kosuIdleri[3]}`,
       `#/sonuclar/karsilastir/${z.kosuIdleri[0]}/${z.kosuIdleri[1]}`, '#/senaryolar', `#/senaryolar/u/${e}`, `#/senaryolar/duzenle/${encodeURIComponent(z.senaryoIdleri[3])}`,
       '#/servisler', `#/servisler/s/${z.soapServisId}`, `#/servisler/s/${z.restServisId}`, '#/servisler/sonuclar', '#/akislar', `#/akislar/${z.uctanUcaId}`,
       '#/ekranlar', `#/ekranlar/e/${e}`, '#/ekranlar/yeni', '#/veri', '#/planli-kosular',

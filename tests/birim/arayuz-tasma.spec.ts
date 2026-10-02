@@ -97,7 +97,7 @@ test.describe('tüm ekranlar taşmasız', () => {
     test.setTimeout(90_000);
     const e = encodeURIComponent(z.ekranIdleri[1]);
     const rotalar = [
-      '#/sonuclar', '#/sonuclar/ozet', '#/sonuclar/servisler', '#/sonuclar/uctan-uca', `#/sonuclar/kosu/${z.kosuIdleri[3]}`, `#/sonuclar/kosu/${z.kosuIdleri[2]}`,
+      '#/sonuclar', '#/sonuclar/ozet', '#/sonuclar/ozet/duzenle', '#/sonuclar/servisler', '#/sonuclar/uctan-uca', `#/sonuclar/kosu/${z.kosuIdleri[3]}`, `#/sonuclar/kosu/${z.kosuIdleri[2]}`,
       `#/sonuclar/karsilastir/${z.kosuIdleri[0]}/${z.kosuIdleri[1]}`, '#/senaryolar', `#/senaryolar/u/${e}`, `#/senaryolar/duzenle/${encodeURIComponent(z.senaryoIdleri[3])}`,
       '#/servisler', `#/servisler/s/${z.soapServisId}`, `#/servisler/s/${z.restServisId}`, '#/servisler/sonuclar', '#/akislar', `#/akislar/${z.uctanUcaId}`,
       '#/ekranlar', `#/ekranlar/e/${e}`, '#/ekranlar/yeni',

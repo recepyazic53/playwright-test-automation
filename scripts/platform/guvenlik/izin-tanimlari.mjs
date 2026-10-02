@@ -107,19 +107,22 @@ export const IZIN_TANIMLARI = Object.freeze([
     aciklama: 'Nöbetçi tanımlı veritabanı bağlantılarına bağlanır ve okuma sorgusu (SELECT) çalıştırır.',
     yapabilecekleri: [
       'Ekran ve servis akışlarındaki SQL adımlarında veritabanını sorgulamak.',
-      'Veritabanı bağlantısını "Bağlantıyı dene" ile sınamak.'
+      'Veritabanı bağlantısını "Bağlantıyı dene" ile sınamak.',
+      'Sonuçlar > Özet panosundaki SQL kartını "Yenile" ile çalıştırmak (yalnız okuma).'
     ],
     yerler: [
       'Ayarlar > Entegrasyonlar > Veritabanı bağlantısı > Bağlantıyı dene',
       'Senaryolardaki SQL adımları (koşu ve Dene sırasında)',
       'Servisler > Akışlar > SQL adımı',
-      'Uçtan uca akışlar > SQL adımı'
+      'Uçtan uca akışlar > SQL adımı',
+      'Sonuçlar > Özet > SQL kartı > Yenile'
     ],
     islemler: [
       { ad: 'Veritabanı bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'veritabanı bağlantısı denenirken' },
       { ad: 'Ekran koşusunda / Dene\'de SQL adımı', uclar: EKRAN_KOSU_UCLARI, kosul: 'senaryonun modelinde SQL adımı varsa' },
       { ad: 'Servis akışında SQL adımı', uclar: ['/platform/servis-akisi/dene', '/platform/servis-akisi/kos'], kosul: 'akışta SQL adımı varsa' },
-      { ad: 'Uçtan uca akışta SQL adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta SQL adımı ya da modelinde SQL adımı olan ekran adımı varsa' }
+      { ad: 'Uçtan uca akışta SQL adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta SQL adımı ya da modelinde SQL adımı olan ekran adımı varsa' },
+      { ad: 'Özet panosunda SQL kartını yenileme', uclar: ['/platform/pano/sql/yenile'] }
     ],
     risk: 'Sorgular veritabanındaki kişisel ya da gizli verileri okuyabilir; ağır sorgular veritabanını yavaşlatabilir.',
     kapaliyken: 'Hiçbir veritabanına bağlanılmaz: SQL adımı sorgu atmadan hatayla kalır, bağlantı denenmez.'
@@ -153,6 +156,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Canlı ortamda ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi yapmak; giriş sayfası önermek.',
       'Canlı ortamda servis erişim kontrolü, şema yenileme ve REST Dene yapmak.',
       'Canlı ortamın veritabanı eşlemesindeki bağlantıyı denemek.',
+      'Canlı ortama ait veritabanı bağlantısındaki Özet panosu SQL kartını yenilemek.',
       'Planlı koşuları (kuralında canlı onayı varsa) canlı ortamda başlatmak.'
     ],
     yerler: [
@@ -171,6 +175,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Canlı ortamda uçtan uca akış koşusu', uclar: UCTAN_UCA_UCLARI, kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamda bağlantı denetimi (Hazırlık kontrolü > Denetle)', uclar: ['/platform/ortam/denetle'], kosul: 'ortam canlıysa' },
       { ad: 'Canlı ortamın veritabanı bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'bağlantı bir canlı ortamın veritabanı eşlemesindeyse' },
+      { ad: 'Canlı ortamın veritabanı bağlantısında Özet panosu SQL kartını yenileme', uclar: ['/platform/pano/sql/yenile'], kosul: 'kartın bağlantısı canlı ortama aitse' },
       { ad: 'Canlı ortamda planlı koşu', uclar: [] }
     ],
     risk: 'Gerçek kullanıcıların verisi ve gerçek işlemler etkilenebilir. İzin açıkken de canlı ortama istek atan her işlemde ayrıca onay sorulur.',

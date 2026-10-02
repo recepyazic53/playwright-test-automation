@@ -36,6 +36,7 @@
 // Koşu sonuçları (şema v5; Playwright raporlayıcısı: scripts/platform/raporlayici.mjs):
 //   GET  /platform/sonuclar/ozet?projeId=&urun=&baslangic=&bitis=(|&gun=)   ürün listesi, kartlar, trend, koşu geçmişi (aralıkta)
 //   GET  /platform/sonuclar/farkindalik?projeId=&baslangic=&bitis=   Sonuçlar > Özet: özet kutuları + Dikkat / Bakım / Kapsam ve güvenlik kartları
+//   GET  /platform/pano(/secenekler|/veri), POST /platform/pano/kaydet, /platform/pano/sql/yenile   Özet panosu (sonuclar/pano-uclari.mjs)
 //   GET  /platform/sonuclar/kosu?id=                  koşu detayı (senaryo bazında sonuçlar)
 //   GET  /platform/sonuclar/sonuc?id=                 test detayı (hata, adımlar, medya listesi)
 //   GET  /platform/sonuclar/kaliplar?projeId=&urun=&baslangic=&bitis=   hata kalıpları
@@ -261,6 +262,7 @@ import {
 } from './sonuclar/gosterim-maskesi.mjs';
 import { sorgudanAralik } from './sonuclar/aralik.mjs';
 import { farkindalikVerisi } from './sonuclar/farkindalik.mjs';
+import { PANO_GET_UCLARI, PANO_POST_UCLARI } from './sonuclar/pano-uclari.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
 import {
   raporIndir, raporListesi, raporOnizle, raporPdf, raporSaklamaTemizligi, raporSecenekleri, raporSilUc, raporVerileriEkrani, raporYenidenOlustur
@@ -1505,6 +1507,8 @@ for (const [yol, islem] of UCTAN_UCA_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of [...TALEP_GET_UCLARI, ...KAPSAM_MATRISI_GET_UCLARI]) GET_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// Sonuçlar > Genel > Özet panosu (düzen, seçenekler, Nöbetçi verisi kartları; sonuclar/pano-uclari.mjs).
+for (const [yol, islem] of PANO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Planlı koşular (zamanlama/uclar.mjs).
 for (const [yol, islem] of zamanlamaGetUclari(zamanlayici)) GET_UCLARI.set(yol, islem);
 // Planlı koşuların kilitliyken / açılışta çalışma tercihleri (A/B/C; görev durumu schtasks /Query ile).
@@ -1943,6 +1947,8 @@ for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of entegrasyonPostUclari({ medyaKlasoruYolu })) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of SQL_KULLANIM_POST_UCLARI) POST_UCLARI.set(yol, islem);
+// Özet panosu: düzeni kaydet, SQL kartını yenile (izin + CANLI onayı uçta: guvenlik/uc-denetimi.mjs).
+for (const [yol, islem] of PANO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Planlı koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
 for (const [yol, islem] of ZAMANLAMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 POST_UCLARI.set('/platform/zamanlama/tercih', (db, g) => arkaPlan.tercihDegistir(db, g));

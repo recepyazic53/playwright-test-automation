@@ -7,7 +7,8 @@
 // CANLI ORTAM ONAYI — TEK KAYNAK: CANLI ortama (Ortam türü: Canlı; ortam-riski.mjs) istek atan, KULLANICININ başlattığı her uç
 // ("canli-ortam" izninin koşullu uçları: koşu, Dene, tarama, akış / giriş kaydı, giriş denemesi, giriş sayfası önerisi, servis
 // erişim kontrolü, şema yenileme, REST Dene, servis / servis akışı / uçtan uca koşu ve Dene, CANLI ortamın veritabanı eşlemesindeki
-// bağlantının denenmesi) istekte canliOnay: true ister; yoksa hiçbir şey yapılmadan 409 CANLI_ONAY_GEREKLI döner (arayüz standart
+// bağlantının denenmesi, Özet panosunda CANLI ortama ait bağlantıdaki SQL kartının yenilenmesi) istekte canliOnay: true ister;
+// yoksa hiçbir şey yapılmadan 409 CANLI_ONAY_GEREKLI döner (arayüz standart
 // "CANLI ortam" penceresini açar). Onay hatırlanmaz: her istek kendi onayını taşır. Planlı koşu bu uçlardan geçmez; onayı
 // kuralın "Canlı ortamda planlı koşuya izin veriyorum" kutusudur (zamanlama/kurallar.mjs).
 //   kapaliIzinler(vt, yol, g)  zamanlayıcı için: kapalı izinlerin anahtarları (işlem atlanır, kayda "izin kapalı: X")
@@ -23,6 +24,7 @@ import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
 import { riskliOrtamMi } from './ortam-riski.mjs';
 import { tumVeritabanlari } from '../sql/veritabanlari.mjs';
 import { izinGerekli, izinleriOku } from './izinler.mjs';
+import { PANO_SQL_UCU, panoSqlCanliOrtamlari } from '../sonuclar/pano-sql.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
@@ -188,6 +190,10 @@ export function gerekenIzinler(vt, yol, g) {
     if (yol === '/platform/entegrasyon/dene') {
       // Veritabanı bağlantısını dene: bağlantı bir CANLI ortamın veritabanı eşlemesindeyse (SQL > Veritabanları) CANLI sayılır.
       const adlar = canliEslemeOrtamlari(vt, g);
+      if (adlar.length) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = adlar.join(', '); }
+    } else if (yol === PANO_SQL_UCU) {
+      // Özet panosu SQL kartı: kartın bağlantısı CANLI ortama aitse (veritabanı + CANLI ortam ya da bağlantının ortamı / eşlemesi).
+      const adlar = panoSqlCanliOrtamlari(vt, g);
       if (adlar.length) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = adlar.join(', '); }
     } else {
       const o = ortamBul(vt, g);
