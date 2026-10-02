@@ -91,6 +91,8 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     for (;;) {
       const o = (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
       if (durumlar.includes(o.durum)) return o;
+      // Keşif toplu sorusu beklenmiyorsa (testin konusu değil): hiçbirine basılmaz.
+      if (o.durum === 'kesifOnay') { await api('/platform/hizli-test/onay', { id, cevap: false }); continue; }
       if (['hata', 'iptal'].includes(o.durum) || Date.now() > son) throw new Error(`beklenen ${durumlar.join('/')}, olan ${o.durum}: ${JSON.stringify(o.hata ?? o.sonHata)} ${JSON.stringify(o.gunluk?.slice(-6))}`);
       await new Promise((c) => setTimeout(c, 300));
     }
@@ -380,34 +382,47 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     await api('/platform/hizli-test/iptal', { id });
   });
 
-  /** Keşif basışı oturumu: baslat → keşif soruları (izne göre) için durum. */
+  /** Keşif basışı oturumu (cümle düğme adı vermez: sayfadaki tüm düğmeler keşfin adayıdır). */
   const kesifBaslat = async (izin: string): Promise<string> => {
     await isBitsin();
     return String((await basarili('/platform/hizli-test/baslat', {
-      projeId, ortamId, hedef: '/kesif-dugmeli/', ekranAdi: `Keşif ${izin}`, izin, cumle: 'Gönder düğmesine bas, "Kayıt alındı" görünce bitir'
+      projeId, ortamId, hedef: '/kesif-dugmeli/', ekranAdi: `Keşif ${izin}`, izin, cumle: '"Kayıt alındı" görünce bitir'
     })).id);
   };
+  const adlar = (o: Nesne): string[] => (o.soru.dugmeler as Nesne[]).map((d) => String(d.metin));
+  const secici = (o: Nesne, metin: string): string => String((o.soru.dugmeler as Nesne[]).find((d) => d.metin === metin)?.secici);
 
-  test('keşif basışı — Bana sor: her düğme sorulur; Bas → bölümün alanları keşfe girer (akışa değil), Basma → girmez; form gönderilmez', async () => {
+  test('keşif basışı — Bana sor: tüm düğmeler (betikli dahil) tek toplu kartta sorulur; seçilenlere basılır, açılan alanlar veri durağında bilgi olarak; form gönderilmez', async () => {
     test.setTimeout(400_000);
     const id = await kesifBaslat('sor');
     let o = await bekle(id, ['kesifOnay'], 300);
-    expect(o.soru).toMatchObject({ tur: 'kesifOnay', dugme: { metin: 'Ek bölüm', emin: true }, kalan: 1 });
+    expect(o.soru.tur).toBe('kesifOnay');
+    expect(adlar(o).sort()).toEqual(['Ek bölüm', 'Gönder', 'Önizle'].sort());
+    expect((o.soru.dugmeler as Nesne[]).find((d) => d.metin === 'Önizle')).toMatchObject({ emin: false, neden: expect.stringContaining('betikle') });
     expect(o.durak).toBe(2);
-    // Arayüz: soru kartı ve "Bas".
     const { page, hatalar, kapat } = await arayuz(id);
     try {
       const soru = page.locator('.hizli-soru');
-      await expect(soru.getByRole('heading', { name: 'Keşif: “Ek bölüm” düğmesine basayım mı?' })).toBeVisible({ timeout: 30_000 });
+      await expect(soru.getByRole('heading', { name: 'Keşif için şu düğmelere basılabilir' })).toBeVisible({ timeout: 30_000 });
+      const liste = soru.getByRole('list', { name: 'Keşif için basılabilecek düğmeler' });
+      await expect(liste.getByRole('checkbox')).toHaveCount(3);
+      await expect(soru.getByRole('button', { name: 'Hiçbirine basma', exact: true })).toBeVisible();
       await expect(soru.getByRole('button', { name: 'Kalanları atla', exact: true })).toBeVisible();
       await tasmaYok(page);
-      await soru.getByRole('button', { name: 'Bas', exact: true }).click();
-      await expect(soru.getByRole('heading', { name: 'Keşif: “Gönder” düğmesine basayım mı?' })).toBeVisible({ timeout: 120_000 });
-      await expect(soru).toContainText('formu gönderir');
-      await soru.getByRole('button', { name: 'Basma', exact: true }).click();
-      await expect(soru.getByRole('heading', { name: /veri gerekli/ })).toBeVisible({ timeout: 60_000 });
-      // Sonuç özeti (keşif notu): basınca açılan alanlar.
-      await expect(soru.locator('.hizli-kesif-notlari')).toContainText('Keşif: “Ek bölüm” düğmesine basınca 2 yeni alan açıldı (Ek alan 1, Ek alan 2)');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await tasmaYok(page);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await liste.getByRole('checkbox', { name: 'Ek bölüm' }).check();
+      await liste.getByRole('checkbox', { name: 'Önizle' }).check();
+      await soru.getByRole('button', { name: 'Seçilenlere bas', exact: true }).click();
+      await expect(soru.getByRole('heading', { name: /veri gerekli/ })).toBeVisible({ timeout: 120_000 });
+      // Veri durağında bilgi bölümü: basınca açılan alanlar (sorulmaz; akışta o düğmeye basılırsa sorulur).
+      const ek = soru.locator('section', { has: page.getByRole('heading', { name: '“Ek bölüm”e basınca açılan alanlar (akışta bu düğmeye basarsanız sorulur)' }) });
+      await expect(ek.locator('li')).toHaveText(['Ek alan 1', 'Ek alan 2']);
+      const onizle = soru.locator('section', { has: page.getByRole('heading', { name: '“Önizle”ye basınca açılan alanlar (akışta bu düğmeye basarsanız sorulur)' }) });
+      await expect(onizle.locator('li')).toHaveText(['Ek alan 3']);
+      await expect(soru.getByLabel('Ek alan 1', { exact: true })).toHaveCount(0);
+      await tasmaYok(page);
       expect(hatalar).toEqual([]);
     } finally { await kapat(); }
     o = await bekle(id, ['veri']);
@@ -415,22 +430,20 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     expect((o.soru.alanlar as Nesne[]).map((a) => a.etiket)).toEqual(['Ad']);
     const gunluk = JSON.stringify(o.gunluk);
     expect(gunluk).toContain('Keşif: “Ek bölüm” düğmesine basınca 2 yeni alan açıldı');
+    expect(gunluk).toContain('Keşif: “Önizle” düğmesine basınca 1 yeni alan açıldı');
     expect(gunluk).toContain('Keşif: “Gönder” düğmesine basılmadı.');
     expect(gunluk).not.toContain('döndürülemedi');
     expect(u.kesifDugmeliKayitlar).toEqual([]);
     expect(o.adimlar.every((a: Nesne) => !a.bas)).toBe(true);
     await api('/platform/hizli-test/iptal', { id });
 
-    // Basma → bölümün alanları keşfe girmez; Kalanları atla → kalan düğme sorulmaz.
+    // Kalanları atla → hiçbirine basılmaz, bilgi bölümü yok.
     const id2 = await kesifBaslat('sor');
     o = await bekle(id2, ['kesifOnay'], 300);
-    await basarili('/platform/hizli-test/onay', { id: id2, cevap: false });
-    o = await bekle(id2, ['kesifOnay']);
-    expect(o.soru.dugme.metin).toBe('Gönder');
     await basarili('/platform/hizli-test/onay', { id: id2, cevap: 'atla' });
     o = await bekle(id2, ['veri']);
-    expect(JSON.stringify(o.kesif.notlar)).not.toContain('Ek alan');
-    expect(JSON.stringify(o.gunluk)).toContain('Keşif: kalan 1 düğmeye basılmadı (kalanları atla).');
+    expect(o.soru.kesifAlanlari).toEqual([]);
+    expect(JSON.stringify(o.gunluk)).toContain('Keşif: kalan 3 düğmeye basılmadı (kalanları atla).');
     expect(u.kesifDugmeliKayitlar).toEqual([]);
     await api('/platform/hizli-test/iptal', { id: id2 });
   });
@@ -440,36 +453,39 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     const id = await kesifBaslat('hayir');
     const o = await bekle(id, ['veri'], 300);
     expect(JSON.stringify(o.gunluk)).not.toContain('Keşif: “');
-    expect(JSON.stringify(o.kesif.notlar)).not.toContain('Ek alan');
+    expect(o.soru.kesifAlanlari).toEqual([]);
     expect(u.kesifDugmeliKayitlar).toEqual([]);
     await api('/platform/hizli-test/iptal', { id });
   });
 
-  test('keşif basışı — Evet: sayfa içinde açan düğmeye sorulmadan basılır, form gönderen düğmede sorulur; kaydedilen senaryoda keşif basışı yok', async () => {
+  test('keşif basışı — Evet: sayfa içinde açan düğmeye sorulmadan basılır; betikli ve form gönderen düğmeler toplu kartta sorulur; kaydedilen senaryoda keşif basışı yok', async () => {
     test.setTimeout(600_000);
     const id = await kesifBaslat('evet');
     let o = await bekle(id, ['kesifOnay', 'veri'], 300);
     expect(o.durum).toBe('kesifOnay');
-    expect(o.soru).toMatchObject({ tur: 'kesifOnay', dugme: { metin: 'Gönder', emin: false }, kalan: 0 });
+    expect(adlar(o).sort()).toEqual(['Gönder', 'Önizle'].sort());
     expect(JSON.stringify(o.gunluk)).toContain('Keşif: “Ek bölüm” düğmesine basılıyor (sayfa içinde bir bölümü açar / kapatır; sorulmadan).');
     expect(JSON.stringify(o.gunluk)).toContain('Keşif: “Ek bölüm” düğmesine basınca 2 yeni alan açıldı (Ek alan 1, Ek alan 2)');
-    await basarili('/platform/hizli-test/onay', { id, cevap: false });
-    o = await bekle(id, ['veri']);
+    // Yalnız betikli düğmeye onay; form gönderen basılmaz.
+    await basarili('/platform/hizli-test/onay', { id, cevap: true, secilenler: [secici(o, 'Önizle')] });
+    o = await bekle(id, ['veri'], 120);
+    expect(JSON.stringify(o.gunluk)).toContain('Keşif: “Önizle” düğmesine basılıyor (onay verildi).');
+    expect(JSON.stringify(o.gunluk)).toContain('Keşif: “Gönder” düğmesine basılmadı.');
+    expect((o.soru.kesifAlanlari as Nesne[]).map((x) => x.dugme)).toEqual(['Ek bölüm', 'Önizle']);
     expect(u.kesifDugmeliKayitlar).toEqual([]);
     await basarili('/platform/hizli-test/veri', { id, degerler: { [alanBul(o, 'Ad').anahtar]: deger('Deneme') } });
     o = await bekle(id, ['karar'], 120);
-    if (!u.kesifDugmeliKayitlar.length) {
-      const gonder = (o.soru.adaylar as Nesne[]).find((a) => a.metin === 'Gönder');
-      await basarili('/platform/hizli-test/karar', { id, karar: 'bas', secici: gonder?.secici });
-      o = await bekle(id, ['karar']);
-    }
+    const gonder = (o.soru.adaylar as Nesne[]).find((a) => a.metin === 'Gönder');
+    await basarili('/platform/hizli-test/karar', { id, karar: 'bas', secici: gonder?.secici });
+    o = await bekle(id, ['karar']);
     expect(u.kesifDugmeliKayitlar).toEqual([{ ad: 'Deneme' }]);
     await bitir(id);
     const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Keşif basışı', senaryoIndeksleri: [] });
-    // Kaydedilen ekran / senaryo: yalnız akıştaki basış (Gönder); keşif basışı (Ek bölüm) yok.
+    // Kaydedilen ekran / senaryo: yalnız akıştaki basış (Gönder); keşif basışları (Ek bölüm, Önizle) yok.
     const ekran = JSON.stringify((await api(`/platform/ekran?projeId=${projeId}&id=${String(k.ekranId)}`)) as Nesne);
     expect(ekran).toContain('gonder');
     expect(ekran).not.toContain('ekAc');
+    expect(ekran).not.toContain('onizle');
     const once = u.kesifDugmeliKayitlar.length;
     await kos(String(k.senaryoId));
     expect(u.kesifDugmeliKayitlar.slice(once)).toEqual([{ ad: 'Deneme' }]);

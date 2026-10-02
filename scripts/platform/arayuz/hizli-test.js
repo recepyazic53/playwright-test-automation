@@ -411,20 +411,33 @@ function soruCiz(o, y) {
       h('div', { class: 'dugmeler' }, uygula, duzelt));
   }
 
-  // Keşif: “X” düğmesine basayım mı? (Bas / Basma / Kalanları atla). Keşif basışı akışın parçası değildir; kaydedilmez.
+  // Keşif toplu sorusu: emin olunmayan düğmeler tek kartta, her biri için onay kutusu ("Seçilenlere bas" / "Hiçbirine basma" /
+  // "Kalanları atla"). Keşif basışı akışın parçası değildir; kaydedilmez.
   if (s.tur === 'kesifOnay') {
-    const ad = s.dugme.metin || s.dugme.secici;
-    const bas = h('button', { type: 'button', class: 'birincil', 'data-odak': '' }, 'Bas');
-    const basma = h('button', { type: 'button', class: 'ikincil' }, 'Basma');
+    const dugmeler = Array.isArray(s.dugmeler) ? s.dugmeler : [];
+    const kutular = dugmeler.map((/** @type {any} */ d, /** @type {number} */ i) => {
+      const id = `hizli-kesif-dugme-${i}`;
+      const c = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id, value: d.secici }));
+      return {
+        c,
+        el: h('li', { class: 'hizli-kesif-dugmesi' }, h('label', { class: 'onay-satiri', for: id }, c, ' ', h('b', {}, d.metin || d.secici)),
+          d.neden ? h('span', { class: 'soluk kucuk' }, d.emin ? `Sayfa içinde ${d.neden.replace(/^sayfa içinde /, '')}.` : `Emin değil: ${d.neden}.`) : null)
+      };
+    });
+    const bas = h('button', { type: 'button', class: 'birincil', 'data-odak': '' }, 'Seçilenlere bas');
+    const basma = h('button', { type: 'button', class: 'ikincil' }, 'Hiçbirine basma');
     const atlaDugmesi = h('button', { type: 'button', class: 'hayalet' }, 'Kalanları atla');
-    bas.addEventListener('click', () => void gonder(bas, 'onay', { cevap: true }, m));
+    bas.addEventListener('click', () => {
+      const secilenler = kutular.filter((k) => k.c.checked).map((k) => k.c.value);
+      if (!secilenler.length) { m.goster('Basılacak düğme seçin ya da “Hiçbirine basma” deyin.'); return; }
+      void gonder(bas, 'onay', { cevap: true, secilenler }, m);
+    });
     basma.addEventListener('click', () => void gonder(basma, 'onay', { cevap: false }, m));
     atlaDugmesi.addEventListener('click', () => void gonder(atlaDugmesi, 'onay', { cevap: 'atla' }, m));
-    return kart(`Keşif: “${ad}” düğmesine basayım mı?`, 'soru', m.kutu,
+    return kart('Keşif için şu düğmelere basılabilir', 'soru', m.kutu,
       h('div', { class: 'hizli-kesif-sorusu' },
-        h('p', {}, 'Sayfada ne açıldığına bakılacak (yeni alanlar, seçimler, pencereler, metinler). Bu basış kaydedilen senaryoya girmez; basarken kayıt oluşturan / gönderen istekler engellenir, sonra sayfa ilk durumuna döndürülür.'),
-        s.dugme.neden ? h('p', { class: 'soluk kucuk' }, s.dugme.emin ? `Düğmenin davranışı: ${s.dugme.neden}.` : `Bu düğmenin yalnız sayfa içinde bir şey açtığı anlaşılamadı (${s.dugme.neden}).`) : null,
-        s.kalan ? h('p', { class: 'soluk kucuk' }, `Sırada ${s.kalan} düğme daha var.`) : null),
+        h('p', {}, 'Bu düğmelerin ne yaptığından emin değilim. Seçtiklerinize keşif için basıp sayfada ne açıldığına bakarım (yeni alanlar, seçimler, pencereler, metinler). Bu basışlar kaydedilen senaryoya girmez; basarken kayıt oluşturan / gönderen istekler engellenir, sonra sayfa ilk durumuna döndürülür.'),
+        h('ul', { class: 'hizli-kesif-dugmeleri', 'aria-label': 'Keşif için basılabilecek düğmeler' }, kutular.map((k) => k.el))),
       h('div', { class: 'dugmeler' }, bas, basma, atlaDugmesi));
   }
 
@@ -687,6 +700,33 @@ function dosyaAlaniCiz(o, a, kap, id, d, sec, m) {
   yerlestir(kap,
     ref ? h('span', { class: 'hizli-dosya-adi' }, ikon('dosya'), ref.ad) : h('span', { class: 'soluk kucuk' }, 'Dosya seçilmedi'),
     ref ? rozet('şifreli depoda') : null, girdi, sec_, depo, kaldir, durumSatiri, depoKap);
+}
+
+/**
+ * Türkçe yönelme eki (ünlü uyumu; ünlüyle biten adda kaynaştırma "y"): "Kaydet" → "e", "İleri" → "ye", "Onay" → "a". Harfle bitmeyen
+ * adda boş (başlık "düğmesine" ile kurulur). @param {string} s @returns {string | null}
+ */
+function yonelmeEki(s) {
+  const kucuk = String(s).trim().toLocaleLowerCase('tr');
+  const sesli = [...kucuk].reverse().find((c) => 'aeıioöuü'.includes(c));
+  if (!sesli || !/\p{L}/u.test(kucuk.slice(-1))) return null;
+  return `${'aeıioöuü'.includes(kucuk.slice(-1)) ? 'y' : ''}${'eiöü'.includes(sesli) ? 'e' : 'a'}`;
+}
+
+/**
+ * Keşif basışıyla açılan alanlar (bilgi; sorulmaz): keşifte basılan düğmenin açtığı alanlar — akışta o düğmeye basılırsa sorulur.
+ * @param {any} s
+ */
+function kesifAlanlariBolumu(s) {
+  const l = Array.isArray(s.kesifAlanlari) ? s.kesifAlanlari : [];
+  if (!l.length) return null;
+  return h('div', { class: 'hizli-kesif-alanlari' }, l.map((/** @type {any} */ x) => {
+    const id = `hizli-kesif-alanlari-${Math.random().toString(36).slice(2, 9)}`;
+    const ek = yonelmeEki(x.dugme);
+    return h('section', { class: 'hizli-salt-okunur', 'aria-labelledby': id },
+      h('h4', { id }, `“${x.dugme}”${ek ?? ' düğmesine'} basınca açılan alanlar (akışta bu düğmeye basarsanız sorulur)`),
+      h('ul', { class: 'hizli-salt-okunur-liste kucuk' }, x.alanlar.map((/** @type {string} */ a) => h('li', {}, a))));
+  }));
 }
 
 /**
@@ -1422,7 +1462,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     o.adimlar.length === 1 && o.kesif && Array.isArray(o.kesif.notlar) && o.kesif.notlar.length
       ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
     h('p', { class: 'soluk' }, 'Sayfadaki alanlar sayfadaki sırasıyla aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada hazır gelen değerler önyazılı ve “sayfada hazır” işaretli: değiştirmezseniz sayfadaki değer kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
-    kontrolKap, gosterge, m.kutu, satirlarKap, saltOkunurBolumu(s, false),
+    kontrolKap, gosterge, m.kutu, satirlarKap, kesifAlanlariBolumu(s), saltOkunurBolumu(s, false),
     h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
     devamIpucu);
 }

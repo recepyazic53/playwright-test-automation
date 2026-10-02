@@ -41,7 +41,14 @@ async function basarili(yol: string, govde: Nesne): Promise<Yanit> {
   expect(y.basarili, `${yol}: ${y.mesaj ?? ''} ${JSON.stringify(y).slice(0, 400)}`).toBe(true);
   return y;
 }
-const oturum = async (id: string): Promise<Nesne> => (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
+/** Oturum durumu. Keşif toplu sorusu (sayfadaki emin olunmayan düğmeler) bu testin konusu değil: "Hiçbirine basma" ile geçilir. */
+const oturum = async (id: string): Promise<Nesne> => {
+  for (;;) {
+    const o = (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
+    if (o?.durum !== 'kesifOnay') return o;
+    await api('/platform/hizli-test/onay', { id, cevap: false });
+  }
+};
 /** Oturum verilen durumlardan birine gelene kadar bekler (hata / iptal olursa açık hata). */
 async function bekle(id: string, durumlar: string[], sn = 90): Promise<Nesne> {
   const son = Date.now() + sn * 1000;
@@ -832,9 +839,17 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await form.getByLabel(/Ne yapılsın/).fill('Hesapla\'ya bas, "Başvurunuz alındı" görünsün');
     await form.getByRole('button', { name: 'Başlat' }).click();
     await expect(page).toHaveURL(/#\/hizli-test\/o\//);
-    // Veri durağı: Doldur (tablodan) + elle.
     const soru = page.locator('.hizli-soru');
-    await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 60_000 });
+    // Keşif toplu sorusu (sayfada emin olunmayan düğme varsa): "Hiçbirine basma".
+    const veriBasligi = soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' });
+    const kesifBasligi = soru.getByRole('heading', { name: 'Keşif için şu düğmelere basılabilir' });
+    await expect(veriBasligi.or(kesifBasligi)).toBeVisible({ timeout: 60_000 });
+    if (await kesifBasligi.isVisible()) {
+      await tasmaYok(page, 'Keşif sorusu');
+      await soru.getByRole('button', { name: 'Hiçbirine basma', exact: true }).click();
+    }
+    // Veri durağı: Doldur (tablodan) + elle.
+    await expect(veriBasligi).toBeVisible({ timeout: 60_000 });
     await tasmaYok(page, 'Veri durağı');
     // Sayfada hazır gelen "Kanal" ana listede, sayfadaki sırasıyla, değeri önyazılı ve "sayfada hazır" rozetiyle (değiştirilebilir).
     await expect(soru.locator('.hizli-hazir')).toHaveCount(0);
