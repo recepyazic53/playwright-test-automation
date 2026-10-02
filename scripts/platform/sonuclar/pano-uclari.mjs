@@ -4,6 +4,7 @@
 //   GET  /platform/pano/secenekler?projeId=            "Kart ekle" seçimleri: veritabanları × ortamlar, bağlantılar, şablonlar, hedefler
 //   GET  /platform/pano/veri?projeId=&sablon=&p=       Nöbetçi verisi kartının sonucu (p: parametreler, JSON)
 //   POST /platform/pano/kaydet { projeId, duzen }      düzeni kaydeder ("Bitti")
+//   POST /platform/pano/tablo-ayari { projeId, kartId, sutunlar, sutunGenislikleri }  tablo sütun sırası / gizleme / genişlik
 //   POST /platform/pano/sql/denetle { projeId, sorgu } yalnız okuma kuralı (bağlantı AÇILMAZ; kart eklerken uyarı)
 //   POST /platform/pano/sql/yenile { projeId, kartId } SQL kartını çalıştırır (izin: Veritabanı okuma; CANLI'da canliOnay: true)
 // NOT: import.meta KULLANILMAZ.
@@ -69,6 +70,17 @@ export const PANO_POST_UCLARI = [
     const kartlar = g.duzen && Array.isArray(g.duzen.kartlar) ? g.duzen.kartlar : [];
     for (const k of kartlar) if (k && k.tur === 'sql' && k.ayar && typeof k.ayar.sorgu === 'string') panoSorgusuDenetle(k.ayar.sorgu);
     panoKaydet(db, projeId, g.duzen);
+    return panoGetir(db, projeId);
+  }],
+  // Tablo görünümünün sütun sırası / görünürlüğü ve genişlikleri: yalnız bu kartın "sutunlar" ve "sutunGenislikleri" ayarı değişir
+  // (düzenleme kipi gerekmez). Hedef ve sorgu değişmediği için önbellekteki sonuç ve "Son veri" korunur; sorgu çalışmaz.
+  ['/platform/pano/tablo-ayari', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const kartId = kimlik(g.kartId, 'kartId');
+    const p = panoGetir(db, projeId);
+    if (!p.duzen.kartlar.some((k) => k.id === kartId && k.tur === 'sql')) throw new DepoHatasi('SQL kartı bulunamadı.');
+    panoKaydet(db, projeId, { ...p.duzen, kartlar: p.duzen.kartlar.map((k) => (k.id === kartId
+      ? { ...k, ayar: { ...k.ayar, sutunlar: g.sutunlar, sutunGenislikleri: g.sutunGenislikleri } } : k)) });
     return panoGetir(db, projeId);
   }],
   ['/platform/pano/sql/denetle', (db, g) => {

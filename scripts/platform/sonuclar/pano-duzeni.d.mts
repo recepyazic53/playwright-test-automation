@@ -39,6 +39,12 @@ export declare function kartBoyutla<D extends { kartlar: PanoKarti[] }>(duzen: D
 export declare function eksikYerlesikler(duzen: { kartlar: PanoKarti[] }): ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string; varsayilan: boolean }>;
 export declare function esikRengi(deger: number, esikler: ReadonlyArray<{ islec: string; deger: number; renk: string }>): string | null;
 export declare function sayiyaCevir(v: unknown): number | null;
+export declare const SUTUN_GENISLIGI: Readonly<{ en: number; enCok: number }>;
+export declare function gorunenSutunlar(ayar: ReadonlyArray<string>, sutunlar: ReadonlyArray<string>): string[];
+export declare function sutunTasi(gorunen: ReadonlyArray<string>, ad: string, hedef: 'sol' | 'sag' | number): string[];
+export declare function sutunGorunurlugu(gorunen: ReadonlyArray<string>, tum: ReadonlyArray<string>, ad: string, goster: boolean): string[];
+export declare function sutunTuru(satirlar: ReadonlyArray<ReadonlyArray<unknown>>, i: number): 'sayi' | 'tarih' | 'metin';
+export declare function satirlariSirala(satirlar: ReadonlyArray<ReadonlyArray<unknown>>, i: number, yon: 'artan' | 'azalan' | null): unknown[][];
 export type PanoBicimi = { ondalik: 'oto' | number; onEk: string; sonEk: string; tarih: string; oran: string; hedef: number | null; gosterge: string };
 export declare const VARSAYILAN_BICIM: Readonly<PanoBicimi>;
 export declare const ONDALIK_SECENEKLERI: ReadonlyArray<'oto' | number>;

@@ -455,6 +455,115 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('tablo: başlığı sürükle / menüyle taşı, gizle / göster, genişlik, sıralama (sayı, tarih, metin); kalıcı; sorgu yeniden çalışmaz', async () => {
+  test.setTimeout(120_000);
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [{ id: 't-tablo', tur: 'sql', boyut: 'tam',
+    ayar: { baslik: 'Kayıt tablosu', hedef: { baglantiId: bTest }, sorgu: 'SELECT id, durum, tc_kimlik_no, tutar, gun FROM kayitlar ORDER BY id', gorunum: 'tablo' } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, yenilemeler, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: 'Kayıt tablosu' }) });
+  await kart.getByRole('button', { name: 'Yenile: Kayıt tablosu' }).click();
+  await expect(kart.locator('tbody tr')).toHaveCount(12);
+  const sonVeri = await kart.locator('.pano-son-veri').textContent();
+  const sorguSayisi = sorgular().length;
+  const basliklar = () => kart.locator('thead th').evaluateAll((l) => l.map((e) => e.getAttribute('data-sutun')));
+  const th = (ad: string) => kart.locator(`thead th[data-sutun="${ad}"]`);
+  const ilkSutun = (i: number) => kart.locator('tbody tr').evaluateAll((l, j) => l.map((r) => r.querySelectorAll('td')[j]?.textContent ?? ''), i);
+  expect(await basliklar()).toEqual(['id', 'durum', 'tc_kimlik_no', 'tutar', 'gun']);
+  // Sürükle-bırak: "gun" başlığını "id"nin üstüne.
+  await th('gun').dragTo(th('id'));
+  await expect.poll(basliklar).toEqual(['gun', 'id', 'durum', 'tc_kimlik_no', 'tutar']);
+  // Klavye: sütun menüsü → "Sola taşı" (Enter); odak menü düğmesine döner.
+  await kart.getByRole('button', { name: 'Sütun menüsü: durum' }).focus();
+  await page.keyboard.press('Enter');
+  const menu = kart.getByRole('menu', { name: 'Sütun menüsü: durum' });
+  await expect(menu.getByRole('menuitem', { name: 'Sola taşı' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect.poll(basliklar).toEqual(['gun', 'durum', 'id', 'tc_kimlik_no', 'tutar']);
+  await expect(kart.getByRole('button', { name: 'Sütun menüsü: durum' })).toBeFocused();
+  // Gizle: menüden; "Sütunlar" ile geri aç. Maskeli sütun gizlenip açılınca maskeli kalır.
+  await kart.getByRole('button', { name: 'Sütun menüsü: tutar' }).click();
+  await kart.getByRole('menu', { name: 'Sütun menüsü: tutar' }).getByRole('menuitem', { name: 'Gizle' }).click();
+  await expect.poll(basliklar).toEqual(['gun', 'durum', 'id', 'tc_kimlik_no']);
+  await expect(kart.getByRole('button', { name: 'Sütunlar (1 gizli)' })).toBeVisible();
+  await kart.getByRole('button', { name: 'Sütun menüsü: tc_kimlik_no' }).click();
+  await kart.getByRole('menu').getByRole('menuitem', { name: 'Gizle' }).click();
+  await kart.getByRole('button', { name: 'Sütunlar (2 gizli)' }).click();
+  const sutunMenusu = kart.getByRole('menu', { name: 'Görünen sütunlar' });
+  await expect(sutunMenusu.getByRole('menuitemcheckbox', { name: 'tc_kimlik_no' })).toHaveAttribute('aria-checked', 'false');
+  await sutunMenusu.getByRole('menuitemcheckbox', { name: 'tc_kimlik_no' }).click();
+  await expect.poll(basliklar).toEqual(['gun', 'durum', 'id', 'tc_kimlik_no']);
+  expect(new Set(await ilkSutun(3))).toEqual(new Set(['•••']));
+  // Genişlik: kenar tutamağını fareyle sürükle (+80 px), klavyeyle (→ +16), çift tıkla sığdır.
+  const tutamak = kart.getByRole('separator', { name: 'Sütun genişliği: durum' });
+  const kutu = (await tutamak.boundingBox())!;
+  const ilk = (await th('durum').boundingBox())!.width;
+  await page.mouse.move(kutu.x + kutu.width / 2, kutu.y + kutu.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(kutu.x + kutu.width / 2 + 40, kutu.y + kutu.height / 2, { steps: 4 });
+  await page.mouse.move(kutu.x + kutu.width / 2 + 80, kutu.y + kutu.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await kart.locator('col[data-sutun="durum"]').getAttribute('width'))).toBe(Math.round(ilk + 80));
+  await kart.getByRole('separator', { name: 'Sütun genişliği: id' }).focus();
+  await page.keyboard.press('ArrowRight');
+  const idGenislik = Number(await kart.locator('col[data-sutun="id"]').getAttribute('width'));
+  expect(idGenislik).toBeGreaterThan(40);
+  await expect(kart.getByRole('separator', { name: 'Sütun genişliği: id' })).toBeFocused();
+  await kart.getByRole('separator', { name: 'Sütun genişliği: id' }).dblclick();
+  await expect(kart.locator('col[data-sutun="id"]')).not.toHaveAttribute('width', /\d/);
+  // Sıralama (yalnız ekranda): sayı, metin (tr-TR), tarih; artan → azalan → kapalı; aria-sort.
+  const sirala = (ad: string) => th(ad).locator('[data-rol="sirala"]');
+  await sirala('id').click();
+  await expect(th('id')).toHaveAttribute('aria-sort', 'ascending');
+  expect((await ilkSutun(2)).slice(0, 3)).toEqual(['1', '2', '3']);
+  await sirala('id').click();
+  await expect(th('id')).toHaveAttribute('aria-sort', 'descending');
+  expect((await ilkSutun(2)).slice(0, 3)).toEqual(['12', '11', '10']);
+  await sirala('id').click();
+  await expect(th('id')).not.toHaveAttribute('aria-sort', /./);
+  await sirala('durum').click();
+  expect(await ilkSutun(1)).toEqual(['bekliyor', 'bekliyor', 'hata', 'hata', 'hata', 'hata', 'onaylandi', 'onaylandi', 'onaylandi', 'onaylandi', 'onaylandi', 'onaylandi']);
+  await sirala('gun').click();
+  await sirala('gun').click();
+  await expect(th('gun')).toHaveAttribute('aria-sort', 'descending');
+  expect((await ilkSutun(0))[0]).toBe('2026-09-22');
+  await expect(sirala('gun')).toBeFocused();
+  await adlarUyumlu(page);
+  await tasmaYok(page);
+  if (process.env.PANO_EKRAN_GORUNTUSU) {
+    mkdirSync(process.env.PANO_EKRAN_GORUNTUSU, { recursive: true });
+    await kart.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-tablo-karti-1440.png') });
+  }
+  // Hiçbiri sorguyu yeniden çalıştırmadı; "Son veri" aynı.
+  expect(sorgular()).toHaveLength(sorguSayisi);
+  expect(yenilemeler()).toBe(1);
+  await expect(kart.locator('.pano-son-veri')).toHaveText(String(sonVeri));
+  // Kalıcı: sayfa yeniden yüklenince aynı sıra, gizli sütun, genişlik; sıralama kaydedilmez.
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('main .iskelet, main [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
+  await expect.poll(basliklar).toEqual(['gun', 'durum', 'id', 'tc_kimlik_no']);
+  await expect(kart.locator('col[data-sutun="durum"]')).toHaveAttribute('width', String(Math.round(ilk + 80)));
+  await expect(th('gun')).not.toHaveAttribute('aria-sort', /./);
+  await expect(kart.locator('.pano-son-veri')).toHaveText(String(sonVeri));
+  const p = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`) as Record<string, any>;
+  expect(p.duzen.kartlar[0].ayar).toMatchObject({ sutunlar: ['gun', 'durum', 'id', 'tc_kimlik_no'], sutunGenislikleri: { durum: Math.round(ilk + 80) } });
+  expect(Object.keys(p.sqlSonuclari)).toEqual(['t-tablo']);
+  expect(sorgular()).toHaveLength(sorguSayisi);
+  // 390 px: yatay kaydırma ipucu, sayfa taşmaz.
+  const dar = await sayfaAc(390, 900);
+  await git(dar.page, '#/sonuclar/ozet');
+  const darKart = dar.page.locator('section.pano-sql-karti');
+  await expect(darKart.locator('.kaydirma-bilgisi')).toBeVisible();
+  await expect(darKart.locator('.kaydirma-bilgisi')).toContainText('yana kaydırın');
+  await tasmaYok(dar.page);
+  await adlarUyumlu(dar.page);
+  expect([...hatalar, ...dar.hatalar]).toEqual([]);
+  await dar.kapat();
+  await kapat();
+});
+
 test('390 px: düzenleme kipi, Kart ekle penceresi ve SQL kartı yatay taşmaz; 1440 px düzenleme kipinde de taşma yok', async () => {
   test.setTimeout(90_000);
   for (const [g, y] of [[390, 900], [1440, 1000]] as const) {

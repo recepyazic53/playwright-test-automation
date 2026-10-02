@@ -58,7 +58,9 @@ export const ESIK_RENKLERI = Object.freeze([
   Object.freeze({ anahtar: 'kirmizi', ad: 'Kırmızı' }), Object.freeze({ anahtar: 'sari', ad: 'Sarı' }), Object.freeze({ anahtar: 'yesil', ad: 'Yeşil' })
 ]);
 export const EN_COK_ESIK = 5;
-export const EN_COK_SUTUN = 20;
+export const EN_COK_SUTUN = 100;
+/** Tablo sütun genişliği sınırları (px; kenar tutamağıyla ayarlanır, kartın ayarında saklanır). */
+export const SUTUN_GENISLIGI = Object.freeze({ en: 40, enCok: 1200 });
 export const SQL_EN_UZUN = 20_000;
 export const NOT_EN_UZUN = 1000;
 export const EN_COK_BAGLANTI = 8;
@@ -179,7 +181,16 @@ function sqlAyari(ham) {
   const sutunHam = ham.sutunlar === undefined ? [] : ham.sutunlar;
   if (!Array.isArray(sutunHam) || sutunHam.length > EN_COK_SUTUN) throw new PanoHatasi(`En çok ${EN_COK_SUTUN} sütun seçilebilir.`);
   const sutunlar = [...new Set(sutunHam.map((s) => metin(s, 'Sütun adı', 120)))];
-  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, bicim: bicimTemizle(ham.bicim) };
+  const gHam = ham.sutunGenislikleri === undefined || ham.sutunGenislikleri === null ? {} : ham.sutunGenislikleri;
+  if (!nesneMi(gHam) || Object.keys(gHam).length > EN_COK_SUTUN) throw new PanoHatasi('Sütun genişlikleri geçersiz.');
+  /** @type {Record<string, number>} */
+  const sutunGenislikleri = {};
+  for (const [ad, g] of Object.entries(gHam)) {
+    const n = Math.round(Number(g));
+    if (!Number.isFinite(n) || n < SUTUN_GENISLIGI.en || n > SUTUN_GENISLIGI.enCok) throw new PanoHatasi(`Sütun genişliği ${SUTUN_GENISLIGI.en}–${SUTUN_GENISLIGI.enCok} px olmalıdır.`);
+    sutunGenislikleri[metin(ad, 'Sütun adı', 120)] = n;
+  }
+  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim) };
 }
 
 /**
@@ -472,4 +483,79 @@ export function pastaDilimleri(noktalar, enCok = EN_COK_DILIM) {
   const dilimler = [...ust.map((n) => ({ etiket: n.etiket, deger: n.deger, diger: false })), ...(tasar ? [{ etiket: 'Diğer', deger: kalan, diger: true }] : [])];
   const toplam = dilimler.reduce((t, n) => t + n.deger, 0) || 1;
   return dilimler.map((d) => ({ ...d, yuzde: (d.deger / toplam) * 100 }));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Tablo görünümü (saf, arayüzle ORTAK): sütun sırası / gizleme kartın "sutunlar" ayarındadır (görünen sütunlar, sırasıyla; boşsa
+// sonucun tüm sütunları), genişlikler "sutunGenislikleri"nde. Sıralama yalnız ekrandadır (kaydedilmez, sorgu yeniden çalışmaz).
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Görünen sütunlar (sırasıyla): ayardaki adlar sonuçta varsa o sırayla; ayar boşsa ya da hiçbiri yoksa tümü.
+ * @param {ReadonlyArray<string>} ayar @param {ReadonlyArray<string>} sutunlar @returns {string[]}
+ */
+export function gorunenSutunlar(ayar, sutunlar) {
+  const k = (/** @type {string} */ x) => x.toLocaleLowerCase('tr');
+  const secili = (ayar ?? []).map((a) => sutunlar.find((s) => k(s) === k(a))).filter((x) => x !== undefined);
+  return secili.length ? [...new Set(secili)] : [...sutunlar];
+}
+
+/**
+ * Görünen sütunlarda bir sütunu sola / sağa ya da hedef sıraya taşır (sınırda değişmez). @param {ReadonlyArray<string>} gorunen
+ * @param {string} ad @param {'sol' | 'sag' | number} hedef @returns {string[]}
+ */
+export function sutunTasi(gorunen, ad, hedef) {
+  const i = gorunen.indexOf(ad);
+  if (i < 0) return [...gorunen];
+  const j = hedef === 'sol' ? i - 1 : hedef === 'sag' ? i + 1 : Math.floor(Number(hedef));
+  if (!Number.isFinite(j) || j < 0 || j >= gorunen.length || j === i) return [...gorunen];
+  const l = [...gorunen];
+  l.splice(i, 1);
+  l.splice(j, 0, ad);
+  return l;
+}
+
+/**
+ * Sütunu gizler (en az bir sütun görünür kalır) ya da gösterir (sona eklenir; sonra taşınabilir). @param {ReadonlyArray<string>} gorunen
+ * @param {ReadonlyArray<string>} tum sonucun sütunları @param {string} ad @param {boolean} goster @returns {string[]}
+ */
+export function sutunGorunurlugu(gorunen, tum, ad, goster) {
+  if (!goster) return gorunen.length > 1 ? gorunen.filter((x) => x !== ad) : [...gorunen];
+  return gorunen.includes(ad) || !tum.includes(ad) ? [...gorunen] : [...gorunen, ad];
+
+}
+
+const TARIH_DESENI = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
+ * Sütunun sıralama türü: boş olmayan bütün değerler sayıysa 'sayi', ISO tarihse 'tarih', değilse 'metin' (maskeli değer metindir).
+ * @param {ReadonlyArray<ReadonlyArray<unknown>>} satirlar @param {number} i @returns {'sayi' | 'tarih' | 'metin'}
+ */
+export function sutunTuru(satirlar, i) {
+  const d = satirlar.map((r) => r[i]).filter((v) => v !== null && v !== undefined && v !== '');
+  if (!d.length) return 'metin';
+  if (d.every((v) => typeof v === 'number' || (typeof v === 'string' && /^-?\d+([.,]\d+)?$/.test(v.trim())))) return 'sayi';
+  if (d.every((v) => typeof v === 'string' && TARIH_DESENI.test(v.trim()) && !Number.isNaN(Date.parse(v.trim().replace(' ', 'T'))))) return 'tarih';
+  return 'metin';
+}
+
+/**
+ * Satırları sütuna göre sıralar (yeni dizi; boş değerler hep sonda): sayı sayısal, tarih zamana göre, metin tr-TR. yon: 'artan' |
+ * 'azalan' | null (sıralama yok: özgün sıra). @param {ReadonlyArray<ReadonlyArray<unknown>>} satirlar @param {number} i
+ * @param {'artan' | 'azalan' | null} yon @returns {unknown[][]}
+ */
+export function satirlariSirala(satirlar, i, yon) {
+  const l = satirlar.map((r) => [...r]);
+  if (!yon) return l;
+  const tur = sutunTuru(satirlar, i);
+  const anahtar = (/** @type {unknown} */ v) => (tur === 'sayi' ? Number(String(v).replace(',', '.')) : tur === 'tarih' ? Date.parse(String(v).trim().replace(' ', 'T')) : String(v));
+  const carpan = yon === 'azalan' ? -1 : 1;
+  return l.map((r, s) => ({ r, s })).sort((x, y) => {
+    const a = x.r[i]; const b = y.r[i];
+    const aBos = a === null || a === undefined || a === ''; const bBos = b === null || b === undefined || b === '';
+    if (aBos || bBos) return aBos && bBos ? x.s - y.s : aBos ? 1 : -1;
+    const ka = anahtar(a); const kb = anahtar(b);
+    const f = tur === 'metin' ? String(ka).localeCompare(String(kb), 'tr', { numeric: true, sensitivity: 'base' }) : Number(ka) - Number(kb);
+    return f ? f * carpan : x.s - y.s;
+  }).map((x) => x.r);
 }

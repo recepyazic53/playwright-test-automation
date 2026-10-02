@@ -159,6 +159,30 @@ a.pano-sayi:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px;
 .pano-pasta .dilim { stroke: var(--dilim); }
 .pano-renk[class*="dilim-"] { background: var(--dilim); }
 
+/* Tablo: başlıkta sıralama, sütun menüsü (⋯) ve genişlik tutamağı; sütun genişliği <col width> özniteliğiyle (satır içi stil yok) */
+.pano-tablo-araclari { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 4px; }
+.pano-menu-yeri:empty { display: none; }
+.pano-menu { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 6px; padding: 4px 6px; border: 1px solid var(--cizgi-2);
+  border-radius: var(--yaricap-m); background: var(--panel-kati); box-shadow: var(--golge); min-width: 0; }
+.pano-menu-baslik { font-size: 12px; font-weight: 600; color: var(--metin-2); margin-right: 4px; overflow-wrap: anywhere; }
+.pano-menu-isaret { display: inline-block; width: 1em; color: var(--vurgu); font-weight: 700; }
+.pano-menu-kapat { margin-left: auto; }
+.pano-tablo-tablosu thead th { position: relative; padding-right: 12px; user-select: none; }
+.pano-tablo-tablosu th[draggable="true"] { cursor: grab; }
+.pano-tablo-tablosu th.surukleniyor { opacity: .45; }
+.pano-tablo-tablosu th.birakma-hedefi { box-shadow: inset 2px 0 0 var(--vurgu); }
+.pano-th { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.pano-th-sirala { all: unset; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; min-width: 0; font: inherit; color: inherit; border-radius: 4px; }
+.pano-th-sirala:focus-visible, .pano-th-menu:focus-visible, .pano-th-genislik:focus-visible { outline: 2px solid var(--odak); outline-offset: 1px; }
+.pano-th-ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pano-th-sira { color: var(--metin-3); font-size: 10px; }
+.pano-th-sira.artan, .pano-th-sira.azalan { color: var(--vurgu); }
+.pano-th-menu { all: unset; cursor: pointer; padding: 0 4px; border-radius: 4px; color: var(--metin-3); line-height: 1; }
+.pano-th-menu:hover, .pano-th-menu[aria-expanded="true"] { color: var(--metin); background: var(--panel-2); }
+.pano-th-genislik { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
+.pano-th-genislik::after { content: ""; position: absolute; top: 25%; bottom: 25%; right: 3px; width: 2px; border-radius: 1px; background: var(--cizgi-2); }
+.pano-th-genislik:hover::after, .pano-th-genislik:focus-visible::after { background: var(--vurgu); }
+
 /* Liste */
 .pano-liste { margin: 0; padding-left: 1.2em; display: grid; gap: 3px; max-height: 22rem; overflow: auto; overflow-wrap: anywhere; }
 .pano-liste-fazla { margin: 6px 0 0; }

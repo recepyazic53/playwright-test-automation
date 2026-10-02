@@ -18,7 +18,7 @@ import { gerekenIzinler } from '../../scripts/platform/guvenlik/uc-denetimi.mjs'
 import {
   BOYUTLAR, EN_COK_DILIM, EN_COK_KART, LISTE_EN_COK, VARSAYILAN_BICIM, bicimTemizle, degisimHesapla, duzenTemizle, eksikYerlesikler, esikRengi,
   hucreBicimle, kartBoyutla, kartEkle, kartKaldir, kartTasi, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
-  yuzdeDegeri, type PanoDuzeni
+  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, type PanoDuzeni
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -112,6 +112,28 @@ test('biçim: yüzde (0,834 → %83,4; 83,4 → %83,4), binlik, ondalık, ön / 
     expect(k.ayar).toMatchObject({ gorunum, bicim: { ondalik: 1, sonEk: ' sn', hedef: 95 } });
   }
   expect(duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1' } }] }).kartlar[0].ayar?.bicim).toEqual(VARSAYILAN_BICIM);
+});
+
+test('tablo: görünen sütunlar, taşı, gizle / göster, sıralama türleri (sayı, tarih, metin tr-TR; boşlar sonda), genişlik doğrulaması', () => {
+  expect(gorunenSutunlar([], ['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+  expect(gorunenSutunlar(['C', 'a', 'yok'], ['a', 'b', 'c'])).toEqual(['c', 'a']);
+  expect(sutunTasi(['a', 'b', 'c'], 'c', 'sol')).toEqual(['a', 'c', 'b']);
+  expect(sutunTasi(['a', 'b', 'c'], 'a', 'sol')).toEqual(['a', 'b', 'c']);
+  expect(sutunTasi(['a', 'b', 'c'], 'c', 0)).toEqual(['c', 'a', 'b']);
+  expect(sutunGorunurlugu(['a', 'b', 'c'], ['a', 'b', 'c'], 'b', false)).toEqual(['a', 'c']);
+  expect(sutunGorunurlugu(['a'], ['a', 'b'], 'a', false)).toEqual(['a']);
+  expect(sutunGorunurlugu(['c', 'a'], ['a', 'b', 'c'], 'b', true)).toEqual(['c', 'a', 'b']);
+  const r = [[10, 'Çilek', '2026-09-12', '•••'], [2, 'ceviz', '2026-10-01', '•••'], [null, 'armut', '2025-12-31', null], [1, 'Ihlamur', null, '•••'], [100, 'ıspanak', '2026-01-05', '•••']];
+  expect([sutunTuru(r, 0), sutunTuru(r, 1), sutunTuru(r, 2), sutunTuru(r, 3)]).toEqual(['sayi', 'metin', 'tarih', 'metin']);
+  expect(satirlariSirala(r, 0, 'artan').map((x) => x[0])).toEqual([1, 2, 10, 100, null]);
+  expect(satirlariSirala(r, 0, 'azalan').map((x) => x[0])).toEqual([100, 10, 2, 1, null]);
+  expect(satirlariSirala(r, 1, 'artan').map((x) => x[1])).toEqual(['armut', 'ceviz', 'Çilek', 'Ihlamur', 'ıspanak']);
+  expect(satirlariSirala(r, 2, 'artan').map((x) => x[2])).toEqual(['2025-12-31', '2026-01-05', '2026-09-12', '2026-10-01', null]);
+  expect(satirlariSirala(r, 0, null)).toEqual(r);
+  expect(satirlariSirala([['10'], ['9'], ['100']], 0, 'artan').map((x) => x[0])).toEqual(['9', '10', '100']);
+  const k = (g: unknown) => duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1', gorunum: 'tablo', sutunGenislikleri: g } }] });
+  expect(k({ durum: 180.4 }).kartlar[0].ayar?.sutunGenislikleri).toEqual({ durum: 180 });
+  expect(() => k({ durum: 10 })).toThrow('Sütun genişliği 40–1200 px');
 });
 
 test.describe('pano (kasa) ve SQL kartı', () => {
@@ -320,7 +342,15 @@ test.describe('pano (kasa) ve SQL kartı', () => {
   test('yedekte pano: tam yüklemede düzen ve SQL sonuç önbelleği geri gelir', async () => {
     const duzen = kartEkle(kartKaldir(varsayilanDuzen(), 'kapsam'), sqlKarti('k-yedek', 'SELECT COUNT(*) AS n FROM kayitlar', { gorunum: 'sayi', esikler: [{ islec: '>', deger: 0, renk: 'kirmizi' }] }));
     kaydetUcu(vt, { projeId: projeA, duzen });
-    await panoSqlYenile(vt, projeA, 'k-yedek');
+    const ilkSonuc = await panoSqlYenile(vt, projeA, 'k-yedek');
+    // Tablo ayarı (sütun sırası / genişlik) yalnız kartın ayarını değiştirir: önbellekteki sonuç ve "Son veri" korunur, sorgu çalışmaz.
+    writeFileSync(gunluk, '');
+    const tabloUcu = PANO_POST_UCLARI.find(([y]) => y === '/platform/pano/tablo-ayari')?.[1] as (db: Veritabani, g: Record<string, unknown>) => any;
+    const t = tabloUcu(vt, { projeId: projeA, kartId: 'k-yedek', sutunlar: ['n'], sutunGenislikleri: { n: 140 } });
+    expect(t.duzen.kartlar.find((x: { id: string }) => x.id === 'k-yedek').ayar).toMatchObject({ sutunlar: ['n'], sutunGenislikleri: { n: 140 }, sorgu: 'SELECT COUNT(*) AS n FROM kayitlar' });
+    expect(t.sqlSonuclari['k-yedek'].zaman).toBe(ilkSonuc.zaman);
+    expect(sorgular()).toEqual([]);
+    expect(() => tabloUcu(vt, { projeId: projeA, kartId: 'baslarken', sutunlar: [] })).toThrow('SQL kartı bulunamadı');
     const once = panoGetir(vt, projeA);
     const { veri } = yedekOlustur(vt);
     const hedef = await veritabaniniHazirla(null);
