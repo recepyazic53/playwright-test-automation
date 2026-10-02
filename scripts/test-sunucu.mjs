@@ -458,6 +458,7 @@ const ARAYUZ_DOSYALARI = new Map([
   // Talep no (serbest metin; kırpma, harf duyarsız eşleşme, benzer yazım): sunucuyla ORTAK saf modül; alan, talep koşusu ve kapsam matrisi.
   ['/arayuz/talepler.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'talepler.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/talep-alani.js', { dosya: 'talep-alani.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/veri-bekliyor.js', { dosya: 'veri-bekliyor.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/talep-kosusu.js', { dosya: 'talep-kosusu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/kapsam-matrisi.js', { dosya: 'kapsam-matrisi.js', tur: 'text/javascript; charset=utf-8' }],
   // Göreli tarih ("bugün+7", "ay sonu"): koşucu, formlar ve tablolar AYNI kuralı kullanır (saf modül).

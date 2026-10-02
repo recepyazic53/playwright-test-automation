@@ -33,9 +33,14 @@ export type PlanOnizlemesi = {
 export type SenaryoOnerisi = {
   indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean;
   alt: { degisiklikler: Array<{ planAdi: string; sutun: string; deger: string; etiket: string; oturumAnahtar: string }> } | null;
-  /** Dalın açtığı, değeri olmayan alanlar: doluysa öneri kaydedilmez (değer üretilmez; o dalla yeni hızlı test başlatılır). */
+  /** Dalın açtığı, değeri olmayan alanların adları (değer üretilmez): seçilirse öneri "veri bekliyor" olarak koşu dışı kaydedilir. */
   veriGerekli: string[];
+  /** veriGerekli'nin alanları (oturum anahtarı + o dalda sorulduğu ad). */
+  eksikAlanlar: Array<{ anahtar: string; etiket: string }>;
 };
+export declare function veriBekleyenSatirlariYaz(vt: Veritabani, projeId: string, g: {
+  satirAdi: string; ekranAdi: string; ekGizliAdlar?: ReadonlyArray<string>; alanlar: ReadonlyArray<{ anahtar: string; etiket: string; alan: Record<string, any> }>;
+}): Array<{ anahtar: string; etiket: string; tabloId: string; tabloAdi: string; sutun: string; satirId: string }>;
 export declare const VARSAYILAN_ONERI_SAYISI: number;
 export declare const ZINCIR_EN_COK_SATIR: number;
 

@@ -1679,6 +1679,9 @@ function dogrulamaAdimListesi(liste) {
       x.durum === 'suruyor' && x.ayrinti ? h('small', { class: 'blok soluk' }, x.ayrinti) : null))));
 }
 
+/** Öneri, değeri olmayan alan açan ("veri gerekli") bir dal mı? @param {any} x */
+const veriGerekliMi = (x) => Array.isArray(x.veriGerekli) && x.veriGerekli.length > 0;
+
 /**
  * Kayıt özeti — KENDİ SEKMESİNDE (#/hizli-test/ozet/<oturumId>): tablolar / birleştirme kararı / bağlantılar / senaryo önerileri; onaylamadan
  * hiçbir şey yazılmaz. Kaydet sekmesindeki seçimler (senaryo adı, toplu koşu, tablo) oturumdan okunur.
@@ -1739,21 +1742,28 @@ async function ozetEkrani(govde, id, yenilemeNotu = null) {
         return [i ? ' · ' : '', x.metin, goster ? ' ' : '', goster];
       }));
     } else {
-      neden.textContent = sorunlar.length ? 'Kayıt onaylanamaz: önce yukarıdaki sorunları düzeltin.' : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo`;
+      const bekleyenSayisi = oneriler.filter((x) => veriGerekliMi(x) && secili.has(x.indeks)).length;
+      neden.textContent = sorunlar.length ? 'Kayıt onaylanamaz: önce yukarıdaki sorunları düzeltin.'
+        : `Yazılacak: ${tv.ozet() ?? 'test verisi yazılmaz'}; ${1 + secili.size} senaryo${bekleyenSayisi ? ` (${bekleyenSayisi} veri bekliyor, koşu dışı)` : ''}`;
     }
   };
   const baslikSatiri = h('b', {}, baslik);
   const senaryoListesi = h('ul', { class: 'hizli-oneriler' },
     h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': 'Yaptığınız senaryo' }), ' ', baslikSatiri, h('span', { class: 'kucuk soluk' }, String(baslik).toLocaleLowerCase('tr').includes('hızlı test') ? ' — yaptığınız akış' : ' — hızlı testte yaptığınız akış'))),
     oneriler.map((x) => {
-      // Veri gerektiren dal: değer üretilmez — seçilemez; kayıttan sonra o dalla yeni hızlı test başlatma bağlantısı gösterilir.
-      const veriGerekli = Array.isArray(x.veriGerekli) && x.veriGerekli.length > 0;
-      const k = h('input', { type: 'checkbox', checked: !veriGerekli && secili.has(x.indeks), disabled: veriGerekli, 'aria-label': `${x.baslik} senaryosunu ekle` });
-      k.addEventListener('change', () => { if (k.checked) secili.add(x.indeks); else secili.delete(x.indeks); guncelle(); });
-      return h('li', { class: veriGerekli ? 'soluk' : '' }, h('label', {}, k, ' ', h('b', {}, x.baslik), h('span', { class: 'kucuk soluk' }, ` — ${x.gerekce}`)),
-        veriGerekli ? rozet(`veri gerekli: ${x.veriGerekli.join(', ')}`, 'uyari', { title: 'Bu dalın alanlarına değer üretilmez. Kaydettikten sonra “Bu dalla yeni hızlı test” ile o değerleri girerek ekleyin.' }) : null);
+      // Veri gerektiren dal: değer üretilmez, sorulmaz. Seçilirse senaryo "veri bekliyor" olarak koşu dışı kaydedilir (tablo satırında
+      // hücreler boş); değerler sonra Test verisi'nde doldurulur, koşuya dahil etmeyi kullanıcı yapar.
+      const veriGerekli = veriGerekliMi(x);
+      const k = h('input', { type: 'checkbox', checked: secili.has(x.indeks), 'aria-label': `${x.baslik} senaryosunu ekle` });
+      const not = veriGerekli ? h('p', { class: 'kucuk hizli-veri-bekliyor-notu', hidden: !k.checked },
+        `“Veri bekliyor” olarak koşu dışı kaydedilir: ${x.veriGerekli.join(', ')} için değer sorulmaz ve üretilmez; tablo satırında boş kalır. Değerleri sonra Test verisi'nde doldurup senaryo ekranından koşuya dahil edersiniz.`) : null;
+      k.addEventListener('change', () => { if (k.checked) secili.add(x.indeks); else secili.delete(x.indeks); if (not) not.hidden = !k.checked; guncelle(); });
+      return h('li', { class: veriGerekli ? 'hizli-oneri-veri-gerekli' : '' }, h('label', {}, k, ' ', h('b', {}, x.baslik), h('span', { class: 'kucuk soluk' }, ` — ${x.gerekce}`)),
+        veriGerekli ? rozet(`veri gerekli: ${x.veriGerekli.join(', ')}`, 'uyari', { title: 'Bu dalın alanlarına değer üretilmez. Seçerseniz senaryo “veri bekliyor” olarak koşu dışı kaydedilir; değerleri Test verisi\'nde doldurursunuz.' }) : null,
+        not);
     }));
-  const veriGerekenDallar = oneriler.filter((x) => Array.isArray(x.veriGerekli) && x.veriGerekli.length);
+  /** Seçilmeyen veri gerektiren dallar (kayıttan sonra "yeni hızlı test" yolu gösterilir). */
+  const veriGerekenDallar = () => oneriler.filter((x) => veriGerekliMi(x) && !secili.has(x.indeks));
   /** Kaydet; aynı başlıklı senaryo varsa (düzenleme kipi) önce sorulur. @param {Record<string, unknown>} ek */
   const kaydet = async (ek = {}) => {
     let r;
@@ -1788,12 +1798,18 @@ async function ozetEkrani(govde, id, yenilemeNotu = null) {
     }
     if (r && r.onayGerekli) { bildir('Bu ekran zaten var: farkları gözden geçirip onaylayın.', 'uyari'); return; }
     if (r && r.kaydedildi) {
+      const bekleyenler = (Array.isArray(r.ekSenaryolar) ? r.ekSenaryolar : []).filter((x) => Array.isArray(x.veriBekliyor) && x.veriBekliyor.length);
+      const kalanDallar = veriGerekenDallar();
       yerlestir(govde, h('section', { class: 'kart hizli-soru' },
         h('div', { class: 'kart-basligi' }, h('h3', { tabindex: '-1', 'data-odak': '' }, ikon('onay'), 'Test kaydedildi'),
           h('span', { class: 'sag' }, rozet(r.dogrulandi ? 'Doğrulandı' : 'Doğrulanmadı', r.dogrulandi ? 'basari' : 'uyari'))),
         h('p', {}, `Ekran “${oz.ekran.ad}” ve senaryo “${r.senaryoBasligi || baslik}” kaydedildi. Bu sekmeyi kapatabilirsiniz.`),
-        veriGerekenDallar.length ? h('div', { class: 'not-kutusu bilgi', role: 'note' },
-          `Veri gerektiren dallar kaydedilmedi (${veriGerekenDallar.map((x) => x.gerekce.split(' — ')[0]).join('; ')}). O dalı denemek için `,
+        bekleyenler.length ? h('div', { class: 'not-kutusu uyari hizli-veri-bekliyor-sonucu', role: 'note' },
+          h('p', {}, h('b', {}, `${bekleyenler.length} senaryo “veri bekliyor” olarak koşu dışı kaydedildi. `),
+            'Değeri olmayan alanlar test verisi satırında boş; senaryo ekranındaki “Değerleri doldur” ile doldurun, sonra koşuya dahil edin.'),
+          h('ul', {}, bekleyenler.map((x) => h('li', {}, h('a', { href: `#/senaryolar/duzenle/${encodeURIComponent(String(x.id))}` }, x.baslik), ` — veri bekliyor: ${x.veriBekliyor.join(', ')}`)))) : null,
+        kalanDallar.length ? h('div', { class: 'not-kutusu bilgi', role: 'note' },
+          `Seçmediğiniz veri gerektiren dallar kaydedilmedi (${kalanDallar.map((x) => x.gerekce.split(' — ')[0]).join('; ')}). O dalı denemek için `,
           h('a', { href: `#/hizli-test/duzenle/${encodeURIComponent(String(r.ekranId))}` }, 'bu ekranla yeni hızlı test başlatın'), ' ve dalın alanlarına değer girin.') : null,
         h('div', { class: 'dugmeler' },
           h('a', { class: 'dugme birincil', href: listeHedefi().adres }, ikon('liste'), listeHedefi().ad),

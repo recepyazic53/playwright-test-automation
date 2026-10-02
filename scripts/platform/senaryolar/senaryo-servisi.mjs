@@ -30,6 +30,7 @@ import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { ayarBasvurulariniDenetle, modelAlanBilgisi, tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { basvuruGruplari, veriKosulariniAc, veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 import { icerikTalepleri, talepleriAyikla } from './talepler.mjs';
+import { bekleyenAlanlar, veriBekliyorAyikla } from './veri-bekliyor.mjs';
 
 /**
  * Ekranın seçim listeleri: tablo sütununa bağlı alanlar tablodan (Test verisi > Tablolar; aynı tablodaki alanlar birbirini
@@ -341,6 +342,8 @@ export function senaryoListesi(vt, projeId, ortamId) {
   const satirlar = [];
   /** @type {Map<string, number>} */
   const sayilar = new Map();
+  /** "Veri bekliyor" senaryosu varsa tablolar bir kez okunur (gizli değer çözülmez). @type {ReturnType<typeof tablolariListele> | null} */
+  let vbTablolari = null;
   for (const s of vt.tumu('SELECT * FROM senaryolar WHERE proje_id = ? ORDER BY baslik', [projeId])) {
     const icerik = /** @type {Nesne} */ (JSON.parse(String(s.icerik_json)));
     const tanimlilar = ortamKimlikleri(icerik);
@@ -383,6 +386,8 @@ export function senaryoListesi(vt, projeId, ortamId) {
       talepler: icerikTalepleri(icerik),
       // Hızlı testle oluşturulan ve henüz doğrulanmamış (Hayır izni) senaryo: listede "doğrulanmadı" rozeti için.
       ...(nesneMi(icerik.hizliTest) ? { hizliTest: { izin: icerik.hizliTest.izin, dogrulandi: icerik.hizliTest.dogrulandi === true } } : {}),
+      // "Veri bekliyor": hücresi hâlâ boş alanların adları (doldurulunca listeden düşer; liste boşsa rozet yok).
+      ...(Array.isArray(icerik.veriBekliyor) ? { veriBekliyor: [...new Set(bekleyenAlanlar(icerik.veriBekliyor, (vbTablolari ??= tablolariListele(vt, projeId))).map((x) => x.etiket))] } : {}),
       ...(ortamId ? {} : { ortamlar })
     });
   }
@@ -423,7 +428,11 @@ export function senaryoDetayi(vt, id, ortamId) {
     // Talep numaraları (serbest metin; yoksa boş liste).
     talepler: icerikTalepleri(icerik),
     // Hızlı testle oluşturulduysa: izin, bitiş koşulu, doğrulandı mı (yoksa null).
-    hizliTest: nesneMi(icerik.hizliTest) ? icerik.hizliTest : null
+    hizliTest: nesneMi(icerik.hizliTest) ? icerik.hizliTest : null,
+    // "Veri bekliyor" (hızlı test önerisi): hücresi hâlâ boş alanlar (tablo / satır adı; değer yok) ve toplam; işaret yoksa null.
+    veriBekliyor: Array.isArray(icerik.veriBekliyor)
+      ? { bekleyen: bekleyenAlanlar(icerik.veriBekliyor, tablolariListele(vt, s.projeId)), toplam: veriBekliyorAyikla(icerik.veriBekliyor)?.length ?? 0 }
+      : null
   };
 }
 
@@ -877,7 +886,7 @@ function hizliTestBilgisi(d) {
  * Çalıştırma biçimi (veriKosulari; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null kaldırır.
  * Kayıt grubunu tabloya da ekleme (yeniTabloSatirlari; tabloSatirlariniEkle): senaryo ve tablo satırı TEK işlemde yazılır.
  * Talep numaraları (talepler; senaryolar/talepler.mjs): verilmezse mevcut korunur, null / [] kaldırır.
- * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; talepler?: unknown; hizliTest?: unknown; yapan?: string }} girdi
+ * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; talepler?: unknown; hizliTest?: unknown; veriBekliyor?: unknown; yapan?: string }} girdi
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
  * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }>; tabloSatirlari?: import('./senaryo-servisi.d.mts').TabloSatiriEklemesi[] }}
  */
@@ -1020,6 +1029,12 @@ function senaryoKaydetIslem(vt, girdi, secenekler = {}) {
     const h = hizliTestBilgisi(girdi.hizliTest);
     if (h) icerik.hizliTest = h;
     else delete icerik.hizliTest;
+  }
+  // "Veri bekliyor" (veri-bekliyor.mjs; hızlı test önerisi): verilmezse mevcut korunur, null / [] kaldırır.
+  if (girdi.veriBekliyor !== undefined) {
+    const v = veriBekliyorAyikla(girdi.veriBekliyor);
+    if (v) icerik.veriBekliyor = v;
+    else delete icerik.veriBekliyor;
   }
   // Tabloya eklenen kayıt grubu: satır seçimi o satıra; grubun çoklu satır ayarı (varsa) kalkar (tek satır).
   if (tabloEklemesi) {

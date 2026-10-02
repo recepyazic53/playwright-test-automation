@@ -171,3 +171,16 @@
 .hizli-sorunlar li { margin: 4px 0; overflow-wrap: anywhere; }
 .hizli-sorunlar li .dugmeler { margin-top: 4px; }
 .hizli-sorunlar details code { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* "Veri bekliyor" (hızlı test önerisi; kayıt özeti, senaryo ekranı veri-bekliyor.js, Test verisi satırı tablolar.js, senaryo listesi). Değeri
+   olmayan alanlar vurgulanır; uzun alan adları kırılır (390 px'te taşma yok). */
+.hizli-oneriler .hizli-oneri-veri-gerekli .rozet { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.hizli-veri-bekliyor-notu { margin: 4px 0 0 1.6em; color: var(--metin-2); overflow-wrap: anywhere; }
+.hizli-veri-bekliyor-sonucu p { margin: 0; }
+.hizli-veri-bekliyor-sonucu ul { margin: 6px 0 0; padding-left: 1.2em; overflow-wrap: anywhere; }
+.veri-bekliyor-notu { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin-bottom: 12px; overflow-wrap: anywhere; }
+.veri-bekliyor-notu p { margin: 0; }
+.veri-bekliyor-notu .dugmeler { margin: 0; flex-wrap: wrap; }
+.veri-bekliyor-rozeti { max-width: 100%; }
+tr.veri-bekliyor-satiri > td { background: var(--atlanan-zemin); }
+td.veri-bekliyor-hucresi input { outline: 2px solid var(--atlanan); outline-offset: -2px; }
