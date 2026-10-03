@@ -10,6 +10,9 @@ import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { tabloDegerleriniYaz } from './servis-ornekleri.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { alanSatirlari } from './servis-govdesi.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { adaGoreMaskele } from '../ayarlar/gizli-adlar.mjs';
+import { GIZLI_SABIT_MASKESI } from './gizli-sabitler.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -95,7 +98,7 @@ export function kosudanOgren(vt, g) {
   const gozlem = gozlemOlustur({
     istek: g.sonuc.istek, sablon: g.icerik.govde, tur: s.tur === 'rest' ? 'rest' : 'soap', ...semaBilgisi(s, op),
     kosuDurumu: g.durum === 'basarili' ? 'basarili' : 'basarisiz', sonuc: g.sonuc, senaryo: g.baslik, senaryoId: g.senaryoId, kosuId: g.kosuId,
-    zaman: new Date().toISOString(), kaynak: 'kosu', oncekiler: s.ayarlar.kosuOgrenmesi?.[op] ?? []
+    zaman: new Date().toISOString(), kaynak: 'kosu', oncekiler: s.ayarlar.kosuOgrenmesi?.[op] ?? [], ekGizliAdlar: ekGizliAdlar(vt)
   });
   if (gozlem) gozlemiKaydet(vt, s.id, op, gozlem);
 }
@@ -107,7 +110,10 @@ export function senaryodanOgren(vt, senaryoId) {
   const s = servisGetir(vt, x.servisId);
   if (!s) return;
   const op = String(x.icerik.operasyon);
-  const gozlem = gozlemOlustur({ istek: x.icerik.govde, sablon: x.icerik.govde, tur: s.tur === 'rest' ? 'rest' : 'soap', ...semaBilgisi(s, op),
+  // Kayıtlı gövdede gizli sabitler düz durur: önce maskelenir (adı gizli alanın değeri gözleme hiç girmez).
+  const ekler = ekGizliAdlar(vt);
+  const govde = adaGoreMaskele(x.icerik.govde, ekler, GIZLI_SABIT_MASKESI).metin;
+  const gozlem = gozlemOlustur({ istek: govde, sablon: govde, ekGizliAdlar: ekler, tur: s.tur === 'rest' ? 'rest' : 'soap', ...semaBilgisi(s, op),
     kosuDurumu: 'bilinmiyor', senaryo: x.baslik, senaryoId: x.id, zaman: new Date().toISOString(), kaynak: 'senaryo' });
   if (gozlem) gozlemiKaydet(vt, s.id, op, gozlem);
 }

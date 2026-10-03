@@ -24,6 +24,9 @@ test('gözlem: yalnız elle yazılmış değerler; tablo / akış / kural ve mas
     'Girdi/Tarih': { d: 'dolu' }, 'Girdi/Parola': { d: 'dolu' }, 'Girdi/Not': { d: 'bos' }
   });
   expect(gozlemOlustur({ ...temel, istek: '<bozuk', sablon: SABLON, kosuDurumu: 'basarili' })).toBeNull();
+  // Adı gizli alanın elle yazılmış değeri (maskesiz olsa da) saklanmaz.
+  const acik = gozlemOlustur({ ...temel, istek: zarf('<Parola>duz-deger</Parola>'), sablon: zarf('<Parola>duz-deger</Parola>'), kosuDurumu: 'bilinmiyor', kaynak: 'senaryo' }) as Gozlem;
+  expect(acik.alanlar).toEqual({ 'Girdi/Parola': { d: 'dolu' } });
 });
 
 test('başarısız koşu: hata metni alanı anıyorsa şüpheli (diğerleri zayıf); tek farkla ayrılıyorsa şüpheli; belirsizse değer yok', () => {

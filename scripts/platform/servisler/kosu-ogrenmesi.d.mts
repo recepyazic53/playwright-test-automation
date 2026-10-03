@@ -16,7 +16,7 @@ export function hataMetni(sonuc: { hata?: unknown; yanit?: unknown }): string;
 export function hataAlanlari(metin: string, yollar: string[]): string[];
 export function gozlemOlustur(g: {
   istek: string; sablon: string; tur?: 'soap' | 'rest'; kosuDurumu: 'basarili' | 'basarisiz' | 'hata' | 'bilinmiyor'; sonuc?: { hata?: unknown; yanit?: unknown };
-  senaryo: string; senaryoId: string | null; kosuId?: string; zaman: string; kaynak: 'kosu' | 'senaryo'; oncekiler?: ReadonlyArray<Gozlem>; kok?: string; ustAlanlar?: string[];
+  senaryo: string; senaryoId: string | null; kosuId?: string; zaman: string; kaynak: 'kosu' | 'senaryo'; oncekiler?: ReadonlyArray<Gozlem>; kok?: string; ustAlanlar?: string[]; ekGizliAdlar?: ReadonlyArray<string>;
 }): Gozlem | null;
 export function gozlemEkle(l: Gozlem[], g: Gozlem): Gozlem[];
 export function kosuOnerileri(g: {

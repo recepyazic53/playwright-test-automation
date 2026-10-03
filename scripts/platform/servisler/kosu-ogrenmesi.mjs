@@ -11,6 +11,7 @@
 //    durumu bilinen örnek), şüpheli alan notu. Kanıt: kaç başarılı koşuda görüldü, son görülme, senaryolar.
 import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, degerOrtusmesi } from './servis-analizi.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
 /** @typedef {import('./kosu-ogrenmesi.d.mts').Gozlem} Gozlem */
 /** @typedef {import('./kosu-ogrenmesi.d.mts').KosuOnerisi} KosuOnerisi */
@@ -61,7 +62,7 @@ export function hataAlanlari(metin, yollar) {
  * Koşudan (ya da kayıtlı senaryodan) gözlem. Değer yalnız şablonda elle yazılmış ve istekte maskesiz olan alanda saklanır.
  * @param {{ istek: string; sablon: string; tur?: 'soap' | 'rest'; kosuDurumu: 'basarili' | 'basarisiz' | 'hata' | 'bilinmiyor'; sonuc?: { hata?: unknown; yanit?: unknown };
  *   senaryo: string; senaryoId: string | null; kosuId?: string; zaman: string; kaynak: 'kosu' | 'senaryo'; oncekiler?: ReadonlyArray<Gozlem>;
- *   kok?: string; ustAlanlar?: string[] }} g
+ *   kok?: string; ustAlanlar?: string[]; ekGizliAdlar?: ReadonlyArray<string> }} g
  * @returns {Gozlem | null} istek çözülemezse null
  */
 export function gozlemOlustur(g) {
@@ -73,7 +74,8 @@ export function gozlemOlustur(g) {
   const alanlar = {};
   for (const [yol, v] of c.alanlar) {
     const sablonDegeri = t.hata ? undefined : t.alanlar.get(yol);
-    const elle = sablonDegeri?.durum === 'dolu' && somut(sablonDegeri.deger);
+    // Adı gizli alanın değeri hiçbir zaman saklanmaz (yalnız "dolu").
+    const elle = sablonDegeri?.durum === 'dolu' && somut(sablonDegeri.deger) && !gizliAdMi(alanAdi(yol), g.ekGizliAdlar ?? []);
     alanlar[yol] = v.durum === 'dolu' ? { d: 'dolu', ...(elle && somut(v.deger) ? { v: v.deger.slice(0, 200) } : {}) } : { d: v.durum };
   }
   /** @type {Gozlem} */
