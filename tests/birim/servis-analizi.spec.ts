@@ -6,7 +6,7 @@
 // değer listesi tablosu; evet/hayır liste tablosu olmaz; hata veren örneğin değerleri girmez), karar hatırlama. Ağ yok; veri sentetik.
 import { expect, test } from '@playwright/test';
 import {
-  AD_ESIGI, adEslesmesi, adPuani, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, servisAnalizi, tabloEslesmesi, tipCikar,
+  AD_ESIGI, adEslesmesi, adPuani, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, servisAnalizi, tabloEslesmesi, tipCikar, xmlBaglami,
   type AnalizDurumu, type AnalizGirdisi, type AnalizOnerisi, type OrnekDurumu
 } from '../../scripts/platform/servisler/servis-analizi.mjs';
 import { ornekIstekleriniDogrula, ornekleriEkle, ornekleriMaskele } from '../../scripts/platform/servisler/servis-ornekleri.mjs';
@@ -274,6 +274,47 @@ test('en uygun sütun: her alan için mevcut tablolardaki en uygun sütun (kavra
     mevcut: { baglar: { 'Girdi/PhoneNumber': { tablo: 'silinmis', sutun: 'cepTelefonu' }, 'Girdi/CardNumber': { tablo: 'silinmis', sutun: 'kartNo' } } } });
   expect(k.oneriler.filter((o) => o.tur === 'kopukBag').map((o) => [o.yol, o.deger])).toEqual([
     ['Girdi/PhoneNumber', { tablo: 'kisi', sutun: 'Telefon' }], ['Girdi/CardNumber', { tablo: 'kart', sutun: 'Kart numarası' }]]);
+});
+
+test('çelişen kavramlar ve XML bağlamı: yer ↔ tarih aday olmaz; üst eleman / kardeş alanlar bağlam verir (yalnız ad eşleşmesini destekler)', () => {
+  const T = (id: string, ad: string, sutunlar: string[], gizli: string[] = []) => ({ id, ad, sutunlar: sutunlar.map((c) => ({ ad: c, gizli: gizli.includes(c) })), satirlar: [] });
+  // Çelişki: doğum YERİ, doğum TARİHİne eşlenmez (kısaltma sütun "D TARİHİ" kendi adında tarih taşır; bütün-ad eş anlamından önce denetlenir).
+  expect(adPuani('Birthplace', 'D TARİHİ').puan).toBe(0);
+  expect(adPuani('Birthplace', 'Doğum tarihi').puan).toBe(0);
+  expect(adEslesmesi('Birthplace', 'Doğum yeri')).toBe('esAnlam');
+  for (const [a, b] of [['FirstName', 'Soyad'], ['Month', 'Yıl'], ['StartDate', 'Bitiş tarihi'], ['ProductName', 'Ürün kodu'], ['HomePhone', 'İş telefonu']]) expect(adEslesmesi(a, b), a + ' / ' + b).toBeNull();
+  const kisi = [T('pas', 'Pasaportlu kişi', ['Ad', 'D TARİHİ']), T('k', 'Kişi bilgileri', ['Doğum tarihi'])];
+  expect(tabloEslesmesi('Birthplace', [], kisi)).toBeNull();
+  expect(tabloEslesmesi('BirthDate', [], kisi)).toMatchObject({ sutun: 'Doğum tarihi' });
+  // XML bağlamı: üst eleman yolu ve kardeşlerin çoğunluğu.
+  const yollar = ['Girdi/Payment/CardNumber', 'Girdi/Payment/CVV', 'Girdi/Payment/Month', 'Girdi/Payment/Year', 'Girdi/Address/No', 'Girdi/Address/City',
+    'Girdi/Person/Name', 'Girdi/Person/Surname', 'Girdi/Person/BirthDate', 'Girdi/Year'];
+  expect(xmlBaglami('Girdi/Payment/Year', yollar)).toEqual(['kart']);
+  expect(xmlBaglami('Girdi/CreditCard/Year', ['Girdi/CreditCard/Year'])).toEqual(['kart']);
+  expect(xmlBaglami('Girdi/Address/No', yollar)).toEqual(['adres']);
+  expect(xmlBaglami('Girdi/Person/Name', yollar)).toEqual(['kisi']);
+  expect(xmlBaglami('Girdi/Year', yollar)).toEqual([]);
+  const tablolar = [
+    T('kk', 'Kredi kartı', ['CVV', 'Son kullanma ay', 'Son kullanma yıl'], ['CVV']), T('bina', 'Bina bilgileri', ['İnşa yılı', 'Kat sayısı']),
+    T('adr', 'Adres bilgileri', ['Kapı no', 'Sokak']), T('kisi', 'Kişi bilgileri', ['Ad', 'Vergi no']), T('urun', 'Ürün', ['Ad', 'Fiyat'])
+  ];
+  const en = (yol: string) => { const e = tabloEslesmesi(yol.split('/').pop() as string, [], tablolar, false, [], xmlBaglami(yol, yollar)); return e ? `${e.tablo} › ${e.sutun}` : null; };
+  // Kart kardeşleriyle: Year / Month kartın son kullanma sütununa; kartsız bağlamda Year başka yıl sütununa gider.
+  expect(en('Girdi/Payment/Year')).toBe('Kredi kartı › Son kullanma yıl');
+  expect(en('Girdi/Payment/Month')).toBe('Kredi kartı › Son kullanma ay');
+  expect(en('Girdi/Year')).toBe('Bina bilgileri › İnşa yılı');
+  // Adres grubundaki "No" adres tablosuna, kişi grubundaki "Name" kişi tablosuna; bağlamsız yalnız genel sözcük öneri değildir.
+  expect(en('Girdi/Address/No')).toBe('Adres bilgileri › Kapı no');
+  expect(en('Girdi/Person/Name')).toBe('Kişi bilgileri › Ad');
+  expect(tabloEslesmesi('No', [], tablolar)).toBeNull();
+  expect(tabloEslesmesi('Name', [], tablolar)).toBeNull();
+  // Bağlam tek başına eşleşme yaratmaz: adı hiçbir sütunla eşleşmeyen alan bağlamla da önerilmez.
+  expect(en('Girdi/Address/City')).toBeNull();
+  expect(tabloEslesmesi('Year', [], tablolar, false, [], ['kart'])?.kanit).toContain('bağlam: kart');
+  // Analizde: örnekteki üst eleman / kardeşler kullanılır.
+  const r = servisAnalizi({ metot: 'Islem', sema: null, tablolar, ornekler: [{ ad: 'A', govde: zarf('<Payment><CardNumber>4111</CardNumber><CVV>123</CVV><Month>01</Month><Year>2030</Year></Payment>') }] });
+  expect(r.oneriler.filter((o) => o.tur === 'tabloBagi' && /Month|Year/.test(o.yol)).map((o) => [o.yol, o.deger])).toEqual([
+    ['Girdi/Payment/Month', { tablo: 'kk', sutun: 'Son kullanma ay' }], ['Girdi/Payment/Year', { tablo: 'kk', sutun: 'Son kullanma yıl' }]]);
 });
 
 test('örnekler arası fark, alan listesi olmayan metot; yeni tablolar kavram gruplarına ayrılır; hata veren örneğin değerleri tabloya girmez', () => {
