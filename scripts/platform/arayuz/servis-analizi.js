@@ -15,6 +15,7 @@ import { alanAdi, farkKaydi, gucluOneriler, oneriyiUygula, oneriyiYoksay, servis
 import { adaGoreMaskele } from './gizli-adlar.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
+import { kosuOnerileri } from './kosu-ogrenmesi.mjs';
 
 const MASKE = '••••••';
 const KAYNAK_ADI = { soapui: 'SoapUI', postman: 'Postman', curl: 'cURL' };
@@ -365,6 +366,38 @@ export async function servisAnaliziSayfasi(kap, proje, s, yenile) {
     baglilar.push(analizBagla(t, { tur: rest ? 'rest' : 'soap', durum: m.durum, ekGizliAdlar, ekKanitlar }));
     return t;
   });
+  // --- Koşulardan gelenler (sürekli öğrenme; kosu-ogrenmesi.mjs): kanıtıyla Uygula / Yoksay; uygulanan yeniden sorulmaz. ---------
+  const kosuKarti = h('section', { class: 'kart kosu-ogrenmesi', 'aria-label': 'Koşulardan gelenler' });
+  const metotDurumu = (/** @type {any} */ m) => ({ zorunlu: m.zorunlu, baglar: m.baglar, varsayilanlar: m.durum.varsayilanlar, kurallar: m.durum.kurallar, ekler: m.ekler,
+    kararlar: m.durum.kararlar, yeniTablolar, tabloDegerleri: (m.durum.tabloDegerleri ??= []) });
+  const tabloAdiBul = (/** @type {string} */ id) => tablolar.find((t) => t.id === id)?.ad ?? id;
+  const kosuCiz = () => {
+    const satirlar = metotlar.flatMap((m) => kosuOnerileri({
+      metot: m.ad, sema: m.sema, ekler: m.ekler, gozlemler: (a.kosuOgrenmesi || {})[m.ad] || [], tablolar,
+      mevcut: { zorunlu: [...m.zorunlu], baglar: m.baglar, varsayilanlar: m.durum.varsayilanlar, kararlar: m.durum.kararlar }
+    }).map((o) => ({ m, o })));
+    const gozlemSayisi = Object.values(a.kosuOgrenmesi || {}).reduce((n, l) => n + l.filter((x) => x.kaynak === 'kosu').length, 0);
+    const gecmis = a.kosuOgrenmesiGecmisi || [];
+    const uygula = (/** @type {any} */ m, /** @type {any} */ o) => { oneriyiUygula(metotDurumu(m), o); kosuCiz(); for (const b of baglilar) b.yenile(); degisti(); };
+    const yoksay = (/** @type {any} */ m, /** @type {any} */ o) => { oneriyiYoksay(metotDurumu(m), o); kosuCiz(); degisti(); };
+    yerlestir(kosuKarti,
+      h('div', { class: 'kart-basligi' }, h('h3', {}, 'Koşulardan gelenler'), h('span', { class: 'sag soluk kucuk' }, `${gozlemSayisi} koşu gözlemi`)),
+      h('p', { class: 'soluk kucuk' }, 'Servis koşuları (Dene, tekil, toplu, planlı) bittikten sonra çevrimdışı incelenir: yalnız senaryoda elle yazılmış değerler (tablo, kural ve akış değerleri değil). Başarılı koşudaki yeni değer, bağlı tabloya eklenmek üzere önerilir; başarısız koşuda hata metni bir alanı anıyorsa o alan şüpheli sayılır, değeri eklenmez.'),
+      satirlar.length ? h('div', { class: 'kosu-onerileri' }, satirlar.map(({ m, o }) => {
+        const ad = `${m.ad} ${o.yol} — ${o.baslik}`;
+        const not = o.guc === 'not';
+        return h('div', { class: `analiz-onerisi ${not ? 'celiski' : o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
+          h('span', { class: 'analiz-oneri-metni' }, not ? ikon('uyari') : null, not ? rozet('not', 'durdu') : o.guc === 'guclu' ? rozet('güçlü', 'basari') : rozet('zayıf', ''),
+            h('code', { class: 'duz' }, `${m.ad} · ${alanAdi(o.yol)}`), h('b', {}, o.tur === 'tabloBagi' ? `Tablo: ${tabloAdiBul(o.deger.tablo)} › ${o.deger.sutun}` : o.baslik),
+            h('span', { class: 'analiz-kaniti' }, o.kanit)),
+          h('span', { class: 'analiz-dugmeleri' },
+            not ? null : h('button', { type: 'button', class: `kucuk-dugme ${o.guc === 'guclu' ? 'birincil' : ''}`, 'aria-label': `Uygula: ${ad}`, onclick: () => uygula(m, o) }, 'Uygula'),
+            h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Yoksay: ${ad}`, onclick: () => yoksay(m, o) }, 'Yoksay')));
+      })) : h('p', { class: 'soluk kucuk kosu-onerisi-yok' }, gozlemSayisi ? 'Koşulardan yeni öneri yok.' : 'Henüz koşu gözlemi yok: servis senaryolarını koşturdukça öneriler burada birikir.'),
+      gecmis.length ? h('details', { class: 'kosu-ogrenmesi-gecmisi' }, h('summary', { class: 'kucuk' }, `Öğrenme geçmişi (${gecmis.length})`),
+        h('ul', { class: 'onay-listesi' }, [...gecmis].reverse().slice(0, 30).map((x) => h('li', {}, `${String(x.zaman).slice(0, 16).replace('T', ' ')} · ${x.operasyon}: ${x.metin}`)))) : null);
+  };
+  kosuCiz();
   const kanitKutusu = (/** @type {'senaryolar' | 'kosular'} */ k, /** @type {string} */ metin, /** @type {number} */ n) => {
     const c = h('input', { type: 'checkbox', id: yeniKimlik('kanit'), disabled: !n });
     c.addEventListener('change', () => { kanitSecimi[k] = c.checked; for (const b of baglilar) b.yenile(); });
@@ -378,6 +411,7 @@ export async function servisAnaliziSayfasi(kap, proje, s, yenile) {
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Servisi analiz et'), rozet(rest ? 'REST' : 'SOAP', 'vurgu')),
         h('p', { class: 'soluk' }, `${s.ad}: örnek isteklerden alanların zorunluluğu, tipi, gizliliği, izin verilen değerleri ve test verisi tablosu eşleşmesi önerilir. Analiz tarayıcıda çalışır; servise istek atılmaz. Uygulanan öneri yeniden sorulmaz, "Yoksay" denen öneri hatırlanır.`)),
       h('div', { class: 'eylemler' }, kayitDurumu, h('a', { class: 'dugme', href: adres }, ikon('geri'), 'Servise dön'))),
+    kosuKarti,
     h('section', { class: 'kart analiz-kaniti-karti', 'aria-label': 'Ek kanıt' },
       h('h3', {}, 'Ek kanıt'),
       h('p', { class: 'soluk kucuk' }, 'İsterseniz kayıtlı senaryoların gövdeleri ve son koşuların istekleri de sayımlara katılır (gizli adlı alanların değeri maskeli; yalnız "dolu" sayılır).'),

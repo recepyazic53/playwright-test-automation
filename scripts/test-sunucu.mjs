@@ -372,6 +372,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-analizi.js', { dosya: 'servis-analizi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-servis-analizi.css', { dosya: 'stil-servis-analizi.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/servis-analizi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-analizi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Sürekli öğrenme (koşulardan gelen öneriler): sunucuyla ORTAK saf modül.
+  ['/arayuz/kosu-ogrenmesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'kosu-ogrenmesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/tablolar/doldur-onerisi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'doldur-onerisi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/tablolar/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/tablolar/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],

@@ -110,7 +110,9 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   sozlesmeler?: Record<string, import('./servis-sozlesmesi.mjs').Sozlesme>; sozlesmeGecmisi?: Record<string, import('./servis-sozlesmesi.mjs').SozlesmeGecmisi[]>;
  *   ornekIstekler?: Record<string, Array<{ id: string; ad: string; govde: string; kaynak: string }>>;
  *   alanKurallari?: Record<string, Record<string, Record<string, unknown>>>; analizKararlari?: Record<string, Record<string, 'uygulandi' | 'yoksayildi'>>;
- *   ornekFarklari?: Record<string, Array<{ yol: string; dolu: string[]; bos: string[] }>> }} ServisAyarlari
+ *   ornekFarklari?: Record<string, Array<{ yol: string; dolu: string[]; bos: string[] }>>;
+ *   kosuOgrenmesi?: Record<string, import('./kosu-ogrenmesi.d.mts').Gozlem[]>; kosuOgrenmesiGecmisi?: Array<{ zaman: string; operasyon: string; metin: string }> }} ServisAyarlari
+ *   kosuOgrenmesi: koşulardan / senaryolardan çevrimdışı gözlemler (servis-ogrenme.mjs; kullanıcı değiştirmez).
  *   tabanGrubu: adlandırılmış taban adres (taban-adresleri.mjs). sozlesmeler: operasyon / uç başına yanıt sözleşmesi (servis-sozlesmesi.mjs).
  *   ornekIstekler / alanKurallari / analizKararlari / ornekFarklari: servis analizi (servis-analizi.mjs, servis-ornekleri.mjs).
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
@@ -153,6 +155,16 @@ export function servisKaydet(vt, girdi) {
       ayarlar_json: girdi.ayarlar !== undefined ? sifreliJson(vt, girdi.ayarlar, 'ayarlar') : (mevcut?.ayarlar_json ?? sifreliJson(vt, {}, 'ayarlar'))
     }, { id: girdi.id, gecmisTuru: 'servis', yapan: girdi.yapan });
   });
+}
+
+/**
+ * Servis ayarlarının iç (kullanıcı değişikliği olmayan) güncellemesi: koşulardan öğrenilen gözlemler gibi. Değişiklik geçmişine
+ * yazılmaz, güncellenme zamanı değişmez. @param {Veritabani} vt @param {string} id @param {(a: ServisAyarlari) => ServisAyarlari} fn
+ */
+export function servisAyarlariniIcGuncelle(vt, id, fn) {
+  const s = servisGetir(vt, id);
+  if (!s) return;
+  vt.calistir('UPDATE servisler SET ayarlar_json = ? WHERE id = ?', [sifreliJson(vt, fn(s.ayarlar), 'ayarlar'), id]);
 }
 
 /** @param {Veritabani} vt @param {string} id */

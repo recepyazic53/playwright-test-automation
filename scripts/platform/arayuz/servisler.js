@@ -536,7 +536,8 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
           s.ayarlar.erisim ? h('span', { title: tarihMetni(s.ayarlar.erisim.zaman) }, ikon('onay'), 'erişim kontrol edildi') : null,
           son ? h('span', { title: `${sonOrtamAdi ? `${sonOrtamAdi} · ` : ''}${tarihMetni(son.baslangic)}` }, ikon('saat'), `son: ${DURUM[son.durum]?.[0] ?? son.durum}${sonOrtamAdi ? ` (${sonOrtamAdi})` : ''}`) : null)),
       h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'servis', id: s.id }),
-        (s.ayarlar.operasyonlar || []).length ? h('a', { class: 'dugme servis-analizi-dugmesi', href: `${adres}/analiz`, title: 'Örnek isteklerden alan önerileri (zorunluluk, tip, gizli, tablo eşleşmesi); servise istek atılmaz' }, ikon('ara'), 'Servisi analiz et') : null,
+        (s.ayarlar.operasyonlar || []).length ? h('a', { class: 'dugme servis-analizi-dugmesi', href: `${adres}/analiz`, title: 'Örnek isteklerden alan önerileri (zorunluluk, tip, gizli, tablo eşleşmesi); servise istek atılmaz' }, ikon('ara'), 'Servisi analiz et',
+          s.ogrenmeOneriSayisi ? [' ', h('span', { class: 'rozet vurgu ogrenme-rozeti', title: 'Koşulardan öğrenilen, henüz karar verilmemiş öneriler' }, `${s.ogrenmeOneriSayisi} yeni öneri`)] : null) : null,
         oneriDugmesi(s), h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
     // Riskli olup olmadığı belirtilmemiş ortam (riskli sayılır): uyarı + Ayarlar bağlantısı.
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
