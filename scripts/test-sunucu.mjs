@@ -41,7 +41,7 @@ import { surucuYukleyiciAyarla } from './platform/entegrasyonlar/veritabani-suru
 import { akisOrtamDegiskenleri } from './platform/akislar/uctan-uca-cikti.mjs';
 import { TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from './platform/tablolar/veri-kosulari.mjs';
 import { UYGULAMA_SURUMU_DEGISKENI, uygulamaSurumuTemizle } from './platform/ayarlar/rapor-verileri.mjs';
-import { CANLI_DUYURU_DEGISKENI, GORUNMEZ_KOSU_METNI, GORUNUR_KOSU_DEGISKENI, canliAkisiVekille, canliKanalaIstek } from './platform/canli-akis.mjs';
+import { CANLI_DUYURU_DEGISKENI, GORUNMEZ_KOSU_METNI, GORUNUR_KOSU_DEGISKENI, canliAkisiVekille, canliKanalaIstek, canliTamSayfaAl } from './platform/canli-akis.mjs';
 import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
 import { veriKoku } from './platform/calisma-alanlari.mjs';
@@ -1280,7 +1280,7 @@ async function istegiIsle(req, res) {
 
   // Arka plan kipi (kasa kilitliyken kullanıcı tercihiyle süren planlı koşu): arayüz kilitli olduğundan canlı görüntü,
   // canlı adımlar, elle kod ve durdurma uçları da 423 döner (koşu kendi başına sürer; ekranda veri görünmez).
-  if (platformArayuzKilitliMi() && req.url && /^\/(canli|canli-akis|tarayiciyi-goster|adim-durumu|kod-istegi|kod-gonder|durdur)(\?|$)/.test(req.url)) {
+  if (platformArayuzKilitliMi() && req.url && /^\/(canli|canli-akis|canli-tam-sayfa|tarayiciyi-goster|adim-durumu|kod-istegi|kod-gonder|durdur)(\?|$)/.test(req.url)) {
     req.resume();
     jsonGonder(res, 423, { basarili: false, kod: 'KASA_KILITLI', mesaj: 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.' });
     return;
@@ -1345,8 +1345,26 @@ async function istegiIsle(req, res) {
     canliAkisiVekille(req, res, {
       duyuruYolu: () => calisanSurecler.get(kosuId)?.canliDuyuruYolu ?? null,
       suruyorMu: () => calisanSurecler.has(kosuId) || kuyruktaBekleyenler.has(kosuId),
-      en: Number(url.searchParams.get('en')) || null
+      en: Number(url.searchParams.get('en')) || null,
+      boy: Number(url.searchParams.get('boy')) || null
     });
+    return;
+  }
+
+  // "Sayfanın tamamı": koşan sayfanın tam sayfa anlık görüntüsü (jpeg; test sürecinde bellekte üretilir, diske yazılmaz). Token YALNIZ
+  // BAŞLIKTA. Sayfa kaydırılmaz, durumu değişmez.
+  if (req.method === 'GET' && req.url && /^\/canli-tam-sayfa(\?|$)/.test(req.url)) {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    const basliktaki = req.headers['x-test-sunucu-token'];
+    if (!tokenGecerli(typeof basliktaki === 'string' ? basliktaki : '')) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
+    const kosuId = url.searchParams.get('kosuId');
+    if (!kosuId) { jsonGonder(res, 400, { basarili: false, mesaj: 'kosuId zorunludur.' }); return; }
+    const kayit = calisanSurecler.get(kosuId);
+    if (!kayit) { jsonGonder(res, 409, { basarili: false, mesaj: 'Bu koşu şu anda çalışmıyor (bitmiş olabilir).' }); return; }
+    const y = await canliTamSayfaAl(kayit.canliDuyuruYolu);
+    if (!y.jpeg) { jsonGonder(res, y.durum, { basarili: false, mesaj: y.mesaj }); return; }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': String(y.jpeg.length), 'Cache-Control': 'no-store' });
+    res.end(y.jpeg);
     return;
   }
 

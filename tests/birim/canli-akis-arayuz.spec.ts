@@ -5,7 +5,7 @@
 // akış kurulamazsa aralıklı görüntüye düşme (not ile), "Tarayıcı penceresinde izle" seçiminin koşu isteğine geçmesi, 1440 / 390 px
 // taşma yok. Gerçek siteye istek yok; tarayıcı yalnız 127.0.0.1'e çözümler. Ekran görüntüleri CANLI_EKRAN_KLASORU'na (yoksa test çıktısına).
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
@@ -205,6 +205,117 @@ test('koşu paneli: sürekli kare akışı (kare hızı / gecikme), Canlı göst
   await yeniBaglanti;
   await kosuBitsin();
   await expect(panel().locator('.canli-akis')).toHaveCount(0); // koşu bitince kutu kalkar, sonuç görünür
+});
+
+/** Büyük penceredeki karenin GÖRÜNEN içeriği (object-fit: contain) görüntü alanının, pencerenin ve tarayıcı penceresinin içinde mi. */
+const buyukSigiyor = (): Promise<{ icinde: boolean; kaydirma: boolean; kaplama: number; ayrinti: string }> => page.evaluate(() => {
+  const d = document.querySelector('dialog.canli-akis-buyuk[open]') as HTMLDialogElement;
+  const img = d.querySelector('img.canli-akis-karesi') as HTMLImageElement;
+  const alan = d.querySelector('.canli-akis-alani') as HTMLElement;
+  const r = img.getBoundingClientRect();
+  const o = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+  const [w, hh] = [img.naturalWidth * o, img.naturalHeight * o];
+  const icerik = { left: r.left + (r.width - w) / 2, top: r.top + (r.height - hh) / 2, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + hh) / 2 };
+  const a = alan.getBoundingClientRect();
+  const p = d.getBoundingClientRect();
+  const ic = (x: { left: number; top: number; right: number; bottom: number }, y: { left: number; top: number; right: number; bottom: number }) =>
+    x.left >= y.left - 1 && x.top >= y.top - 1 && x.right <= y.right + 1 && x.bottom <= y.bottom + 1;
+  const pencere = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+  return {
+    icinde: img.naturalWidth > 0 && ic(icerik, a) && ic(a, p) && ic(p, pencere),
+    kaydirma: d.scrollHeight > d.clientHeight + 1 || alan.scrollHeight > alan.clientHeight + 1,
+    kaplama: (p.width * p.height) / (window.innerWidth * window.innerHeight),
+    ayrinti: JSON.stringify({ icerik, a, p, pencere, n: [img.naturalWidth, img.naturalHeight] })
+  };
+});
+
+test('Büyüt: ekranı kaplar, kare tamamen sığar (1440×900 / 390×844), yüksek çözünürlük istenir; "Sayfanın tamamı" anlık görüntüsü ve "Canlıya dön"; diske yazılmaz', async () => {
+  test.setTimeout(240_000);
+  yavas = true;
+  await paneliKapat();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await kosuyuBaslat(false);
+  const kutu = panel().locator('.canli-akis');
+  await expect(kutu).toHaveAttribute('data-durum', 'akis', { timeout: 60_000 });
+  const kucukIstek = akisIstekleri[akisIstekleri.length - 1];
+  const kucukEn = Number(new URL(kucukIstek, nobetci.adres).searchParams.get('en'));
+  expect(new URL(kucukIstek, nobetci.adres).searchParams.has('boy')).toBe(false);
+  const baslangic = Date.now();
+
+  // Büyüt: ekranın tamamı; daha yüksek çözünürlük (en + boy) istenir.
+  const buyukIstek = page.waitForRequest((r) => r.url().includes('/canli-akis?') && r.url().includes('boy='));
+  await kutu.getByRole('button', { name: 'Canlı görüntüyü büyüt' }).click();
+  const buyuk = page.locator('dialog.canli-akis-buyuk[open]');
+  await expect(buyuk).toBeVisible();
+  const q = new URL((await buyukIstek).url()).searchParams;
+  expect(Number(q.get('en'))).toBeGreaterThan(kucukEn);
+  expect(Number(q.get('boy'))).toBeGreaterThan(400);
+  const kareSayisi = async () => Number(await kutu.getAttribute('data-kare-sayisi'));
+  const once = await kareSayisi();
+  await expect.poll(kareSayisi, { timeout: 15_000 }).toBeGreaterThan(once + 3);
+  await expect.poll(async () => (await buyukSigiyor()).icinde, { timeout: 10_000 }).toBe(true);
+  let s = await buyukSigiyor();
+  expect(s.kaydirma, s.ayrinti).toBe(false);
+  expect(s.kaplama).toBeGreaterThan(0.95);
+  await goruntu('06-buyut-tam-ekran-1440');
+
+  // "Sayfanın tamamı": anlık görüntü (jpeg) gelir; "Anlık görüntü · saat" notu ve "Canlıya dön".
+  const tamIstek = page.waitForResponse((r) => r.url().includes('/canli-tam-sayfa?'));
+  await buyuk.getByRole('button', { name: 'Sayfanın tamamı' }).click();
+  const tamYanit = await tamIstek;
+  expect(tamYanit.status()).toBe(200);
+  expect(tamYanit.headers()['content-type']).toMatch(/^image\/jpeg/);
+  expect(tamYanit.request().url()).not.toContain('token');
+  await expect(buyuk.locator('.canli-akis-tam-notu')).toHaveText(/^Anlık görüntü · \d{2}:\d{2}:\d{2}$/);
+  const tamImg = buyuk.locator('img.canli-akis-tam-karesi');
+  await expect(tamImg).toBeVisible();
+  expect(await tamImg.getAttribute('src')).toMatch(/^data:image\/jpeg;base64,/);
+  await expect(buyuk.locator('.canli-akis-alani')).toBeHidden();
+  // Görüntü pencereye sığar (yatay taşma yok; çok uzunsa yalnız dikey kaydırma).
+  const tam = await page.evaluate(() => {
+    const a = document.querySelector('.canli-akis-tam-alani') as HTMLElement;
+    const i = a.querySelector('img') as HTMLImageElement;
+    const r = i.getBoundingClientRect();
+    return { yatay: a.scrollWidth > a.clientWidth + 1, icinde: r.left >= -1 && r.right <= window.innerWidth + 1, n: i.naturalWidth };
+  });
+  expect(tam).toMatchObject({ yatay: false, icinde: true });
+  expect(tam.n).toBeGreaterThan(0);
+  await goruntu('07-sayfanin-tamami-1440');
+  await buyuk.getByRole('button', { name: 'Canlıya dön' }).click();
+  await expect(buyuk.locator('.canli-akis-tam-alani')).toBeHidden();
+  await expect(buyuk.locator('img.canli-akis-karesi')).toBeVisible();
+  await expect(buyuk.getByRole('button', { name: 'Sayfanın tamamı' })).toBeVisible();
+  await expect(buyuk.locator('.canli-akis-tam-notu')).toHaveText('');
+
+  // 390×844 (dikey, dar): pencere boyutu değişince kare yeniden sığar; yeni ölçü istenir.
+  const yeniIstek = page.waitForRequest((r) => r.url().includes('/canli-akis?') && r.url().includes('boy='));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await yeniIstek;
+  await expect.poll(async () => (await buyukSigiyor()).icinde, { timeout: 10_000 }).toBe(true);
+  s = await buyukSigiyor();
+  expect(s.kaydirma, s.ayrinti).toBe(false);
+  expect(s.kaplama).toBeGreaterThan(0.9);
+  expect(await tasma()).toBeLessThanOrEqual(0);
+  await goruntu('08-buyut-tam-ekran-390');
+  await buyuk.getByRole('button', { name: 'Sayfanın tamamı' }).click();
+  await expect(buyuk.locator('.canli-akis-tam-notu')).toHaveText(/^Anlık görüntü · /);
+  await goruntu('09-sayfanin-tamami-390');
+  await buyuk.getByRole('button', { name: 'Canlıya dön' }).click();
+
+  // Kapanınca kutunun (küçük) ölçüsüne dönülür.
+  const kucukDonus = page.waitForRequest((r) => r.url().includes('/canli-akis?') && !r.url().includes('boy='));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.keyboard.press('Escape');
+  await expect(buyuk).toHaveCount(0);
+  await kucukDonus;
+  // Anlık görüntü diske yazılmadı (Nöbetçi veri klasöründe yeni görüntü dosyası yok).
+  const yeniGoruntuler = (k: string): string[] => readdirSync(k, { withFileTypes: true }).flatMap((e) => {
+    const y = join(k, e.name);
+    if (e.isDirectory()) return yeniGoruntuler(y);
+    return /\.(png|jpe?g)$/i.test(e.name) && statSync(y).mtimeMs >= baslangic ? [y] : [];
+  });
+  expect(yeniGoruntuler(klasor)).toEqual([]);
+  await kosuBitsin();
 });
 
 test('akış kurulamazsa aralıklı görüntüye düşülür ve not gösterilir', async () => {

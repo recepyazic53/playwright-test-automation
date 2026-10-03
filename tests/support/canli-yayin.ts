@@ -9,6 +9,11 @@
 //  - CDP yoksa (Chromium dışı tarayıcı) ya da screencast başlamazsa izleyiciye "yedek" durumu gider; arayüz aralıklı görüntüye düşer.
 //  - Hız: en çok ~15 kare/sn (66 ms); her screencastFrame hemen onaylanır (screencastFrameAck), fazlası birleştirilir (son kare gider).
 //  - "Tarayıcıyı göster": görünür (headed) koşuda sayfayı öne getirir (page.bringToFront); görünmez koşuda 409 döner.
+//  - Çözünürlük: izleyici ?en= (genişlik) ve ?boy= (yükseklik) ister (320–2560; büyük pencere daha yüksek ister). Sayfanın görüntü
+//    alanından büyüğü istenmez (fazlası yalnız bant harcar).
+//  - "Sayfanın tamamı" (GET /tam-sayfa): koşan sayfanın tüm kaydırılabilir yüksekliğinin TEK jpeg görüntüsü (page.screenshot fullPage);
+//    bellekte üretilir, diske yazılmaz; kaydırma konumu, görüntü alanı ve sayfa durumu değişmez. Bilinen geçici etki: Chromium
+//    yakalama süresince görüntü alanını bir an büyütüp geri alır (sayfa bir "resize" / "scroll" olayı alabilir).
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -17,8 +22,14 @@ import type { BrowserContext, CDPSession, Page } from '@playwright/test';
 
 /** Kare aralığı alt sınırı (ms): ~15 kare/sn. */
 export const CANLI_KARE_ARALIGI_MS = 66;
-/** Screencast varsayılan en büyük genişliği / yüksekliği (px); izleyici ?en= ile 320–1600 arası ister. */
+/** Screencast varsayılan en büyük genişliği / yüksekliği (px); izleyici ?en= / ?boy= ile 320–2560 arası ister. */
 const VARSAYILAN_EN = 1280;
+const EN_KUCUK = 320;
+const EN_BUYUK = 2560;
+/** Screencast jpeg kalitesi (büyük pencerede de aynı: kare hızı makul kalsın). */
+const KALITE = 60;
+/** "Sayfanın tamamı" jpeg kalitesi. */
+const TAM_SAYFA_KALITE = 70;
 const ANAHTAR_BASLIGI = 'x-canli-anahtar';
 
 export type CanliDuyuru = { port: number; anahtar: string; pid: number };
@@ -52,6 +63,8 @@ export async function canliYayinKur(
   let yedek: string | null = null;
   let kapali = false;
   let en = VARSAYILAN_EN;
+  let boy = VARSAYILAN_EN;
+  let tamSayfaSuruyor = false;
   let sira = 0;
   let sonKare: string | null = null;
   let sonGonderim = 0;
@@ -110,7 +123,11 @@ export async function canliYayinKur(
         kareAl(f.data, f.metadata.timestamp ? Math.round(f.metadata.timestamp * 1000) : Date.now(), Math.round(f.metadata.deviceWidth), Math.round(f.metadata.deviceHeight));
       });
       try {
-        await c.send('Page.startScreencast', { format: 'jpeg', quality: 60, maxWidth: en, maxHeight: en, everyNthFrame: 1 });
+        // Sayfanın görüntü alanından büyüğü istenmez (en çok tarayıcı görüntü alanı kadar).
+        const g = hedef.viewportSize();
+        const maxWidth = g ? Math.min(en, Math.max(EN_KUCUK, g.width)) : en;
+        const maxHeight = g ? Math.min(boy, Math.max(EN_KUCUK, g.height)) : boy;
+        await c.send('Page.startScreencast', { format: 'jpeg', quality: KALITE, maxWidth, maxHeight, everyNthFrame: 1 });
       } catch (hata) {
         await c.detach().catch(() => undefined);
         if (hedef.isClosed() || kapali) return;
@@ -157,11 +174,14 @@ export async function canliYayinKur(
     if (typeof anahtarBasligi !== 'string' || !esit(anahtarBasligi, anahtar)) { req.resume(); yanit(res, 401, { tamam: false }); return; }
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     if (req.method === 'GET' && url.pathname === '/akis') {
-      const istenen = Number(url.searchParams.get('en'));
-      if (Number.isFinite(istenen) && istenen >= 320) {
-        const yeniEn = Math.min(1600, Math.round(istenen));
-        if (yeniEn !== en) { en = yeniEn; if (cdp) void durdur().then(() => baslat()); }
-      }
+      const olcu = (ad: string): number | null => {
+        const x = Number(url.searchParams.get(ad));
+        return Number.isFinite(x) && x >= EN_KUCUK ? Math.min(EN_BUYUK, Math.round(x)) : null;
+      };
+      const yeniEn = olcu('en') ?? en;
+      // Yükseklik istenmezse genişlikle aynı (eski izleyiciler).
+      const yeniBoy = olcu('boy') ?? (olcu('en') !== null ? yeniEn : boy);
+      if (yeniEn !== en || yeniBoy !== boy) { en = yeniEn; boy = yeniBoy; if (cdp) void durdur().then(() => baslat()); }
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(`event: durum\ndata: ${JSON.stringify(yedek ? { durum: 'yedek', neden: yedek } : { durum: 'baglandi', sayfa: sayfaNo })}\n\n`);
       // Duran sayfada yeni kare gelmeyebilir: bağlanan izleyici son kareyi hemen görür (bellekten).
@@ -174,6 +194,20 @@ export async function canliYayinKur(
       req.on('close', birak);
       res.on('close', birak);
       void baslat();
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/tam-sayfa') {
+      req.resume();
+      // Tek seferde bir görüntü (art arda basışlar sayfayı yormasın). Kaydırma / durum değişmez (Playwright tam sayfa görüntüsü).
+      if (tamSayfaSuruyor) { yanit(res, 429, { tamam: false, mesaj: 'Görüntü alınıyor; birazdan yeniden deneyin.' }); return; }
+      if (kapali || sayfa.isClosed()) { yanit(res, 409, { tamam: false, mesaj: 'Sayfa açık değil.' }); return; }
+      tamSayfaSuruyor = true;
+      void sayfa.screenshot({ fullPage: true, type: 'jpeg', quality: TAM_SAYFA_KALITE, animations: 'allow', caret: 'initial', timeout: 20_000 })
+        .then((b) => {
+          res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': String(b.length), 'Cache-Control': 'no-store' });
+          res.end(b);
+        }, (h: unknown) => yanit(res, 500, { tamam: false, mesaj: String(h instanceof Error ? h.message : h).split('\n')[0].slice(0, 200) }))
+        .finally(() => { tamSayfaSuruyor = false; });
       return;
     }
     if (req.method === 'POST' && url.pathname === '/one-getir') {

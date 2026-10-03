@@ -728,7 +728,7 @@ function izlemeAlani(oturum) {
       canliKutu = {
         kosuId,
         kutu: canliGoruntu({
-          akisAdresi: `/canli-akis?kosuId=${encodeURIComponent(kosuId)}`, etiket: `Canlı ekran görüntüsü: ${satir.baslik}`,
+          akisAdresi: `/canli-akis?kosuId=${encodeURIComponent(kosuId)}`, tamSayfaAdresi: `/canli-tam-sayfa?kosuId=${encodeURIComponent(kosuId)}`, etiket: `Canlı ekran görüntüsü: ${satir.baslik}`,
           yedekKareAl: () => kosuYedekKaresi(kosuId),
           tarayiciyiGoster: async () => {
             const y = await api('/tarayiciyi-goster', { govde: { kosuId } }).catch((e) => ({ basarili: false, mesaj: e.message }));

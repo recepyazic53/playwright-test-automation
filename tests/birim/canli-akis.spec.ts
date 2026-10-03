@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { chromium, expect, test, type Browser, type BrowserContext } from '@playwright/test';
 import { canliYayinKur } from '../support/canli-yayin';
 import { kosuGorunurMu } from '../support/kosu-ayarlari';
-import { canliAkisiVekille, canliKanalaIstek, duyuruOku } from '../../scripts/platform/canli-akis.mjs';
+import { canliAkisiVekille, canliKanalaIstek, canliTamSayfaAl, duyuruOku } from '../../scripts/platform/canli-akis.mjs';
 import { gorunurOrtami } from '../../scripts/platform/senaryolar/calistirma.mjs';
 
 /** Animasyonlu sahte sayfa: dönen kutu (CSS) + her karede değişen sayaç (rAF). */
@@ -140,6 +140,104 @@ test('animasyonlu sayfa: vekil üzerinden sürekli kareler (≥ 8 kare/sn, gecik
   }
   // Yayın kapanınca kendi duyurusu silinir.
   expect(readdirSync(klasor).includes('duyuru-1.json')).toBe(false);
+});
+
+/** JPEG genişlik / yükseklik (SOF işaretinden). */
+function jpegOlcusu(b: Buffer): { en: number; boy: number } {
+  for (let i = 2; i + 9 < b.length;) {
+    if (b[i] !== 0xff) { i += 1; continue; }
+    const isaret = b[i + 1];
+    const uzunluk = b.readUInt16BE(i + 2);
+    if (isaret >= 0xc0 && isaret <= 0xc3) return { boy: b.readUInt16BE(i + 5), en: b.readUInt16BE(i + 7) };
+    i += 2 + uzunluk;
+  }
+  throw new Error('JPEG ölçüsü bulunamadı');
+}
+
+test('çözünürlük: büyük pencere en/boy ile daha büyük kare ister (en çok tarayıcı görüntü alanı); "Sayfanın tamamı" tam yükseklikte tek jpeg, sayfayı kaydırmaz / değiştirmez, diske yazılmaz', async () => {
+  test.setTimeout(90_000);
+  const baglam = await tarayici.newContext({ viewport: { width: 1000, height: 600 } });
+  const page = await baglam.newPage();
+  // Uzun sayfa (3000 px) + yan etki sayaçları (yeniden boyutlanma, kaydırma) + bir alanın değeri.
+  await page.goto(adres);
+  await page.evaluate(() => {
+    const uzun = document.createElement('div');
+    uzun.style.cssText = 'height:3000px;background:linear-gradient(#fff,#36c)';
+    document.body.append(uzun);
+    // Kaydırılmış sayfada da kare gelsin: sabit konumlu dönen kutu.
+    const sabit = document.createElement('div');
+    sabit.style.cssText = 'position:fixed;right:10px;bottom:10px;width:40px;height:40px;background:#e33;animation:don 1s linear infinite';
+    document.body.append(sabit);
+    const girdi = document.createElement('input');
+    girdi.id = 'girdi';
+    girdi.value = 'ilk';
+    document.body.prepend(girdi);
+    const w = window as unknown as { sayac: { boyut: number; kaydirma: number } };
+    w.sayac = { boyut: 0, kaydirma: 0 };
+    window.addEventListener('resize', () => { w.sayac.boyut += 1; });
+    window.scrollTo(0, 400);
+    window.addEventListener('scroll', () => { w.sayac.kaydirma += 1; });
+  });
+  const durum = () => page.evaluate(() => ({
+    y: window.scrollY, en: window.innerWidth, boy: window.innerHeight, girdi: (document.getElementById('girdi') as HTMLInputElement).value,
+    sayac: (window as unknown as { sayac: { boyut: number; kaydirma: number } }).sayac, yukseklik: document.documentElement.scrollHeight
+  }));
+  const once = await durum();
+  expect(once.y).toBe(400);
+  const duyuruYolu = join(klasor, 'duyuru-tam.json');
+  const yayin = await canliYayinKur(baglam, page, { duyuruYolu });
+  // Vekil: istemcinin en / boy isteği olduğu gibi geçer (Nöbetçi'deki uçlarla aynı).
+  const s = createServer((req, res) => {
+    const q = new URL(req.url ?? '/', 'http://127.0.0.1').searchParams;
+    canliAkisiVekille(req, res, { duyuruYolu: () => duyuruYolu, suruyorMu: () => true, en: Number(q.get('en')) || null, boy: Number(q.get('boy')) || null });
+  });
+  await new Promise<void>((coz) => s.listen(0, '127.0.0.1', coz));
+  const vekil = `http://127.0.0.1:${(s.address() as AddressInfo).port}/akis`;
+  const olculer = (a: ReturnType<typeof akisiOku>) => a.olaylar.filter((o) => o.ad === 'kare').map((o) => jpegOlcusu(Buffer.from(String(o.veri.v), 'base64')));
+  try {
+    // Küçük kutu: en=400 → kare genişliği ≤ 400.
+    const kucuk = akisiOku(`${vekil}?en=400`);
+    await expect.poll(() => olculer(kucuk).length, { timeout: 15_000 }).toBeGreaterThan(3);
+    const k1 = olculer(kucuk).pop() as { en: number; boy: number };
+    expect(k1.en).toBeLessThanOrEqual(400);
+    kucuk.kes();
+    await kucuk.bitti;
+    // Büyük pencere: en=2400&boy=1600 → daha büyük kare; ama tarayıcı görüntü alanından (1000×600) büyük değil.
+    const buyuk = akisiOku(`${vekil}?en=2400&boy=1600`);
+    await expect.poll(() => olculer(buyuk).filter((x) => x.en > k1.en).length, { timeout: 15_000 }).toBeGreaterThan(2);
+    const k2 = olculer(buyuk).pop() as { en: number; boy: number };
+    expect(k2.en).toBeGreaterThan(k1.en);
+    expect(k2.en).toBeLessThanOrEqual(1000);
+    expect(k2.boy).toBeLessThanOrEqual(600);
+    buyuk.kes();
+    await buyuk.bitti;
+
+    // "Sayfanın tamamı": anahtarsız istek reddedilir; vekil fonksiyonu tam yükseklikte tek jpeg getirir.
+    expect((await fetch(`http://127.0.0.1:${yayin.duyuru.port}/tam-sayfa`)).status).toBe(401);
+    const t = await canliTamSayfaAl(duyuruYolu);
+    expect(t.durum).toBe(200);
+    const jpeg = t.jpeg as Buffer;
+    expect(jpeg.subarray(0, 2).toString('hex')).toBe('ffd8');
+    const o = jpegOlcusu(jpeg);
+    expect(o.en).toBe(1000);
+    expect(o.boy).toBeGreaterThanOrEqual(once.yukseklik - 1);
+    // Yan etki: kaydırma konumu, görüntü alanı, sayfa yüksekliği ve alan değeri aynı kalır. Bilinen geçici etki: Chromium'un tam sayfa
+    // yakalaması (captureBeyondViewport) görüntü alanını yakalama süresince büyütüp geri alır → sayfa en çok BİR "resize" ve BİR "scroll"
+    // olayı alır (konum geri yüklenir). Ölçülüp sınırlanır.
+    const sonra = await durum();
+    expect({ ...sonra, sayac: null }).toEqual({ ...once, sayac: null });
+    expect(sonra.sayac.boyut).toBeLessThanOrEqual(1);
+    expect(sonra.sayac.kaydirma).toBeLessThanOrEqual(1);
+    // Diske yazılmadı (yalnız duyuru).
+    expect(readdirSync(klasor).some((x) => /\.(png|jpe?g)$/i.test(x))).toBe(false);
+    // Duyuru yoksa istek atılmaz.
+    expect(await canliTamSayfaAl(join(klasor, 'yok.json'))).toMatchObject({ durum: 409, jpeg: null });
+  } finally {
+    s.closeAllConnections();
+    await new Promise<void>((coz) => s.close(() => coz()));
+    await yayin.kapat();
+    await baglam.close();
+  }
 });
 
 test('sekme değişince yayın yeni sayfaya geçer; sayfa kapanınca kalan sayfaya döner; anahtarsız istek 401', async () => {

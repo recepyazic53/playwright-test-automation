@@ -5,7 +5,7 @@
 //  3) Hızlı test (Nöbetçi sunucusu): keşif zinciri bulur; veri durağı zinciri üstten alta SIRAYLA sorar (alt liste üst seçilince gelen
 //     gerçek seçeneklerle); düğmeye doğru değerlerle basılır; kaydedilen modelde bağımlılıklar vardır.
 //  4) Arayüz: üst seçilince seçim anında sayfaya uygulanır (yedek: yerinde "↓ “İlçe” seçeneklerini getir" düğmesi); alt liste üstünün altında belirir, odak seçimde kalır ve
-//     duyurulur; üst değişince alt temizlenir; zincir tamamlanmadan "Devam et" pasif, "Bağlı alanları atla" ikincil yol; zincirsiz sayfada
+//     duyurulur; üst değişince alt temizlenir; bağlı listeler zorunlu sayılmaz: "Devam et" hep etkin, zincir yarımsa engellemeyen bilgi; zincirsiz sayfada
 //     eski davranış.
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez — sahte sayfa 127.0.0.1'dedir (bagli-liste-fikstur.ts), tarayıcı DNS çözümlemez ve
 // yalnız fikstürün kökenine bağlanır. Geçici veritabanı; veri/ klasörüne dokunulmaz. Tüm değerler uydurmadır.
@@ -304,7 +304,7 @@ test.describe('hızlı test', () => {
     expect(JSON.stringify(sonuc)).toMatch(/listesinin seçenekleri [\d,]+ sn'de geldi \(olağan ≈ [\d,]+ sn\): yavaşlama/);
   });
 
-  test('arayüz: üst seçilince alt listenin seçenekleri anında (getir beklenmeden) gelir, zincir adım adım; üst değişince alt temizlenir; Devam zincir tamamlanmadan pasif; atla bağlantısı; 1440/390 px taşma yok', async () => {
+  test('arayüz: üst seçilince alt listenin seçenekleri anında (getir beklenmeden) gelir, zincir adım adım; üst değişince alt temizlenir; Devam hep etkin, zincir yarımsa bilgi; atla bağlantısı yok; 1440/390 px taşma yok', async () => {
     test.setTimeout(300_000);
     const testInfo = test.info();
     for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
@@ -346,12 +346,11 @@ test.describe('hızlı test', () => {
       await expect(soru.locator('.hizli-zincir-getir').getByText('Önce “İl” seçin', { exact: true })).toBeVisible();
       await expect(ilceGetir).toHaveAccessibleDescription('Önce “İl” seçin');
       expect((await ilceGetir.textContent())?.replace(/^↓\s*/, '')).toBe('“İlçe” seçeneklerini getir');
-      // Devam et: zincir tamamlanmadan pasif ve ne olacağını söyler; yanında "Bağlı alanları atla ve devam et".
-      const devam = soru.getByRole('button', { name: 'Devam et (önce bağlı alanları tamamlayın)', exact: true });
-      await expect(devam).toBeDisabled();
-      await expect(devam).toHaveAccessibleDescription(/Seçenekleri getirilmemiş: “İlçe”, “Mahalle”, “Sokak”/);
-      const atla = soru.getByRole('button', { name: 'Bağlı alanları atla ve devam et', exact: true });
-      await expect(atla).toBeVisible();
+      // Devam et: bağlı listeler zorunlu sayılmaz → hep etkin; zincir yarımken yanında engellemeyen kısa bilgi. "Atla" bağlantısı yok.
+      const devam = soru.getByRole('button', { name: 'Devam et', exact: true });
+      await expect(devam).toBeEnabled();
+      await expect(devam).toHaveAccessibleDescription(/^İlçe, Mahalle, Sokak.* boş; sayfa bunları zorunlu sayarsa düğmeye basınca hata gösterir\.$/);
+      await expect(soru.getByRole('button', { name: /Bağlı alanları atla/ })).toHaveCount(0);
 
       // 1) İl = Ankara → seçim anında (getir düğmesine basmadan) sayfaya uygulanır; yalnız İl uygulanır; İlçe seçenekleriyle İl'in hemen
       //    altında belirir; odak seçimde (İl) kalır, canlı durum satırında duyurulur.
@@ -375,7 +374,8 @@ test.describe('hızlı test', () => {
       expect(alan('İl').deger).toBe('06');
       expect(alan('İlçe').bagli.getirildi).toBe(true);
       expect(uygulama.hesaplamalar.length).toBe(hesaplamalar);
-      await expect(devam).toBeDisabled();
+      await expect(devam).toBeEnabled();
+      await expect(devam).toHaveAccessibleDescription(/^İlçe, Mahalle, Sokak.* boş; sayfa bunları zorunlu sayarsa/);
 
       // 2) İlçe = Keçiören → Mahalle seçenekleri anında (Etlik).
       await ilce.focus();
@@ -404,21 +404,21 @@ test.describe('hızlı test', () => {
       await expect(ilce.locator('option', { hasText: 'Keçiören' })).toHaveCount(0);
       await expect(ilce).toHaveValue('');
       await expect(gosterge).toContainText('(1/4 tamam)');
-      await expect(devam).toBeDisabled();
+      await expect(devam).toBeEnabled();
 
-      // 4) Boş gelen liste (sayfanın kendi hatası): "seçenek gelmedi" söylenir, Devam pasif kalır.
+      // 4) Boş gelen liste (sayfanın kendi hatası): "seçenek gelmedi" söylenir, Devam etkin kalır (zorunluluk sayfanın işi).
       await il.focus();
       await il.selectOption({ label: 'Boşil' });
       await expect(soru.getByText('Bu seçimde “İlçe” için seçenek gelmedi; başka bir “İl” seçin.')).toBeVisible({ timeout: 60_000 });
       await expect(page.getByRole('status').filter({ hasText: 'seçenek gelmedi' }).first()).toContainText('“İlçe” için seçenek gelmedi');
       await expect(il).toBeFocused();
-      await expect(devam).toBeDisabled();
+      await expect(devam).toBeEnabled();
 
-      // 5) "Bağlı alanları atla ve devam et": getirilmemiş bağlı alanlar sorulmadan ilerlenir (izin "Bana sor" → "Şimdi ne yapayım?").
+      // 5) Zincir yarımken "Devam et": boş bağlı alanlar sorulmadan ilerlenir (izin "Bana sor" → "Şimdi ne yapayım?").
       await il.focus();
       await il.selectOption({ label: 'Ankara' });
       await expect(ilce).toBeEnabled({ timeout: 60_000 });
-      await atla.click();
+      await devam.click();
       await expect(page.locator('.hizli-soru').getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
       expect(uygulama.hesaplamalar.length).toBe(hesaplamalar);
       expect(hatalar).toEqual([]);
@@ -428,7 +428,7 @@ test.describe('hızlı test', () => {
     }
   });
 
-  test('arayüz: zincir yoksa veri durağı eski davranışta (Devam et etkin, gösterge ve atla bağlantısı yok)', async () => {
+  test('arayüz: zincir yoksa veri durağı eski davranışta (Devam et etkin, gösterge ve zincir bilgisi yok)', async () => {
     test.setTimeout(240_000);
     for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
     const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/zincirsiz/', ekranAdi: 'Zincirsiz', izin: 'sor' })).id);
@@ -442,11 +442,114 @@ test.describe('hızlı test', () => {
       const devam = soru.getByRole('button', { name: 'Devam et', exact: true });
       await expect(devam).toBeEnabled();
       await expect(soru.locator('.hizli-zincir-gostergesi')).toBeHidden();
-      await expect(soru.getByRole('button', { name: 'Bağlı alanları atla ve devam et' })).toHaveCount(0);
+      await expect(devam).not.toHaveAttribute('aria-describedby', /.+/);
       await expect(soru.locator('.hizli-zincir-dugmesi')).toHaveCount(0);
       await soru.getByLabel('Ad', { exact: true }).fill('Deneme');
       await devam.click();
       await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
+    } finally {
+      await tarayici.close();
+      await api('/platform/hizli-test/iptal', { id });
+    }
+  });
+
+  test('zincir yarımken Devam etkin: boş bağlı listeler sayfaya / senaryoya yazılmaz; doğrulama, kayıt ve normal koşu geçer', async () => {
+    test.setTimeout(400_000);
+    for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
+    const id = String((await basarili('/platform/hizli-test/baslat', {
+      projeId, ortamId, hedef: '/adres/?kismi=1', ekranAdi: 'Kısmi zincir', izin: 'evet', cumle: 'Hesapla düğmesine bas, "Sonuç hazır" görünce bitir'
+    })).id);
+    let o = await bekle(id, ['veri'], 240);
+    const alan = (etiket: string): Nesne => o.soru.alanlar.find((a: Nesne) => a.etiket === etiket);
+    // Sayfa bağlı listeleri zorunlu saymıyor: Nöbetçi de saymaz.
+    for (const e of ['İlçe', 'Mahalle', 'Sokak']) expect(alan(e).zorunlu, e).toBe(false);
+    const once = uygulama.hesaplamalar.length;
+    const tarayici = await korumaliTarayici();
+    try {
+      const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } })).newPage();
+      const hatalar: string[] = [];
+      page.on('pageerror', (e) => hatalar.push(String(e)));
+      await page.goto(`/#/hizli-test/o/${id}`);
+      const soru = page.locator('.hizli-soru');
+      await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 30_000 });
+      const devam = soru.getByRole('button', { name: 'Devam et', exact: true });
+      await expect(devam).toBeEnabled();
+      // İl = Ankara → İlçe seçenekleri gelir; İlçe ve altları boş bırakılır. Devam etkin, yanında engellemeyen bilgi.
+      await soru.getByLabel('İl', { exact: true }).selectOption({ label: 'Ankara' });
+      const ilce = soru.getByLabel('İlçe', { exact: true });
+      await expect(ilce).toBeEnabled({ timeout: 60_000 });
+      await expect(soru.locator('.hizli-zincir-gostergesi')).toContainText('(1/4 tamam)');
+      await expect(devam).toBeEnabled();
+      const bilgi = soru.locator('.hizli-devam-ipucu');
+      await expect(bilgi).toHaveText(/^İlçe, Mahalle, Sokak.* boş; sayfa bunları zorunlu sayarsa düğmeye basınca hata gösterir\.$/);
+      await expect(devam).toHaveAccessibleDescription(await bilgi.innerText());
+      await page.screenshot({ path: test.info().outputPath('zincir-yarim-devam-1440.png'), fullPage: true });
+      await devam.click();
+      // Evet + tek aday → "Hesapla"ya basılır; boş bağlı listelere dokunulmadı.
+      await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 90_000 });
+      expect(hatalar).toEqual([]);
+    } finally {
+      await tarayici.close();
+    }
+    o = await bekle(id, ['karar']);
+    expect(uygulama.hesaplamalar.slice(once)).toEqual([{ il: '06', ilce: '', mahalle: '', sokak: '', model: '' }]);
+    await basarili('/platform/hizli-test/karar', { id, karar: 'bitir' });
+    o = await bekle(id, ['bitis']);
+    const bitti = Object.keys(o.soru.etiketler).find((m) => m.startsWith('Sonuç hazır')) as string;
+    await basarili('/platform/hizli-test/bitis', { id, etiketler: { ...o.soru.etiketler, [bitti]: 'bitti' } });
+    await bekle(id, ['kaydet']);
+    // Doğrulama koşusu: baştan sona; boş bağlı listeler yine yazılmaz.
+    await basarili('/platform/hizli-test/dogrula', { id });
+    o = await bekle(id, ['kaydet'], 180);
+    expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
+    expect(uygulama.hesaplamalar.slice(once)).toEqual([{ il: '06', ilce: '', mahalle: '', sokak: '', model: '' }, { il: '06', ilce: '', mahalle: '', sokak: '', model: '' }]);
+    const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Kısmi zincir' });
+    // Senaryo verisinde yalnız girilen değer (İl) var; boş bağlı listeler yazılmadı.
+    const senaryo = (await api(`/platform/senaryo?id=${String(k.senaryoId)}&ortamId=${ortamId}`)).senaryo as Nesne;
+    expect(Object.keys(senaryo.veri).sort(), JSON.stringify(senaryo.veri)).toEqual(['baslik', 'il']);
+    // Normal koşu: İl doldurulur, boş bağlı listelere dokunulmaz; başarılı.
+    const kosuOnce = uygulama.hesaplamalar.length;
+    const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomBytes(6).toString('hex')}`, senaryoId: String(k.senaryoId), ortamId });
+    expect(y.basarili, y.mesaj).toBe(true);
+    const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
+    expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
+    expect(uygulama.hesaplamalar.slice(kosuOnce)).toEqual([{ il: '06', ilce: '', mahalle: '', sokak: '', model: '' }]);
+  });
+
+  test('sayfada zorunlu (required) bağlı liste boşsa "Zorunlu alanlar boş" denetimi sürer', async () => {
+    test.setTimeout(300_000);
+    for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
+    const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/adres/?kismi=1&zorunlu=1', ekranAdi: 'Zorunlu ilçe', izin: 'sor' })).id);
+    let o = await bekle(id, ['veri'], 240);
+    const alan = (etiket: string): Nesne => o.soru.alanlar.find((a: Nesne) => a.etiket === etiket);
+    expect(alan('İlçe').zorunlu).toBe(true);
+    expect(alan('Mahalle').zorunlu).toBe(false);
+    const once = uygulama.hesaplamalar.length;
+    const tarayici = await korumaliTarayici();
+    try {
+      const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } })).newPage();
+      await page.goto(`/#/hizli-test/o/${id}`);
+      const soru = page.locator('.hizli-soru');
+      await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible({ timeout: 30_000 });
+      await soru.getByLabel('İl', { exact: true }).selectOption({ label: 'Ankara' });
+      const ilce = soru.getByLabel(/^İlçe/);
+      await expect(ilce).toBeEnabled({ timeout: 60_000 });
+      const devam = soru.getByRole('button', { name: 'Devam et', exact: true });
+      await expect(devam).toBeEnabled();
+      await devam.click();
+      await expect(soru.getByText(/Zorunlu alanlar boş: İlçe\./)).toBeVisible();
+      await expect(soru.getByRole('heading', { name: 'Devam etmek için veri gerekli' })).toBeVisible();
+      // Sunucu da aynı kuralı uygular (arayüz atlansa bile).
+      o = await bekle(id, ['veri']);
+      const y = await api('/platform/hizli-test/veri', { id, degerler: { [alan('İl').anahtar]: deger('06') } });
+      expect(y.basarili).toBe(false);
+      expect(y.mesaj).toContain('Zorunlu alanlar boş: İlçe');
+      // İlçe seçilince ilerlenir (Mahalle, Sokak boş kalabilir).
+      await ilce.selectOption({ label: 'Çankaya' });
+      await expect(soru.getByLabel('Mahalle', { exact: true })).toBeEnabled({ timeout: 60_000 });
+      await devam.click();
+      await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });
+      expect(uygulama.hesaplamalar.length).toBe(once);
     } finally {
       await tarayici.close();
       await api('/platform/hizli-test/iptal', { id });

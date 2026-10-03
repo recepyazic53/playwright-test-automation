@@ -18,6 +18,10 @@ export const GORUNUR_KOSU_DEGISKENI = 'NOBETCI_GORUNUR';
 export const GORUNMEZ_KOSU_METNI = 'Bu koşu görünmez başladı; pencerede izlemek için koşuyu ‘Tarayıcı penceresinde izle’ ile yeniden başlatın. Görünmez başlayan tarayıcı sonradan görünür yapılamaz.';
 
 const YENIDEN_DENEME_MS = 250;
+/** İzleyicinin isteyebileceği en büyük kare ölçüsü (px). */
+const EN_BUYUK_OLCU = 2560;
+/** "Sayfanın tamamı" görüntüsünün üst sınırı (bayt). */
+const TAM_SAYFA_SINIRI = 25 * 1024 * 1024;
 const CANLI_TUTMA_MS = 15_000;
 /** Koşu kaydı görülmeden en çok bu kadar beklenir (koşu sırada / süreç açılıyor). */
 const BEKLEME_MS = 20_000;
@@ -37,7 +41,8 @@ export function duyuruOku(yol) {
 /**
  * Panelin SSE isteğini test sürecinin yayınına bağlar (vekil). Token denetimi ÇAĞIRANDADIR.
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res
- * @param {{ duyuruYolu: () => string | null; suruyorMu: () => boolean; en?: number | null }} s
+ * en / boy: izleyicinin istediği kare genişliği / yüksekliği (px; büyük pencere daha yüksek ister).
+ * @param {{ duyuruYolu: () => string | null; suruyorMu: () => boolean; en?: number | null; boy?: number | null }} s
  */
 export function canliAkisiVekille(req, res, s) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
@@ -68,7 +73,10 @@ export function canliAkisiVekille(req, res, s) {
   req.on('close', bitir);
   res.on('close', bitir);
   const sonra = () => { if (!kapandi) zamanlayici = setTimeout(bagla, YENIDEN_DENEME_MS); };
-  const en = Number.isFinite(s.en) && Number(s.en) >= 320 ? Math.min(1600, Math.round(Number(s.en))) : null;
+  const olcu = (/** @type {number | null | undefined} */ x) => (Number.isFinite(x) && Number(x) >= 320 ? Math.min(EN_BUYUK_OLCU, Math.round(Number(x))) : null);
+  const en = olcu(s.en);
+  const boy = olcu(s.boy);
+  const sorgu = [en ? `en=${en}` : '', boy ? `boy=${boy}` : ''].filter(Boolean).join('&');
   function bagla() {
     zamanlayici = null;
     if (kapandi) return;
@@ -78,7 +86,7 @@ export function canliAkisiVekille(req, res, s) {
     else { durum({ durum: 'bekleniyor' }); sonra(); return; }
     const d = duyuruOku(s.duyuruYolu());
     if (!d) { durum({ durum: 'bekleniyor' }); sonra(); return; }
-    const istek = request({ host: '127.0.0.1', port: d.port, path: `/akis${en ? `?en=${en}` : ''}`, method: 'GET', headers: { 'x-canli-anahtar': d.anahtar } }, (yanit) => {
+    const istek = request({ host: '127.0.0.1', port: d.port, path: `/akis${sorgu ? `?${sorgu}` : ''}`, method: 'GET', headers: { 'x-canli-anahtar': d.anahtar } }, (yanit) => {
       if (yanit.statusCode !== 200) { yanit.resume(); ust = null; sonra(); return; }
       sonDurum = '';
       yanit.on('data', (/** @type {Buffer} */ parca) => { if (!kapandi) res.write(parca); });
@@ -98,6 +106,38 @@ export function canliAkisiVekille(req, res, s) {
     istek.end();
   }
   bagla();
+}
+
+/**
+ * "Sayfanın tamamı": test sürecinden koşan sayfanın tam sayfa jpeg görüntüsü (bellekte; diske yazılmaz). Yayın yoksa / alınamazsa
+ * { durum, mesaj } döner. @param {string | null | undefined} duyuruYolu
+ * @returns {Promise<{ durum: number; jpeg: Buffer | null; mesaj: string }>}
+ */
+export function canliTamSayfaAl(duyuruYolu) {
+  const d = duyuruOku(duyuruYolu);
+  if (!d) return Promise.resolve({ durum: 409, jpeg: null, mesaj: 'Tarayıcı şu anda açık değil.' });
+  return new Promise((coz) => {
+    const istek = request({ host: '127.0.0.1', port: d.port, path: '/tam-sayfa', method: 'GET', headers: { 'x-canli-anahtar': d.anahtar }, timeout: 30_000 }, (yanit) => {
+      /** @type {Buffer[]} */
+      const parcalar = [];
+      let boyut = 0;
+      yanit.on('data', (/** @type {Buffer} */ p) => {
+        boyut += p.length;
+        if (boyut > TAM_SAYFA_SINIRI) { istek.destroy(); return; }
+        parcalar.push(p);
+      });
+      yanit.on('end', () => {
+        const govde = Buffer.concat(parcalar);
+        if (yanit.statusCode === 200 && /^image\/jpeg/.test(String(yanit.headers['content-type'] ?? ''))) { coz({ durum: 200, jpeg: govde, mesaj: '' }); return; }
+        let mesaj = 'Sayfanın görüntüsü alınamadı.';
+        try { const j = JSON.parse(govde.toString('utf-8')); if (typeof j?.mesaj === 'string' && j.mesaj) mesaj = `Sayfanın görüntüsü alınamadı: ${j.mesaj}`; } catch { /* yok */ }
+        coz({ durum: yanit.statusCode === 429 ? 429 : 502, jpeg: null, mesaj });
+      });
+    });
+    istek.on('timeout', () => istek.destroy());
+    istek.on('error', () => coz({ durum: 502, jpeg: null, mesaj: 'Sayfanın görüntüsü alınamadı.' }));
+    istek.end();
+  });
 }
 
 /**

@@ -141,7 +141,7 @@
 .hizli-zincir-bos { color: var(--atlanan); overflow-wrap: anywhere; }
 .hizli-zincir-gostergesi { display: grid; gap: 2px; padding: 6px 10px; border-radius: var(--yaricap-m); background: var(--vurgu-zemin); overflow-wrap: anywhere; min-width: 0; }
 .hizli-zincir-gostergesi p { margin: 0; }
-.hizli-zincir-atla { font-size: 13px; }
+.hizli-devam-ipucu { display: block; margin-top: 4px; overflow-wrap: anywhere; }
 /* İç içe "Önce bunu seçin": üst seçimin değer grubunun içinde kendi satırı (kendi grubu altında). */
 .hizli-onsecim-ic { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--vurgu) 35%, var(--cizgi)); border-radius: var(--yaricap-m); background: var(--vurgu-zemin); min-width: 0; }
 .hizli-onsecim-ic .hizli-onsecim-ic-baslik { margin: 0; font-weight: 600; color: var(--metin-2); }

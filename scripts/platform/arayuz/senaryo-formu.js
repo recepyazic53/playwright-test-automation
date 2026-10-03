@@ -1851,7 +1851,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       // Sürekli kare akışı (token başlıkta; akış kurulamazsa aralıklı görüntüye düşülür).
       const kosuId = d.kosuId;
       denemeKutusu = canliGoruntu({
-        akisAdresi: `/canli-akis?kosuId=${encodeURIComponent(kosuId)}`, etiket: 'Deneme: canlı ekran görüntüsü',
+        akisAdresi: `/canli-akis?kosuId=${encodeURIComponent(kosuId)}`, tamSayfaAdresi: `/canli-tam-sayfa?kosuId=${encodeURIComponent(kosuId)}`, etiket: 'Deneme: canlı ekran görüntüsü',
         bekleniyorMetni: 'Deneme başlatıldı; canlı görüntü bekleniyor…', yedekKareAl: () => kosuYedekKaresi(kosuId),
         tarayiciyiGoster: async () => {
           const y = await api('/tarayiciyi-goster', { govde: { kosuId } }).catch((e) => ({ basarili: false, mesaj: e.message }));
