@@ -302,6 +302,51 @@ test.describe('servis analizi arayüzü', () => {
     await baglam.close();
   });
 
+  test('Parametreler: her alanın değer kaynağı (tablo / kural / akış / evet-hayır / bağlı değil + öneri bağlantısı), tip rozeti ve kaynağı, "Yalnız bağlı olmayanlar"', async () => {
+    test.setTimeout(90_000);
+    const once = soap.istekler.length;
+    const a = (await servis()).ayarlar;
+    // Channel bağı kaldırılır (analizde Bayi önerisi var), kart numarası akıştan, taksit örneklerden onaylanmış tip.
+    const baglar = { ...a.alanBaglari.Siparis };
+    delete baglar['Input/Channel'];
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'analiz-servisi', ad: 'Analiz Servisi', yol: a.yol,
+      alanBaglari: { ...a.alanBaglari, Siparis: baglar },
+      alanVarsayilanlari: { ...a.alanVarsayilanlari, Siparis: { ...a.alanVarsayilanlari.Siparis, 'Input/CreditCard/CardNumber': { kaynak: 'akis', deger: 'Kart' } } },
+      alanKurallari: { ...a.alanKurallari, Siparis: { ...a.alanKurallari.Siparis, 'Input/CreditCard/Installment': { tip: 'tamsayi' } } } });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/parametreler`);
+    await page.getByRole('button', { name: 'Siparis metodu' }).click();
+    await expect(page.locator('.kaynak-aciklamasi')).toContainText('Bağlı değil (senaryoda yazılır)');
+    const satir = (ad: string) => page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await expect(satir('ClientType').locator('.kaynak-ozeti')).toHaveAttribute('data-kaynak', 'tablo');
+    await expect(satir('IsGiftWrap').locator('.kaynak-ozeti')).toHaveText('Evet/hayır — değer senaryoda seçilir (tablo gerekmez)');
+    await expect(satir('BeginDate').locator('.kaynak-ozeti')).toHaveText('Kural: BEGIN_DATE');
+    await expect(satir('CardNumber').locator('.kaynak-ozeti')).toHaveText('Akıştan: ${akis:Kart}');
+    await expect(satir('Channel').locator('.kaynak-ozeti')).toContainText('Bağlı değil — senaryoda yazılır');
+    await expect(satir('Channel').locator('.kaynak-ozeti a.oneri-var')).toHaveAttribute('href', `#/servisler/s/${servisId}/analiz`);
+    // Tip rozeti ve kaynağı.
+    await expect(satir('Channel').locator('.alan-tipi')).toHaveText('metin');
+    await expect(satir('Channel').locator('.alan-tipi')).toHaveAttribute('title', 'Tip: metin (kaynak: WSDL)');
+    await expect(satir('IsGiftWrap').locator('.alan-tipi')).toHaveText('evet/hayır');
+    await expect(satir('Installment').locator('.alan-tipi')).toHaveText('tamsayı');
+    await expect(satir('Installment').locator('.alan-tipi')).toHaveAttribute('title', 'Tip: tamsayı (kaynak: örneklerden (onaylanmış analiz))');
+    // Süzgeç: yalnız bağlı olmayanlar.
+    await page.getByText('Yalnız bağlı olmayanlar').click();
+    await expect(satir('Channel')).toHaveCount(1);
+    await expect(satir('IsGiftWrap')).toHaveCount(0);
+    await expect(satir('ClientType')).toHaveCount(0);
+    await expect(satir('BeginDate')).toHaveCount(0);
+    await tasmaYok(page);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await tasmaYok(page);
+    expect(hatalar).toEqual([]);
+    expect(soap.istekler.length).toBe(once);
+    await baglam.close();
+  });
+
   test('içe aktarma: SoapUI ve Postman istekleri servisin örnek isteklerine gelir (bilinen değer yazılır, gizli değer yer tutucu kalır)', async () => {
     test.setTimeout(60_000);
     // SoapUI: yeni servis erişim kontrolüyle (WSDL yalnız sahte sunucudan).

@@ -28,6 +28,8 @@ import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
 import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
+import { servisAnalizi } from './servis-analizi.mjs';
+import { kosuOnerileri } from './kosu-ogrenmesi.mjs';
 import { servisKosuPaneliniKenaraAl, servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
@@ -1893,6 +1895,21 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     const zorunlu = new Set(Array.isArray(liste) ? liste : alanSatirlari(sm.alanlar).filter((x) => !x.grup && x.alan.zorunlu).map((x) => x.yol));
     return { sm, ekler, baglar, zorunlu };
   });
+  /**
+   * Analiz önerisi olan alanlar (kayıtlı örnekler ve koşu gözlemleri; tarayıcıda, istek yok): "Öneri var" → Servisi analiz et.
+   * @param {any} m
+   */
+  const oneriYollari = (m) => {
+    const op = m.sm.ad;
+    const ortak = { metot: op, sema: m.sm, ekler: m.ekler, tablolar, mevcut: { zorunlu: [...m.zorunlu], baglar: m.baglar, varsayilanlar: (s.ayarlar.alanVarsayilanlari || {})[op] || {}, kurallar: (s.ayarlar.alanKurallari || {})[op] || {}, kararlar: (s.ayarlar.analizKararlari || {})[op] || {} } };
+    const yollar = new Set();
+    try {
+      const ornekler = (s.ayarlar.ornekIstekler || {})[op] || [];
+      if (ornekler.length) for (const o of servisAnalizi({ ...ortak, tur: s.tur === 'rest' ? 'rest' : 'soap', ornekler }).oneriler) if (o.yol && o.guc !== 'not') yollar.add(o.yol);
+      for (const o of kosuOnerileri({ ...ortak, gozlemler: (s.ayarlar.kosuOgrenmesi || {})[op] || [] })) if (o.yol && o.guc !== 'not') yollar.add(o.yol);
+    } catch { /* öneri bağlantısı gösterilmez */ }
+    return (/** @type {string} */ yol) => (yollar.has(yol) ? `#/servisler/s/${q(s.id)}/analiz` : false);
+  };
   // Anında kaydet: her değişiklikten kısa süre sonra (art arda değişiklikler tek istekte) servis ayarına yazılır.
   const kayitDurumu = h('span', { class: 'kayit-durumu soluk kucuk', 'aria-live': 'polite' });
   let kayitZamanlayici = null;
@@ -1923,6 +1940,8 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     metotlar.length
       ? metotKutulari(metotlar.map((m) => ({
         ad: m.sm.ad, sema: m.sm, zorunlu: m.zorunlu, ekler: m.ekler, degisti, baglar: m.baglar, tablolar,
+        alanKurallari: (s.ayarlar.alanKurallari || {})[m.sm.ad] || {}, varsayilanlar: (s.ayarlar.alanVarsayilanlari || {})[m.sm.ad] || {},
+        oneriVar: oneriYollari(m),
         kurallar, kuralEkle: (ad, kural) => kurallariKaydet({ ...kurallar, [ad]: kural }).then(() => kuralKartiniYenile()), etki: etki(m.sm.ad)
       })), { anahtar: `servis:${s.id}` })
       : h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.'));

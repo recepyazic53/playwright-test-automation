@@ -251,6 +251,9 @@ export function analizBagla(tanim, a) {
     tanim.tabloyuYenile?.();
   };
   tanim.ust = bolum;
+  tanim.oneriVar = (/** @type {string} */ yol) => Boolean(d.sonuc?.oneriler.some((o) => o.yol === yol && o.guc !== 'not'));
+  tanim.alanKurallari = d.kurallar;
+  tanim.varsayilanlar = d.varsayilanlar;
   tanim.analiz = {
     /** Satır önerileri (alan tablosunda): örnek özeti + öneriler (tablo bağı satırın seçim kutusunun yanında rozetle). @param {string} yol */
     satir: (yol) => {

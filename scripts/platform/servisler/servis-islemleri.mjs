@@ -276,7 +276,7 @@ function alanVarsayilanlariniDogrula(v) {
     for (const [yol, d] of Object.entries(alanlar)) {
       if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!d || typeof d !== 'object' || !KAYNAKLAR.includes(d.kaynak)) throw new DepoHatasi(`"${yol}" için geçersiz kaynak.`);
-      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo' || d.kaynak === 'hesap';
+      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo' || d.kaynak === 'hesap' || d.kaynak === 'akis';
       if (degerli && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
       (s[op] ??= {})[yol] = degerli ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
     }

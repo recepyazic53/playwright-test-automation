@@ -11,12 +11,42 @@ import { degerCipleri } from './parametre-tanimi-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
 import { kuralFormu } from './hesap-kurali-formu.js';
 
-const TIP = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
+const TIP = { metin: 'metin', tamsayi: 'tamsayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
 const YOL = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
 
 /** Alan tabloya bağlı mı ('tablo' | ''). @param {Parameters<typeof metotAlanTablosu>[0]} s @param {string} yol */
 export function kaynakSecimi(s, yol) {
   return s.baglar[yol] ? 'tablo' : '';
+}
+
+/**
+ * Alanın tipi ve tipin kaynağı: onaylanmış analiz kuralı (örneklerden) > elle eklenen alan > WSDL / şema.
+ * @param {Parameters<typeof metotAlanTablosu>[0]} s @param {{ yol: string; alan: import('./servis-govdesi.mjs').Alan }} st
+ */
+export function alanTipi(s, st) {
+  const k = s.alanKurallari?.[st.yol]?.tip;
+  if (k) return { tip: k, kaynak: 'örneklerden (onaylanmış analiz)' };
+  if (st.alan.secenekler) return { tip: 'liste', kaynak: 'WSDL (seçenek listesi)' };
+  return { tip: st.alan.tip || 'metin', kaynak: st.alan.ek ? 'elle eklenen alan' : 'WSDL' };
+}
+
+/**
+ * Alanın değeri nereden gelir (tek bakışta): tablo › sütun, hesaplama kuralı, akış, evet/hayır (tablo gerekmez) ya da bağlı değil.
+ * @param {Parameters<typeof metotAlanTablosu>[0]} s @param {{ yol: string; alan: import('./servis-govdesi.mjs').Alan }} st
+ * @returns {{ tur: 'tablo' | 'kural' | 'akis' | 'evetHayir' | 'yok'; metin: string }}
+ */
+export function degerKaynagi(s, st) {
+  const b = s.baglar[st.yol];
+  if (b && b.tablo) {
+    const t = (s.tablolar || []).find((x) => x.id === b.tablo);
+    return { tur: 'tablo', metin: `Tablo › Sütun: ${t ? t.ad : b.tablo} › ${b.sutun}` };
+  }
+  if (b && b.kural) return { tur: 'kural', metin: `Kural: ${b.kural}` };
+  const v = s.varsayilanlar?.[st.yol];
+  if (v && v.kaynak === 'akis') return { tur: 'akis', metin: `Akıştan: \${akis:${v.deger}}` };
+  if (v && (v.kaynak === 'parametre' || v.kaynak === 'hesap')) return { tur: 'kural', metin: `Kural: ${v.deger}` };
+  if (alanTipi(s, st).tip === 'mantiksal') return { tur: 'evetHayir', metin: 'Evet/hayır — değer senaryoda seçilir (tablo gerekmez)' };
+  return { tur: 'yok', metin: 'Bağlı değil — senaryoda yazılır' };
 }
 
 /**
@@ -34,6 +64,9 @@ export function kaynakSecimi(s, yol) {
  *   ust?: HTMLElement;                            // tablonun üstünde gösterilen bölüm (servis analizi: örnek istekler)
  *   analiz?: { satir: (yol: string) => HTMLElement | null; bagRozeti?: (yol: string) => HTMLElement | null };   // satır altı öneriler, seçim yanında tablo önerisi (servis analizi)
  *   tabloyuYenile?: () => void;                   // burada atanır: tabloyu yeniden çizer (öneri uygulanınca)
+ *   alanKurallari?: Record<string, { tip?: string }>;   // onaylanmış analiz kuralları (tip rozeti kaynağı "örneklerden")
+ *   varsayilanlar?: Record<string, { kaynak: string; deger?: string }>;   // alan varsayılanları (akış / kural kaynağı)
+ *   oneriVar?: (yol: string) => string | boolean;  // alan için analiz önerisi var mı (dize: "Öneri var" bağlantı adresi)
  * }} s
  */
 export function metotAlanTablosu(s) {
@@ -44,11 +77,19 @@ export function metotAlanTablosu(s) {
   // Arama ve süzgeçler: yalnız tablo yeniden çizilir (seçimler s üzerinde durduğu için kaybolmaz).
   const ara = h('input', { type: 'search', placeholder: 'Alan ara…', 'aria-label': `${s.ad} alan ara` });
   const yalnizZorunlu = h('input', { type: 'checkbox', id: yeniKimlik('yz'), 'aria-label': `${s.ad} yalnız zorunlular` });
-  const bosEtiket = 'Yalnız tabloya bağlı olmayanlar';
+  const bosEtiket = 'Yalnız bağlı olmayanlar';
   const yalnizBos = h('input', { type: 'checkbox', id: yeniKimlik('yb'), 'aria-label': `${s.ad} ${bosEtiket.toLocaleLowerCase('tr')}` });
   const ust = h('div', { class: 'alan-formu-ust' }, ara,
     h('label', { class: 'secenek', for: yalnizZorunlu.id }, yalnizZorunlu, 'Yalnız zorunlular'),
     h('label', { class: 'secenek', for: yalnizBos.id }, yalnizBos, bosEtiket));
+  const aciklama = h('p', { class: 'soluk kucuk kaynak-aciklamasi' }, 'Her alanın altında değerin nereden geldiği yazar: Tablo › Sütun · Kural · Akıştan · Evet/hayır (senaryoda seçilir, tablo gerekmez) · Bağlı değil (senaryoda yazılır). Tip rozetinin ipucunda kaynağı yazar (WSDL / örneklerden).');
+  /** Değer kaynağı satırı (tablo bağında seçim kutusu zaten gösterir). @param {any} st */
+  const kaynakSatiri = (st) => {
+    const k = degerKaynagi(s, st);
+    const oneri = k.tur === 'yok' && s.oneriVar ? s.oneriVar(st.yol) : false;
+    return h('span', { class: `kaynak-ozeti kaynak-${k.tur}`, 'data-kaynak': k.tur }, k.tur === 'tablo' ? null : k.metin,
+      oneri ? [' · ', typeof oneri === 'string' ? h('a', { href: oneri, class: 'oneri-var' }, 'Öneri var') : h('span', { class: 'oneri-var' }, 'Öneri var')] : null);
+  };
   /** Alanın tablo sütunu ya da hesaplama kuralı seçimi + etiket / biçim + sütunun ilk değerleri. */
   const bagHucresi = (st) => {
     const b = s.baglar[st.yol];
@@ -120,13 +161,13 @@ export function metotAlanTablosu(s) {
     let alt = null;
     if (kuralVar) {
       const etki = s.etki ? s.etki(st.yol, b.kural) : null;
-      alt = h('span', { class: 'soluk kucuk kural-bagi-notu' }, `Koşu anında hesaplanır: ${b.kural} = ${kurallar[b.kural]}`, etki ? h('br', {}) : null, etki);
+      alt = h('span', { class: 'soluk kucuk kural-bagi-notu' }, `Kural: ${b.kural} = ${kurallar[b.kural]} (koşu anında hesaplanır)`, etki ? h('br', {}) : null, etki);
     } else if (sutun && sutun.gizli) alt = h('span', { class: 'soluk kucuk' }, 'gizli sütun — değer koşuda satırdan gelir');
     else if (sutun) {
       const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
       alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
     }
-    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), s.analiz?.bagRozeti?.(st.yol) ?? null, alt, formKap);
+    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), s.analiz?.bagRozeti?.(st.yol) ?? null, alt, kuralVar ? null : kaynakSatiri(st), formKap);
   };
   const ciz = () => {
     const birlesik = semaBirlestir(s.sema, s.ekler || []);
@@ -137,12 +178,12 @@ export function metotAlanTablosu(s) {
       const secili = kaynakSecimi(s, st.yol);
       if (a && !st.yol.toLocaleLowerCase('tr').includes(a)) return null;
       if (yalnizZorunlu.checked && !s.zorunlu.has(st.yol)) return null;
-      if (yalnizBos.checked && secili) return null;
+      if (yalnizBos.checked && degerKaynagi(s, st).tur !== 'yok') return null;
       {
         const zk = h('input', { type: 'checkbox', checked: s.zorunlu.has(st.yol), 'aria-label': `${s.ad} ${st.yol} zorunlu`,
           title: st.alan.ek ? 'Elle eklenen alan' : st.alan.zorunlu ? 'WSDL\'de zorunlu (minOccurs=1)' : 'WSDL\'de isteğe bağlı' });
         const satir = h('div', { class: `alan-satiri derinlik-${suzgecli ? 0 : Math.min(st.derinlik, 6)} ${secili ? '' : 'gonderilmez'} ${s.zorunlu.has(st.yol) ? 'zorunlu' : ''}` },
-          h('span', { class: 'alan-adi', title: st.yol }, st.alan.ad, h('span', { class: 'alan-tipi' }, st.alan.secenekler ? 'liste' : TIP[st.alan.tip] || 'metin'),
+          h('span', { class: 'alan-adi', title: st.yol }, st.alan.ad, (() => { const at = alanTipi(s, st); return h('span', { class: 'alan-tipi', title: `Tip: ${TIP[at.tip] || at.tip} (kaynak: ${at.kaynak})`, 'data-tip-kaynagi': at.kaynak.startsWith('örnek') ? 'ornek' : at.kaynak.startsWith('elle') ? 'elle' : 'wsdl' }, TIP[at.tip] || at.tip); })(),
             st.alan.ek ? rozet('WSDL\'de yok', 'durdu') : null,
             st.alan.ek && s.ekler ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${st.yol} alanını kaldır`, onclick: () => {
               s.ekler.splice(s.ekler.findIndex((x) => x.yol === st.yol), 1);
@@ -168,7 +209,7 @@ export function metotAlanTablosu(s) {
   ciz();
   // Servis analizi (servis-analizi.js > analizBagla): örnek istekler bölümü tablonun üstünde; öneriler değişince tablo yeniden çizilir.
   s.tabloyuYenile = () => { ciz(); sayacGuncelle(); };
-  kap.append(...(s.ust ? [s.ust] : []), ust, tablo);
+  kap.append(...(s.ust ? [s.ust] : []), ust, aciklama, tablo);
   if (s.ekler) {
     // Alan ekle (WSDL'de yok): "+ Alan ekle" formu açar; yol (grup/alan), tip, zorunlu.
     const kok = s.sema.alanlar.length === 1 && s.sema.alanlar[0].cocuklar ? `${s.sema.alanlar[0].ad}/` : '';
