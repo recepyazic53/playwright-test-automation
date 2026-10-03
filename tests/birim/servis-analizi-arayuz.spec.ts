@@ -19,8 +19,10 @@ const GORUNTU = process.env.ANALIZ_GORUNTU_KLASORU ?? '';
 
 const zarf = (ic: string) => `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <soap:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></soap:Body></soap:Envelope>`;
-const BIREYSEL = zarf('<Channel>77</Channel><Username>u1</Username><Password>ornek-parola-1</Password><IdentityNumber>10000000146</IdentityNumber><ClientType>O</ClientType><Ekstra>E1</Ekstra><CreditCard><Installment>3</Installment></CreditCard>');
-const KURUMSAL = zarf('<Channel>77</Channel><Username>u2</Username><Password>ornek-parola-2</Password><ClientType>T</ClientType><Ekstra>E2</Ekstra><IsGiftWrap xsi:nil="true"/>');
+// Kanal / kullanıcı değerleri nötr "Bayi" tablosunun satırlarında (aynı satırda birlikte).
+const BIREYSEL = zarf('<Channel>51234</Channel><Username>51234001</Username><Password>ornek-parola-1</Password><IdentityNumber>10000000146</IdentityNumber><ClientType>O</ClientType><Ekstra>E1</Ekstra><CreditCard><Installment>3</Installment></CreditCard>');
+const KURUMSAL = zarf('<Channel>51234</Channel><Username>51234001</Username><Password>ornek-parola-2</Password><ClientType>T</ClientType><Ekstra>E2</Ekstra><IsGiftWrap xsi:nil="true"/>');
+const UCUNCU = zarf('<Channel>67890</Channel><Username>67890001</Username><Password>ornek-parola-3</Password><ClientType>O</ClientType><Ekstra>E3</Ekstra><IsGiftWrap xsi:nil="true"/>');
 
 /** Ekran görüntüsü (GORUNTU verilmişse): uzun pencerede, bölüm görünür; sabit üst çubuk araya girmesin diye tam sayfa alınmaz. */
 async function goruntu(page: Page, ad: string, bolum: ReturnType<Page['locator']>) {
@@ -48,6 +50,7 @@ test.describe('servis analizi arayüzü', () => {
   let projeId = '';
   let girisId = '';
   let tipId = '';
+  let bayiId = '';
   let servisId = '';
   let denetimSonrasi = 0;
   const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
@@ -72,6 +75,9 @@ test.describe('servis analizi arayüzü', () => {
     // "ClientType" ↔ "Tip" (eş anlam, tablo adı) + değerler O / T "Kod" sütununda: güçlü eşleşme → sihirbazda önseçili.
     tipId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Tip', sutunlar: [{ ad: 'Kod' }, { ad: 'Açıklama' }],
       satirlar: [{ ad: 'o', degerler: { Kod: 'O', 'Açıklama': 'Birinci' } }, { ad: 't', degerler: { Kod: 'T', 'Açıklama': 'İkinci' } }] })).tablo.id;
+    // "Bayi": Username ↔ Kullanıcı (eş anlam + değer), Channel ↔ Bayi kodu (yalnız değer, desen aynı; aynı satırda birlikte).
+    bayiId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Bayi', sutunlar: [{ ad: 'Bayi kodu' }, { ad: 'Kullanıcı' }],
+      satirlar: [{ ad: 'b1', degerler: { 'Bayi kodu': '51234', 'Kullanıcı': '51234001' } }, { ad: 'b2', degerler: { 'Bayi kodu': '67890', 'Kullanıcı': '67890001' } }] })).tablo.id;
     tarayici = await chromium.launch();
     if (GORUNTU) mkdirSync(GORUNTU, { recursive: true });
   });
@@ -83,7 +89,7 @@ test.describe('servis analizi arayüzü', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('sihirbaz: 2 adlı örnek → öneriler tabloda, önseçili tablo eşleşmesi, Uygula / Tümünü uygula, yeni tablo özet adımında ve kayıtta', async () => {
+  test('sihirbaz: 3 adlı örnek → güç sınıfları, satırda tablo öneri rozeti, Tablo önerileri (mevcut / yeni), güçlü önerileri uygula, yeni tablo kaydı', async () => {
     test.setTimeout(120_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
     const page = await baglam.newPage();
@@ -102,45 +108,96 @@ test.describe('servis analizi arayüzü', () => {
     denetimSonrasi = soap.istekler.length;
     await ileri.click();
 
-    // Alanlar: metodun tablosunun üstünde "Örnek istekler"; iki adlı örnek.
+    // Boş durum: hiçbir mevcut tablo eşleşmiyor → bölüm açıkça söyler (yeni tablo önerildi).
+    await page.getByRole('button', { name: 'Onayla metodu' }).click();
+    const onayla = page.getByRole('region', { name: 'Onayla örnek istekleri' });
+    await onayla.getByRole('button', { name: 'Gövde XML ekle' }).click();
+    await onayla.getByLabel('Onayla örnek adı').fill('Tek');
+    await onayla.getByLabel('Onayla örnek gövdesi').fill('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Onayla xmlns="Ornek"><SiparisNo>4242</SiparisNo></Onayla></soap:Body></soap:Envelope>');
+    await onayla.getByRole('button', { name: 'Ekle', exact: true }).click();
+    await expect(onayla.getByRole('region', { name: 'Onayla tablo önerileri' })).toContainText('Mevcut tablolarla eşleşen alan bulunamadı; 1 alan için yeni tablo önerildi.');
+
+    // Siparis: üç adlı örnek.
     await page.getByRole('button', { name: 'Siparis metodu' }).click();
     const bolum = page.getByRole('region', { name: 'Siparis örnek istekleri' });
     await expect(bolum).toContainText('Örnek istekler (gövde XML)');
-    for (const [ad, govde] of [['Bireysel', BIREYSEL], ['Kurumsal', KURUMSAL]]) {
+    // Bireysel ve Kurumsal başarılı (işaretli), Ucuncu bilinmiyor.
+    for (const [ad, govde, sonuc] of [['Bireysel', BIREYSEL, 'basarili'], ['Kurumsal', KURUMSAL, 'basarili'], ['Ucuncu', UCUNCU, 'bilinmiyor']]) {
       await bolum.getByRole('button', { name: 'Gövde XML ekle' }).click();
       await bolum.getByLabel('Siparis örnek adı').fill(ad);
       await bolum.getByLabel('Siparis örnek gövdesi').fill(govde);
+      await bolum.getByLabel('Siparis örnek sonucu').selectOption(sonuc);
       await bolum.getByRole('button', { name: 'Ekle', exact: true }).click();
     }
-    await expect(bolum.locator('.ornek-listesi li')).toHaveCount(2);
-    // Gizli adlı alanın değeri önizlemede maskeli.
+    await expect(bolum.locator('.ornek-listesi li')).toHaveCount(3);
     await expect(bolum.locator('.ornek-listesi')).not.toContainText('ornek-parola-1');
     await expect(bolum.locator('.ornek-listesi')).toContainText('••••••');
-    await expect(bolum).toContainText('2 örnek analiz edildi');
-
-    // Tablo eşleşmesi önseçili: ClientType → Tip.Kod (kanıtıyla).
-    await expect(page.getByLabel('Siparis Input/ClientType tablo sütunu ya da kural')).toHaveValue(`${tipId}\u0001Kod`);
-    const tipSatiri = page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^ClientType/ }) });
-    await expect(tipSatiri.locator('.analiz-onerisi[data-tur="tabloBagi"]')).toContainText('önseçili');
-    await expect(tipSatiri.locator('.analiz-onerisi[data-tur="tabloBagi"]')).toContainText('O, T 2/2 Tip.Kod\'da var');
-    // Satır başına öneri: kimlik numarası gizli (11 hane) → Uygula.
-    const kimlikSatiri = page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IdentityNumber/ }) });
-    await expect(kimlikSatiri.locator('.analiz-ozeti')).toContainText('1/2 örnekte dolu');
-    await kimlikSatiri.getByRole('button', { name: 'Uygula: Input/IdentityNumber — Gizli' }).click();
-    await expect(kimlikSatiri.locator('.analiz-onerisi[data-tur="gizli"]')).toHaveCount(0);
-    // WSDL ile çelişki ayrı uyarı (IsGiftWrap WSDL'de zorunlu, örneklerde boş / yok).
-    await expect(page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IsGiftWrap/ }) }).locator('.analiz-onerisi.celiski')).toContainText('WSDL\'de zorunlu');
-    // WSDL'de olmayan öğe bölümde: "alan olarak eklensin mi?"; Tümünü uygula hepsini uygular.
+    await expect(bolum).toContainText('3 örnek analiz edildi');
+    await expect(bolum.getByLabel('Kurumsal isteği başarılı oldu mu?')).toHaveValue('basarili');
+    await expect(bolum).toContainText('Kesin karar için C aşaması');
+    // Zorunluluk kanıtı başarılı istekten: IsGiftWrap başarılı Bireysel'de yok → güçlü "boş gönder" + WSDL çelişki notu; satır özeti.
+    const hediye = page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IsGiftWrap/ }) });
+    await expect(hediye.locator('.analiz-ozeti')).toContainText('başarılı 2 istekte boş / yok · WSDL: zorunlu');
+    await expect(hediye.locator('.analiz-onerisi[data-tur="bosGonder"]')).toHaveAttribute('data-guc', 'guclu');
+    await expect(hediye.locator('.analiz-onerisi[data-tur="bosGonder"]')).toContainText('servis bu alan olmadan kabul ediyor');
+    // Her örnekte dolu → yalnız zayıf "zorunlu olabilir".
+    const ekstra = page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^Ekstra/ }) });
     await expect(bolum.locator('.analiz-onerisi[data-tur="alanEkle"]')).toContainText('Input/Ekstra');
-    await expect(bolum.locator('.ornek-farklari')).toContainText('Örnekler arası fark');
+    await expect(page.getByLabel('Siparis Input/ClientType zorunlu')).toBeChecked();
+
+    // Satırda: önerilen tablo sütunu seçim kutusunun yanında rozetle (önseçili ya da öneri).
+    const satir = (ad: string) => page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await expect(page.getByLabel('Siparis Input/ClientType tablo sütunu ya da kural')).toHaveValue(`${tipId}\u0001Kod`);
+    await expect(satir('ClientType').locator('.bag-onerisi')).toContainText('Önseçili: Tip › Kod');
+    await expect(satir('Username').locator('.bag-onerisi')).toContainText('Öneri: Bayi › Kullanıcı');
+    // Tablo önerileri (a): mevcut tablolara bağ — güç ve kanıtıyla; aynı satır güveni; yalnız değerden gelen Channel güçlendi.
+    const tablo = bolum.getByRole('region', { name: 'Siparis tablo önerileri' });
+    const bag = (ad: string) => tablo.locator('.tablo-onerileri-a .analiz-onerisi').filter({ hasText: `${ad} → ` });
+    await expect(bag('Username')).toContainText('Bayi › Kullanıcı');
+    await expect(bag('Username')).toContainText('güçlü');
+    await expect(bag('Username')).toContainText('Ad: Username ↔ Kullanıcı (eş anlam)');
+    await expect(bag('Channel')).toContainText('Bayi › Bayi kodu');
+    await expect(bag('Channel')).toContainText('desen aynı');
+    await expect(bag('Channel')).toContainText('Channel + Username aynı Bayi satırında');
+    await expect(bag('Channel')).toHaveAttribute('data-guc', 'guclu');
+    // (b) Yeni tablolar: kavram gruplarına göre; açılır önizleme (gizli değer maskeli), ad düzenlenir.
+    const yeniler = tablo.locator('.yeni-tablo-karti');
+    await expect(yeniler.locator('summary')).toContainText(['Kişi bilgileri', 'Kart bilgileri', 'Siparis']);
+    const kisi = yeniler.filter({ hasText: 'Kişi bilgileri' });
+    await kisi.locator('summary').click();
+    await expect(kisi.getByRole('table')).toContainText('IdentityNumber');
+    await expect(kisi.getByRole('table')).toContainText('••••••');
+    await expect(kisi.getByRole('table')).not.toContainText('10000000146');
+    const ek = yeniler.filter({ hasText: 'Siparis' });
+    await ek.locator('summary').click();
+    await ek.getByLabel('Siparis yeni tablo adı düzenle').fill('Ek bilgiler');
+    await ek.getByLabel('Siparis yeni tablo adı düzenle').blur();
+    // Zayıf öneri tek tek: kimlik numarası gizli (1 gözlem) → Uygula.
+    await expect(satir('IdentityNumber').locator('.analiz-onerisi[data-tur="gizli"]')).toHaveAttribute('data-guc', 'zayif');
+    await satir('IdentityNumber').getByRole('button', { name: 'Uygula: Input/IdentityNumber — Gizli' }).click();
+    await expect(satir('IdentityNumber').locator('.analiz-onerisi[data-tur="gizli"]')).toHaveCount(0);
+    // Çelişki notu ayrı; uygulanmaz.
+    await expect(satir('IsGiftWrap').locator('.analiz-onerisi.celiski')).toContainText('WSDL\'de zorunlu');
+    await expect(satir('IsGiftWrap').locator('.analiz-onerisi.celiski').getByRole('button', { name: /^Uygula/ })).toHaveCount(0);
     if (GORUNTU) await goruntu(page, 'sihirbaz-alanlar-1440.png', bolum);
     await tasmaYok(page);
-    await bolum.getByRole('button', { name: 'Siparis tüm önerileri uygula' }).click();
-    await expect(bolum.getByRole('button', { name: 'Siparis tüm önerileri uygula' })).toHaveText('Tümünü uygula (0)');
+    // Satır rozetinden Uygula; sonra güçlü önerilerin hepsi (zayıflar ve çelişkiler kalır).
+    await satir('Username').getByRole('button', { name: 'Öneriyi uygula: Input/Username → Bayi › Kullanıcı' }).click();
+    await expect(page.getByLabel('Siparis Input/Username tablo sütunu ya da kural')).toHaveValue(`${bayiId}\u0001Kullanıcı`);
+    const guclu = bolum.getByRole('button', { name: 'Siparis güçlü önerileri uygula' });
+    await expect(guclu).toHaveText(/^Güçlü önerileri uygula \([1-9]\d*\)$/);
+    await guclu.click();
+    await expect(guclu).toHaveText('Güçlü önerileri uygula (0)');
+    await expect(page.locator('.analiz-onerisi[data-guc="zayif"]').first()).toBeVisible();
     await expect(page.locator('.alan-satiri .alan-adi').filter({ hasText: /^Ekstra/ })).toContainText('WSDL\'de yok');
+    await expect(ekstra.locator('.analiz-onerisi[data-tur="zorunlu"]')).toHaveAttribute('data-guc', 'zayif');
+    await expect(ekstra.locator('.analiz-onerisi[data-tur="zorunlu"]')).toContainText('Zorunlu olabilir');
+    await expect(page.getByLabel('Siparis Input/Channel tablo sütunu ya da kural')).toHaveValue(`${bayiId}\u0001Bayi kodu`);
+    // Yeni tablolar zayıftır: tek tek önerilir.
+    await tablo.locator('.yeni-tablo-karti').filter({ hasText: 'Ek bilgiler' }).getByRole('button', { name: 'Uygula: Ek bilgiler yeni tablo' }).click();
+    await expect(tablo.locator('.yeni-tablo-karti').filter({ hasText: 'Kişi bilgileri' })).toHaveAttribute('open', '');
+    await tablo.locator('.yeni-tablo-karti').filter({ hasText: 'Kişi bilgileri' }).getByRole('button', { name: 'Uygula: Kişi bilgileri yeni tablo' }).click();
     await expect(page.getByLabel('Siparis Input/Ekstra tablo sütunu ya da kural')).toHaveValue('yeni:Siparis\u0001Ekstra');
-    await expect(page.getByLabel('Siparis Input/Channel zorunlu')).toBeChecked();
-    // 390 px: taşma yok.
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -148,10 +205,9 @@ test.describe('servis analizi arayüzü', () => {
 
     // Özet: yeni tablolar ve örnek sayısı; kayıt.
     const ozet = page.locator('.ozet-listesi');
-    await expect(ozet).toContainText('Örnek istekler');
-    await expect(ozet).toContainText('Siparis: 2');
-    await expect(ozet.locator('.yeni-tablolar')).toContainText('Siparis');
-    await expect(ozet.getByLabel('Siparis tablosu ne yapılsın')).toHaveValue('yeni');
+    await expect(ozet).toContainText('Siparis: 3');
+    await expect(ozet.locator('.yeni-tablolar')).toContainText('Ek bilgiler');
+    await expect(ozet.locator('.yeni-tablolar')).toContainText('Kişi bilgileri');
     await expect(ozet).toContainText('Gizli sütun boş açılır');
     await page.getByRole('button', { name: 'Kaydet' }).click();
     await expect(page).toHaveURL(/#\/servisler\/s\/[0-9a-f-]{36}$/);
@@ -162,29 +218,31 @@ test.describe('servis analizi arayüzü', () => {
     const s = servisler.find((x: Nesne) => x.anahtar === 'analiz-servisi');
     servisId = s.id;
     const a = s.ayarlar;
-    // Örnekler saklandı (görünümde gizli değer maskeli; saklanan değer maskesiz — kayıt sonrası analizde kullanılır).
-    expect(a.ornekIstekler.Siparis.map((x: Nesne) => [x.ad, x.kaynak])).toEqual([['Bireysel', 'elle'], ['Kurumsal', 'elle']]);
+    expect(a.ornekIstekler.Siparis.map((x: Nesne) => [x.ad, x.kaynak, x.durum ?? 'bilinmiyor'])).toEqual([['Bireysel', 'elle', 'basarili'], ['Kurumsal', 'elle', 'basarili'], ['Ucuncu', 'elle', 'bilinmiyor']]);
     expect(a.ornekIstekler.Siparis[0].govde).toContain('<Password>••••••</Password>');
     expect(a.alanBaglari.Siparis['Input/ClientType']).toEqual({ tablo: tipId, sutun: 'Kod' });
-    expect(a.alanBaglari.Siparis['Input/Channel']).toEqual({ tablo: girisId, sutun: 'Channel' });
+    expect(a.alanBaglari.Siparis['Input/Username']).toEqual({ tablo: bayiId, sutun: 'Kullanıcı' });
+    expect(a.alanBaglari.Siparis['Input/Channel']).toEqual({ tablo: bayiId, sutun: 'Bayi kodu' });
     expect(a.alanKurallari.Siparis['Input/IdentityNumber']).toEqual({ gizli: true });
     expect(a.ekAlanlar.Siparis).toEqual([{ yol: 'Input/Ekstra', tip: 'metin' }]);
-    expect(a.alanZorunluluklari.Siparis).toEqual(expect.arrayContaining(['Input/Channel', 'Input/Ekstra', 'Input/ClientType']));
+    // Güçlü uygulananlar: başarılı istekte yok → Installment isteğe bağlı, IsGiftWrap boş (nil) gönder; "zorunlu olabilir" (zayıf) uygulanmadı.
+    expect(a.alanZorunluluklari.Siparis).toContain('Input/ClientType');
+    for (const y of ['Input/Ekstra', 'Input/Channel', 'Input/CreditCard/Installment', 'Input/IsGiftWrap']) expect(a.alanZorunluluklari.Siparis).not.toContain(y);
     expect(a.alanVarsayilanlari.Siparis['Input/IsGiftWrap']).toEqual({ kaynak: 'nil' });
     expect(Object.values(a.analizKararlari.Siparis)).toContain('uygulandi');
     expect(a.ornekFarklari.Siparis.map((f: Nesne) => f.yol)).toEqual(['Input/IdentityNumber', 'Input/CreditCard/Installment']);
-    // Yeni tablo yazıldı: satır = örnek adı; gizli sütun (kimlik numarası) boş; Ekstra bu tabloya bağlı.
     const { tablolar } = await basarili(`/platform/tablolar?projeId=${projeId}`);
-    const yeni = tablolar.find((t: Nesne) => t.ad === 'Siparis');
-    expect(yeni.sutunlar.map((c: Nesne) => [c.ad, c.gizli])).toEqual(expect.arrayContaining([['Ekstra', false], ['IdentityNumber', true]]));
-    expect(yeni.satirlar.map((r: Nesne) => [r.ad, r.degerler.Ekstra])).toEqual([['Bireysel', 'E1'], ['Kurumsal', 'E2']]);
-    expect(yeni.satirlar.every((r: Nesne) => r.doluGizli.length === 0)).toBe(true);
+    const yeni = tablolar.find((t: Nesne) => t.ad === 'Ek bilgiler');
+    expect(yeni.satirlar.map((r: Nesne) => [r.ad, r.degerler.Ekstra])).toEqual([['Bireysel', 'E1'], ['Kurumsal', 'E2'], ['Ucuncu', 'E3']]);
     expect(a.alanBaglari.Siparis['Input/Ekstra']).toEqual({ tablo: yeni.id, sutun: 'Ekstra' });
-    // Analiz boyunca servise istek gitmedi (yalnız Denetle'deki WSDL isteği).
+    const kisiTablosu = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri');
+    expect(kisiTablosu.sutunlar.map((c: Nesne) => [c.ad, c.gizli])).toEqual([['IdentityNumber', true]]);
+    expect(kisiTablosu.satirlar.every((r: Nesne) => r.doluGizli.length === 0)).toBe(true);
+    expect(tablolar.some((t: Nesne) => t.ad === 'Kart bilgileri')).toBe(false);
     expect(soap.istekler.length).toBe(denetimSonrasi);
   });
 
-  test('kayıtlı servis: "Servisi analiz et" — kayıtlı örnekler gelir, yalnız yeni öneriler sorulur, Yoksay hatırlanır, istek yok', async () => {
+  test('kayıtlı servis: "Servisi analiz et" — kayıtlı örnekler, yalnız yeni öneriler, Yoksay hatırlanır, tablo önerisi boş durumu, istek yok', async () => {
     test.setTimeout(120_000);
     const once = soap.istekler.length;
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
@@ -196,38 +254,40 @@ test.describe('servis analizi arayüzü', () => {
     await expect(page.getByRole('heading', { name: 'Servisi analiz et' })).toBeVisible();
     await page.getByRole('button', { name: 'Siparis metodu' }).click();
     const bolum = page.getByRole('region', { name: 'Siparis örnek istekleri' });
-    await expect(bolum.locator('.ornek-listesi li')).toHaveCount(2);
-    await expect(bolum.locator('.ornek-listesi')).toContainText('Bireysel');
+    await expect(bolum.locator('.ornek-listesi li')).toHaveCount(3);
     await expect(bolum.locator('.ornek-listesi')).not.toContainText('ornek-parola');
-    // Önceden uygulanan / yoksayılan öneriler yeniden sorulmaz (yalnız ek kanıt kutuları ve örnekler).
-    await expect(bolum).toContainText('2 örnek analiz edildi');
-    await expect(bolum.getByRole('button', { name: 'Siparis tüm önerileri uygula' })).toHaveText('Tümünü uygula (0)');
-    // Yeni örnek: yalnız yeni öneriler (Username artık 2/3 → isteğe bağlı).
+    await expect(bolum).toContainText('3 örnek analiz edildi');
+    // Uygulananlar yeniden sorulmaz: güçlü öneri kalmadı; tüm alanlar bağlı → boş durum (kalan yeni tablo önerisiyle).
+    await expect(bolum.getByRole('button', { name: 'Siparis güçlü önerileri uygula' })).toHaveText('Güçlü önerileri uygula (0)');
+    await expect(bolum.getByRole('region', { name: 'Siparis tablo önerileri' })).toContainText('Mevcut tablolarla eşleşen alan bulunamadı; 1 alan için yeni tablo önerildi.');
+    // Yeni başarılı örnek ClientType olmadan: yalnız yeni öneri (güçlü "isteğe bağlı" + WSDL çelişki notu).
     await bolum.getByRole('button', { name: 'Gövde XML ekle' }).click();
     await bolum.getByLabel('Siparis örnek adı').fill('Kısa');
-    await bolum.getByLabel('Siparis örnek gövdesi').fill(zarf('<Channel>77</Channel><Password>ornek-parola-3</Password><ClientType>O</ClientType><Ekstra>E3</Ekstra>'));
+    await bolum.getByLabel('Siparis örnek gövdesi').fill(zarf('<Channel>51234</Channel><Username>51234001</Username><Password>ornek-parola-4</Password><Ekstra>E4</Ekstra>'));
+    await bolum.getByLabel('Siparis örnek sonucu').selectOption('basarili');
     await bolum.getByRole('button', { name: 'Ekle', exact: true }).click();
-    await expect(bolum).toContainText('3 örnek analiz edildi');
-    const kullaniciSatiri = page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^Username/ }) });
-    await expect(kullaniciSatiri.locator('.analiz-onerisi[data-tur="zorunlu"]')).toContainText('2/3 örnekte dolu');
+    await expect(bolum).toContainText('4 örnek analiz edildi');
+    const ekSatiri = page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^ClientType/ }) });
+    await expect(ekSatiri.locator('.analiz-onerisi[data-tur="zorunlu"]')).toContainText('Başarılı \'Kısa\' isteğinde yok → servis bu alan olmadan kabul ediyor');
+    await expect(ekSatiri.locator('.analiz-onerisi.celiski')).toContainText('WSDL\'de zorunlu');
+    await expect(bolum.getByRole('button', { name: 'Siparis güçlü önerileri uygula' })).toHaveText('Güçlü önerileri uygula (1)');
     await expect(page.locator('.analiz-onerisi[data-tur="gizli"]')).toHaveCount(0);
-    await expect(page.locator('.analiz-onerisi[data-tur="tabloBagi"]')).toHaveCount(0);
+    await expect(page.locator('.bag-onerisi')).toHaveCount(0);
     if (GORUNTU) await goruntu(page, 'servis-analiz-1440.png', bolum);
     await tasmaYok(page);
-    await kullaniciSatiri.getByRole('button', { name: 'Yoksay: Input/Username — İsteğe bağlı' }).click();
+    await ekSatiri.getByRole('button', { name: 'Yoksay: Input/ClientType — İsteğe bağlı' }).click();
     await expect(page.locator('.kayit-durumu')).toHaveText('✓ Kaydedildi');
     const a = (await servis()).ayarlar;
-    expect(a.ornekIstekler.Siparis.map((x: Nesne) => x.ad)).toEqual(['Bireysel', 'Kurumsal', 'Kısa']);
-    expect(Object.entries(a.analizKararlari.Siparis).filter(([, v]) => v === 'yoksayildi').map(([k]) => k)).toEqual(expect.arrayContaining([expect.stringContaining('zorunlu|Input/Username|false')]));
-    expect(a.alanZorunluluklari.Siparis).toContain('Input/Username');
-    // Kayıtta maskeli değer saklanan değerle geri yazıldı (görünüm yine maskeli).
+    expect(a.ornekIstekler.Siparis.map((x: Nesne) => x.ad)).toEqual(['Bireysel', 'Kurumsal', 'Ucuncu', 'Kısa']);
+    expect(Object.entries(a.analizKararlari.Siparis).filter(([, v]) => v === 'yoksayildi').map(([k]) => k)).toEqual(expect.arrayContaining([expect.stringContaining('zorunlu|Input/ClientType|false')]));
+    // Mevcut ZORUNLU kutusu öneri uygulanmadan değişmez.
+    expect(a.alanZorunluluklari.Siparis).toContain('Input/ClientType');
+    expect(a.ornekIstekler.Siparis[3]).toMatchObject({ ad: 'Kısa', durum: 'basarili' });
     expect(a.ornekIstekler.Siparis[0].govde).toContain('<Password>••••••</Password>');
-    // Yeniden açınca: Yoksay hatırlanır.
     await page.reload();
     await page.getByRole('button', { name: 'Siparis metodu' }).click();
-    await expect(page.getByRole('region', { name: 'Siparis örnek istekleri' })).toContainText('3 örnek analiz edildi');
-    await expect(page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^Username/ }) }).locator('.analiz-onerisi')).toHaveCount(0);
-    // Ek kanıt kutusu: kayıtlı senaryo yok → kapalı.
+    await expect(page.getByRole('region', { name: 'Siparis örnek istekleri' })).toContainText('4 örnek analiz edildi');
+    await expect(page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^ClientType/ }) }).locator('.analiz-onerisi[data-tur="zorunlu"]')).toHaveCount(0);
     await expect(page.getByLabel('Kayıtlı senaryoların gövdeleri (0)')).toBeDisabled();
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);

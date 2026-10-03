@@ -37,3 +37,23 @@
   .ornek-istekler { padding: 8px; }
   .analiz-oneri-metni { flex-basis: 100%; }
 }
+
+/* Güç sınıfı: zayıf öneriler soluk kenarla, tek tek uygulanır. */
+.analiz-onerisi.zayif { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--cizgi-2); }
+/* Seçim kutusunun yanında önerilen tablo sütunu (uzun listede kaybolmasın). */
+.bag-onerisi { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--vurgu-zemin); box-shadow: inset 0 0 0 1px var(--vurgu); max-width: 100%; min-width: 0; }
+.bag-onerisi.zayif { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); }
+.bag-onerisi-metni { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+/* Tablo önerileri bölümü: (a) mevcut tablolara bağ, (b) yeni tablolar (açılır önizleme). */
+.tablo-onerileri { display: grid; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.tablo-onerileri h6 { margin: 0; font-size: 13px; }
+.tablo-onerileri-a, .tablo-onerileri-b { display: grid; gap: 4px; min-width: 0; }
+.yeni-tablo-karti { border-radius: 8px; padding: 4px 8px; background: var(--panel-2); min-width: 0; }
+.yeni-tablo-karti summary { cursor: pointer; overflow-wrap: anywhere; }
+.yeni-tablo-govdesi { display: grid; gap: 6px; padding: 6px 0; min-width: 0; }
+.yeni-tablo-adi { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.yeni-tablo-adi input { max-width: 100%; }
+/* Örnek sonucu (başarılı / hata verdi / bilinmiyor) ve kesin karar notu. */
+.ornek-sonucu { max-width: 11rem; }
+.kesin-karar-notu { font-style: italic; }
+.analiz-notlari { font-size: 12.5px; }

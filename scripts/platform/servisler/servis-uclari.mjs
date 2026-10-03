@@ -40,7 +40,7 @@ import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { sozlesmeBilgisi, sozlesmeKaydet, sozlesmeOnizle, sozlesmeSil } from './servis-sozlesmesi.mjs';
 import { servisOnerileriniUret } from './servis-oneri-baglami.mjs';
 import { oneriKarariKaydet } from '../ayarlar/oneri-kararlari.mjs';
-import { analizKanitlari, analizTablolariniYaz, baglariCoz, ornekleriMaskele } from './servis-ornekleri.mjs';
+import { analizKanitlari, analizTablolariniYaz, baglariCoz, ornekleriMaskele, tabloDegerleriniYaz } from './servis-ornekleri.mjs';
 
 /**
  * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
@@ -263,6 +263,7 @@ export const SERVIS_POST_UCLARI = [
     // Analizden gelen yeni tablolar servisle tek işlemde yazılır (yeni / birleştir / yeni ad / atla); "yeni:<ad>" bağları gerçek tabloya çevrilir.
     const id = db.islem(() => {
       const eslem = analizTablolariniYaz(db, projeId, g.analizTablolari);
+      tabloDegerleriniYaz(db, projeId, g.tabloDegerleri);
       return servisiKaydet(db, projeId, {
         ...analizGirdisi(g),
         ...(g.ornekKokleri !== undefined ? { ornekKokleri: g.ornekKokleri } : {}),
@@ -490,6 +491,7 @@ export const SERVIS_POST_UCLARI = [
     // Analizden gelen yeni tablolar servisle tek işlemde yazılır; "yeni:<ad>" bağları gerçek tabloya çevrilir.
     return db.islem(() => {
       const eslem = analizTablolariniYaz(db, projeId, g.analizTablolari);
+      tabloDegerleriniYaz(db, projeId, g.tabloDegerleri);
       return restServisiKaydet(db, projeId, {
         id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
         ...(bagli ? { tabanlar: bagli.tabanlar, tabanGrubu: grup } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),

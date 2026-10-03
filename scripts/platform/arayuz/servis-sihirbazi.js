@@ -403,6 +403,9 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     ...(d.tabanGrubu ? { tabanGrubu: d.tabanGrubu } : {})
   });
 
+  /** Analizde uygulanan "tabloya şu değerler eklensin" önerileri (kayıtla birlikte yazılır). @param {any[]} durumlar */
+  const tabloDegerleriEki = (durumlar) => { const l = durumlar.flatMap((x) => x?.tabloDegerleri || []); return l.length ? { tabloDegerleri: l } : {}; };
+
   /** Adımdan ileri geçilemiyorsa nedeni (null = geçilebilir). */
   const eksik = () => {
     if (d.adim === 0) {
@@ -442,6 +445,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
             ...(d.curl ? curlKayitEki() : {}),
             ...analizKaydi(d.uclar.filter((u) => d.restAnaliz[u.kimlik]).map((u) => [u.ad.trim(), d.restAnaliz[u.kimlik]])),
             ...(d.yeniTablolar.length ? { analizTablolari: d.yeniTablolar.map(analizTablosuGovdesi) } : {}),
+            ...tabloDegerleriEki(Object.values(d.restAnaliz)),
             senaryolar: d.uclar.filter((u) => (d.senaryoIstenen ?? new Set(d.uclar.map((x) => x.kimlik))).has(u.kimlik)).map((u) => u.ad.trim()), kapsam: d.kapsam
           } });
           bildir(`REST servisi eklendi${r.eklenenSenaryolar.length ? `; ${r.eklenenSenaryolar.length} başlangıç senaryosu oluşturuldu` : ''}.`);
@@ -463,6 +467,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
         const r = await api('/platform/servis/kaydet', { govde: {
           ...analizKaydi(analizli), ...(Object.keys(ornekKokleri).length ? { ornekKokleri } : {}),
           ...(d.yeniTablolar.length ? { analizTablolari: d.yeniTablolar.map(analizTablosuGovdesi) } : {}),
+          ...tabloDegerleriEki(analizli.map(([, x]) => x)),
           projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), yol: d.yol, soapSurumu: d.soapSurumu, tlsDogrulama: d.tls,
           tabanlar: d.tabanlar, secilenOperasyonlar: [...d.secilen], yalnizTestOperasyonlari: [...d.yalnizTest].filter((x) => d.secilen.has(x)),
           alanVarsayilanlari, alanBaglari: secilenler(d.baglar), ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])),

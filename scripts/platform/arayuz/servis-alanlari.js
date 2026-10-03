@@ -32,7 +32,7 @@ export function kaynakSecimi(s, yol) {
  *   etki?: (yol: string, kural: string) => string | null;   // kurala bağlanınca etki notu (hangi senaryolar zaten kuraldan alıyor)
  *   tablolar?: Array<{ id: string; ad: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satirlar: Array<{ degerler: Record<string, string | null> }> }>;
  *   ust?: HTMLElement;                            // tablonun üstünde gösterilen bölüm (servis analizi: örnek istekler)
- *   analiz?: { satir: (yol: string) => HTMLElement | null };   // satır altı öneriler (servis analizi)
+ *   analiz?: { satir: (yol: string) => HTMLElement | null; bagRozeti?: (yol: string) => HTMLElement | null };   // satır altı öneriler, seçim yanında tablo önerisi (servis analizi)
  *   tabloyuYenile?: () => void;                   // burada atanır: tabloyu yeniden çizer (öneri uygulanınca)
  * }} s
  */
@@ -126,7 +126,7 @@ export function metotAlanTablosu(s) {
       const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
       alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
     }
-    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), alt, formKap);
+    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), s.analiz?.bagRozeti?.(st.yol) ?? null, alt, formKap);
   };
   const ciz = () => {
     const birlesik = semaBirlestir(s.sema, s.ekler || []);
