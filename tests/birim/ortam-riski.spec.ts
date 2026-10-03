@@ -195,7 +195,9 @@ test.describe('ortam formu ve sunucu (127.0.0.1)', () => {
     await kosuDene('c1');
     const kosuDiyalogu = page.getByRole('dialog', { name: 'Koşu' });
     await expect(kosuDiyalogu.locator('.not-kutusu.hata')).toContainText('Bu bir CANLI ortam');
-    await expect(kosuDiyalogu.getByRole('checkbox')).toHaveCount(0);
+    // Tek onay kutusu "Tarayıcı penceresinde izle" (görünür koşu seçimi); CANLI için ayrıca onay kutusu yok.
+    await expect(kosuDiyalogu.getByRole('checkbox')).toHaveCount(1);
+    await expect(kosuDiyalogu.getByRole('checkbox', { name: /^Tarayıcı penceresinde izle \(görünür\)/ })).toHaveCount(1);
     await kosuDiyalogu.getByRole('button', { name: /senaryoyu başlat/ }).click();
     const canliPencere = page.getByRole('dialog', { name: 'CANLI ortam' });
     await expect(canliPencere).toContainText('Bu işlem Üretim (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Emin misiniz?');

@@ -655,6 +655,8 @@ function listeGorunumu(icerik, s) {
     // Tek, riskli olmayan ortamda tanımlıysa (ve SQL uyarısı yoksa, senaryo tablodan veri almıyorsa) sormadan çalışır; aksi halde
     // ortam (ve tablodan veri alan senaryoda veri koşusu biçimi, tahmini test sayısı) diyalogda seçilir.
     let veriKipi = 'senaryo';
+    // Sormadan başlayan koşu: "Tarayıcı penceresinde izle" Ayarlar > Koşu'daki varsayılanla (diyalogda ise kullanıcının seçimiyle).
+    let gorunur = false;
     // Çalıştırılamıyorsa (hazırlık) diyalog gerekçeyi ve "Düzelt"i gösterir; sormadan başlatılmaz.
     if (secenek.length > 1 || riskliOrtamMi(ortam) || calistirilamazMi(x, ortam.id) || sqlUyarilari(ortam).length || await veriGrupluMu(x, ortam)) {
       const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hazirlik: { projeId: proje.id },
@@ -663,8 +665,9 @@ function listeGorunumu(icerik, s) {
       if (!y) return;
       ortam = y.ortam;
       veriKipi = y.veriKipi;
-    }
-    kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik, tekBasina: true, veriKipi });
+      gorunur = y.gorunur === true;
+    } else gorunur = (await kullaniciAyarlari().catch(() => ({}))).tarayiciPenceresindeIzle === true;
+    kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik, tekBasina: true, veriKipi, gorunur });
   }
 
   /** Senaryo bu ortamda tablodan veri alıyor mu (koşu diyaloğunda veri koşusu seçimi gösterilsin)? Hesaplanamazsa hayır. */

@@ -97,7 +97,10 @@ test('varsayılanlar bugünküyle aynı: tek yeni ayar "Tarama ve akış kaydın
   expect(TARAMA_ESLERI).toEqual([['taramaEkranGenisligi', 'kosuEkranGenisligi'], ['taramaEkranYuksekligi', 'kosuEkranYuksekligi'], ['taramaDili', 'kosuDili'],
     ['taramaOturumKontrolSn', 'oturumKontrolSn'], ['taramaGirisAlanBeklemeSn', 'girisAlanBeklemeSn']]);
   // Sayfada görünenler (ana): profillerin yanında yeniden deneme, süre limiti ve birleşik onay; diğer Koşu ayarları Gelişmiş'te.
-  expect(KOSU_AYAR_TANIMLARI.filter((t) => t.ana).map((t) => t.anahtar)).toEqual(['yenidenDeneme', 'kosuSureLimitiDk', 'taramaKosuAyarlariniKullan']);
+  // "Tarayıcı penceresinde izle": yalnız koşu / Deneme onayındaki seçimin ön değeri (kapalı; env yok — planlı koşu başsız kalır).
+  expect(KOSU_AYAR_TANIMLARI.filter((t) => t.ana).map((t) => t.anahtar)).toEqual(['yenidenDeneme', 'kosuSureLimitiDk', 'tarayiciPenceresindeIzle', 'taramaKosuAyarlariniKullan']);
+  expect(v.tarayiciPenceresindeIzle).toBe(false);
+  expect(tanim('tarayiciPenceresindeIzle')?.env).toBeUndefined();
   // Yeni ayar alt sürece ortam değişkeni olarak gitmez (koşucu davranışı değişmez).
   expect(tanim('taramaKosuAyarlariniKullan')?.env).toBeUndefined();
 });

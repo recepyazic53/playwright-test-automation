@@ -26,6 +26,15 @@ export function ayarDegeri(ad: string): string | undefined {
   return k !== undefined && k !== '' ? k : undefined;
 }
 
+/**
+ * Koşu görünür (headed) tarayıcıda mı? YALNIZ ortam değişkeninden (NOBETCI_GORUNUR=1): kullanıcı koşuyu "Tarayıcı penceresinde izle"
+ * ile başlattıysa Nöbetçi verir. Kasadaki ayar OKUNMAZ (ayarın varsayılanı yalnız onay penceresindeki seçimi doldurur; planlı ve
+ * terminal koşuları başsız kalır).
+ */
+export function kosuGorunurMu(): boolean {
+  return process.env.NOBETCI_GORUNUR === '1';
+}
+
 const kayit = (ad: string): string | undefined => {
   const v = ayarDegeri(ad);
   return v !== undefined && (KAYIT_SECIMLERI as readonly string[]).includes(v) ? v : undefined;

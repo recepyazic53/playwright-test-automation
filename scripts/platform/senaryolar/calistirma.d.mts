@@ -42,6 +42,8 @@ export interface Kosucu {
   modelDene(istek: {
     ortam: string; dosya: string; kosuId: string; etiket: string; grepDeseni: string; genel: { projeId: string; ortamId: string };
     denemeSenaryosu: Record<string, unknown>;
+    /** Görünür koşu (NOBETCI_GORUNUR); sunucu yalnız bilinen adları geçirir. */
+    ekOrtam?: Record<string, string> | null;
   }): Promise<KosuYaniti>;
   /** Senaryo o an koşuyor mu (kuyrukta bekleme dahil)? Koşan senaryo düzenlenemez/silinemez. */
   kosuyorMu?(dosya: string, ad: string): boolean;
@@ -54,6 +56,7 @@ export declare function calistirmaIsteginiHazirla(vt: Veritabani, govde: Record<
   hedef: CalistirmaHedefi;
   ekOrtam: Record<string, string>;
 };
+export declare function gorunurOrtami(govde: Record<string, unknown>): Record<string, string>;
 export declare function senaryoCalistir(
   vt: Veritabani, govde: Record<string, unknown>, kosucu: Kosucu | null, secenekler?: CalistirmaSecenekleri
 ): Promise<{ httpDurum: number; govde: Record<string, unknown> }>;

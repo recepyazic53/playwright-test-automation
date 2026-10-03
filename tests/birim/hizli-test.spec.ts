@@ -883,7 +883,14 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     // Evet + cümlede "Hesapla": basılır; yeni alan için veri durağı.
     await expect(soru.getByRole('heading', { name: 'Adım 2: veri gerekli' })).toBeVisible({ timeout: 60_000 });
-    await expect(page.locator('.hizli-yan img.hizli-goruntu')).toBeVisible();
+    // "Tarayıcıda şu an": sürekli kare akışı (CDP screencast; canli-akis.js) — kutu "Canlı", kareler gelir, son kare zamanı yazılı.
+    // Test tarayıcısı başsız (NOBETCI_KAYIT_BASSIZ): "Tarayıcıyı göster" düğmesi yok.
+    const canliKutu = page.locator('.hizli-yan .canli-akis');
+    await expect(canliKutu).toHaveAttribute('data-durum', 'akis', { timeout: 20_000 });
+    await expect(canliKutu.locator('img.canli-akis-karesi')).toBeVisible();
+    await expect.poll(async () => Number(await canliKutu.getAttribute('data-kare-sayisi')), { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(canliKutu.locator('.canli-akis-zamani')).toHaveText(/^Son kare \d{2}:\d{2}:\d{2}$/);
+    await expect(canliKutu.getByRole('button', { name: 'Tarayıcıyı göster' })).toHaveCount(0);
     await soru.getByLabel('Ödeme şekli').selectOption('havale');
     await soru.getByRole('button', { name: 'Devam et', exact: true }).click();
     await expect(soru.getByRole('heading', { name: 'Şimdi ne yapayım?' })).toBeVisible({ timeout: 60_000 });

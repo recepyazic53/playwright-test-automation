@@ -26,6 +26,8 @@ export interface KosuAyarlari {
   enCokVeriKosusu: number;
   /** Tarama ve akış kaydında koşunun ekran boyutu, dili, oturum kontrolü ve giriş alanı beklemesi kullanılsın (kayıtsızsa eşlerden türetilir). */
   taramaKosuAyarlariniKullan: boolean;
+  /** Koşu / Deneme onayındaki "Tarayıcı penceresinde izle" seçiminin ön değeri (env yok). */
+  tarayiciPenceresindeIzle: boolean;
   /** Ayarlar > Arayüz > Sonuçlar özeti (Sonuçlar > Genel > Özet kartlarının eşikleri; sonuclar/farkindalik.mjs). */
   ozetKirmiziGun: number; ozetYavaslamaYuzde: number; ozetKosmayanGun: number; ozetYedekGun: number;
 }

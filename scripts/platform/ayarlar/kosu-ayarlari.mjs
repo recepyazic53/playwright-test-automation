@@ -60,6 +60,11 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'yenidenDeneme', ana: true, grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Başarısız test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
   { anahtar: 'kosuSureLimitiDk', ana: true, grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
     tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 120, birim: 'dk', env: 'NOBETCI_KOSU_SURE_LIMITI_MS', carpan: 60_000 },
+  // Görünür koşu: yalnız onay penceresindeki "Tarayıcı penceresinde izle" seçiminin ÖN DEĞERİ (env yok; koşuya gövdedeki seçim gider).
+  // Planlı koşular bu ayardan etkilenmez (her zaman görünmez).
+  { anahtar: 'tarayiciPenceresindeIzle', ana: true, grup: 'Koşu', etiket: 'Tarayıcı penceresinde izle',
+    aciklama: 'Koşu ve Deneme başlatılırken "Tarayıcı penceresinde izle" seçeneği bu değerle gelir. Seçilirse koşu ekranda görünen bir tarayıcı penceresinde çalışır; seçilmezse görünmez çalışır ve paneldeki canlı görüntüden izlenir. Planlı koşular her zaman görünmez çalışır.',
+    tur: 'onay', varsayilan: false },
   { anahtar: 'enCokVeriKosusu', grup: 'Koşu', etiket: 'Tek senaryoda en çok veri koşusu',
     aciklama: 'Senaryo tablodan birden çok satırla (seçili satırlar, uyan tüm satırlar ya da kombinasyonlar) koşarken bir senaryodan çıkabilecek en çok test. Aşılırsa koşu başlatılmaz; senaryonun satır seçimini daraltın.',
     tur: 'sayi', varsayilan: 50, enAz: 1, enCok: 1000, birim: 'test' },
@@ -240,7 +245,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
  *   saatDilimi: string; ekranEszamanli: number; ekranBeklemeMs: number; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; raporSaklamaGun: string; benzerlikEsigi: number;
- *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number; taramaKosuAyarlariniKullan: boolean;
+ *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number; taramaKosuAyarlariniKullan: boolean; tarayiciPenceresindeIzle: boolean;
  *   ozetKirmiziGun: number; ozetYavaslamaYuzde: number; ozetKosmayanGun: number; ozetYedekGun: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */

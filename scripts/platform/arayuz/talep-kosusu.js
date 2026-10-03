@@ -90,7 +90,7 @@ export async function talebinSenaryolariniKos(proje, talep) {
   if (p.ekran.length) {
     await onayli();
     const bitti = ekranKosusuBitince();
-    if (!kosuBaslat({ projeId: proje.id, ortam, senaryolar: p.ekran, tur: 'tekil', esZamanli: false, baslik: `Talep ${plan.talep} · ekran senaryoları` })) return false;
+    if (!kosuBaslat({ projeId: proje.id, ortam, senaryolar: p.ekran, tur: 'tekil', esZamanli: false, baslik: `Talep ${plan.talep} · ekran senaryoları`, gorunur: y.gorunur === true })) return false;
     await bitti;
     sayac.ekran = p.ekran.length;
     if (kosuDurdurulduMu()) { bildir(`"${plan.talep}" koşusu durduruldu; servis ve uçtan uca senaryoları başlatılmadı.`, 'hata'); return true; }

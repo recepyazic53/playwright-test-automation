@@ -10,7 +10,8 @@
 // - Elle doğrulama kodu (giriş tarifinde SMS "elle" kipi): çalışan satırlar için /kod-istegi yoklanır; kod
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, canliKareAl, canliOnayPenceresi, kapaliDugmeNedenleri, kullaniciAyarlari, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { api, canliOnayPenceresi, kapaliDugmeNedenleri, kullaniciAyarlari, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { canliGoruntu, kosuYedekKaresi } from './canli-akis.js';
 import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
 import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
 import { HAZIRLIK_BASLIKLARI, kosuSayimMetni, ortamDenetimiMetni } from './hazirlik.mjs';
@@ -188,6 +189,15 @@ export function kosuOnayi(s) {
     const surumBolumu = surumGirdisi ? h('div', { class: 'alan kosu-surum-alani' },
       h('label', { for: surumGirdisi.id }, 'Uygulama sürümü (isteğe bağlı)'), surumGirdisi,
       h('div', { class: 'yardim' }, 'Test edilen uygulamanın sürümü; koşuya etiket olarak yazılır (raporlarda sürüme göre başarı). Boşsa ortam ayarındaki sürüm kullanılır.')) : null;
+    // --- "Tarayıcı penceresinde izle (görünür)": seçilirse koşu görünür (headed) tarayıcıda çalışır. Ön değer Ayarlar > Koşu'dan
+    // (tarayiciPenceresindeIzle); servis koşularında (tarayıcı yok) gösterilmez. Seçim kosuBaslat'a iletilir (gorunurSeciminiAl). ---
+    const gorunurKutusu = s.tarayiciSecimi === false ? null : h('input', { type: 'checkbox', id: `kosu-gorunur-${kimlikUret()}` });
+    let gorunurDokunuldu = false;
+    gorunurKutusu?.addEventListener('change', () => { gorunurDokunuldu = true; });
+    if (gorunurKutusu) void kullaniciAyarlari().then((a) => { if (!gorunurDokunuldu && a && a.tarayiciPenceresindeIzle === true) gorunurKutusu.checked = true; }).catch(() => {});
+    const gorunurBolumu = gorunurKutusu ? h('label', { class: 'tarayici-penceresi-secimi', for: gorunurKutusu.id }, gorunurKutusu,
+      h('span', {}, 'Tarayıcı penceresinde izle (görünür)',
+        h('small', {}, 'Koşu ekranda görünen bir tarayıcı penceresinde çalışır. Seçilmezse görünmez çalışır; paneldeki canlı görüntüden izlersiniz.'))) : null;
     const veriCiz = () => {
       if (!veriKipiSecimi) return;
       veriBolumu.hidden = !tahmin || !tahmin.gruplu;
@@ -322,7 +332,8 @@ export function kosuOnayi(s) {
         ortamSecimi ? h('div', { class: 'alan kosu-ortam-secimi' }, h('label', { for: ortamSecimi.id }, 'Ortam'), ortamSecimi) : null,
         veriKipiSecimi ? veriBolumu : null,
         surumBolumu,
-        degisken),
+        degisken,
+        gorunurBolumu),
       h('div', { class: 'diyalog-alt' }, vazgec, baslat));
     ortamSecimi?.addEventListener('change', () => {
       ortam = s.ortamlar.find((o) => o.id === ortamSecimi.value) || ortam; tahmin = null; ciz(); veriCiz(); tahminAl();
@@ -338,13 +349,27 @@ export function kosuOnayi(s) {
       diyalog.remove();
       // CANLI ortamda "Başlat"tan sonra TEK TİP CANLI onay penceresi (onaylanırsa sunucuya bir kez canliOnay: true gider).
       if (sonuc && ortam) sonuc = await canliOnayIste(ortam);
-      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar, veriKipi, ...(surumGirdisi ? { uygulamaSurumu: surumGirdisi.value.trim() } : {}) } : null) : sonuc);
+      const gorunur = Boolean(sonuc && gorunurKutusu && gorunurKutusu.checked);
+      sonGorunurSecimi = sonuc && gorunurKutusu ? { deger: gorunur, zaman: Date.now() } : null;
+      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar, veriKipi, gorunur, ...(surumGirdisi ? { uygulamaSurumu: surumGirdisi.value.trim() } : {}) } : null) : sonuc);
     });
     document.body.append(diyalog);
     diyalog.showModal();
     (ortamSecimi || baslat).focus();
   });
 }
+
+/**
+ * Son onaylanan koşu penceresindeki "Tarayıcı penceresinde izle" seçimi. kosuOnayi'nın Promise<boolean> biçimini kullanan çağıranlar
+ * (sabit ortam) seçimi ayrıca taşımaz: hemen ardından gelen kosuBaslat bunu bir kez alır (30 sn içinde; sonra unutulur).
+ * @type {{ deger: boolean; zaman: number } | null}
+ */
+let sonGorunurSecimi = null;
+const gorunurSeciminiAl = () => {
+  const s = sonGorunurSecimi;
+  sonGorunurSecimi = null;
+  return Boolean(s && s.deger && Date.now() - s.zaman < 30_000);
+};
 
 /** Son koşu oturumunun ortam kimliği (kosuDurumu'nun döndürdüğü satırlar bu ortamda koşar; oturum yoksa null). */
 export const kosuOrtamiId = () => (durum.oturum ? durum.oturum.ortam.id : null);
@@ -433,7 +458,9 @@ export function kosuBaslat(s) {
   const yeniler = s.senaryolar.filter((x) => !kosuDurumu(x.id));
   if (!yeniler.length) { bildir('Seçilen senaryolar zaten çalışıyor.', 'hata'); return false; }
   const tekMi = yeniler.length === 1 && s.esZamanli && s.tur === 'tekil';
-  const veriEki = { ...(s.veriKipi && s.veriKipi !== 'senaryo' ? { veriKipi: s.veriKipi } : {}), ...(s.tekrar ? { tekrar: s.tekrar } : {}),
+  // Görünür koşu: açık seçim (s.gorunur) ya da az önce onaylanan koşu penceresindeki seçim (gorunurSeciminiAl; bir kez).
+  const gorunur = gorunurSeciminiAl() || s.gorunur === true;
+  const veriEki = { ...(gorunur ? { gorunur: true } : {}), ...(s.veriKipi && s.veriKipi !== 'senaryo' ? { veriKipi: s.veriKipi } : {}), ...(s.tekrar ? { tekrar: s.tekrar } : {}),
     // Koşu diyaloğunda girilen uygulama sürümü (boşsa sunucu ortam ayarındakini kullanır; PDF rapor A4).
     ...(s.uygulamaSurumu ? { uygulamaSurumu: s.uygulamaSurumu } : {}) };
   if (kosuSuruyorMu()) {
@@ -567,13 +594,15 @@ let hapEl = null;
 let canliZamanlayici = null;
 /** Panelde o an görünen canlı görüntüyü yenileyen fonksiyon (her çizimde güncellenir). */
 let canliYukle = null;
-/** Son alınan canlı kare (yeniden çizimde boş kutu göstermemek için). */
-let sonCanliKare = null;
+/** Seçili çalışan koşunun canlı görüntü kutusu (canli-akis.js; yeniden çizimde korunur). @type {{ kosuId: string; kutu: ReturnType<typeof canliGoruntu> } | null} */
+let canliKutu = null;
 
 function canliIzlemeyiDurdur() {
   if (canliZamanlayici) clearInterval(canliZamanlayici);
   canliZamanlayici = null;
   canliYukle = null;
+  canliKutu?.kutu.durdur();
+  canliKutu = null;
 }
 
 function durumSimgesi(d) {
@@ -688,15 +717,27 @@ function izlemeAlani(oturum) {
   if (!satir) return alan;
   const g = KOSU_DURUMLARI[satir.durum] || KOSU_DURUMLARI.hata;
   alan.append(h('div', { class: 'izleme-basligi' }, h('span', { title: satir.baslik }, satir.baslik),
-    satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti', title: 'Anlık ekran görüntüsü (koşu sürerken yenilenir)' }, 'ANLIK') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)));
+    rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)));
   if (satir.durum === 'calisiyor') {
     if (satir.kodIstegi) alan.append(kodFormu(satir));
-    const img = h('img', { alt: `Canlı ekran görüntüsü: ${satir.baslik}` });
-    const bos = h('div', { class: 'medya-bos' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Canlı görüntü bekleniyor…');
-    const kap = h('div', { class: 'goruntuleyici' }, h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, 'anlık görüntü')), bos);
-    alan.append(kap);
-    // Önceki kare yeni çizimde de gösterilir (yenileme sırasında titreme olmasın).
-    if (sonCanliKare && sonCanliKare.kosuId === satir.kosuId) { img.src = sonCanliKare.src; bos.replaceWith(img); }
+    // Sürekli kare akışı (canli-akis.js): aynı koşu için kutu yeniden çizimlerde KORUNUR (bağlantı kesilmez, titreme yok); seçili
+    // koşu değişince / panel küçülünce ya da kapanınca durdurulur (izleyici kalmazsa test sürecindeki screencast da durur).
+    if (!canliKutu || canliKutu.kosuId !== satir.kosuId) {
+      canliKutu?.kutu.durdur();
+      const kosuId = satir.kosuId;
+      canliKutu = {
+        kosuId,
+        kutu: canliGoruntu({
+          akisAdresi: `/canli-akis?kosuId=${encodeURIComponent(kosuId)}`, etiket: `Canlı ekran görüntüsü: ${satir.baslik}`,
+          yedekKareAl: () => kosuYedekKaresi(kosuId),
+          tarayiciyiGoster: async () => {
+            const y = await api('/tarayiciyi-goster', { govde: { kosuId } }).catch((e) => ({ basarili: false, mesaj: e.message }));
+            return { basarili: Boolean(y.basarili), mesaj: String(y.mesaj || '') };
+          }
+        })
+      };
+    }
+    alan.append(canliKutu.kutu.el);
     const adimKap = h('div', {}, adimListesi(satir.canliAdimlar || [], true));
     alan.append(adimKap);
     const adimlariYukle = async () => {
@@ -705,18 +746,8 @@ function izlemeAlani(oturum) {
         if (Array.isArray(y.adimlar)) { satir.canliAdimlar = y.adimlar; if (adimKap.isConnected) yerlestir(adimKap, adimListesi(y.adimlar, true)); }
       } catch { /* bir sonraki tikte yeniden denenir */ }
     };
-    canliYukle = () => {
-      void adimlariYukle();
-      // Kare fetch ile (token başlıkta); kare yoksa (204) bir sonraki tikte yeniden sorulur. Eski blob adresi bırakılır.
-      void canliKareAl(satir.kosuId).then((src) => {
-        if (!src) return;
-        const onceki = sonCanliKare ? sonCanliKare.src : null;
-        sonCanliKare = { kosuId: satir.kosuId, src };
-        img.src = src;
-        if (bos.isConnected) bos.replaceWith(img);
-        if (onceki && onceki !== src) setTimeout(() => URL.revokeObjectURL(onceki), 1000);
-      });
-    };
+    // Adım listesi aralıkla yoklanır (görüntü akıştan gelir).
+    canliYukle = () => { void adimlariYukle(); };
     canliYukle();
     if (!canliZamanlayici) canliZamanlayici = setInterval(() => { if (canliYukle) canliYukle(); }, CANLI_ARALIK_MS);
     return alan;
