@@ -4,6 +4,8 @@
 //             Marka seçilince BELİREN Model listesi, bağımsız "Yapı tarzı" listesi ve "Hesapla" düğmesi (hepsi seçiliyse "Sonuç hazır").
 //   Kasıtlı sayfa hataları (bulgu olmalı): "Boşil" ilinde ilçe listesi BOŞ gelir; "Çukurova"nın mahalle listesinde "Toros" İKİ KEZ var;
 //   "Kurtuluş" mahallesinin sokak listesi BOŞ gelir.
+//   ?kismi=1: "Hesapla" yalnız İl'i ister (zincirin kalanı boş kalabilir); ?zorunlu=1 ile İlçe listesi sayfada `required` işaretlidir ve
+//             "Hesapla" onu da ister (sayfanın kendi zorunluluğu).
 //   /zincirsiz/  bağlı listesi olmayan küçük form (veri durağının eski davranışı için).
 //   Sayaçlar: hesaplamalar (GET /api/hesapla) — düğmeye basıldığının kanıtı; istekler (seçenek istekleri dahil).
 import type { FiksturIstegi, FiksturYaniti } from './giris-fikstur';
@@ -38,6 +40,7 @@ export const BAGLI_LISTE_SAYFASI = `<h1>Adres ve araç</h1>
 <div id="sonuc" class="alert alert-success" role="status" hidden></div>
 <script>
   var $ = function (id) { return document.getElementById(id); };
+  var KISMI = /[?&]kismi=1/.test(location.search);
   function bosalt(id) { $(id).innerHTML = '<option value="">Seçiniz</option>'; }
   function doldur(id, liste) { bosalt(id); liste.forEach(function (x) { var o = document.createElement('option'); o.value = x[0]; o.textContent = x[1]; $(id).appendChild(o); }); }
   function getir(tur, ust, hedef) { fetch('/api/secenek?tur=' + tur + '&ust=' + encodeURIComponent(ust)).then(function (r) { return r.json(); }).then(function (l) { doldur(hedef, l); }); }
@@ -47,7 +50,7 @@ export const BAGLI_LISTE_SAYFASI = `<h1>Adres ve araç</h1>
   $('marka').addEventListener('change', function () { bosalt('model'); $('modelKutusu').hidden = !this.value; if (this.value) getir('model', this.value, 'model'); });
   $('hesapla').addEventListener('click', function () {
     $('uyari').hidden = true;
-    var eksik = ['il', 'ilce', 'mahalle', 'sokak', 'marka', 'model'].filter(function (k) { return !$(k).value; });
+    var eksik = (KISMI ? ['il'].concat($('ilce').required ? ['ilce'] : []) : ['il', 'ilce', 'mahalle', 'sokak', 'marka', 'model']).filter(function (k) { return !$(k).value; });
     if (eksik.length) { $('uyari').textContent = 'Eksik alan: ' + eksik.join(', '); $('uyari').hidden = false; return; }
     fetch('/api/hesapla?il=' + $('il').value + '&ilce=' + $('ilce').value + '&mahalle=' + encodeURIComponent($('mahalle').value) + '&sokak=' + encodeURIComponent($('sokak').value) + '&model=' + encodeURIComponent($('model').value))
       .then(function (r) { return r.json(); }).then(function (j) { $('sonuc').textContent = 'Sonuç hazır: Tutar ' + j.tutar + ' TL'; $('sonuc').hidden = false; });
@@ -234,7 +237,12 @@ export class BagliListeUygulamasi {
   /** Bu fikstürün yollarını işler; başka yolsa null (çağıran kendi yollarına bakar). */
   isle(i: FiksturIstegi): FiksturYaniti | null {
     if (i.yol === '/zincirsiz/' && i.yontem === 'GET') { this.istekler.push('GET /zincirsiz/'); return html(ZINCIRSIZ_SAYFA); }
-    if (i.yol === '/adres/' && i.yontem === 'GET') { this.istekler.push('GET /adres/'); return html(i.sorgu.get('suslu') ? suslu(BAGLI_LISTE_SAYFASI) : BAGLI_LISTE_SAYFASI); }
+    if (i.yol === '/adres/' && i.yontem === 'GET') {
+      this.istekler.push('GET /adres/');
+      // ?zorunlu=1: İlçe listesi sayfada zorunlu işaretli (required).
+      const sayfa = i.sorgu.get('zorunlu') === '1' ? BAGLI_LISTE_SAYFASI.replace('<select id="ilce" name="ilce">', '<select id="ilce" name="ilce" required>') : BAGLI_LISTE_SAYFASI;
+      return html(i.sorgu.get('suslu') ? suslu(sayfa) : sayfa);
+    }
     if (i.yol === '/api/secenek' && i.yontem === 'GET') {
       const tur = i.sorgu.get('tur') ?? '';
       this.istekler.push(`GET secenek ${tur}`);

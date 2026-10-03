@@ -25,17 +25,35 @@
 .canli-akis-notu[data-tur="basari"] { color: #8ee6a8; }
 .canli-akis-notu[data-tur="hata"] { color: #ff9b9b; }
 
-/* Büyüt: büyük pencere (dialog). Görüntü pencereye sığar; dar ekranda tam genişlik. */
+/* Büyüt: ekranın tamamını kullanan büyük pencere (dialog; küçük kenar boşluğu). Çubuk üstte; kare çubuk dışındaki alana en-boy oranı
+   korunarak TAMAMEN sığar (object-fit: contain; kaydırma yok, kenarlarda boşluk olabilir). Dar / dikey ekranda da aynı. */
 dialog.canli-akis-buyuk {
-  width: min(96vw, 1600px); max-width: 96vw; max-height: 94vh; padding: 0; border: 0; border-radius: var(--yaricap-l, 12px);
+  box-sizing: border-box; width: calc(100vw - 16px); height: calc(100vh - 16px); height: calc(100dvh - 16px);
+  max-width: none; max-height: none; margin: 8px; padding: 0; border: 0; border-radius: var(--yaricap-l, 12px);
   background: #0a0e14; color: #dbe3ee; box-shadow: var(--golge-yuksek, 0 20px 60px rgba(0, 0, 0, .5)); overflow: hidden;
 }
+dialog.canli-akis-buyuk[open] { display: flex; flex-direction: column; }
 dialog.canli-akis-buyuk::backdrop { background: rgba(5, 8, 12, .78); }
-.canli-akis-buyuk-cubugu { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #161c26; }
-.canli-akis-buyuk-cubugu .bosluk { flex: 1; }
+.canli-akis-buyuk-cubugu { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 10px; background: #161c26; min-width: 0; }
+.canli-akis-buyuk-cubugu .bosluk { flex: 1 1 0; min-width: 0; }
 .canli-akis-buyuk-cubugu .ikon-dugme { color: #dbe3ee; }
-dialog.canli-akis-buyuk .canli-akis-alani img.canli-akis-karesi { max-height: calc(94vh - 48px); width: 100%; object-position: center; }
+.canli-akis-buyuk-cubugu .kucuk-dugme { min-height: 26px; padding: 0 8px; font-size: 11.5px; color: #dbe3ee; }
+.canli-akis-buyuk-cubugu .kucuk-dugme .ikon { width: 14px; height: 14px; }
+.canli-akis-tam-notu { font: 10.5px var(--yazi-mono); color: #a9b4c4; min-width: 0; overflow-wrap: anywhere; }
+.canli-akis-tam-notu:empty { display: none; }
+/* Anlık görüntüdeyken "Canlı" göstergesi gizlenir (gösterilen canlı değil). */
+dialog.canli-akis-buyuk[data-kip="tam"] .canli-akis-gostergesi { display: none; }
+dialog.canli-akis-buyuk .canli-akis-alani { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+dialog.canli-akis-buyuk .canli-akis-alani[hidden] { display: none; }
+dialog.canli-akis-buyuk .canli-akis-alani img.canli-akis-karesi { width: 100%; height: 100%; max-height: none; object-fit: contain; object-position: center; }
 dialog.canli-akis-buyuk .canli-akis-bos { min-height: 40vh; }
+/* "Sayfanın tamamı" (anlık görüntü): ekrana sığar; çok uzunsa genişliğe sığdırılır ve dikey kaydırılır. */
+.canli-akis-tam-alani { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #0a0e14; }
+.canli-akis-tam-alani[hidden] { display: none; }
+.canli-akis-tam-alani img.canli-akis-tam-karesi { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
+.canli-akis-tam-alani.uzun { display: block; overflow-x: hidden; overflow-y: auto; }
+.canli-akis-tam-alani.uzun img.canli-akis-tam-karesi { width: auto; max-width: 100%; height: auto; margin: 0 auto; object-fit: initial; }
+.canli-akis-tam-alani:focus-visible { outline: 2px solid var(--vurgu, #4c8dff); outline-offset: -2px; }
 
 /* "Tarayıcı penceresinde izle" seçimi (koşu onayı ve Deneme). */
 .tarayici-penceresi-secimi { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; font-size: 13px; }

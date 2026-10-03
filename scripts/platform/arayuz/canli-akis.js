@@ -5,7 +5,8 @@
 // data: adresiyle anında güncellenir (CSP: img-src 'self' data:). Sunucu tarafında kaynak CDP screencast'tir (tests/support/canli-yayin.ts);
 // bileşen kapanınca (durdur() ya da DOM'dan çıkınca) bağlantı kesilir → izleyici kalmazsa screencast durur.
 // Akış yoksa / kurulamazsa (Chromium dışı tarayıcı, hata) aralıklı görüntüye düşülür ve küçük bir not gösterilir.
-// Kutuda: "Canlı" göstergesi, son karenin zamanı, "Büyüt" (büyük pencere) ve isteğe bağlı "Tarayıcıyı göster".
+// Kutuda: "Canlı" göstergesi, son karenin zamanı, "Büyüt" (ekranı kaplayan büyük pencere; kare tamamen sığar, daha yüksek çözünürlük;
+// isteğe bağlı "Sayfanın tamamı" anlık görüntüsü) ve isteğe bağlı "Tarayıcıyı göster".
 import { h, ikon, TOKEN } from './ortak.js';
 
 /** Aralıklı görüntü (yedek) yoklama aralığı (ms). */
@@ -40,9 +41,10 @@ const saat = (ms) => new Date(ms).toLocaleTimeString('tr-TR', { hour: '2-digit',
 /**
  * Canlı görüntü kutusu.
  * @param {{ akisAdresi: string; etiket: string; yedekKareAl?: (() => Promise<string | null>) | null; ilkGoruntu?: string | null;
- *   tarayiciyiGoster?: (() => Promise<{ basarili: boolean; mesaj: string }>) | null; bekleniyorMetni?: string }} s
- *   akisAdresi: SSE adresi (sorgu dizesiyle; "en" eklenir). yedekKareAl: aralıklı görüntü (data: adresi). ilkGoruntu: ilk kare gelene
- *   kadar gösterilecek görüntü (data: adresi). tarayiciyiGoster: "Tarayıcıyı göster" düğmesi (yoksa düğme çizilmez).
+ *   tarayiciyiGoster?: (() => Promise<{ basarili: boolean; mesaj: string }>) | null; bekleniyorMetni?: string; tamSayfaAdresi?: string | null }} s
+ *   akisAdresi: SSE adresi (sorgu dizesiyle; "en" / "boy" eklenir). yedekKareAl: aralıklı görüntü (data: adresi). ilkGoruntu: ilk kare
+ *   gelene kadar gösterilecek görüntü (data: adresi). tarayiciyiGoster: "Tarayıcıyı göster" düğmesi (yoksa düğme çizilmez).
+ *   tamSayfaAdresi: "Sayfanın tamamı" anlık görüntüsünün adresi (jpeg; token başlıkta; yoksa düğme çizilmez).
  * @returns {{ el: HTMLElement; durdur: () => void; goruntuVer: (src: string | null) => void }}
  */
 export function canliGoruntu(s) {
@@ -123,11 +125,26 @@ export function canliGoruntu(s) {
     if ((d.durum === 'akis' || d.durum === 'baglandi' || d.durum === 'sayfa') && el.dataset.durum === 'baglaniyor') durumYaz('akis', 'Canlı');
   };
 
-  const enIste = () => {
+  /**
+   * İstenecek kare ölçüsü: kutuda genişlik (yükseklik sunucuda genişlikle aynı); büyük pencerede görüntü alanının genişliği VE
+   * yüksekliği (daha yüksek çözünürlük; sunucu tarayıcının görüntü alanından büyüğünü istemez). @returns {string}
+   */
+  const olcuIste = () => {
     const dpr = window.devicePixelRatio || 1;
-    const genislik = (alan.clientWidth || 640) * dpr;
-    return Math.round(Math.max(320, Math.min(1600, genislik)));
+    if (dialog?.open) {
+      const en = Math.round(Math.max(320, Math.min(2560, (alan.clientWidth || 1280) * dpr)));
+      const boy = Math.round(Math.max(320, Math.min(2560, (alan.clientHeight || 720) * dpr)));
+      istenenOlcu = { en, boy };
+      return `en=${en}&boy=${boy}`;
+    }
+    const en = Math.round(Math.max(320, Math.min(1600, (alan.clientWidth || 640) * dpr)));
+    istenenOlcu = { en, boy: 0 };
+    return `en=${en}`;
   };
+  /** Son istenen ölçü (pencere boyutu değişince yeniden istemek için). */
+  let istenenOlcu = { en: 0, boy: 0 };
+  /** Akışı yeni ölçüyle yeniden bağlar (bilerek kesme; hata sayılmaz). */
+  const yenidenBaglan = () => { if (kip === 'akis' && ac && !durdu) { kasitliKesme = true; ac.abort(); } };
 
   async function akisiOku() {
     let hata = 0;
@@ -136,7 +153,7 @@ export function canliGoruntu(s) {
       const kareOnce = kareSayisi;
       try {
         const ayrac = s.akisAdresi.includes('?') ? '&' : '?';
-        const r = await fetch(`${s.akisAdresi}${ayrac}en=${enIste()}`, { headers: { 'X-Test-Sunucu-Token': TOKEN, Accept: 'text/event-stream' }, cache: 'no-store', signal: ac.signal });
+        const r = await fetch(`${s.akisAdresi}${ayrac}${olcuIste()}`, { headers: { 'X-Test-Sunucu-Token': TOKEN, Accept: 'text/event-stream' }, cache: 'no-store', signal: ac.signal });
         if (!r.ok || !r.body || !/text\/event-stream/.test(r.headers.get('content-type') || '')) throw new Error(`HTTP ${r.status}`);
         const okuyucu = r.body.getReader();
         const cozucu = new TextDecoder();
@@ -212,29 +229,105 @@ export function canliGoruntu(s) {
     if (disaridaSayac >= 2) durdurIc();
   }, 1000);
 
-  // --- Büyüt: büyük pencere (dialog); görüntü alanı pencereye taşınır, kapanınca geri döner ---
+  // --- Büyüt: ekranın tamamını kullanan büyük pencere (dialog); görüntü alanı pencereye taşınır, kapanınca geri döner. Kare çubuk
+  // dışındaki alana en-boy oranı korunarak TAMAMEN sığar (object-fit: contain; kaydırma yok). Açıkken daha yüksek çözünürlük istenir,
+  // pencere boyutu değişince yeniden istenir; kapanınca kutunun ölçüsüne dönülür. "Sayfanın tamamı": koşan sayfanın tüm yüksekliğinin
+  // anlık görüntüsü (canlı değil; "Canlıya dön" ile akışa dönülür). ---
   /** @type {HTMLDialogElement | null} */
   let dialog = null;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let boyutZamanlayici = null;
+  const boyutDegisti = () => {
+    if (!dialog?.open) return;
+    if (boyutZamanlayici) clearTimeout(boyutZamanlayici);
+    boyutZamanlayici = setTimeout(() => {
+      boyutZamanlayici = null;
+      if (!dialog?.open) return;
+      const dpr = window.devicePixelRatio || 1;
+      const [en, boy] = [alan.clientWidth * dpr, alan.clientHeight * dpr];
+      // Belirgin değişiklikte (%15'ten çok) yeni ölçü istenir; sığdırma CSS ile anında olur.
+      const fark = (/** @type {number} */ a, /** @type {number} */ b) => Math.abs(a - b) / Math.max(1, b);
+      if (fark(Math.min(2560, en), istenenOlcu.en) > 0.15 || fark(Math.min(2560, boy), istenenOlcu.boy) > 0.15) yenidenBaglan();
+    }, 400);
+  };
   buyut.addEventListener('click', () => {
     if (dialog?.open) return;
     const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Büyük görüntüyü kapat', title: 'Kapat' }, ikon('carpi'));
-    dialog = /** @type {HTMLDialogElement} */ (h('dialog', { class: 'canli-akis-buyuk', 'aria-label': `Büyük canlı görüntü: ${s.etiket}` },
-      h('div', { class: 'canli-akis-buyuk-cubugu' }, gosterge.cloneNode(true), h('span', { class: 'bosluk' }), kapat)));
+    const tamNot = h('span', { class: 'canli-akis-tam-notu', role: 'status', 'aria-live': 'polite' });
+    const tamDugme = s.tamSayfaAdresi ? h('button', { type: 'button', class: 'kucuk-dugme canli-akis-tam-dugmesi', title: 'Koşan sayfanın tüm yüksekliğinin anlık görüntüsü' }, ikon('gorunum'), h('span', {}, 'Sayfanın tamamı')) : null;
+    const canliyaDon = h('button', { type: 'button', class: 'kucuk-dugme canli-akis-canliya-don', hidden: true }, h('span', {}, 'Canlıya dön'));
+    const tamImg = h('img', { class: 'canli-akis-tam-karesi', alt: `Sayfanın tamamı (anlık görüntü): ${s.etiket}` });
+    const tamAlan = h('div', { class: 'canli-akis-tam-alani', hidden: true, tabindex: '0' }, tamImg);
+    const d = /** @type {HTMLDialogElement} */ (h('dialog', { class: 'canli-akis-buyuk', 'aria-label': `Büyük canlı görüntü: ${s.etiket}`, 'data-kip': 'canli' },
+      h('div', { class: 'canli-akis-buyuk-cubugu' }, gosterge.cloneNode(true), tamNot, h('span', { class: 'bosluk' }), tamDugme, canliyaDon, kapat), tamAlan));
+    dialog = d;
     const yer = h('div', { class: 'canli-akis-yer-tutucu' });
     alan.replaceWith(yer);
-    dialog.append(alan);
-    kapat.addEventListener('click', () => dialog?.close());
-    dialog.addEventListener('close', () => {
-      yer.replaceWith(alan);
-      dialog?.remove();
-      dialog = null;
-      buyut.focus();
+    d.insertBefore(alan, tamAlan);
+    /** Uzun görüntü: ekrana sığdırınca çok incelirse (genişliğin %40'ından az) genişliğe sığdırılır, dikey kaydırılır. */
+    const tamSigdir = () => {
+      if (!tamImg.naturalWidth || tamAlan.hidden) return;
+      const [cw, ch] = [tamAlan.clientWidth, tamAlan.clientHeight];
+      const olcek = Math.min(cw / tamImg.naturalWidth, ch / tamImg.naturalHeight);
+      tamAlan.classList.toggle('uzun', tamImg.naturalWidth * olcek < cw * 0.4);
+    };
+    const canliKip = () => {
+      d.dataset.kip = 'canli';
+      tamAlan.hidden = true;
+      alan.hidden = false;
+      canliyaDon.hidden = true;
+      if (tamDugme) tamDugme.hidden = false;
+      tamNot.textContent = '';
+      tamImg.removeAttribute('src');
+    };
+    tamDugme?.addEventListener('click', async () => {
+      if (!s.tamSayfaAdresi) return;
+      tamDugme.disabled = true;
+      tamNot.textContent = 'Sayfanın tamamı alınıyor…';
+      try {
+        const r = await fetch(s.tamSayfaAdresi, { headers: { 'X-Test-Sunucu-Token': TOKEN }, cache: 'no-store' });
+        if (!r.ok || !/^image\/jpeg/.test(r.headers.get('content-type') || '')) {
+          let m = 'Sayfanın görüntüsü alınamadı.';
+          try { const j = await r.json(); if (j && typeof j.mesaj === 'string' && j.mesaj) m = j.mesaj; } catch { /* yok */ }
+          throw new Error(m);
+        }
+        const src = await dataAdresi(await r.blob());
+        if (!dialog?.open || dialog !== d) return;
+        tamImg.src = src;
+        await tamImg.decode().catch(() => undefined);
+        d.dataset.kip = 'tam';
+        alan.hidden = true;
+        tamAlan.hidden = false;
+        tamAlan.scrollTop = 0;
+        tamDugme.hidden = true;
+        canliyaDon.hidden = false;
+        tamNot.textContent = `Anlık görüntü · ${saat(Date.now())}`;
+        tamSigdir();
+        canliyaDon.focus();
+      } catch (e) {
+        tamNot.textContent = e instanceof Error ? e.message : String(e);
+      } finally { tamDugme.disabled = false; }
     });
-    document.body.append(dialog);
-    dialog.showModal();
+    canliyaDon.addEventListener('click', () => { canliKip(); tamDugme?.focus(); });
+    const pencereBoyutu = () => { boyutDegisti(); tamSigdir(); };
+    window.addEventListener('resize', pencereBoyutu);
+    kapat.addEventListener('click', () => d.close());
+    d.addEventListener('close', () => {
+      window.removeEventListener('resize', pencereBoyutu);
+      if (boyutZamanlayici) { clearTimeout(boyutZamanlayici); boyutZamanlayici = null; }
+      alan.hidden = false;
+      yer.replaceWith(alan);
+      d.remove();
+      if (dialog === d) dialog = null;
+      buyut.focus();
+      // Kutuya dönüldü: eski (küçük) ölçü istenir.
+      yenidenBaglan();
+    });
+    document.body.append(d);
+    d.showModal();
     kapat.focus();
-    // Büyük pencerede daha geniş kare istenir (akış yeniden bağlanır; screencast genişliği değişir).
-    if (kip === 'akis' && ac) { kasitliKesme = true; ac.abort(); }
+    // Büyük pencerede daha yüksek çözünürlük istenir (akış yeniden bağlanır; screencast ölçüsü değişir). Yerleşim bitince ölçülür.
+    requestAnimationFrame(() => yenidenBaglan());
   });
 
   goster?.addEventListener('click', async () => {

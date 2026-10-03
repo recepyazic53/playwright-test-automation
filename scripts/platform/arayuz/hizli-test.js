@@ -268,7 +268,7 @@ function oturumEkrani(govde, id) {
     // "Tarayıcıda şu an": tarayıcı açıkken sürekli kare akışı (canli-akis.js; kutu oturum boyunca korunur, oturum bitince durur).
     if (!canliKutu && o.canliAkis && !['kaydedildi', 'iptal', 'hata'].includes(o.durum)) {
       canliKutu = canliGoruntu({
-        akisAdresi: `/platform/hizli-test/canli-akis?id=${encodeURIComponent(id)}`, etiket: 'Hızlı test tarayıcısındaki sayfa (canlı)',
+        akisAdresi: `/platform/hizli-test/canli-akis?id=${encodeURIComponent(id)}`, tamSayfaAdresi: `/platform/hizli-test/canli-tam-sayfa?id=${encodeURIComponent(id)}`, etiket: 'Hızlı test tarayıcısındaki sayfa (canlı)',
         ilkGoruntu: o.goruntu ? `data:image/jpeg;base64,${o.goruntu}` : null, bekleniyorMetni: 'Tarayıcı görüntüsü bekleniyor…',
         tarayiciyiGoster: o.gorunur ? async () => {
           const y = await api('/platform/hizli-test/tarayiciyi-goster', { govde: { id } }).catch((e) => ({ gosterildi: false, mesaj: e.message }));
@@ -1313,12 +1313,10 @@ function veriDuragi(o, s, kart, m, gonder, y) {
   };
   // Zincir göstergesi (kartın üstünde): "Bağlı alanlar: İl → İlçe → Mahalle (1/3 tamam)".
   const gosterge = h('div', { class: 'hizli-zincir-gostergesi' });
-  /** Getirilmemiş bağlı alanlar (zincir tamamlanmadı). */
-  // (Belirsiz bağın alt listesi "Devam et"i kilitlemez: bağ keşifte kesinleşmedi, seçenek hiç gelmeyebilir.)
-  const getirilmemis = () => sorulanlar().filter((a) => zincirde(a) && !altHazir(a) && !a.bagli.belirsiz);
+  /** Değeri boş bağlı alanlar (zincir yarım). Bilgi içindir: bağlı liste ek zorunluluk taşımaz, "Devam et"i kilitlemez. */
+  const bosBagli = () => sorulanlar().filter((a) => zincirde(a) && !dolu(a));
   const devam = h('button', { type: 'button', class: 'birincil' }, 'Devam et', ikon('ok'));
-  const devamIpucu = h('span', { class: 'soluk kucuk', id: `hizli-devam-ipucu-${Math.random().toString(36).slice(2, 9)}` });
-  const atla = h('button', { type: 'button', class: 'baglanti-dugmesi hizli-zincir-atla' }, 'Bağlı alanları atla ve devam et');
+  const devamIpucu = h('span', { class: 'soluk kucuk hizli-devam-ipucu', id: `hizli-devam-ipucu-${Math.random().toString(36).slice(2, 9)}` });
   const zincirGuncelle = () => {
     const gorunen = sorulanlar();
     for (const a of gorunen) { const c = zincirCizenler.get(a.anahtar); if (c) c(); }
@@ -1333,19 +1331,15 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       return h('p', { class: 'kucuk' }, h('b', {}, 'Bağlı alanlar: '), yol.map((a) => a.etiket).join(' → '), ` (${tamam}/${yol.length} tamam)`);
     }));
     gosterge.hidden = !kokler.length;
-    // "Devam et": zincirde getirilmemiş alan varsa pasif ve ne olacağını söyler; "Bağlı alanları atla" ikincil yol.
-    // Anında uygulanan seçim sürüyorken "Devam et" bekler (sayfa o seçimi uyguluyor; yanıtla form güncellenir).
+    // "Devam et" bağlı listeler yüzünden kilitlenmez: Nöbetçi bir alanı yalnız sayfa zorunlu sayıyorsa zorunlu sayar. Zincir yarımsa
+    // yanında engellemeyen kısa bilgi durur. Anında uygulanan seçim sürüyorken bekler (sayfa o seçimi uyguluyor; yanıtla form güncellenir).
     const uygulaniyor = Boolean(oto.suruyor);
-    const eksikler = uygulaniyor ? [] : getirilmemis();
-    const kapali = Boolean(getiriliyor) || uygulaniyor || eksikler.length > 0;
-    devam.disabled = kapali;
-    yerlestir(devam, eksikler.length ? 'Devam et (önce bağlı alanları tamamlayın)' : 'Devam et', ikon('ok'));
+    const bos = uygulaniyor ? [] : bosBagli();
+    devam.disabled = Boolean(getiriliyor) || uygulaniyor;
     devamIpucu.textContent = uygulaniyor ? 'Seçim sayfaya uygulanıyor; bitince devam edebilirsiniz.'
-      : eksikler.length ? `Seçenekleri getirilmemiş: ${eksikler.map((a) => `“${a.etiket}”`).join(', ')}. Üst listeyi seçin (seçenekler kendiliğinden gelir) ya da yanındaki “↓ … seçeneklerini getir” düğmesine basın.` : '';
+      : bos.length ? `${bos.map((a) => a.etiket).join(', ')} boş; sayfa ${bos.length > 1 ? 'bunları' : 'bunu'} zorunlu sayarsa düğmeye basınca hata gösterir.` : '';
     devamIpucu.hidden = !devamIpucu.textContent;
     if (devamIpucu.textContent) devam.setAttribute('aria-describedby', devamIpucu.id); else devam.removeAttribute('aria-describedby');
-    atla.hidden = !eksikler.length;
-    atla.disabled = Boolean(getiriliyor);
     // Etiketi seçime göre değişen alanların adları; koşullu alan gruplarının başlıkları ve notları seçimin şu anki değerine göre.
     for (const c of etiketCizenler.values()) c();
     for (const k of gruplar.keys()) grupBasligi(k);
@@ -1373,14 +1367,17 @@ function veriDuragi(o, s, kart, m, gonder, y) {
   /** Ekrandaki değerler (sunucuya gidecek biçimde). */
   const degerleriTopla = () => Object.fromEntries(Object.entries(durum).map(([k, d]) => [k, d.deger === null || d.deger === '' ? null
     : { deger: d.deger, kaynak: d.kaynak || 'elle', ...(d.tabloSecimi ? { tabloSecimi: d.tabloSecimi } : {}) }]));
-  /** "Devam et" / "Bağlı alanları atla": zorunlu boş alan yoksa veri gönderilir. @param {HTMLButtonElement} dugme @param {boolean} zinciriAtla */
-  const ilerle = (dugme, zinciriAtla) => {
+  /**
+   * "Devam et": sayfanın zorunlu saydığı boş alan yoksa veri gönderilir (boş bağlı listeler gönderilmez, sayfaya yazılmaz).
+   * @param {HTMLButtonElement} dugme
+   */
+  const ilerle = (dugme) => {
     // Bekleyen anında uygulama gerekmez: "Devam et" tüm değerleri gönderir ve sayfaya uygular.
     otoBirak();
     const degerler = degerleriTopla();
     const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
-    void gonder(dugme, 'veri', { degerler, sira: siralama, ...(zinciriAtla ? { zinciriAtla: true } : {}) }, m);
+    void gonder(dugme, 'veri', { degerler, sira: siralama }, m);
   };
   /** Göstergeler (seçimin satırı, zincir düğmeleri, Devam). */
   const otoGostergeleriCiz = () => { for (const c of otoCizenler.values()) c(); zincirGuncelle(); };
@@ -1442,8 +1439,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     }
     otoGostergeleriCiz();
   };
-  devam.addEventListener('click', () => ilerle(devam, false));
-  atla.addEventListener('click', () => ilerle(atla, true));
+  devam.addEventListener('click', () => ilerle(devam));
   listeyiCiz();
   kuruluyor = false;
   // Yerinde zincir isteği sürerken girdiler kapalıdır (sunucu sayfayı dolduruyor; sonuç gelince kart yeniden çizilir).
@@ -1479,7 +1475,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
     h('p', { class: 'soluk' }, 'Sayfadaki alanlar sayfadaki sırasıyla aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada hazır gelen değerler önyazılı ve “sayfada hazır” işaretli: değiştirmezseniz sayfadaki değer kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
     kontrolKap, gosterge, m.kutu, satirlarKap, kesifAlanlariBolumu(s), saltOkunurBolumu(s, false),
-    h('div', { class: 'dugmeler' }, devam, atla, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
+    h('div', { class: 'dugmeler' }, devam, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
     devamIpucu);
 }
 
