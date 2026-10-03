@@ -258,8 +258,8 @@ test.describe('hızlı test özeti → veri bekliyor → test verisi → koşu (
       await page.goto(`/#/senaryolar/duzenle/${tuzelId}`);
       const not2 = page.locator('.veri-bekliyor-notu');
       await expect(not2).toContainText('Değerler dolduruldu.', { timeout: 30_000 });
-      await not2.getByRole('button', { name: 'Koşuya dahil et' }).click();
-      await expect(not2).toContainText('Koşuya dahil edildi.');
+      await not2.getByRole('button', { name: 'Toplu koşuya dahil et' }).click();
+      await expect(not2).toContainText('Toplu koşuya dahil edildi.');
       await tasmaYok(page);
       expect((await senaryolar()).find((x) => x.id === tuzelId)?.kosuyaDahil).toBe(true);
       expect(hatalar).toEqual([]);
