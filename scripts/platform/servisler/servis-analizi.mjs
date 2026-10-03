@@ -15,9 +15,10 @@
 //                      olmayan alanda değerlerden (≥ 3 dolu gözlem): tarih (gg.aa.yyyy / yyyy-aa-gg / ISO), tamsayı, ondalık (ayraç),
 //                      evet/hayır (true/false, E/H, 1/0), e-posta. Uzunluk / desen ve izin verilen değer KISITI önerilmez. Gizli adlı,
 //                      11 haneli sayı ya da kimlik benzeri ad → gizli.
-//   4) Tablo eşleşmesi: ad (aynı ad, eş anlam / kısaltma — doldur-onerisi.mjs > ayniKavramMi / benzerAdMi —, küçük TR↔EN sözlüğü;
-//                      tablo adı da sayılır) + değer örtüşmesi (sütunun karşılıkları: metin ↔ kod). Ad + ≥ 1 değer → güçlü; ad yokken
-//                      değer sütunda ve biçim aynı → zayıf ("desen aynı"). Aynı tabloya önerilen alanların değerleri aynı satırda
+//   4) Tablo eşleşmesi: her alan için EN UYGUN sütun — kavram düzeyinde ad puanı (alan / sütun adı sözcüklere ayrılır, TR↔EN
+//                      sözlüğüyle kavrama çevrilir; ayırt edici kavram yüksek, genel kavram düşük ağırlık; kapsama oranı; tablo adı
+//                      bağlam; kart / pasaport bağlam uyumsuzluğu ceza) + değer örtüşmesi (sütunun karşılıkları: metin ↔ kod). Yüksek
+//                      kapsama + ≥ 1 değer → güçlü; yalnız ad → zayıf; ad yokken değer sütunda ve biçim aynı → zayıf ("desen aynı"). Aynı tabloya önerilen alanların değerleri aynı satırda
 //                      birlikte bulunuyorsa güçlü. Silinmiş tabloya / sütuna bağ → "kopuk bağ" (en iyi eşleşmeye bağla / bağı kaldır).
 //   5) Yeni tablo    : eşleşmeyen alanlar için hızlı testin kayıt planı kuralları: kavram grupları (kişi / adres / iletişim / kart /
 //                      giriş bilgileri) grubun kayıt tablosunda (her örnek bir satır); gruba girmeyen her alan kendi adıyla tablo
@@ -61,17 +62,28 @@ export const BICIM_ADLARI = Object.freeze({
 const AD_TURU = Object.freeze({ birebir: 'aynı ad', esAnlam: 'eş anlam', benzer: 'kısaltma / benzer' });
 
 /**
- * Genel TR ↔ EN kavram sözlüğü (normal ad: küçük harf, Türkçe karakter Latin, yalnız harf / rakam). Ürüne / sektöre özgü ad yok.
- * doldur-onerisi.mjs > ayniKavramMi'nin (doğum tarihi, telefon, kimlik, vergi, e-posta, ad soyad) tamamlayıcısıdır.
+ * Genel TR ↔ EN kavram sözlüğü (normal sözcük: küçük harf, Türkçe karakter Latin, yalnız harf / rakam → kavram). Ürüne / sektöre
+ * özgü ad yok. Alan ve sütun adı sözcüklere ayrılır, her sözcük (Türkçe ek atılarak: "numarası" → numara, "kartı" → kart,
+ * "pasaportlu" → pasaport; bitişik iki sözcük: "telno" → tel + no) bu sözlükle kavrama çevrilir; sözlükte olmayan sözcük kendi
+ * kavramıdır. Genel sözcükler (no, number, date, name…) de kavramdır ama düşük ağırlık alır (GENEL_SOZLER).
+ * doldur-onerisi.mjs > ayniKavramMi (bütün ad: doğum tarihi, telefon, kimlik…) ayrıca sayılır.
  */
 const SOZLUK = /** @type {ReadonlyArray<readonly [string, ReadonlyArray<string>]>} */ ([
+  ['numara', ['no', 'nr', 'nro', 'num', 'number', 'numara', 'numarasi']],
+  ['kod', ['kod', 'kodu', 'code']],
+  ['id', ['id']],
+  ['tarih', ['tarih', 'tarihi', 'date']],
+  ['tip', ['tip', 'tipi', 'type', 'tur', 'turu', 'kind']],
+  ['deger', ['deger', 'degeri', 'value']],
+  ['bilgi', ['bilgi', 'bilgisi', 'bilgileri', 'info']],
+  ['adet', ['adet', 'sayi', 'sayisi', 'count', 'quantity', 'qty']],
+  ['ad', ['ad', 'adi', 'isim', 'ismi', 'name', 'firstname', 'givenname']],
+  ['soyad', ['soyad', 'soyadi', 'soyisim', 'soyismi', 'surname', 'lastname', 'familyname']],
   ['ulke', ['ulke', 'ulkekodu', 'country', 'countrycode', 'uyruk']],
   ['sehir', ['sehir', 'il', 'city', 'province']],
   ['ilce', ['ilce', 'district', 'county', 'town']],
   ['adres', ['adres', 'address']],
   ['postaKodu', ['postakodu', 'zip', 'zipcode', 'postalcode', 'postcode']],
-  ['ad', ['ad', 'adi', 'isim', 'name', 'firstname', 'givenname']],
-  ['soyad', ['soyad', 'soyadi', 'surname', 'lastname', 'familyname']],
   ['baslangic', ['baslangic', 'baslangictarihi', 'begin', 'begindate', 'start', 'startdate']],
   ['bitis', ['bitis', 'bitistarihi', 'end', 'enddate', 'finish', 'finishdate']],
   ['tutar', ['tutar', 'miktar', 'amount']],
@@ -82,46 +94,86 @@ const SOZLUK = /** @type {ReadonlyArray<readonly [string, ReadonlyArray<string>]
   ['kullanici', ['kullanici', 'kullaniciadi', 'user', 'username', 'userid', 'login']],
   ['aciklama', ['aciklama', 'description', 'desc']],
   ['durum', ['durum', 'status', 'state']],
-  ['adet', ['adet', 'quantity', 'qty', 'count']],
   ['fiyat', ['fiyat', 'price']],
-  ['taksit', ['taksit', 'installment']],
+  ['taksit', ['taksit', 'installment', 'installments']],
   ['kart', ['kart', 'card']],
   ['musteri', ['musteri', 'customer', 'client']],
   ['urun', ['urun', 'product', 'item']],
   ['sirket', ['sirket', 'firma', 'company']],
   ['eposta', ['eposta', 'email', 'mail']],
-  ['telefon', ['telefon', 'phone', 'mobile', 'gsm']],
-  ['dogumTarihi', ['dogumtarihi', 'birthdate', 'dateofbirth', 'dob']],
-  ['dogum', ['dogum', 'birth']],
+  ['telefon', ['telefon', 'tel', 'telephone', 'phone', 'mobile', 'gsm', 'cep']],
+  ['dogum', ['dogum', 'birth', 'birthday', 'birthdate', 'dateofbirth', 'dob', 'dogumtarihi']],
   ['kimlik', ['kimlik', 'tc', 'tckn', 'citizenship', 'identity', 'nationalid']],
   ['vergi', ['vergi', 'vkn', 'tax']],
   ['pasaport', ['pasaport', 'passport']],
-  ['sahip', ['sahip', 'sahibi', 'holder', 'owner']]
+  ['sahip', ['sahip', 'sahibi', 'holder', 'owner']],
+  ['ay', ['ay', 'month']],
+  ['yil', ['yil', 'year']],
+  ['gun', ['gun', 'day']],
+  ['sonKullanma', ['sonkullanma', 'expiry', 'expire', 'expiration', 'gecerlilik', 'validity']],
+  ['cvv', ['cvv', 'cvc', 'cvv2', 'guvenlikkodu', 'securitycode']]
 ]);
-/** @type {Map<string, string>} normal ad → kavram */
+/** @type {Map<string, string>} normal sözcük → kavram */
 const SOZLUK_HARITASI = new Map(SOZLUK.flatMap(([k, l]) => l.map((x) => [x, k])));
-/**
- * Genel ekler / kökler: TEK BAŞINA eşleşme sayılmaz (ayırt edici kısım da eşleşmeli). "PhoneNumber" ile "Vergi no" yalnız
- * "number" / "no" ortak olduğu için eşleşmez.
- */
-const GENEL_SOZLER = new Set(['no', 'nr', 'num', 'number', 'numara', 'numarasi', 'kod', 'kodu', 'code', 'id', 'tarih', 'tarihi', 'date', 'ad', 'adi',
-  'name', 'isim', 'ismi', 'tip', 'tipi', 'type', 'tur', 'turu', 'kind', 'deger', 'degeri', 'value', 'bilgi', 'bilgisi', 'bilgileri', 'info', 'd']);
-/** Rol önekleri (client / customer…): ayırt edici sayılmaz, bağlamı belirler. */
+/** Genel sözcükler: kavram eşleşmesinde DÜŞÜK ağırlık; yalnız bunlar eşleşiyorsa öneri yok ("PhoneNumber" ↔ "Vergi no" yalnız "no"). */
+const GENEL_SOZLER = new Set(['no', 'nr', 'nro', 'num', 'number', 'numara', 'numarasi', 'kod', 'kodu', 'code', 'id', 'tarih', 'tarihi', 'date', 'ad', 'adi',
+  'name', 'isim', 'ismi', 'tip', 'tipi', 'type', 'tur', 'turu', 'kind', 'deger', 'degeri', 'value', 'bilgi', 'bilgisi', 'bilgileri', 'info', 'd',
+  'adet', 'sayi', 'sayisi', 'count', 'quantity', 'qty']);
+/** Rol önekleri (client / customer…): kavram sayılmaz (ayırt edici değil), yalnız bağlamdır. */
 const ROL_SOZLERI = new Set(['client', 'customer', 'insured', 'musteri']);
+/** Niteleyici kavramlar (sahip / holder): düşük ağırlık. */
+const NITELEYICI = new Set(['sahip']);
+/** Türkçe ekler (sözlükte bulunmayan sözcükten atılır; kök sözlükteyse). */
+const EKLER = ['ndaki', 'ndeki', 'daki', 'deki', 'taki', 'teki', 'leri', 'lari', 'si', 'su', 'li', 'lu', 'i', 'u'];
+/** Sözcüğün sözlükteki kökü (ek atılarak) ya da null. @param {string} w */
+function kokBul(w) {
+  if (SOZLUK_HARITASI.has(w)) return w;
+  for (const e of EKLER) {
+    if (w.length - e.length >= 2 && w.endsWith(e) && SOZLUK_HARITASI.has(w.slice(0, -e.length))) return w.slice(0, -e.length);
+  }
+  return null;
+}
+/** @typedef {{ w: string; k: string; genel: boolean }} Kavram */
+/** @param {string} w kök */
+const kavramYap = (w) => ({ w, k: SOZLUK_HARITASI.get(w) ?? w, genel: GENEL_SOZLER.has(w) });
 /**
- * Bağlam kavramları: alanda varsa hedefte (tablo ya da sütun adında) da olmalı, hedefte varsa alanda da (kart alanı kişi / pasaport
- * tablosuna, kişi alanı pasaport ya da kart tablosuna eşlenmez).
+ * Adın kavramları (rol önekleri hariç): sözcükler, bitişik iki sözcük sözlükteyse birleşik ("first name" → firstname, "son
+ * kullanma" → sonkullanma), Türkçe ek atılmış kök, bitişik yazılmış iki sözlük sözcüğü ("kartno" → kart + no).
+ * @param {string} ad @returns {Kavram[]}
  */
-const BAGLAMLAR = /** @type {ReadonlyArray<readonly [string, RegExp]>} */ ([['kart', /^(kart|card)/], ['pasaport', /^(pasaport|passport)/]]);
-/** Adın bağlamları. @param {string} ad */
-const baglamlari = (ad) => new Set(sozcukler(ad).flatMap((w) => BAGLAMLAR.filter(([, d]) => d.test(w)).map(([k]) => k)));
+function kavramlar(ad) {
+  const ham = sozcukler(ad);
+  /** @type {string[]} */
+  const l = [];
+  for (let i = 0; i < ham.length; i++) {
+    const ikili = i + 1 < ham.length ? ham[i] + ham[i + 1] : '';
+    if (ikili && kokBul(ikili)) { l.push(ikili); i++; } else l.push(ham[i]);
+  }
+  /** @type {Kavram[]} */
+  const sonuc = [];
+  for (const w of l) {
+    if (ROL_SOZLERI.has(w)) continue;
+    const k = kokBul(w);
+    if (k) { sonuc.push(kavramYap(k)); continue; }
+    let bolundu = false;
+    for (let i = w.length - 2; i >= 2 && !bolundu; i--) {
+      const a = kokBul(w.slice(0, i));
+      const b = kokBul(w.slice(i));
+      if (a && b) { sonuc.push(kavramYap(a), kavramYap(b)); bolundu = true; }
+    }
+    if (!bolundu) sonuc.push({ w, k: w, genel: GENEL_SOZLER.has(w) });
+  }
+  return sonuc;
+}
+/** Bağlam kavramları: alanda varsa hedefte de olmalı (yoksa güçlü ceza); yalnız hedefte varsa hafif ceza. Yasak değil, ceza. */
+const BAGLAM_KAVRAMLARI = new Set(['kart', 'pasaport']);
 /**
- * Alan ile hedef (tablo + sütun adı) bağlam uyumlu mu: kart / pasaport bağlamı iki tarafta da aynı olmalı.
+ * Alan ile hedef (tablo + sütun adı) bağlam uyumlu mu: kart / pasaport bağlamı iki tarafta da aynı (puanlamada ceza olarak kullanılır).
  * @param {string} alan @param {string} tablo @param {string} sutun
  */
 export function baglamUyumlu(alan, tablo, sutun) {
-  const a = baglamlari(alan);
-  const h = new Set([...baglamlari(tablo), ...baglamlari(sutun)]);
+  const a = new Set(kavramlar(alan).map((x) => x.k).filter((k) => BAGLAM_KAVRAMLARI.has(k)));
+  const h = new Set([...kavramlar(tablo), ...kavramlar(sutun)].map((x) => x.k).filter((k) => BAGLAM_KAVRAMLARI.has(k)));
   return [...a].every((x) => h.has(x)) && [...h].every((x) => a.has(x));
 }
 
@@ -277,8 +329,6 @@ const kimlikAdiMi = (ad) => ayniKavramMi(baslikNormal(ad), 'kimlikno');
 // Tablo eşleştirme
 // ---------------------------------------------------------------------------------------
 
-/** Adın ayırt edici sözcükleri (genel ekler ve rol önekleri çıkarılmış). @param {string} ad */
-const ayirtEdici = (ad) => sozcukler(ad).filter((w) => !GENEL_SOZLER.has(w) && !ROL_SOZLERI.has(w));
 /** İki adın düzenleme uzaklığı ≤ 1 mi (uzun sözcüklerde yazım farkı). @param {string} a @param {string} b */
 function birHarfFarkli(a, b) {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -290,45 +340,81 @@ function birHarfFarkli(a, b) {
   }
   return fark + (a.length - i) + (b.length - j) <= 1;
 }
-/** İki ayırt edici sözcük eşleşmesi. @param {string} x @param {string} y @returns {'esAnlam' | 'benzer' | null} */
-function sozEslesmesi(x, y) {
-  if (x === y) return 'esAnlam';
-  const kx = SOZLUK_HARITASI.get(x);
-  if (kx && kx === SOZLUK_HARITASI.get(y)) return 'esAnlam';
-  if (ayniKavramMi(x, y)) return 'esAnlam';
+/** İki ayırt edici sözcük yazımca yakın mı (kısaltma / baş ≥ 4 harf ya da ≥ 5 harfte tek harf farkı). @param {string} x @param {string} y */
+function yakinYazim(x, y) {
   const [kisa, uzun] = x.length <= y.length ? [x, y] : [y, x];
-  if ((kisa.length >= 4 && uzun.startsWith(kisa)) || (kisa.length >= 5 && birHarfFarkli(x, y))) return 'benzer';
-  return null;
+  return (kisa.length >= 4 && uzun.startsWith(kisa)) || (kisa.length >= 5 && birHarfFarkli(x, y));
+}
+
+/** Kavram eşleşmesinde ad önerisi eşiği (ağırlıklı kapsama; bağlam cezası dahil). */
+export const AD_ESIGI = 0.5;
+/** Ağırlıklar: ayırt edici 1 (ANA kavram ×2), niteleyici (sahip / holder) 0.3, genel (no, date, name…) 0.25. */
+const AGIRLIK = { ayirtEdici: 1, ana: 2, niteleyici: 0.3, genel: 0.25 };
+/** Kapsamada çarpanlar: yazım benzerliği 0.8, kavram yalnız tablo adında 0.8; bağlam: alanınki hedefte yok 0.5, yalnız hedefte 0.7. */
+const CARPAN = { benzer: 0.8, tablodan: 0.8, baglamEksik: 0.5, baglamFazla: 0.7, fazlaKavram: 0.02 };
+
+/**
+ * Alan adı ile hedef (sütun adı; tablo adı bağlam olarak) arasındaki kavram düzeyinde ad puanı (0–1). Alanın kavramları ağırlıklı:
+ * ayırt edici kavram 1, ANA kavram (son ayırt edici: "CardHolderLastname" → soyad) 2, niteleyici 0.3, genel 0.25. Puan: hedefin
+ * (sütun + tablo adı) kapsadığı ağırlık / toplam ağırlık. Yalnız genel kavram eşleşiyorsa puan 0. Kart / pasaport bağlamı alanda
+ * olup hedefte yoksa ×0.5, yalnız hedefte varsa ×0.7. Sütunun alanda olmayan ayırt edici kavramları sıralama için hafif düşürür.
+ * @param {string} alan @param {string} sutun @param {string} [tablo]
+ * @returns {{ puan: number; tur: 'birebir' | 'esAnlam' | 'benzer' | 'tablo' | null }}
+ */
+export function adPuani(alan, sutun, tablo = '') {
+  const a = baslikNormal(alan);
+  const b = baslikNormal(sutun);
+  if (!a || (!b && !tablo)) return { puan: 0, tur: null };
+  const ka = kavramlar(alan);
+  const ks = kavramlar(sutun);
+  const kt = tablo ? kavramlar(tablo) : [];
+  const ayirtEdiciler = ka.filter((x) => !x.genel && !NITELEYICI.has(x.k));
+  const ana = ayirtEdiciler[ayirtEdiciler.length - 1] ?? null;
+  const baglamCarpani = () => {
+    const aB = new Set(ka.map((x) => x.k).filter((k) => BAGLAM_KAVRAMLARI.has(k)));
+    const hB = new Set([...ks, ...kt].map((x) => x.k).filter((k) => BAGLAM_KAVRAMLARI.has(k)));
+    return ([...aB].some((k) => !hB.has(k)) ? CARPAN.baglamEksik : 1) * ([...hB].some((k) => !aB.has(k)) ? CARPAN.baglamFazla : 1);
+  };
+  if (a === b) return { puan: baglamCarpani(), tur: 'birebir' };
+  let toplam = 0;
+  let kazanilan = 0;
+  let ayirtEdiciEslesti = false;
+  let benzerVar = false;
+  let sutundan = false;
+  for (const x of ka) {
+    const ag = x.genel ? AGIRLIK.genel : NITELEYICI.has(x.k) ? AGIRLIK.niteleyici : x === ana ? AGIRLIK.ana : AGIRLIK.ayirtEdici;
+    toplam += ag;
+    /** @param {Kavram[]} l */
+    const bul = (l) => (l.some((y) => y.k === x.k) ? 1 : !x.genel && l.some((y) => !y.genel && yakinYazim(x.w, y.w)) ? CARPAN.benzer : 0);
+    const s = bul(ks);
+    const t = s ? 0 : bul(kt) * CARPAN.tablodan;
+    if (!s && !t) continue;
+    kazanilan += ag * (s || t);
+    if (!x.genel) ayirtEdiciEslesti = true;
+    if (s && s < 1) benzerVar = true;
+    if (s) sutundan = true;
+  }
+  let puan = toplam && ayirtEdiciEslesti ? kazanilan / toplam : 0;
+  // Bütün ad bir kavram (doldur-onerisi.mjs: doğum tarihi, telefon, kimlik…) — iki taraf da yalnız genel sözcük değilse.
+  if (puan < 0.9 && ayirtEdiciler.length && ayniKavramMi(a, b)) { puan = 0.9; sutundan = true; benzerVar = false; }
+  // Tablo adı alanın adıyla aynı ("ClientType" ↔ "Client type" tablosu): tablo düzeyinde eşleşme (değer kanıtı gerekir).
+  if (!puan && tablo && baslikNormal(tablo) === a) return { puan: CARPAN.tablodan, tur: 'tablo' };
+  if (!puan) return { puan: 0, tur: null };
+  const kaKumesi = new Set(ka.map((x) => x.k));
+  const fazla = ks.filter((y) => !y.genel && !NITELEYICI.has(y.k) && !kaKumesi.has(y.k)).length;
+  puan = Math.max(0, puan * baglamCarpani() - fazla * CARPAN.fazlaKavram);
+  return { puan, tur: !sutundan ? 'tablo' : benzerVar ? 'benzer' : 'esAnlam' };
 }
 
 /**
- * Alan adı ile bir sütun / tablo adı arasındaki ad eşleşmesi: 'birebir' (esnek başlık aynı), 'esAnlam' (TR↔EN sözlüğü ya da
- * doldur-onerisi.mjs eş anlam kavramı), 'benzer' (kısaltma / baş / tek harf farkı). Yoksa null.
- * Genel ekler (no, number, kod, id, tarih, ad, tip, değer…) ve rol önekleri (client, customer…) tek başına eşleşme sayılmaz:
- * alanın ayırt edici ANA sözcüğü (sonuncusu; "CardHolderLastname" → lastname) hedefin ayırt edici sözcüklerinden biriyle eşleşmeli.
- * Bütün ad bir kavramsa (doldur-onerisi.mjs: doğum tarihi, telefon, kimlik…; sözlük) — iki taraf da yalnız genel sözcük değilse — eşleşir.
+ * Alan adı ile bir sütun / tablo adı arasındaki ad eşleşmesi (adPuani ≥ AD_ESIGI): 'birebir' (esnek başlık aynı), 'esAnlam'
+ * (kavramlar TR↔EN sözlüğüyle eşleşiyor), 'benzer' (kısaltma / tek harf farkı). Yoksa null. Genel ekler (no, number, kod, id,
+ * tarih, ad, tip, değer…) ve rol önekleri (client, customer…) tek başına eşleşme sayılmaz.
  * @param {string} alan @param {string} hedef @returns {'birebir' | 'esAnlam' | 'benzer' | null}
  */
 export function adEslesmesi(alan, hedef) {
-  const a = baslikNormal(alan);
-  const b = baslikNormal(hedef);
-  if (!a || !b) return null;
-  if (a === b) return 'birebir';
-  const wa = ayirtEdici(alan);
-  const wb = ayirtEdici(hedef);
-  const ka = SOZLUK_HARITASI.get(a);
-  if (ka && ka === SOZLUK_HARITASI.get(b) && (wa.length || wb.length || !(GENEL_SOZLER.has(a) && GENEL_SOZLER.has(b)))) return 'esAnlam';
-  if ((wa.length || wb.length) && ayniKavramMi(a, b)) return 'esAnlam';
-  if (!wa.length || !wb.length) return null;
-  const ana = wa[wa.length - 1];
-  /** @type {'esAnlam' | 'benzer' | null} */
-  let en = null;
-  for (const y of wb) {
-    const e = sozEslesmesi(ana, y);
-    if (e === 'esAnlam') return 'esAnlam';
-    if (e) en = e;
-  }
-  return en;
+  const p = adPuani(alan, hedef);
+  return p.puan >= AD_ESIGI && p.tur !== 'tablo' ? p.tur : null;
 }
 
 /**
@@ -367,52 +453,63 @@ function ortusmeKaniti(o, t, c, gizli) {
 }
 
 /**
- * Alanın en iyi tablo sütunu adayı (ad + değer kanıtıyla). Gizli alan yalnız gizli sütuna, açık alan açık sütuna (ad eşleşmesi
- * olmadan gizli sütuna değil) önerilir. Kabul: ad (aynı / eş anlam / benzer) ya da tablo adı eşleşmesi ve değerlerden en az biri
- * sütunda (değer yoksa ad yeter); ad eşleşmesi yokken ≥ 2 farklı değerin hepsi aynı sütunda.
+ * Alanın EN UYGUN tablo sütunu (kavram düzeyinde ad puanı + değer kanıtı). Her sütun puanlanır (adPuani: sütun adı, tablo adı
+ * bağlam); ad puanı ≥ AD_ESIGI olan ya da yalnız değerden güçlü kanıtı olan sütunlar aday olur, en yüksek puanlı önerilir (ikinci
+ * aday kanıtta "diğer aday"). Ad eşleşmesi değerlerle örtüşmese de aday kalır (zayıf). Kavram yalnız tablo adındaysa değer gerekir.
+ * Güç: ad puanı ≥ 0.75 ve en az bir değer sütunda → güçlü (aynı ad ve değer yoksa da güçlü); yalnız ad ya da yalnız değer → zayıf.
+ * Gizli alan yalnız gizli sütuna, açık alan gizli sütuna yalnız ad eşleşmesiyle önerilir.
+ * ekAdlar: ek ad kanıtı (kopuk bağın silinmiş sütun adı: "cepTelefonu"); puanı ×0.9 sayılır.
  * @param {string} ad alan adı @param {string[]} degerler farklı somut değerler @param {ReadonlyArray<AnalizTablosu>} tablolar @param {boolean} gizli
+ * @param {ReadonlyArray<string>} [ekAdlar]
  * @returns {TabloEslesmesi | null}
  */
-export function tabloEslesmesi(ad, degerler, tablolar, gizli = false) {
-  /** @type {(TabloEslesmesi & { puan: number }) | null} */
-  let en = null;
-  const PUAN = { birebir: 3, esAnlam: 2, benzer: 1 };
+export function tabloEslesmesi(ad, degerler, tablolar, gizli = false, ekAdlar = []) {
+  /** @type {Array<TabloEslesmesi & { puan: number; adPuan: number }>} */
+  const adaylar = [];
+  const fi = ortakImza(degerler);
+  // Yalnız genel sözcüklerden oluşan ad (Code, Name…): aynı ad olsa da değerler sütunda hiç yoksa aday değil.
+  const genelAd = !kavramlar(ad).some((x) => !x.genel);
   for (const t of tablolar) {
     if (t.baglam || String(t.id).startsWith('baglam_')) continue;
-    const tabloAd = adEslesmesi(ad, t.ad);
     for (const c of t.sutunlar) {
       if (gizli && !c.gizli) continue;
-      // Bağlam uyumsuzluğu (kart alanı ↔ kişi / pasaport tablosu vb.): eşleşme yok (yerine yeni tablo önerilir).
-      if (!baglamUyumlu(ad, t.ad, c.ad)) continue;
-      const adTur = adEslesmesi(ad, c.ad);
+      let ap = adPuani(ad, c.ad, t.ad);
+      let ekAd = '';
+      for (const e of ekAdlar) {
+        const p = adPuani(e, c.ad, t.ad);
+        if (p.puan * 0.9 > ap.puan) { ap = { puan: p.puan * 0.9, tur: p.tur }; ekAd = e; }
+      }
+      const adVar = ap.puan >= AD_ESIGI;
+      const adTur = adVar && ap.tur !== 'tablo' ? ap.tur : null;
+      const tabloAd = adVar && ap.tur === 'tablo';
       if (c.gizli && !adTur) continue;
       const o = degerOrtusmesi(gizli || c.gizli ? [] : degerler, t, c);
       const oran = o.toplam ? o.bulunan / o.toplam : null;
-      const adPuani = adTur ? PUAN[adTur] : 0;
-      const tabloPuani = !adTur && tabloAd ? PUAN[tabloAd] : 0;
       // Yalnız değerden (ad eşleşmesi yok): değerlerden en az biri sütunda ve biçim aynı (ör. hep 5 hane) — zayıf öneri.
-      const fi = ortakImza(degerler);
       const sutunImzasi = ortakImza(t.satirlar.map((r) => r.degerler[c.ad]).filter(somutMu).map(String));
       const desenAyni = Boolean(fi) && fi === sutunImzasi;
-      // Ad eşleşmesi değerlerle çelişiyorsa (değer var, hiçbiri sütunda yok) aday sayılmaz.
-      const kabul = (adPuani > 0 && (oran === null || oran > 0)) || (tabloPuani > 0 && oran !== null && oran > 0)
-        || (!adPuani && !tabloPuani && o.bulunan >= 1 && (desenAyni || (o.toplam >= 2 && oran === 1)));
+      const kabul = (Boolean(adTur) && !(genelAd && oran === 0)) || (tabloAd && oran !== null && oran > 0)
+        || (!adVar && o.bulunan >= 1 && (desenAyni || (o.toplam >= 2 && oran === 1)));
       if (!kabul) continue;
-      const puan = adPuani * 10 + tabloPuani * 8 + (oran ?? 0.4) * 20 + (desenAyni ? 2 : 0) + (c.gizli === gizli ? 1 : 0);
-      if (en && en.puan >= puan) continue;
-      // Güçlü: ad (ya da tablo adı) eşleşmesi + en az bir değer sütunda; ya da aynı ad ve değer yok. Yalnız değerden: zayıf.
-      const guclu = ((adPuani > 0 || tabloPuani > 0) && o.bulunan >= 1) || (adTur === 'birebir' && oran === null);
+      const adPuan = adVar ? ap.puan : 0;
+      // Ad eşleşmesi değerlerle çelişiyorsa (değer var, hiçbiri sütunda yok) ad ağırlığı yarıya iner: tüm değerleri içeren sütun öne geçer.
+      const puan = adPuan * (oran === 0 ? 15 : 30) + (oran ?? 0.4) * 20 + (desenAyni ? 2 : 0) + (c.gizli === gizli ? 1 : 0);
+      const guclu = (adVar && adPuan >= 0.75 && o.bulunan >= 1) || (adTur === 'birebir' && oran === null);
+      const kim = ekAd ? `${ekAd} (eski sütun adı)` : ad;
       const kanit = [
-        adTur ? `Ad: ${ad} ↔ ${c.ad} (${AD_TURU[adTur]})` : tabloAd ? `Ad: ${ad} ↔ ${t.ad} tablosu (${AD_TURU[tabloAd]})` : 'Yalnız değerden (ad eşleşmiyor)',
+        adTur ? `Ad: ${kim} ↔ ${c.ad} (${AD_TURU[adTur]})` : tabloAd ? `Ad: ${kim} ↔ ${t.ad} tablosu (${AD_TURU.esAnlam})` : 'Yalnız değerden (ad eşleşmiyor)',
         ortusmeKaniti(o, t.ad, c.ad, gizli || c.gizli),
-        desenAyni && !adPuani && !tabloPuani ? 'desen aynı' : ''
+        desenAyni && !adVar ? 'desen aynı' : ''
       ].filter(Boolean).join(' · ');
-      en = { tabloId: t.id, tablo: t.ad, sutun: c.ad, adTuru: adTur ?? (tabloAd ? 'tablo' : null), bulunan: o.bulunan, toplam: o.toplam,
-        karsiliklar: o.karsilik, guc: guclu ? 'guclu' : 'zayif', kanit, puan };
+      adaylar.push({ tabloId: t.id, tablo: t.ad, sutun: c.ad, adTuru: adTur ?? (tabloAd ? 'tablo' : null), bulunan: o.bulunan, toplam: o.toplam,
+        karsiliklar: o.karsilik, guc: guclu ? 'guclu' : 'zayif', kanit, puan, adPuan });
     }
   }
-  if (!en) return null;
-  const { puan, ...x } = en;
+  if (!adaylar.length) return null;
+  adaylar.sort((x, y) => y.puan - x.puan);
+  const [en, ikinci] = adaylar;
+  const { puan, adPuan, ...x } = en;
+  if (ikinci && ikinci.adPuan >= AD_ESIGI && ikinci.adTuru && ikinci.adTuru !== 'tablo') x.kanit = `${x.kanit} · diğer aday: ${ikinci.tablo} › ${ikinci.sutun}`;
   return x;
 }
 
@@ -525,7 +622,8 @@ export function servisAnalizi(g) {
     const bagSutunu = bagTablosu?.sutunlar.find((c) => c.ad === bag?.sutun);
     const kopuk = Boolean(bag?.tablo) && !String(bag?.tablo).startsWith('yeni:') && (!bagTablosu || !bagSutunu);
     const bagOrtusmesi = bagTablosu && bagSutunu && !gizli && !bagSutunu.gizli ? degerOrtusmesi(degerler, bagTablosu, bagSutunu) : null;
-    const aday = degerler.length || n ? tabloEslesmesi(ad, gizli ? [] : degerler, tablolar, gizli) : null;
+    // Kopuk bağda da aynı en-uygun-sütun araması; silinmiş sütunun adı ek ad kanıtıdır.
+    const aday = degerler.length || n ? tabloEslesmesi(ad, gizli ? [] : degerler, tablolar, gizli, kopuk && bag?.sutun ? [bag.sutun] : []) : null;
     // Başarı durumuna göre boş / yok gözlemler (hata verenler zorunluluk hesabına katılmaz).
     const dolmayan = gozlem.filter((x) => x.v?.durum !== 'dolu');
     const basariliBos = dolmayan.filter((x) => x.durum === 'basarili');

@@ -80,7 +80,9 @@ export function adEslesmesi(alan: string, hedef: string): 'birebir' | 'esAnlam' 
 export function degerOrtusmesi(degerler: string[], t: AnalizTablosu, c: AnalizTablosu['sutunlar'][number]):
   { dogrudan: string[]; karsilik: Array<[string, string]>; eksik: string[]; bulunan: number; toplam: number };
 export function baglamUyumlu(alan: string, tablo: string, sutun: string): boolean;
-export function tabloEslesmesi(ad: string, degerler: string[], tablolar: ReadonlyArray<AnalizTablosu>, gizli?: boolean): TabloEslesmesi | null;
+export const AD_ESIGI: number;
+export function adPuani(alan: string, sutun: string, tablo?: string): { puan: number; tur: 'birebir' | 'esAnlam' | 'benzer' | 'tablo' | null };
+export function tabloEslesmesi(ad: string, degerler: string[], tablolar: ReadonlyArray<AnalizTablosu>, gizli?: boolean, ekAdlar?: ReadonlyArray<string>): TabloEslesmesi | null;
 export function oneriAnahtari(tur: string, yol: string, deger: unknown): string;
 export function servisAnalizi(g: AnalizGirdisi): AnalizSonucu;
 export function oneriyiUygula(d: AnalizDurumu, o: AnalizOnerisi): void;
