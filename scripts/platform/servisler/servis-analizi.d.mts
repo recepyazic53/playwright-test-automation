@@ -40,7 +40,7 @@ export type YeniTabloPlani = {
 };
 export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'gizli' | 'tabloBagi' | 'yeniTablo' | 'kopukBag' | 'tabloyaDeger' | 'supheli';
 export type OneriGucu = 'guclu' | 'zayif' | 'not';
-export type AnalizOnerisi = { anahtar: string; tur: OneriTuru; yol: string; deger: unknown; baslik: string; kanit: string; guc: OneriGucu };
+export type AnalizOnerisi = { anahtar: string; tur: OneriTuru; yol: string; deger: unknown; baslik: string; kanit: string; guc: OneriGucu; /** kopukBag: silinmiş eski bağ (Tablo › Sütun). */ eskiBag?: string };
 export type AlanAnalizi = {
   yol: string; ad: string; wsdlde: boolean; ekli: boolean; wsdlZorunlu: boolean | null; dolu: number; bos: number; yok: number; toplam: number;
   degerler: string[]; gizli: boolean; ozet: string; tablo: TabloEslesmesi | null;
@@ -79,6 +79,7 @@ export function tipCikar(degerler: string[]): { tip: AlanTipi; bicim?: string } 
 export function adEslesmesi(alan: string, hedef: string): 'birebir' | 'esAnlam' | 'benzer' | null;
 export function degerOrtusmesi(degerler: string[], t: AnalizTablosu, c: AnalizTablosu['sutunlar'][number]):
   { dogrudan: string[]; karsilik: Array<[string, string]>; eksik: string[]; bulunan: number; toplam: number };
+export function baglamUyumlu(alan: string, tablo: string, sutun: string): boolean;
 export function tabloEslesmesi(ad: string, degerler: string[], tablolar: ReadonlyArray<AnalizTablosu>, gizli?: boolean): TabloEslesmesi | null;
 export function oneriAnahtari(tur: string, yol: string, deger: unknown): string;
 export function servisAnalizi(g: AnalizGirdisi): AnalizSonucu;

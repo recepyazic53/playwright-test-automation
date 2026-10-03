@@ -30,7 +30,7 @@
 // Ek kanıt (kayıtlı senaryo gövdeleri, son koşu istekleri) sayımlara katılır; adlı değildir (satır / fark üretmez). Yer tutuculu
 // (${…}, {{…}}) ve maskeli (•••) değerler "dolu" sayılır ama değer çıkarımına girmez.
 import { alanSatirlari, semaBirlestir, xmlAyristir } from './servis-govdesi.mjs';
-import { ayniKavramMi, benzerAdMi } from '../tablolar/doldur-onerisi.mjs';
+import { ayniKavramMi } from '../tablolar/doldur-onerisi.mjs';
 import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
@@ -72,7 +72,6 @@ const SOZLUK = /** @type {ReadonlyArray<readonly [string, ReadonlyArray<string>]
   ['postaKodu', ['postakodu', 'zip', 'zipcode', 'postalcode', 'postcode']],
   ['ad', ['ad', 'adi', 'isim', 'name', 'firstname', 'givenname']],
   ['soyad', ['soyad', 'soyadi', 'surname', 'lastname', 'familyname']],
-  ['tarih', ['tarih', 'date']],
   ['baslangic', ['baslangic', 'baslangictarihi', 'begin', 'begindate', 'start', 'startdate']],
   ['bitis', ['bitis', 'bitistarihi', 'end', 'enddate', 'finish', 'finishdate']],
   ['tutar', ['tutar', 'miktar', 'amount']],
@@ -81,11 +80,8 @@ const SOZLUK = /** @type {ReadonlyArray<readonly [string, ReadonlyArray<string>]
   ['cinsiyet', ['cinsiyet', 'gender', 'sex']],
   ['kanal', ['kanal', 'channel']],
   ['kullanici', ['kullanici', 'kullaniciadi', 'user', 'username', 'userid', 'login']],
-  ['kod', ['kod', 'code']],
   ['aciklama', ['aciklama', 'description', 'desc']],
   ['durum', ['durum', 'status', 'state']],
-  ['tur', ['tur', 'tip', 'type', 'kind']],
-  ['numara', ['numara', 'no', 'number', 'num']],
   ['adet', ['adet', 'quantity', 'qty', 'count']],
   ['fiyat', ['fiyat', 'price']],
   ['taksit', ['taksit', 'installment']],
@@ -95,10 +91,39 @@ const SOZLUK = /** @type {ReadonlyArray<readonly [string, ReadonlyArray<string>]
   ['sirket', ['sirket', 'firma', 'company']],
   ['eposta', ['eposta', 'email', 'mail']],
   ['telefon', ['telefon', 'phone', 'mobile', 'gsm']],
-  ['dogumTarihi', ['dogumtarihi', 'birthdate', 'dateofbirth', 'dob']]
+  ['dogumTarihi', ['dogumtarihi', 'birthdate', 'dateofbirth', 'dob']],
+  ['dogum', ['dogum', 'birth']],
+  ['kimlik', ['kimlik', 'tc', 'tckn', 'citizenship', 'identity', 'nationalid']],
+  ['vergi', ['vergi', 'vkn', 'tax']],
+  ['pasaport', ['pasaport', 'passport']],
+  ['sahip', ['sahip', 'sahibi', 'holder', 'owner']]
 ]);
 /** @type {Map<string, string>} normal ad → kavram */
 const SOZLUK_HARITASI = new Map(SOZLUK.flatMap(([k, l]) => l.map((x) => [x, k])));
+/**
+ * Genel ekler / kökler: TEK BAŞINA eşleşme sayılmaz (ayırt edici kısım da eşleşmeli). "PhoneNumber" ile "Vergi no" yalnız
+ * "number" / "no" ortak olduğu için eşleşmez.
+ */
+const GENEL_SOZLER = new Set(['no', 'nr', 'num', 'number', 'numara', 'numarasi', 'kod', 'kodu', 'code', 'id', 'tarih', 'tarihi', 'date', 'ad', 'adi',
+  'name', 'isim', 'ismi', 'tip', 'tipi', 'type', 'tur', 'turu', 'kind', 'deger', 'degeri', 'value', 'bilgi', 'bilgisi', 'bilgileri', 'info', 'd']);
+/** Rol önekleri (client / customer…): ayırt edici sayılmaz, bağlamı belirler. */
+const ROL_SOZLERI = new Set(['client', 'customer', 'insured', 'musteri']);
+/**
+ * Bağlam kavramları: alanda varsa hedefte (tablo ya da sütun adında) da olmalı, hedefte varsa alanda da (kart alanı kişi / pasaport
+ * tablosuna, kişi alanı pasaport ya da kart tablosuna eşlenmez).
+ */
+const BAGLAMLAR = /** @type {ReadonlyArray<readonly [string, RegExp]>} */ ([['kart', /^(kart|card)/], ['pasaport', /^(pasaport|passport)/]]);
+/** Adın bağlamları. @param {string} ad */
+const baglamlari = (ad) => new Set(sozcukler(ad).flatMap((w) => BAGLAMLAR.filter(([, d]) => d.test(w)).map(([k]) => k)));
+/**
+ * Alan ile hedef (tablo + sütun adı) bağlam uyumlu mu: kart / pasaport bağlamı iki tarafta da aynı olmalı.
+ * @param {string} alan @param {string} tablo @param {string} sutun
+ */
+export function baglamUyumlu(alan, tablo, sutun) {
+  const a = baglamlari(alan);
+  const h = new Set([...baglamlari(tablo), ...baglamlari(sutun)]);
+  return [...a].every((x) => h.has(x)) && [...h].every((x) => a.has(x));
+}
 
 const YER_TUTUCU = /\$\{[^}]*\}|\{\{[^}]*\}\}/;
 const MASKELI = /•|\*{3}/;
@@ -252,17 +277,36 @@ const kimlikAdiMi = (ad) => ayniKavramMi(baslikNormal(ad), 'kimlikno');
 // Tablo eşleştirme
 // ---------------------------------------------------------------------------------------
 
-/** Sözlük kavramı: adın tamamı, yoksa son sözcüğü. @param {string} ad */
-function sozlukKavrami(ad) {
-  const n = baslikNormal(ad);
-  if (SOZLUK_HARITASI.has(n)) return SOZLUK_HARITASI.get(n) ?? null;
-  const w = sozcukler(ad);
-  return w.length > 1 ? SOZLUK_HARITASI.get(w[w.length - 1]) ?? null : null;
+/** Adın ayırt edici sözcükleri (genel ekler ve rol önekleri çıkarılmış). @param {string} ad */
+const ayirtEdici = (ad) => sozcukler(ad).filter((w) => !GENEL_SOZLER.has(w) && !ROL_SOZLERI.has(w));
+/** İki adın düzenleme uzaklığı ≤ 1 mi (uzun sözcüklerde yazım farkı). @param {string} a @param {string} b */
+function birHarfFarkli(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0; let j = 0; let fark = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++fark > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return fark + (a.length - i) + (b.length - j) <= 1;
+}
+/** İki ayırt edici sözcük eşleşmesi. @param {string} x @param {string} y @returns {'esAnlam' | 'benzer' | null} */
+function sozEslesmesi(x, y) {
+  if (x === y) return 'esAnlam';
+  const kx = SOZLUK_HARITASI.get(x);
+  if (kx && kx === SOZLUK_HARITASI.get(y)) return 'esAnlam';
+  if (ayniKavramMi(x, y)) return 'esAnlam';
+  const [kisa, uzun] = x.length <= y.length ? [x, y] : [y, x];
+  if ((kisa.length >= 4 && uzun.startsWith(kisa)) || (kisa.length >= 5 && birHarfFarkli(x, y))) return 'benzer';
+  return null;
 }
 
 /**
  * Alan adı ile bir sütun / tablo adı arasındaki ad eşleşmesi: 'birebir' (esnek başlık aynı), 'esAnlam' (TR↔EN sözlüğü ya da
- * doldur-onerisi.mjs eş anlam kavramı), 'benzer' (kısaltma / baş). Yoksa null.
+ * doldur-onerisi.mjs eş anlam kavramı), 'benzer' (kısaltma / baş / tek harf farkı). Yoksa null.
+ * Genel ekler (no, number, kod, id, tarih, ad, tip, değer…) ve rol önekleri (client, customer…) tek başına eşleşme sayılmaz:
+ * alanın ayırt edici ANA sözcüğü (sonuncusu; "CardHolderLastname" → lastname) hedefin ayırt edici sözcüklerinden biriyle eşleşmeli.
+ * Bütün ad bir kavramsa (doldur-onerisi.mjs: doğum tarihi, telefon, kimlik…; sözlük) — iki taraf da yalnız genel sözcük değilse — eşleşir.
  * @param {string} alan @param {string} hedef @returns {'birebir' | 'esAnlam' | 'benzer' | null}
  */
 export function adEslesmesi(alan, hedef) {
@@ -270,11 +314,21 @@ export function adEslesmesi(alan, hedef) {
   const b = baslikNormal(hedef);
   if (!a || !b) return null;
   if (a === b) return 'birebir';
-  const ka = sozlukKavrami(alan);
-  if (ka && ka === sozlukKavrami(hedef)) return 'esAnlam';
-  if (ayniKavramMi(a, b)) return 'esAnlam';
-  if (benzerAdMi(a, b)) return 'benzer';
-  return null;
+  const wa = ayirtEdici(alan);
+  const wb = ayirtEdici(hedef);
+  const ka = SOZLUK_HARITASI.get(a);
+  if (ka && ka === SOZLUK_HARITASI.get(b) && (wa.length || wb.length || !(GENEL_SOZLER.has(a) && GENEL_SOZLER.has(b)))) return 'esAnlam';
+  if ((wa.length || wb.length) && ayniKavramMi(a, b)) return 'esAnlam';
+  if (!wa.length || !wb.length) return null;
+  const ana = wa[wa.length - 1];
+  /** @type {'esAnlam' | 'benzer' | null} */
+  let en = null;
+  for (const y of wb) {
+    const e = sozEslesmesi(ana, y);
+    if (e === 'esAnlam') return 'esAnlam';
+    if (e) en = e;
+  }
+  return en;
 }
 
 /**
@@ -328,6 +382,8 @@ export function tabloEslesmesi(ad, degerler, tablolar, gizli = false) {
     const tabloAd = adEslesmesi(ad, t.ad);
     for (const c of t.sutunlar) {
       if (gizli && !c.gizli) continue;
+      // Bağlam uyumsuzluğu (kart alanı ↔ kişi / pasaport tablosu vb.): eşleşme yok (yerine yeni tablo önerilir).
+      if (!baglamUyumlu(ad, t.ad, c.ad)) continue;
       const adTur = adEslesmesi(ad, c.ad);
       if (c.gizli && !adTur) continue;
       const o = degerOrtusmesi(gizli || c.gizli ? [] : degerler, t, c);
@@ -434,7 +490,7 @@ export function servisAnalizi(g) {
   const ekle = (o) => { tum.push({ ...o, anahtar: oneriAnahtari(o.tur, o.yol, o.deger) }); };
   /** @type {Map<string, { ad: string; gizli: boolean; degerler: string[] }>} yeni tabloya aday alanlar */
   const tabloAdaylari = new Map();
-  /** Tablo bağı önerileri (aynı satır güveni için sonradan güçlendirilir). @type {Array<{ yol: string; aday: TabloEslesmesi; kanit: string; degistir: boolean }>} */
+  /** Tablo bağı önerileri (aynı satır güveni için sonradan güçlendirilir; eskiBag: kopuk bağın yerine). @type {Array<{ yol: string; aday: TabloEslesmesi; kanit: string; degistir: boolean; eskiBag?: string }>} */
   const bagOnerileri = [];
 
   for (const yol of yollar) {
@@ -523,11 +579,12 @@ export function servisAnalizi(g) {
         kanit: `${goster(degerler, 3)} → ${TIP_ADLARI[tipOnerisi.tip]} (${tumDegerler.length} gözlem)` });
     }
     if (gizliNeden) ekle({ tur: 'gizli', yol, deger: true, guc: gizliNeden.startsWith('11') && tumDegerler.length < EN_AZ_GOZLEM ? 'zayif' : 'guclu', baslik: 'Gizli', kanit: gizliNeden });
-    // 4) Kopuk bağ: bağlı tablo / sütun yok → en iyi eşleşmeye bağlansın mı / bağ kaldırılsın mı (ikisi de ayrı öneri).
-    if (kopuk && bag) {
-      const neyok = !bagTablosu ? 'bağlı tablo silinmiş' : `"${bagTablosu.ad}" tablosunda "${bag.sutun}" sütunu yok`;
-      if (aday) ekle({ tur: 'kopukBag', yol, deger: { tablo: aday.tabloId, sutun: aday.sutun }, guc: 'zayif', baslik: `Kopuk bağ: ${aday.tablo} › ${aday.sutun} sütununa bağlansın mı?`, kanit: `${neyok} · ${aday.kanit}` });
-      ekle({ tur: 'kopukBag', yol, deger: null, guc: 'zayif', baslik: 'Kopuk bağ: bağ kaldırılsın mı?', kanit: `${neyok}${aday ? '' : ' · eşleşen sütun bulunamadı'}` });
+    // 4) Kopuk bağ: TEK öneri. Eşleşme varsa "önerilen sütuna bağla" (güç eşleşme kanıtından; kopukluk yalnız bağlamdır) — kartta
+    //    ayrıca "bağı kaldır"; eşleşme yoksa yalnız "bağı kaldır".
+    const eskiBag = kopuk && bag ? `${bagTablosu?.ad ?? 'silinmiş tablo'} › ${bag.sutun}` : '';
+    if (kopuk && bag && !aday) {
+      ekle({ tur: 'kopukBag', yol, deger: null, guc: 'zayif', eskiBag, baslik: `Eski bağ silinmiş (${eskiBag}) → bağı kaldır`,
+        kanit: `${!bagTablosu ? 'Bağlı tablo silinmiş' : `"${bagTablosu.ad}" tablosunda "${bag.sutun}" sütunu yok`} · eşleşen sütun bulunamadı` });
     }
     // Bağlı (mevcut) tabloda olmayan örnek değerleri: "tabloya şu değerler eklensin mi?" (uygulanırsa yeni satırlar).
     const veriEksik = bagOrtusmesi ? bagOrtusmesi.eksik.filter((v) => veriDegerleri.includes(v)) : [];
@@ -537,6 +594,7 @@ export function servisAnalizi(g) {
         baslik: `${bagTablosu.ad} › ${bagSutunu.ad} tablosuna şu değerler eklensin mi: ${liste(eksik, 6)}`,
         kanit: `Örneklerde var, tabloda yok (${eksik.length}/${bagOrtusmesi.toplam} değer); uygulanırsa her değer yeni satır olur` });
     }
+    if (kopuk && bag && aday) bagOnerileri.push({ yol, aday, degistir: false, kanit: aday.kanit, eskiBag });
     // 5) Tablo eşleşmesi: bağ yoksa en iyi aday; bağ varken yalnız bağlı sütunda hiçbir değer yoksa ve aday değer kanıtlıysa.
     if (!kopuk && aday && !(bag?.kural) && !varsayilanlar[yol]) {
       const ayni = bag && bag.tablo === aday.tabloId && bag.sutun === aday.sutun;
@@ -585,7 +643,9 @@ export function servisAnalizi(g) {
     }
   }
   for (const b of bagOnerileri) {
-    ekle({ tur: 'tabloBagi', yol: b.yol, deger: { tablo: b.aday.tabloId, sutun: b.aday.sutun }, guc: b.aday.guc, baslik: `Tablo: ${b.aday.tablo} › ${b.aday.sutun}`, kanit: b.kanit });
+    const deger = { tablo: b.aday.tabloId, sutun: b.aday.sutun };
+    if (b.eskiBag) ekle({ tur: 'kopukBag', yol: b.yol, deger, guc: b.aday.guc, eskiBag: b.eskiBag, baslik: `Eski bağ silinmiş (${b.eskiBag}) → ${b.aday.tablo} › ${b.aday.sutun}`, kanit: b.kanit });
+    else ekle({ tur: 'tabloBagi', yol: b.yol, deger, guc: b.aday.guc, baslik: `Tablo: ${b.aday.tablo} › ${b.aday.sutun}`, kanit: b.kanit });
   }
 
   // --- Yeni tablo planları ----------------------------------------------------------------------
