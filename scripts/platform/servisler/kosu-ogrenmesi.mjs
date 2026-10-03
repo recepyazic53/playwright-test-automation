@@ -10,7 +10,7 @@
 //    görülen satır güçlü — servis-analizi.mjs satır bütünlüğü kuralı), bağı
 //    olmayan alan için tablo eşleşmesi, başarılı koşuda boş / yok giden zorunlu alan için "isteğe bağlı" (#179 kuralları; koşu =
 //    durumu bilinen örnek), şüpheli alan notu. Kanıt: kaç başarılı koşuda görüldü, son görülme, senaryolar.
-import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, hucreEsit } from './servis-analizi.mjs';
+import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, hucreEsit, satirYonlendir } from './servis-analizi.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
@@ -196,7 +196,9 @@ export function kosuOnerileri(g) {
   // boş kalır ve notta yazar (satırın geri kalanı şüpheli sayılmaz). Gizli sütun yazılmaz. Tabloda bağlı sütunların hepsi aynı olan
   // satır varsa önerilmez. Satır ≥ GUCLU_KOSU_SAYISI başarılı koşuda görüldüyse güçlü; kart, satırlarının hepsi güçlüyse güçlü.
   // Satır kararları ayrı hatırlanır (satırın anahtarı); kartın Uygula / Yoksay'ı satırlarına da yazılır.
-  for (const [tabloId, eslem] of satirEslemleri) {
+  // Koşu başına satır yönlendirmesi (grup bütünlüğü; servis-analizi.mjs > satirYonlendir).
+  const yonler = new Map(g.gozlemler.map((x) => [x, satirYonlendir(satirEslemleri, g.tablolar, (y) => x.alanlar[y]?.d === 'dolu')]));
+  for (const [tabloId, varsayilanEslem] of satirEslemleri) {
     const t = g.tablolar.find((x) => x.id === tabloId);
     if (!t) continue;
     /** @type {Map<string, { ad: string; degerler: Record<string, string>; b: { sayi: number; senaryolar: Set<string>; son: string } | null; z: { sayi: number; senaryolar: Set<string>; son: string } | null; notlar: Set<string> }>} */
@@ -209,6 +211,10 @@ export function kosuOnerileri(g) {
       const deg = {};
       /** @type {string[]} */
       const notlar = [];
+      const yon = yonler.get(x);
+      const eslem = yon?.eslemler.get(tabloId) ?? varsayilanEslem;
+      const gerekce = yon?.gerekceler.get(tabloId);
+      if (gerekce) notlar.push(gerekce);
       for (const [yol, e] of eslem) {
         const a = x.alanlar[yol];
         if (!a || a.d !== 'dolu') continue;

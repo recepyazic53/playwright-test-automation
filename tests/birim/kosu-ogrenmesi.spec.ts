@@ -129,6 +129,23 @@ test('satır bütünlüğü (öğrenme): koşu başına tek satır, yalnız o ta
   expect(kosuOnerileri({ metot: 'Islem', gozlemler, tablolar, mevcut: { baglar, kararlar: d.kararlar } }).filter((x) => x.tur === 'tabloyaSatir').map((x) => x.yol)).toEqual(['#teslim']);
 });
 
+test('satır yönlendirme (öğrenme): koşu başına; ayırt edici sütunu dolu koşunun grup alanları o tabloya, ötekiler varsayılan tabloda', () => {
+  const tablolar = [
+    { id: 'kisi', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }], satirlar: [] },
+    { id: 'pas', ad: 'Pasaportlu kişi', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }, { ad: 'Pasaport no' }], satirlar: [] }
+  ];
+  const baglar = { 'Girdi/Customer/Firstname': { tablo: 'kisi', sutun: 'Ad' }, 'Girdi/Customer/Lastname': { tablo: 'kisi', sutun: 'Soyad' },
+    'Girdi/Customer/PassportNumber': { tablo: 'pas', sutun: 'Pasaport no' } };
+  const o = kosuOnerileri({ metot: 'Islem', tablolar, mevcut: { baglar }, gozlemler: [
+    gz({ senaryo: 'Yerli', senaryoId: 'y', alanlar: { 'Girdi/Customer/Firstname': { d: 'dolu', v: 'Ali' }, 'Girdi/Customer/Lastname': { d: 'dolu', v: 'Kaya' }, 'Girdi/Customer/PassportNumber': { d: 'bos' } } }),
+    gz({ senaryo: 'Yabancı', senaryoId: 'x', alanlar: { 'Girdi/Customer/Firstname': { d: 'dolu', v: 'John' }, 'Girdi/Customer/Lastname': { d: 'dolu', v: 'Smith' }, 'Girdi/Customer/PassportNumber': { d: 'dolu', v: 'X1234567' } } })
+  ] });
+  const satirlar = (id: string) => (o.find((x) => x.yol === `#${id}`)?.deger as TabloSatiriOnerisi | undefined)?.satirlar ?? [];
+  expect(satirlar('kisi').map((x) => [x.ad, x.degerler])).toEqual([['Yerli', { Ad: 'Ali', Soyad: 'Kaya' }]]);
+  expect(satirlar('pas').map((x) => [x.ad, x.degerler])).toEqual([['Yabancı', { 'Pasaport no': 'X1234567', Ad: 'John', Soyad: 'Smith' }]]);
+  expect(satirlar('pas')[0].kanit).toContain('Pasaportlu kişi tablosuna yazılır (Pasaport no dolu)');
+});
+
 test('gözlem listesi budanır; senaryo gözlemi yenisiyle değişir; öğrenme hatası yakalanır (koşu etkilenmez)', () => {
   let l: Gozlem[] = [];
   for (let i = 0; i < EN_COK_GOZLEM + 5; i++) l = gozlemEkle(l, gz({ kosuId: `k${i}`, alanlar: {} }));

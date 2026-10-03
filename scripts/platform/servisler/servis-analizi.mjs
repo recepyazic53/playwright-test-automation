@@ -494,6 +494,63 @@ export function adEslesmesi(alan, hedef) {
 }
 
 /**
+ * Satır yönlendirme (grup bütünlüğü; ÖRNEK / koşu başına): bir tablonun AYIRT EDİCİ sütununa (öteki aday tabloda karşılığı olmayan
+ * sütun: "Pasaportlu kişi › Pasaport no") giden alan bu örnekte DOLUYSA, aynı XML grubundaki (aynı üst eleman) dolu alanlar o tabloda
+ * karşılık sütunu bulduğunda bu örneğin satırında o tabloya yazılır (gizli ayırt edici sütun yönlendirmez). Karşılığı olmayan alan varsayılan tablosunda kalır (en az
+ * bölünme). Yalnız varsayılan tablosu başka olan alanlar taşınır (geri taşıma yok). Servis düzeyindeki alan bağı DEĞİŞMEZ.
+ * Karşılık: alan adı ya da varsayılan sütun adı hedef sütunla ad eşleşmesi (adPuani ≥ AD_ESIGI); hedefte zaten dolu sütun kullanılmaz.
+ * @param {ReadonlyMap<string, ReadonlyMap<string, { sutun: string; gizli: boolean }>>} eslemler tablo → alan yolu → varsayılan sütun
+ * @param {ReadonlyArray<AnalizTablosu>} tablolar @param {(yol: string) => boolean} doluMu bu örnekte dolu mu
+ * @returns {{ eslemler: Map<string, Map<string, { sutun: string; gizli: boolean }>>; gerekceler: Map<string, string> }}
+ */
+export function satirYonlendir(eslemler, tablolar, doluMu) {
+  const ust = (/** @type {string} */ y) => y.split('/').slice(0, -1).join('/');
+  const tablo = (/** @type {string} */ id) => tablolar.find((t) => t.id === id);
+  /** @type {Map<string, { tid: string; sutun: string; gizli: boolean }>} */
+  const varsayilan = new Map();
+  for (const [tid, m] of eslemler) for (const [yol, e] of m) varsayilan.set(yol, { tid, ...e });
+  const sonuc = new Map([...eslemler].map(([k, m]) => [k, new Map(m)]));
+  /** @type {Map<string, string>} */
+  const gerekceler = new Map();
+  /** Tabloda alanın karşılık sütunu (en iyi; kullanılanlar hariç). @param {AnalizTablosu} t @param {string} alan @param {string} sutun @param {Set<string>} kullanilan */
+  const karsilik = (t, alan, sutun, kullanilan) => {
+    let en = null;
+    let enPuan = 0;
+    for (const c of t.sutunlar) {
+      if (kullanilan.has(c.ad)) continue;
+      const p = Math.max(adPuani(alan, c.ad, t.ad).puan, baslikNormal(sutun) === baslikNormal(c.ad) ? 1 : adPuani(sutun, c.ad).puan);
+      if (p >= AD_ESIGI && p > enPuan) { en = c; enPuan = p; }
+    }
+    return en;
+  };
+  /** @type {Set<string>} */
+  const tasinan = new Set();
+  for (const [pid, m] of eslemler) {
+    const P = tablo(pid);
+    if (!P) continue;
+    for (const [d, e] of m) {
+      // Gizli sütun yönlendirmez: değeri yazılmadığından satırı tanımlayamaz (ör. her istekte dolu parola).
+      if (e.gizli || !doluMu(d)) continue;
+      const grup = ust(d);
+      for (const [s, v] of varsayilan) {
+        if (v.tid === pid || tasinan.has(s) || ust(s) !== grup || !doluMu(s)) continue;
+        const K = tablo(v.tid);
+        // d'nin sütunu K'da da karşılık buluyorsa ayırt edici değil.
+        if (!K || karsilik(K, alanAdi(d), e.sutun, new Set())) continue;
+        const hedef = /** @type {Map<string, { sutun: string; gizli: boolean }>} */ (sonuc.get(pid));
+        const cp = karsilik(P, alanAdi(s), v.sutun, new Set([...hedef.values()].map((x) => x.sutun)));
+        if (!cp) continue;
+        sonuc.get(v.tid)?.delete(s);
+        hedef.set(s, { sutun: cp.ad, gizli: Boolean(cp.gizli) });
+        tasinan.add(s);
+        gerekceler.set(pid, `${P.ad} tablosuna yazılır (${e.sutun} dolu)`);
+      }
+    }
+  }
+  return { eslemler: sonuc, gerekceler };
+}
+
+/**
  * Değerlerin sütunda bulunması: doğrudan (büyük / küçük harf yok sayılır) ya da sütunun karşılığıyla (hücre "Türkiye", karşılığı
  * "TR"). @param {string[]} degerler farklı somut değerler @param {AnalizTablosu} t @param {AnalizTablosu['sutunlar'][number]} c
  */
@@ -829,11 +886,13 @@ export function servisAnalizi(g) {
   // Bir örneğin aynı tabloya bağlanan tüm alanlarının değerleri o satırın sütunlarına yazılır; satır adı örnek adı. Hata veren
   // örnekler ve ek kanıtlar (adsız) girmez. Gizli alan / sütun değeri yazılmaz (önizlemede maskeli). Tabloda (ya da öneride)
   // bağlı sütunların değerlerinin HEPSİ aynı olan satır varsa eklenmez. Tek sütunlu (liste) tabloda her farklı değer bir satır.
-  for (const [tabloId, eslem] of satirEslemleri) {
+  // Örnek başına satır yönlendirmesi (grup bütünlüğü): ayırt edici sütunu dolu olan tabloya grubun alanları da gider.
+  const yonler = new Map(cozulen.map((x) => [x, satirYonlendir(satirEslemleri, tablolar, (y) => x.c.alanlar.get(y)?.durum === 'dolu')]));
+  for (const [tabloId, varsayilanEslem] of satirEslemleri) {
     const t = tablolar.find((x) => x.id === tabloId);
     if (!t) continue;
     const liste_ = t.sutunlar.length === 1;
-    /** @type {Array<{ ad: string; degerler: Record<string, string> }>} */
+    /** @type {Array<{ ad: string; degerler: Record<string, string>; gerekce?: string }>} */
     const satirlar = [];
     /** @type {Set<string>} */
     const gizliSutunlar = new Set();
@@ -841,6 +900,8 @@ export function servisAnalizi(g) {
       if (!x.adli || x.durum === 'hata') continue;
       /** @type {Record<string, string>} */
       const deg = {};
+      const yon = yonler.get(x);
+      const eslem = yon?.eslemler.get(tabloId) ?? varsayilanEslem;
       for (const [yol, e] of eslem) {
         const c = t.sutunlar.find((s) => s.ad === e.sutun);
         const v = x.c.alanlar.get(yol);
@@ -852,7 +913,8 @@ export function servisAnalizi(g) {
       if (!anahtarlar.length) continue;
       const ayni = (/** @type {Record<string, unknown>} */ r) => anahtarlar.every((k) => hucreEsit(t.sutunlar.find((s) => s.ad === k), r[k], deg[k]));
       if (t.satirlar.some((r) => ayni(r.degerler)) || satirlar.some((r) => ayni(r.degerler))) continue;
-      satirlar.push({ ad: liste_ ? deg[anahtarlar[0]].slice(0, 60) : x.ad, degerler: deg });
+      const gerekce = yon?.gerekceler.get(tabloId);
+      satirlar.push({ ad: liste_ ? deg[anahtarlar[0]].slice(0, 60) : x.ad, degerler: deg, ...(gerekce ? { gerekce } : {}) });
     }
     if (!satirlar.length) continue;
     const sutunlar = t.sutunlar.filter((c) => satirlar.some((r) => c.ad in r.degerler)).map((c) => c.ad);
