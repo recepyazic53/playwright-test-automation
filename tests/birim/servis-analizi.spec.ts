@@ -6,7 +6,7 @@
 // değer listesi tablosu; evet/hayır liste tablosu olmaz; hata veren örneğin değerleri girmez), karar hatırlama. Ağ yok; veri sentetik.
 import { expect, test } from '@playwright/test';
 import {
-  adEslesmesi, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, servisAnalizi, tabloEslesmesi, tipCikar,
+  adEslesmesi, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, servisAnalizi, tabloEslesmesi, tipCikar,
   type AnalizDurumu, type AnalizGirdisi, type AnalizOnerisi, type OrnekDurumu
 } from '../../scripts/platform/servisler/servis-analizi.mjs';
 import { ornekIstekleriniDogrula, ornekleriEkle, ornekleriMaskele } from '../../scripts/platform/servisler/servis-ornekleri.mjs';
@@ -176,16 +176,21 @@ test('tablo eşleştirme: ad + değer güçlü; yalnız değerden (desen aynı) 
   expect(bul(bagli.oneriler, 'tabloBagi', 'Girdi/Channel')?.guc).toBe('guclu');
   expect(bul(servisAnalizi({ metot: 'Islem', sema, ornekler, tablolar, mevcut: { baglar: { 'Girdi/Country': { tablo: 't3', sutun: 'Code' } } } }).oneriler, 'tabloBagi', 'Girdi/Country')?.kanit)
     .toContain('şu anki bağ: 0/2 Diğer.Code\'nde var');
-  // Kopuk bağ: en iyi eşleşmeye bağla / bağı kaldır.
+  // Kopuk bağ: TEK öneri; güç eşleşme kanıtından (ad + değer → güçlü; kopukluk gücü düşürmez). "Bağı kaldır" aynı öneriyle (deger null).
   const kopuk = servisAnalizi({ metot: 'Islem', sema, ornekler, tablolar, mevcut: { baglar: { 'Girdi/Username': { tablo: 'silinmis', sutun: 'Eski' } } } });
   const kb = hepsi(kopuk.oneriler, 'kopukBag', 'Girdi/Username');
-  expect(kb.map((o) => [o.baslik, o.guc, o.deger])).toEqual([
-    ['Kopuk bağ: Bayi › Kullanıcı sütununa bağlansın mı?', 'zayif', { tablo: 't2', sutun: 'Kullanıcı' }], ['Kopuk bağ: bağ kaldırılsın mı?', 'zayif', null]]);
+  expect(kb.map((o) => [o.baslik, o.guc, o.deger, o.eskiBag])).toEqual([
+    ['Eski bağ silinmiş (silinmiş tablo › Eski) → Bayi › Kullanıcı', 'guclu', { tablo: 't2', sutun: 'Kullanıcı' }, 'silinmiş tablo › Eski']]);
+  expect(gucluOneriler(kopuk.oneriler).some((o) => o.tur === 'kopukBag')).toBe(true);
   const d = bosDurum({ baglar: { 'Girdi/Username': { tablo: 'silinmis', sutun: 'Eski' } } });
-  oneriyiUygula(d, kb[1]);
+  oneriyiUygula(d, { ...kb[0], deger: null });
   expect(d.baglar['Girdi/Username']).toBeUndefined();
   oneriyiUygula(d, kb[0]);
   expect(d.baglar['Girdi/Username']).toEqual({ tablo: 't2', sutun: 'Kullanıcı' });
+  // Eşleşme yoksa yalnız "bağı kaldır" (zayıf; güçlü önerileri uygula kapsamaz).
+  const yalniz = servisAnalizi({ metot: 'Islem', sema, ornekler, tablolar: [], mevcut: { baglar: { 'Girdi/Username': { tablo: 'silinmis', sutun: 'Eski' } } } });
+  expect(hepsi(yalniz.oneriler, 'kopukBag', 'Girdi/Username').map((o) => [o.baslik, o.guc, o.deger])).toEqual([['Eski bağ silinmiş (silinmiş tablo › Eski) → bağı kaldır', 'zayif', null]]);
+  expect(gucluOneriler(yalniz.oneriler).some((o) => o.tur === 'kopukBag')).toBe(false);
   // Bağlı tabloda olmayan değerler: "tabloya şu değerler eklensin mi" (hata veren örneğin değeri girmez).
   const eksik = servisAnalizi({ metot: 'Islem', sema, tablolar, mevcut: { baglar: { 'Girdi/Channel': { tablo: 't2', sutun: 'Bayi kodu' } } }, ornekler: [
     { govde: zarf('<Channel>51234</Channel>') }, { govde: zarf('<Channel>33333</Channel>') }, { durum: 'basarili', govde: zarf('<Channel>44444</Channel>') },
@@ -195,6 +200,34 @@ test('tablo eşleştirme: ad + değer güçlü; yalnız değerden (desen aynı) 
   const d2 = bosDurum();
   oneriyiUygula(d2, td as AnalizOnerisi);
   expect(d2.tabloDegerleri).toEqual([{ tablo: 't2', sutun: 'Bayi kodu', degerler: ['33333', '44444'] }]);
+});
+
+test('ad eşleşmesi: genel ekler (no / number / kod / tarih / ad / tip) ve rol önekleri tek başına eşleşmez; ayırt edici kısım eşleşmeli', () => {
+  // Gerçek servislerde yanlış eşleşen alan adları (negatif): yalnız genel ek ortak.
+  for (const a of ['IdentityNumber', 'PhoneNumber', 'PassportNumber', 'UnitNo', 'ContractNo', 'ClientPhoneNumber', 'ClientIdentityNumber']) expect(adEslesmesi(a, 'Vergi no'), a).toBeNull();
+  for (const a of ['TaxNumber', 'CardNumber', 'RenewalNo']) expect(adEslesmesi(a, 'Sözleşme no'), a).toBeNull();
+  for (const [a, b] of [['Code', 'Kod'], ['Name', 'Ad'], ['ClientType', 'Tip'], ['StartDate', 'Tarih'], ['Value', 'Değer']]) expect(adEslesmesi(a, b), a + ' / ' + b).toBeNull();
+  // Ayırt edici kısım eşleşir (önek bağlamdır, ayırt edici değil); uzun sözcükte tek harf farkı benzer sayılır.
+  for (const [a, b] of [['IdentityNumber', 'Kimlik no'], ['ClientIdentityNumber', 'TC'], ['TaxNumber', 'Vergi no'], ['PhoneNumber', 'Telefon'],
+    ['ClientPhoneNumber', 'İletişim telefonu'], ['PassportNumber', 'Pasaport no'], ['CardNumber', 'Kart no'], ['CustomerBirthDate', 'Doğum tarihi'],
+    ['ContractNr', 'Contracts no'], ['FirstName', 'Ad'], ['CardHolderLastname', 'Soyad']]) expect(adEslesmesi(a, b), a + ' / ' + b).not.toBeNull();
+  // Ana sözcük: "CardHolderLastname" kartın numarasıyla eşleşmez.
+  expect(adEslesmesi('CardHolderLastname', 'Kart no')).toBeNull();
+  // Bağlam: kart alanı kişi / pasaport tablosuna, kişi alanı pasaport tablosuna eşlenmez; eşleşme yoksa yeni tablo önerilir.
+  expect(baglamUyumlu('CardHolderLastname', 'Pasaportlu kişi', 'Soyad')).toBe(false);
+  expect(baglamUyumlu('CardHolderLastname', 'Kart bilgileri', 'Soyad')).toBe(true);
+  expect(baglamUyumlu('CustomerBirthDate', 'Pasaportlu kişi', 'D TARİHİ')).toBe(false);
+  expect(baglamUyumlu('CustomerBirthDate', 'Kişi bilgileri', 'D TARİHİ')).toBe(true);
+  const tablolar = [
+    { id: 'p', ad: 'Pasaportlu kişi', sutunlar: [{ ad: 'Soyad' }, { ad: 'D TARİHİ' }], satirlar: [{ degerler: { Soyad: 'Yilmaz', 'D TARİHİ': '01.01.1990' } }] },
+    { id: 'k', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Vergi no' }, { ad: 'Sözleşme no' }], satirlar: [{ degerler: { 'Vergi no': '1111111111', 'Sözleşme no': 'S1' } }] }
+  ];
+  expect(tabloEslesmesi('CardHolderLastname', ['Yilmaz'], tablolar)).toBeNull();
+  expect(tabloEslesmesi('CustomerBirthDate', ['01.01.1990'], tablolar)).toBeNull();
+  expect(tabloEslesmesi('PhoneNumber', ['5550001'], tablolar)).toBeNull();
+  const r = servisAnalizi({ metot: 'Islem', sema: null, tablolar, ornekler: [{ ad: 'A', govde: zarf('<CardHolderLastname>Yilmaz</CardHolderLastname><RenewalNo>3</RenewalNo>') }] });
+  expect(r.oneriler.filter((o) => o.tur === 'tabloBagi')).toEqual([]);
+  expect(r.yeniTablolar.flatMap((x) => x.alanlar.map((a) => a.yol)).sort()).toEqual(['Girdi/CardHolderLastname', 'Girdi/RenewalNo']);
 });
 
 test('örnekler arası fark, alan listesi olmayan metot; yeni tablolar kavram gruplarına ayrılır; hata veren örneğin değerleri tabloya girmez', () => {

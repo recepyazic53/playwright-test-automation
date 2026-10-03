@@ -110,6 +110,8 @@ export function analizBagla(tanim, a) {
   const gucRozeti = (/** @type {any} */ o) => (o.tur === 'celiski' ? rozet('not', 'durdu') : o.guc === 'guclu' ? rozet('güçlü', 'basari') : rozet('zayıf', ''));
   const dugmeler = (/** @type {any} */ o, /** @type {string} */ ad, uygulaMetni = 'Uygula') => h('span', { class: 'analiz-dugmeleri' },
     o.tur === 'celiski' ? null : h('button', { type: 'button', class: `kucuk-dugme ${o.guc === 'guclu' ? 'birincil' : ''}`, 'aria-label': `Uygula: ${ad}`, onclick: () => { uygula(o); sonra(); } }, uygulaMetni),
+    // Kopuk bağ tek kartta: önerilen sütuna bağla (yukarıdaki) ya da eski bağı kaldır (güçlü önerileri uygula kapsamaz).
+    o.tur === 'kopukBag' && o.deger ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Bağı kaldır: ${ad}`, onclick: () => { uygula({ ...o, deger: null }); sonra(); } }, 'Bağı kaldır') : null,
     h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Yoksay: ${ad}`, onclick: () => { yoksay(o); sonra(); } }, 'Yoksay'));
 
   /** Öneri satırı: (bölümdeyse alan yolu) + güç + başlık + kanıt + Uygula / Yoksay. @param {any} o @param {boolean} [yolGoster] */
@@ -118,7 +120,7 @@ export function analizBagla(tanim, a) {
     return h('div', { class: `analiz-onerisi ${o.tur === 'celiski' ? 'celiski' : o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
       h('span', { class: 'analiz-oneri-metni' }, o.tur === 'celiski' ? ikon('uyari') : null, gucRozeti(o), yolGoster && o.yol ? h('code', { class: 'duz' }, o.yol) : null, h('b', {}, o.baslik),
         d.onsecili.has(o.anahtar) ? [' ', rozet('önseçili', 'vurgu')] : null, h('span', { class: 'analiz-kaniti' }, o.kanit)),
-      dugmeler(o, ad, o.tur === 'kopukBag' && !o.deger ? 'Bağı kaldır' : 'Uygula'));
+      dugmeler(o, ad, o.tur === 'kopukBag' ? (o.deger ? 'Önerilen sütuna bağla' : 'Bağı kaldır') : 'Uygula'));
   };
 
   /** Örnek sonucu (başarılı / hata verdi / bilinmiyor): zorunluluk kanıtı bundan gelir; hata verenlerin değerleri tablolara girmez. @param {any} x */
@@ -200,10 +202,10 @@ export function analizBagla(tanim, a) {
       h('h6', {}, 'Tablo önerileri'),
       h('div', { class: 'tablo-onerileri-a' }, h('div', { class: 'alan-etiketi' }, 'Mevcut tablolara bağlanacak alanlar'),
         baglar.length ? baglar.map((o) => h('div', { class: `analiz-onerisi ${o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
-          h('span', { class: 'analiz-oneri-metni' }, gucRozeti(o), h('code', { class: 'duz' }, alanAdi(o.yol)), ' → ',
+          h('span', { class: 'analiz-oneri-metni' }, gucRozeti(o), h('code', { class: 'duz' }, alanAdi(o.yol)), o.eskiBag ? `: eski bağ silinmiş (${o.eskiBag})` : null, ' → ',
             h('b', {}, o.deger ? `${tabloAdi(o.deger.tablo)} › ${o.deger.sutun}${o.tur === 'tabloyaDeger' ? ` (eklenecek: ${o.deger.degerler.join(', ')})` : ''}` : 'bağı kaldır'), d.onsecili.has(o.anahtar) ? [' ', rozet('önseçili', 'vurgu')] : null,
             h('span', { class: 'analiz-kaniti' }, o.kanit)),
-          dugmeler(o, `${o.yol} — ${o.baslik}`, o.tur === 'kopukBag' && !o.deger ? 'Bağı kaldır' : 'Uygula')))
+          dugmeler(o, `${o.yol} — ${o.baslik}`, o.tur === 'kopukBag' ? (o.deger ? 'Önerilen sütuna bağla' : 'Bağı kaldır') : 'Uygula')))
           : h('p', { class: 'soluk kucuk tablo-onerileri-bos' }, `Mevcut tablolarla eşleşen alan bulunamadı${yeniAlan ? `; ${yeniAlan} alan için yeni tablo önerildi` : ''}.`)),
       h('div', { class: 'tablo-onerileri-b' }, h('div', { class: 'alan-etiketi' }, 'Yeni tablolar'),
         yeniler.length ? yeniler.map(yeniTabloKarti) : h('p', { class: 'soluk kucuk' }, 'Yeni tablo önerisi yok.')));

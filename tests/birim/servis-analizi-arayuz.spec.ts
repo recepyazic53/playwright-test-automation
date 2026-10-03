@@ -72,8 +72,8 @@ test.describe('servis analizi arayüzü', () => {
     await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, riskli: false });
     girisId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Servis girişi', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }],
       satirlar: [{ degerler: { Channel: '77', Username: 'tablo-kullanici', Password: 'tablo-parola' } }] })).tablo.id;
-    // "ClientType" ↔ "Tip" (eş anlam, tablo adı) + değerler O / T "Kod" sütununda: güçlü eşleşme → sihirbazda önseçili.
-    tipId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Tip', sutunlar: [{ ad: 'Kod' }, { ad: 'Açıklama' }],
+    // "ClientType" ↔ "Client type" (birebir, tablo adı; tek başına "Tip" genel ek sayılır) + değerler O / T "Kod" sütununda: güçlü eşleşme → sihirbazda önseçili.
+    tipId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Client type', sutunlar: [{ ad: 'Kod' }, { ad: 'Açıklama' }],
       satirlar: [{ ad: 'o', degerler: { Kod: 'O', 'Açıklama': 'Birinci' } }, { ad: 't', degerler: { Kod: 'T', 'Açıklama': 'İkinci' } }] })).tablo.id;
     // "Bayi": Username ↔ Kullanıcı (eş anlam + değer), Channel ↔ Bayi kodu (yalnız değer, desen aynı; aynı satırda birlikte).
     bayiId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Bayi', sutunlar: [{ ad: 'Bayi kodu' }, { ad: 'Kullanıcı' }],
@@ -148,7 +148,7 @@ test.describe('servis analizi arayüzü', () => {
     // Satırda: önerilen tablo sütunu seçim kutusunun yanında rozetle (önseçili ya da öneri).
     const satir = (ad: string) => page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
     await expect(page.getByLabel('Siparis Input/ClientType tablo sütunu ya da kural')).toHaveValue(`${tipId}\u0001Kod`);
-    await expect(satir('ClientType').locator('.bag-onerisi')).toContainText('Önseçili: Tip › Kod');
+    await expect(satir('ClientType').locator('.bag-onerisi')).toContainText('Önseçili: Client type › Kod');
     await expect(satir('Username').locator('.bag-onerisi')).toContainText('Öneri: Bayi › Kullanıcı');
     // Tablo önerileri (a): mevcut tablolara bağ — güç ve kanıtıyla; aynı satır güveni; yalnız değerden gelen Channel güçlendi.
     const tablo = bolum.getByRole('region', { name: 'Siparis tablo önerileri' });
@@ -342,6 +342,35 @@ test.describe('servis analizi arayüzü', () => {
     await tasmaYok(page);
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);
+    expect(hatalar).toEqual([]);
+    expect(soap.istekler.length).toBe(once);
+    await baglam.close();
+  });
+
+  test('kopuk bağ: alan başına TEK kart — eski bağ + önerilen sütuna bağla / bağı kaldır / Yoksay; güç eşleşme kanıtından', async () => {
+    test.setTimeout(60_000);
+    const once = soap.istekler.length;
+    const a = (await servis()).ayarlar;
+    // Username'in bağlı olduğu sütun artık yok (kopuk); ad + değer Bayi › Kullanıcı ile eşleşiyor.
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'analiz-servisi', ad: 'Analiz Servisi', yol: a.yol,
+      alanBaglari: { ...a.alanBaglari, Siparis: { ...a.alanBaglari.Siparis, 'Input/Username': { tablo: bayiId, sutun: 'Eski' } } } });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/analiz`);
+    await page.getByRole('button', { name: 'Siparis metodu' }).click();
+    const tablolar = page.getByRole('region', { name: 'Siparis tablo önerileri' });
+    const kart = tablolar.locator('.analiz-onerisi').filter({ hasText: 'Username' });
+    await expect(kart).toHaveCount(1);
+    await expect(kart).toHaveAttribute('data-tur', 'kopukBag');
+    await expect(kart).toHaveAttribute('data-guc', 'guclu');
+    await expect(kart).toContainText('eski bağ silinmiş (Bayi › Eski) → Bayi › Kullanıcı');
+    await expect(kart.getByRole('button')).toHaveText(['Önerilen sütuna bağla', 'Bağı kaldır', 'Yoksay']);
+    await kart.getByRole('button', { name: 'Önerilen sütuna bağla' }).click();
+    await expect(page.locator('.kayit-durumu')).toHaveText('✓ Kaydedildi');
+    await expect(tablolar.locator('.analiz-onerisi').filter({ hasText: 'Username' })).toHaveCount(0);
+    expect((await servis()).ayarlar.alanBaglari.Siparis['Input/Username']).toEqual({ tablo: bayiId, sutun: 'Kullanıcı' });
     expect(hatalar).toEqual([]);
     expect(soap.istekler.length).toBe(once);
     await baglam.close();
