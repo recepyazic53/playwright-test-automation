@@ -33,7 +33,7 @@ export function veriBekliyorNotu(s) {
     const birden = satirlar.size > 1;
     return h('div', { class: 'not-kutusu uyari veri-bekliyor-notu', role: 'note' },
       h('p', {}, h('b', {}, `Veri bekliyor: ${adlar}`)),
-      h('p', { class: 'kucuk' }, 'Bu alanların değeri yok (değer üretilmez). Senaryo koşuya dahil değil; çalıştırılırsa “Şu alanların değeri yok” hatasıyla durur. Değerleri test verisi satırında doldurun.'),
+      h('p', { class: 'kucuk' }, 'Bu alanların değeri yok (değer üretilmez). Senaryo toplu koşuya dahil değil; çalıştırılırsa “Şu alanların değeri yok” hatasıyla durur. Değerleri test verisi satırında doldurun.'),
       h('div', { class: 'dugmeler' }, [...satirlar.values()].map((r) => {
         const yok = !r.tablo || !r.satirAdi;
         return yok
@@ -44,9 +44,9 @@ export function veriBekliyorNotu(s) {
   }
   if (s.kosuyaDahil) return null;
   // Hücreler doldu, senaryo hâlâ koşu dışı: koşuya almak kullanıcının kararı (tek tıkla).
-  const dugme = h('button', { type: 'button', class: 'kucuk-dugme birincil' }, ikon('onay'), 'Koşuya dahil et');
+  const dugme = h('button', { type: 'button', class: 'kucuk-dugme birincil' }, ikon('onay'), 'Toplu koşuya dahil et');
   const not = h('div', { class: 'not-kutusu basari veri-bekliyor-notu', role: 'note' },
-    h('p', {}, h('b', {}, 'Değerler dolduruldu. '), 'Bu senaryo “veri bekliyor” olarak koşu dışı kaydedilmişti; isterseniz şimdi koşuya dahil edin.'),
+    h('p', {}, h('b', {}, 'Değerler dolduruldu. '), 'Bu senaryo “veri bekliyor” olarak toplu koşu dışında kaydedilmişti; isterseniz şimdi toplu koşuya dahil edin.'),
     h('div', { class: 'dugmeler' }, dugme));
   dugme.addEventListener('click', async () => {
     dugme.disabled = true;
@@ -54,7 +54,7 @@ export function veriBekliyorNotu(s) {
       await api('/platform/senaryo/kosuya-dahil', { govde: { projeId: s.projeId, idler: [s.senaryo.id], dahil: true } });
       bildir('Senaryo toplu koşuya dahil edildi.');
       if (s.dahilEdildi) s.dahilEdildi();
-      yerlestir(not, h('p', {}, h('b', {}, 'Koşuya dahil edildi. '), '“Koşuyu başlat” bu senaryoyu da koşar.'));
+      yerlestir(not, h('p', {}, h('b', {}, 'Toplu koşuya dahil edildi. '), '“Koşuyu başlat” bu senaryoyu da koşar.'));
     } catch (e) {
       dugme.disabled = false;
       if (e && e.durum === 423) return;
