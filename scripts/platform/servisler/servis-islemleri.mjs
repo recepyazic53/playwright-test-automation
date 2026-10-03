@@ -50,6 +50,7 @@ import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
 import { HAZIR_YETKI, beklemeMs, hazirYetkiKuraliAcik, servisKosuluDegerlendir, servisKurallari, suzgecTutar } from '../ayarlar/kurtarma-kurallari.mjs';
 // Döngüsel içe aktarma (taban-adresleri bu modülün taban doğrulamasını kullanır): yalnız çağrı anında kullanılan işlevler.
 import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
+import { kosudanOgren, ogrenmeyiZamanla } from './servis-ogrenme.mjs';
 import { alanKurallariniDogrula, analizKararlariniDogrula, ornekFarklariniDogrula, ornekIstekleriniDogrula, ornekKokleriniDogrula, ornekleriEkle } from './servis-ornekleri.mjs';
 
 /** Dosya kontrolünde rapora eklenecek (Ayarlar izin verirse) dosyanın en büyük boyutu; daha büyüğü yalnız özetle kalır. */
@@ -275,7 +276,7 @@ function alanVarsayilanlariniDogrula(v) {
     for (const [yol, d] of Object.entries(alanlar)) {
       if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!d || typeof d !== 'object' || !KAYNAKLAR.includes(d.kaynak)) throw new DepoHatasi(`"${yol}" için geçersiz kaynak.`);
-      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo' || d.kaynak === 'hesap';
+      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo' || d.kaynak === 'hesap' || d.kaynak === 'akis';
       if (degerli && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
       (s[op] ??= {})[yol] = degerli ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
     }
@@ -1286,6 +1287,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     // Test edilen uygulamanın sürümü (yalnız koşularda; "Dene" etiketlenmez): koşu başlatılırken girilen, yoksa ortam ayarındaki.
     ...(girdi.tur === 'kosu' ? { uygulamaSurumu: kosuUygulamaSurumu(girdi.uygulamaSurumu, ortam) } : {})
   });
+  // Sürekli öğrenme (servis-ogrenme.mjs): koşu kaydedildikten sonra arka planda çevrimdışı gözlem; hatası koşuyu etkilemez.
+  ogrenmeyiZamanla(() => kosudanOgren(vt, { servisId: servis.id, senaryoId: kayitli?.id ?? null, baslik, icerik, kosuId, durum, sonuc }));
   // Açık değerler yalnız çağıran akış motoruna (geri çağırma); dönüş / API yanıtı / kayıt maskeli kalır.
   girdi.acikDegerler?.({ okunan, gizliler });
   // "İstekler arası bekleme" (Ayarlar > Koşu > Servisler; ortamda ezilebilir): istek gönderildiyse (yanıt ya da hata) bu yuvadaki

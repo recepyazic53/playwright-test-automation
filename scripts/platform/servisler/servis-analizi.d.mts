@@ -38,7 +38,7 @@ export type YeniTabloPlani = {
   alanlar: Array<{ yol: string; sutun: string }>;
   ayniAdli: { id: string; ad: string } | null;
 };
-export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'gizli' | 'tabloBagi' | 'yeniTablo' | 'kopukBag' | 'tabloyaDeger';
+export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'gizli' | 'tabloBagi' | 'yeniTablo' | 'kopukBag' | 'tabloyaDeger' | 'supheli';
 export type OneriGucu = 'guclu' | 'zayif' | 'not';
 export type AnalizOnerisi = { anahtar: string; tur: OneriTuru; yol: string; deger: unknown; baslik: string; kanit: string; guc: OneriGucu };
 export type AlanAnalizi = {

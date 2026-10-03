@@ -57,3 +57,11 @@
 .ornek-sonucu { max-width: 11rem; }
 .kesin-karar-notu { font-style: italic; }
 .analiz-notlari { font-size: 12.5px; }
+
+/* Değer kaynağı (Parametreler / sihirbaz Alanlar): tek bakışta tablo / kural / akış / evet-hayır / bağlı değil. */
+.kaynak-ozeti { display: block; font-size: 12px; color: var(--metin-2); overflow-wrap: anywhere; min-width: 0; }
+.kaynak-ozeti:empty { display: none; }
+.kaynak-ozeti.kaynak-yok { color: var(--metin-3); font-style: italic; }
+.kaynak-ozeti.kaynak-evetHayir { color: var(--basari); }
+.kaynak-ozeti .oneri-var { font-style: normal; font-weight: 600; }
+.kaynak-aciklamasi { margin: 4px 0; }

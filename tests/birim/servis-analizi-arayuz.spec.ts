@@ -162,16 +162,16 @@ test.describe('servis analizi arayüzü', () => {
     await expect(bag('Channel')).toHaveAttribute('data-guc', 'guclu');
     // (b) Yeni tablolar: kavram gruplarına göre; açılır önizleme (gizli değer maskeli), ad düzenlenir.
     const yeniler = tablo.locator('.yeni-tablo-karti');
-    await expect(yeniler.locator('summary')).toContainText(['Kişi bilgileri', 'Kart bilgileri', 'Siparis']);
+    await expect(yeniler.locator('summary')).toContainText(['Kişi bilgileri', 'Kart bilgileri', 'Ekstra (liste)']);
     const kisi = yeniler.filter({ hasText: 'Kişi bilgileri' });
     await kisi.locator('summary').click();
     await expect(kisi.getByRole('table')).toContainText('IdentityNumber');
     await expect(kisi.getByRole('table')).toContainText('••••••');
     await expect(kisi.getByRole('table')).not.toContainText('10000000146');
-    const ek = yeniler.filter({ hasText: 'Siparis' });
+    const ek = yeniler.filter({ hasText: 'Ekstra (liste)' });
     await ek.locator('summary').click();
-    await ek.getByLabel('Siparis yeni tablo adı düzenle').fill('Ek bilgiler');
-    await ek.getByLabel('Siparis yeni tablo adı düzenle').blur();
+    await ek.getByLabel('Ekstra yeni tablo adı düzenle').fill('Ek bilgiler');
+    await ek.getByLabel('Ekstra yeni tablo adı düzenle').blur();
     // Zayıf öneri tek tek: kimlik numarası gizli (1 gözlem) → Uygula.
     await expect(satir('IdentityNumber').locator('.analiz-onerisi[data-tur="gizli"]')).toHaveAttribute('data-guc', 'zayif');
     await satir('IdentityNumber').getByRole('button', { name: 'Uygula: Input/IdentityNumber — Gizli' }).click();
@@ -197,7 +197,7 @@ test.describe('servis analizi arayüzü', () => {
     await tablo.locator('.yeni-tablo-karti').filter({ hasText: 'Ek bilgiler' }).getByRole('button', { name: 'Uygula: Ek bilgiler yeni tablo' }).click();
     await expect(tablo.locator('.yeni-tablo-karti').filter({ hasText: 'Kişi bilgileri' })).toHaveAttribute('open', '');
     await tablo.locator('.yeni-tablo-karti').filter({ hasText: 'Kişi bilgileri' }).getByRole('button', { name: 'Uygula: Kişi bilgileri yeni tablo' }).click();
-    await expect(page.getByLabel('Siparis Input/Ekstra tablo sütunu ya da kural')).toHaveValue('yeni:Siparis\u0001Ekstra');
+    await expect(page.getByLabel('Siparis Input/Ekstra tablo sütunu ya da kural')).toHaveValue('yeni:Ekstra\u0001Ekstra');
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -233,7 +233,7 @@ test.describe('servis analizi arayüzü', () => {
     expect(a.ornekFarklari.Siparis.map((f: Nesne) => f.yol)).toEqual(['Input/IdentityNumber', 'Input/CreditCard/Installment']);
     const { tablolar } = await basarili(`/platform/tablolar?projeId=${projeId}`);
     const yeni = tablolar.find((t: Nesne) => t.ad === 'Ek bilgiler');
-    expect(yeni.satirlar.map((r: Nesne) => [r.ad, r.degerler.Ekstra])).toEqual([['Bireysel', 'E1'], ['Kurumsal', 'E2'], ['Ucuncu', 'E3']]);
+    expect(yeni.satirlar.map((r: Nesne) => [r.ad, r.degerler.Ekstra])).toEqual([['E1', 'E1'], ['E2', 'E2'], ['E3', 'E3']]);
     expect(a.alanBaglari.Siparis['Input/Ekstra']).toEqual({ tablo: yeni.id, sutun: 'Ekstra' });
     const kisiTablosu = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri');
     expect(kisiTablosu.sutunlar.map((c: Nesne) => [c.ad, c.gizli])).toEqual([['IdentityNumber', true]]);
@@ -297,6 +297,51 @@ test.describe('servis analizi arayüzü', () => {
       await expect(page.getByRole('link', { name: 'Servisi analiz et' })).toBeVisible();
       await page.screenshot({ path: join(GORUNTU, 'servis-sayfasi-1440.png') });
     }
+    expect(hatalar).toEqual([]);
+    expect(soap.istekler.length).toBe(once);
+    await baglam.close();
+  });
+
+  test('Parametreler: her alanın değer kaynağı (tablo / kural / akış / evet-hayır / bağlı değil + öneri bağlantısı), tip rozeti ve kaynağı, "Yalnız bağlı olmayanlar"', async () => {
+    test.setTimeout(90_000);
+    const once = soap.istekler.length;
+    const a = (await servis()).ayarlar;
+    // Channel bağı kaldırılır (analizde Bayi önerisi var), kart numarası akıştan, taksit örneklerden onaylanmış tip.
+    const baglar = { ...a.alanBaglari.Siparis };
+    delete baglar['Input/Channel'];
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'analiz-servisi', ad: 'Analiz Servisi', yol: a.yol,
+      alanBaglari: { ...a.alanBaglari, Siparis: baglar },
+      alanVarsayilanlari: { ...a.alanVarsayilanlari, Siparis: { ...a.alanVarsayilanlari.Siparis, 'Input/CreditCard/CardNumber': { kaynak: 'akis', deger: 'Kart' } } },
+      alanKurallari: { ...a.alanKurallari, Siparis: { ...a.alanKurallari.Siparis, 'Input/CreditCard/Installment': { tip: 'tamsayi' } } } });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/parametreler`);
+    await page.getByRole('button', { name: 'Siparis metodu' }).click();
+    await expect(page.locator('.kaynak-aciklamasi')).toContainText('Bağlı değil (senaryoda yazılır)');
+    const satir = (ad: string) => page.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await expect(satir('ClientType').locator('.kaynak-ozeti')).toHaveAttribute('data-kaynak', 'tablo');
+    await expect(satir('IsGiftWrap').locator('.kaynak-ozeti')).toHaveText('Evet/hayır — değer senaryoda seçilir (tablo gerekmez)');
+    await expect(satir('BeginDate').locator('.kaynak-ozeti')).toHaveText('Kural: BEGIN_DATE');
+    await expect(satir('CardNumber').locator('.kaynak-ozeti')).toHaveText('Akıştan: ${akis:Kart}');
+    await expect(satir('Channel').locator('.kaynak-ozeti')).toContainText('Bağlı değil — senaryoda yazılır');
+    await expect(satir('Channel').locator('.kaynak-ozeti a.oneri-var')).toHaveAttribute('href', `#/servisler/s/${servisId}/analiz`);
+    // Tip rozeti ve kaynağı.
+    await expect(satir('Channel').locator('.alan-tipi')).toHaveText('metin');
+    await expect(satir('Channel').locator('.alan-tipi')).toHaveAttribute('title', 'Tip: metin (kaynak: WSDL)');
+    await expect(satir('IsGiftWrap').locator('.alan-tipi')).toHaveText('evet/hayır');
+    await expect(satir('Installment').locator('.alan-tipi')).toHaveText('tamsayı');
+    await expect(satir('Installment').locator('.alan-tipi')).toHaveAttribute('title', 'Tip: tamsayı (kaynak: örneklerden (onaylanmış analiz))');
+    // Süzgeç: yalnız bağlı olmayanlar.
+    await page.getByText('Yalnız bağlı olmayanlar').click();
+    await expect(satir('Channel')).toHaveCount(1);
+    await expect(satir('IsGiftWrap')).toHaveCount(0);
+    await expect(satir('ClientType')).toHaveCount(0);
+    await expect(satir('BeginDate')).toHaveCount(0);
+    await tasmaYok(page);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await tasmaYok(page);
     expect(hatalar).toEqual([]);
     expect(soap.istekler.length).toBe(once);
     await baglam.close();

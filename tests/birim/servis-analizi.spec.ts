@@ -123,7 +123,7 @@ test('tip: WSDL tipi önce (string → metin, rakamlı değerde tamsayı yok); W
   expect(bul(iki.oneriler, 'alanEkle', 'Girdi/Tarih')?.deger).toEqual({ tip: 'metin' });
 });
 
-test('gizli önerisi; değer listesi tablosu (her farklı değer bir satır), evet/hayır için liste tablosu yok', () => {
+test('gizli önerisi; gruba girmeyen her alana kendi tablosu (her farklı değer bir satır, eşik yok), evet/hayır alanına tablo yok', () => {
   const sema: OperasyonSemasi = { ad: 'Islem', kok: 'Islem', ns: '', alanlar: [{ ad: 'Girdi', cocuklar: [
     { ad: 'Parola', tip: 'metin' }, { ad: 'Numara', tip: 'metin' }, { ad: 'KimlikNo', tip: 'metin' }, { ad: 'Secenek', tip: 'metin' }, { ad: 'Liste', tip: 'metin', secenekler: ['P', 'R'] }
   ] }] };
@@ -131,8 +131,15 @@ test('gizli önerisi; değer listesi tablosu (her farklı değer bir satır), ev
     ['4', 'gizli-3', '10000000148', 'x3', 'false', 'R'], ['1', 'gizli-4', '10000000149', 'x4', 'true', 'P']];
   const r = servisAnalizi({ metot: 'Islem', sema, ornekler: satirlar.map(([b, p, n, k, s, l]) => ({
     govde: zarf(`<Baski>${b}</Baski><Parola>${p}</Parola><Numara>${n}</Numara><KimlikNo>${k}</KimlikNo><Secenek>${s}</Secenek><Liste>${l}</Liste>`) })) });
-  expect(r.yeniTablolar.filter((t) => t.tur === 'liste').map((t) => [t.ad, t.satirlar.map((x) => x.degerler[t.sutunlar[0].ad])])).toEqual([['Baski', ['1', '2', '3', '4']]]);
-  expect(r.yeniTablolar.flatMap((t) => t.sutunlar.map((c) => c.ad))).toContain('Secenek');
+  expect(r.yeniTablolar.map((t) => [t.ad, t.sutunlar.map((c) => [c.ad, c.gizli]), t.satirlar.map((x) => x.degerler[t.sutunlar[0].ad])])
+    .sort((x, y) => String(x[0]).localeCompare(String(y[0]), 'tr'))).toEqual([
+    ['Baski', [['Baski', false]], ['1', '2', '3', '4']], ['Giriş bilgileri', [['Parola', true]], [null, null, null, null, null]],
+    ['Kişi bilgileri', [['KimlikNo', true]], [null, null, null, null, null]], ['Liste', [['Liste', false]], ['P', 'R']], ['Numara', [['Numara', true]], []]]);
+  // Evet/hayır (Secenek: true / false) için tablo açılmaz.
+  expect(r.yeniTablolar.flatMap((t) => t.sutunlar.map((c) => c.ad))).not.toContain('Secenek');
+  // Tek değerli alan da tablo alır (eşik yok).
+  const tekDeger = servisAnalizi({ metot: 'Islem', sema: null, ornekler: [{ govde: zarf('<Baski>1</Baski>') }] });
+  expect(tekDeger.yeniTablolar.map((t) => [t.ad, t.tur, t.satirlar.map((x) => x.ad)])).toEqual([['Baski', 'liste', ['1']]]);
   expect(bul(r.oneriler, 'gizli', 'Girdi/Parola')).toMatchObject({ kanit: 'adı gizli ad kuralına uyuyor', guc: 'guclu' });
   expect(bul(r.oneriler, 'gizli', 'Girdi/Numara')).toMatchObject({ kanit: '11 haneli sayı (kimlik benzeri)', guc: 'guclu' });
   expect(bul(r.oneriler, 'gizli', 'Girdi/KimlikNo')?.kanit).toBe('adı kimlik numarası benzeri');
@@ -214,14 +221,14 @@ test('örnekler arası fark, alan listesi olmayan metot; yeni tablolar kavram gr
     { ad: 'Iki', govde: zarf('<FirstName>Can</FirstName><City>Izmir</City><Phone>5550002</Phone><Miktar>4</Miktar>') },
     { ad: 'Hatali', durum: 'hata', govde: zarf('<FirstName>Ece</FirstName><City>Bursa</City><Miktar>99</Miktar>') }] });
   expect(g.yeniTablolar.map((t) => [t.ad, t.sutunlar.map((c) => c.ad), t.satirlar.map((x) => x.ad)])).toEqual([
-    ['Kişi bilgileri', ['FirstName'], ['Bir', 'Iki']], ['Adres bilgileri', ['City'], ['Bir', 'Iki']], ['İletişim bilgileri', ['Phone'], ['Bir', 'Iki']], ['Islem', ['Miktar'], ['Bir', 'Iki']]]);
+    ['Kişi bilgileri', ['FirstName'], ['Bir', 'Iki']], ['Adres bilgileri', ['City'], ['Bir', 'Iki']], ['İletişim bilgileri', ['Phone'], ['Bir', 'Iki']], ['Miktar', ['Miktar'], ['3', '4']]]);
   expect(JSON.stringify(g.yeniTablolar)).not.toContain('Bursa');
   expect(g.oneriler.filter((o) => o.tur === 'yeniTablo').every((o) => o.guc === 'zayif')).toBe(true);
   const tek = servisAnalizi({ metot: 'Islem', sema: null, ornekler: [{ ad: 'Bir', govde: zarf('<FirstName>Ali</FirstName>') }] });
   expect(tek.yeniTablolar.map((t) => t.ad)).toEqual(['Islem']);
   // Kayıt tablosunda örnek satırlarında olmayan farklı değer (ek kanıttan) eksik kalmaz.
-  const kanit = servisAnalizi({ metot: 'Islem', sema: null, ornekler: [{ ad: 'Bir', govde: zarf('<Miktar>3</Miktar>') }], ekKanitlar: [{ govde: zarf('<Miktar>8</Miktar>') }] });
-  expect(kanit.yeniTablolar[0].satirlar.map((x) => [x.ad, x.degerler.Miktar])).toEqual([['Bir', '3'], ['8', '8']]);
+  const kanit = servisAnalizi({ metot: 'Islem', sema: null, ornekler: [{ ad: 'Bir', govde: zarf('<City>Ankara</City>') }], ekKanitlar: [{ govde: zarf('<City>Izmir</City>') }] });
+  expect(kanit.yeniTablolar[0].satirlar.map((x) => [x.ad, x.degerler.City])).toEqual([['Bir', 'Ankara'], ['Izmir', 'Izmir']]);
 });
 
 test('uygula / yoksay: karar hatırlanır; yeni örnek yalnız yeni öneri getirir; güçlü önerileri uygula yalnız güçlüleri kapsar', () => {
@@ -234,9 +241,8 @@ test('uygula / yoksay: karar hatırlanır; yeni örnek yalnız yeni öneri getir
   const calistir = (l = ornekler) => servisAnalizi({ metot: 'Islem', sema: SEMA, ornekler: l, tablolar, ekler: d.ekler,
     mevcut: { zorunlu: [...d.zorunlu], baglar: d.baglar, varsayilanlar: d.varsayilanlar, kurallar: d.kurallar, kararlar: d.kararlar } });
   const r = calistir();
-  expect(r.yeniTablolar.find((t) => t.tur === 'liste')).toMatchObject({ ad: 'Tur', satirlar: [{ ad: 'O' }, { ad: 'T' }] });
-  expect(r.yeniTablolar.filter((t) => t.tur === 'kayit').map((t) => [t.ad, t.sutunlar.map((c) => c.ad), t.ayniAdli])).toEqual([
-    ['Giriş bilgileri', ['Kanal'], null], ['Islem', ['Ek'], { id: 'm1', ad: 'Islem' }]]);
+  expect(r.yeniTablolar.map((t) => [t.ad, t.tur, t.sutunlar.map((c) => c.ad), t.satirlar.length])).toEqual([
+    ['Giriş bilgileri', 'kayit', ['Kanal'], 3], ['Ek', 'liste', ['Ek'], 3], ['Tur', 'liste', ['Tur'], 2]]);
   const guclu = gucluOneriler(r.oneriler);
   expect(guclu.map((o) => `${o.tur} ${o.yol}`).sort()).toEqual(['alanEkle Girdi/Ek', 'alanEkle Girdi/Tur', 'bosGonder Girdi/Not'].sort());
   for (const o of guclu) oneriyiUygula(d, o);

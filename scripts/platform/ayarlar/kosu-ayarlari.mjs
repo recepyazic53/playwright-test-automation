@@ -78,6 +78,10 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'yetkiHatasinda', grup: 'Servisler', etiket: 'Yetki hatasında (401 / 403)',
     aciklama: 'Oturum akışı ya da token adımı olan servis isteği HTTP 401 / 403 dönerse. Tekrar deneme: istek tekrarlanmaz, sonuç olduğu gibi değerlendirilir. Token\'ı yenile, bir kez tekrar dene: oturum / token adımı yeniden çalıştırılır ve istek bir kez daha gönderilir (raporda not olarak görünür; ikinci deneme de reddedilirse normal hata). Akışta "Genel ayarı kullan" seçiliyse bu değer kullanılır (akışta ayrıca seçim yapılmışsa o geçerlidir). Tekrar da "Servis istekleri" iznine tabidir.',
     tur: 'secim', varsayilan: 'yenileVeTekrar', secenekler: [['tekrarYok', 'Tekrar deneme'], ['yenileVeTekrar', 'Token\'ı yenile, bir kez tekrar dene']] },
+  // Sürekli öğrenme (servis-ogrenme.mjs): varsayılan KAPALI; açıkken yalnız güçlü "değer ekle" önerileri kendiliğinden uygulanır.
+  { anahtar: 'ogrenmeOtomatikEkle', grup: 'Servisler', etiket: 'Başarılı koşulardaki yeni değerleri tablolara kendiliğinden ekle',
+    aciklama: 'Açıksa başarılı servis koşularında elle yazılmış ve en az iki başarılı koşuda görülmüş yeni değerler, alanın bağlı olduğu test verisi tablosuna yeni satır olarak kendiliğinden eklenir ve servisin öğrenme geçmişine yazılır. Zorunluluk ve tablo bağı önerileri hiçbir zaman kendiliğinden uygulanmaz (Servisi analiz et > Koşulardan gelenler).',
+    tur: 'onay', varsayilan: false },
   // Koşu hızı (servis / ekran): sınırlar ayarlar/kosu-hizi.mjs'de; ortam formundaki "Koşu hızı" bu dört değeri ortam bazında ezer
   // (boş = bu genel ayar). Varsayılanlar önceki davranış: sırayla, beklemesiz.
   { anahtar: 'servisEszamanli', grup: 'Servis senaryoları', etiket: 'Aynı anda en çok servis senaryosu',
@@ -238,7 +242,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 ]);
 
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
- *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; hizliBostaKalmaDk: number; hizliUstSinirDk: number;
+ *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; ogrenmeOtomatikEkle: boolean; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; hizliBostaKalmaDk: number; hizliUstSinirDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number; hizliAlanIslemSn: number;
  *   kesifSecenekSiniri: number; zincirDerinligi: number; zincirOrnek: number; hizliOneriSayisi: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;

@@ -40,6 +40,7 @@ import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { sozlesmeBilgisi, sozlesmeKaydet, sozlesmeOnizle, sozlesmeSil } from './servis-sozlesmesi.mjs';
 import { servisOnerileriniUret } from './servis-oneri-baglami.mjs';
 import { oneriKarariKaydet } from '../ayarlar/oneri-kararlari.mjs';
+import { ogrenmeOneriSayisi, ogrenmeyiZamanla, senaryodanOgren } from './servis-ogrenme.mjs';
 import { analizKanitlari, analizTablolariniYaz, baglariCoz, ornekleriMaskele, tabloDegerleriniYaz } from './servis-ornekleri.mjs';
 
 /**
@@ -171,7 +172,8 @@ export const SERVIS_GET_UCLARI = [
     // Gizli sabitler (parola, token… adlı alanların sabit değeri) arayüze gönderilmez: yerlerinde maske (gizli-sabitler.mjs).
     const ekler = ekGizliAdlar(db);
     const senaryolar = g.senaryolar.map((x) => ({ ...x, icerik: servisIceriginiMaskele(x.icerik, ekler, GIZLI_SABIT_MASKESI) }));
-    return { servis: servisOzeti(db, s), senaryolar, sonSonuclar: g.sonSonuclar };
+    // Koşulardan öğrenilen uygulanabilir öneri sayısı (servis sayfası rozeti; servis-ogrenme.mjs).
+    return { servis: { ...servisOzeti(db, s), ogrenmeOneriSayisi: ogrenmeOneriSayisi(db, s) }, senaryolar, sonSonuclar: g.sonSonuclar };
   }],
   // Sözleşme sekmesi (operasyon / uç başına): sözleşme, geçmiş, kayıtlı WSDL yanıt şeması var mı, taslak için başarılı yanıtlar.
   ['/platform/servis/sozlesme', (db, q) => {
@@ -332,6 +334,8 @@ export const SERVIS_POST_UCLARI = [
       ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
       ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {})
     });
+    // Sürekli öğrenme: kaydedilen senaryonun elle yazılmış değerleri arka planda gözlem olur (hatası kaydı etkilemez).
+    ogrenmeyiZamanla(() => senaryodanOgren(db, id));
     return { id };
   }],
   // "Tabloya gizli sütun olarak taşı" (senaryo düzenleyicisi): adı gizli alanın sabit değeri — yeni yazılan (deger) ya da kayıtlı
