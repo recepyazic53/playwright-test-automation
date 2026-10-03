@@ -98,6 +98,31 @@ export function operasyonAdimlari(icerik) {
   return sonuc;
 }
 
+/**
+ * Akıştan gelen (kilitli) alanın başvurusu gövdede yerinde mi: SOAP'ta şema varsa alanın değeri tam ${akis:Ad}; REST'te JSON
+ * gövdesindeki yolun değeri; şema yoksa (ya da REST gövdesi JSON değilse) başvurunun metinde geçmesi yeter.
+ * @param {string} govde @param {{ yol: string; ad: string }} k
+ * @param {{ rest: boolean; sema?: any; govdeCoz?: (g: string, s: any) => { degerler: Record<string, any> } }} s
+ */
+export function kilitliBasvuruYerinde(govde, k, s) {
+  const metin = String(govde ?? '');
+  if (!s.rest && s.sema && s.govdeCoz) {
+    const v = s.govdeCoz(metin, s.sema).degerler[k.yol];
+    return Boolean(v && v.kaynak === 'akis' && v.deger === k.ad);
+  }
+  if (s.rest) {
+    /** @type {any} */
+    let o;
+    try { o = JSON.parse(metin); } catch { return metin.includes(`\${akis:${k.ad}}`); }
+    for (const p of k.yol.split('/')) {
+      if (o === null || typeof o !== 'object') return false;
+      o = o[p];
+    }
+    return bagAdi(o) === k.ad;
+  }
+  return metin.includes(`\${akis:${k.ad}}`);
+}
+
 /** JSON gövdesinde "a/b/0/c" yoluna değer yazar (ara nesneler oluşturulur). @param {string} govde @param {string} yol @param {string} deger */
 function jsonaYaz(govde, yol, deger) {
   let kok;
