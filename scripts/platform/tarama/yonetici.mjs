@@ -78,6 +78,7 @@ import {
   girisProfilleriniListele, ortamVarsayilanGirisProfiliId, ortamlariListele, projeGetir
 } from '../veritabani/depo.mjs';
 import { acikAnahtar } from '../kasa.mjs';
+import { CANLI_DUYURU_DEGISKENI } from '../canli-akis.mjs';
 import {
   oturumAnahtariTuret, oturumDosyaYolu, oturumDosyasiniOku, oturumDosyasinaYaz, oturumDurumuMu, oturumuKokenlereSinirla
 } from '../giris/oturum-dosyasi.mjs';
@@ -711,8 +712,15 @@ export function taramaYoneticisiOlustur(secenekler) {
       // Akış kaydı görünür tarayıcıda (testlerde NOBETCI_KAYIT_BASSIZ=1 ile başsız).
       // Giriş denemesi yalnız kullanıcı "Tarayıcıyı göster"i seçtiyse görünür.
       // Öğe seçme de görünür tarayıcıda (kullanıcı sayfada tıklayarak seçer).
-      ...((kayit || sayfaIsi || (girisDenemesi && g.gorunur === true)) && ortam[KAYIT_BASSIZ_DEGISKENI] !== '1' ? { [TARAMA_GORUNUR_DEGISKENI]: '1' } : {})
+      ...((kayit || sayfaIsi || (girisDenemesi && g.gorunur === true)) && ortam[KAYIT_BASSIZ_DEGISKENI] !== '1' ? { [TARAMA_GORUNUR_DEGISKENI]: '1' } : {}),
+      // Hızlı test "Tarayıcıda şu an": sürekli kare akışı (tests/support/canli-yayin.ts); alt süreç yalnız bağlantı duyurusunu
+      // (127.0.0.1 portu + anahtar) işin geçici klasörüne yazar, kareler bellekte kalır.
+      ...(hizliTest ? { [CANLI_DUYURU_DEGISKENI]: join(ciktiKlasoru, 'canli-akis.json') } : {})
     });
+    if (hizliTest) {
+      is.canliDuyuruYolu = join(ciktiKlasoru, 'canli-akis.json');
+      is.gorunur = env[TARAMA_GORUNUR_DEGISKENI] === '1';
+    }
     const surec = spawn(process.execPath, [cli, 'test', '--config', yapilandirma], {
       cwd: secenekler.projeKoku, env, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', shell: false
     });

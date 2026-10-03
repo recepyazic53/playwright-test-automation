@@ -23,6 +23,8 @@ import { DegerIzleyici, alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvim
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, ortuyuKaldir, sakinlikBekle, sayfaParmakIzi } from './guvenli-tiklama';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
+import { canliYayinKur, type CanliYayin } from '../../../tests/support/canli-yayin';
+import { CANLI_DUYURU_DEGISKENI } from '../canli-akis.mjs';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
@@ -31,7 +33,7 @@ import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import type { EngellenenIstek, HamAlan } from './paket-olusturucu.mjs';
 import {
-  HIZLI_BASIS_BEKLEME_EN_COK_MS, HIZLI_SECIM_KIMLIGI, HIZLI_SECIM_KOPRUSU, taramaTarayiciAyarlari,
+  HIZLI_BASIS_BEKLEME_EN_COK_MS, HIZLI_SECIM_KIMLIGI, HIZLI_SECIM_KOPRUSU, TARAMA_GORUNUR_DEGISKENI, taramaTarayiciAyarlari,
   type HizliAnlik, type HizliDiyalog, type HizliDoldurulan, type HizliPencere, type HizliDugme, type HizliFark, type HizliKesif, type HizliKesifDugmesi, type HizliKomut, type HizliMetin, type HizliOlay, type HizliPlan,
   type HizliTestSonucu, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi
 } from './protokol.mjs';
@@ -209,6 +211,7 @@ export async function hizliTestiYurut(
   /** Pencere yanıtının günlükteki adı. */
   const yanitAdi = (x: HizliDiyalog): string => (x.tur === 'alert' ? 'Tamam' : x.yanit === 'kabul' ? 'Tamam (onaylandı)' : 'İptal');
 
+  let yayin: CanliYayin | null = null;
   try {
     // "Başka düğmeye bas" köprüsü (şerit yalnız secimAc komutunda kurulur).
     await baglam.exposeBinding(HIZLI_SECIM_KOPRUSU, async (_kaynak, veri: Record<string, unknown>) => {
@@ -231,6 +234,9 @@ export async function hizliTestiYurut(
     });
     const islem = await baglam.newPage();
     ilkSayfa = islem;
+    // "Tarayıcıda şu an" sürekli kare akışı (yalnız izlenirken; kareler bellekte). Kurulamazsa arayüz son görüntüyü gösterir.
+    yayin = await canliYayinKur(baglam, islem, { duyuruYolu: process.env[CANLI_DUYURU_DEGISKENI], gorunur: process.env[TARAMA_GORUNUR_DEGISKENI] === '1' })
+      .catch(() => null);
     sayfayiDinle(islem);
     islem.on('close', () => { kapandi = true; });
     browser.on('disconnected', () => { kapandi = true; });
@@ -1140,6 +1146,7 @@ export async function hizliTestiYurut(
     await olay({ tur: 'adim', adim: 'hizli', durum: 'tamam', mesaj: 'Hızlı test tarayıcısı kapatıldı.' });
     return { kip: 'hizliTest', notlar };
   } finally {
+    await yayin?.kapat().catch(() => undefined);
     await baglam.close().catch(() => undefined);
   }
 }

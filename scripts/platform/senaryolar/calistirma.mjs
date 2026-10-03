@@ -12,6 +12,7 @@ import { UYGULAMA_SURUMU_DEGISKENI, kosuUygulamaSurumu } from '../ayarlar/rapor-
 import { calistirmaHedefiCoz, denemePaketiOlustur } from './senaryo-servisi.mjs';
 import { senaryoVeriKosusuTahmini, tekrarSenaryoPlani, veriKosusuSiniri } from './veri-kosusu-plani.mjs';
 import { KOSU_KIPLERI, TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from '../tablolar/veri-kosulari.mjs';
+import { GORUNUR_KOSU_DEGISKENI } from '../canli-akis.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./calistirma.d.mts').Kosucu} Kosucu */
@@ -74,7 +75,16 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
   ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' && govde.tekBasina === true });
-  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: { ...veriKosusuOrtami(vt, projeId, hedef, govde), ...surumOrtami(vt, hedef, govde) } };
+  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: { ...veriKosusuOrtami(vt, projeId, hedef, govde), ...surumOrtami(vt, hedef, govde), ...gorunurOrtami(govde) } };
+}
+
+/**
+ * GÖRÜNÜR KOŞU: kullanıcı koşuyu / denemeyi "Tarayıcı penceresinde izle" ile başlattıysa (gövdede gorunur: true) koşu görünür
+ * (headed) tarayıcıda çalışır (playwright.config.ts > headless). Yalnız açık true; planlı koşular bunu göndermez (başsız kalır).
+ * @param {Record<string, unknown>} govde @returns {Record<string, string>}
+ */
+export function gorunurOrtami(govde) {
+  return govde.gorunur === true ? { [GORUNUR_KOSU_DEGISKENI]: '1' } : {};
 }
 
 /**
@@ -157,7 +167,7 @@ export async function senaryoDene(vt, govde, kosucu) {
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
   const sonuc = await kosucu.modelDene({
     ortam: GENEL_ORTAM_ETIKETI, dosya: paket.spec, kosuId, etiket: paket.etiket, grepDeseni: paket.grepDeseni,
-    genel: paket.genel, denemeSenaryosu: paket.denemeSenaryosu
+    genel: paket.genel, denemeSenaryosu: paket.denemeSenaryosu, ekOrtam: gorunurOrtami(govde)
   });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, uyarilar: paket.uyarilar } };
 }

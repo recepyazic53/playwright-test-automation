@@ -59,6 +59,7 @@ import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
 import { TaramaHatasi, taramaYoneticisiAl } from '../tarama/yonetici.mjs';
+import { canliAkisiVekille, canliKanalaIstek } from '../canli-akis.mjs';
 import { HedefHatasi, ekKokenleri, hedefCoz } from '../tarama/koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturucu.mjs';
 import { kalipVar, katla } from '../tarama/eylem-kesfi.mjs';
@@ -1470,6 +1471,8 @@ export function hizliTestYoneticisiOlustur(s) {
     if (o.tarayici === 'acik') { try { sure = tarama().hizliSure(o.isId); } catch { sure = null; } }
     return {
       tarayici: o.tarayici ?? 'acik', sure,
+      // "Tarayıcıda şu an": sürekli akış var mı (iş tarayıcısı açık) ve tarayıcı görünür mü ("Tarayıcıyı göster" yalnız bunda).
+      canliAkis: Boolean(o.tarayici !== 'kapali' && d && d.durum === 'suruyor' && d.canliDuyuruYolu), gorunur: Boolean(d && d.gorunur),
       uyari: o.sayfaUyarisi ?? null, id: o.id, durum: o.durum, izin: o.izin, izinAdi: IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (o.izin)], projeId: o.projeId, ortam: o.ortam, hedef: o.hedefYol,
       ekran: o.ekran, cumle: o.cumle, duzenleme: Boolean(o.ekran.id), durak: durakNo(o), calisiyor: o.calisiyor, sonHata: o.sonHata, hata: o.hata,
       kesif: o.kesifAnlik ? {
@@ -2566,8 +2569,35 @@ export function hizliTestYoneticisiOlustur(s) {
     return { iptal: true };
   }
 
+  // ---- "Tarayıcıda şu an": sürekli kare akışı ve "Tarayıcıyı göster" ----
+  /** Oturumun o anki tarayıcı işi (tarayıcı yeniden açılınca değişir). @param {Nesne} o @returns {Nesne | null} */
+  const tarayiciIsi = (o) => { try { return o.isId ? (tarama().isler.get(o.isId) ?? null) : null; } catch { return null; } };
+  /**
+   * Canlı akış kaynağı (sunucu vekili için; platform/canli-akis.mjs). Duyuru yolu her bağlantıda yeniden okunur (tarayıcı yeniden
+   * açılırsa yeni işin yayınına geçilir). Oturum bitince (kaydedildi / iptal / hata) akış biter. Durum yoklaması gibi etkileşim sayılmaz.
+   * @param {string} id
+   */
+  function canliKaynak(id) {
+    const o = oturumGetir(id, false);
+    return {
+      duyuruYolu: () => (o.tarayici === 'acik' ? (tarayiciIsi(o)?.canliDuyuruYolu ?? null) : null),
+      suruyorMu: () => oturumlar.get(o.id) === o && !['kaydedildi', 'iptal', 'hata'].includes(o.durum)
+    };
+  }
+  /** "Tarayıcıyı göster": görünür tarayıcıyı öne getirir (page.bringToFront); başsız / kapalıysa açık ileti. @param {Nesne} g */
+  async function tarayiciyiGoster(g) {
+    const o = oturumGetir(String(g.id ?? ''), false);
+    const t = o.tarayici === 'acik' ? tarayiciIsi(o) : null;
+    if (!t || t.durum !== 'suruyor') return { gosterildi: false, mesaj: 'Hızlı test tarayıcısı şu anda kapalı.' };
+    if (!t.gorunur) return { gosterildi: false, mesaj: 'Hızlı test tarayıcısı görünmez çalışıyor; pencere gösterilemez.' };
+    const y = await canliKanalaIstek(t.canliDuyuruYolu, '/one-getir');
+    return y && y.durum === 200 ? { gosterildi: true, mesaj: 'Tarayıcı penceresi öne getirildi.' } : { gosterildi: false, mesaj: 'Tarayıcı penceresi henüz hazır değil; birazdan yeniden deneyin.' };
+  }
+
   return {
     oturumlar,
+    canliKaynak,
+    tarayiciyiGoster,
     secenekler,
     baslat,
     // Durum yoklaması kullanıcı işlemi sayılmaz (boşta kalma sayacını sıfırlamaz).
@@ -2627,6 +2657,12 @@ export async function hizliTestIsteginiIsle(req, res, b) {
       }
       if (yol === '/platform/hizli-test/durum') { gonder(200, { basarili: true, oturum: y.durum(String(q.get('id') ?? '')) }); return true; }
       if (yol === '/platform/hizli-test/dosyalar') { gonder(200, { basarili: true, ...y.dosyalar(await b.acikVeritabani(), String(q.get('id') ?? '')) }); return true; }
+      // "Tarayıcıda şu an" sürekli kare akışı (SSE; token başlıkta). Kareler bellekten iletilir, diske yazılmaz.
+      if (yol === '/platform/hizli-test/canli-akis') {
+        const k = y.canliKaynak(String(q.get('id') ?? ''));
+        canliAkisiVekille(req, res, { ...k, en: Number(q.get('en')) || null });
+        return true;
+      }
       gonder(404, { basarili: false, mesaj: 'Bilinmeyen hızlı test uç noktası.' });
       return true;
     }
@@ -2682,7 +2718,8 @@ export async function hizliTestIsteginiIsle(req, res, b) {
       '/platform/hizli-test/devam': () => y.devam(govde, tarayiciBaglami),
       '/platform/hizli-test/ozet': () => y.ozet(db, govde),
       '/platform/hizli-test/kaydet': () => y.kaydet(db, govde, { kosuyorMu: b.kosuyorMu, medyaKlasoru: b.medyaKlasoru() }),
-      '/platform/hizli-test/iptal': () => y.iptal(govde)
+      '/platform/hizli-test/iptal': () => y.iptal(govde),
+      '/platform/hizli-test/tarayiciyi-goster': () => y.tarayiciyiGoster(govde)
     };
     const islem = islemler[yol];
     if (!islem) { gonder(404, { basarili: false, mesaj: 'Bilinmeyen hızlı test uç noktası.' }); return true; }

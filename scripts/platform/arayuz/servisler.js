@@ -603,7 +603,7 @@ async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   if (!ortamlar.length) { bildir('Projede ortam yok (Ayarlar > Ortamlar).', 'hata'); return; }
   const denetim = await sqlKosuDenetimiAl(proje.id);
   const y = await kosuOnayi({
-    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false, ...(await servisKosuBicimi()), surumAlani: true,
+    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', tarayiciSecimi: false, esZamanli: false, ...(await servisKosuBicimi()), surumAlani: true,
     hesapla: (o) => ({
       senaryolar: senaryolar.filter((x) => ortamdaDahil(s, x, o)),
       // Akış senaryolarının SQL adımı: veritabanı bu ortamda eşli değilse uyarı (koşu engellenmez).
@@ -744,7 +744,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     if (!ortam) {
       const denetim = await sqlKosuDenetimiAl(proje.id);
       const y = await kosuOnayi({
-        baslik: tekil ? 'Senaryoyu çalıştır?' : 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu',
+        baslik: tekil ? 'Senaryoyu çalıştır?' : 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', tarayiciSecimi: false,
         esZamanli: false, ...(tekil ? { dugme: 'Çalıştır' } : {}), ...(await servisKosuBicimi()),
         hesapla: (o) => ({
           senaryolar: secilenler.filter((x) => ortamdaKosar(s, x, o)),

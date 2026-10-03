@@ -41,6 +41,7 @@ import { surucuYukleyiciAyarla } from './platform/entegrasyonlar/veritabani-suru
 import { akisOrtamDegiskenleri } from './platform/akislar/uctan-uca-cikti.mjs';
 import { TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from './platform/tablolar/veri-kosulari.mjs';
 import { UYGULAMA_SURUMU_DEGISKENI, uygulamaSurumuTemizle } from './platform/ayarlar/rapor-verileri.mjs';
+import { CANLI_DUYURU_DEGISKENI, GORUNMEZ_KOSU_METNI, GORUNUR_KOSU_DEGISKENI, canliAkisiVekille, canliKanalaIstek } from './platform/canli-akis.mjs';
 import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
 import { veriKoku } from './platform/calisma-alanlari.mjs';
@@ -476,6 +477,9 @@ const ARAYUZ_DOSYALARI = new Map([
   // Kayıtsız site adresi sorusu (Hızlı test ve Ekran ekle > tarama / kayıt; tam adresten taban ve yol ayırma).
   ['/arayuz/adres-ayirma.js', { dosya: 'adres-ayirma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-hizli-test.css', { dosya: 'stil-hizli-test.css', tur: 'text/css; charset=utf-8' }],
+  // Canlı görüntü (koşu / Deneme paneli ve hızlı test "Tarayıcıda şu an"): sürekli kare akışı bileşeni ve kendi stil dosyası.
+  ['/arayuz/canli-akis.js', { dosya: 'canli-akis.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-canli-akis.css', { dosya: 'stil-canli-akis.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.
   ['/arayuz/ekran-modeli-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'ekran-modeli-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -811,6 +815,11 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // ekran görüntüsü ile sağlanır (bkz. fixtures.ts > canliIzlemeYayini ve aşağıdaki
     // /canli ucu).
     const canliYolu = join(tmpdir(), `test-sunucu-canli-${randomBytes(6).toString('hex')}.png`);
+    // Sürekli akış (CDP screencast): test süreci yalnız bağlantı duyurusunu (127.0.0.1 portu + rastgele anahtar) buraya yazar;
+    // kareler bellekten /canli-akis vekiliyle panele gider (bkz. tests/support/canli-yayin.ts, platform/canli-akis.mjs).
+    const canliDuyuruYolu = `${canliYolu}.akis.json`;
+    // Görünür (headed) koşu: yalnız kullanıcı "Tarayıcı penceresinde izle"yi seçtiyse (calistirma.mjs > gorunurOrtami).
+    const gorunur = ekOrtamDegiskenleri[GORUNUR_KOSU_DEGISKENI] === '1';
     // Canlı adım listesi: raporlayıcı üst düzey adımları başladıkça / bittikçe bu JSON'a yazar (bkz. /adim-durumu).
     const adimYolu = join(tmpdir(), `test-sunucu-adim-${randomBytes(6).toString('hex')}.json`);
     // Elle doğrulama kodu (SMS "elle" kipi): giriş motoru bu yola istek yazar, panel kullanıcıdan kodu alıp
@@ -860,6 +869,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
         PLATFORM_SONUC_TOKENI: RAPORLAYICI_TOKENI,
         TEST_SUNUCU_GORUNUR: '1',
         TEST_SUNUCU_CANLI_YOLU: canliYolu,
+        [CANLI_DUYURU_DEGISKENI]: canliDuyuruYolu,
         TEST_SUNUCU_ADIM_YOLU: adimYolu,
         [KOD_YOLU_DEGISKENI]: kodYolu,
         TEST_SUNUCU_GREP_DESENI: desen,
@@ -907,7 +917,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     });
 
     if (alt.pid) sahipYaz(dosyaKlasoru, alt.pid);
-    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu, adimYolu, kodYolu };
+    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu, canliDuyuruYolu, gorunur, adimYolu, kodYolu };
     calisanSurecler.set(kosuId, kayit);
     aktifPlatformKosulari.set(kosuKimligi, (aktifPlatformKosulari.get(kosuKimligi) ?? 0) + 1);
     const platformKosusunuBirak = async (durum) => {
@@ -943,6 +953,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
       // sorun değil, sessizce yok sayılır).
       try {
         if (existsSync(canliYolu)) unlinkSync(canliYolu);
+        if (existsSync(canliDuyuruYolu)) unlinkSync(canliDuyuruYolu);
         if (existsSync(adimYolu)) unlinkSync(adimYolu);
       } catch {
         // yok sayılır
@@ -1065,6 +1076,12 @@ function surumOrtamDegiskeni(ek) {
   const surum = uygulamaSurumuTemizle(/** @type {Record<string, unknown>} */ (ek)[UYGULAMA_SURUMU_DEGISKENI]);
   return surum ? { [UYGULAMA_SURUMU_DEGISKENI]: surum } : {};
 }
+// - görünür koşu (platform/senaryolar/calistirma.mjs > gorunurOrtami): NOBETCI_GORUNUR=1 — yalnız kullanıcı "Tarayıcı penceresinde izle"yi seçtiyse.
+/** @param {unknown} ek @returns {Record<string, string>} */
+function gorunurOrtamDegiskeni(ek) {
+  if (!ek || typeof ek !== 'object' || Array.isArray(ek)) return {};
+  return /** @type {Record<string, unknown>} */ (ek)[GORUNUR_KOSU_DEGISKENI] === '1' ? { [GORUNUR_KOSU_DEGISKENI]: '1' } : {};
+}
 async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null, ekOrtam = null }) {
   const veriOrtami = veriKosusuOrtamDegiskenleri(ekOrtam);
   let tumSenaryolar;
@@ -1103,7 +1120,8 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
           : {}),
         ...veriOrtami,
         ...akisOrtamDegiskenleri(ekOrtam),
-        ...surumOrtamDegiskeni(ekOrtam)
+        ...surumOrtamDegiskeni(ekOrtam),
+        ...gorunurOrtamDegiskeni(ekOrtam)
       },
       grepDeseni,
       genel,
@@ -1194,6 +1212,8 @@ platformKosucusunuAyarla({
       // TEST_SUNUCU_DENEME: raporlayıcı koşuyu "Dene" koşusu olarak işaretler (koşu geçmişinde varsayılan gizli).
       const ekOrtamDegiskenleri = { TEST_SUNUCU_MODEL_DENEME_DOSYASI: denemeYolu, TEST_SUNUCU_DENEME: '1' };
       const liste = await senaryolariListele(istek.ortam, [], undefined, ekOrtamDegiskenleri, istek.genel);
+      // Görünür deneme ("Tarayıcı penceresinde izle"): yalnız koşuya eklenir (test listesini değiştirmez).
+      Object.assign(ekOrtamDegiskenleri, gorunurOrtamDegiskeni(istek.ekOrtam));
       const eslesen = liste.filter((s) => s.dosya === istek.dosya && Array.isArray(s.etiketler) && s.etiketler.includes(istek.etiket));
       if (eslesen.length !== 1) {
         return { httpDurum: 500, govde: { basarili: false, mesaj: 'Deneme senaryosu model koşucusunun test listesinde bulunamadı (deneme dosyası okunamadı).' } };
@@ -1251,7 +1271,7 @@ async function istegiIsle(req, res) {
 
   // Arka plan kipi (kasa kilitliyken kullanıcı tercihiyle süren planlı koşu): arayüz kilitli olduğundan canlı görüntü,
   // canlı adımlar, elle kod ve durdurma uçları da 423 döner (koşu kendi başına sürer; ekranda veri görünmez).
-  if (platformArayuzKilitliMi() && req.url && /^\/(canli|adim-durumu|kod-istegi|kod-gonder|durdur)(\?|$)/.test(req.url)) {
+  if (platformArayuzKilitliMi() && req.url && /^\/(canli|canli-akis|tarayiciyi-goster|adim-durumu|kod-istegi|kod-gonder|durdur)(\?|$)/.test(req.url)) {
     req.resume();
     jsonGonder(res, 423, { basarili: false, kod: 'KASA_KILITLI', mesaj: 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.' });
     return;
@@ -1304,9 +1324,43 @@ async function istegiIsle(req, res) {
     return;
   }
 
+  // SÜREKLİ CANLI AKIŞ (SSE; platform/canli-akis.mjs): çalışan koşunun tarayıcısından CDP screencast kareleri. Token YALNIZ
+  // BAŞLIKTA (X-Test-Sunucu-Token; arayüz fetch akışıyla okur). Panel bağlantıyı kapatınca test sürecindeki screencast durur.
+  // Koşu yoksa / bitince "bitti" durumu gider. Kareler diske yazılmaz.
+  if (req.method === 'GET' && req.url && /^\/canli-akis(\?|$)/.test(req.url)) {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    const basliktaki = req.headers['x-test-sunucu-token'];
+    if (!tokenGecerli(typeof basliktaki === 'string' ? basliktaki : '')) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
+    const kosuId = url.searchParams.get('kosuId');
+    if (!kosuId) { jsonGonder(res, 400, { basarili: false, mesaj: 'kosuId zorunludur.' }); return; }
+    canliAkisiVekille(req, res, {
+      duyuruYolu: () => calisanSurecler.get(kosuId)?.canliDuyuruYolu ?? null,
+      suruyorMu: () => calisanSurecler.has(kosuId) || kuyruktaBekleyenler.has(kosuId),
+      en: Number(url.searchParams.get('en')) || null
+    });
+    return;
+  }
+
+  // "Tarayıcıyı göster": görünür (headed) koşuda koşan sayfayı öne getirir (page.bringToFront; işletim sistemi izin verdiği ölçüde).
+  // Görünmez başlayan koşu sonradan görünür yapılamaz: açık ileti döner.
+  if (req.method === 'POST' && req.url === '/tarayiciyi-goster') {
+    let istek;
+    try { istek = JSON.parse(await govdeOku(req)); } catch { jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' }); return; }
+    const { kosuId, token } = istek ?? {};
+    if (!tokenGecerli(token)) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
+    const kayit = typeof kosuId === 'string' ? calisanSurecler.get(kosuId) : undefined;
+    if (!kayit) { jsonGonder(res, 200, { basarili: false, gorunur: false, mesaj: 'Bu koşu şu anda çalışmıyor (bitmiş olabilir).' }); return; }
+    if (!kayit.gorunur) { jsonGonder(res, 200, { basarili: false, gorunur: false, mesaj: GORUNMEZ_KOSU_METNI }); return; }
+    const y = await canliKanalaIstek(kayit.canliDuyuruYolu, '/one-getir');
+    jsonGonder(res, 200, y && y.durum === 200
+      ? { basarili: true, gorunur: true, mesaj: 'Tarayıcı penceresi öne getirildi.' }
+      : { basarili: false, gorunur: true, mesaj: 'Tarayıcı penceresi henüz hazır değil; birazdan yeniden deneyin.' });
+    return;
+  }
+
   // Token BAŞLIKTA (X-Test-Sunucu-Token; arayüz fetch ile ister, adres çubuğuna / geçmişe token düşmez); eski istemciler için
   // sorgu dizesindeki token da kabul edilir. Kare henüz yoksa 204 (içerik yok): olağan durumdur, tarayıcı konsoluna hata düşmez.
-  if (req.method === 'GET' && req.url && req.url.startsWith('/canli')) {
+  if (req.method === 'GET' && req.url && /^\/canli(\?|$)/.test(req.url)) {
     const url = new URL(req.url, 'http://127.0.0.1');
     const basliktaki = req.headers['x-test-sunucu-token'];
     const token = (typeof basliktaki === 'string' && basliktaki) || url.searchParams.get('token');
