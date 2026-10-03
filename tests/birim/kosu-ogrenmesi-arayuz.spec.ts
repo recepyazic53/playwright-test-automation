@@ -107,9 +107,21 @@ test.describe('sürekli öğrenme', () => {
     const kart = page.getByRole('region', { name: 'Koşulardan gelenler' });
     await expect(kart).toContainText('3 koşu gözlemi');
     const satir = (metin: string) => kart.locator('.analiz-onerisi').filter({ hasText: metin });
-    await expect(satir('"77" eklensin')).toHaveAttribute('data-guc', 'guclu');
-    await expect(satir('"77" eklensin')).toContainText('2 başarılı koşuda görüldü: Senaryo A');
-    await expect(satir('"88" eklensin')).toHaveAttribute('data-guc', 'zayif');
+    // Tablo başına tek kart; koşu başına satır (yalnız tabloya bağlı Channel; diğer parametreler yok).
+    const satirKarti = kart.locator('.satir-onerisi').filter({ hasText: 'Giriş tablosuna' });
+    await expect(satirKarti).toHaveCount(1);
+    await expect(satirKarti).toContainText('Giriş tablosuna 2 satır eklensin mi');
+    await expect(satirKarti).toHaveAttribute('data-guc', 'zayif');
+    const onizleme = satirKarti.getByRole('table', { name: 'Giriş satır önizlemesi' });
+    await expect(onizleme.locator('tbody tr')).toHaveCount(2);
+    await expect(onizleme.locator('tbody tr').nth(0)).toContainText('Senaryo A');
+    await expect(onizleme.locator('tbody tr').nth(0)).toContainText('77');
+    await expect(onizleme.locator('tbody tr').nth(0)).toContainText('2 başarılı koşuda görüldü: Senaryo A');
+    await expect(onizleme.locator('tbody tr').nth(0)).toHaveAttribute('data-guclu', 'true');
+    await expect(onizleme.locator('tbody tr').nth(1)).toContainText('88');
+    await expect(onizleme.locator('tbody tr').nth(1)).toHaveAttribute('data-guclu', 'false');
+    await expect(onizleme).not.toContainText(SAHTE_TC);
+    await expect(kart.locator('.analiz-onerisi[data-tur="tabloyaDeger"]')).toHaveCount(0);
     await expect(satir('Hataya yol açmış olabilir')).toContainText('IdentityNumber');
     await expect(satir('Hataya yol açmış olabilir')).toContainText('hata metni bu alanı anıyor');
     await expect(satir('İsteğe bağlı').filter({ hasText: 'IsGiftWrap' })).toContainText('servis bu alan olmadan kabul ediyor');
@@ -119,32 +131,43 @@ test.describe('sürekli öğrenme', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await satir('"88" eklensin').getByRole('button', { name: /^Yoksay/ }).click();
+    await satirKarti.getByRole('button', { name: /^Yoksay/ }).click();
     await expect(page.locator('.kayit-durumu')).toHaveText('✓ Kaydedildi');
     await page.reload();
-    await expect(page.getByRole('region', { name: 'Koşulardan gelenler' }).locator('.analiz-onerisi').filter({ hasText: '"88"' })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Koşulardan gelenler' }).locator('.analiz-onerisi').filter({ hasText: '"77"' })).toHaveCount(1);
-    expect(Object.entries((await servis()).ayarlar.analizKararlari.Siparis).filter(([k, v]) => k.includes('"88"') && v === 'yoksayildi')).toHaveLength(1);
+    await expect(page.getByRole('region', { name: 'Koşulardan gelenler' }).locator('.satir-onerisi')).toHaveCount(0);
+    // Satır kararları ayrı hatırlanır.
+    expect(Object.entries((await servis()).ayarlar.analizKararlari.Siparis).filter(([k, v]) => k.startsWith('tabloyaSatir|') && v === 'yoksayildi').length).toBeGreaterThanOrEqual(3);
     expect(hatalar).toEqual([]);
     await baglam.close();
     tablo = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === girisId);
     expect(tablo.satirlar.map((r: Nesne) => r.degerler.Kanal)).toEqual(['66']);
   });
 
-  test('kendiliğinden ekleme açıkken yalnız güçlü "değer ekle" uygulanır ve geçmişe yazılır; zorunluluk değişmez', async () => {
+  test('kendiliğinden ekleme açıkken yalnız güçlü satırlar (≥ 2 başarılı koşu) yazılır ve geçmişe girer; eski biçimli bekleyen veri de yazılır', async () => {
     test.setTimeout(60_000);
     const ayar = await basarili('/platform/kosu-ayarlari');
     expect(ayar.ayarlar.ogrenmeOtomatikEkle).toBe(false);
+    const senaryoC = String((await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Senaryo C', kapsam: 'test', icerik: {
+      operasyon: 'Siparis', govde: zarf(`<Channel>99</Channel><IdentityNumber>${SAHTE_TC}</IdentityNumber>`), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }] } })).id);
+    const kanallar = async () => (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === girisId).satirlar.map((r: Nesne) => r.degerler.Kanal).sort();
     await basarili('/platform/kosu-ayarlari/kaydet', { ayarlar: { ogrenmeOtomatikEkle: true } });
-    expect((await dene(senaryoA)).sonuc.durum).toBe('basarili');
-    await expect.poll(async () => (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === girisId).satirlar.map((r: Nesne) => r.degerler.Kanal).sort())
-      .toEqual(['66', '77']);
+    // Bir başarılı koşu: satır zayıf, yazılmaz.
+    const g0 = await gozlemSayisi();
+    expect((await dene(senaryoC)).sonuc.durum).toBe('basarili');
+    await expect.poll(gozlemSayisi).toBe(g0 + 1);
+    expect(await kanallar()).toEqual(['66']);
+    // İkinci başarılı koşu: satır güçlü → kendiliğinden yazılır (satır adı senaryo adı); yoksayılan 88 yazılmaz.
+    expect((await dene(senaryoC)).sonuc.durum).toBe('basarili');
+    await expect.poll(kanallar).toEqual(['66', '99']);
+    const tablo = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === girisId);
+    expect(tablo.satirlar.find((r: Nesne) => r.degerler.Kanal === '99').ad).toBe('Senaryo C');
     const s = await servis();
-    expect(s.ayarlar.kosuOgrenmesiGecmisi.map((x: Nesne) => x.metin).join(' ')).toContain('Kendiliğinden eklendi');
-    // Zorunluluk önerisi kendiliğinden uygulanmaz; zayıf / yoksayılan 88 eklenmez.
+    expect(s.ayarlar.kosuOgrenmesiGecmisi.map((x: Nesne) => x.metin).join(' ')).toContain('Kendiliğinden eklendi: Giriş tablosuna satır "Senaryo C"');
     expect(s.ayarlar.alanZorunluluklari.Siparis).toContain('Input/IsGiftWrap');
-    const kanallar = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === girisId).satirlar.map((r: Nesne) => r.degerler.Kanal);
-    expect(kanallar).not.toContain('88');
     await basarili('/platform/kosu-ayarlari/kaydet', { ayarlar: { ogrenmeOtomatikEkle: false } });
+    // Eski biçimde (sütun + değerler) bekleyen öğrenme verisi kayıtta yine yazılır.
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ogrenen', ad: 'Ogrenen', yol: s.ayarlar.yol ?? '/Servis/ornek.asmx',
+      tabloDegerleri: [{ tablo: girisId, sutun: 'Kanal', degerler: ['55'] }] });
+    expect(await kanallar()).toEqual(['55', '66', '99']);
   });
 });

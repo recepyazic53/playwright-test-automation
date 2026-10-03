@@ -21,6 +21,22 @@ const MASKE = '••••••';
 const KAYNAK_ADI = { soapui: 'SoapUI', postman: 'Postman', curl: 'cURL' };
 const ornekKimligi = () => `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const kopya = (/** @type {any} */ x) => JSON.parse(JSON.stringify(x));
+/**
+ * Satır önerisinin önizleme tablosu: satır adı + sütunlar (gizli sütun "••• (yazılmaz)"); satır başına kanıt / gerekçe varsa ayrı sütun.
+ * @param {any} v { tablo, satirlar, gizliSutunlar } @param {ReadonlyArray<any>} tablolar
+ */
+export function satirOnizlemesi(v, tablolar) {
+  const t = tablolar.find((x) => x.id === v.tablo);
+  const gizliler = v.gizliSutunlar || [];
+  const sutunlar = (t ? t.sutunlar.map((/** @type {any} */ c) => c.ad) : [...new Set(v.satirlar.flatMap((/** @type {any} */ r) => Object.keys(r.degerler)))])
+    .filter((/** @type {string} */ c) => gizliler.includes(c) || v.satirlar.some((/** @type {any} */ r) => c in r.degerler));
+  const notlu = v.satirlar.some((/** @type {any} */ r) => r.kanit || r.gerekce);
+  return h('div', { class: 'tablo-kaydirma satir-onizleme' }, h('table', { class: 'veri-tablosu kucuk', 'aria-label': `${t?.ad ?? v.tablo} satır önizlemesi` },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Satır'), sutunlar.map((/** @type {string} */ c) => h('th', {}, c)), notlu ? h('th', {}, 'Kanıt') : null)),
+    h('tbody', {}, v.satirlar.map((/** @type {any} */ r) => h('tr', r.guclu === undefined ? {} : { 'data-guclu': String(r.guclu) }, h('td', {}, r.ad),
+      sutunlar.map((/** @type {string} */ c) => h('td', { class: gizliler.includes(c) ? 'soluk' : '' }, gizliler.includes(c) ? '••• (yazılmaz)' : r.degerler[c] ?? '')),
+      notlu ? h('td', { class: 'soluk kucuk' }, [r.gerekce, r.kanit].filter(Boolean).join(' · ')) : null)))));
+}
 
 /**
  * Metot başına analiz durumu (örnekler + kararlar + kurallar + boş gönder varsayılanları; yeniTablolar sihirbaz / sayfa genelinde ortak).
@@ -216,20 +232,10 @@ export function analizBagla(tanim, a) {
    * "Tabloya N satır eklensin mi" kartı (tablo başına tek): örnek başına satır önizlemesi; gizli sütunlar maskeli ve yazılmaz.
    * @param {any} o
    */
-  const satirKarti = (o) => {
-    const v = o.deger;
-    const t = (tanim.tablolar || []).find((x) => x.id === v.tablo);
-    const gizliler = v.gizliSutunlar || [];
-    const sutunlar = (t ? t.sutunlar.map((/** @type {any} */ c) => c.ad) : [...new Set(v.satirlar.flatMap((/** @type {any} */ r) => Object.keys(r.degerler)))])
-      .filter((/** @type {string} */ c) => gizliler.includes(c) || v.satirlar.some((/** @type {any} */ r) => c in r.degerler));
-    return h('div', { class: 'analiz-onerisi zayif satir-onerisi', 'data-tur': o.tur, 'data-guc': o.guc },
-      h('span', { class: 'analiz-oneri-metni' }, gucRozeti(o), h('b', {}, o.baslik), h('span', { class: 'analiz-kaniti' }, o.kanit)),
-      h('div', { class: 'tablo-kaydirma satir-onizleme' }, h('table', { class: 'veri-tablosu kucuk', 'aria-label': `${tabloAdi(v.tablo)} satır önizlemesi` },
-        h('thead', {}, h('tr', {}, h('th', {}, 'Satır'), sutunlar.map((/** @type {string} */ c) => h('th', {}, c)))),
-        h('tbody', {}, v.satirlar.map((/** @type {any} */ r) => h('tr', {}, h('td', {}, r.ad),
-          sutunlar.map((/** @type {string} */ c) => h('td', { class: gizliler.includes(c) ? 'soluk' : '' }, gizliler.includes(c) ? '••• (yazılmaz)' : r.degerler[c] ?? ''))))))),
-      dugmeler(o, o.baslik, 'Satırları ekle'));
-  };
+  const satirKarti = (o) => h('div', { class: 'analiz-onerisi zayif satir-onerisi', 'data-tur': o.tur, 'data-guc': o.guc },
+    h('span', { class: 'analiz-oneri-metni' }, gucRozeti(o), h('b', {}, o.baslik), h('span', { class: 'analiz-kaniti' }, o.kanit)),
+    satirOnizlemesi(o.deger, tanim.tablolar || []),
+    dugmeler(o, o.baslik, 'Satırları ekle'));
   const tabloAdi = (/** @type {string} */ id) => (tanim.tablolar || []).find((t) => t.id === id)?.ad ?? id;
 
   const sonucBolumu = () => {
@@ -410,10 +416,20 @@ export async function servisAnaliziSayfasi(kap, proje, s, yenile) {
     const yoksay = (/** @type {any} */ m, /** @type {any} */ o) => { oneriyiYoksay(metotDurumu(m), o); kosuCiz(); degisti(); };
     yerlestir(kosuKarti,
       h('div', { class: 'kart-basligi' }, h('h3', {}, 'Koşulardan gelenler'), h('span', { class: 'sag soluk kucuk' }, `${gozlemSayisi} koşu gözlemi`)),
-      h('p', { class: 'soluk kucuk' }, 'Servis koşuları (Dene, tekil, toplu, planlı) bittikten sonra çevrimdışı incelenir: yalnız senaryoda elle yazılmış değerler (tablo, kural ve akış değerleri değil). Başarılı koşudaki yeni değer, bağlı tabloya eklenmek üzere önerilir; başarısız koşuda hata metni bir alanı anıyorsa o alan şüpheli sayılır, değeri eklenmez.'),
+      h('p', { class: 'soluk kucuk' }, 'Servis koşuları (Dene, tekil, toplu, planlı) bittikten sonra çevrimdışı incelenir: yalnız senaryoda elle yazılmış değerler (tablo, kural ve akış değerleri değil). Başarılı koşunun yeni değerleri, bağlı tabloya koşu başına tek satır olarak önerilir (yalnız o tabloya bağlı alanlar); başarısız koşuda hata metni bir alanı anıyorsa o alan şüpheli sayılır, değeri eklenmez.'),
       satirlar.length ? h('div', { class: 'kosu-onerileri' }, satirlar.map(({ m, o }) => {
-        const ad = `${m.ad} ${o.yol} — ${o.baslik}`;
+        const satirli = o.tur === 'tabloyaSatir';
+        const ad = satirli ? `${m.ad} — ${o.baslik}` : `${m.ad} ${o.yol} — ${o.baslik}`;
         const not = o.guc === 'not';
+        if (satirli) {
+          return h('div', { class: `analiz-onerisi satir-onerisi ${o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
+            h('span', { class: 'analiz-oneri-metni' }, o.guc === 'guclu' ? rozet('güçlü', 'basari') : rozet('zayıf', ''), h('code', { class: 'duz' }, m.ad), h('b', {}, o.baslik),
+              h('span', { class: 'analiz-kaniti' }, o.kanit)),
+            satirOnizlemesi(o.deger, tablolar),
+            h('span', { class: 'analiz-dugmeleri' },
+              h('button', { type: 'button', class: `kucuk-dugme ${o.guc === 'guclu' ? 'birincil' : ''}`, 'aria-label': `Uygula: ${ad}`, onclick: () => uygula(m, o) }, 'Satırları ekle'),
+              h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Yoksay: ${ad}`, onclick: () => yoksay(m, o) }, 'Yoksay')));
+        }
         return h('div', { class: `analiz-onerisi ${not ? 'celiski' : o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
           h('span', { class: 'analiz-oneri-metni' }, not ? ikon('uyari') : null, not ? rozet('not', 'durdu') : o.guc === 'guclu' ? rozet('güçlü', 'basari') : rozet('zayıf', ''),
             h('code', { class: 'duz' }, `${m.ad} · ${alanAdi(o.yol)}`), h('b', {}, o.tur === 'tabloBagi' ? `Tablo: ${tabloAdiBul(o.deger.tablo)} › ${o.deger.sutun}` : o.baslik),

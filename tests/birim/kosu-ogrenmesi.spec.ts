@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test';
 import { EN_COK_GOZLEM, gozlemEkle, gozlemOlustur, hataAlanlari, hataMetni, kosuOnerileri, type Gozlem } from '../../scripts/platform/servisler/kosu-ogrenmesi.mjs';
 import { ogrenmeyiCalistir } from '../../scripts/platform/servisler/servis-ogrenme.mjs';
 import type { OperasyonSemasi } from '../../scripts/platform/servisler/servis-govdesi.mjs';
+import { oneriyiUygula, type AnalizDurumu, type TabloSatiriOnerisi } from '../../scripts/platform/servisler/servis-analizi.mjs';
 
 const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Islem xmlns="urn:ornek"><Girdi>${ic}</Girdi></Islem></s:Body></s:Envelope>`;
 const SEMA: OperasyonSemasi = { ad: 'Islem', kok: 'Islem', ns: 'urn:ornek', alanlar: [{ ad: 'Girdi', cocuklar: [
@@ -65,25 +66,84 @@ test('öneriler: değer ekle (≥ 2 başarılı koşu güçlü), şüpheli değe
   ];
   const o = kosuOnerileri({ metot: 'Islem', sema: SEMA, gozlemler, tablolar: TABLOLAR,
     mevcut: { zorunlu: ['Girdi/Not'], baglar: { 'Girdi/Kanal': { tablo: 't1', sutun: 'Kanal' } } } });
-  const deger = (v: string) => o.find((x) => x.tur === 'tabloyaDeger' && (x.deger as { degerler: string[] }).degerler[0] === v);
-  expect(deger('7')).toMatchObject({ guc: 'guclu', baslik: 'Giriş › Kanal tablosuna "7" eklensin mi?', kanit: '2 başarılı koşuda görüldü: A, B (son: 2026-10-03 11:00)',
-    kosuKaniti: { basarili: 2, senaryolar: ['A', 'B'] } });
-  expect(deger('9')?.guc).toBe('zayif');
-  expect(deger('11')).toMatchObject({ guc: 'zayif', kanit: '1 başarısız koşuda (başka alan hatası) görüldü: C (son: 2026-10-03 10:00)' });
-  expect(o.some((x) => x.tur === 'tabloyaDeger' && JSON.stringify(x.deger).includes('K9'))).toBe(false);
+  // Satır bütünlüğü: tablo başına tek kart, koşu başına satır (aynı değer kümesi tek satır, kanıt sayacı artar).
+  expect(o.some((x) => x.tur === 'tabloyaDeger')).toBe(false);
+  const kart = o.find((x) => x.tur === 'tabloyaSatir' && x.yol === '#t1');
+  expect(kart).toMatchObject({ guc: 'zayif', baslik: 'Giriş tablosuna 3 satır eklensin mi' });
+  const satirlar = (kart?.deger as TabloSatiriOnerisi).satirlar;
+  expect(satirlar.map((x) => [x.ad, x.degerler, x.guclu, x.kanit])).toEqual([
+    ['A', { Kanal: '7' }, true, '2 başarılı koşuda görüldü: A, B (son: 2026-10-03 11:00)'],
+    ['A (2)', { Kanal: '9' }, false, '1 başarılı koşuda görüldü: A (son: 2026-10-03 10:00)'],
+    ['C', { Kanal: '11' }, false, '1 başarısız koşuda (başka alan hatası) görüldü: C (son: 2026-10-03 10:00)']]);
+  expect(JSON.stringify(o.filter((x) => x.tur === 'tabloyaSatir'))).not.toContain('K9');
   expect(o.find((x) => x.tur === 'supheli')).toMatchObject({ yol: 'Girdi/Kod', guc: 'not', baslik: 'Hataya yol açmış olabilir' });
   expect(o.find((x) => x.tur === 'supheli')?.kanit).toContain('Değer K9 eklenmedi · hata metni bu alanı anıyor');
   expect(o.find((x) => x.tur === 'tabloBagi')).toMatchObject({ yol: 'Girdi/Username', deger: { tablo: 't2', sutun: 'Kullanıcı' } });
   expect(o.find((x) => x.tur === 'zorunlu')).toMatchObject({ yol: 'Girdi/Not', deger: false, guc: 'guclu' });
   expect(o.find((x) => x.tur === 'celiski' && x.yol === 'Girdi/Not')).toBeDefined();
-  // Karar verilmiş (uygulanan / yoksayılan) öneri yeniden çıkmaz; tabloda olan değer önerilmez.
+  // Satır kararı ayrı hatırlanır (yoksayılan satır yeniden çıkmaz); tabloda aynı değerli satır varsa önerilmez.
   const kararli = kosuOnerileri({ metot: 'Islem', sema: SEMA, gozlemler, tablolar: [{ ...TABLOLAR[0], satirlar: [{ degerler: { Kanal: '7' } }] }, TABLOLAR[1]],
-    mevcut: { zorunlu: [], baglar: { 'Girdi/Kanal': { tablo: 't1', sutun: 'Kanal' } }, kararlar: { [String(deger('9')?.anahtar)]: 'yoksayildi' } } });
-  expect(kararli.filter((x) => x.tur === 'tabloyaDeger').map((x) => (x.deger as { degerler: string[] }).degerler[0])).toEqual(['11']);
+    mevcut: { zorunlu: [], baglar: { 'Girdi/Kanal': { tablo: 't1', sutun: 'Kanal' } }, kararlar: { [String(satirlar[1].anahtar)]: 'yoksayildi' } } });
+  expect(kararli.filter((x) => x.tur === 'tabloyaSatir').flatMap((x) => (x.deger as TabloSatiriOnerisi).satirlar.map((s) => s.degerler.Kanal))).toEqual(['11']);
   // Senaryodan (sonucu bilinmeyen) gözlem: yalnız bağsız alana zayıf tablo eşleşmesi.
   const sen = kosuOnerileri({ metot: 'Islem', sema: SEMA, tablolar: TABLOLAR, gozlemler: [gz({ kaynak: 'senaryo', durum: 'bilinmiyor', alanlar: { 'Girdi/Username': { d: 'dolu', v: '51234001' }, 'Girdi/Kanal': { d: 'dolu', v: '8' } } })],
     mevcut: { baglar: { 'Girdi/Kanal': { tablo: 't1', sutun: 'Kanal' } } } });
   expect(sen.map((x) => [x.tur, x.yol, x.guc])).toEqual([['tabloBagi', 'Girdi/Username', 'zayif']]);
+});
+
+test('satır bütünlüğü (öğrenme): koşu başına tek satır, yalnız o tablonun sütunları; iki tablo → iki kart; şüpheli hücre boş + not; gizli yazılmaz; tablodan gelen değer satır üretmez', () => {
+  const tablolar = [
+    { id: 'kisi', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }, { ad: 'Vergi no', gizli: true }], satirlar: [{ degerler: { Ad: 'Ayşe', Soyad: 'Demir' } }] },
+    { id: 'teslim', ad: 'Teslim', sutunlar: [{ ad: 'Teslim şekli' }], satirlar: [] }
+  ];
+  const baglar = { 'Girdi/Firstname': { tablo: 'kisi', sutun: 'Ad' }, 'Girdi/Lastname': { tablo: 'kisi', sutun: 'Soyad' }, 'Girdi/TaxNumber': { tablo: 'kisi', sutun: 'Vergi no' },
+    'Girdi/Delivery': { tablo: 'teslim', sutun: 'Teslim şekli' }, 'Girdi/Kullanici': { tablo: 'kisi', sutun: 'Ad' } };
+  const s1 = { 'Girdi/Firstname': { d: 'dolu', v: 'Ali' }, 'Girdi/Lastname': { d: 'dolu', v: 'Kaya' }, 'Girdi/TaxNumber': { d: 'dolu', v: '1234567890' },
+    'Girdi/Delivery': { d: 'dolu', v: 'Kapıda' }, 'Girdi/Serbest': { d: 'dolu', v: 'serbest-metin' } } as Gozlem['alanlar'];
+  const gozlemler = [
+    gz({ senaryo: 'S1', senaryoId: 's1', alanlar: s1 }),
+    gz({ senaryo: 'S1', senaryoId: 's1', zaman: '2026-10-03T12:00:00.000Z', alanlar: s1 }),
+    // Hata metni Lastname'i anıyor: Soyad hücresi boş kalır, satırın geri kalanı (zayıf) yine önerilir.
+    gz({ senaryo: 'S2', senaryoId: 's2', durum: 'hata', zayif: true, supheli: ['Girdi/Lastname'], alanlar: { 'Girdi/Firstname': { d: 'dolu', v: 'Veli' }, 'Girdi/Lastname': { d: 'dolu', v: 'Bey' } } }),
+    // Tabloda aynı değerli satır var: önerilmez. Tablodan seçilen değer (v yok) satır üretmez.
+    gz({ senaryo: 'S3', senaryoId: 's3', alanlar: { 'Girdi/Firstname': { d: 'dolu', v: 'Ayşe' }, 'Girdi/Lastname': { d: 'dolu', v: 'Demir' } } }),
+    gz({ senaryo: 'S4', senaryoId: 's4', alanlar: { 'Girdi/Kullanici': { d: 'dolu' } } })
+  ];
+  const o = kosuOnerileri({ metot: 'Islem', gozlemler, tablolar, mevcut: { baglar } });
+  const kartlar = o.filter((x) => x.tur === 'tabloyaSatir');
+  expect(kartlar.map((x) => [x.yol, x.baslik, x.guc])).toEqual([
+    ['#kisi', 'Kişi bilgileri tablosuna 2 satır eklensin mi', 'zayif'], ['#teslim', 'Teslim tablosuna 1 satır eklensin mi', 'guclu']]);
+  const kisi = kartlar[0].deger as TabloSatiriOnerisi;
+  expect(kisi.satirlar.map((x) => [x.ad, x.degerler, x.guclu])).toEqual([['S1', { Ad: 'Ali', Soyad: 'Kaya' }, true], ['S2', { Ad: 'Veli' }, false]]);
+  expect(kisi.satirlar[1].kanit).toContain('Soyad: Lastname hataya yol açmış olabilir, hücre boş');
+  expect(kisi.gizliSutunlar).toEqual(['Vergi no']);
+  expect((kartlar[1].deger as TabloSatiriOnerisi).satirlar.map((x) => [x.ad, x.degerler])).toEqual([['S1', { 'Teslim şekli': 'Kapıda' }]]);
+  // Diğer parametreler (bağsız "Serbest") ve gizli değer hiçbir satıra yazılmaz.
+  expect(JSON.stringify(kartlar)).not.toContain('serbest-metin');
+  expect(JSON.stringify(kartlar)).not.toContain('1234567890');
+  expect(kartlar[0].kosuKaniti).toMatchObject({ basarili: 2, senaryolar: ['S1', 'S2'] });
+  // Uygulanınca kayıt yeni biçimde ({ tablo, satirlar }); satır kararları da yazılır, kart yeniden çıkmaz.
+  const d: AnalizDurumu = { zorunlu: new Set(), baglar: {}, varsayilanlar: {}, kurallar: {}, ekler: [], kararlar: {}, yeniTablolar: [], tabloDegerleri: [] };
+  oneriyiUygula(d, kartlar[0]);
+  expect(d.tabloDegerleri).toEqual([{ tablo: 'kisi', satirlar: [{ ad: 'S1', degerler: { Ad: 'Ali', Soyad: 'Kaya' } }, { ad: 'S2', degerler: { Ad: 'Veli' } }] }]);
+  expect(kosuOnerileri({ metot: 'Islem', gozlemler, tablolar, mevcut: { baglar, kararlar: d.kararlar } }).filter((x) => x.tur === 'tabloyaSatir').map((x) => x.yol)).toEqual(['#teslim']);
+});
+
+test('satır yönlendirme (öğrenme): koşu başına; ayırt edici sütunu dolu koşunun grup alanları o tabloya, ötekiler varsayılan tabloda', () => {
+  const tablolar = [
+    { id: 'kisi', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }], satirlar: [] },
+    { id: 'pas', ad: 'Pasaportlu kişi', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }, { ad: 'Pasaport no' }], satirlar: [] }
+  ];
+  const baglar = { 'Girdi/Customer/Firstname': { tablo: 'kisi', sutun: 'Ad' }, 'Girdi/Customer/Lastname': { tablo: 'kisi', sutun: 'Soyad' },
+    'Girdi/Customer/PassportNumber': { tablo: 'pas', sutun: 'Pasaport no' } };
+  const o = kosuOnerileri({ metot: 'Islem', tablolar, mevcut: { baglar }, gozlemler: [
+    gz({ senaryo: 'Yerli', senaryoId: 'y', alanlar: { 'Girdi/Customer/Firstname': { d: 'dolu', v: 'Ali' }, 'Girdi/Customer/Lastname': { d: 'dolu', v: 'Kaya' }, 'Girdi/Customer/PassportNumber': { d: 'bos' } } }),
+    gz({ senaryo: 'Yabancı', senaryoId: 'x', alanlar: { 'Girdi/Customer/Firstname': { d: 'dolu', v: 'John' }, 'Girdi/Customer/Lastname': { d: 'dolu', v: 'Smith' }, 'Girdi/Customer/PassportNumber': { d: 'dolu', v: 'X1234567' } } })
+  ] });
+  const satirlar = (id: string) => (o.find((x) => x.yol === `#${id}`)?.deger as TabloSatiriOnerisi | undefined)?.satirlar ?? [];
+  expect(satirlar('kisi').map((x) => [x.ad, x.degerler])).toEqual([['Yerli', { Ad: 'Ali', Soyad: 'Kaya' }]]);
+  expect(satirlar('pas').map((x) => [x.ad, x.degerler])).toEqual([['Yabancı', { 'Pasaport no': 'X1234567', Ad: 'John', Soyad: 'Smith' }]]);
+  expect(satirlar('pas')[0].kanit).toContain('Pasaportlu kişi tablosuna yazılır (Pasaport no dolu)');
 });
 
 test('gözlem listesi budanır; senaryo gözlemi yenisiyle değişir; öğrenme hatası yakalanır (koşu etkilenmez)', () => {

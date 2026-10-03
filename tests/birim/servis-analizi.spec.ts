@@ -6,8 +6,8 @@
 // değer listesi tablosu; evet/hayır liste tablosu olmaz; hata veren örneğin değerleri girmez), karar hatırlama. Ağ yok; veri sentetik.
 import { expect, test } from '@playwright/test';
 import {
-  AD_ESIGI, adEslesmesi, adPuani, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, servisAnalizi, tabloEslesmesi, tipCikar, xmlBaglami,
-  type AnalizDurumu, type AnalizGirdisi, type AnalizOnerisi, type OrnekDurumu
+  AD_ESIGI, adEslesmesi, adPuani, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, satirYonlendir, servisAnalizi, tabloEslesmesi, tipCikar, xmlBaglami,
+  type AnalizDurumu, type AnalizGirdisi, type AnalizOnerisi, type OrnekDurumu, type TabloSatiriOnerisi
 } from '../../scripts/platform/servisler/servis-analizi.mjs';
 import { ornekIstekleriniDogrula, ornekleriEkle, ornekleriMaskele } from '../../scripts/platform/servisler/servis-ornekleri.mjs';
 import type { OperasyonSemasi } from '../../scripts/platform/servisler/servis-govdesi.mjs';
@@ -369,6 +369,49 @@ test('çelişen kavramlar ve XML bağlamı: yer ↔ tarih aday olmaz; üst elema
   const r = servisAnalizi({ metot: 'Islem', sema: null, tablolar, ornekler: [{ ad: 'A', govde: zarf('<Payment><CardNumber>4111</CardNumber><CVV>123</CVV><Month>01</Month><Year>2030</Year></Payment>') }] });
   expect(r.oneriler.filter((o) => o.tur === 'tabloBagi' && /Month|Year/.test(o.yol)).map((o) => [o.yol, o.deger])).toEqual([
     ['Girdi/Payment/Month', { tablo: 'kk', sutun: 'Son kullanma ay' }], ['Girdi/Payment/Year', { tablo: 'kk', sutun: 'Son kullanma yıl' }]]);
+});
+
+test('satır yönlendirme (grup bütünlüğü): ayırt edici sütunu dolu örneğin grup alanları o tabloya; ötekiler varsayılan tabloda; alan bağı değişmez', () => {
+  const tablolar = [
+    { id: 'kisi', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }, { ad: 'Doğum tarihi' }, { ad: 'Telefon' }], satirlar: [] },
+    { id: 'pas', ad: 'Pasaportlu kişi', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }, { ad: 'Pasaport no' }, { ad: 'D TARİHİ' }], satirlar: [] }
+  ];
+  const kisi = (ad: string, soyad: string, pasaport = '', tel = '5550001122') => zarf(`<Customer><Firstname>${ad}</Firstname><Lastname>${soyad}</Lastname><BirthDate>01.01.1990</BirthDate><PhoneNumber>${tel}</PhoneNumber><PassportNumber>${pasaport}</PassportNumber></Customer>`);
+  const r = servisAnalizi({ metot: 'Islem', sema: null, tablolar, ornekler: [
+    { ad: 'Pasaportsuz', durum: 'basarili', govde: kisi('Ali', 'Kaya') },
+    { ad: 'Pasaportlu', durum: 'basarili', govde: kisi('John', 'Smith', 'X1234567', '4915112345') }] });
+  const satir = (id: string) => (bul(r.oneriler, 'tabloyaSatir', `#${id}`)?.deger as TabloSatiriOnerisi | undefined)?.satirlar ?? [];
+  // Pasaportsuz örnek Kişi bilgileri'nde; pasaportlu örneğin ad / soyad / doğum tarihi Pasaportlu kişi satırında (gerekçesiyle).
+  expect(satir('kisi').map((x) => [x.ad, x.degerler])).toEqual([
+    ['Pasaportsuz', { Ad: 'Ali', Soyad: 'Kaya', 'Doğum tarihi': '01.01.1990', Telefon: '5550001122' }],
+    // Hedefte karşılığı olmayan Telefon varsayılan tablosunda kalır (en az bölünme).
+    ['Pasaportlu', { Telefon: '4915112345' }]]);
+  expect(satir('pas')).toEqual([{ ad: 'Pasaportlu', degerler: { 'Pasaport no': 'X1234567', Ad: 'John', Soyad: 'Smith', 'D TARİHİ': '01.01.1990' },
+    gerekce: 'Pasaportlu kişi tablosuna yazılır (Pasaport no dolu)' }]);
+  // Servis düzeyindeki alan bağı (varsayılan sütun) değişmez: çoğunluğun tablosu.
+  expect(bul(r.oneriler, 'tabloBagi', 'Girdi/Customer/Firstname')?.deger).toEqual({ tablo: 'kisi', sutun: 'Ad' });
+  expect(bul(r.oneriler, 'tabloBagi', 'Girdi/Customer/PassportNumber')?.deger).toEqual({ tablo: 'pas', sutun: 'Pasaport no' });
+  // Genel ikinci vaka: "Kurum" tablosunun ayırt edici sütunu (vergi kimlik no) dolu olan örneğin ad / telefonu Kurum'a.
+  const kurum = [
+    { id: 'kisi', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Ad' }, { ad: 'Telefon' }], satirlar: [] },
+    { id: 'kurum', ad: 'Kurum', sutunlar: [{ ad: 'Ad' }, { ad: 'Telefon' }, { ad: 'Vergi kimlik no' }], satirlar: [] }
+  ];
+  const baglar = { 'Girdi/Party/Name': { tablo: 'kisi', sutun: 'Ad' }, 'Girdi/Party/Phone': { tablo: 'kisi', sutun: 'Telefon' }, 'Girdi/Party/TaxId': { tablo: 'kurum', sutun: 'Vergi kimlik no' } };
+  const k = servisAnalizi({ metot: 'Islem', sema: null, tablolar: kurum, mevcut: { baglar }, ornekler: [
+    { ad: 'Bireysel', govde: zarf('<Party><Name>Ali</Name><Phone>5550001122</Phone><TaxId/></Party>') },
+    { ad: 'Kurumsal', govde: zarf('<Party><Name>Örnek Ltd</Name><Phone>5550003344</Phone><TaxId>1112223334</TaxId></Party>') }] });
+  expect((bul(k.oneriler, 'tabloyaSatir', '#kisi')?.deger as TabloSatiriOnerisi).satirlar.map((x) => x.ad)).toEqual(['Bireysel']);
+  expect((bul(k.oneriler, 'tabloyaSatir', '#kurum')?.deger as TabloSatiriOnerisi).satirlar).toEqual([{ ad: 'Kurumsal',
+    degerler: { 'Vergi kimlik no': '1112223334', Ad: 'Örnek Ltd', Telefon: '5550003344' }, gerekce: 'Kurum tablosuna yazılır (Vergi kimlik no dolu)' }]);
+  // Doğrudan: karşılığı olmayan grup dışı alan taşınmaz; boş ayırt edici sütun yönlendirmez.
+  const eslem = new Map([['kisi', new Map([['G/Name', { sutun: 'Ad', gizli: false }], ['H/Phone', { sutun: 'Telefon', gizli: false }]])], ['kurum', new Map([['G/TaxId', { sutun: 'Vergi kimlik no', gizli: false }]])]]);
+  const y = satirYonlendir(eslem, kurum, () => true);
+  expect([...(y.eslemler.get('kurum') ?? new Map()).keys()]).toEqual(['G/TaxId', 'G/Name']);
+  expect([...(y.eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['H/Phone']);
+  expect([...(satirYonlendir(eslem, kurum, (yol) => yol !== 'G/TaxId').eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['G/Name', 'H/Phone']);
+  // Gizli ayırt edici sütun (değeri yazılmaz) yönlendirmez.
+  const gizliEslem = new Map([...eslem, ['kurum', new Map([['G/TaxId', { sutun: 'Vergi kimlik no', gizli: true }]])]]);
+  expect([...(satirYonlendir(gizliEslem, kurum, () => true).eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['G/Name', 'H/Phone']);
 });
 
 test('örnekler arası fark, alan listesi olmayan metot; yeni tablolar kavram gruplarına ayrılır; hata veren örneğin değerleri tabloya girmez', () => {
