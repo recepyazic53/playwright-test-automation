@@ -10,6 +10,8 @@
 import { test as base } from '@playwright/test';
 import { writeFileSync, renameSync } from 'node:fs';
 import { ekranGoruntusuAl } from './screenshots';
+import { canliYayinKur, type CanliYayin } from './canli-yayin';
+import { CANLI_DUYURU_DEGISKENI, GORUNUR_KOSU_DEGISKENI } from '../../scripts/platform/canli-akis.mjs';
 import { mesajYakalayicisiKur, yakalananMesajlariEkle } from './mesaj-yakalayici';
 import { kayitSecimleri } from './kosu-ayarlari';
 import { BASARILI_GORUNTU_ADI, HATA_GORUNTU_ADI } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
@@ -111,11 +113,21 @@ export const test = base.extend<OrtakFixturelar>({
         return;
       }
 
+      // SÜREKLİ AKIŞ (tests/support/canli-yayin.ts): panel açıkken CDP screencast kareleri yalnız bellekten, Nöbetçi'nin
+      // /canli-akis vekili üzerinden gider (diske yazılmaz). Akış kurulamazsa aşağıdaki aralıklı PNG yedek olarak kalır.
+      let yayin: CanliYayin | null = null;
+      try {
+        yayin = await canliYayinKur(page.context(), page, { duyuruYolu: process.env[CANLI_DUYURU_DEGISKENI], gorunur: process.env[GORUNUR_KOSU_DEGISKENI] === '1' });
+      } catch {
+        yayin = null;
+      }
+
       // Bir önceki yakalama bitmediyse bu tik atlanır; yakalamalar adım görüntüleriyle aynı sırada ve süre sınırlıdır
-      // (screenshots.ts > ekranGoruntusuAl — üst üste binen yakalamalar koşuyu takıyordu).
+      // (screenshots.ts > ekranGoruntusuAl — üst üste binen yakalamalar koşuyu takıyordu). Sürekli akış izlenirken aralıklı
+      // görüntü alınmaz (aynı kareyi iki yoldan üretmek boşa CPU).
       let calisiyor = false;
       const araVer = setInterval(() => {
-        if (calisiyor) return;
+        if (calisiyor || yayin?.durum().yayinda) return;
         calisiyor = true;
         ekranGoruntusuAl(page, { fullPage: false, sureMs: 5_000 })
           .then((tamponVerisi) => {
@@ -139,6 +151,7 @@ export const test = base.extend<OrtakFixturelar>({
 
       await use();
       clearInterval(araVer);
+      await yayin?.kapat().catch(() => undefined);
     },
     { auto: true }
   ]

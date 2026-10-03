@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { MODEL_SPEC_DOSYASI } from './scripts/platform/senaryolar/model-kosusu.mjs';
 import { genelOturumDosyasi, genelVeri } from './tests/support/genel-veri';
 import { oturumuSifreliOku } from './tests/support/oturum-kasasi';
-import { ekranGoruntusuAyari, izAyari, kayitSecimleri, kosuTarayiciAyarlari, videoKaydiAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
+import { ekranGoruntusuAyari, izAyari, kayitSecimleri, kosuGorunurMu, kosuTarayiciAyarlari, videoKaydiAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // MODEL KOŞUSU — Nöbetçi'deki senaryolar (test kodu yok; her senaryo ekran modeliyle genel model koşucusunda koşar).
 // Nöbetçi koşuyu proje ve ortam KİMLİKLERİYLE başlatır (NOBETCI_PROJE_ID / NOBETCI_ORTAM_ID; scripts/test-sunucu.mjs).
@@ -47,7 +47,10 @@ export default defineConfig({
     // ekran boyutu; "Küçük" — varsayılan — Playwright'ın kendi boyutu).
     video: videoKaydiAyari(),
     screenshot: ekranGoruntusuAyari(),
-    trace: izAyari()
+    trace: izAyari(),
+    // Koşular başsızdır; YALNIZ kullanıcı koşuyu "Tarayıcı penceresinde izle" ile başlattıysa Nöbetçi NOBETCI_GORUNUR=1 verir
+    // (planlı koşular ve terminal koşuları başsız kalır).
+    headless: !kosuGorunurMu()
   },
 
   projects: [

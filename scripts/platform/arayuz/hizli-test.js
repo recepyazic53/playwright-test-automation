@@ -11,6 +11,7 @@ import { doldurDugmesi } from './doldur.js';
 import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle } from './dosya-yukleme.js';
 import { testVerisiSecimi } from './sayfa-paketi.js';
 import { adresliIstek } from './adres-ayirma.js';
+import { canliGoruntu } from './canli-akis.js';
 
 const DURAKLAR = ['Başlat', 'Keşfet', 'Veri durağı', 'Adım adım', 'Bitiş koşulu', 'Kaydet'];
 const IZIN_SECENEKLERI = [
@@ -234,6 +235,8 @@ function oturumEkrani(govde, id) {
   govde.replaceChildren(serit, durumSatiri, sureBandi, h('div', { class: 'hizli-duzen' }, ana, yan));
   let imza = '';
   let yanImza = '';
+  /** @type {ReturnType<typeof canliGoruntu> | null} */
+  let canliKutu = null;
   let sonDurumMetni = '';
   /** @type {ReturnType<typeof setTimeout> | null} */
   let zamanlayici = null;
@@ -262,8 +265,21 @@ function oturumEkrani(govde, id) {
     // Durum satırı yalnız iş metni değişince yazılır (araya giren duyuru her yoklamada silinmez).
     const durumMetni = o.calisiyor ? o.calisiyor : '';
     if (durumMetni !== sonDurumMetni) { sonDurumMetni = durumMetni; durumSatiri.textContent = durumMetni; }
-    const yeniYan = JSON.stringify([o.adimlar, o.gunluk.length, (o.goruntu || '').length, o.bulgular, o.zincir]);
-    if (yeniYan !== yanImza) { yanImza = yeniYan; yanCiz(yan, o); }
+    // "Tarayıcıda şu an": tarayıcı açıkken sürekli kare akışı (canli-akis.js; kutu oturum boyunca korunur, oturum bitince durur).
+    if (!canliKutu && o.canliAkis && !['kaydedildi', 'iptal', 'hata'].includes(o.durum)) {
+      canliKutu = canliGoruntu({
+        akisAdresi: `/platform/hizli-test/canli-akis?id=${encodeURIComponent(id)}`, etiket: 'Hızlı test tarayıcısındaki sayfa (canlı)',
+        ilkGoruntu: o.goruntu ? `data:image/jpeg;base64,${o.goruntu}` : null, bekleniyorMetni: 'Tarayıcı görüntüsü bekleniyor…',
+        tarayiciyiGoster: o.gorunur ? async () => {
+          const y = await api('/platform/hizli-test/tarayiciyi-goster', { govde: { id } }).catch((e) => ({ gosterildi: false, mesaj: e.message }));
+          return { basarili: Boolean(y.gosterildi), mesaj: String(y.mesaj || '') };
+        } : null
+      });
+    }
+    if (canliKutu && ['kaydedildi', 'iptal', 'hata'].includes(o.durum)) { canliKutu.durdur(); canliKutu = null; }
+    if (canliKutu && o.goruntu) canliKutu.goruntuVer(o.goruntu);
+    const yeniYan = JSON.stringify([o.adimlar, o.gunluk.length, canliKutu ? 0 : (o.goruntu || '').length, o.bulgular, o.zincir, Boolean(canliKutu)]);
+    if (yeniYan !== yanImza) { yanImza = yeniYan; yanCiz(yan, o, canliKutu ? canliKutu.el : null); }
     if (yeniImza === imza) return;
     // Seçim sayfaya uygulanırken kart yerinde kalır (kullanıcı yazmayı / seçmeyi sürdürür); yanıt gelince yeniden çizilir.
     if (otoSuruyor(o)) return;
@@ -283,14 +299,14 @@ function oturumEkrani(govde, id) {
   void yenile();
 }
 
-/** Sağ sütun: son görüntü, zincir, günlük. @param {HTMLElement} yan @param {any} o */
-function yanCiz(yan, o) {
+/** Sağ sütun: canlı görüntü (ya da son görüntü), zincir, günlük. @param {HTMLElement} yan @param {any} o @param {HTMLElement | null} [canli] */
+function yanCiz(yan, o, canli = null) {
   const zincir = (o.adimlar || []).filter((a) => a.bas || a.alanlar.some((x) => x.deger !== null));
   yerlestir(yan,
     h('section', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('ekran'), 'Tarayıcıda şu an'),
       h('span', { class: 'sag' }, rozet(o.ortam.canli ? `${o.ortam.ad} · CANLI ortam` : o.ortam.ad, o.ortam.canli ? 'uyari' : ''), rozet(`İzin: ${o.izinAdi}`))),
-      o.goruntu ? h('img', { class: 'hizli-goruntu', src: `data:image/jpeg;base64,${o.goruntu}`, alt: 'Hızlı test tarayıcısındaki sayfanın son görüntüsü' })
-        : h('p', { class: 'soluk kucuk' }, 'Görüntü keşiften sonra gelir.'),
+      canli || (o.goruntu ? h('img', { class: 'hizli-goruntu', src: `data:image/jpeg;base64,${o.goruntu}`, alt: 'Hızlı test tarayıcısındaki sayfanın son görüntüsü' })
+        : h('p', { class: 'soluk kucuk' }, 'Görüntü keşiften sonra gelir.')),
       h('p', { class: 'soluk kucuk' }, `Sayfa: ${o.hedef}`)),
     zincir.length ? h('section', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Zincir')),
       h('ol', { class: 'hizli-zincir' }, zincir.map((a) => h('li', {},

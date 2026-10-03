@@ -15,7 +15,8 @@
 // Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
 // değişince form o akışın modeliyle yeniden çizilir, girilen değerler korunur (yeni akışta olmayanlar uyarıyla kaldırılır).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, canliKareAl, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
+import { api, kullaniciAyarlari, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
+import { canliGoruntu, kosuYedekKaresi } from './canli-akis.js';
 import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle, kabulListesi } from './dosya-yukleme.js';
 import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
@@ -1502,6 +1503,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const genelHatalar = h('ul', { class: 'not-kutusu hata', hidden: true });
   const kaydetDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), s.mod === 'yeni' ? 'Senaryoyu oluştur' : 'Değişiklikleri kaydet');
   const deneDugmesi = h('button', { type: 'button', title: 'Formdaki güncel değerlerle (kaydedilmemiş değişiklikler dahil) dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene');
+  // "Tarayıcı penceresinde izle (görünür)": Deneme görünür tarayıcıda koşar. Ön değer Ayarlar > Koşu > Tarayıcı penceresinde izle.
+  const deneGorunur = h('input', { type: 'checkbox', id: yeniId('dene-gorunur') });
+  let deneGorunurDokunuldu = false;
+  deneGorunur.addEventListener('change', () => { deneGorunurDokunuldu = true; });
+  void kullaniciAyarlari().then((a) => { if (!deneGorunurDokunuldu && a && a.tarayiciPenceresindeIzle === true) deneGorunur.checked = true; }).catch(() => {});
+  const deneGorunurSecimi = h('label', { class: 'tarayici-penceresi-secimi', for: deneGorunur.id, title: 'Seçilmezse Deneme görünmez çalışır; aşağıdaki canlı görüntüden izlenir.' },
+    deneGorunur, h('span', {}, 'Tarayıcı penceresinde izle (görünür)'));
   const vazgecDugmesi = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
   const denemeAlani = h('section', { class: 'kart', hidden: true, 'aria-labelledby': 'deneme-baslik', 'aria-live': 'polite' });
 
@@ -1815,7 +1823,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         govde: {
           projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}), ...canliOnayEki(ortamId),
           ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi, adimGoruntusu: adimGoruntusuSecimi ?? 'ayar',
-          tabloSecimleri: kaydedilecekSecimler()
+          tabloSecimleri: kaydedilecekSecimler(), ...(deneGorunur.checked ? { gorunur: true } : {})
         }
       });
       deneme.bitti = true;
@@ -1831,37 +1839,35 @@ function modelFormu(icerik, s, senaryo, baglam) {
     }
   });
 
-  let canliZamanlayici = null;
+  /** Süren denemenin canlı görüntü kutusu (canli-akis.js); deneme bitince / yeniden çizilince durdurulur. */
+  let denemeKutusu = null;
   function denemeCiz(d) {
-    clearInterval(canliZamanlayici);
+    denemeKutusu?.durdur();
+    denemeKutusu = null;
     denemeAlani.hidden = false;
     const hali = deneme && deneme.kaydedilmemis ? 'formdaki kaydedilmemiş değişikliklerle denendi' : 'formdaki hâliyle denendi';
     const baslik = h('div', { class: 'kart-basligi' }, h('h3', { id: 'deneme-baslik' }, ikon('oynat'), 'Deneme'), h('span', { class: 'alt' }, `${d.ortam.ad} · ${hali} · senaryo kaydedilmez`));
     if (d.durum === 'calisiyor') {
-      const img = h('img', { alt: 'Deneme: canlı ekran görüntüsü' });
-      const bos = h('div', { class: 'medya-bos' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Deneme başlatıldı; canlı görüntü bekleniyor…');
+      // Sürekli kare akışı (token başlıkta; akış kurulamazsa aralıklı görüntüye düşülür).
+      const kosuId = d.kosuId;
+      denemeKutusu = canliGoruntu({
+        akisAdresi: `/canli-akis?kosuId=${encodeURIComponent(kosuId)}`, etiket: 'Deneme: canlı ekran görüntüsü',
+        bekleniyorMetni: 'Deneme başlatıldı; canlı görüntü bekleniyor…', yedekKareAl: () => kosuYedekKaresi(kosuId),
+        tarayiciyiGoster: async () => {
+          const y = await api('/tarayiciyi-goster', { govde: { kosuId } }).catch((e) => ({ basarili: false, mesaj: e.message }));
+          return { basarili: Boolean(y.basarili), mesaj: String(y.mesaj || '') };
+        }
+      });
       const durdur = h('button', { type: 'button', class: 'kucuk-dugme tehlike' }, h('span', { class: 'kare-simge', 'aria-hidden': 'true' }), 'Durdur');
       durdur.addEventListener('click', async () => {
         durdur.disabled = true;
         durdur.textContent = 'Durduruluyor…';
         try { await api('/durdur', { govde: { kosuId: d.kosuId } }); } catch (e) { bildir(e.message, 'hata'); }
       });
-      // Kare fetch ile (token başlıkta, adreste değil); ilk kare gelmeden sunucu 204 döner (konsolda hata yok).
-      const yukle = () => {
-        void canliKareAl(d.kosuId).then((src) => {
-          if (!src) return;
-          const onceki = img.src && img.src.startsWith('blob:') ? img.src : null;
-          img.src = src;
-          if (bos.isConnected) bos.replaceWith(img);
-          if (onceki) setTimeout(() => URL.revokeObjectURL(onceki), 1000);
-        });
-      };
-      canliZamanlayici = setInterval(() => { if (!denemeAlani.isConnected || deneme?.bitti) { clearInterval(canliZamanlayici); return; } yukle(); }, 1200);
-      yukle();
       yerlestir(denemeAlani, baslik,
         h('div', { class: 'deneme-sonucu' },
-          h('div', { class: 'izleme-basligi satir' }, h('span', { class: 'canli-rozeti', title: 'Tarayıcıdaki anlık görüntü (Dene sürerken yenilenir)' }, 'Canlı görüntü'), h('span', { class: 'soluk kucuk' }, 'Senaryo koşuyor…'), h('span', { class: 'bosluk' }), durdur),
-          h('div', { class: 'goruntuleyici' }, h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, 'canlı')), bos)));
+          h('div', { class: 'izleme-basligi satir' }, h('span', { class: 'canli-rozeti', title: 'Tarayıcıdaki anlık görüntü (Dene sürerken sürekli akar)' }, 'Canlı görüntü'), h('span', { class: 'soluk kucuk' }, 'Senaryo koşuyor…'), h('span', { class: 'bosluk' }), durdur),
+          denemeKutusu.el));
       denemeAlani.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       return;
     }
@@ -2149,7 +2155,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
           h('label', { class: 'onay-satiri', for: kosudaKutu.id, title: '"Koşuyu başlat" ve planlı koşular bu senaryoyu koşar; kapalıysa yalnız tek başına (▷ ya da Dene) çalışır.' }, kosudaKutu, 'Toplu koşuya dahil'),
           h('div', { class: 'bolum-grubu' }, h('h4', {}, 'Akış'), akisOzeti),
           hazirlikPaneli, dogrulamaOzeti, uyariListesi, genelHatalar,
-          h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, vazgecDugmesi)),
+          h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, deneGorunurSecimi, vazgecDugmesi)),
         denemeAlani)));
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
   // "Veri bekliyor" (hızlı test önerisi): eksik hücrelere "Değerleri doldur"; dolunca tek tıkla "Koşuya dahil et" (veri-bekliyor.js).
