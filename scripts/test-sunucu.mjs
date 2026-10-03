@@ -444,6 +444,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-formu.js', { dosya: 'akis-senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/govde-sekmeleri.js', { dosya: 'govde-sekmeleri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/dosya-kontrolu-formu.js', { dosya: 'dosya-kontrolu-formu.js', tur: 'text/javascript; charset=utf-8' }],

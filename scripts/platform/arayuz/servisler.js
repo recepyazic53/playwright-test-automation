@@ -31,6 +31,7 @@ import { servisKosuPaneliniKenaraAl, servisKosusuBaslat } from './servis-kosu-pa
 import { akislarSekmesi } from './servis-akislari.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { senaryoSayfasi } from './akis-senaryo-formu.js';
+import { govdeSekmeKabi, govdeSekmeleriCiz, govdeUyumsuzUyarisi } from './govde-sekmeleri.js';
 import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
@@ -1148,7 +1149,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   // REST'te alan şeması yalnız tablo bağlama içindir; gövde metin olarak düzenlenir (XML alan formu yok).
   const sema = () => (!rest && semalar[operasyon.value] ? semaBirlestir(semalar[operasyon.value], (s.ayarlar.ekAlanlar || {})[operasyon.value] || []) : null);
   const govdeUretFormdan = () => govdeUret(sema(), degerler, { soapSurumu: s.ayarlar.soapSurumu });
-  const sekmeKap = h('div', { class: 'segment', role: 'tablist', 'aria-label': 'Gövde görünümü' });
+  const sekmeKap = govdeSekmeKabi();
   const govdeAlani = h('div', {});
   const uyari = h('div', {});
 
@@ -1174,9 +1175,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (!govde.value.trim()) { degerler = baslangic(sm); mod = 'alanlar'; return true; }
     const c = govdeCoz(govdeMetni.oku(), sm);
     if (c.uyumsuz.length && !zorla) {
-      yerlestir(uyari, h('div', { class: 'not-kutusu uyari', role: 'status' },
-        h('b', {}, 'Bu gövde alan formunda tam gösterilemiyor: '), c.uyumsuz.slice(0, 6).join(' '), c.uyumsuz.length > 6 ? ` (+${c.uyumsuz.length - 6})` : '',
-        h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { if (formaGec(true)) ciz(); } }, 'Formu yine de kullan (şemada olmayan kısımlar atılır)'))));
+      yerlestir(uyari, govdeUyumsuzUyarisi(c.uyumsuz, () => { if (formaGec(true)) ciz(); }));
       return false;
     }
     degerler = c.degerler;
@@ -1440,15 +1439,10 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
 
   const ciz = () => {
     const sm = sema();
-    yerlestir(sekmeKap, ...[['alanlar', 'Alanlar'], ['xml', 'Gövde (XML)']].map(([m, e]) => h('button', {
-      type: 'button', role: 'tab', 'aria-selected': mod === m ? 'true' : 'false', disabled: m === 'alanlar' && !sm,
-      title: m === 'alanlar' && !sm ? 'Bu operasyonun alan listesi yok' : null,
-      onclick: () => {
-        if (m === mod) return;
-        if (m === 'xml') { govdeMetni.yaz(govdeUretFormdan()); mod = 'xml'; yerlestir(uyari); ciz(); return; }
-        if (formaGec()) { yerlestir(uyari); ciz(); }
-      }
-    }, e)));
+    govdeSekmeleriCiz(sekmeKap, { mod: mod === 'alanlar' ? 'alanlar' : 'xml', alanlarVar: Boolean(sm), sec: (m) => {
+      if (m === 'xml') { govdeMetni.yaz(govdeUretFormdan()); mod = 'xml'; yerlestir(uyari); ciz(); return; }
+      if (formaGec()) { yerlestir(uyari); ciz(); }
+    } });
     if (mod === 'alanlar' && sm) { yerlestir(govdeAlani, formCiz()); return; }
     yerlestir(govdeAlani,
       sm || rest ? null : h('div', { class: 'not-kutusu', role: 'status' }, `"${operasyon.value}" operasyonunun alan listesi yok; gövde XML olarak düzenlenir. `, ortamlar.length > 1 ? semaOrtami.el : null, ' ', semaAl),

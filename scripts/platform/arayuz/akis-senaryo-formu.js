@@ -4,6 +4,9 @@
 //   dahil ve akışın HER OPERASYON ADIMI için ayrı bölüm ("1. SiparisServisi · CreateOrder"): o metodun zorunlu / seçili alanları
 //   (metot ayarlarındaki zorunlu işaretleri, tablo ve hesaplama kuralı bağları, servis varsayılanları; "Tüm alanlar" ile hepsi),
 //   akıştan gelen alanlar KİLİTLİ ("1. adımdan gelir (${akis:OrderNo})"; sorulmaz), adımın beklenen sonucu (kontroller).
+//   Her adımda tek istek formuyla aynı "Alanlar | Gövde (XML)" (REST'te "Gövde (JSON)") sekmeleri (govde-sekmeleri.js); gövde
+//   sekmesinde kaydedilen adım { gorunum: 'govde' } işaretiyle saklanır ve o sekmede açılır; akıştan gelen alanın ${akis:Ad}
+//   başvurusu gövdeden silinirse kayıt açık hatayla durur.
 //   Aynı adlı alan her adımda ayrı sorulur. Akıştaki bir operasyon CANLI'da çağrılmıyorsa CANLI kapsamı seçilemez (neden yazılı).
 //   Adres: #/servisler/s/<id>/senaryo/yeni?akis=<akisId> (akış sayfasındaki "Senaryo ekle") akış seçili açılır.
 // Kayıt: POST /platform/servis/akis-senaryosu/kaydet (içerik: { tur: 'akis', akisId, adimlar: { <adımId>: tek istekli içerik } }).
@@ -19,6 +22,8 @@ import { basvuru } from './tablo-secimi.mjs';
 import { dosyaKontroluFormu, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { talepAlani } from './talep-alani.js';
 import { adaGoreMaskele, gizliAdMi, maskeyiGeriKoy } from './gizli-adlar.mjs';
+import { baglariUygula, kilitliBasvuruYerinde } from './akis-senaryo-icerigi.mjs';
+import { govdeSekmeKabi, govdeSekmeleriCiz, govdeUyumsuzUyarisi } from './govde-sekmeleri.js';
 
 const q = encodeURIComponent;
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -125,16 +130,31 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
       ...durumlar.map((d) => adimBolumu(d)));
   }
 
-  /** Adımın başlangıç durumu: senaryodaki içerik, yoksa operasyonun varsayılanı; kilitli alanlar akış değeri. */
+  /**
+   * Adımın başlangıç durumu: senaryodaki içerik, yoksa operasyonun varsayılanı; kilitli alanlar akış değeri.
+   * Görünüm (mod): adım "Gövde" sekmesinde kaydedildiyse (gorunum: 'govde') gövde aynen o sekmede açılır; değilse alan formu
+   * (kayıtlı gövde şemaya uymuyorsa gövde sekmesi + uyarı; şema yoksa / REST'te yalnız gövde). Eski kayıtlarda gorunum yoktur:
+   * bugünkü davranış aynen.
+   */
   function adimDurumu(a) {
     const ic = eski[a.id] && eski[a.id].operasyon === a.operasyon ? eski[a.id] : a.varsayilanIcerik;
     const d = { adim: a, kontroller: JSON.parse(JSON.stringify(ic?.kontroller ?? [{ tur: a.servis?.tur === 'rest' ? 'durumKodu' : 'soapYaniti', ...(a.servis?.tur === 'rest' ? { deger: '200-299' } : {}) }])),
-      http: ic?.http ? { ...ic.http } : undefined, basliklar: ic?.basliklar, tumAlanlar: false, degerler: null, govdeG: null };
-    if (a.sema) {
+      http: ic?.http ? { ...ic.http } : undefined, basliklar: ic?.basliklar, tumAlanlar: false, degerler: null, govdeG: null,
+      /** @type {'alanlar' | 'xml'} */ mod: 'xml', uyumsuz: /** @type {string[]} */ ([]),
+      /** Gövde sekmesine girildiğinde yerinde olan kilitli başvurular (kayıtta bunlar korunmalı). @type {any[]} */ kilitTabani: [] };
+    if (a.sema && ic?.gorunum === 'govde' && typeof ic.govde === 'string') d.govdeG = ic.govde;
+    else if (a.sema) {
       const c = ic?.govde ? govdeCoz(ic.govde, a.sema) : { degerler: baslangicDegerleri(a.sema, a.alanVarsayilanlari || {}), uyumsuz: [] };
-      if (!c.uyumsuz.length || !ic?.govde) d.degerler = c.degerler;
-      else d.govdeG = ic.govde;
-    } else d.govdeG = ic?.govde ?? '';
+      if (!c.uyumsuz.length || !ic?.govde) { d.degerler = c.degerler; d.mod = 'alanlar'; }
+      else { d.govdeG = ic.govde; d.uyumsuz = c.uyumsuz; }
+    } else {
+      d.govdeG = ic?.govde ?? '';
+      // Yeni REST adımında akıştan gelen alanlar gövdeye ${akis:Ad} olarak yazılır (koşu da aynısını yapar; burada görünür olur).
+      if (!eski[a.id] && a.servis?.tur === 'rest' && a.kilitli.length) {
+        try { d.govdeG = baglariUygula({ govde: d.govdeG }, Object.fromEntries(a.kilitli.map((k) => [k.yol, `\${akis:${k.ad}}`])), { rest: true }).govde; } catch { /* JSON değil: aynen */ }
+      }
+    }
+    if (d.govdeG !== null) d.kilitTabani = kilitTabani(a, d.govdeG);
     if (d.degerler) {
       // Bağlı alanlar (tablo / hesaplama kuralı) yeni senaryoda o kaynakla başlar; akıştan gelenler kilitli.
       if (!eski[a.id]) {
@@ -148,6 +168,11 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     }
     return d;
   }
+
+  /** Adımın akıştan gelen alanının başvurusu gövdede yerinde mi. @param {any} a @param {string} govde @param {any} k */
+  const basvuruYerinde = (a, govde, k) => kilitliBasvuruYerinde(govde, k, { rest: a.servis?.tur === 'rest', sema: a.sema, govdeCoz });
+  /** Gövdede yerinde olan kilitli başvurular. @param {any} a @param {string} govde */
+  const kilitTabani = (a, govde) => a.kilitli.filter((k) => basvuruYerinde(a, govde, k));
 
   function kapsamDenetle() {
     const engel = form?.canliEngeli ?? [];
@@ -167,8 +192,34 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
       const k = a.kilitli.find((x) => x.yol === yol);
       return k ? `${k.ureten ? `${k.ureten}. adımdan gelir` : 'akıştan gelir'} (\${akis:${k.ad}})` : '';
     };
+    // Sekmeler (tek istek formuyla aynı bileşen): Alanlar → Gövde gövdeyi alanlardan üretir; Gövde → Alanlar gövdeyi çözer,
+    // çözülemeyen kısım varsa geçmez ve uyarır (gövde aynen kalır; "Formu yine de kullan" bilerek atar).
+    const sekmeKap = govdeSekmeKabi(`${a.no}. adım gövde görünümü`);
+    const uyari = h('div', {});
+    const govdeyeGec = () => {
+      d.govdeG = govdeUret(a.sema, d.degerler, { soapSurumu: a.servis.soapSurumu });
+      d.kilitTabani = kilitTabani(a, d.govdeG);
+      d.mod = 'xml';
+      d.uyumsuz = [];
+      yerlestir(uyari);
+      alanlariCiz();
+    };
+    /** @param {boolean} [zorla] */
+    const alanlaraGec = (zorla = false) => {
+      const c = govdeCoz(d.govdeG ?? '', a.sema);
+      if (c.uyumsuz.length && !zorla) { yerlestir(uyari, govdeUyumsuzUyarisi(c.uyumsuz, () => alanlaraGec(true))); return; }
+      // Akıştan gelen alanlar alan formunda her zaman kilitli (akış değeri).
+      for (const k of a.kilitli) c.degerler[k.yol] = { kaynak: 'akis', deger: k.ad };
+      d.degerler = c.degerler;
+      d.mod = 'alanlar';
+      d.uyumsuz = [];
+      yerlestir(uyari);
+      alanlariCiz();
+    };
     const alanlariCiz = () => {
-      if (!d.degerler) {
+      govdeSekmeleriCiz(sekmeKap, { mod: d.mod, alanlarVar: Boolean(a.sema), rest: a.servis.tur === 'rest',
+        sec: (m) => { if (m === 'xml') govdeyeGec(); else alanlaraGec(); } });
+      if (d.mod === 'xml') {
         const g = h('textarea', { class: 'kod-alani', rows: 10, spellcheck: 'false', 'aria-label': `${a.no}. adım istek gövdesi` });
         // Adı gizli alanların değeri maskeli gösterilir; maskeli kalan yerlere asıl değer geri yazılır (saklanan gövde değişmez).
         const MASKE = '••••••';
@@ -177,9 +228,10 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
         g.addEventListener('input', () => { d.govdeG = maskeyiGeriKoy(g.value, m.asillar, ekGizliAdlar, MASKE); });
         yerlestir(alanKap,
           a.servis.tur === 'rest' && d.http ? h('p', { class: 'kucuk' }, h('code', { class: 'duz' }, `${d.http.metot} ${d.http.yol || '/'}`)) : null,
-          a.sema ? h('div', { class: 'not-kutusu uyari' }, 'Kayıtlı gövde alan formunda gösterilemiyor; gövde metin olarak düzenlenir.') : null,
+          d.uyumsuz.length ? h('div', { class: 'not-kutusu uyari' }, 'Kayıtlı gövde alan formunda gösterilemiyor; gövde metin olarak düzenlenir.') : null,
           alan(a.servis.tur === 'rest' ? 'İstek gövdesi (JSON)' : 'İstek gövdesi (SOAP zarfı)', g, { yardim: 'Değerler ${Tablo.Sütun}, ${akis:Ad} ya da hesaplama kuralıyla yazılabilir.' }),
-          a.kilitli.length ? h('p', { class: 'soluk kucuk' }, 'Akıştan gelen alanlar (koşuda yazılır, sorulmaz): ', ...a.kilitli.map((k) => h('code', { class: 'akis-degeri' }, `${k.yol} ← \${akis:${k.ad}}`))) : null);
+          a.kilitli.length ? h('p', { class: 'soluk kucuk akis-kilit-notu' }, 'Akıştan gelen alanlar (koşuda yazılır, sorulmaz; gövdedeki başvuru silinmemeli): ',
+            ...a.kilitli.map((k) => h('code', { class: 'akis-degeri' }, `${k.yol} ← \${akis:${k.ad}}`))) : null);
         return;
       }
       const zorunlu = (yol, alanT) => (Array.isArray(a.zorunlular) ? a.zorunlular.includes(yol) : Boolean(alanT.zorunlu));
@@ -267,7 +319,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     kontrolCiz();
     return h('fieldset', { class: 'akis-senaryo-adimi' },
       h('legend', {}, etiket, a.ad && a.ad !== a.operasyon ? h('span', { class: 'soluk kucuk' }, ` — ${a.ad}`) : null, a.yalnizTest ? rozet('yalnız TEST', 'uyari') : null),
-      alanKap,
+      sekmeKap, uyari, alanKap,
       h('h4', { class: 'ayrinti-basligi' }, 'Beklenen sonuç (bu adım)'),
       h('p', { class: 'soluk kucuk' }, 'Varsayılan: operasyonun olağan kontrolü. Bu adımın bir hata vermesi bekleniyorsa ör. “Yanıtta geçer” + hata metni ekleyin.'),
       kontrolKap);
@@ -280,12 +332,23 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     for (const d of durumlar) {
       const a = d.adim;
       if (!a.servis) continue;
-      for (const [yol, v] of Object.entries(d.degerler || {})) {
+      const alanlarla = d.mod === 'alanlar' && d.degerler;
+      for (const [yol, v] of Object.entries(alanlarla ? d.degerler : {})) {
         if (['tablo', 'parametre', 'akis'].includes(v.kaynak) && !v.deger) throw new Error(`${a.no}. adım: "${yol}" alanında ${v.kaynak === 'tablo' ? 'tablo sütunu' : v.kaynak === 'akis' ? 'akış değeri adı' : 'hesaplama kuralı'} seçilmedi.`);
       }
-      const govde = d.degerler ? govdeUret(a.sema, d.degerler, { soapSurumu: a.servis.soapSurumu }) : d.govdeG ?? '';
+      const govde = alanlarla ? govdeUret(a.sema, d.degerler, { soapSurumu: a.servis.soapSurumu }) : d.govdeG ?? '';
+      // Gövde sekmesinde akıştan gelen alanın ${akis:Ad} başvurusu silinir ya da değiştirilirse kayıt (ve Dene) açık hatayla durur.
+      // Sessizce geri yazılmaz: koşuda gidecek istek kullanıcının gördüğü gövdeyle aynı kalsın; alan formunda da bu alanlar
+      // değiştirilemez (kilitli). Yalnız sekmeye girerken yerinde olan başvurular denetlenir: başvurusuz kaydedilmiş eski REST
+      // gövdeleri bugünkü gibi koşuda bağla doldurulur.
+      if (!alanlarla) {
+        const k = d.kilitTabani.find((x) => !basvuruYerinde(a, govde, x));
+        if (k) throw new Error(`${a.no}. adım: “${k.yol.split('/').pop()}” alanı akıştan gelir (\${akis:${k.ad}}); gövdede bu başvuru kalmalı.`);
+      }
       adimlar[a.id] = {
         operasyon: a.operasyon, govde,
+        // Hangi sekmeyle kaydedildiği: alan listesi olan adımda gövde sekmesi işaretlenir (yeniden açılınca o sekme).
+        ...(!alanlarla && a.sema ? { gorunum: 'govde' } : {}),
         kontroller: d.kontroller.map((k) => Object.fromEntries(Object.entries(k).filter(([, x]) => x !== '' && x !== undefined))),
         ...(d.http ? { http: d.http } : {}), ...(d.basliklar ? { basliklar: d.basliklar } : {})
       };
