@@ -1,15 +1,17 @@
 // SERVİS ANALİZİ (A aşaması) — arayüz. Çıkarım saf modülde (servis-analizi.mjs; sunucu testleriyle ORTAK); burada:
 //  - analizBagla: metot alan tablosunun (servis-alanlari.js) ÜSTÜNE "Örnek istekler (gövde XML / JSON)" bölümü — "+ Gövde XML ekle" ile
 //    adlı örnekler (düzenle / sil; gizli adlı alanların değeri önizlemede maskeli), örnekler değişince analiz anında yeniden çalışır;
-//    öneriler alan tablosunda satır başına (kanıt + Uygula / Yoksay), tabloda satırı olmayanlar (WSDL'de yok, yeni tablo) bölümde;
-//    "Tümünü uygula". Sihirbazda güçlü tablo eşleşmesi önseçili gelir (Uygula onaylar, Yoksay kaldırır).
+//    öneriler alan tablosunda satır başına (güç rozeti +
+//    kanıt + Uygula / Yoksay), önerilen tablo sütunu seçim kutusunun yanında rozetle; "Tablo önerileri" bölümü (mevcut tablolara bağ /
+//    yeni tablolar önizlemesiyle); "Güçlü önerileri uygula" yalnız güçlüleri kapsar (zayıflar tek tek, çelişki notları hiç).
+//    Sihirbazda güçlü tablo eşleşmesi önseçili gelir (Uygula onaylar, Yoksay kaldırır).
 //  - tabloIslemSecimi: yeni tablonun aynı adlı tabloya Birleştir / Yeni ad / Atla seçimi (sihirbaz Özet adımı ve analiz sayfası).
 //  - servisAnaliziSayfasi: kayıtlı servis için "Servisi analiz et" (#/servisler/s/<id>/analiz): kayıtlı örnekler, ek kanıt (kayıtlı
 //    senaryo gövdeleri / son koşu istekleri — kullanıcı onay kutusuyla dahil eder), uygulanan öneri yeniden sorulmaz, Yoksay hatırlanır;
 //    değişiklikler servisin ayarlarına (mevcut kayıt ucu) yazılır.
 // Hiçbir servise istek atılmaz; analiz tamamen tarayıcıda çalışır.
 import { api, bildir, h, ikon, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { farkKaydi, oneriyiUygula, oneriyiYoksay, servisAnalizi } from './servis-analizi.mjs';
+import { alanAdi, farkKaydi, gucluOneriler, oneriyiUygula, oneriyiYoksay, servisAnalizi } from './servis-analizi.mjs';
 import { adaGoreMaskele } from './gizli-adlar.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
@@ -24,7 +26,7 @@ const kopya = (/** @type {any} */ x) => JSON.parse(JSON.stringify(x));
  * @param {Record<string, any>} [b]
  */
 export function yeniOrnekDurumu(b = {}) {
-  return { ornekler: [], kararlar: {}, kurallar: {}, varsayilanlar: {}, yeniTablolar: [], onsecili: new Set(), sonuc: null, ...b };
+  return { ornekler: [], kararlar: {}, kurallar: {}, varsayilanlar: {}, yeniTablolar: [], tabloDegerleri: [], onsecili: new Set(), sonuc: null, ...b };
 }
 
 /** cURL / gövde örneğinden başlangıç örneği. @param {string} ad @param {string} govde @param {string} kaynak */
@@ -58,12 +60,13 @@ export const analizTablosuGovdesi = (t) => ({ id: t.id, ad: t.ad, islem: t.islem
  */
 export function analizBagla(tanim, a) {
   const d = a.durum;
+  d.tabloAdlari ??= {};
   const tur = a.tur === 'rest' ? 'JSON' : 'XML';
   const bolum = h('section', { class: 'ornek-istekler', 'aria-label': `${tanim.ad} örnek istekleri` });
   /** @type {null | 'yeni' | string} düzenlenen örnek (yeni ya da kimlik) */
   let duzenlenen = null;
   const maskele = (/** @type {string} */ m) => adaGoreMaskele(m, a.ekGizliAdlar || [], MASKE).metin;
-  const durumu = () => ({ zorunlu: tanim.zorunlu, baglar: tanim.baglar, varsayilanlar: d.varsayilanlar, kurallar: d.kurallar, ekler: tanim.ekler, kararlar: d.kararlar, yeniTablolar: d.yeniTablolar });
+  const durumu = () => ({ zorunlu: tanim.zorunlu, baglar: tanim.baglar, varsayilanlar: d.varsayilanlar, kurallar: d.kurallar, ekler: tanim.ekler, kararlar: d.kararlar, yeniTablolar: d.yeniTablolar, tabloDegerleri: (d.tabloDegerleri ??= []) });
   const hesapla = () => {
     const g = {
       metot: tanim.ad, tur: a.tur, sema: tanim.sema, ekler: tanim.ekler || [], ornekler: d.ornekler, ekKanitlar: a.ekKanitlar ? a.ekKanitlar() : [],
@@ -71,6 +74,8 @@ export function analizBagla(tanim, a) {
     };
     const mevcut = () => ({ zorunlu: [...tanim.zorunlu], baglar: tanim.baglar, varsayilanlar: d.varsayilanlar, kurallar: d.kurallar, kararlar: d.kararlar, onsecili: [...d.onsecili] });
     d.sonuc = servisAnalizi({ ...g, mevcut: mevcut() });
+    // Kullanıcının düzenlediği yeni tablo adları (yeniden analizde korunur).
+    for (const o of d.sonuc.oneriler) if (o.tur === 'yeniTablo' && d.tabloAdlari[o.deger.id]) adiDegistir(o.deger, d.tabloAdlari[o.deger.id]);
     if (!a.onsecim) return;
     // Sihirbaz: güçlü tablo eşleşmesi bağ seçimine önseçili yazılır (kullanıcı Uygula ile onaylar, Yoksay ile kaldırır).
     let yazildi = false;
@@ -81,6 +86,13 @@ export function analizBagla(tanim, a) {
       yazildi = true;
     }
     if (yazildi) d.sonuc = servisAnalizi({ ...g, mevcut: mevcut() });
+  };
+  /** Yeni tablo planının adı (aynı adlı tablo kontrolü yeniden). @param {any} plan @param {string} ad */
+  const adiDegistir = (plan, ad) => {
+    plan.ad = ad;
+    const t = (tanim.tablolar || []).find((x) => !String(x.id).startsWith('yeni:') && x.ad.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'));
+    plan.ayniAdli = t ? { id: t.id, ad: t.ad } : null;
+    if (!plan.ayniAdli && plan.islem && plan.islem !== 'atla') plan.islem = 'yeni';
   };
   const sonra = () => { ciz(); tanim.degisti?.(); };
   /** Yeni tablo planı alan seçiminde görünsün (kayıtta gerçek tabloya çevrilir). @param {any} t */
@@ -94,18 +106,26 @@ export function analizBagla(tanim, a) {
     if (o.tur === 'yeniTablo') planTablosu(d.yeniTablolar.find((x) => x.id === o.deger.id) || o.deger);
   };
   const yoksay = (/** @type {any} */ o) => { oneriyiYoksay(durumu(), o); d.onsecili.delete(o.anahtar); };
+  const gucRozeti = (/** @type {any} */ o) => (o.tur === 'celiski' ? rozet('not', 'durdu') : o.guc === 'guclu' ? rozet('güçlü', 'basari') : rozet('zayıf', ''));
+  const dugmeler = (/** @type {any} */ o, /** @type {string} */ ad, uygulaMetni = 'Uygula') => h('span', { class: 'analiz-dugmeleri' },
+    o.tur === 'celiski' ? null : h('button', { type: 'button', class: `kucuk-dugme ${o.guc === 'guclu' ? 'birincil' : ''}`, 'aria-label': `Uygula: ${ad}`, onclick: () => { uygula(o); sonra(); } }, uygulaMetni),
+    h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Yoksay: ${ad}`, onclick: () => { yoksay(o); sonra(); } }, 'Yoksay'));
 
-  /** Öneri satırı: (bölümdeyse alan yolu) + başlık + kanıt + Uygula / Yoksay. @param {any} o @param {boolean} [yolGoster] */
+  /** Öneri satırı: (bölümdeyse alan yolu) + güç + başlık + kanıt + Uygula / Yoksay. @param {any} o @param {boolean} [yolGoster] */
   const oneriSatiri = (o, yolGoster = false) => {
     const ad = `${o.yol ? `${o.yol} — ` : ''}${o.baslik}`;
-    const secim = o.tur === 'yeniTablo' && o.deger.ayniAdli ? tabloIslemSecimi(o.deger) : null;
-    return h('div', { class: `analiz-onerisi ${o.tur === 'celiski' ? 'celiski' : ''}`, 'data-tur': o.tur },
-      h('span', { class: 'analiz-oneri-metni' }, o.tur === 'celiski' ? ikon('uyari') : null, yolGoster && o.yol ? h('code', { class: 'duz' }, o.yol) : null, h('b', {}, o.baslik),
+    return h('div', { class: `analiz-onerisi ${o.tur === 'celiski' ? 'celiski' : o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
+      h('span', { class: 'analiz-oneri-metni' }, o.tur === 'celiski' ? ikon('uyari') : null, gucRozeti(o), yolGoster && o.yol ? h('code', { class: 'duz' }, o.yol) : null, h('b', {}, o.baslik),
         d.onsecili.has(o.anahtar) ? [' ', rozet('önseçili', 'vurgu')] : null, h('span', { class: 'analiz-kaniti' }, o.kanit)),
-      secim,
-      h('span', { class: 'analiz-dugmeleri' },
-        o.tur === 'celiski' ? null : h('button', { type: 'button', class: 'kucuk-dugme birincil', 'aria-label': `Uygula: ${ad}`, onclick: () => { uygula(o); sonra(); } }, 'Uygula'),
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Yoksay: ${ad}`, onclick: () => { yoksay(o); sonra(); } }, 'Yoksay')));
+      dugmeler(o, ad, o.tur === 'kopukBag' && !o.deger ? 'Bağı kaldır' : 'Uygula'));
+  };
+
+  /** Örnek sonucu (başarılı / hata verdi / bilinmiyor): zorunluluk kanıtı bundan gelir; hata verenlerin değerleri tablolara girmez. @param {any} x */
+  const sonucSecimi = (x) => {
+    const s = h('select', { class: 'ornek-sonucu', 'aria-label': `${x.ad} isteği başarılı oldu mu?`, title: 'Başarılı istekte boş alan isteğe bağlıdır (kesin kanıt). Hata veren isteğin değerleri tablolara girmez.' },
+      [['bilinmiyor', 'Sonuç: bilinmiyor'], ['basarili', 'Başarılı'], ['hata', 'Hata verdi']].map(([v, m]) => h('option', { value: v, selected: (x.durum || 'bilinmiyor') === v }, m)));
+    s.addEventListener('change', () => { if (s.value === 'bilinmiyor') delete x.durum; else x.durum = s.value; sonra(); });
+    return s;
   };
 
   const ornekListesi = () => (d.ornekler.length ? h('ul', { class: 'ornek-listesi' }, d.ornekler.map((x) => {
@@ -115,7 +135,7 @@ export function analizBagla(tanim, a) {
     return h('li', {},
       h('span', { class: 'ornek-adi' }, h('b', {}, x.ad), KAYNAK_ADI[x.kaynak] ? [' ', rozet(KAYNAK_ADI[x.kaynak], '')] : null),
       h('code', { class: 'duz ornek-onizleme', title: onizleme.slice(0, 2000) }, onizleme.length > 160 ? `${onizleme.slice(0, 157)}…` : onizleme),
-      h('span', { class: 'analiz-dugmeleri' },
+      h('span', { class: 'analiz-dugmeleri' }, sonucSecimi(x),
         h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${x.ad} örneğini düzenle`, onclick: () => { duzenlenen = x.id; ciz(); bolum.querySelector('textarea')?.focus(); } }, 'Düzenle'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${x.ad} örneğini sil`, onclick: () => { d.ornekler.splice(d.ornekler.indexOf(x), 1); if (duzenlenen === x.id) duzenlenen = null; sonra(); } }, 'Sil')));
   })) : null);
@@ -129,19 +149,65 @@ export function analizBagla(tanim, a) {
     const govde = h('textarea', { rows: '8', spellcheck: 'false', class: 'ornek-govdesi', 'aria-label': `${tanim.ad} örnek gövdesi`,
       placeholder: tur === 'XML' ? '<soap:Envelope …><soap:Body><Metot>…</Metot></soap:Body></soap:Envelope>' : '{ "alan": "değer" }' });
     govde.value = x ? x.govde : '';
+    const sonuc = h('select', { 'aria-label': `${tanim.ad} örnek sonucu` },
+      [['bilinmiyor', 'Bu istek başarılı oldu mu? Bilinmiyor'], ['basarili', 'Başarılı'], ['hata', 'Hata verdi']].map(([v, m]) => h('option', { value: v, selected: (x?.durum || 'bilinmiyor') === v }, m)));
     const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
     const kaydet = h('button', { type: 'button', class: 'kucuk-dugme birincil' }, x ? 'Kaydet' : 'Ekle');
     kaydet.addEventListener('click', () => {
       if (!govde.value.trim()) { not.textContent = 'Gövde boş.'; return; }
       const adi = ad.value.trim() || x?.ad || `Örnek ${d.ornekler.length + 1}`;
-      if (x) Object.assign(x, { ad: adi, govde: govde.value });
-      else d.ornekler.push({ id: ornekKimligi(), ad: adi, govde: govde.value, kaynak: 'elle' });
+      const durum = sonuc.value === 'bilinmiyor' ? undefined : sonuc.value;
+      if (x) { Object.assign(x, { ad: adi, govde: govde.value }); if (durum) x.durum = durum; else delete x.durum; }
+      else d.ornekler.push({ id: ornekKimligi(), ad: adi, govde: govde.value, kaynak: 'elle', ...(durum ? { durum } : {}) });
       duzenlenen = null;
       sonra();
     });
     const vazgec = h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { duzenlenen = null; ciz(); } }, 'Vazgeç');
-    return h('div', { class: 'ornek-formu' }, ad, govde, h('div', { class: 'dugmeler' }, kaydet, vazgec, not));
+    return h('div', { class: 'ornek-formu' }, ad, govde, sonuc, h('div', { class: 'dugmeler' }, kaydet, vazgec, not));
   };
+
+  /** Yeni tablo önizlemesi: sütunlar (kaynak alanlarıyla), satırlar (örnek adlarıyla; gizli değer maskeli), ad ve işlem seçimi. @param {any} o */
+  const yeniTabloKarti = (o) => {
+    const t = o.deger;
+    const ad = h('input', { type: 'text', maxlength: '60', value: t.ad, 'aria-label': `${t.ad} yeni tablo adı düzenle` });
+    const secimKabi = h('span', {});
+    const secimCiz = () => yerlestir(secimKabi, t.ayniAdli ? tabloIslemSecimi(t) : null);
+    ad.addEventListener('change', () => { const v = ad.value.trim(); if (!v) { ad.value = t.ad; return; } d.tabloAdlari[t.id] = v; adiDegistir(t, v); secimCiz(); });
+    secimCiz();
+    const kaynak = new Map(t.alanlar.map((x) => [x.sutun, x.yol]));
+    // Açık / kapalı durumu yeniden çizimde korunur.
+    d.acikTablolar ??= new Set();
+    const kart = h('details', { class: 'yeni-tablo-karti', 'data-tablo': t.id, open: d.acikTablolar.has(t.id) },
+      h('summary', {}, h('b', {}, t.ad), ` ${t.tur === 'liste' ? '(liste)' : '(kayıt)'} — ${t.sutunlar.length} sütun, ${t.satirlar.length} satır `, gucRozeti(o)),
+      h('div', { class: 'yeni-tablo-govdesi' },
+        h('label', { class: 'yeni-tablo-adi' }, 'Tablo adı ', ad), secimKabi,
+        h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu', 'aria-label': `${t.ad} önizleme` },
+          h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Satır'), t.sutunlar.map((c) => h('th', { scope: 'col', title: kaynak.get(c.ad) || '' }, c.ad, c.gizli ? ' (gizli)' : '', h('div', { class: 'soluk kucuk' }, kaynak.get(c.ad) || ''))))),
+          h('tbody', {}, t.satirlar.slice(0, 20).map((r) => h('tr', {}, h('td', {}, r.ad), t.sutunlar.map((c) => h('td', {}, c.gizli ? MASKE : r.degerler[c.ad] ?? '—'))))))),
+        h('p', { class: 'soluk kucuk' }, o.kanit),
+        dugmeler(o, `${t.ad} yeni tablo`, 'Tabloyu öner')));
+    kart.addEventListener('toggle', () => { if (kart.open) d.acikTablolar.add(t.id); else d.acikTablolar.delete(t.id); });
+    return kart;
+  };
+
+  /** Tablo önerileri: (a) mevcut tablolara bağlanacak alanlar, (b) yeni tablolar; boş durum açıkça. @param {any} r */
+  const tabloOnerileri = (r) => {
+    const baglar = r.oneriler.filter((o) => o.tur === 'tabloBagi' || o.tur === 'kopukBag' || o.tur === 'tabloyaDeger');
+    const yeniler = r.oneriler.filter((o) => o.tur === 'yeniTablo');
+    const yeniAlan = yeniler.reduce((n, o) => n + o.deger.alanlar.length, 0);
+    return h('section', { class: 'tablo-onerileri', 'aria-label': `${tanim.ad} tablo önerileri` },
+      h('h6', {}, 'Tablo önerileri'),
+      h('div', { class: 'tablo-onerileri-a' }, h('div', { class: 'alan-etiketi' }, 'Mevcut tablolara bağlanacak alanlar'),
+        baglar.length ? baglar.map((o) => h('div', { class: `analiz-onerisi ${o.guc === 'zayif' ? 'zayif' : ''}`, 'data-tur': o.tur, 'data-guc': o.guc },
+          h('span', { class: 'analiz-oneri-metni' }, gucRozeti(o), h('code', { class: 'duz' }, alanAdi(o.yol)), ' → ',
+            h('b', {}, o.deger ? `${tabloAdi(o.deger.tablo)} › ${o.deger.sutun}${o.tur === 'tabloyaDeger' ? ` (eklenecek: ${o.deger.degerler.join(', ')})` : ''}` : 'bağı kaldır'), d.onsecili.has(o.anahtar) ? [' ', rozet('önseçili', 'vurgu')] : null,
+            h('span', { class: 'analiz-kaniti' }, o.kanit)),
+          dugmeler(o, `${o.yol} — ${o.baslik}`, o.tur === 'kopukBag' && !o.deger ? 'Bağı kaldır' : 'Uygula')))
+          : h('p', { class: 'soluk kucuk tablo-onerileri-bos' }, `Mevcut tablolarla eşleşen alan bulunamadı${yeniAlan ? `; ${yeniAlan} alan için yeni tablo önerildi` : ''}.`)),
+      h('div', { class: 'tablo-onerileri-b' }, h('div', { class: 'alan-etiketi' }, 'Yeni tablolar'),
+        yeniler.length ? yeniler.map(yeniTabloKarti) : h('p', { class: 'soluk kucuk' }, 'Yeni tablo önerisi yok.')));
+  };
+  const tabloAdi = (/** @type {string} */ id) => (tanim.tablolar || []).find((t) => t.id === id)?.ad ?? id;
 
   const sonucBolumu = () => {
     const r = d.sonuc;
@@ -151,21 +217,24 @@ export function analizBagla(tanim, a) {
         : 'Bu metodun alan listesi yok: örnek ekleyin, alanlar örneklerden çıkarılır ve alan formu açılır.');
     }
     const satirYollari = new Set(alanSatirlari(semaBirlestir(tanim.sema, tanim.ekler || []).alanlar).filter((x) => !x.grup).map((x) => x.yol));
-    const genel = r.oneriler.filter((o) => !satirYollari.has(o.yol));
-    const satirdaki = r.oneriler.length - genel.length;
-    const uygulanabilir = r.oneriler.filter((o) => o.tur !== 'celiski');
-    const tumu = h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !uygulanabilir.length, 'aria-label': `${tanim.ad} tüm önerileri uygula` }, `Tümünü uygula (${uygulanabilir.length})`);
+    const tabloTurleri = new Set(['tabloBagi', 'kopukBag', 'yeniTablo', 'tabloyaDeger']);
+    const genel = r.oneriler.filter((o) => !satirYollari.has(o.yol) && !tabloTurleri.has(o.tur));
+    const guclu = gucluOneriler(r.oneriler);
+    const zayif = r.oneriler.filter((o) => o.guc === 'zayif').length;
+    const tumu = h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !guclu.length, 'aria-label': `${tanim.ad} güçlü önerileri uygula` }, `Güçlü önerileri uygula (${guclu.length})`);
     tumu.addEventListener('click', () => {
-      // Önce alan ekleme (sonraki öneriler eklenen alanın satırına düşer), sonra kalanlar.
-      for (const o of [...uygulanabilir.filter((x) => x.tur === 'alanEkle'), ...uygulanabilir.filter((x) => x.tur !== 'alanEkle')]) uygula(o);
+      // Önce alan ekleme (sonraki öneriler eklenen alanın satırına düşer), sonra kalanlar. Zayıflar ve çelişki notları dahil değil.
+      for (const o of [...guclu.filter((x) => x.tur === 'alanEkle'), ...guclu.filter((x) => x.tur !== 'alanEkle')]) uygula(o);
       sonra();
     });
     return h('div', { class: 'analiz-sonucu', 'aria-live': 'polite' },
       h('div', { class: 'analiz-sonucu-ust' },
-        h('span', { class: 'soluk kucuk' }, `${r.toplam} örnek analiz edildi${r.toplam - r.adliSayisi ? ` (${r.adliSayisi} adlı + ${r.toplam - r.adliSayisi} ek kanıt)` : ''} · ${r.oneriler.length} öneri${satirdaki ? ` (${satirdaki} tanesi alan tablosunda)` : ''}`),
+        h('span', { class: 'soluk kucuk' }, `${r.toplam} örnek analiz edildi${r.toplam - r.adliSayisi ? ` (${r.adliSayisi} adlı + ${r.toplam - r.adliSayisi} ek kanıt)` : ''} · ${r.oneriler.length} öneri: ${guclu.length} güçlü, ${zayif} zayıf (tek tek uygulanır)`),
         tumu),
       r.hatalar.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, r.hatalar.map((x) => h('div', {}, h('b', {}, `${x.ad}: `), x.mesaj))) : null,
+      r.notlar.length ? h('div', { class: 'not-kutusu analiz-notlari', role: 'note' }, r.notlar.map((x) => h('div', {}, x))) : null,
       genel.length ? h('div', { class: 'analiz-genel' }, genel.map((o) => oneriSatiri(o, true))) : null,
+      tabloOnerileri(r),
       r.farklar.length ? h('details', { class: 'ornek-farklari' }, h('summary', { class: 'kucuk' }, `Örnekler arası fark (${r.farklar.length})`),
         h('p', { class: 'soluk kucuk' }, 'Yalnız bazı örneklerde dolu alanlar; senaryo önerileri için saklanır.'),
         h('ul', { class: 'onay-listesi' }, r.farklar.map((f) => h('li', {}, f.metin)))) : null);
@@ -175,20 +244,31 @@ export function analizBagla(tanim, a) {
     hesapla();
     yerlestir(bolum,
       h('div', { class: 'ornek-istekler-baslik' }, h('h5', {}, `Örnek istekler (gövde ${tur})`), h('span', { class: 'soluk kucuk' }, `${d.ornekler.length} örnek`)),
-      h('p', { class: 'soluk kucuk' }, `Servise giden gerçek istek gövdelerini (${tur}) adlarıyla ekleyin (ör. "Bireysel", "Kurumsal"). Analiz yalnız bu metinler üzerinde çalışır; servise istek atılmaz. Öneriler siz uygulayınca geçer.`),
+      h('p', { class: 'soluk kucuk' }, `Servise giden gerçek istek gövdelerini (${tur}) adlarıyla ekleyin (ör. "Bireysel", "Kurumsal") ve sonucunu işaretleyin (Başarılı / Hata verdi). Başarılı istekte boş alan isteğe bağlıdır; her örnekte dolu olması zorunluluğu kanıtlamaz. Analiz yalnız bu metinler üzerinde çalışır; servise istek atılmaz.`),
+      h('p', { class: 'soluk kucuk kesin-karar-notu' }, 'Kesin karar için C aşaması (onaylı TEST denemesi) — henüz yapılmıyor.'),
       ornekListesi(), form(), sonucBolumu());
     tanim.tabloyuYenile?.();
   };
   tanim.ust = bolum;
   tanim.analiz = {
-    /** Satır önerileri (alan tablosunda): örnek özeti + öneriler. @param {string} yol */
+    /** Satır önerileri (alan tablosunda): örnek özeti + öneriler (tablo bağı satırın seçim kutusunun yanında rozetle). @param {string} yol */
     satir: (yol) => {
       const r = d.sonuc;
       if (!r || !r.toplam) return null;
       const al = r.alanlar.find((x) => x.yol === yol);
-      const ol = r.oneriler.filter((o) => o.yol === yol);
+      const ol = r.oneriler.filter((o) => o.yol === yol && o.tur !== 'tabloBagi');
       if (!(al && (al.dolu + al.bos)) && !ol.length) return null;
       return h('div', { class: 'analiz-satiri' }, al ? h('span', { class: 'soluk kucuk analiz-ozeti' }, al.ozet) : null, ol.map((o) => oneriSatiri(o)));
+    },
+    /** Önerilen tablo sütunu: seçim kutusunun yanında belirgin rozet ("Öneri: Tablo › Sütun — Uygula"). @param {string} yol */
+    bagRozeti: (yol) => {
+      const o = d.sonuc?.oneriler.find((x) => x.tur === 'tabloBagi' && x.yol === yol);
+      if (!o) return null;
+      const hedef = `${tabloAdi(o.deger.tablo)} › ${o.deger.sutun}`;
+      return h('span', { class: `bag-onerisi ${o.guc === 'zayif' ? 'zayif' : ''}`, title: o.kanit, 'data-guc': o.guc },
+        h('span', { class: 'bag-onerisi-metni' }, `${d.onsecili.has(o.anahtar) ? 'Önseçili' : 'Öneri'}: ${hedef}${o.guc === 'zayif' ? ' (zayıf)' : ''}`),
+        h('button', { type: 'button', class: 'kucuk-dugme birincil', 'aria-label': `Öneriyi uygula: ${yol} → ${hedef}`, onclick: () => { uygula(o); sonra(); } }, 'Uygula'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Öneriyi yoksay: ${yol} → ${hedef}`, onclick: () => { yoksay(o); sonra(); } }, '×'));
     }
   };
   for (const t of d.yeniTablolar) if (Object.values(tanim.baglar).some((b) => b && b.tablo === t.id)) planTablosu(t);
@@ -203,7 +283,7 @@ export function analizKaydi(liste) {
   const dolu = (/** @type {Record<string, any>} */ x) => Object.keys(x).length > 0;
   const nesne = (/** @type {(d: any) => any} */ f) => Object.fromEntries(liste.map(([ad, d]) => [ad, f(d)]).filter(([, v]) => (Array.isArray(v) ? v.length : v && dolu(v))));
   return {
-    ornekIstekler: nesne((d) => d.ornekler.map((x) => ({ id: x.id, ad: x.ad, govde: x.govde, kaynak: x.kaynak || 'elle' }))),
+    ornekIstekler: nesne((d) => d.ornekler.map((x) => ({ id: x.id, ad: x.ad, govde: x.govde, kaynak: x.kaynak || 'elle', ...(x.durum ? { durum: x.durum } : {}) }))),
     alanKurallari: nesne((d) => d.kurallar),
     analizKararlari: nesne((d) => d.kararlar),
     ornekFarklari: nesne((d) => (d.sonuc ? farkKaydi(d.sonuc) : []))
@@ -249,6 +329,7 @@ export async function servisAnaliziSayfasi(kap, proje, s, yenile) {
     const nesne = (/** @type {(m: any) => any} */ f, /** @type {Record<string, any>} */ eski) => ({ ...(eski || {}), ...Object.fromEntries(metotlar.map((m) => [m.ad, f(m)])) });
     const k = analizKaydi(metotlar.map((m) => [m.ad, m.durum]));
     const bekleyen = yeniTablolar.filter((t) => !t.yazildi);
+    const degerler = metotlar.flatMap((m) => m.durum.tabloDegerleri || []);
     const govde = {
       alanZorunluluklari: nesne((m) => [...m.zorunlu], a.alanZorunluluklari), ekAlanlar: nesne((m) => m.ekler, a.ekAlanlar),
       alanBaglari: nesne((m) => m.baglar, a.alanBaglari), alanVarsayilanlari: nesne((m) => m.durum.varsayilanlar, a.alanVarsayilanlari),
@@ -257,14 +338,16 @@ export async function servisAnaliziSayfasi(kap, proje, s, yenile) {
       alanKurallari: nesne((m) => m.durum.kurallar, a.alanKurallari), analizKararlari: nesne((m) => m.durum.kararlar, a.analizKararlari),
       ornekFarklari: nesne((m) => (m.durum.sonuc ? farkKaydi(m.durum.sonuc) : []), a.ornekFarklari),
       ...(rest ? {} : { ornekKokleri: Object.fromEntries(metotlar.filter((m) => !m.sema.alanlar.length && m.durum.sonuc?.kok).map((m) => [m.ad, { kok: m.durum.sonuc.kok, ns: m.durum.sonuc.ns || '' }])) }),
-      ...(bekleyen.length ? { analizTablolari: bekleyen.map(analizTablosuGovdesi) } : {})
+      ...(bekleyen.length ? { analizTablolari: bekleyen.map(analizTablosuGovdesi) } : {}),
+      ...(degerler.length ? { tabloDegerleri: degerler } : {})
     };
     kayitDurumu.textContent = 'Kaydediliyor…';
     kayitDurumu.className = 'kayit-durumu soluk kucuk';
     try {
       await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: a.yol, ...govde } });
       kayitDurumu.textContent = '✓ Kaydedildi';
-      if (bekleyen.length) { bildir(`${bekleyen.filter((t) => t.islem !== 'atla').length} tablo test verisine yazıldı.`); yenile(); }
+      if (degerler.length) for (const m of metotlar) m.durum.tabloDegerleri = [];
+      if (bekleyen.length || degerler.length) { bildir(`${bekleyen.filter((t) => t.islem !== 'atla').length} tablo test verisine yazıldı.`); yenile(); }
     } catch (e) {
       kayitDurumu.textContent = `Kaydedilemedi: ${e.message}`;
       kayitDurumu.className = 'kayit-durumu alan-uyarisi';

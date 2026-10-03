@@ -1,5 +1,7 @@
 import type { AlanTipi, OperasyonSemasi } from './servis-govdesi.mjs';
 
+/** Örnek isteğin sonucu (kullanıcı işaretler; koşulardan gelen kanıtta koşunun sonucu). */
+export type OrnekDurumu = 'basarili' | 'hata' | 'bilinmiyor';
 export type OrnekGozlemi = { durum: 'dolu' | 'bos' | 'nil'; deger: string; coklu: boolean };
 export type CozulenOrnek = { kok: string; ns: string; alanlar: Map<string, OrnekGozlemi>; gruplar: Set<string>; hata: string | null };
 export type AnalizTablosu = {
@@ -20,14 +22,14 @@ export type AnalizMevcudu = {
 export type AnalizGirdisi = {
   metot: string; tur?: 'soap' | 'rest';
   sema?: OperasyonSemasi | null; ekler?: ReadonlyArray<{ yol: string; tip?: string }>;
-  ornekler?: ReadonlyArray<{ ad?: string; govde: string }>;
-  ekKanitlar?: ReadonlyArray<{ ad?: string; govde: string }>;
+  ornekler?: ReadonlyArray<{ ad?: string; govde: string; durum?: OrnekDurumu }>;
+  ekKanitlar?: ReadonlyArray<{ ad?: string; govde: string; durum?: OrnekDurumu }>;
   tablolar?: ReadonlyArray<AnalizTablosu>; ekGizliAdlar?: ReadonlyArray<string>;
   mevcut?: AnalizMevcudu;
 };
 export type TabloEslesmesi = {
   tabloId: string; tablo: string; sutun: string; adTuru: 'birebir' | 'esAnlam' | 'benzer' | 'tablo' | null;
-  bulunan: number; toplam: number; karsiliklar: Array<[string, string]>; guc: 'guclu' | 'orta'; kanit: string;
+  bulunan: number; toplam: number; karsiliklar: Array<[string, string]>; guc: 'guclu' | 'zayif'; kanit: string;
 };
 export type YeniTabloPlani = {
   id: string; ad: string; tur: 'kayit' | 'liste';
@@ -36,8 +38,9 @@ export type YeniTabloPlani = {
   alanlar: Array<{ yol: string; sutun: string }>;
   ayniAdli: { id: string; ad: string } | null;
 };
-export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'desen' | 'gizli' | 'degerler' | 'tabloBagi' | 'yeniTablo';
-export type AnalizOnerisi = { anahtar: string; tur: OneriTuru; yol: string; deger: unknown; baslik: string; kanit: string; guc?: 'guclu' | 'orta' };
+export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'gizli' | 'tabloBagi' | 'yeniTablo' | 'kopukBag' | 'tabloyaDeger';
+export type OneriGucu = 'guclu' | 'zayif' | 'not';
+export type AnalizOnerisi = { anahtar: string; tur: OneriTuru; yol: string; deger: unknown; baslik: string; kanit: string; guc: OneriGucu };
 export type AlanAnalizi = {
   yol: string; ad: string; wsdlde: boolean; ekli: boolean; wsdlZorunlu: boolean | null; dolu: number; bos: number; yok: number; toplam: number;
   degerler: string[]; gizli: boolean; ozet: string; tablo: TabloEslesmesi | null;
@@ -47,6 +50,8 @@ export type AnalizSonucu = {
   alanlar: AlanAnalizi[]; oneriler: AnalizOnerisi[]; tumOneriler: AnalizOnerisi[];
   farklar: Array<{ yol: string; dolu: string[]; bos: string[]; metin: string }>;
   yeniTablolar: YeniTabloPlani[];
+  /** Hata veren örneklerin çok farklı olduğu durumlar (zorunluluk kanıtı sayılmaz). */
+  notlar: string[];
 };
 export type AnalizDurumu = {
   zorunlu: Set<string>;
@@ -56,17 +61,21 @@ export type AnalizDurumu = {
   ekler: Array<{ yol: string; tip?: string }>;
   kararlar: Record<string, 'uygulandi' | 'yoksayildi'>;
   yeniTablolar: YeniTabloPlani[];
+  /** Bağlı tablolara eklenecek değerler (kayıtta yeni satırlar). */
+  tabloDegerleri: Array<{ tablo: string; sutun: string; degerler: string[] }>;
 };
 
 export const EN_COK_ORNEK: number;
 export const EN_COK_KUME: number;
+export const EN_AZ_GOZLEM: number;
+export function kavramGrubu(ad: string): string | null;
+export function gucluOneriler(l: ReadonlyArray<AnalizOnerisi>): AnalizOnerisi[];
 export const TIP_ADLARI: Readonly<Record<AlanTipi, string>>;
 export const BICIM_ADLARI: Readonly<Record<string, string>>;
 export function alanAdi(yol: string): string;
 export function bulunmaEki(s: string): string;
 export function ornekCoz(govde: string, s?: { tur?: 'soap' | 'rest'; kok?: string; ustAlanlar?: ReadonlyArray<string> }): CozulenOrnek;
 export function tipCikar(degerler: string[]): { tip: AlanTipi; bicim?: string } | null;
-export function desenCikar(gozlemler: string[]): { desen?: string; enAzUzunluk: number; enCokUzunluk: number; aciklama: string } | null;
 export function adEslesmesi(alan: string, hedef: string): 'birebir' | 'esAnlam' | 'benzer' | null;
 export function degerOrtusmesi(degerler: string[], t: AnalizTablosu, c: AnalizTablosu['sutunlar'][number]):
   { dogrudan: string[]; karsilik: Array<[string, string]>; eksik: string[]; bulunan: number; toplam: number };

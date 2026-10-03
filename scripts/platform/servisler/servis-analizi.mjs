@@ -4,16 +4,28 @@
 //   1) Alan listesi  : örnekteki öğeler (ad alanı önekleri yok sayılır; yol "Input/Alan" biçiminde, şemanın yollarıyla) WSDL alanlarıyla
 //                      eşlenir; WSDL'de olmayan öğe "alan olarak eklensin mi?" (alanEkle) önerisi olur. Alan listesi olmayan metotta
 //                      alanların tamamı örneklerden gelir (kok / ns de örnekten).
-//   2) Zorunluluk    : her örnekte dolu → zorunlu; bazılarında → isteğe bağlı; hep boş (<x/>, <x></x>, xsi:nil) → zorunlu değil,
-//                      varsayılan "boş gönder"; hiç yok → öneri yok (WSDL ne diyorsa). WSDL ile çelişki ayrı uyarı (celiski).
-//   3) Tip / biçim   : WSDL tipi (metin dışı) varsa o; yoksa değerlerden: tarih (gg.aa.yyyy / yyyy-aa-gg / ISO), tamsayı, ondalık
-//                      (ayraç), evet/hayır (true/false, E/H, 1/0), e-posta. Hep aynı uzunluk → desen ("hep 5 hane"). Gizli adlı,
-//                      11 haneli sayı ya da kimlik benzeri ad → gizli. ≤ 8 farklı değer ve tekrar → izin verilen değerler.
+//   2) Zorunluluk    : örnek başına durum (basarili / hata / bilinmiyor; koşudan gelen kanıtta koşunun sonucu). Başarılı istekte boş /
+//                      yok → güçlü "isteğe bağlı" (hep boşsa varsayılan "boş gönder"; WSDL zorunluysa ayrıca çelişki notu). Her örnekte
+//                      dolu → yalnız zayıf "zorunlu olabilir" (WSDL zorunluysa öneri yok). Hata veren istek bir başarılı istekten YALNIZ
+//                      bu alanın boş / yok olmasıyla ayrılıyorsa → güçlü ipucu "zorunlu olabilir: bu alan eksikken hata verdi" (kesin
+//                      değil); birden çok alanla ayrılıyorsa yalnız not. Hata veren istekte boş alan tek başına kanıt değildir (hesaba
+//                      katılmaz). Başarısı bilinmeyen örnekte boş → zayıf "isteğe bağlı olabilir" (WSDL zorunluysa yalnız not).
+//                      Hata veren örneklerin değerleri tablolara ve "tabloya değer ekle" önerisine girmez. Alan listesi ve tip tüm örneklerden.
+//   3) Tip / biçim   : WSDL'deki alanda WSDL tipi geçerlidir (string → metin; rakamlardan oluşsa da tamsayı önerilmez). WSDL'de
+//                      olmayan alanda değerlerden (≥ 3 dolu gözlem): tarih (gg.aa.yyyy / yyyy-aa-gg / ISO), tamsayı, ondalık (ayraç),
+//                      evet/hayır (true/false, E/H, 1/0), e-posta. Uzunluk / desen ve izin verilen değer KISITI önerilmez. Gizli adlı,
+//                      11 haneli sayı ya da kimlik benzeri ad → gizli.
 //   4) Tablo eşleşmesi: ad (aynı ad, eş anlam / kısaltma — doldur-onerisi.mjs > ayniKavramMi / benzerAdMi —, küçük TR↔EN sözlüğü;
-//                      tablo adı da sayılır) + değer örtüşmesi (değerlerin sütunda bulunma oranı; sütunun karşılıkları: metin ↔ kod).
-//   5) Yeni tablo    : eşleşmeyen alanlar için hızlı testin kayıt planı kuralları: aynı gruptaki (birlikte giden) alanlar tek kayıt
-//                      tablosu, izin verilen değer listeleri ayrı liste tablosu, gizli adlı sütun gizli (değeri yazılmaz). Satırlar
-//                      örneklerden (satır adı = örnek adı). Aynı adlı tablo varsa ayniAdli dolu (arayüz: Birleştir / Yeni ad / Atla).
+//                      tablo adı da sayılır) + değer örtüşmesi (sütunun karşılıkları: metin ↔ kod). Ad + ≥ 1 değer → güçlü; ad yokken
+//                      değer sütunda ve biçim aynı → zayıf ("desen aynı"). Aynı tabloya önerilen alanların değerleri aynı satırda
+//                      birlikte bulunuyorsa güçlü. Silinmiş tabloya / sütuna bağ → "kopuk bağ" (en iyi eşleşmeye bağla / bağı kaldır).
+//   5) Yeni tablo    : eşleşmeyen alanlar için hızlı testin kayıt planı kuralları: kavram grupları (kişi / adres / iletişim / kart /
+//                      giriş bilgileri) ayrı kayıt tablosu, kalanlar metodun tablosu; küçük değer listeleri (evet/hayır hariç) ayrı
+//                      liste tablosu (her farklı değer bir satır); kayıt tablosunda her örnek bir satır, örnek satırlarında olmayan
+//                      farklı değerler ayrı satır. Bağlı tabloda olmayan örnek değerleri "tabloya eklensin mi" önerisi;
+//                      gizli adlı sütun gizli (değeri yazılmaz). Satırlar örneklerden (satır adı = örnek adı). Aynı adlı tablo varsa
+//                      ayniAdli dolu (arayüz: Birleştir / Yeni ad / Atla).
+//   Güç: her öneri "guclu" ya da "zayif" (çelişki "not"); "Güçlü önerileri uygula" yalnız güçlüleri kapsar.
 //   6) Fark          : adlandırılmış örnekler karşılaştırılır — yalnız bazılarında dolu alanlar (B aşaması senaryo önerileri için).
 // Ek kanıt (kayıtlı senaryo gövdeleri, son koşu istekleri) sayımlara katılır; adlı değildir (satır / fark üretmez). Yer tutuculu
 // (${…}, {{…}}) ve maskeli (•••) değerler "dolu" sayılır ama değer çıkarımına girmez.
@@ -23,6 +35,7 @@ import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
 /** @typedef {import('./servis-analizi.d.mts').OrnekGozlemi} OrnekGozlemi */
+/** @typedef {import('./servis-analizi.d.mts').OrnekDurumu} OrnekDurumu */
 /** @typedef {import('./servis-analizi.d.mts').CozulenOrnek} CozulenOrnek */
 /** @typedef {import('./servis-analizi.d.mts').AnalizGirdisi} AnalizGirdisi */
 /** @typedef {import('./servis-analizi.d.mts').AnalizSonucu} AnalizSonucu */
@@ -98,13 +111,31 @@ export const alanAdi = (yol) => String(yol).split('/').pop() ?? '';
 const sozcukler = (s) => String(s ?? '').replace(/([a-zçğıöşü0-9])([A-ZÇĞİÖŞÜ])/g, '$1 $2').split(/[^\p{L}\p{N}]+/u).map(baslikNormal).filter(Boolean);
 /** Gösterimde değer listesi (en çok n tane). @param {string[]} l @param {number} [n] */
 const liste = (l, n = 4) => `${l.slice(0, n).join(', ')}${l.length > n ? ` (+${l.length - n})` : ''}`;
-/** Bulunma eki ("Kod'da", "Ülke'de", "Tip'te"): son ünlü ve son ünsüz. @param {string} s */
+/** Bulunma eki ("Kod'da", "Ülke'de", "Tip'te", "kodu'nda"): son ünlü, son ünsüz; ünlüyle biten sözde kaynaştırma "n". @param {string} s */
 export function bulunmaEki(s) {
   const k = kucuk(s);
   const unlu = [...k].reverse().find((c) => 'aeıioöuü'.includes(c)) ?? 'e';
-  const sert = /[çfhkpsşt]$/.test(k);
-  return `'${sert ? 't' : 'd'}${'aıou'.includes(unlu) ? 'a' : 'e'}`;
+  const a = 'aıou'.includes(unlu) ? 'a' : 'e';
+  if (/[aeıioöuü]$/.test(k)) return `'nd${a}`;
+  return `'${/[çfhkpsşt]$/.test(k) ? 't' : 'd'}${a}`;
 }
+/** Değerin biçim imzası (rakam / büyük harf dizisi ve uzunluk; başka biçimde null). @param {string} v */
+const imza = (v) => (/^\d+$/.test(v) ? `9:${v.length}` : /^[A-Z]+$/.test(v) ? `A:${v.length}` : null);
+/** Değerler tek bir imzada mı (hepsi aynı uzunlukta rakam / büyük harf dizisi): imza ya da null. @param {ReadonlyArray<string>} l */
+const ortakImza = (l) => { const s = new Set(l.map(imza)); return l.length && s.size === 1 && !s.has(null) ? /** @type {string} */ ([...s][0]) : null; };
+
+/** Değerden tip önerisinin kanıt eşiği: en az 3 dolu gözlem. */
+export const EN_AZ_GOZLEM = 3;
+/** Hızlı testin kayıt planıyla aynı kavram grupları (test-verisi-tablosu.mjs: "Kişi bilgileri", "Kart bilgileri"; normal ad üzerinde). */
+const KAVRAM_GRUPLARI = /** @type {ReadonlyArray<readonly [string, RegExp]>} */ ([
+  ['Kart bilgileri', /(kart|card|cvv|cvc|guvenlikkodu|sonkullanma|gecerlilik|expir|installment|taksit)/],
+  ['İletişim bilgileri', /(telefon|^tel|gsm|^cep|phone|mobile|eposta|email|^mail|fax|faks)/],
+  ['Adres bilgileri', /(adres|address|^il$|ilce|sehir|city|district|province|posta|zip|ulke|country|mahalle|sokak|street|bina|daire)/],
+  ['Kişi bilgileri', /(^ad$|^adi$|isim|soyad|surname|lastname|firstname|^name$|fullname|dogum|birth|cinsiyet|gender|kimlik|identity|^tc|uyruk|meslek|occupation)/],
+  ['Giriş bilgileri', /(kullanici|username|^user|parola|password|sifre|kanal|channel|token|apikey|oturum|session)/]
+]);
+/** Alanın kavram grubu (yoksa null → metodun tablosu). @param {string} ad */
+export const kavramGrubu = (ad) => KAVRAM_GRUPLARI.find(([, d]) => d.test(baslikNormal(ad)))?.[0] ?? null;
 
 // ---------------------------------------------------------------------------------------
 // Örnek çözümleme
@@ -181,7 +212,7 @@ export function ornekCoz(govde, s = {}) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Tip / biçim / desen
+// Tip / biçim
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -203,7 +234,7 @@ export function tipCikar(degerler) {
   if (altKume(['e', 'h']) && kume.size === 2) return { tip: 'mantiksal', bicim: 'E/H' };
   if (altKume(['y', 'n']) && kume.size === 2) return { tip: 'mantiksal', bicim: 'Y/N' };
   if (altKume(['1', '0']) && kume.size === 2) return { tip: 'mantiksal', bicim: '1/0' };
-  // Baştaki sıfırlı (00123) ya da 10+ haneli sayı (kimlik / numara) koddur: tamsayı değil (desen önerisi gelir).
+  // Baştaki sıfırlı (00123) ya da 10+ haneli sayı (kimlik / numara) koddur: tamsayı değil.
   if (hepsi(/^-?\d{1,9}$/) && !l.some((x) => /^-?0\d/.test(x))) return { tip: 'tamsayi' };
   if (hepsi(/^-?\d+([.,]\d+)?$/) && l.some((x) => /[.,]/.test(x))) {
     const virgul = l.some((x) => x.includes(','));
@@ -212,21 +243,6 @@ export function tipCikar(degerler) {
   }
   if (hepsi(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return { tip: 'metin', bicim: 'e-posta' };
   return null;
-}
-
-/**
- * Hep aynı uzunluk → desen (en az 2 gözlem). Rakam: "hep N hane"; büyük harf; büyük harf + rakam; yoksa yalnız uzunluk.
- * @param {string[]} gozlemler somut değerler (tekrarlı) @returns {{ desen?: string; enAzUzunluk: number; enCokUzunluk: number; aciklama: string } | null}
- */
-export function desenCikar(gozlemler) {
-  const l = gozlemler.filter(somutMu);
-  if (l.length < 2) return null;
-  const n = l[0].length;
-  if (!l.every((x) => x.length === n)) return null;
-  if (l.every((x) => /^\d+$/.test(x))) return { desen: `^\\d{${n}}$`, enAzUzunluk: n, enCokUzunluk: n, aciklama: `hep ${n} hane` };
-  if (l.every((x) => /^[A-Z]+$/.test(x))) return { desen: `^[A-Z]{${n}}$`, enAzUzunluk: n, enCokUzunluk: n, aciklama: `hep ${n} büyük harf` };
-  if (l.every((x) => /^[A-Z0-9]+$/.test(x))) return { desen: `^[A-Z0-9]{${n}}$`, enAzUzunluk: n, enCokUzunluk: n, aciklama: `hep ${n} karakter (büyük harf / rakam)` };
-  return { enAzUzunluk: n, enCokUzunluk: n, aciklama: `hep ${n} karakter` };
 }
 
 /** Kimlik benzeri ad (doldur-onerisi.mjs eş anlam sözlüğü). @param {string} ad */
@@ -318,19 +334,25 @@ export function tabloEslesmesi(ad, degerler, tablolar, gizli = false) {
       const oran = o.toplam ? o.bulunan / o.toplam : null;
       const adPuani = adTur ? PUAN[adTur] : 0;
       const tabloPuani = !adTur && tabloAd ? PUAN[tabloAd] : 0;
+      // Yalnız değerden (ad eşleşmesi yok): değerlerden en az biri sütunda ve biçim aynı (ör. hep 5 hane) — zayıf öneri.
+      const fi = ortakImza(degerler);
+      const sutunImzasi = ortakImza(t.satirlar.map((r) => r.degerler[c.ad]).filter(somutMu).map(String));
+      const desenAyni = Boolean(fi) && fi === sutunImzasi;
       // Ad eşleşmesi değerlerle çelişiyorsa (değer var, hiçbiri sütunda yok) aday sayılmaz.
       const kabul = (adPuani > 0 && (oran === null || oran > 0)) || (tabloPuani > 0 && oran !== null && oran > 0)
-        || (!adPuani && !tabloPuani && o.toplam >= 2 && oran === 1);
+        || (!adPuani && !tabloPuani && o.bulunan >= 1 && (desenAyni || (o.toplam >= 2 && oran === 1)));
       if (!kabul) continue;
-      const puan = adPuani * 10 + tabloPuani * 8 + (oran ?? 0.4) * 20 + (c.gizli === gizli ? 1 : 0);
+      const puan = adPuani * 10 + tabloPuani * 8 + (oran ?? 0.4) * 20 + (desenAyni ? 2 : 0) + (c.gizli === gizli ? 1 : 0);
       if (en && en.puan >= puan) continue;
-      const guclu = (oran === 1 && (adPuani > 0 || tabloPuani > 0)) || (adTur === 'birebir' && oran === null) || (adTur === 'birebir' && oran === 1);
+      // Güçlü: ad (ya da tablo adı) eşleşmesi + en az bir değer sütunda; ya da aynı ad ve değer yok. Yalnız değerden: zayıf.
+      const guclu = ((adPuani > 0 || tabloPuani > 0) && o.bulunan >= 1) || (adTur === 'birebir' && oran === null);
       const kanit = [
-        adTur ? `Ad: ${ad} ↔ ${c.ad} (${AD_TURU[adTur]})` : tabloAd ? `Ad: ${ad} ↔ ${t.ad} tablosu (${AD_TURU[tabloAd]})` : '',
-        ortusmeKaniti(o, t.ad, c.ad, gizli || c.gizli)
+        adTur ? `Ad: ${ad} ↔ ${c.ad} (${AD_TURU[adTur]})` : tabloAd ? `Ad: ${ad} ↔ ${t.ad} tablosu (${AD_TURU[tabloAd]})` : 'Yalnız değerden (ad eşleşmiyor)',
+        ortusmeKaniti(o, t.ad, c.ad, gizli || c.gizli),
+        desenAyni && !adPuani && !tabloPuani ? 'desen aynı' : ''
       ].filter(Boolean).join(' · ');
       en = { tabloId: t.id, tablo: t.ad, sutun: c.ad, adTuru: adTur ?? (tabloAd ? 'tablo' : null), bulunan: o.bulunan, toplam: o.toplam,
-        karsiliklar: o.karsilik, guc: guclu ? 'guclu' : 'orta', kanit, puan };
+        karsiliklar: o.karsilik, guc: guclu ? 'guclu' : 'zayif', kanit, puan };
     }
   }
   if (!en) return null;
@@ -367,17 +389,19 @@ export function servisAnalizi(g) {
   const satirlar = sema ? alanSatirlari(sema.alanlar) : [];
   const yapraklar = new Map(satirlar.filter((x) => !x.grup).map((x) => [x.yol, x.alan]));
   const semaGruplari = new Set(satirlar.filter((x) => x.grup).map((x) => x.yol));
+  /** @param {unknown} d @returns {OrnekDurumu} */
+  const durumu = (d) => (d === 'basarili' || d === 'hata' ? d : 'bilinmiyor');
   const kaynaklar = [
-    ...(g.ornekler ?? []).map((o, i) => ({ ad: String(o.ad ?? '').trim() || `Örnek ${i + 1}`, govde: o.govde, adli: true })),
-    ...(g.ekKanitlar ?? []).map((k, i) => ({ ad: String(k.ad ?? '').trim() || `Kanıt ${i + 1}`, govde: k.govde, adli: false }))
+    ...(g.ornekler ?? []).map((o, i) => ({ ad: String(o.ad ?? '').trim() || `Örnek ${i + 1}`, govde: o.govde, adli: true, durum: durumu(o.durum) })),
+    ...(g.ekKanitlar ?? []).map((k, i) => ({ ad: String(k.ad ?? '').trim() || `Kanıt ${i + 1}`, govde: k.govde, adli: false, durum: durumu(k.durum) }))
   ];
-  /** @type {Array<{ ad: string; adli: boolean; c: CozulenOrnek }>} */
+  /** @type {Array<{ ad: string; adli: boolean; durum: OrnekDurumu; c: CozulenOrnek }>} */
   const cozulen = [];
   /** @type {Array<{ ad: string; mesaj: string }>} */
   const hatalar = [];
   for (const k of kaynaklar) {
     const c = ornekCoz(k.govde, { tur, ...(sema ? { kok: sema.kok, ustAlanlar: sema.alanlar.map((a) => a.ad) } : {}) });
-    if (c.hata) hatalar.push({ ad: k.ad, mesaj: c.hata }); else cozulen.push({ ad: k.ad, adli: k.adli, c });
+    if (c.hata) hatalar.push({ ad: k.ad, mesaj: c.hata }); else cozulen.push({ ad: k.ad, adli: k.adli, durum: k.durum, c });
   }
   // SOAP: işlem öğesi metodun kökü değilse uyarı (başka metodun örneği yapıştırılmış olabilir).
   if (tur === 'soap' && sema?.kok) for (const x of cozulen) if (x.c.kok && x.c.kok !== sema.kok) hatalar.push({ ad: x.ad, mesaj: `İşlem öğesi "${x.c.kok}", metodun kökü "${sema.kok}" değil.` });
@@ -386,6 +410,21 @@ export function servisAnalizi(g) {
   /** @type {string[]} */
   const yollar = [...yapraklar.keys()];
   for (const x of cozulen) for (const y of x.c.alanlar.keys()) if (!yapraklar.has(y) && !semaGruplari.has(y) && !yollar.includes(y)) yollar.push(y);
+  const doluMu = (/** @type {CozulenOrnek} */ c, /** @type {string} */ y) => c.alanlar.get(y)?.durum === 'dolu';
+  const basarililar = cozulen.filter((x) => x.durum === 'basarili');
+  // Veri (tablolar, "tabloya değer ekle"): hata veren örneklerin değerleri girmez.
+  const veriOrnekleri = cozulen.filter((x) => x.durum !== 'hata');
+  /**
+   * Hata veren her örnek için: dolu / boş durumu farklı alanlar, en az farkla ayrıldığı başarılı örneğe göre. Tek fark (yalnız bir alan,
+   * hata örneğinde boş / yok) → o alan için güçlü ipucu; çok fark → yalnız not.
+   * @type {Array<{ ad: string; basarili: string; fark: string[] }>}
+   */
+  const hataFarklari = cozulen.filter((x) => x.durum === 'hata').flatMap((h) => {
+    const adaylar = basarililar.map((s) => ({ s, fark: yollar.filter((y) => doluMu(s.c, y) !== doluMu(h.c, y)) })).sort((a, b) => a.fark.length - b.fark.length);
+    return adaylar.length ? [{ ad: h.ad, basarili: adaylar[0].s.ad, fark: adaylar[0].fark }] : [];
+  });
+  /** @type {string[]} */
+  const notlar = hataFarklari.filter((x) => x.fark.length > 1).map((x) => `Hata veren '${x.ad}' isteği başarılı '${x.basarili}' isteğinden ${x.fark.length} alanla ayrılıyor (${liste(x.fark.map(alanAdi), 5)}); zorunluluk kanıtı sayılmaz.`);
 
   /** @type {AlanAnalizi[]} */
   const alanlar = [];
@@ -395,81 +434,157 @@ export function servisAnalizi(g) {
   const ekle = (o) => { tum.push({ ...o, anahtar: oneriAnahtari(o.tur, o.yol, o.deger) }); };
   /** @type {Map<string, { ad: string; gizli: boolean; kume: string[] | null; tarih: boolean }>} yeni tabloya aday alanlar */
   const tabloAdaylari = new Map();
+  /** Tablo bağı önerileri (aynı satır güveni için sonradan güçlendirilir). @type {Array<{ yol: string; aday: TabloEslesmesi; kanit: string; degistir: boolean }>} */
+  const bagOnerileri = [];
 
   for (const yol of yollar) {
     const alan = yapraklar.get(yol) ?? null;
     const ad = alanAdi(yol);
-    const gozlem = cozulen.map((x) => ({ ad: x.ad, adli: x.adli, v: x.c.alanlar.get(yol) }));
+    const gozlem = cozulen.map((x) => ({ ad: x.ad, adli: x.adli, durum: x.durum, v: x.c.alanlar.get(yol) }));
     const dolu = gozlem.filter((x) => x.v?.durum === 'dolu').length;
     const nil = gozlem.filter((x) => x.v?.durum === 'nil').length;
     const bos = gozlem.filter((x) => x.v?.durum === 'bos').length + nil;
     const yok = n - dolu - bos;
     const tumDegerler = gozlem.filter((x) => x.v?.durum === 'dolu' && somutMu(x.v.deger)).map((x) => /** @type {OrnekGozlemi} */ (x.v).deger);
     const degerler = [...new Set(tumDegerler)];
+    // Veri için (yeni tablo / tabloya değer ekle): hata veren örnekler hariç.
+    const veriDegerleri = [...new Set(gozlem.filter((x) => x.durum !== 'hata' && x.v?.durum === 'dolu' && somutMu(x.v.deger)).map((x) => /** @type {OrnekGozlemi} */ (x.v).deger))];
     const wsdlde = Boolean(alan && !alan.ek);
     const wsdlZorunlu = wsdlde ? Boolean(alan?.zorunlu) : null;
-    const tipOnerisi = tipCikar(tumDegerler);
+    // Tip: WSDL'deki alanda WSDL tipi geçerlidir (string → metin; rakamlardan oluşsa da tamsayı önerilmez). WSDL'de olmayan alanda
+    // değerlerden çıkarılır; en az 3 dolu gözlem gerekir.
+    const yeterli = tumDegerler.length >= EN_AZ_GOZLEM;
+    const hamTip = tipCikar(tumDegerler);
+    const tipOnerisi = hamTip;
+    const evetHayir = hamTip?.tip === 'mantiksal';
     const gizliNeden = gizliAdMi(ad, ekGizli) ? 'adı gizli ad kuralına uyuyor'
       : degerler.length && degerler.every((x) => /^\d{11}$/.test(x)) ? '11 haneli sayı (kimlik benzeri)'
         : kimlikAdiMi(ad) ? 'adı kimlik numarası benzeri' : '';
     const gizli = Boolean(gizliNeden) || Boolean(kurallar[yol]?.gizli);
     const goster = (/** @type {string[]} */ l, k = 4) => (gizli ? `${l.length} değer (gizli)` : liste(l, k));
-    // Mevcut bağın değer kanıtı / en iyi aday.
+    // Mevcut bağın değer kanıtı / en iyi aday; silinmiş tabloya / sütuna bağ (kopuk).
     const bag = baglar[yol];
     const bagTablosu = bag?.tablo ? tablolar.find((t) => t.id === bag.tablo) : undefined;
     const bagSutunu = bagTablosu?.sutunlar.find((c) => c.ad === bag?.sutun);
+    const kopuk = Boolean(bag?.tablo) && !String(bag?.tablo).startsWith('yeni:') && (!bagTablosu || !bagSutunu);
     const bagOrtusmesi = bagTablosu && bagSutunu && !gizli && !bagSutunu.gizli ? degerOrtusmesi(degerler, bagTablosu, bagSutunu) : null;
     const aday = degerler.length || n ? tabloEslesmesi(ad, gizli ? [] : degerler, tablolar, gizli) : null;
+    // Başarı durumuna göre boş / yok gözlemler (hata verenler zorunluluk hesabına katılmaz).
+    const dolmayan = gozlem.filter((x) => x.v?.durum !== 'dolu');
+    const basariliBos = dolmayan.filter((x) => x.durum === 'basarili');
+    const bilinmeyenBos = dolmayan.filter((x) => x.durum === 'bilinmiyor');
+    const hesaptakiler = gozlem.filter((x) => x.durum !== 'hata');
+    const bosMetniOf = (/** @type {typeof gozlem} */ l) => (l.every((x) => !x.v) ? 'yok' : l.every((x) => x.v) ? 'boş' : 'boş / yok');
     const ozet = n ? [
       `${dolu}/${n} örnekte dolu${bos ? `, ${bos} boş` : ''}${yok && dolu + bos ? `, ${yok} örnekte yok` : ''}`,
+      basariliBos.length ? `başarılı ${basariliBos.length} istekte ${bosMetniOf(basariliBos)}` : '',
       wsdlde ? `WSDL: ${wsdlZorunlu ? 'zorunlu' : 'isteğe bağlı'}` : alan?.ek ? 'elle eklenen alan' : 'WSDL\'de yok',
-      bagOrtusmesi && bagOrtusmesi.toplam ? `bağ: ${ortusmeKaniti(bagOrtusmesi, bagTablosu?.ad ?? '', bagSutunu?.ad ?? '', false)}` : ''
+      kopuk ? 'bağ kopuk (tablo ya da sütun silinmiş)' : bagOrtusmesi && bagOrtusmesi.toplam ? `bağ: ${ortusmeKaniti(bagOrtusmesi, bagTablosu?.ad ?? '', bagSutunu?.ad ?? '', false)}` : ''
     ].filter(Boolean).join(' · ') : '';
     alanlar.push({ yol, ad, wsdlde, ekli: Boolean(alan?.ek), wsdlZorunlu, dolu, bos, yok, toplam: n, degerler: gizli ? [] : degerler, gizli, ozet, tablo: aday });
     if (!n || !(dolu + bos)) continue;
 
     // 1) Alan listesi
     if (!alan) {
-      ekle({ tur: 'alanEkle', yol, deger: { tip: tipOnerisi?.tip ?? 'metin' }, baslik: sema && sema.alanlar.length ? 'WSDL\'de yok — alan olarak eklensin mi?' : 'Alan listesi yok — alan olarak eklensin mi?',
-        kanit: `${dolu + bos}/${n} örnekte var${tipOnerisi ? ` · ${TIP_ADLARI[tipOnerisi.tip]}` : ''}` });
+      ekle({ tur: 'alanEkle', yol, deger: { tip: (yeterli && tipOnerisi?.tip) || 'metin' }, guc: dolu + bos >= EN_AZ_GOZLEM ? 'guclu' : 'zayif',
+        baslik: sema && sema.alanlar.length ? 'WSDL\'de yok — alan olarak eklensin mi?' : 'Alan listesi yok — alan olarak eklensin mi?',
+        kanit: `${dolu + bos}/${n} örnekte var${yeterli && tipOnerisi ? ` · ${TIP_ADLARI[tipOnerisi.tip]}` : ''}` });
     }
-    // 2) Zorunluluk (+ WSDL çelişkisi)
-    if (dolu === n) ekle({ tur: 'zorunlu', yol, deger: true, baslik: 'Zorunlu', kanit: `${n}/${n} örnekte dolu` });
-    else if (dolu === 0) ekle({ tur: 'bosGonder', yol, deger: nil === bos ? 'nil' : 'bos', baslik: `Zorunlu değil — varsayılan "${nil === bos ? 'nil gönder' : 'boş gönder'}"`, kanit: `${bos}/${n} örnekte boş${nil === bos ? ' (xsi:nil)' : ''}${yok ? `, ${yok} örnekte yok` : ''}` });
-    else ekle({ tur: 'zorunlu', yol, deger: false, baslik: 'İsteğe bağlı', kanit: `${dolu}/${n} örnekte dolu; ${n - dolu} örnekte ${bos && yok ? 'boş ya da yok' : bos ? 'boş' : 'yok'}` });
-    if (wsdlde && wsdlZorunlu && dolu < n) ekle({ tur: 'celiski', yol, deger: 'wsdlZorunlu', baslik: 'WSDL ile çelişki', kanit: `WSDL'de zorunlu (minOccurs=1) ama ${n - dolu}/${n} örnekte ${bos && yok ? 'boş ya da yok' : bos ? 'boş' : 'yok'}` });
-    if (wsdlde && !wsdlZorunlu && dolu === n && n >= 2) ekle({ tur: 'celiski', yol, deger: 'wsdlIstegeBagli', baslik: 'WSDL ile çelişki', kanit: `WSDL'de isteğe bağlı ama ${n}/${n} örnekte dolu` });
-    // 3) Tip / biçim (WSDL'in metin dışı tipi önceliklidir)
-    const wsdlTipi = wsdlde && alan?.tip && alan.tip !== 'metin' ? alan.tip : null;
-    if (!wsdlTipi && tipOnerisi && (tipOnerisi.tip !== 'metin' || tipOnerisi.bicim)) {
-      ekle({ tur: 'tip', yol, deger: tipOnerisi, baslik: `Tip: ${TIP_ADLARI[tipOnerisi.tip]}${tipOnerisi.bicim ? ` (${BICIM_ADLARI[/** @type {keyof typeof BICIM_ADLARI} */ (tipOnerisi.bicim)] ?? tipOnerisi.bicim})` : ''}`,
-        kanit: `${goster(degerler, 3)} → ${TIP_ADLARI[tipOnerisi.tip]}` });
+    // 2) Zorunluluk — başarılı istekte boş / yok kesin kanıttır; her örnekte dolu olması yalnız zayıf ipucu (bkz. dosya başı).
+    const ilkBasarili = basariliBos[0];
+    const tekFark = hataFarklari.find((x) => x.fark.length === 1 && x.fark[0] === yol && !doluMu(/** @type {CozulenOrnek} */ (cozulen.find((c) => c.ad === x.ad)?.c), yol));
+    if (ilkBasarili) {
+      const kanit = `Başarılı '${ilkBasarili.ad}' isteğinde ${bosMetniOf([ilkBasarili])}${basariliBos.length > 1 ? ` (+${basariliBos.length - 1} başarılı istek)` : ''} → servis bu alan olmadan kabul ediyor`;
+      const hepBos = hesaptakiler.every((x) => x.v?.durum !== 'dolu') && hesaptakiler.some((x) => x.v);
+      const nilMi = hesaptakiler.filter((x) => x.v).every((x) => x.v?.durum === 'nil');
+      if (hepBos) ekle({ tur: 'bosGonder', yol, deger: nilMi ? 'nil' : 'bos', guc: 'guclu', baslik: `Zorunlu değil — varsayılan "${nilMi ? 'nil gönder' : 'boş gönder'}"`, kanit });
+      else ekle({ tur: 'zorunlu', yol, deger: false, guc: 'guclu', baslik: 'İsteğe bağlı', kanit });
+      if (wsdlZorunlu) ekle({ tur: 'celiski', yol, deger: 'wsdlZorunlu', guc: 'not', baslik: 'WSDL ile çelişki', kanit: `WSDL'de zorunlu (minOccurs=1) ama başarılı ${basariliBos.length} istekte ${bosMetniOf(basariliBos)}` });
+    } else if (tekFark) {
+      ekle({ tur: 'zorunlu', yol, deger: true, guc: 'guclu', baslik: 'Zorunlu olabilir: bu alan eksikken hata verdi',
+        kanit: `Hata veren '${tekFark.ad}' isteği başarılı '${tekFark.basarili}' isteğinden yalnız bu alanın boş / yok olmasıyla ayrılıyor (kesin değil)` });
+    } else if (hesaptakiler.length) {
+      const doluH = hesaptakiler.filter((x) => x.v?.durum === 'dolu').length;
+      if (doluH === hesaptakiler.length) {
+        if (!wsdlZorunlu) ekle({ tur: 'zorunlu', yol, deger: true, guc: 'zayif', baslik: 'Zorunlu olabilir', kanit: `${doluH}/${hesaptakiler.length} örnekte dolu; zorunlu olabilir (kesinleşmesi için WSDL ya da canlı doğrulama)` });
+      } else if (bilinmeyenBos.length) {
+        const bosH = hesaptakiler.filter((x) => x.v && x.v.durum !== 'dolu');
+        if (wsdlZorunlu) ekle({ tur: 'celiski', yol, deger: 'wsdlZorunluBilinmiyor', guc: 'not', baslik: 'WSDL ile çelişki olabilir', kanit: `WSDL'de zorunlu; başarısı bilinmeyen ${bilinmeyenBos.length} örnekte ${bosMetniOf(bilinmeyenBos)}` });
+        else if (doluH === 0 && bosH.length) {
+          const nilMi = bosH.every((x) => x.v?.durum === 'nil');
+          ekle({ tur: 'bosGonder', yol, deger: nilMi ? 'nil' : 'bos', guc: 'zayif', baslik: `İsteğe bağlı olabilir — varsayılan "${nilMi ? 'nil gönder' : 'boş gönder'}"`, kanit: `${bosH.length}/${hesaptakiler.length} örnekte boş (başarısı bilinmiyor)` });
+        } else ekle({ tur: 'zorunlu', yol, deger: false, guc: 'zayif', baslik: 'İsteğe bağlı olabilir', kanit: `${doluH}/${hesaptakiler.length} örnekte dolu; ${bilinmeyenBos.length} örnekte ${bosMetniOf(bilinmeyenBos)} (başarısı bilinmiyor)` });
+      }
     }
-    // İzin verilen değerler (küçük küme, tekrar var); WSDL listesi varsa önerilmez.
+    // 3) Tip / biçim: yalnız WSDL'de olmayan alanda (elle eklenen ya da örnekten gelen) ve ≥ 3 gözlemle.
+    if (yeterli && !wsdlde && tipOnerisi && (tipOnerisi.tip !== 'metin' || tipOnerisi.bicim)) {
+      ekle({ tur: 'tip', yol, deger: tipOnerisi, guc: 'guclu', baslik: `Tip: ${TIP_ADLARI[tipOnerisi.tip]}${tipOnerisi.bicim ? ` (${BICIM_ADLARI[/** @type {keyof typeof BICIM_ADLARI} */ (tipOnerisi.bicim)] ?? tipOnerisi.bicim})` : ''}`,
+        kanit: `${goster(degerler, 3)} → ${TIP_ADLARI[tipOnerisi.tip]} (${tumDegerler.length} gözlem)` });
+    }
+    // Değer listesi (kısıt DEĞİL; yalnız yeni tabloda ayrı liste tablosu olur): 2–EN_COK_KUME farklı değer, tekrar var; WSDL listesi /
+    // evet-hayır / tarih / gizli alanda olmaz.
     const sayim = new Map();
-    for (const v of tumDegerler) sayim.set(v, (sayim.get(v) ?? 0) + 1);
-    const kume = !gizli && !alan?.secenekler && tipOnerisi?.tip !== 'tarih' && tipOnerisi?.tip !== 'tarihSaat' && degerler.length >= 2 && degerler.length <= EN_COK_KUME
-      && [...sayim.values()].some((x) => x >= 2) ? [...degerler].sort((a, b) => a.localeCompare(b, 'tr')) : null;
-    if (kume) ekle({ tur: 'degerler', yol, deger: kume, baslik: 'İzin verilen değerler', kanit: `${kume.length} farklı değer: ${kume.map((v) => `${v} (${sayim.get(v)})`).join(', ')}` });
-    // Desen (hep aynı uzunluk); gizli alanda, tarih / evet-hayır / e-posta ve değer kümesinde önerilmez.
-    const desen = !kume && !gizli && (!tipOnerisi || tipOnerisi.tip === 'metin' && !tipOnerisi.bicim || tipOnerisi.tip === 'tamsayi') ? desenCikar(tumDegerler) : null;
-    if (desen) ekle({ tur: 'desen', yol, deger: { ...(desen.desen ? { desen: desen.desen } : {}), enAzUzunluk: desen.enAzUzunluk, enCokUzunluk: desen.enCokUzunluk }, baslik: `Desen: ${desen.aciklama}`, kanit: `${goster(degerler, 3)} (${tumDegerler.length} gözlem)` });
-    if (gizliNeden) ekle({ tur: 'gizli', yol, deger: true, baslik: 'Gizli', kanit: gizliNeden });
-    // 4) Tablo eşleşmesi: bağ yoksa en iyi aday; bağ varken yalnız bağlı sütunda değer yoksa ve aday güçlüyse.
-    if (aday && !(bag?.kural) && !varsayilanlar[yol]) {
+    for (const x of gozlem) if (x.durum !== 'hata' && x.v?.durum === 'dolu' && somutMu(x.v.deger)) sayim.set(x.v.deger, (sayim.get(x.v.deger) ?? 0) + 1);
+    const kume = !gizli && !alan?.secenekler && !evetHayir && hamTip?.tip !== 'tarih' && hamTip?.tip !== 'tarihSaat' && veriDegerleri.length >= 2 && veriDegerleri.length <= EN_COK_KUME
+      && [...sayim.values()].reduce((a, b) => a + b, 0) > veriDegerleri.length ? [...veriDegerleri].sort((a, b) => a.localeCompare(b, 'tr')) : null;
+    if (gizliNeden) ekle({ tur: 'gizli', yol, deger: true, guc: gizliNeden.startsWith('11') && tumDegerler.length < EN_AZ_GOZLEM ? 'zayif' : 'guclu', baslik: 'Gizli', kanit: gizliNeden });
+    // 4) Kopuk bağ: bağlı tablo / sütun yok → en iyi eşleşmeye bağlansın mı / bağ kaldırılsın mı (ikisi de ayrı öneri).
+    if (kopuk && bag) {
+      const neyok = !bagTablosu ? 'bağlı tablo silinmiş' : `"${bagTablosu.ad}" tablosunda "${bag.sutun}" sütunu yok`;
+      if (aday) ekle({ tur: 'kopukBag', yol, deger: { tablo: aday.tabloId, sutun: aday.sutun }, guc: 'zayif', baslik: `Kopuk bağ: ${aday.tablo} › ${aday.sutun} sütununa bağlansın mı?`, kanit: `${neyok} · ${aday.kanit}` });
+      ekle({ tur: 'kopukBag', yol, deger: null, guc: 'zayif', baslik: 'Kopuk bağ: bağ kaldırılsın mı?', kanit: `${neyok}${aday ? '' : ' · eşleşen sütun bulunamadı'}` });
+    }
+    // Bağlı (mevcut) tabloda olmayan örnek değerleri: "tabloya şu değerler eklensin mi?" (uygulanırsa yeni satırlar).
+    const veriEksik = bagOrtusmesi ? bagOrtusmesi.eksik.filter((v) => veriDegerleri.includes(v)) : [];
+    if (!kopuk && bagTablosu && bagSutunu && bagOrtusmesi && bagOrtusmesi.bulunan > 0 && veriEksik.length) {
+      const eksik = [...veriEksik].sort((a, b) => a.localeCompare(b, 'tr'));
+      ekle({ tur: 'tabloyaDeger', yol, deger: { tablo: bagTablosu.id, sutun: bagSutunu.ad, degerler: eksik }, guc: 'zayif',
+        baslik: `${bagTablosu.ad} › ${bagSutunu.ad} tablosuna şu değerler eklensin mi: ${liste(eksik, 6)}`,
+        kanit: `Örneklerde var, tabloda yok (${eksik.length}/${bagOrtusmesi.toplam} değer); uygulanırsa her değer yeni satır olur` });
+    }
+    // 5) Tablo eşleşmesi: bağ yoksa en iyi aday; bağ varken yalnız bağlı sütunda hiçbir değer yoksa ve aday değer kanıtlıysa.
+    if (!kopuk && aday && !(bag?.kural) && !varsayilanlar[yol]) {
       const ayni = bag && bag.tablo === aday.tabloId && bag.sutun === aday.sutun;
-      const degistir = bag && !ayni && bagOrtusmesi && bagOrtusmesi.toplam > 0 && bagOrtusmesi.bulunan === 0 && aday.guc === 'guclu';
+      const degistir = Boolean(bag && !ayni && bagOrtusmesi && bagOrtusmesi.toplam > 0 && bagOrtusmesi.bulunan === 0 && aday.bulunan > 0);
       const anahtar = oneriAnahtari('tabloBagi', yol, { tablo: aday.tabloId, sutun: aday.sutun });
       if (!bag || degistir || (ayni && onsecili.has(anahtar))) {
-        ekle({ tur: 'tabloBagi', yol, deger: { tablo: aday.tabloId, sutun: aday.sutun }, guc: aday.guc, baslik: `Tablo: ${aday.tablo} → ${aday.sutun}`,
+        bagOnerileri.push({ yol, aday, degistir,
           kanit: `${aday.kanit}${degistir ? ` · şu anki bağ: ${ortusmeKaniti(/** @type {ReturnType<typeof degerOrtusmesi>} */ (bagOrtusmesi), bagTablosu?.ad ?? '', bagSutunu?.ad ?? '', false)}` : ''}` });
       }
     }
-    // 5) Yeni tabloya aday: değeri olan, bağı / adayı / kural varsayılanı olmayan alan.
-    if (!aday && !bag && !varsayilanlar[yol] && (degerler.length || gizli)) tabloAdaylari.set(yol, { ad, gizli, kume, tarih: Boolean(tipOnerisi && (tipOnerisi.tip === 'tarih' || tipOnerisi.tip === 'tarihSaat')) });
+    // 6) Yeni tabloya aday: değeri olan, bağı / adayı / kural varsayılanı olmayan alan.
+    if (!aday && !bag && !varsayilanlar[yol] && (veriDegerleri.length || gizli)) tabloAdaylari.set(yol, { ad, gizli, kume, tarih: Boolean(hamTip && (hamTip.tip === 'tarih' || hamTip.tip === 'tarihSaat')) });
   }
 
-  // --- 5) Yeni tablo planları ----------------------------------------------------------------
+  // --- Tablo bağları: aynı tabloya önerilen alanların değerleri aynı satırda birlikte bulunuyorsa güven artar --------------------
+  /** @type {Map<string, typeof bagOnerileri>} */
+  const tabloyaGore = new Map();
+  for (const b of bagOnerileri) tabloyaGore.set(b.aday.tabloId, [...(tabloyaGore.get(b.aday.tabloId) ?? []), b]);
+  for (const [tabloId, liste_] of tabloyaGore) {
+    const t = tablolar.find((x) => x.id === tabloId);
+    if (!t) continue;
+    // Ortaklar: bu tabloya önerilen alanlar + zaten bu tabloya bağlı alanlar.
+    const ortaklar = [...liste_.map((b) => ({ yol: b.yol, sutun: b.aday.sutun })),
+      ...Object.entries(baglar).filter(([y, b]) => b?.tablo === tabloId && b.sutun && !liste_.some((x) => x.yol === y)).map(([y, b]) => ({ yol: y, sutun: /** @type {string} */ (b.sutun) }))];
+    if (ortaklar.length < 2) continue;
+    let birlikte = 0;
+    for (const x of cozulen) {
+      const dolular = ortaklar.filter((b) => doluMu(x.c, b.yol));
+      if (dolular.length < 2 || !dolular.some((b) => liste_.some((y) => y.yol === b.yol))) continue;
+      const uyar = t.satirlar.some((r) => dolular.every((b) => kucuk(r.degerler[b.sutun]) === kucuk(x.c.alanlar.get(b.yol)?.deger)));
+      if (uyar) birlikte++;
+    }
+    if (!birlikte) continue;
+    for (const b of liste_) {
+      b.aday = { ...b.aday, guc: 'guclu' };
+      b.kanit = `${b.kanit} · ${ortaklar.map((y) => alanAdi(y.yol)).join(' + ')} aynı ${t.ad} satırında (${birlikte} örnek)`;
+    }
+  }
+  for (const b of bagOnerileri) {
+    ekle({ tur: 'tabloBagi', yol: b.yol, deger: { tablo: b.aday.tabloId, sutun: b.aday.sutun }, guc: b.aday.guc, baslik: `Tablo: ${b.aday.tablo} › ${b.aday.sutun}`, kanit: b.kanit });
+  }
+
+  // --- Yeni tablo planları ----------------------------------------------------------------------
   /** @type {YeniTabloPlani[]} */
   const yeniTablolar = [];
   const kullanilan = new Set();
@@ -487,15 +602,21 @@ export function servisAnalizi(g) {
     yeniTablolar.push({ id: `yeni:${ad}`, ad, tur: 'liste', sutunlar: [{ ad: x.ad, gizli: false }], satirlar: x.kume.map((v) => ({ ad: v, degerler: { [x.ad]: v } })),
       alanlar: [{ yol, sutun: x.ad }], ayniAdli: ayniAdli(ad) });
   }
-  // Kayıt tabloları: aynı gruptaki (birlikte giden) alanlar tek tablo; satır = adlı örnek; gizli sütunun değeri yazılmaz.
+  // Kayıt tabloları: alanlar kavram gruplarına göre (kişi / adres / iletişim / kart / giriş — hızlı testin kayıt planındaki gibi);
+  // gruba girmeyenler bulundukları gruba (üst öğe) göre metodun tablosunda. Satır = adlı örnek; gizli sütunun değeri yazılmaz.
   /** @type {Map<string, string[]>} */
   const gruplar = new Map();
   for (const [yol, x] of tabloAdaylari) {
     if (x.kume) continue;
+    const kavram = kavramGrubu(x.ad);
     const ust = yol.includes('/') ? yol.slice(0, yol.lastIndexOf('/')) : '';
-    gruplar.set(ust, [...(gruplar.get(ust) ?? []), yol]);
+    const parcalar = ust.split('/').filter(Boolean);
+    const anahtar = kavram ?? (parcalar.length > 1 ? `${g.metot} ${parcalar[parcalar.length - 1]}` : g.metot);
+    gruplar.set(anahtar, [...(gruplar.get(anahtar) ?? []), yol]);
   }
-  for (const [ust, uyeler] of gruplar) {
+  // Tek gruba düşüyorsa metot adı kalır.
+  const tekGrup = gruplar.size === 1;
+  for (const [grupAdi, uyeler] of gruplar) {
     const sutunAdlari = new Set();
     const sutunlar = uyeler.map((yol) => {
       const temel = tabloAdiYap(alanAdi(yol)) || 'Alan';
@@ -504,21 +625,31 @@ export function servisAnalizi(g) {
       sutunAdlari.add(kucuk(a));
       return { yol, ad: a, gizli: /** @type {{ gizli: boolean }} */ (tabloAdaylari.get(yol)).gizli };
     });
-    const satirlar = adlilar.map((x) => ({
+    // Satır: alanlardan en az biri dolu olan adlı örnek (gizli sütunun değeri yazılmaz; satır yine açılır).
+    const satirlar = adlilar.filter((x) => x.durum !== 'hata' && sutunlar.some((s) => doluMu(x.c, s.yol))).map((x) => ({
       ad: x.ad,
       degerler: Object.fromEntries(sutunlar.map((s) => {
         const v = x.c.alanlar.get(s.yol);
         return [s.ad, !s.gizli && v?.durum === 'dolu' && somutMu(v.deger) ? v.deger : null];
       }))
-    })).filter((r) => Object.values(r.degerler).some((v) => v !== null));
-    if (!satirlar.length && !sutunlar.every((s) => s.gizli)) continue;
-    const parcalar = ust.split('/').filter(Boolean);
-    const ad = adVer(parcalar.length > 1 ? `${g.metot} ${parcalar[parcalar.length - 1]}` : g.metot);
+    }));
+    // Örnek satırlarında görünmeyen farklı değerler (ek kanıttan) ayrı satır olarak eksik kalmasın.
+    for (const s of sutunlar.filter((c) => !c.gizli)) {
+      const gorulen = new Set(satirlar.map((x) => kucuk(x.degerler[s.ad])));
+      for (const x of veriOrnekleri.filter((y) => !y.adli)) {
+        const v = x.c.alanlar.get(s.yol);
+        if (v?.durum !== 'dolu' || !somutMu(v.deger) || gorulen.has(kucuk(v.deger))) continue;
+        gorulen.add(kucuk(v.deger));
+        satirlar.push({ ad: v.deger.slice(0, 60), degerler: Object.fromEntries(sutunlar.map((c) => [c.ad, c.ad === s.ad ? v.deger : null])) });
+      }
+    }
+    if (!satirlar.length) continue;
+    const ad = adVer(tekGrup ? g.metot : grupAdi);
     yeniTablolar.push({ id: `yeni:${ad}`, ad, tur: 'kayit', sutunlar: sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli })), satirlar,
       alanlar: sutunlar.map((s) => ({ yol: s.yol, sutun: s.ad })), ayniAdli: ayniAdli(ad) });
   }
   for (const t of yeniTablolar) {
-    ekle({ tur: 'yeniTablo', yol: '', deger: t, baslik: `Yeni tablo: ${t.ad}${t.tur === 'liste' ? ' (liste)' : ''}`,
+    ekle({ tur: 'yeniTablo', yol: '', deger: t, guc: 'zayif', baslik: `Yeni tablo: ${t.ad}${t.tur === 'liste' ? ' (liste)' : ''}`,
       kanit: `${t.sutunlar.length} sütun (${liste(t.sutunlar.map((s) => `${s.ad}${s.gizli ? ' — gizli, değeri yazılmaz' : ''}`), 5)}) · ${t.satirlar.length} satır${t.tur === 'kayit' ? ` (${liste(t.satirlar.map((r) => r.ad), 4)})` : ''}${t.ayniAdli ? ` · "${t.ayniAdli.ad}" adlı tablo var` : ''}` });
   }
 
@@ -536,7 +667,6 @@ export function servisAnalizi(g) {
 
   // --- Uygulanabilir öneriler: mevcut ayarla aynı olan ve karar verilmiş (uygulanan / yoksayılan) öneri sorulmaz ------------
   const ekler = new Map((g.ekler ?? []).map((e) => [e.yol, e]));
-  const esit = (/** @type {unknown} */ a, /** @type {unknown} */ b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const oneriler = tum.filter((o) => {
     if (kararlar[o.anahtar]) return false;
     const k = kurallar[o.yol] ?? {};
@@ -547,23 +677,27 @@ export function servisAnalizi(g) {
         const d = /** @type {{ tip: string; bicim?: string }} */ (o.deger);
         return !(k.tip === d.tip && (k.bicim ?? '') === (d.bicim ?? '')) && !(ekler.get(o.yol)?.tip === d.tip && !d.bicim);
       }
-      case 'desen': { const d = /** @type {Record<string, unknown>} */ (o.deger); return !((k.desen ?? null) === (d.desen ?? null) && k.enAzUzunluk === d.enAzUzunluk && k.enCokUzunluk === d.enCokUzunluk); }
       case 'gizli': return !k.gizli;
-      case 'degerler': return !esit(k.degerler, o.deger);
       default: return true;
     }
   });
   const ilk = cozulen[0]?.c;
   return {
     toplam: n, adliSayisi: adlilar.length, hatalar, kok: (sema?.kok || ilk?.kok) ?? '', ns: (sema?.ns || ilk?.ns) ?? '',
-    alanlar, oneriler, tumOneriler: tum, farklar, yeniTablolar
+    alanlar, oneriler, tumOneriler: tum, farklar, yeniTablolar, notlar
   };
 }
 
 /**
+ * "Güçlü önerileri uygula"nın kapsadığı öneriler: güç sınıfı güçlü olanlar (çelişki notları ve zayıflar hariç; zayıflar tek tek uygulanır).
+ * @param {ReadonlyArray<AnalizOnerisi>} l
+ */
+export const gucluOneriler = (l) => l.filter((o) => o.guc === 'guclu' && o.tur !== 'celiski');
+
+/**
  * Öneriyi durum üzerinde uygular (DEĞİŞTİRİR) ve kararı "uygulandi" olarak yazar. Değer üretilmez: öneri örneklerden gelir.
- *  alanEkle → ekler · zorunlu → zorunlu kümesi · bosGonder → zorunluluk kalkar + varsayılan boş / nil · tip / desen / gizli /
- *  degerler → alan kuralı (ek alanda tip de) · tabloBagi → alan bağı · yeniTablo → plan yeniTablolar'a, alanları planın sütunlarına
+ *  alanEkle → ekler · zorunlu → zorunlu kümesi · bosGonder → zorunluluk kalkar + varsayılan boş / nil · tip / gizli → alan kuralı
+ *  (ek alanda tip de) · tabloyaDeger → bağlı tabloya eklenecek değerler (kayıtta yeni satır) · tabloBagi → alan bağı · yeniTablo → plan yeniTablolar'a, alanları planın sütunlarına
  *  ("yeni:<ad>" kimliğiyle; kayıtta gerçek tabloya çevrilir) · celiski → yalnız karar.
  * @param {AnalizDurumu} d @param {AnalizOnerisi} o
  */
@@ -572,6 +706,7 @@ export function oneriyiUygula(d, o) {
   switch (o.tur) {
     case 'alanEkle': if (!d.ekler.some((e) => e.yol === o.yol)) d.ekler.push({ yol: o.yol, tip: /** @type {{ tip: AlanTipi }} */ (o.deger).tip }); break;
     case 'zorunlu': if (o.deger) d.zorunlu.add(o.yol); else d.zorunlu.delete(o.yol); break;
+    case 'kopukBag': if (o.deger) d.baglar[o.yol] = { .../** @type {{ tablo: string; sutun: string }} */ (o.deger) }; else delete d.baglar[o.yol]; break;
     case 'bosGonder': d.zorunlu.delete(o.yol); d.varsayilanlar[o.yol] = { kaynak: /** @type {'bos' | 'nil'} */ (o.deger) }; break;
     case 'tip': {
       const t = /** @type {{ tip: AlanTipi; bicim?: string }} */ (o.deger);
@@ -581,9 +716,8 @@ export function oneriyiUygula(d, o) {
       if (e) e.tip = t.tip;
       break;
     }
-    case 'desen': Object.assign(kural(), /** @type {object} */ (o.deger)); break;
     case 'gizli': kural().gizli = true; break;
-    case 'degerler': kural().degerler = [.../** @type {string[]} */ (o.deger)]; break;
+    case 'tabloyaDeger': d.tabloDegerleri.push(JSON.parse(JSON.stringify(o.deger))); break;
     case 'tabloBagi': d.baglar[o.yol] = { .../** @type {{ tablo: string; sutun: string }} */ (o.deger) }; break;
     case 'yeniTablo': {
       const t = /** @type {YeniTabloPlani} */ (o.deger);

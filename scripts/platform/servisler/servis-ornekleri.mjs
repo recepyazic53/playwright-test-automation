@@ -18,7 +18,7 @@ import { servisKosulariniListele, servisKosusuGetir, servisSenaryolariniListele 
 import { EN_COK_ORNEK } from './servis-analizi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
-/** @typedef {{ id: string; ad: string; govde: string; kaynak: string }} OrnekIstek */
+/** @typedef {{ id: string; ad: string; govde: string; kaynak: string; durum?: 'basarili' | 'hata' }} OrnekIstek  durum yoksa bilinmiyor; hata verenler B aşamasında olumsuz senaryo önerisi için saklanır */
 
 const ALAN_YOLU = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
 const KIMLIK = /^[A-Za-z0-9_-]{1,64}$/;
@@ -55,7 +55,8 @@ export function ornekIstekleriniDogrula(v, mevcut, ekler) {
       const ad = (typeof x.ad === 'string' ? x.ad.trim() : '').slice(0, 80) || `Örnek ${liste.length + 1}`;
       const eski = eskiler.get(id);
       const govde = eski ? maskeyiGeriKoy(x.govde, adaGoreMaskele(eski.govde, ekler, GIZLI_SABIT_MASKESI).asillar, ekler, GIZLI_SABIT_MASKESI) : x.govde;
-      liste.push({ id, ad, govde, kaynak: KAYNAKLAR.includes(x.kaynak) ? x.kaynak : eski?.kaynak ?? 'elle' });
+      const durum = x.durum === 'basarili' || x.durum === 'hata' ? x.durum : null;
+      liste.push({ id, ad, govde, kaynak: KAYNAKLAR.includes(x.kaynak) ? x.kaynak : eski?.kaynak ?? 'elle', ...(durum ? { durum } : {}) });
     });
     if (new Set(liste.map((x) => x.id)).size !== liste.length) throw new DepoHatasi(`"${op}" örnek kimlikleri tekil olmalıdır.`);
     if (liste.length) s[op] = liste;
@@ -230,6 +231,33 @@ export function analizTablolariniYaz(vt, projeId, v) {
 }
 
 /**
+ * Analizin "tabloya şu değerler eklensin mi" önerisi (kullanıcı uyguladıysa): bağlı mevcut tabloya her değer yeni satır olarak eklenir
+ * (satır adı = değer; diğer sütunlar boş). Sütunda zaten olan değer eklenmez. Çağıran işlemin içinde çalışır.
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} v [{ tablo, sutun, degerler }]
+ * @returns {number} eklenen satır sayısı
+ */
+export function tabloDegerleriniYaz(vt, projeId, v) {
+  if (v === undefined || v === null) return 0;
+  if (!Array.isArray(v) || v.length > 200) throw new DepoHatasi('"tabloDegerleri" en çok 200 öğeli bir dizi olmalıdır.');
+  let eklenen = 0;
+  for (const ham of v) {
+    const o = nesne(ham, 'tablo değeri');
+    if (typeof o.tablo !== 'string' || typeof o.sutun !== 'string' || !Array.isArray(o.degerler)) throw new DepoHatasi('Tabloya eklenecek değer geçersiz.');
+    const t = tablolariListele(vt, projeId).find((x) => x.id === o.tablo);
+    const c = t?.sutunlar.find((x) => x.ad === o.sutun);
+    if (!t || !c || c.gizli) throw new DepoHatasi(`"${o.sutun}" sütunu bulunamadı (değer eklenemez).`);
+    const var_ = new Set(t.satirlar.map((r) => String(r.degerler[c.ad] ?? '').trim().toLocaleLowerCase('tr')));
+    const yeni = [...new Set(o.degerler.filter((x) => typeof x === 'string' && x.trim() && x.length <= 500).map((x) => x.trim()))]
+      .filter((x) => !var_.has(x.toLocaleLowerCase('tr')));
+    if (!yeni.length) continue;
+    tabloKaydet(vt, { projeId, id: t.id, ad: t.ad, sutunlar: t.sutunlar.map((x) => ({ ad: x.ad, eskiAd: x.ad, gizli: x.gizli })),
+      satirlar: yeni.map((x) => ({ ad: x.slice(0, 60), ortamId: null, degerler: { [c.ad]: x } })) });
+    eklenen += yeni.length;
+  }
+  return eklenen;
+}
+
+/**
  * Alan bağlarındaki "yeni:<ad>" tablo kimliklerini yazılan tabloya çevirir; atlanan tablonun bağı kaldırılır.
  * @param {unknown} baglar @param {ReturnType<typeof analizTablolariniYaz>} eslem
  */
@@ -259,7 +287,9 @@ export function analizKanitlari(vt, servis, ekler, sinir = 20) {
       const tam = servisKosusuGetir(vt, k.id);
       const istek = /** @type {any} */ (tam?.sonuc)?.istek;
       return typeof istek === 'string' && istek.trim()
-        ? [{ ad: `${k.baslik} (${String(k.baslangic).slice(0, 16).replace('T', ' ')})`, operasyon: /** @type {string} */ (opu.get(/** @type {string} */ (k.senaryoId))), govde: adaGoreMaskele(istek, ekler, GIZLI_SABIT_MASKESI).metin }]
+        ? [{ ad: `${k.baslik} (${String(k.baslangic).slice(0, 16).replace('T', ' ')})`, operasyon: /** @type {string} */ (opu.get(/** @type {string} */ (k.senaryoId))), govde: adaGoreMaskele(istek, ekler, GIZLI_SABIT_MASKESI).metin,
+          // Koşunun sonucu örneğin durumu olur (zorunluluk kanıtı).
+          durum: k.durum === 'basarili' ? 'basarili' : k.durum === 'basarisiz' || k.durum === 'hata' ? 'hata' : 'bilinmiyor' }]
         : [];
     })
   };
