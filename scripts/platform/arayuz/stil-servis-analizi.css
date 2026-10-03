@@ -1,0 +1,39 @@
+/* Servis analizi (servis-analizi.js): metot alan tablosunun üstündeki "Örnek istekler" bölümü, satır önerileri, analiz sayfası.
+   Renkler tema değişkenlerinden (stil.css); dar ekranda (390 px) tek sütun, taşma yok. */
+.ornek-istekler { display: grid; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border: 1px dashed var(--cizgi-2); border-radius: 10px; background: var(--panel-2); min-width: 0; }
+.ornek-istekler-baslik { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ornek-istekler-baslik h5 { margin: 0; font-size: 13px; }
+.ornek-istekler p { margin: 0; }
+.ornek-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ornek-listesi li { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--panel); min-width: 0; }
+.ornek-adi { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.ornek-onizleme { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--metin-2); }
+.ornek-formu { display: grid; gap: 6px; min-width: 0; }
+.ornek-formu input, .ornek-formu textarea { width: 100%; box-sizing: border-box; min-width: 0; }
+.ornek-formu textarea { font-family: var(--yazi-mono); font-size: 12px; resize: vertical; }
+.ornek-formu .dugmeler { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ornek-ekle { justify-self: start; }
+.analiz-sonucu { display: grid; gap: 6px; min-width: 0; }
+.analiz-sonucu-ust { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.analiz-genel { display: grid; gap: 4px; }
+.ornek-farklari summary { cursor: pointer; }
+.ornek-farklari ul { margin: 4px 0 0; }
+
+/* Satır önerileri: alan satırının altında tam genişlik. */
+.alan-satiri > .analiz-satiri { grid-column: 1 / -1; display: grid; gap: 4px; padding: 2px 0 4px; min-width: 0; }
+.analiz-ozeti { overflow-wrap: anywhere; }
+.analiz-onerisi { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 8px; border-radius: 8px; background: var(--vurgu-zemin); box-shadow: inset 3px 0 0 var(--vurgu); min-width: 0; }
+.analiz-onerisi.celiski { background: var(--atlanan-zemin); box-shadow: inset 3px 0 0 var(--atlanan); }
+.analiz-oneri-metni { flex: 1 1 18rem; min-width: 0; display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; font-size: 12.5px; }
+.analiz-kaniti { color: var(--metin-2); }
+.analiz-dugmeleri { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+.tablo-islem-secimi { display: inline-flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.tablo-islem-secimi select, .tablo-islem-secimi input { max-width: 100%; }
+.yeni-tablolar { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.analiz-kaniti-karti .satir-duzen { flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .ornek-listesi li { grid-template-columns: minmax(0, 1fr); }
+  .ornek-istekler { padding: 8px; }
+  .analiz-oneri-metni { flex-basis: 100%; }
+}

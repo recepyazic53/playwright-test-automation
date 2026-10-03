@@ -23,6 +23,7 @@ import { baslangicSablonu, govdeOrnegiCoz, GOVDELI_METOTLAR, REST_METOTLARI, res
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { servisGetir, servisKaydet, servisSenaryolariniListele, servisSenaryosuKaydet } from './servis-deposu.mjs';
 import { alanBaglariniDogrula, alanZorunluluklariniDogrula, kuralBaglariniDenetle, tabanlariDogrula, tabanlariOrtamlaraKaydet, tarihKurallariniDogrula } from './servis-islemleri.mjs';
+import { alanKurallariniDogrula, analizKararlariniDogrula, ornekFarklariniDogrula, ornekIstekleriniDogrula } from './servis-ornekleri.mjs';
 import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -126,7 +127,9 @@ export function izleyenYol(senaryoYolu, eskiYol, yeniYol) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ id?: string; anahtar: string; ad: string; tabanlar?: Record<string, string>; tlsDogrulama?: boolean; uclar: unknown[];
  *   alanBaglari?: unknown; alanZorunluluklari?: unknown; tarihKurallari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string;
- *   tabanGrubu?: string; gizliBosSutun?: boolean; gizliAlanDegerleri?: Record<string, Record<string, string | null>> }} girdi
+ *   tabanGrubu?: string; gizliBosSutun?: boolean; gizliAlanDegerleri?: Record<string, Record<string, string | null>>;
+ *   ornekIstekler?: unknown; alanKurallari?: unknown; analizKararlari?: unknown; ornekFarklari?: unknown }} girdi
+ *   ornekIstekler / alanKurallari / analizKararlari / ornekFarklari: servis analizi (uç adına göre; servis-ornekleri.mjs).
  *   tarihKurallari: hesaplama kuralları (verilirse mevcutların yerine; tarih kuralları dahil).
  *   tabanGrubu: yeni servis bu adlandırılmış taban adresine bağlanır (tabanlar çağıran tarafından tabandan verilir).
  *   gizliBosSutun (cURL'den ekleme): gizli adlı başlığın değeri boşsa ya da yalnız şemaysa ("Bearer") değer YAZILMAZ; "<servis>
@@ -247,7 +250,12 @@ export function restServisiKaydet(vt, projeId, girdi) {
         ...(typeof girdi.tlsDogrulama === 'boolean' ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
         operasyonlar, operasyonSemalari: Object.fromEntries(uclar.map((u) => [u.ad, restSemasi(u)])),
         yalnizTestOperasyonlari: uclar.filter((u) => u.yalnizTest).map((u) => u.ad),
-        alanBaglari: sadece(baglar), alanZorunluluklari: sadece(zorunlu), tarihKurallari: kurallar
+        alanBaglari: sadece(baglar), alanZorunluluklari: sadece(zorunlu), tarihKurallari: kurallar,
+        // Servis analizi (servis-ornekleri.mjs): verilmeyen korunur; uç adı değişince yeni ada taşınır.
+        ...(girdi.ornekIstekler !== undefined || mevcut?.ayarlar.ornekIstekler ? { ornekIstekler: sadece(ornekIstekleriniDogrula(girdi.ornekIstekler ?? tasi(mevcut?.ayarlar.ornekIstekler ?? {}), tasi(mevcut?.ayarlar.ornekIstekler ?? {}), ekler)) } : {}),
+        ...(girdi.alanKurallari !== undefined || mevcut?.ayarlar.alanKurallari ? { alanKurallari: sadece(alanKurallariniDogrula(girdi.alanKurallari ?? tasi(mevcut?.ayarlar.alanKurallari ?? {}))) } : {}),
+        ...(girdi.analizKararlari !== undefined || mevcut?.ayarlar.analizKararlari ? { analizKararlari: sadece(analizKararlariniDogrula(girdi.analizKararlari ?? tasi(mevcut?.ayarlar.analizKararlari ?? {}))) } : {}),
+        ...(girdi.ornekFarklari !== undefined || mevcut?.ayarlar.ornekFarklari ? { ornekFarklari: sadece(ornekFarklariniDogrula(girdi.ornekFarklari ?? tasi(mevcut?.ayarlar.ornekFarklari ?? {}))) } : {})
       }
     });
     // Adı değişen uçların senaryoları yeni ada geçer. Metodu değişen ucun senaryolarından metodu ucun ESKİ metoduyla aynı olanlar

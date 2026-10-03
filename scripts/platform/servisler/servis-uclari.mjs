@@ -40,6 +40,7 @@ import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { sozlesmeBilgisi, sozlesmeKaydet, sozlesmeOnizle, sozlesmeSil } from './servis-sozlesmesi.mjs';
 import { servisOnerileriniUret } from './servis-oneri-baglami.mjs';
 import { oneriKarariKaydet } from '../ayarlar/oneri-kararlari.mjs';
+import { analizKanitlari, analizTablolariniYaz, baglariCoz, ornekleriMaskele } from './servis-ornekleri.mjs';
 
 /**
  * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
@@ -106,12 +107,26 @@ function akisAl(vt, projeId, id) {
   return a;
 }
 
-/** Liste görünümü: servis + senaryo sayısı + son koşu. @param {Veritabani} vt @param {import('./servis-deposu.mjs').Servis} s */
+/**
+ * Liste görünümü: servis + senaryo sayısı + son koşu. Örnek isteklerde adı gizli alanların değeri maskeli (servis-ornekleri.mjs).
+ * @param {Veritabani} vt @param {import('./servis-deposu.mjs').Servis} s
+ */
 function servisOzeti(vt, s) {
   const senaryolar = servisSenaryolariniListele(vt, s.id);
   const [son] = servisKosulariniListele(vt, { servisId: s.id, sinir: 1 });
-  return { ...s, senaryoSayisi: senaryolar.length, kosuyaDahilSayisi: senaryolar.filter((x) => x.kosuyaDahil).length, sonKosu: son ?? null };
+  return { ...s, ayarlar: ornekleriMaskele(s.ayarlar, ekGizliAdlar(vt)), senaryoSayisi: senaryolar.length, kosuyaDahilSayisi: senaryolar.filter((x) => x.kosuyaDahil).length, sonKosu: son ?? null };
 }
+
+/**
+ * Servis analizi ayarları (kayıt uçları; doğrulama servis-ornekleri.mjs'de): verilmeyen korunur.
+ * @param {Govde} g
+ */
+const analizGirdisi = (g) => ({
+  ...(g.ornekIstekler !== undefined ? { ornekIstekler: g.ornekIstekler } : {}),
+  ...(g.alanKurallari !== undefined ? { alanKurallari: g.alanKurallari } : {}),
+  ...(g.analizKararlari !== undefined ? { analizKararlari: g.analizKararlari } : {}),
+  ...(g.ornekFarklari !== undefined ? { ornekFarklari: g.ornekFarklari } : {})
+});
 
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const SERVIS_GET_UCLARI = [
@@ -179,6 +194,11 @@ export const SERVIS_GET_UCLARI = [
       reddedilenleriGoster: q.get('reddedilenler') === '1', ...(Number.isInteger(ustSinir) && ustSinir > 0 && ustSinir <= 500 ? { ustSinir } : {})
     });
   }],
+  // Servis analizi ek kanıtı (yalnız okuma; istek atılmaz): kayıtlı senaryo gövdeleri ve son koşu istekleri, gizli adlı değerler maskeli.
+  ['/platform/servis/analiz-kanitlari', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    return analizKanitlari(db, servisAl(db, projeId, q.get('servisId')), ekGizliAdlar(db));
+  }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     return servisParametreleri(db, projeId, servisAl(db, projeId, q.get('id')).id);
@@ -240,28 +260,34 @@ export const SERVIS_POST_UCLARI = [
     const grup = typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : g.tabanGrubu === null || g.tabanGrubu === '' ? null : undefined;
     const onceki = secimli(g.id) ? servisGetir(db, String(g.id)) : undefined;
     const bagli = grup && !(onceki?.ayarlar.tabanGrubu === grup && g.tabanlar !== undefined) ? servisTabanBaglantisi(db, projeId, secimli(g.id), grup) : null;
-    const id = servisiKaydet(db, projeId, {
-      ...(grup !== undefined ? { tabanGrubu: grup } : {}),
-      id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), yol: metin(g.yol),
-      ...(g.soapSurumu === '1.2' || g.soapSurumu === '1.1' ? { soapSurumu: g.soapSurumu } : {}),
-      ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
-      ...(bagli ? { tabanlar: bagli.tabanlar } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
-      ...(Array.isArray(g.secilenOperasyonlar) ? { secilenOperasyonlar: g.secilenOperasyonlar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
-      ...(typeof g.kimlikProfili === 'string' ? { kimlikProfili: g.kimlikProfili } : {}),
-      ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
-      ...(g.veriProfilleri !== undefined ? { veriProfilleri: metinNesnesi(g.veriProfilleri) } : {}),
-      ...(Array.isArray(g.yalnizTestOperasyonlari) ? { yalnizTestOperasyonlari: g.yalnizTestOperasyonlari } : {}),
-      ...(Array.isArray(g.tekrarDenenebilirOperasyonlar) ? { tekrarDenenebilirOperasyonlar: g.tekrarDenenebilirOperasyonlar } : {}),
-      ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
-      ...(g.durum === 'etkin' || g.durum === 'devre_disi' ? { durum: g.durum } : {}),
-      ...(g.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: g.alanVarsayilanlari } : {}),
-      ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
-      ...(g.ekAlanlar !== undefined ? { ekAlanlar: g.ekAlanlar } : {}),
-      ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
-      ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
-      ...(g.oturumAkisi !== undefined ? { oturumAkisi: g.oturumAkisi === null || g.oturumAkisi === '' ? null : kimlik(g.oturumAkisi, 'oturumAkisi') } : {}),
-      tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari),
-      erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
+    // Analizden gelen yeni tablolar servisle tek işlemde yazılır (yeni / birleştir / yeni ad / atla); "yeni:<ad>" bağları gerçek tabloya çevrilir.
+    const id = db.islem(() => {
+      const eslem = analizTablolariniYaz(db, projeId, g.analizTablolari);
+      return servisiKaydet(db, projeId, {
+        ...analizGirdisi(g),
+        ...(g.ornekKokleri !== undefined ? { ornekKokleri: g.ornekKokleri } : {}),
+        ...(grup !== undefined ? { tabanGrubu: grup } : {}),
+        id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), yol: metin(g.yol),
+        ...(g.soapSurumu === '1.2' || g.soapSurumu === '1.1' ? { soapSurumu: g.soapSurumu } : {}),
+        ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
+        ...(bagli ? { tabanlar: bagli.tabanlar } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+        ...(Array.isArray(g.secilenOperasyonlar) ? { secilenOperasyonlar: g.secilenOperasyonlar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+        ...(typeof g.kimlikProfili === 'string' ? { kimlikProfili: g.kimlikProfili } : {}),
+        ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
+        ...(g.veriProfilleri !== undefined ? { veriProfilleri: metinNesnesi(g.veriProfilleri) } : {}),
+        ...(Array.isArray(g.yalnizTestOperasyonlari) ? { yalnizTestOperasyonlari: g.yalnizTestOperasyonlari } : {}),
+        ...(Array.isArray(g.tekrarDenenebilirOperasyonlar) ? { tekrarDenenebilirOperasyonlar: g.tekrarDenenebilirOperasyonlar } : {}),
+        ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
+        ...(g.durum === 'etkin' || g.durum === 'devre_disi' ? { durum: g.durum } : {}),
+        ...(g.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: g.alanVarsayilanlari } : {}),
+        ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
+        ...(g.ekAlanlar !== undefined ? { ekAlanlar: g.ekAlanlar } : {}),
+        ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
+        ...(g.alanBaglari !== undefined ? { alanBaglari: baglariCoz(g.alanBaglari, eslem) } : {}),
+        ...(g.oturumAkisi !== undefined ? { oturumAkisi: g.oturumAkisi === null || g.oturumAkisi === '' ? null : kimlik(g.oturumAkisi, 'oturumAkisi') } : {}),
+        tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari),
+        erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
+      });
     });
     return { id };
   }],
@@ -461,18 +487,23 @@ export const SERVIS_POST_UCLARI = [
     // Yeni servis adlandırılmış taban adresine bağlanıyorsa (cURL'den ekleme) adresler o tabandan gelir.
     const grup = !secimli(g.id) && typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : undefined;
     const bagli = grup ? servisTabanBaglantisi(db, projeId, undefined, grup) : null;
-    return restServisiKaydet(db, projeId, {
-      id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
-      ...(bagli ? { tabanlar: bagli.tabanlar, tabanGrubu: grup } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
-      ...(g.gizliBosSutun === true ? { gizliBosSutun: true } : {}),
-      ...(g.gizliAlanDegerleri !== undefined ? { gizliAlanDegerleri: gizliAlanDegerleriniDogrula(g.gizliAlanDegerleri) } : {}),
-      ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
-      ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
-      ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
-      ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
-      senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
-      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
-      tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari)
+    // Analizden gelen yeni tablolar servisle tek işlemde yazılır; "yeni:<ad>" bağları gerçek tabloya çevrilir.
+    return db.islem(() => {
+      const eslem = analizTablolariniYaz(db, projeId, g.analizTablolari);
+      return restServisiKaydet(db, projeId, {
+        id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
+        ...(bagli ? { tabanlar: bagli.tabanlar, tabanGrubu: grup } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+        ...(g.gizliBosSutun === true ? { gizliBosSutun: true } : {}),
+        ...(g.gizliAlanDegerleri !== undefined ? { gizliAlanDegerleri: gizliAlanDegerleriniDogrula(g.gizliAlanDegerleri) } : {}),
+        ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
+        ...(g.alanBaglari !== undefined ? { alanBaglari: baglariCoz(g.alanBaglari, eslem) } : {}),
+        ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
+        ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
+        ...analizGirdisi(g),
+        senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
+        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
+        tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari)
+      });
     });
   }],
   ['/platform/servis/rest/dene', async (db, g) => restUcuDene(db, kimlik(g.projeId, 'projeId'), {

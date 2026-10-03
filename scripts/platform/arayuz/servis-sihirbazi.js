@@ -20,6 +20,7 @@ import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablol
 import { benzerTabloNotu } from './veri-sagligi.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
+import { analizBagla, analizKaydi, analizTablosuGovdesi, ornekOlustur, tabloIslemSecimi, yeniOrnekDurumu } from './servis-analizi.js';
 
 const ADIMLAR = ['Adresler', 'Metotlar', 'Alanlar', 'Özet'];
 const REST_ADIMLARI = ['Adresler', 'İstekler', 'Alanlar', 'Özet'];
@@ -64,8 +65,11 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     // Hesaplama kuralları (alan bağlamada "+ Yeni kural…" ile eklenenler; tarih önerileri kayıtta birleşir).
     kurallar: {},
     // cURL'den: adlandırılmış taban adres bağı ve başlangıç verisi (gizli alan değerleri uç kimliğine göre).
-    tabanGrubu: null, curl: null
+    tabanGrubu: null, curl: null,
+    // Servis analizi (servis-analizi.js): metot (REST: uç kimliği) başına örnekler / kararlar; analizden yazılacak yeni tablolar (ortak).
+    analiz: {}, restAnaliz: {}, yeniTablolar: [], ekGizliAdlar: []
   };
+  api('/platform/maskeleme').then((m) => { d.ekGizliAdlar = m.ekAdlar || []; }).catch(() => { /* çekirdek gizli adlar yeter */ });
   if (baslangic) {
     Object.assign(d, { tur: 'rest', ad: baslangic.ad, anahtar: anahtarUret(baslangic.ad), uclar: baslangic.uclar, tabanGrubu: baslangic.tabanGrubu, curl: baslangic });
     Object.assign(d.tabanlar, baslangic.tabanlar);
@@ -263,6 +267,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
           d.baglar = {};
           d.zorunlu = {};
           d.ekAlanlar = {};
+          d.analiz = {};
+          d.yeniTablolar = [];
           metotAlani();
         } catch (hata) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); }
         durumGuncelle();
@@ -284,19 +290,25 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     const bolumler = [];
     const metotTanimlari = [];
     for (const ad of d.secilen) {
-      const sema = d.erisim.semalar?.[ad];
-      if (!sema || !sema.alanlar.length) { bolumler.push(h('p', { class: 'soluk' }, h('code', { class: 'duz' }, ad), ': alan listesi yok (senaryoları XML olarak düzenlenir).')); continue; }
+      // Alan listesi olmayan metot: alanlar örnek isteklerden çıkarılır (Örnek istekler bölümü; kök öğe de örnekten).
+      const sema = d.erisim.semalar?.[ad]?.alanlar.length ? d.erisim.semalar[ad] : { ad, kok: d.erisim.semalar?.[ad]?.kok ?? '', ns: d.erisim.semalar?.[ad]?.ns ?? '', alanlar: [] };
       const alanlar = alanSatirlari(sema.alanlar).filter((x) => !x.grup);
       d.varsayilanlar[ad] ??= Object.fromEntries(alanlar.map((x) => [x.yol, tarihOnerisi(x.alan)]).filter(([, p]) => p));
       const baglar = (d.baglar[ad] ??= Object.fromEntries(alanlar.filter((x) => !d.varsayilanlar[ad][x.yol]).map((x) => [x.yol, bagOnerisi(x.alan)]).filter(([, b]) => b)));
       // Zorunluluk: WSDL'e göre işaretli gelir (şemada zorunlu), kullanıcı iş kuralına göre düzeltir.
       const z = (d.zorunlu[ad] ??= new Set(alanlar.filter((x) => x.alan.zorunlu).map((x) => x.yol)));
       const ekler = (d.ekAlanlar[ad] ??= []);
-      metotTanimlari.push({ ad, sema, zorunlu: z, ekler, baglar, tablolar, kurallar: Object.assign(d.kurallar, { ...tarihKuraliOnerileri(), ...d.kurallar }), kuralEkle: (a, k) => { d.kurallar[a] = k; } });
+      const tanim = { ad, sema, zorunlu: z, ekler, baglar, tablolar, kurallar: Object.assign(d.kurallar, { ...tarihKuraliOnerileri(), ...d.kurallar }), kuralEkle: (a, k) => { d.kurallar[a] = k; } };
+      // Tarih kuralı önerilen alanlar analizde "kural varsayılanı" sayılır (tablo önerilmez).
+      const durum = (d.analiz[ad] ??= yeniOrnekDurumu({ yeniTablolar: d.yeniTablolar,
+        varsayilanlar: Object.fromEntries(Object.entries(d.varsayilanlar[ad]).filter(([, p]) => p).map(([y, p]) => [y, { kaynak: 'parametre', deger: p }])) }));
+      analizBagla(tanim, { tur: 'soap', durum, ekGizliAdlar: d.ekGizliAdlar, onsecim: true });
+      metotTanimlari.push(tanim);
     }
     if (metotTanimlari.length) bolumler.unshift(metotKutulari(metotTanimlari, { anahtar: 'sihirbaz' }));
     return [
       h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → kanal); senaryoda değer o sütundan seçilir, aynı tablodaki alanlar birbirini süzer. Öneriler hazır geldi: başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun. Bağlanmayan alanlar senaryoda elle yazılır ya da gönderilmez.'),
+      h('p', { class: 'soluk kucuk' }, 'Örnek istekleriniz varsa metodun "Örnek istekler" bölümüne ekleyin: zorunluluk, tip, gizli alan, izin verilen değerler ve tablo eşleşmesi kanıtıyla önerilir; öneriler siz uygulayınca geçer.'),
       h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin. WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Başlangıç / bitiş tarihleri tarih kuralıyla (bugün, bugün + 1 yıl) dolar. Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
       tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz (Test verisi > Tablolar).'),
       ...bolumler
@@ -312,7 +324,23 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
       h('dt', {}, 'Metotlar'), h('dd', {}, [...d.secilen].map((m) => `${m}${d.yalnizTest.has(m) ? ' (CANLI\'da çağrılmaz)' : ''}`).join(', ')),
       h('dt', {}, 'Tabloya bağlı alanlar'), h('dd', {}, `${bagli} alan`),
       h('dt', {}, 'Zorunlu alanlar'), h('dd', {}, [...d.secilen].filter((m) => d.zorunlu[m]).map((m) => `${m}: ${d.zorunlu[m].size}`).join(' · ') || '—'),
-      h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'))];
+      h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'),
+      ...analizOzeti([...d.secilen].map((m) => [m, d.analiz[m]])))];
+  };
+  /**
+   * Özet adımında servis analizi: örnek istek sayısı ve analizden yazılacak yeni tablolar (Birleştir / Yeni ad / Atla seçimiyle).
+   * @param {Array<[string, any]>} liste [metot / uç adı, analiz durumu]
+   */
+  const analizOzeti = (liste) => {
+    const ornekli = liste.filter(([, x]) => x && x.ornekler.length);
+    const kullanilan = d.yeniTablolar;
+    return [
+      ornekli.length ? [h('dt', {}, 'Örnek istekler'), h('dd', {}, ornekli.map(([m, x]) => `${m}: ${x.ornekler.length}`).join(' · '))] : null,
+      kullanilan.length ? [h('dt', {}, 'Yeni tablolar'), h('dd', {}, h('ul', { class: 'yeni-tablolar' }, kullanilan.map((t) => h('li', {},
+        h('b', {}, t.ad), ` ${t.tur === 'liste' ? '(liste)' : '(kayıt)'} — ${t.sutunlar.length} sütun, ${t.satirlar.length} satır `,
+        tabloIslemSecimi(t, durumGuncelle),
+        t.sutunlar.some((c) => c.gizli) ? h('div', { class: 'soluk kucuk' }, `Gizli sütun boş açılır (değer yazılmaz): ${t.sutunlar.filter((c) => c.gizli).map((c) => c.ad).join(', ')}`) : null))))] : null
+    ];
   };
 
   // --- REST adımları ------------------------------------------------------------------------------------------------
@@ -323,7 +351,10 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
   const restAdim3 = () => [
     h('p', { class: 'soluk' }, 'İsteklerin alanları: yol yer tutucuları ({id}), sorgu parametreleri ve gövde örneğindeki alanlar. Her alanı bir test verisi tablosunun sütununa bağlayın; senaryoda değer o sütundan gelir. Öneriler hazır geldi (başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz.'),
-    ...restAlanlari(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu, tablolar, bagOnerisi, kurallar: d.kurallar, kuralEkle: (a, k) => { d.kurallar[a] = k; } })
+    ...restAlanlari(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu, tablolar, bagOnerisi, kurallar: d.kurallar, kuralEkle: (a, k) => { d.kurallar[a] = k; },
+      // Servis analizi: uç başına örnek istekler (JSON); cURL'den gelen gövde örneği listede hazır gelir.
+      analiz: (u, tanim) => analizBagla(tanim, { tur: 'rest', ekGizliAdlar: d.ekGizliAdlar, onsecim: true,
+        durum: (d.restAnaliz[u.kimlik] ??= yeniOrnekDurumu({ yeniTablolar: d.yeniTablolar, ornekler: d.curl && u.govdeOrnegi?.trim() ? [ornekOlustur(u.ad, u.govdeOrnegi, 'curl')] : [] })) }) })
   ];
   const restAdim4 = () => {
     d.senaryoIstenen ??= new Set(d.uclar.map((u) => u.kimlik));
@@ -337,7 +368,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
       h('dt', {}, 'Tabloya bağlı alanlar'), h('dd', {}, `${bagli} alan`),
       d.tabanGrubu ? [h('dt', {}, 'Taban adresi'), h('dd', {}, `"${d.tabanGrubu}" (bağlı)`)] : null,
       d.curl && d.curl.gizliOzeti.onayli + d.curl.gizliOzeti.onaysiz ? [h('dt', {}, 'Gizli değerler'),
-        h('dd', {}, `${d.curl.gizliOzeti.onayli} değer şifreli kaydedilecek; ${d.curl.gizliOzeti.onaysiz} değer kaydedilmeyecek (sütunu boş açılır, tabloda doldurun).`)] : null),
+        h('dd', {}, `${d.curl.gizliOzeti.onayli} değer şifreli kaydedilecek; ${d.curl.gizliOzeti.onaysiz} değer kaydedilmeyecek (sütunu boş açılır, tabloda doldurun).`)] : null,
+      ...analizOzeti(d.uclar.map((u) => [u.ad, d.restAnaliz[u.kimlik]]))),
       h('fieldset', {}, h('legend', {}, 'Başlangıç senaryoları'),
         h('p', { class: 'soluk kucuk' }, 'İşaretli her istek için bir senaryo oluşturulur: gövde / yol / sorgu şablonu bağlı alanlarda tablo sütununa başvurur, diğer alanlarda örnek değer durur (gizli alanlarınki yazılmaz). Kontrol: HTTP 200-299.'),
         d.uclar.map((u) => {
@@ -380,6 +412,10 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
       for (const o of ortamlar) { const a = d.tabanlar[o.id]; if (a && !/^https?:\/\/\S+$/.test(a)) return `${o.ad} taban adresi http:// ya da https:// ile başlamalı.`; }
       if (servisler.some((s) => s.anahtar === d.anahtar)) return `"${d.anahtar}" anahtarlı servis zaten var.`;
     }
+    if (d.adim === adimAdlari().length - 1) {
+      const t = d.yeniTablolar.find((x) => x.islem === 'yeniAd' && !String(x.yeniAd || '').trim());
+      if (t) return `"${t.ad}" tablosu için yeni ad yazın.`;
+    }
     if (d.adim >= 1 && rest()) return uclarEksik(d.uclar);
     if (d.adim === 1) {
       if (!d.erisim) return 'Yolu yazıp "Denetle" ile erişimi kontrol edin.';
@@ -404,6 +440,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
             projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), tabanlar: d.tabanlar, tlsDogrulama: d.tls, uclar: d.uclar.map(ucGovdesi),
             ...adaGore(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu }), ...(Object.keys(d.kurallar).length ? { tarihKurallari: d.kurallar } : {}),
             ...(d.curl ? curlKayitEki() : {}),
+            ...analizKaydi(d.uclar.filter((u) => d.restAnaliz[u.kimlik]).map((u) => [u.ad.trim(), d.restAnaliz[u.kimlik]])),
+            ...(d.yeniTablolar.length ? { analizTablolari: d.yeniTablolar.map(analizTablosuGovdesi) } : {}),
             senaryolar: d.uclar.filter((u) => (d.senaryoIstenen ?? new Set(d.uclar.map((x) => x.kimlik))).has(u.kimlik)).map((u) => u.ad.trim()), kapsam: d.kapsam
           } });
           bildir(`REST servisi eklendi${r.eklenenSenaryolar.length ? `; ${r.eklenenSenaryolar.length} başlangıç senaryosu oluşturuldu` : ''}.`);
@@ -414,11 +452,17 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     }
     try {
       await mesgulIken(ileri, 'Kaydediliyor…', async () => {
-        const alanVarsayilanlari = Object.fromEntries(Object.entries(d.varsayilanlar)
-          .map(([op, v]) => [op, Object.fromEntries(Object.entries(v).filter(([, p]) => p).map(([yol, p]) => [yol, { kaynak: 'parametre', deger: p }]))])
-          .filter(([op, v]) => d.secilen.has(op) && Object.keys(v).length));
+        // Varsayılanlar: analizde uygulanan "boş gönder" + tarih kuralı önerileri (tarih kuralı önceliklidir).
+        const alanVarsayilanlari = Object.fromEntries([...d.secilen]
+          .map((op) => [op, { ...(d.analiz[op]?.varsayilanlar ?? {}), ...Object.fromEntries(Object.entries(d.varsayilanlar[op] ?? {}).filter(([, p]) => p).map(([yol, p]) => [yol, { kaynak: 'parametre', deger: p }])) }])
+          .filter(([, v]) => Object.keys(v).length));
         const secilenler = (kaynak) => Object.fromEntries([...d.secilen].filter((m) => kaynak[m] && Object.keys(kaynak[m]).length).map((m) => [m, kaynak[m]]));
+        const analizli = [...d.secilen].filter((m) => d.analiz[m]).map((m) => /** @type {[string, any]} */ ([m, d.analiz[m]]));
+        // Alan listesi olmayan metodun kökü örnekten (elle eklenen alanlar bu kökle forma girer).
+        const ornekKokleri = Object.fromEntries(analizli.filter(([m, x]) => !d.erisim.semalar?.[m]?.alanlar.length && x.sonuc?.kok).map(([m, x]) => [m, { kok: x.sonuc.kok, ns: x.sonuc.ns || '' }]));
         const r = await api('/platform/servis/kaydet', { govde: {
+          ...analizKaydi(analizli), ...(Object.keys(ornekKokleri).length ? { ornekKokleri } : {}),
+          ...(d.yeniTablolar.length ? { analizTablolari: d.yeniTablolar.map(analizTablosuGovdesi) } : {}),
           projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), yol: d.yol, soapSurumu: d.soapSurumu, tlsDogrulama: d.tls,
           tabanlar: d.tabanlar, secilenOperasyonlar: [...d.secilen], yalnizTestOperasyonlari: [...d.yalnizTest].filter((x) => d.secilen.has(x)),
           alanVarsayilanlari, alanBaglari: secilenler(d.baglar), ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])),

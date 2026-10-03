@@ -4,6 +4,7 @@
 // (WSDL'de yok)" — elle eklenen alanlar ek listesinde tutulur (servis ayarı ekAlanlar), şemaya semaBirlestir ile katılır ve kaldırılabilir.
 // Yazma kutusu yoktur (seçim kutuları); alan ekleme formu "+ Alan ekle" ile açılır, tablo yalnız ekleme / kaldırma olunca yeniden çizilir.
 // metotKutulari: her metot bir kutucuk; tıklanan metodun tablosu altta çerçeve içinde açılır (iç içe açılır bölümler yok).
+// Servis analizi (servis-analizi.js) bağlanırsa: tablonun üstünde "Örnek istekler" bölümü (s.ust), satır altında öneriler (s.analiz).
 import { h, ikon, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { degerCipleri } from './parametre-tanimi-formu.js';
@@ -30,6 +31,9 @@ export function kaynakSecimi(s, yol) {
  *   kuralEkle?: (ad: string, kural: string) => Promise<void> | void;   // "+ Yeni kural…" kaydı (kurallar'a da eklemeli)
  *   etki?: (yol: string, kural: string) => string | null;   // kurala bağlanınca etki notu (hangi senaryolar zaten kuraldan alıyor)
  *   tablolar?: Array<{ id: string; ad: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satirlar: Array<{ degerler: Record<string, string | null> }> }>;
+ *   ust?: HTMLElement;                            // tablonun üstünde gösterilen bölüm (servis analizi: örnek istekler)
+ *   analiz?: { satir: (yol: string) => HTMLElement | null };   // satır altı öneriler (servis analizi)
+ *   tabloyuYenile?: () => void;                   // burada atanır: tabloyu yeniden çizer (öneri uygulanınca)
  * }} s
  */
 export function metotAlanTablosu(s) {
@@ -147,7 +151,7 @@ export function metotAlanTablosu(s) {
               ciz();
               s.degisti?.();
             } }, '×') : null),
-          bagHucresi(st), h('span', { class: 'zorunlu-hucre' }, zk));
+          bagHucresi(st), h('span', { class: 'zorunlu-hucre' }, zk), s.analiz ? s.analiz.satir(st.yol) : null);
         zk.addEventListener('change', () => { zk.checked ? s.zorunlu.add(st.yol) : s.zorunlu.delete(st.yol); satir.classList.toggle('zorunlu', zk.checked); sayacGuncelle(); s.degisti?.(); });
         return satir;
       }
@@ -162,7 +166,9 @@ export function metotAlanTablosu(s) {
   yalnizZorunlu.addEventListener('change', ciz);
   yalnizBos.addEventListener('change', ciz);
   ciz();
-  kap.append(ust, tablo);
+  // Servis analizi (servis-analizi.js > analizBagla): örnek istekler bölümü tablonun üstünde; öneriler değişince tablo yeniden çizilir.
+  s.tabloyuYenile = () => { ciz(); sayacGuncelle(); };
+  kap.append(...(s.ust ? [s.ust] : []), ust, tablo);
   if (s.ekler) {
     // Alan ekle (WSDL'de yok): "+ Alan ekle" formu açar; yol (grup/alan), tip, zorunlu.
     const kok = s.sema.alanlar.length === 1 && s.sema.alanlar[0].cocuklar ? `${s.sema.alanlar[0].ad}/` : '';

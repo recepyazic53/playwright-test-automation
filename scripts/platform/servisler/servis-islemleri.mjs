@@ -50,6 +50,7 @@ import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
 import { HAZIR_YETKI, beklemeMs, hazirYetkiKuraliAcik, servisKosuluDegerlendir, servisKurallari, suzgecTutar } from '../ayarlar/kurtarma-kurallari.mjs';
 // Döngüsel içe aktarma (taban-adresleri bu modülün taban doğrulamasını kullanır): yalnız çağrı anında kullanılan işlevler.
 import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
+import { alanKurallariniDogrula, analizKararlariniDogrula, ornekFarklariniDogrula, ornekIstekleriniDogrula, ornekKokleriniDogrula, ornekleriEkle } from './servis-ornekleri.mjs';
 
 /** Dosya kontrolünde rapora eklenecek (Ayarlar izin verirse) dosyanın en büyük boyutu; daha büyüğü yalnız özetle kalır. */
 const DOSYA_EKI_SINIRI = 5 * 1024 * 1024;
@@ -406,7 +407,10 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
  *   tekrarDenenebilirOperasyonlar?: string[]; alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
- *   oturumAkisi?: string | null; tabanGrubu?: string | null; tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari> }} girdi
+ *   oturumAkisi?: string | null; tabanGrubu?: string | null; tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari>;
+ *   ornekIstekler?: unknown; alanKurallari?: unknown; analizKararlari?: unknown; ornekFarklari?: unknown; ornekKokleri?: unknown }} girdi
+ *   ornekIstekler / alanKurallari / analizKararlari / ornekFarklari: servis analizi (servis-ornekleri.mjs); verilmeyen korunur.
+ *   ornekKokleri: alan listesi olmayan metodun örnekten gelen kökü — şeması yoksa (ya da alanı yoksa) elle eklenen alanlar bu kökle forma girer.
  *   oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
  *   tabanKararlari: bağlı olduğu taban adresinden farklı adres yazılıyorsa kullanıcının kararı (yoksa TabanKarariHatasi; taban-adresleri.mjs).
  */
@@ -439,7 +443,11 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.ekAlanlar !== undefined ? { ekAlanlar: ekAlanlariDogrula(girdi.ekAlanlar) } : {}),
     ...(girdi.alanListeleri !== undefined ? { alanListeleri: alanListeleriniDogrula(girdi.alanListeleri) } : {}),
     ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {}),
-    ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {})
+    ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {}),
+    ...(girdi.ornekIstekler !== undefined ? { ornekIstekler: ornekIstekleriniDogrula(girdi.ornekIstekler, mevcut?.ayarlar.ornekIstekler, ekGizliAdlar(vt)) } : {}),
+    ...(girdi.alanKurallari !== undefined ? { alanKurallari: alanKurallariniDogrula(girdi.alanKurallari) } : {}),
+    ...(girdi.analizKararlari !== undefined ? { analizKararlari: analizKararlariniDogrula(girdi.analizKararlari) } : {}),
+    ...(girdi.ornekFarklari !== undefined ? { ornekFarklari: ornekFarklariniDogrula(girdi.ornekFarklari) } : {})
   };
   // Adlandırılmış taban adres (null: servise özel adres). Adresleri çağıran taban adresinden verir (servis-uclari.mjs).
   if (girdi.tabanGrubu !== undefined) {
@@ -459,6 +467,14 @@ export function servisiKaydet(vt, projeId, girdi) {
     if (ops.length) ayarlar.operasyonlar = ops;
     const semalar = Object.fromEntries(Object.entries(e.semalar).filter(([ad]) => !secilen || secilen.has(ad)));
     if (Object.keys(semalar).length) ayarlar.operasyonSemalari = semalar;
+  }
+  // Alan listesi olmayan metot: örnekten gelen kökle boş şema (elle eklenen alanlar bu şemaya katılır, alan formu açılır).
+  if (girdi.ornekKokleri !== undefined) {
+    const ops = new Set((ayarlar.operasyonlar ?? []).map((o) => o.ad));
+    for (const [op, k] of Object.entries(ornekKokleriniDogrula(girdi.ornekKokleri))) {
+      const sm = ayarlar.operasyonSemalari?.[op];
+      if (ops.has(op) && (!sm || !sm.alanlar.length)) ayarlar.operasyonSemalari = { ...(ayarlar.operasyonSemalari ?? {}), [op]: { ...(sm ?? {}), ad: op, kok: sm?.kok || k.kok, ns: sm?.ns || k.ns, alanlar: [] } };
+    }
   }
   return vt.islem(() => {
     tabanKarariUygula(vt, projeId, karar, girdi.yapan);
@@ -927,10 +943,18 @@ function postmanAktarimi(vt, projeId, girdi, yazici) {
         if (!operasyonlar.some((o) => o.ad === i.operasyon)) operasyonlar.push({ ad: i.operasyon, metot: i.metot, yol: goreli(i.yol.split('?')[0]) });
       }
       if (Object.keys(tabanlar).length) tabanlariOrtamlaraKaydet(vt, projeId, tabanlariDogrula(tabanlar));
+      // Servis analizi: isteklerin gövdeleri ucun örnek isteklerine eklenir (adı = istek başlığı). Değişkenin bilinen, gizli olmayan
+      // değeri yerine yazılır; diğerleri yer tutucu kalır (${ad}). Aynı gövde ikinci kez eklenmez.
+      let ornekler = mevcut?.ayarlar.ornekIstekler;
+      for (const i of kl.istekler) {
+        if (!i.govde.trim()) continue;
+        const govde = sablonCevir(i.govde, (ad) => { const d = degiskenler.get(ad); return d && !gizliler.has(ad) && d.deger ? d.deger : `\${${ad}}`; });
+        ornekler = ornekleriEkle(ornekler, i.operasyon, [{ ad: i.baslik, govde, kaynak: 'postman' }]);
+      }
       const servisId = servisKaydet(vt, {
         ...(mevcut ? { id: mevcut.id } : {}), projeId, anahtar: kl.anahtar, ad: mevcut?.ad ?? kl.ad, tur: 'rest', yapan: girdi.yapan,
         ayarlar: { ...(mevcut?.ayarlar ?? {}), yol: yolDogrula(yol), adresler: mevcut?.ayarlar.adresler ?? {}, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), operasyonlar,
-          ...(karar.ayir ? { tabanGrubu: undefined } : {}) }
+          ...(karar.ayir ? { tabanGrubu: undefined } : {}), ...(ornekler ? { ornekIstekler: ornekler } : {}) }
       });
       const basliklar = new Set(servisSenaryolariniListele(vt, servisId).map((x) => x.baslik));
       let eklenen = 0;
