@@ -94,7 +94,12 @@ test.describe('sihirbaz uçtan uca', () => {
 
     // 2 · Metotlar: yol + denetle (onay penceresi) → metot listesi; "Onayla" CANLI'da çağrılmasın işaretli gelir.
     await expect(ileri).toBeDisabled();
-    await page.getByLabel('Yol (zorunlu)', { exact: true }).fill('/ornek.asmx');
+    // Tam adres yazılabilir: taban (1. adımda seçilen) ayrılır, alanda yalnız yol kalır.
+    const yolAlani = page.getByLabel('Yol (zorunlu)', { exact: true });
+    await yolAlani.fill(`${soap.adres}/Servis/ornek.asmx?wsdl`);
+    await yolAlani.blur();
+    await expect(yolAlani).toHaveValue('/ornek.asmx');
+    await expect(page.getByText(`Taban: ${soap.adres}/Servis · Yol: /ornek.asmx (kayıtlı taban adres)`)).toBeVisible();
     await expect(page.locator('.adres-onizleme')).toContainText(`${soap.adres}/Servis/ornek.asmx`);
     await expect(page.locator('.adres-onizleme')).toContainText('bu ortamda yok');
     const once = soap.istekler.length;

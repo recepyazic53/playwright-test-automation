@@ -151,6 +151,25 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     d.yapistirNotu = `Taban: ${a.koken}${a.semaEklendi ? ' (şema yazılmadığı için https:// varsayıldı)' : ''} · İstek yolu: ${a.yol || '/'}${a.sorgu.length ? ` · ${a.sorgu.length} sorgu parametresi` : ''} (sonraki adımda HTTP işlemini seçin)`;
     ciz();
   };
+  /**
+   * Tam adres (ör. https://site/AppService/x.asmx?wsdl) → taban + yol: denetleme ortamının kayıtlı taban adreslerinden en uzun eşleşen
+   * taban olur (yoksa adresin kökü yeni taban; kaydedilince ortama eklenir), kalan kısım yol. Kullanıcıya gösterilecek notu döner.
+   * @param {string} metin
+   */
+  const tamAdresiAyir = (metin) => {
+    let u;
+    try { u = new URL(metin.trim().replace(/\?wsdl$/i, '')); } catch { return 'Adres anlaşılamadı (http:// ya da https:// ile başlamalı).'; }
+    const tam = u.href.replace(/\/$/, '');
+    const test = ortamlar.find((o) => o.id === d.kontrolOrtami) || testOrtamlari[0];
+    const adaylar = test ? [...new Set([...(test.tabanAdresleri || [test.tabanUrl]), d.tabanlar[test.id]].filter(Boolean).map(temizTaban))] : [];
+    const taban = adaylar.filter((a) => tam.toLowerCase().startsWith(a.toLowerCase() + '/')).sort((a, b) => b.length - a.length)[0] || u.origin;
+    if (test) d.tabanlar[test.id] = taban;
+    d.yol = tam.slice(taban.length) || '/';
+    d.erisim = null;
+    return `Taban: ${taban} · Yol: ${d.yol} (${adaylar.includes(taban) ? 'kayıtlı taban adres' : 'yeni taban adres; kaydedilince ortama eklenir'})`;
+  };
+  /** Yazılan bir tam adres mi (yol değil)? @param {string} v */
+  const tamAdresMi = (v) => /^[a-z][a-z0-9+.-]*:\/\//i.test(v.trim());
   const adim1 = () => {
     const ad = h('input', { type: 'text', autocomplete: 'off', value: d.ad, placeholder: 'ör. SiparisServisi' });
     const anahtar = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.anahtar, placeholder: 'ör. siparis-servisi' });
@@ -162,16 +181,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     if (rest()) yapistir.placeholder = 'xxx.com/api/rest/v1/authenticate';
     yapistir.addEventListener('change', () => {
       if (rest()) { restYapistir(yapistir.value); return; }
-      let u;
-      try { u = new URL(yapistir.value.trim().replace(/\?wsdl$/i, '')); } catch { yapistirNotu.textContent = 'Adres anlaşılamadı (http:// ya da https:// ile başlamalı).'; return; }
-      const tam = u.href.replace(/\/$/, '');
-      const test = ortamlar.find((o) => o.id === d.kontrolOrtami) || testOrtamlari[0];
-      const adaylar = test ? [...new Set((test.tabanAdresleri || [test.tabanUrl]).map(temizTaban))] : [];
-      const taban = adaylar.filter((a) => tam.toLowerCase().startsWith(a.toLowerCase() + '/')).sort((a, b) => b.length - a.length)[0] || u.origin;
-      if (test) d.tabanlar[test.id] = taban;
-      d.yol = tam.slice(taban.length) || '/';
-      d.erisim = null;
-      yapistirNotu.textContent = `Taban: ${taban} · Yol: ${d.yol} (${adaylar.includes(taban) ? 'kayıtlı taban adres' : 'yeni taban adres; kaydedilince ortama eklenir'})`;
+      yapistirNotu.textContent = tamAdresiAyir(yapistir.value);
       ciz();
     });
     const surum = h('select', { 'aria-label': 'SOAP sürümü' }, ['1.1', '1.2'].map((v) => h('option', { value: v, selected: d.soapSurumu === v }, `SOAP ${v}`)));
@@ -196,7 +206,17 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     const onizleme = h('ul', { class: 'adres-onizleme' });
     const onizle = () => yerlestir(onizleme, ...ortamlar.map((o) => h('li', {}, h('b', {}, `${o.ad}: `),
       d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol || '/…')) : h('span', { class: 'soluk' }, 'bu ortamda yok'))));
-    yol.addEventListener('input', () => { d.yol = yol.value.trim(); d.erisim = null; onizle(); metotAlani(); durumGuncelle(); });
+    // Tam adres yazılırsa (hızlı testteki gibi) taban + yol ayrılır: taban denetleme ortamına yazılır, alanda yalnız yol kalır.
+    const yolNotu = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' });
+    const tamAdresiUygula = () => {
+      if (!tamAdresMi(yol.value)) return;
+      yolNotu.textContent = tamAdresiAyir(yol.value);
+      yol.value = d.yol;
+      onizle(); metotAlani(); durumGuncelle();
+    };
+    yol.addEventListener('input', () => { d.yol = yol.value.trim(); d.erisim = null; yolNotu.textContent = ''; onizle(); metotAlani(); durumGuncelle(); });
+    yol.addEventListener('change', tamAdresiUygula);
+    yol.addEventListener('paste', () => setTimeout(tamAdresiUygula, 0));
     onizle();
     const kontrolSec = h('select', { 'aria-label': 'Denetleme ortamı' }, ortamlar.map((o) => h('option', { value: o.id, selected: d.kontrolOrtami === o.id }, ortamSecenekMetni(o))));
     kontrolSec.addEventListener('change', () => { d.kontrolOrtami = kontrolSec.value; d.erisim = null; metotAlani(); durumGuncelle(); });
@@ -222,7 +242,9 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     };
     denetle.addEventListener('click', async () => {
       mesaj.temizle();
-      if (!/^\/\S*$/.test(d.yol)) { mesaj.goster('Yol "/" ile başlamalı (ör. /AppService/siparis.asmx).'); return; }
+      tamAdresiUygula();
+      if (d.yol && !d.yol.startsWith('/') && !tamAdresMi(d.yol)) { d.yol = `/${d.yol}`; yol.value = d.yol; onizle(); }
+      if (!/^\/\S*$/.test(d.yol)) { mesaj.goster('Yol "/" ile başlamalı (ör. /AppService/siparis.asmx) ya da servisin tam adresini yazın.'); return; }
       const o = ortamlar.find((x) => x.id === d.kontrolOrtami);
       if (!o || !d.tabanlar[o.id]) { mesaj.goster(`Denetleme için ${o ? `${o.ad} ortamının` : 'ortamın'} taban adresi gerekli (1. adım).`); return; }
       const adres = `${birlestir(d.tabanlar[o.id], d.yol)}?wsdl`;
@@ -250,7 +272,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     return [
       h('div', { class: 'not-kutusu bilgi wsdl-notu', role: 'note' }, h('b', {}, 'WSDL nereden gelir? '),
         'Yolu yazıp "Denetle"ye basın: WSDL, seçilen ortamdaki servis adresinin sonuna "?wsdl" eklenerek istenir (istekten önce onay sorulur). Ayrıca WSDL dosyası yapıştırmanız ya da yüklemeniz gerekmez; SoapUI projeniz varsa "SoapUI dosyasından" sekmesini kullanın.'),
-      alan('Yol', yol, { zorunlu: true, yardim: 'Taban adresin arkasına eklenir; tüm ortamlarda aynıdır. WSDL bu adresin sonuna "?wsdl" eklenerek istenir.' }),
+      alan('Yol', yol, { zorunlu: true, yardim: 'Taban adresin arkasına eklenir; tüm ortamlarda aynıdır. Servisin tam adresini de yazabilirsiniz: taban adres ayrılır. WSDL bu adresin sonuna "?wsdl" eklenerek istenir.' }),
+      yolNotu,
       h('div', {}, h('div', { class: 'alan-etiketi' }, 'Gidilecek adresler'), onizleme),
       h('div', { class: 'satir-duzen' }, alan('Denetleme ortamı', kontrolSec, { yardim: 'Varsayılan TEST ortamı; CANLI ortamda istekten önce onay sorulur.' }), denetle),
       sonuc
