@@ -64,7 +64,7 @@ export function ogrenmeOneriSayisi(vt, s, tablolar) {
 }
 
 /**
- * Gözlemi kaydeder; kendiliğinden ekleme açıksa güçlü "değer ekle" önerilerini uygular.
+ * Gözlemi kaydeder; kendiliğinden ekleme açıksa güçlü satır önerilerini (≥ 2 başarılı koşuda görülen satırlar) tablolara yazar.
  * @param {Veritabani} vt @param {string} servisId @param {string} op @param {import('./kosu-ogrenmesi.d.mts').Gozlem} gozlem
  */
 function gozlemiKaydet(vt, servisId, op, gozlem) {
@@ -72,14 +72,23 @@ function gozlemiKaydet(vt, servisId, op, gozlem) {
     servisAyarlariniIcGuncelle(vt, servisId, (a) => ({ ...a, kosuOgrenmesi: { ...(a.kosuOgrenmesi ?? {}), [op]: gozlemEkle([...(a.kosuOgrenmesi?.[op] ?? [])], gozlem) } }));
     if (gozlem.durum !== 'basarili' || kosuAyarlariniOku(vt).ogrenmeOtomatikEkle !== true) return;
     const s = /** @type {Servis} */ (servisGetir(vt, servisId));
-    const uygulanacak = metotOgrenmeOnerileri(s, op, tablolariListele(vt, s.projeId)).filter((o) => o.tur === 'tabloyaDeger' && o.guc === 'guclu');
+    // Yalnız güçlü SATIRLAR (≥ 2 başarılı koşu) yazılır; kartın zayıf satırları öneri olarak kalır. Satırın kararı hatırlanır.
+    const tablolar = tablolariListele(vt, s.projeId);
+    const uygulanacak = metotOgrenmeOnerileri(s, op, tablolar).filter((o) => o.tur === 'tabloyaSatir').flatMap((o) => {
+      const v = /** @type {import('./servis-analizi.d.mts').TabloSatiriOnerisi} */ (o.deger);
+      const satirlar = v.satirlar.filter((x) => x.guclu);
+      return satirlar.length ? [{ o, tablo: v.tablo, satirlar }] : [];
+    });
     if (!uygulanacak.length) return;
-    tabloDegerleriniYaz(vt, s.projeId, uygulanacak.map((o) => o.deger));
+    tabloDegerleriniYaz(vt, s.projeId, uygulanacak.map((x) => ({ tablo: x.tablo, satirlar: x.satirlar.map((r) => ({ ad: r.ad, degerler: r.degerler })) })));
     const zaman = new Date().toISOString();
+    const tabloAdi = (/** @type {string} */ id) => tablolar.find((x) => x.id === id)?.ad ?? id;
     servisAyarlariniIcGuncelle(vt, servisId, (a) => ({
       ...a,
-      analizKararlari: { ...(a.analizKararlari ?? {}), [op]: { ...(a.analizKararlari?.[op] ?? {}), ...Object.fromEntries(uygulanacak.map((o) => [o.anahtar, /** @type {'uygulandi'} */ ('uygulandi')])) } },
-      kosuOgrenmesiGecmisi: [...(a.kosuOgrenmesiGecmisi ?? []), ...uygulanacak.map((o) => ({ zaman, operasyon: op, metin: `Kendiliğinden eklendi: ${o.baslik.replace(/ eklensin mi\?$/, '')} (${o.kanit})` }))].slice(-EN_COK_GECMIS)
+      analizKararlari: { ...(a.analizKararlari ?? {}), [op]: { ...(a.analizKararlari?.[op] ?? {}),
+        ...Object.fromEntries(uygulanacak.flatMap((x) => x.satirlar.filter((r) => r.anahtar).map((r) => [/** @type {string} */ (r.anahtar), /** @type {'uygulandi'} */ ('uygulandi')]))) } },
+      kosuOgrenmesiGecmisi: [...(a.kosuOgrenmesiGecmisi ?? []), ...uygulanacak.flatMap((x) => x.satirlar.map((r) => ({ zaman, operasyon: op,
+        metin: `Kendiliğinden eklendi: ${tabloAdi(x.tablo)} tablosuna satır "${r.ad}" (${Object.entries(r.degerler).map(([k, d]) => `${k}: ${d}`).join(', ')}; ${r.kanit ?? ''})` })))].slice(-EN_COK_GECMIS)
     }));
   });
 }

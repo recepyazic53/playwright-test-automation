@@ -54,7 +54,8 @@ export type AnalizSonucu = {
   notlar: string[];
 };
 /** "Tabloya satır eklensin mi" önerisinin değeri (gizliSutunlar: önizlemede maskeli, yazılmaz). */
-export type TabloSatiriOnerisi = { tablo: string; satirlar: Array<{ ad: string; degerler: Record<string, string> }>; gizliSutunlar?: string[] };
+/** Satırda (koşulardan): anahtar (satır kararı), guclu (≥ 2 başarılı koşu), kanit (satır başına). */
+export type TabloSatiriOnerisi = { tablo: string; satirlar: Array<{ ad: string; degerler: Record<string, string>; anahtar?: string; guclu?: boolean; kanit?: string }>; gizliSutunlar?: string[] };
 export type AnalizDurumu = {
   zorunlu: Set<string>;
   baglar: Record<string, { tablo?: string; sutun?: string; kural?: string; etiket?: string; bicim?: string }>;
@@ -79,6 +80,7 @@ export function bulunmaEki(s: string): string;
 export function ornekCoz(govde: string, s?: { tur?: 'soap' | 'rest'; kok?: string; ustAlanlar?: ReadonlyArray<string> }): CozulenOrnek;
 export function tipCikar(degerler: string[]): { tip: AlanTipi; bicim?: string } | null;
 export function adEslesmesi(alan: string, hedef: string): 'birebir' | 'esAnlam' | 'benzer' | null;
+export function hucreEsit(c: AnalizTablosu['sutunlar'][number] | undefined, hucre: unknown, v: string): boolean;
 export function degerOrtusmesi(degerler: string[], t: AnalizTablosu, c: AnalizTablosu['sutunlar'][number]):
   { dogrudan: string[]; karsilik: Array<[string, string]>; eksik: string[]; bulunan: number; toplam: number };
 export function baglamUyumlu(alan: string, tablo: string, sutun: string): boolean;

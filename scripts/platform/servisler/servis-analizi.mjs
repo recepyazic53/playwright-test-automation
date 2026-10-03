@@ -228,7 +228,7 @@ export function xmlBaglami(yol, yollar) {
  * Hücre değeri örnek değerine eşit mi (büyük / küçük harf yok sayılır; sütunun karşılığıyla da: hücre "Türkiye", karşılık "TR").
  * @param {AnalizTablosu['sutunlar'][number] | undefined} c @param {unknown} hucre @param {string} v
  */
-const hucreEsit = (c, hucre, v) => kucuk(hucre) === kucuk(v)
+export const hucreEsit = (c, hucre, v) => kucuk(hucre) === kucuk(v)
   || Object.entries(c?.karsiliklar ?? {}).some(([mt, k]) => kucuk(mt) === kucuk(hucre) && [k?.servis, k?.sayfa].some((x) => typeof x === 'string' && kucuk(x) === kucuk(v)));
 const YER_TUTUCU = /\$\{[^}]*\}|\{\{[^}]*\}\}/;
 const MASKELI = /•|\*{3}/;
@@ -996,8 +996,10 @@ export function oneriyiUygula(d, o) {
     case 'gizli': kural().gizli = true; break;
     case 'tabloyaDeger': d.tabloDegerleri.push(JSON.parse(JSON.stringify(o.deger))); break;
     case 'tabloyaSatir': {
+      // Kayda yalnız satır adı ve değerler gider; satırların kendi kararı (koşulardan gelen satırlarda anahtar) da yazılır.
       const s = /** @type {TabloSatiriOnerisi} */ (o.deger);
-      d.tabloDegerleri.push({ tablo: s.tablo, satirlar: JSON.parse(JSON.stringify(s.satirlar)) });
+      d.tabloDegerleri.push({ tablo: s.tablo, satirlar: s.satirlar.map((x) => ({ ad: x.ad, degerler: { ...x.degerler } })) });
+      for (const x of s.satirlar) if (x.anahtar) d.kararlar[x.anahtar] = 'uygulandi';
       break;
     }
     case 'tabloBagi': d.baglar[o.yol] = { .../** @type {{ tablo: string; sutun: string }} */ (o.deger) }; break;
@@ -1019,6 +1021,7 @@ export function oneriyiYoksay(d, o) {
     const v = /** @type {{ tablo: string; sutun: string }} */ (o.deger);
     if (b && b.tablo === v.tablo && b.sutun === v.sutun) delete d.baglar[o.yol];
   }
+  if (o.tur === 'tabloyaSatir') for (const x of /** @type {TabloSatiriOnerisi} */ (o.deger).satirlar) if (x.anahtar) d.kararlar[x.anahtar] = 'yoksayildi';
   d.kararlar[o.anahtar] = 'yoksayildi';
 }
 

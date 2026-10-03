@@ -6,10 +6,11 @@
 //    kuralları: servis-analizi.mjs > adEslesmesi) o alan "hataya yol açmış olabilir" (şüpheli; değeri eklenmez), diğer alanların
 //    değerleri ZAYIF. Aynı senaryonun önceki başarılı koşusundan yalnız tek alanla ayrılıyorsa o alan şüpheli. Sebep belirsizse
 //    hiçbir değer alınmaz (yalnız dolu / boş durumu).
-//  - Öneriler: bağlı tabloda olmayan değerler "tabloya eklensin mi" (değer başına; ≥ 2 başarılı koşuda görüldüyse güçlü), bağı
+//  - Öneriler: tabloya satır (tablo başına tek kart; koşu başına satır, yalnız o tabloya bağlı alanlar; ≥ 2 başarılı koşuda
+//    görülen satır güçlü — servis-analizi.mjs satır bütünlüğü kuralı), bağı
 //    olmayan alan için tablo eşleşmesi, başarılı koşuda boş / yok giden zorunlu alan için "isteğe bağlı" (#179 kuralları; koşu =
 //    durumu bilinen örnek), şüpheli alan notu. Kanıt: kaç başarılı koşuda görüldü, son görülme, senaryolar.
-import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, degerOrtusmesi } from './servis-analizi.mjs';
+import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, hucreEsit } from './servis-analizi.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
@@ -130,8 +131,16 @@ export function kosuOnerileri(g) {
   const basarili = g.gozlemler.filter((x) => x.kaynak === 'kosu' && x.durum === 'basarili');
   /** @type {KosuOnerisi[]} */
   const sonuc = [];
-  /** @param {Omit<KosuOnerisi, 'anahtar'>} o */
-  const ekle = (o) => { const a = oneriAnahtari(o.tur, o.yol, o.deger); if (!kararlar[a]) sonuc.push({ ...o, anahtar: a }); };
+  /** @param {Omit<KosuOnerisi, 'anahtar'>} o @param {unknown} [anahtarDegeri] karar anahtarının değeri (verilmezse öneri değeri) */
+  const ekle = (o, anahtarDegeri) => { const a = oneriAnahtari(o.tur, o.yol, anahtarDegeri === undefined ? o.deger : anahtarDegeri); if (!kararlar[a]) sonuc.push({ ...o, anahtar: a }); };
+  /** @type {Map<string, Map<string, { sutun: string; gizli: boolean }>>} tablo → alan yolu → sütun (satır bütünlüğü) */
+  const satirEslemleri = new Map();
+  /** @param {string} tabloId @param {string} yol @param {string} sutun @param {boolean} gizli */
+  const satirEslemi = (tabloId, yol, sutun, gizli) => {
+    const e = satirEslemleri.get(tabloId) ?? new Map();
+    e.set(yol, { sutun, gizli });
+    satirEslemleri.set(tabloId, e);
+  };
 
   // Değerler: başarılı koşulardan (güçlü sayım) ve alanı anan hata koşularının diğer alanlarından (zayıf).
   /** @type {Map<string, { sayi: number; senaryolar: Set<string>; son: string }>} yol\u0001değer → başarılı sayım */
@@ -156,16 +165,7 @@ export function kosuOnerileri(g) {
     const c = t?.sutunlar.find((x) => x.ad === bag?.sutun);
     if (bag?.kural || m.varsayilanlar?.[yol]) continue;
     if (t && c) {
-      if (c.gizli) continue;
-      for (const v of degerOrtusmesi(degerleri(yol), t, c).eksik) {
-        const b = bSayim.get(`${yol}\u0001${v}`);
-        const z = zSayim.get(`${yol}\u0001${v}`);
-        const guclu = (b?.sayi ?? 0) >= GUCLU_KOSU_SAYISI;
-        ekle({ tur: 'tabloyaDeger', yol, deger: { tablo: t.id, sutun: c.ad, degerler: [v] }, guc: guclu ? 'guclu' : 'zayif',
-          baslik: `${t.ad} › ${c.ad} tablosuna "${v}" eklensin mi?`,
-          kanit: [b ? kanitMetni(b) : '', z ? kanitMetni(z, 'başarısız koşuda (başka alan hatası) görüldü') : ''].filter(Boolean).join(' · '),
-          kosuKaniti: { basarili: b?.sayi ?? 0, sonGorulme: [b?.son, z?.son].filter(Boolean).sort().pop() ?? '', senaryolar: [...new Set([...(b?.senaryolar ?? []), ...(z?.senaryolar ?? [])])] } });
-      }
+      satirEslemi(t.id, yol, c.ad, Boolean(c.gizli));
     } else if (!bag) {
       // Bağı olmayan alan: başarılı koşu değerleriyle mevcut eşleştirme kuralları.
       const bDegerleri = degerleri(yol).filter((v) => bSayim.has(`${yol}\u0001${v}`));
@@ -183,10 +183,71 @@ export function kosuOnerileri(g) {
         const toplam = bDegerleri.reduce((n, v) => n + (bSayim.get(`${yol}\u0001${v}`)?.sayi ?? 0), 0);
         const senaryolar = new Set(bDegerleri.flatMap((v) => [...(bSayim.get(`${yol}\u0001${v}`)?.senaryolar ?? [])]));
         const son = bDegerleri.map((v) => bSayim.get(`${yol}\u0001${v}`)?.son ?? '').sort().pop() ?? '';
+        satirEslemi(e.tabloId, yol, e.sutun, Boolean(g.tablolar.find((x) => x.id === e.tabloId)?.sutunlar.find((x) => x.ad === e.sutun)?.gizli));
         ekle({ tur: 'tabloBagi', yol, deger: { tablo: e.tabloId, sutun: e.sutun }, guc: e.guc, baslik: `Tablo: ${e.tablo} › ${e.sutun}`,
           kanit: `${e.kanit} · ${kanitMetni({ sayi: toplam, senaryolar, son })}`, kosuKaniti: { basarili: toplam, sonGorulme: son, senaryolar: [...senaryolar] } });
       }
     }
+  }
+
+  // Satır bütünlüğü (servis-analizi.mjs ile aynı kural): tablo başına tek öneri; koşu başına tek satır, satıra yalnız o tabloya bağlı
+  // (ya da önerilen bağdaki) alanların ELLE yazılmış değerleri. Aynı değer kümesi (aynı ya da başka senaryodan) tek satır, kanıt
+  // sayacı artar; satır adı ilk senaryonun adı. Başarılı koşu ve "başka alan hatası" (zayıf) koşular girer; şüpheli alanın hücresi
+  // boş kalır ve notta yazar (satırın geri kalanı şüpheli sayılmaz). Gizli sütun yazılmaz. Tabloda bağlı sütunların hepsi aynı olan
+  // satır varsa önerilmez. Satır ≥ GUCLU_KOSU_SAYISI başarılı koşuda görüldüyse güçlü; kart, satırlarının hepsi güçlüyse güçlü.
+  // Satır kararları ayrı hatırlanır (satırın anahtarı); kartın Uygula / Yoksay'ı satırlarına da yazılır.
+  for (const [tabloId, eslem] of satirEslemleri) {
+    const t = g.tablolar.find((x) => x.id === tabloId);
+    if (!t) continue;
+    /** @type {Map<string, { ad: string; degerler: Record<string, string>; b: { sayi: number; senaryolar: Set<string>; son: string } | null; z: { sayi: number; senaryolar: Set<string>; son: string } | null; notlar: Set<string> }>} */
+    const satirlar = new Map();
+    /** @type {Set<string>} */
+    const gizliSutunlar = new Set();
+    for (const x of g.gozlemler) {
+      if (x.kaynak !== 'kosu' || (x.durum !== 'basarili' && !x.zayif)) continue;
+      /** @type {Record<string, string>} */
+      const deg = {};
+      /** @type {string[]} */
+      const notlar = [];
+      for (const [yol, e] of eslem) {
+        const a = x.alanlar[yol];
+        if (!a || a.d !== 'dolu') continue;
+        if ((x.supheli ?? []).includes(yol)) { notlar.push(`${e.sutun}: ${alanAdi(yol)} hataya yol açmış olabilir, hücre boş`); continue; }
+        if (e.gizli) { gizliSutunlar.add(e.sutun); continue; }
+        if (a.v !== undefined) deg[e.sutun] = a.v;
+      }
+      const anahtarlar = Object.keys(deg).sort();
+      if (!anahtarlar.length) continue;
+      const ayni = (/** @type {Record<string, unknown>} */ r) => anahtarlar.every((k) => hucreEsit(t.sutunlar.find((s) => s.ad === k), r[k], deg[k]));
+      if (t.satirlar.some((r) => ayni(r.degerler))) continue;
+      const anahtar = JSON.stringify(anahtarlar.map((k) => [k, deg[k]]));
+      const s = satirlar.get(anahtar) ?? { ad: x.senaryo, degerler: deg, b: null, z: null, notlar: new Set() };
+      const yeniSayim = () => ({ sayi: 0, senaryolar: new Set(), son: '' });
+      const k = x.durum === 'basarili' ? (s.b ??= yeniSayim()) : (s.z ??= yeniSayim());
+      k.sayi++; k.senaryolar.add(x.senaryo); if (x.zaman > k.son) k.son = x.zaman;
+      for (const n of notlar) s.notlar.add(n);
+      satirlar.set(anahtar, s);
+    }
+    /** @type {Map<string, number>} */
+    const adSayisi = new Map();
+    const liste_ = [...satirlar.values()].map((s) => {
+      const n = (adSayisi.get(s.ad) ?? 0) + 1;
+      adSayisi.set(s.ad, n);
+      const satirAnahtari = oneriAnahtari('tabloyaSatir', `#${t.id}`, s.degerler);
+      return { ad: (n > 1 ? `${s.ad} (${n})` : s.ad).slice(0, 60), degerler: s.degerler, anahtar: satirAnahtari, guclu: (s.b?.sayi ?? 0) >= GUCLU_KOSU_SAYISI,
+        kanit: [s.b ? kanitMetni(s.b) : '', s.z ? kanitMetni(s.z, 'başarısız koşuda (başka alan hatası) görüldü') : '', ...s.notlar].filter(Boolean).join(' · '), s };
+    }).filter((r) => !kararlar[r.anahtar]);
+    if (!liste_.length) continue;
+    const toplam = liste_.reduce((n, r) => n + (r.s.b?.sayi ?? 0), 0);
+    const senaryolar = [...new Set(liste_.flatMap((r) => [...(r.s.b?.senaryolar ?? []), ...(r.s.z?.senaryolar ?? [])]))];
+    const son = liste_.map((r) => [r.s.b?.son ?? '', r.s.z?.son ?? '']).flat().sort().pop() ?? '';
+    const guclu = liste_.every((r) => r.guclu);
+    const satirlarDegeri = liste_.map(({ s: _s, ...r }) => r);
+    ekle({ tur: 'tabloyaSatir', yol: `#${t.id}`, deger: { tablo: t.id, satirlar: satirlarDegeri, ...(gizliSutunlar.size ? { gizliSutunlar: [...gizliSutunlar] } : {}) },
+      guc: guclu ? 'guclu' : 'zayif', baslik: `${t.ad} tablosuna ${liste_.length} satır eklensin mi`,
+      kanit: ['Her koşu bir satır (yalnız bu tabloya bağlı alanların elle yazılmış değerleri)', `${liste_.filter((r) => r.guclu).length}/${liste_.length} satır ≥ ${GUCLU_KOSU_SAYISI} başarılı koşuda görüldü`,
+        gizliSutunlar.size ? `gizli sütunlar yazılmaz: ${[...gizliSutunlar].join(', ')}` : ''].filter(Boolean).join(' · '),
+      kosuKaniti: { basarili: toplam, sonGorulme: son, senaryolar } }, { tablo: t.id, satirlar: satirlarDegeri.map((r) => r.anahtar) });
   }
 
   // Zorunluluk: başarılı koşuda boş / yok giden (şu an zorunlu) alan → isteğe bağlı (güçlü); WSDL zorunluysa çelişki notu.
