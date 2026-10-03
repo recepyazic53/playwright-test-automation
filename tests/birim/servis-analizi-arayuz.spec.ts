@@ -376,6 +376,57 @@ test.describe('servis analizi arayüzü', () => {
     await baglam.close();
   });
 
+  test('satır bütünlüğü: tabloya örnek başına tek satır (önizleme, Satırları ekle, aynı satır yeniden önerilmez); eski biçimli bekleyen veri de yazılır', async () => {
+    test.setTimeout(90_000);
+    const once = soap.istekler.length;
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/analiz`);
+    await page.getByRole('button', { name: 'Siparis metodu' }).click();
+    const bolum = page.getByRole('region', { name: 'Siparis örnek istekleri' });
+    await bolum.getByRole('button', { name: 'Gövde XML ekle' }).click();
+    await bolum.getByLabel('Siparis örnek adı').fill('Yeni bayi');
+    await bolum.getByLabel('Siparis örnek gövdesi').fill(zarf('<Channel>70000</Channel><Username>70000001</Username><Password>ornek-parola-5</Password><ClientType>O</ClientType><Ekstra>E5</Ekstra>'));
+    await bolum.getByLabel('Siparis örnek sonucu').selectOption('basarili');
+    await bolum.getByRole('button', { name: 'Ekle', exact: true }).click();
+    // Tablo başına tek kart; satır önizlemesi (Bayi kodu ve Kullanıcı aynı satırda).
+    const kart = bolum.locator('.satir-onerisi').filter({ hasText: 'Bayi tablosuna' });
+    await expect(kart).toHaveCount(1);
+    await expect(kart).toContainText('Bayi tablosuna 1 satır eklensin mi');
+    const onizleme = kart.getByRole('table', { name: 'Bayi satır önizlemesi' });
+    await expect(onizleme.locator('tbody tr')).toHaveCount(1);
+    await expect(onizleme.locator('tbody tr').first()).toContainText('Yeni bayi');
+    await expect(onizleme.locator('tbody tr').first()).toContainText('70000');
+    await expect(onizleme.locator('tbody tr').first()).toContainText('70000001');
+    await expect(bolum.locator('.analiz-onerisi[data-tur="tabloyaDeger"]')).toHaveCount(0);
+    await expect(bolum).not.toContainText('ornek-parola-5');
+    await tasmaYok(page);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await tasmaYok(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await kart.getByRole('button', { name: 'Satırları ekle' }).click();
+    const bayi = async () => ((await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).find((t) => t.id === bayiId) as Nesne;
+    // Kayıt sonrası sayfa yenilenir; satır tabloya TEK satır olarak (iki sütun birlikte) yazılır.
+    await expect.poll(async () => (await bayi()).satirlar.filter((r: Nesne) => r.ad === 'Yeni bayi').map((r: Nesne) => r.degerler))
+      .toEqual([expect.objectContaining({ 'Bayi kodu': '70000', 'Kullanıcı': '70000001' })]);
+    await expect(page.getByText('Önerilen satırlar tablolara eklendi.')).toBeVisible();
+    // Yeniden açınca aynı satır önerilmez.
+    await page.reload();
+    await page.getByRole('button', { name: 'Siparis metodu' }).click();
+    await expect(page.getByRole('region', { name: 'Siparis örnek istekleri' })).toContainText('örnek analiz edildi');
+    await expect(page.locator('.satir-onerisi').filter({ hasText: 'Bayi tablosuna' })).toHaveCount(0);
+    // Eski biçimle bekleyen veri (sütun + değerler) kayıtta yine yazılır; sütunda olan değer eklenmez.
+    const a = (await servis()).ayarlar;
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'analiz-servisi', ad: 'Analiz Servisi', yol: a.yol,
+      tabloDegerleri: [{ tablo: bayiId, sutun: 'Bayi kodu', degerler: ['80000', '70000'] }] });
+    expect((await bayi()).satirlar.filter((r: Nesne) => ['80000', '70000'].includes(r.degerler['Bayi kodu'])).map((r: Nesne) => r.ad).sort()).toEqual(['80000', 'Yeni bayi']);
+    expect(hatalar).toEqual([]);
+    expect(soap.istekler.length).toBe(once);
+    await baglam.close();
+  });
+
   test('içe aktarma: SoapUI ve Postman istekleri servisin örnek isteklerine gelir (bilinen değer yazılır, gizli değer yer tutucu kalır)', async () => {
     test.setTimeout(60_000);
     // SoapUI: yeni servis erişim kontrolüyle (WSDL yalnız sahte sunucudan).

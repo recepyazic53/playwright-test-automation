@@ -231,27 +231,53 @@ export function analizTablolariniYaz(vt, projeId, v) {
 }
 
 /**
- * Analizin "tabloya şu değerler eklensin mi" önerisi (kullanıcı uyguladıysa): bağlı mevcut tabloya her değer yeni satır olarak eklenir
- * (satır adı = değer; diğer sütunlar boş). Sütunda zaten olan değer eklenmez. Çağıran işlemin içinde çalışır.
- * @param {Veritabani} vt @param {string} projeId @param {unknown} v [{ tablo, sutun, degerler }]
+ * Analizin tablo satırı önerileri (kullanıcı uyguladıysa) mevcut tablolara yazılır. İki biçim:
+ *  - { tablo, satirlar: [{ ad, degerler: { sütun: değer } }] } (örnek başına tek satır): tabloda bu satırın verilen sütunlarının
+ *    HEPSİ aynı olan satır varsa (ya da aynı kayıtta eklendiyse) eklenmez; gizli / olmayan sütun değeri yazılmaz.
+ *  - eski biçim { tablo, sutun, degerler } (koşulardan gelen ya da önceden kaydedilmiş bekleyen veri): her değer bir satır
+ *    (satır adı = değer); sütunda zaten olan değer eklenmez.
+ * Çağıran işlemin içinde çalışır.
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} v
  * @returns {number} eklenen satır sayısı
  */
 export function tabloDegerleriniYaz(vt, projeId, v) {
   if (v === undefined || v === null) return 0;
   if (!Array.isArray(v) || v.length > 200) throw new DepoHatasi('"tabloDegerleri" en çok 200 öğeli bir dizi olmalıdır.');
+  const kucukHarf = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
+  const gecerli = (/** @type {unknown} */ x) => typeof x === 'string' && Boolean(x.trim()) && x.length <= 500;
   let eklenen = 0;
   for (const ham of v) {
     const o = nesne(ham, 'tablo değeri');
-    if (typeof o.tablo !== 'string' || typeof o.sutun !== 'string' || !Array.isArray(o.degerler)) throw new DepoHatasi('Tabloya eklenecek değer geçersiz.');
+    if (typeof o.tablo !== 'string') throw new DepoHatasi('Tabloya eklenecek değer geçersiz.');
     const t = tablolariListele(vt, projeId).find((x) => x.id === o.tablo);
-    const c = t?.sutunlar.find((x) => x.ad === o.sutun);
-    if (!t || !c || c.gizli) throw new DepoHatasi(`"${o.sutun}" sütunu bulunamadı (değer eklenemez).`);
-    const var_ = new Set(t.satirlar.map((r) => String(r.degerler[c.ad] ?? '').trim().toLocaleLowerCase('tr')));
-    const yeni = [...new Set(o.degerler.filter((x) => typeof x === 'string' && x.trim() && x.length <= 500).map((x) => x.trim()))]
-      .filter((x) => !var_.has(x.toLocaleLowerCase('tr')));
+    if (!t) throw new DepoHatasi('Değer eklenecek tablo bulunamadı.');
+    /** @type {Array<{ ad: string; degerler: Record<string, string> }>} */
+    let yeni = [];
+    if (Array.isArray(o.satirlar)) {
+      if (o.satirlar.length > 500) throw new DepoHatasi('Bir öneride en çok 500 satır olabilir.');
+      const acik = new Set(t.sutunlar.filter((c) => !c.gizli).map((c) => c.ad));
+      for (const s of o.satirlar) {
+        const x = nesne(s, 'tablo satırı');
+        const d = nesne(x.degerler ?? {}, 'satır değerleri');
+        /** @type {Record<string, string>} */
+        const degerler = Object.fromEntries(Object.entries(d).filter(([k, val]) => acik.has(k) && gecerli(val)).map(([k, val]) => [k, String(val).trim()]));
+        const anahtarlar = Object.keys(degerler);
+        if (!anahtarlar.length) continue;
+        const ayni = (/** @type {Record<string, unknown>} */ r) => anahtarlar.every((k) => kucukHarf(r[k]) === kucukHarf(degerler[k]));
+        if (t.satirlar.some((r) => ayni(r.degerler)) || yeni.some((r) => ayni(r.degerler))) continue;
+        yeni.push({ ad: (typeof x.ad === 'string' && x.ad.trim() ? x.ad.trim() : degerler[anahtarlar[0]]).slice(0, 60), degerler });
+      }
+    } else {
+      if (typeof o.sutun !== 'string' || !Array.isArray(o.degerler)) throw new DepoHatasi('Tabloya eklenecek değer geçersiz.');
+      const c = t.sutunlar.find((x) => x.ad === o.sutun);
+      if (!c || c.gizli) throw new DepoHatasi(`"${o.sutun}" sütunu bulunamadı (değer eklenemez).`);
+      const var_ = new Set(t.satirlar.map((r) => kucukHarf(r.degerler[c.ad])));
+      yeni = [...new Set(o.degerler.filter(gecerli).map((x) => String(x).trim()))].filter((x) => !var_.has(kucukHarf(x)))
+        .map((x) => ({ ad: x.slice(0, 60), degerler: { [c.ad]: x } }));
+    }
     if (!yeni.length) continue;
     tabloKaydet(vt, { projeId, id: t.id, ad: t.ad, sutunlar: t.sutunlar.map((x) => ({ ad: x.ad, eskiAd: x.ad, gizli: x.gizli })),
-      satirlar: yeni.map((x) => ({ ad: x.slice(0, 60), ortamId: null, degerler: { [c.ad]: x } })) });
+      satirlar: yeni.map((x) => ({ ad: x.ad, ortamId: null, degerler: x.degerler })) });
     eklenen += yeni.length;
   }
   return eklenen;

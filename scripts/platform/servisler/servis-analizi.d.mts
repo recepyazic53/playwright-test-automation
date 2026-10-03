@@ -38,7 +38,7 @@ export type YeniTabloPlani = {
   alanlar: Array<{ yol: string; sutun: string }>;
   ayniAdli: { id: string; ad: string } | null;
 };
-export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'gizli' | 'tabloBagi' | 'yeniTablo' | 'kopukBag' | 'tabloyaDeger' | 'supheli';
+export type OneriTuru = 'alanEkle' | 'zorunlu' | 'bosGonder' | 'celiski' | 'tip' | 'gizli' | 'tabloBagi' | 'yeniTablo' | 'kopukBag' | 'tabloyaDeger' | 'tabloyaSatir' | 'supheli';
 export type OneriGucu = 'guclu' | 'zayif' | 'not';
 export type AnalizOnerisi = { anahtar: string; tur: OneriTuru; yol: string; deger: unknown; baslik: string; kanit: string; guc: OneriGucu; /** kopukBag: silinmiş eski bağ (Tablo › Sütun). */ eskiBag?: string };
 export type AlanAnalizi = {
@@ -53,6 +53,8 @@ export type AnalizSonucu = {
   /** Hata veren örneklerin çok farklı olduğu durumlar (zorunluluk kanıtı sayılmaz). */
   notlar: string[];
 };
+/** "Tabloya satır eklensin mi" önerisinin değeri (gizliSutunlar: önizlemede maskeli, yazılmaz). */
+export type TabloSatiriOnerisi = { tablo: string; satirlar: Array<{ ad: string; degerler: Record<string, string> }>; gizliSutunlar?: string[] };
 export type AnalizDurumu = {
   zorunlu: Set<string>;
   baglar: Record<string, { tablo?: string; sutun?: string; kural?: string; etiket?: string; bicim?: string }>;
@@ -61,8 +63,8 @@ export type AnalizDurumu = {
   ekler: Array<{ yol: string; tip?: string }>;
   kararlar: Record<string, 'uygulandi' | 'yoksayildi'>;
   yeniTablolar: YeniTabloPlani[];
-  /** Bağlı tablolara eklenecek değerler (kayıtta yeni satırlar). */
-  tabloDegerleri: Array<{ tablo: string; sutun: string; degerler: string[] }>;
+  /** Tablolara eklenecek satırlar (kayıtta): örnek başına satır; eski biçim (sütun + değerler, koşulardan) de kabul edilir. */
+  tabloDegerleri: Array<{ tablo: string; sutun: string; degerler: string[] } | { tablo: string; satirlar: Array<{ ad: string; degerler: Record<string, string> }> }>;
 };
 
 export const EN_COK_ORNEK: number;

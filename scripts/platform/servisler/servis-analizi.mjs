@@ -23,7 +23,7 @@
 //   5) Yeni tablo    : eşleşmeyen alanlar için hızlı testin kayıt planı kuralları: kavram grupları (kişi / adres / iletişim / kart /
 //                      giriş bilgileri) grubun kayıt tablosunda (her örnek bir satır); gruba girmeyen her alan kendi adıyla tablo
 //                      (gözlenen her farklı değer bir satır; tek değer de; eşik yok). Evet/hayır alanına tablo açılmaz (değer senaryoda
-//                      seçilir). Eşleşen sütunda olmayan değerler için "tabloya eklensin mi". Bağlı tabloda olmayan örnek değerleri "tabloya eklensin mi" önerisi;
+//                      seçilir). Bağlı / önerilen tabloya örnek başına TEK satır önerisi (tablo başına bir öneri; aynı değerli satır tekrar eklenmez);
 //                      gizli adlı sütun gizli (değeri yazılmaz). Satırlar örneklerden (satır adı = örnek adı). Aynı adlı tablo varsa
 //                      ayniAdli dolu (arayüz: Birleştir / Yeni ad / Atla).
 //   Güç: her öneri "guclu" ya da "zayif" (çelişki "not"); "Güçlü önerileri uygula" yalnız güçlüleri kapsar.
@@ -46,6 +46,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 /** @typedef {import('./servis-analizi.d.mts').YeniTabloPlani} YeniTabloPlani */
 /** @typedef {import('./servis-analizi.d.mts').AnalizTablosu} AnalizTablosu */
 /** @typedef {import('./servis-analizi.d.mts').AnalizDurumu} AnalizDurumu */
+/** @typedef {import('./servis-analizi.d.mts').TabloSatiriOnerisi} TabloSatiriOnerisi */
 /** @typedef {import('./servis-govdesi.mjs').AlanTipi} AlanTipi */
 
 /** Bir metotta en çok örnek sayısı (sunucu doğrulaması da bunu kullanır). */
@@ -223,6 +224,12 @@ export function xmlBaglami(yol, yollar) {
   return [...s];
 }
 
+/**
+ * Hücre değeri örnek değerine eşit mi (büyük / küçük harf yok sayılır; sütunun karşılığıyla da: hücre "Türkiye", karşılık "TR").
+ * @param {AnalizTablosu['sutunlar'][number] | undefined} c @param {unknown} hucre @param {string} v
+ */
+const hucreEsit = (c, hucre, v) => kucuk(hucre) === kucuk(v)
+  || Object.entries(c?.karsiliklar ?? {}).some(([mt, k]) => kucuk(mt) === kucuk(hucre) && [k?.servis, k?.sayfa].some((x) => typeof x === 'string' && kucuk(x) === kucuk(v)));
 const YER_TUTUCU = /\$\{[^}]*\}|\{\{[^}]*\}\}/;
 const MASKELI = /•|\*{3}/;
 /** Değer çıkarımına girebilir mi (yer tutucusuz, maskesiz, boş değil). @param {unknown} v */
@@ -555,7 +562,9 @@ export function tabloEslesmesi(ad, degerler, tablolar, gizli = false, ekAdlar = 
       const adTur = adVar && ap.tur !== 'tablo' ? ap.tur : null;
       const tabloAd = adVar && ap.tur === 'tablo';
       if (c.gizli && !adTur) continue;
-      const o = degerOrtusmesi(gizli || c.gizli ? [] : degerler, t, c);
+      // Boş sütun (hiç somut hücre yok) değerle çelişmez: değer kanıtı yok sayılır (ör. yeni açılmış "Adres" tablosu).
+      const sutunBos = !t.satirlar.some((r) => somutMu(r.degerler[c.ad]));
+      const o = degerOrtusmesi(gizli || c.gizli || sutunBos ? [] : degerler, t, c);
       const oran = o.toplam ? o.bulunan / o.toplam : null;
       // Yalnız değerden (ad eşleşmesi yok): değerlerden en az biri sütunda ve biçim aynı (ör. hep 5 hane) — zayıf öneri.
       const sutunImzasi = ortakImza(t.satirlar.map((r) => r.degerler[c.ad]).filter(somutMu).map(String));
@@ -662,6 +671,14 @@ export function servisAnalizi(g) {
   const tabloAdaylari = new Map();
   /** Tablo bağı önerileri (aynı satır güveni için sonradan güçlendirilir; eskiBag: kopuk bağın yerine). @type {Array<{ yol: string; aday: TabloEslesmesi; kanit: string; degistir: boolean; eskiBag?: string }>} */
   const bagOnerileri = [];
+  /** @type {Map<string, Map<string, { sutun: string; gizli: boolean }>>} tablo → alan yolu → sütun (satır bütünlüğü önerisi için) */
+  const satirEslemleri = new Map();
+  /** @param {string} tabloId @param {string} yol @param {string} sutun @param {boolean} gizli */
+  const satirEslemi = (tabloId, yol, sutun, gizli) => {
+    const m = satirEslemleri.get(tabloId) ?? new Map();
+    m.set(yol, { sutun, gizli });
+    satirEslemleri.set(tabloId, m);
+  };
 
   for (const yol of yollar) {
     const alan = yapraklar.get(yol) ?? null;
@@ -757,15 +774,9 @@ export function servisAnalizi(g) {
       ekle({ tur: 'kopukBag', yol, deger: null, guc: 'zayif', eskiBag, baslik: `Eski bağ silinmiş (${eskiBag}) → bağı kaldır`,
         kanit: `${!bagTablosu ? 'Bağlı tablo silinmiş' : `"${bagTablosu.ad}" tablosunda "${bag.sutun}" sütunu yok`} · eşleşen sütun bulunamadı` });
     }
-    // Bağlı (mevcut) tabloda olmayan örnek değerleri: "tabloya şu değerler eklensin mi?" (uygulanırsa yeni satırlar).
-    const veriEksik = bagOrtusmesi ? bagOrtusmesi.eksik.filter((v) => veriDegerleri.includes(v)) : [];
-    if (!kopuk && bagTablosu && bagSutunu && bagOrtusmesi && bagOrtusmesi.bulunan > 0 && veriEksik.length) {
-      const eksik = [...veriEksik].sort((a, b) => a.localeCompare(b, 'tr'));
-      ekle({ tur: 'tabloyaDeger', yol, deger: { tablo: bagTablosu.id, sutun: bagSutunu.ad, degerler: eksik }, guc: 'zayif',
-        baslik: `${bagTablosu.ad} › ${bagSutunu.ad} tablosuna şu değerler eklensin mi: ${liste(eksik, 6)}`,
-        kanit: `Örneklerde var, tabloda yok (${eksik.length}/${bagOrtusmesi.toplam} değer); uygulanırsa her değer yeni satır olur` });
-    }
-    if (kopuk && bag && aday) bagOnerileri.push({ yol, aday, degistir: false, kanit: aday.kanit, eskiBag });
+    // Satır bütünlüğü: bağlı tablodaki değerler örnek başına satır önerisine girer (bağ değerlerle doğrulanmışsa ya da tablo boşsa).
+    if (!kopuk && bagTablosu && bagSutunu && !bag?.kural && (!bagOrtusmesi || bagOrtusmesi.bulunan > 0 || !bagTablosu.satirlar.length)) satirEslemi(bagTablosu.id, yol, bagSutunu.ad, gizli);
+    if (kopuk && bag && aday) { bagOnerileri.push({ yol, aday, degistir: false, kanit: aday.kanit, eskiBag }); satirEslemi(aday.tabloId, yol, aday.sutun, gizli); }
     // 5) Tablo eşleşmesi: bağ yoksa en iyi aday; bağ varken yalnız bağlı sütunda hiçbir değer yoksa ve aday değer kanıtlıysa.
     if (!kopuk && aday && !(bag?.kural) && !varsayilanlar[yol]) {
       const ayni = bag && bag.tablo === aday.tabloId && bag.sutun === aday.sutun;
@@ -774,15 +785,7 @@ export function servisAnalizi(g) {
       if (!bag || degistir || (ayni && onsecili.has(anahtar))) {
         bagOnerileri.push({ yol, aday, degistir,
           kanit: `${aday.kanit}${degistir ? ` · şu anki bağ: ${ortusmeKaniti(/** @type {ReturnType<typeof degerOrtusmesi>} */ (bagOrtusmesi), bagTablosu?.ad ?? '', bagSutunu?.ad ?? '', false)}` : ''}` });
-        // Eşleşen sütunda olmayan örnek değerleri: "tabloya eklensin mi" (bağ önerisiyle birlikte).
-        const at = tablolar.find((x) => x.id === aday.tabloId);
-        const ac = at?.sutunlar.find((x) => x.ad === aday.sutun);
-        const eksik = at && ac && !ac.gizli && !gizli ? degerOrtusmesi(veriDegerleri, at, ac).eksik.sort((a, b) => a.localeCompare(b, 'tr')) : [];
-        if (at && ac && eksik.length) {
-          ekle({ tur: 'tabloyaDeger', yol, deger: { tablo: at.id, sutun: ac.ad, degerler: eksik }, guc: 'zayif',
-            baslik: `${at.ad} › ${ac.ad} tablosuna şu değerler eklensin mi: ${liste(eksik, 6)}`,
-            kanit: `Örneklerde var, önerilen sütunda yok (${eksik.length}/${veriDegerleri.length} değer); uygulanırsa her değer yeni satır olur` });
-        }
+        satirEslemi(aday.tabloId, yol, aday.sutun, gizli);
       }
     }
     // 6) Yeni tabloya aday: evet/hayır olmayan, değeri olan (ya da gizli), bağı / adayı / kural varsayılanı olmayan alan — eşik yok.
@@ -817,6 +820,46 @@ export function servisAnalizi(g) {
     const deger = { tablo: b.aday.tabloId, sutun: b.aday.sutun };
     if (b.eskiBag) ekle({ tur: 'kopukBag', yol: b.yol, deger, guc: b.aday.guc, eskiBag: b.eskiBag, baslik: `Eski bağ silinmiş (${b.eskiBag}) → ${b.aday.tablo} › ${b.aday.sutun}`, kanit: b.kanit });
     else ekle({ tur: 'tabloBagi', yol: b.yol, deger, guc: b.aday.guc, baslik: `Tablo: ${b.aday.tablo} › ${b.aday.sutun}`, kanit: b.kanit });
+  }
+
+  // Alan satırındaki tablo eşleşmesi öneriyle AYNI kaynaktan (aynı satır güveni dahil): kart ile satır aynı gücü gösterir.
+  for (const b of bagOnerileri) { const a = alanlar.find((x) => x.yol === b.yol); if (a) a.tablo = b.aday; }
+
+  // --- Satır bütünlüğü: bağlı / önerilen tabloya ÖRNEK başına tek satır (tablo başına tek öneri) --------------------------
+  // Bir örneğin aynı tabloya bağlanan tüm alanlarının değerleri o satırın sütunlarına yazılır; satır adı örnek adı. Hata veren
+  // örnekler ve ek kanıtlar (adsız) girmez. Gizli alan / sütun değeri yazılmaz (önizlemede maskeli). Tabloda (ya da öneride)
+  // bağlı sütunların değerlerinin HEPSİ aynı olan satır varsa eklenmez. Tek sütunlu (liste) tabloda her farklı değer bir satır.
+  for (const [tabloId, eslem] of satirEslemleri) {
+    const t = tablolar.find((x) => x.id === tabloId);
+    if (!t) continue;
+    const liste_ = t.sutunlar.length === 1;
+    /** @type {Array<{ ad: string; degerler: Record<string, string> }>} */
+    const satirlar = [];
+    /** @type {Set<string>} */
+    const gizliSutunlar = new Set();
+    for (const x of cozulen) {
+      if (!x.adli || x.durum === 'hata') continue;
+      /** @type {Record<string, string>} */
+      const deg = {};
+      for (const [yol, e] of eslem) {
+        const c = t.sutunlar.find((s) => s.ad === e.sutun);
+        const v = x.c.alanlar.get(yol);
+        if (!c || v?.durum !== 'dolu' || !somutMu(v.deger)) continue;
+        if (e.gizli || c.gizli) { gizliSutunlar.add(c.ad); continue; }
+        deg[c.ad] = String(v.deger);
+      }
+      const anahtarlar = Object.keys(deg);
+      if (!anahtarlar.length) continue;
+      const ayni = (/** @type {Record<string, unknown>} */ r) => anahtarlar.every((k) => hucreEsit(t.sutunlar.find((s) => s.ad === k), r[k], deg[k]));
+      if (t.satirlar.some((r) => ayni(r.degerler)) || satirlar.some((r) => ayni(r.degerler))) continue;
+      satirlar.push({ ad: liste_ ? deg[anahtarlar[0]].slice(0, 60) : x.ad, degerler: deg });
+    }
+    if (!satirlar.length) continue;
+    const sutunlar = t.sutunlar.filter((c) => satirlar.some((r) => c.ad in r.degerler)).map((c) => c.ad);
+    ekle({ tur: 'tabloyaSatir', yol: `#${t.id}`, deger: { tablo: t.id, satirlar, ...(gizliSutunlar.size ? { gizliSutunlar: [...gizliSutunlar] } : {}) }, guc: 'zayif',
+      baslik: `${t.ad} tablosuna ${satirlar.length} satır eklensin mi`,
+      kanit: [liste_ ? 'Her farklı değer bir satır' : 'Her örnek bir satır (satır adı = örnek adı; hata veren örnekler hariç)', `sütunlar: ${sutunlar.join(', ')}`,
+        gizliSutunlar.size ? `gizli sütunlar yazılmaz: ${[...gizliSutunlar].join(', ')}` : '', 'tabloda aynı değerlerle bulunan satır eklenmez'].filter(Boolean).join(' · ') });
   }
 
   // --- Yeni tablo planları ----------------------------------------------------------------------
@@ -931,7 +974,7 @@ export const gucluOneriler = (l) => l.filter((o) => o.guc === 'guclu' && o.tur !
 /**
  * Öneriyi durum üzerinde uygular (DEĞİŞTİRİR) ve kararı "uygulandi" olarak yazar. Değer üretilmez: öneri örneklerden gelir.
  *  alanEkle → ekler · zorunlu → zorunlu kümesi · bosGonder → zorunluluk kalkar + varsayılan boş / nil · tip / gizli → alan kuralı
- *  (ek alanda tip de) · tabloyaDeger → bağlı tabloya eklenecek değerler (kayıtta yeni satır) · tabloBagi → alan bağı · yeniTablo → plan yeniTablolar'a, alanları planın sütunlarına
+ *  (ek alanda tip de) · tabloyaSatir → tabloya örnek başına satırlar (kayıtta) · tabloyaDeger (koşulardan; eski biçim) → sütuna değerler · tabloBagi → alan bağı · yeniTablo → plan yeniTablolar'a, alanları planın sütunlarına
  *  ("yeni:<ad>" kimliğiyle; kayıtta gerçek tabloya çevrilir) · celiski → yalnız karar.
  * @param {AnalizDurumu} d @param {AnalizOnerisi} o
  */
@@ -952,6 +995,11 @@ export function oneriyiUygula(d, o) {
     }
     case 'gizli': kural().gizli = true; break;
     case 'tabloyaDeger': d.tabloDegerleri.push(JSON.parse(JSON.stringify(o.deger))); break;
+    case 'tabloyaSatir': {
+      const s = /** @type {TabloSatiriOnerisi} */ (o.deger);
+      d.tabloDegerleri.push({ tablo: s.tablo, satirlar: JSON.parse(JSON.stringify(s.satirlar)) });
+      break;
+    }
     case 'tabloBagi': d.baglar[o.yol] = { .../** @type {{ tablo: string; sutun: string }} */ (o.deger) }; break;
     case 'yeniTablo': {
       const t = /** @type {YeniTabloPlani} */ (o.deger);
