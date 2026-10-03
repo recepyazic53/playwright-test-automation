@@ -65,3 +65,7 @@
 .kaynak-ozeti.kaynak-evetHayir { color: var(--basari); }
 .kaynak-ozeti .oneri-var { font-style: normal; font-weight: 600; }
 .kaynak-aciklamasi { margin: 4px 0; }
+/* Tabloya satır önerisi: kartta satır önizlemesi (dar ekranda yatay kaydırma kendi kutusunda). */
+.analiz-onerisi.satir-onerisi { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.satir-onizleme { overflow-x: auto; min-width: 0; max-width: 100%; }
+.satir-onizleme table { font-size: 12px; }

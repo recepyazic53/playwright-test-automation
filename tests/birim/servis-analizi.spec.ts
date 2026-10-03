@@ -191,15 +191,69 @@ test('tablo eşleştirme: ad + değer güçlü; yalnız değerden (desen aynı) 
   const yalniz = servisAnalizi({ metot: 'Islem', sema, ornekler, tablolar: [], mevcut: { baglar: { 'Girdi/Username': { tablo: 'silinmis', sutun: 'Eski' } } } });
   expect(hepsi(yalniz.oneriler, 'kopukBag', 'Girdi/Username').map((o) => [o.baslik, o.guc, o.deger])).toEqual([['Eski bağ silinmiş (silinmiş tablo › Eski) → bağı kaldır', 'zayif', null]]);
   expect(gucluOneriler(yalniz.oneriler).some((o) => o.tur === 'kopukBag')).toBe(false);
-  // Bağlı tabloda olmayan değerler: "tabloya şu değerler eklensin mi" (hata veren örneğin değeri girmez).
+  // Bağlı tabloda olmayan değerler: tablo başına TEK "satır eklensin mi" önerisi, örnek başına satır (hata veren örneğin değeri girmez).
   const eksik = servisAnalizi({ metot: 'Islem', sema, tablolar, mevcut: { baglar: { 'Girdi/Channel': { tablo: 't2', sutun: 'Bayi kodu' } } }, ornekler: [
     { govde: zarf('<Channel>51234</Channel>') }, { govde: zarf('<Channel>33333</Channel>') }, { durum: 'basarili', govde: zarf('<Channel>44444</Channel>') },
     { durum: 'hata', govde: zarf('<Channel>99999</Channel>') }] });
-  const td = bul(eksik.oneriler, 'tabloyaDeger', 'Girdi/Channel');
-  expect(td).toMatchObject({ guc: 'zayif', deger: { tablo: 't2', sutun: 'Bayi kodu', degerler: ['33333', '44444'] }, baslik: 'Bayi › Bayi kodu tablosuna şu değerler eklensin mi: 33333, 44444' });
+  expect(hepsi(eksik.oneriler, 'tabloyaDeger', 'Girdi/Channel')).toEqual([]);
+  const td = bul(eksik.oneriler, 'tabloyaSatir', '#t2');
+  expect(td).toMatchObject({ guc: 'zayif', baslik: 'Bayi tablosuna 2 satır eklensin mi',
+    deger: { tablo: 't2', satirlar: [{ ad: 'Örnek 2', degerler: { 'Bayi kodu': '33333' } }, { ad: 'Örnek 3', degerler: { 'Bayi kodu': '44444' } }] } });
   const d2 = bosDurum();
   oneriyiUygula(d2, td as AnalizOnerisi);
-  expect(d2.tabloDegerleri).toEqual([{ tablo: 't2', sutun: 'Bayi kodu', degerler: ['33333', '44444'] }]);
+  expect(d2.tabloDegerleri).toEqual([{ tablo: 't2', satirlar: [{ ad: 'Örnek 2', degerler: { 'Bayi kodu': '33333' } }, { ad: 'Örnek 3', degerler: { 'Bayi kodu': '44444' } }] }]);
+});
+
+test('satır bütünlüğü: tablo başına tek öneri, örnek başına tek satır (tüm bağlı alanlar aynı satırda); aynı satır yeniden eklenmez; gizli yazılmaz; liste tablosunda her değer bir satır', () => {
+  const T = (id: string, ad: string, sutunlar: Array<string | { ad: string; gizli?: boolean }>, satirlar: Array<Record<string, string>> = []) =>
+    ({ id, ad, sutunlar: sutunlar.map((c) => (typeof c === 'string' ? { ad: c } : c)), satirlar: satirlar.map((degerler) => ({ degerler })) });
+  const tablolar = [
+    T('kisi', 'Kişi bilgileri', ['Ad', 'Soyad', 'Telefon', { ad: 'Vergi no', gizli: true }], [{ Ad: 'Ali', Soyad: 'Kaya', Telefon: '5551112233' }]),
+    T('ilk', 'Teslim şekli', ['Teslim şekli'])
+  ];
+  const kisi = (ad: string, soyad: string, tel: string, vergi = '') => `<Customer><Firstname>${ad}</Firstname><Lastname>${soyad}</Lastname><PhoneNumber>${tel}</PhoneNumber>${vergi ? `<TaxNumber>${vergi}</TaxNumber>` : ''}</Customer>`;
+  const r = servisAnalizi({ metot: 'Islem', sema: null, tablolar, ornekler: [
+    { ad: 'Birinci', durum: 'basarili', govde: zarf(`${kisi('Ali', 'Kaya', '5551112233', '1234567890')}<DeliveryOption>Kapıda</DeliveryOption>`) },
+    { ad: 'İkinci', durum: 'basarili', govde: zarf(`${kisi('Ayşe', 'Demir', '5552223344', '9876543210')}<DeliveryOption>Kargo</DeliveryOption>`) },
+    { ad: 'Üçüncü', govde: zarf(`${kisi('Ayşe', 'Demir', '5552223344')}<DeliveryOption>Kargo</DeliveryOption>`) },
+    { ad: 'Hatalı', durum: 'hata', govde: zarf(`${kisi('Mehmet', 'Ak', '5553334455')}<DeliveryOption>Yok</DeliveryOption>`) }
+  ], mevcut: { baglar: { 'Girdi/DeliveryOption': { tablo: 'ilk', sutun: 'Teslim şekli' } } } });
+  // Sütun başına ayrı "değer ekle" önerisi yok; tablo başına tek kart.
+  expect(r.oneriler.filter((o) => o.tur === 'tabloyaDeger')).toEqual([]);
+  const satir = r.oneriler.filter((o) => o.tur === 'tabloyaSatir');
+  expect(satir.map((o) => o.yol).sort()).toEqual(['#ilk', '#kisi']);
+  // "Birinci" tabloda aynı değerlerle var → eklenmez; "Üçüncü" "İkinci" ile aynı → bir kez; "Hatalı" girmez. Vergi no gizli: yazılmaz.
+  const k = satir.find((o) => o.yol === '#kisi');
+  expect(k).toMatchObject({ baslik: 'Kişi bilgileri tablosuna 1 satır eklensin mi', guc: 'zayif',
+    deger: { tablo: 'kisi', satirlar: [{ ad: 'İkinci', degerler: { Ad: 'Ayşe', Soyad: 'Demir', Telefon: '5552223344' } }], gizliSutunlar: ['Vergi no'] } });
+  expect(k?.kanit).toContain('gizli sütunlar yazılmaz: Vergi no');
+  expect(JSON.stringify(r.oneriler)).not.toContain('9876543210');
+  // Liste (tek sütunlu) tablo: her farklı değer bir satır (satır adı = değer).
+  expect(satir.find((o) => o.yol === '#ilk')?.deger).toEqual({ tablo: 'ilk', satirlar: [{ ad: 'Kapıda', degerler: { 'Teslim şekli': 'Kapıda' } }, { ad: 'Kargo', degerler: { 'Teslim şekli': 'Kargo' } }] });
+  // Uygulanınca kayıt biçimi: gizli sütun listesi kayda girmez.
+  const d = bosDurum();
+  oneriyiUygula(d, k as AnalizOnerisi);
+  expect(d.tabloDegerleri).toEqual([{ tablo: 'kisi', satirlar: [{ ad: 'İkinci', degerler: { Ad: 'Ayşe', Soyad: 'Demir', Telefon: '5552223344' } }] }]);
+});
+
+test('XML bağlamı tablo adında tek başına ("Adres") yeter; alan satırındaki tablo gücü öneriyle aynı kaynaktan', () => {
+  // Adres grubundaki "No": tablo adı yalnız "Adres", tablo boş (boş sütun değerle çelişmez); kardeşler de adres bağlamı verir.
+  const tablolar = [{ id: 'adr', ad: 'Adres', sutunlar: [{ ad: 'İl' }, { ad: 'Kapı no' }, { ad: 'Posta kodu' }], satirlar: [] },
+    { id: 'kisi', ad: 'Kişi bilgileri', sutunlar: [{ ad: 'Vergi no' }], satirlar: [] }];
+  const adres = servisAnalizi({ metot: 'Islem', sema: null, tablolar, ornekler: [
+    { ad: 'A', govde: zarf('<Address><City>Ankara</City><No>12</No><PostCode>06000</PostCode></Address>') },
+    { ad: 'B', govde: zarf('<Address><City>İzmir</City><No>7</No><PostCode>35000</PostCode></Address>') }] });
+  const no = adres.alanlar.find((a) => a.yol === 'Girdi/Address/No');
+  expect(no?.tablo).toMatchObject({ tablo: 'Adres', sutun: 'Kapı no' });
+  expect(no?.tablo?.kanit).toContain('bağlam: adres');
+  expect(tabloEslesmesi('No', ['12'], tablolar, false, [], ['adres'])).toMatchObject({ sutun: 'Kapı no' });
+  // Kopuk bağ kartı aynı satır güveniyle güçlü ise alan satırı da güçlü gösterir.
+  const bayi = [{ id: 'b', ad: 'Bayi', sutunlar: [{ ad: 'Bayi kodu' }, { ad: 'Kullanıcı' }], satirlar: [{ degerler: { 'Bayi kodu': '11111', 'Kullanıcı': '11111001' } }] }];
+  const k = servisAnalizi({ metot: 'Islem', sema: null, tablolar: bayi, mevcut: { baglar: { 'Girdi/Channel': { tablo: 'silinmis', sutun: 'kanal' } } }, ornekler: [
+    { ad: 'A', govde: zarf('<Channel>11111</Channel><Username>11111001</Username>') }, { ad: 'B', govde: zarf('<Channel>11111</Channel><Username>11111001</Username>') }] });
+  const kart = bul(k.oneriler, 'kopukBag', 'Girdi/Channel');
+  expect(kart?.guc).toBe('guclu');
+  expect(k.alanlar.find((a) => a.yol === 'Girdi/Channel')?.tablo?.guc).toBe(kart?.guc);
 });
 
 test('ad eşleşmesi: genel ekler (no / number / kod / tarih / ad / tip) ve rol önekleri tek başına eşleşmez; ayırt edici kavram eşleşmeli', () => {

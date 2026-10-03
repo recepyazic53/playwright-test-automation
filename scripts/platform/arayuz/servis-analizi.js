@@ -197,6 +197,7 @@ export function analizBagla(tanim, a) {
   const tabloOnerileri = (r) => {
     const baglar = r.oneriler.filter((o) => o.tur === 'tabloBagi' || o.tur === 'kopukBag' || o.tur === 'tabloyaDeger');
     const yeniler = r.oneriler.filter((o) => o.tur === 'yeniTablo');
+    const satirOnerileri = r.oneriler.filter((o) => o.tur === 'tabloyaSatir');
     const yeniAlan = yeniler.reduce((n, o) => n + o.deger.alanlar.length, 0);
     return h('section', { class: 'tablo-onerileri', 'aria-label': `${tanim.ad} tablo önerileri` },
       h('h6', {}, 'Tablo önerileri'),
@@ -207,8 +208,27 @@ export function analizBagla(tanim, a) {
             h('span', { class: 'analiz-kaniti' }, o.kanit)),
           dugmeler(o, `${o.yol} — ${o.baslik}`, o.tur === 'kopukBag' ? (o.deger ? 'Önerilen sütuna bağla' : 'Bağı kaldır') : 'Uygula')))
           : h('p', { class: 'soluk kucuk tablo-onerileri-bos' }, `Mevcut tablolarla eşleşen alan bulunamadı${yeniAlan ? `; ${yeniAlan} alan için yeni tablo önerildi` : ''}.`)),
+      satirOnerileri.length ? h('div', { class: 'tablo-onerileri-a' }, h('div', { class: 'alan-etiketi' }, 'Tablolara eklenecek satırlar'), satirOnerileri.map(satirKarti)) : null,
       h('div', { class: 'tablo-onerileri-b' }, h('div', { class: 'alan-etiketi' }, 'Yeni tablolar'),
         yeniler.length ? yeniler.map(yeniTabloKarti) : h('p', { class: 'soluk kucuk' }, 'Yeni tablo önerisi yok.')));
+  };
+  /**
+   * "Tabloya N satır eklensin mi" kartı (tablo başına tek): örnek başına satır önizlemesi; gizli sütunlar maskeli ve yazılmaz.
+   * @param {any} o
+   */
+  const satirKarti = (o) => {
+    const v = o.deger;
+    const t = (tanim.tablolar || []).find((x) => x.id === v.tablo);
+    const gizliler = v.gizliSutunlar || [];
+    const sutunlar = (t ? t.sutunlar.map((/** @type {any} */ c) => c.ad) : [...new Set(v.satirlar.flatMap((/** @type {any} */ r) => Object.keys(r.degerler)))])
+      .filter((/** @type {string} */ c) => gizliler.includes(c) || v.satirlar.some((/** @type {any} */ r) => c in r.degerler));
+    return h('div', { class: 'analiz-onerisi zayif satir-onerisi', 'data-tur': o.tur, 'data-guc': o.guc },
+      h('span', { class: 'analiz-oneri-metni' }, gucRozeti(o), h('b', {}, o.baslik), h('span', { class: 'analiz-kaniti' }, o.kanit)),
+      h('div', { class: 'tablo-kaydirma satir-onizleme' }, h('table', { class: 'veri-tablosu kucuk', 'aria-label': `${tabloAdi(v.tablo)} satır önizlemesi` },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Satır'), sutunlar.map((/** @type {string} */ c) => h('th', {}, c)))),
+        h('tbody', {}, v.satirlar.map((/** @type {any} */ r) => h('tr', {}, h('td', {}, r.ad),
+          sutunlar.map((/** @type {string} */ c) => h('td', { class: gizliler.includes(c) ? 'soluk' : '' }, gizliler.includes(c) ? '••• (yazılmaz)' : r.degerler[c] ?? ''))))))),
+      dugmeler(o, o.baslik, 'Satırları ekle'));
   };
   const tabloAdi = (/** @type {string} */ id) => (tanim.tablolar || []).find((t) => t.id === id)?.ad ?? id;
 
@@ -220,7 +240,7 @@ export function analizBagla(tanim, a) {
         : 'Bu metodun alan listesi yok: örnek ekleyin, alanlar örneklerden çıkarılır ve alan formu açılır.');
     }
     const satirYollari = new Set(alanSatirlari(semaBirlestir(tanim.sema, tanim.ekler || []).alanlar).filter((x) => !x.grup).map((x) => x.yol));
-    const tabloTurleri = new Set(['tabloBagi', 'kopukBag', 'yeniTablo', 'tabloyaDeger']);
+    const tabloTurleri = new Set(['tabloBagi', 'kopukBag', 'yeniTablo', 'tabloyaDeger', 'tabloyaSatir']);
     const genel = r.oneriler.filter((o) => !satirYollari.has(o.yol) && !tabloTurleri.has(o.tur));
     const guclu = gucluOneriler(r.oneriler);
     const zayif = r.oneriler.filter((o) => o.guc === 'zayif').length;
@@ -353,7 +373,10 @@ export async function servisAnaliziSayfasi(kap, proje, s, yenile) {
       await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: a.yol, ...govde } });
       kayitDurumu.textContent = '✓ Kaydedildi';
       if (degerler.length) for (const m of metotlar) m.durum.tabloDegerleri = [];
-      if (bekleyen.length || degerler.length) { bildir(`${bekleyen.filter((t) => t.islem !== 'atla').length} tablo test verisine yazıldı.`); yenile(); }
+      if (bekleyen.length || degerler.length) {
+        bildir([bekleyen.length ? `${bekleyen.filter((t) => t.islem !== 'atla').length} tablo test verisine yazıldı.` : '', degerler.length ? 'Önerilen satırlar tablolara eklendi.' : ''].filter(Boolean).join(' '));
+        yenile();
+      }
     } catch (e) {
       kayitDurumu.textContent = `Kaydedilemedi: ${e.message}`;
       kayitDurumu.className = 'kayit-durumu alan-uyarisi';
