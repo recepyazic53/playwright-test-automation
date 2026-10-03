@@ -143,6 +143,12 @@ test.describe('cURL yapıştır arayüzü', () => {
     expect(hatalar).toEqual([]);
     await ileri.click();
     await expect(page.locator('.sihirbaz-adimlari li.simdiki')).toContainText('Alanlar');
+    // Servis analizi: cURL'deki gövde örneği ucun örnek isteklerinde hazır (JSON; gizli değer önizlemede yok).
+    const ornekler = page.getByRole('region', { name: 'giris örnek istekleri' });
+    await expect(ornekler).toContainText('Örnek istekler (gövde JSON)');
+    await expect(ornekler.locator('.ornek-listesi li')).toHaveCount(1);
+    await expect(ornekler.locator('.ornek-listesi')).toContainText('cURL');
+    await expect(ornekler.locator('.ornek-listesi')).not.toContainText('gizli-deger');
     await ileri.click();
     await expect(page.locator('.ozet-listesi')).toContainText('2 değer şifreli kaydedilecek; 3 değer kaydedilmeyecek');
     await expect(page.locator('.ozet-listesi')).toContainText('"Ornek API" (bağlı)');
@@ -171,6 +177,7 @@ test.describe('cURL yapıştır arayüzü', () => {
     expect(alanlar.satirlar[0].doluGizli).toEqual(['token']);
     expect(s.ayarlar.alanBaglari.giris).toMatchObject({ 'sorgu/token': { tablo: alanlar.id, sutun: 'token' }, 'govde/parola': { tablo: alanlar.id, sutun: 'parola' } });
     expect(JSON.stringify(s)).not.toContain('gizli-deger');
+    expect(s.ayarlar.ornekIstekler.giris.map((x: Nesne) => [x.ad, x.kaynak])).toEqual([['giris', 'curl']]);
 
     // Ağ: tüm istekler yerel Nöbetçi'ye; onaysız değerler ve yapıştırılan metin hiçbir isteğe girmedi.
     expect(istekler.filter((q) => !q.url.startsWith(nobetci.adres)).map((q) => q.url)).toEqual([]);

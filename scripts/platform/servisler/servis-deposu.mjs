@@ -107,8 +107,12 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   alanListeleri?: Record<string, Record<string, string>>;
  *   alanBaglari?: Record<string, Record<string, { tablo?: string; sutun?: string; etiket?: string; bicim?: string; kural?: string }>>;
  *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string; tabanGrubu?: string;
- *   sozlesmeler?: Record<string, import('./servis-sozlesmesi.mjs').Sozlesme>; sozlesmeGecmisi?: Record<string, import('./servis-sozlesmesi.mjs').SozlesmeGecmisi[]> }} ServisAyarlari
+ *   sozlesmeler?: Record<string, import('./servis-sozlesmesi.mjs').Sozlesme>; sozlesmeGecmisi?: Record<string, import('./servis-sozlesmesi.mjs').SozlesmeGecmisi[]>;
+ *   ornekIstekler?: Record<string, Array<{ id: string; ad: string; govde: string; kaynak: string }>>;
+ *   alanKurallari?: Record<string, Record<string, Record<string, unknown>>>; analizKararlari?: Record<string, Record<string, 'uygulandi' | 'yoksayildi'>>;
+ *   ornekFarklari?: Record<string, Array<{ yol: string; dolu: string[]; bos: string[] }>> }} ServisAyarlari
  *   tabanGrubu: adlandırılmış taban adres (taban-adresleri.mjs). sozlesmeler: operasyon / uç başına yanıt sözleşmesi (servis-sozlesmesi.mjs).
+ *   ornekIstekler / alanKurallari / analizKararlari / ornekFarklari: servis analizi (servis-analizi.mjs, servis-ornekleri.mjs).
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
  */

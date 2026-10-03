@@ -25,6 +25,7 @@ import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, secilenSatir } from '../tablolar/tablo-secimi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { ornekleriEkle } from './servis-ornekleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -364,6 +365,16 @@ function soapuiAktarimi(vt, projeId, girdi, yazici) {
       });
       mevcutBasliklar.add(x.baslik);
       eklenen++;
+    }
+    // Servis analizi: dosyadaki istekler metodun örnek isteklerine eklenir (adı = test adımı; özelliğin bilinen değeri yerine
+    // yazılır, gizli adlı özellik ve değeri bilinmeyen yer tutucu olarak kalır; aynı gövde ikinci kez eklenmez).
+    let ornekler = s.ayarlar.ornekIstekler;
+    for (const x of eklenecek.senaryolar) {
+      const govde = x.govde.replace(PARAMETRE, (m, ad) => (!gizliAdMi(ad, ekGizliAdlar(vt)) && plan.degerler.get(ad) ? /** @type {string} */ (plan.degerler.get(ad)) : m));
+      ornekler = ornekleriEkle(ornekler, x.operasyon, [{ ad: x.baslik, govde, kaynak: 'soapui' }]);
+    }
+    if (JSON.stringify(ornekler ?? null) !== JSON.stringify(s.ayarlar.ornekIstekler ?? null)) {
+      servisKaydet(vt, { id: servisId, projeId, anahtar: s.anahtar, ad: s.ad, ayarlar: { ...s.ayarlar, ornekIstekler: ornekler }, yapan: girdi.yapan });
     }
     // Gövdede kalan, hiçbir kaynağa bağlanmamış parametreler (kural değil, tablo başvurusu değil, eski eşlemesi de yok).
     const eslemeler = parametreEslemeleri(vt, projeId);

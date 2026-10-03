@@ -6,6 +6,7 @@
 //   #/servisler/sonuclar[/...]            → eski adres: Sonuçlar > Servisler'e yönlenir (servis-sonuclari.js > eskiServisSonucAdresi)
 //   #/servisler/s/<id>/senaryo/<sid|yeni> → senaryo düzenleyici (gövde + başlıklar + kontroller + Dene)
 //   #/servisler/s/<id>/akislar[/<akisId|yeni>] → servis akışları ve oturum akışı (servis-akislari.js)
+//   #/servisler/s/<id>/analiz             → "Servisi analiz et": örnek isteklerden alan önerileri (servis-analizi.js)
 // Kurallar (sunucu da denetler): erişim kontrolü, şema alma ve Dene seçilen ortamda (varsayılan: TEST); CANLI ortamda istek
 // yalnız tek tip "CANLI ortam" onayından sonra gider. Yeni servis ancak başarılı erişim kontrolünden sonra kaydedilir; her ağ
 // isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
@@ -186,6 +187,7 @@ export function servislerEkrani(main, parcalar, baglam) {
   if (!servisId) { yerlestir(icerik, bosDurum('Servis seçin.', 'Soldaki listeden bir servis seçin ya da yeni servis ekleyin.', { ikon: 'ag', eylem: h('a', { class: 'dugme birincil', href: '#/servisler/yeni' }, ikon('arti'), 'Servis ekle') })); return; }
   // Senaryo önerileri ayrı sayfa (#/servisler/s/<id>/oneriler; ekran önerileri sayfasının karşılığı).
   if (sekme === 'oneriler') { oneriSayfasiAc(icerik, proje, servisId).catch(hata); return; }
+  if (sekme === 'analiz') { analizSayfasiAc(icerik, proje, servisId).catch(hata); return; }
   servisSayfasi(icerik, proje, servisId, SEKMELER.some(([a]) => a === sekme) ? sekme : sekme === 'senaryo' ? 'senaryo' : 'senaryolar', altKimlik ? decodeURIComponent(altKimlik) : null).catch(hata);
 }
 
@@ -506,6 +508,13 @@ async function oneriSayfasiAc(icerik, proje, servisId) {
   });
 }
 
+/** "Servisi analiz et" sayfası (servis-analizi.js): örnek isteklerden alan önerileri; servise istek atılmaz. */
+async function analizSayfasiAc(icerik, proje, servisId) {
+  const { servis } = await api(`/platform/servis?projeId=${q(proje.id)}&id=${q(servisId)}`);
+  const { servisAnaliziSayfasi } = await import('./servis-analizi.js');
+  await servisAnaliziSayfasi(icerik, proje, servis, () => window.dispatchEvent(new HashChangeEvent('hashchange')));
+}
+
 async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   const [d, ortamlar] = await Promise.all([api(`/platform/servis?projeId=${q(proje.id)}&id=${q(servisId)}`), ortamlariAl(proje)]);
   const s = d.servis;
@@ -526,7 +535,9 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
           h('span', {}, ikon('liste'), `${s.senaryoSayisi} senaryo`),
           s.ayarlar.erisim ? h('span', { title: tarihMetni(s.ayarlar.erisim.zaman) }, ikon('onay'), 'erişim kontrol edildi') : null,
           son ? h('span', { title: `${sonOrtamAdi ? `${sonOrtamAdi} · ` : ''}${tarihMetni(son.baslangic)}` }, ikon('saat'), `son: ${DURUM[son.durum]?.[0] ?? son.durum}${sonOrtamAdi ? ` (${sonOrtamAdi})` : ''}`) : null)),
-      h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'servis', id: s.id }), oneriDugmesi(s), h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
+      h('div', { class: 'eylemler' }, pdfRaporDugmesi(proje, { kapsam: 'servis', id: s.id }),
+        (s.ayarlar.operasyonlar || []).length ? h('a', { class: 'dugme servis-analizi-dugmesi', href: `${adres}/analiz`, title: 'Örnek isteklerden alan önerileri (zorunluluk, tip, gizli, tablo eşleşmesi); servise istek atılmaz' }, ikon('ara'), 'Servisi analiz et') : null,
+        oneriDugmesi(s), h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
     // Riskli olup olmadığı belirtilmemiş ortam (riskli sayılır): uyarı + Ayarlar bağlantısı.
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Servis bölümleri' },
@@ -1873,7 +1884,8 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
   // --- Metot alanları: WSDL alanları + elle eklenenler; varsayılan değer (★) ve zorunluluk -----------------------------
   const semalar = s.ayarlar.operasyonSemalari || {};
   /** Metot başına düzenlenebilir durum. */
-  const metotlar = Object.values(semalar).filter((sm) => sm.alanlar.length).map((sm) => {
+  // Alan listesi olmayan metot da (örneklerden alan eklendiyse: servis analizi) listelenir.
+  const metotlar = Object.values(semalar).filter((sm) => sm.alanlar.length || ((s.ayarlar.ekAlanlar || {})[sm.ad] || []).length).map((sm) => {
     const ekler = JSON.parse(JSON.stringify((s.ayarlar.ekAlanlar || {})[sm.ad] || []));
     const baglar = JSON.parse(JSON.stringify((s.ayarlar.alanBaglari || {})[sm.ad] || {}));
     const liste = (s.ayarlar.alanZorunluluklari || {})[sm.ad];

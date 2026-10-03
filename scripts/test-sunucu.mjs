@@ -366,6 +366,15 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/rest-sihirbazi.js', { dosya: 'rest-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/curl-aktarimi.js', { dosya: 'curl-aktarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
+  // Servis analizi (A aşaması): örnek isteklerden alan önerileri — arayüz, kendi stil dosyası ve sunucuyla ORTAK saf çıkarım modülü.
+  // Saf modül kendi klasörünün dışından içe aktarır (../tablolar, ../ayarlar): tarayıcı o adresleri ister, aynı dosyalar oradan da sunulur.
+  ['/arayuz/servis-analizi.js', { dosya: 'servis-analizi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-servis-analizi.css', { dosya: 'stil-servis-analizi.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/servis-analizi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-analizi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/tablolar/doldur-onerisi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'doldur-onerisi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/tablolar/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/tablolar/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/ayarlar/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-onerileri.js', { dosya: 'servis-onerileri.js', tur: 'text/javascript; charset=utf-8' }],
