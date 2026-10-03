@@ -79,11 +79,20 @@ export function canliGoruntu(s) {
     gosterge.lastChild.textContent = metin;
   };
   const notYaz = (/** @type {string} */ m) => { not.hidden = !m; not.textContent = m; };
+  // Çift tampon: yeni kare önce görünmez bir Image'da çözülür, hazır olunca gösterilene konur. Doğrudan img.src değiştirmek çözme
+  // sırasında kutunun koyu zeminini bir an gösterir (siyah yanıp sönme). Yalnız en son kare konur; geride kalan atlanır.
+  let kareSirasi = 0;
   const goruntuKoy = (/** @type {string} */ src, /** @type {number} */ zamanMs) => {
-    img.src = src;
-    if (img.hidden) { img.hidden = false; bos.remove(); }
-    zaman.textContent = `Son kare ${saat(zamanMs)}`;
-    zaman.title = new Date(zamanMs).toLocaleString('tr-TR');
+    const sira = ++kareSirasi;
+    const yeni = new Image();
+    yeni.src = src;
+    yeni.decode().catch(() => undefined).then(() => {
+      if (sira !== kareSirasi) return;
+      img.src = src;
+      if (img.hidden) { img.hidden = false; bos.remove(); }
+      zaman.textContent = `Son kare ${saat(zamanMs)}`;
+      zaman.title = new Date(zamanMs).toLocaleString('tr-TR');
+    });
   };
   if (s.ilkGoruntu) goruntuKoy(s.ilkGoruntu, Date.now());
 
