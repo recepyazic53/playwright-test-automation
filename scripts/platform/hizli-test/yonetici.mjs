@@ -1405,7 +1405,11 @@ export function hizliTestYoneticisiOlustur(s) {
     // "Veriyi düzenle" geçmiş adımda: o adımın alanları (girilen değerler önyazılı); gecmis: yerinde seçim uygulama düğmeleri gösterilmez.
     const gecmisNo = o.durum === 'veri' && Number.isInteger(o.duzeltAdimi) && o.adimlar[o.duzeltAdimi] ? Number(o.duzeltAdimi) : null;
     if (o.durum === 'veri' && gecmisNo !== null) soru = { tur: 'veri', adim: gecmisNo + 1, alanlar: o.adimlar[gecmisNo].alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null, gecmis: true };
-    else if (o.durum === 'veri' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null };
+    else if (o.durum === 'veri' && adim) {
+      soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: o.soruNotu ?? null, getiriliyor: null,
+        // "Doldurmadan burada bitir": en az bir basıştan sonra açılan (henüz basışı olmayan) adımın veri durağında.
+        doldurmadanBitir: o.basisNo > 0 && !adim.bas };
+    }
     // Yerinde zincir isteği sürerken aynı veri durağı gösterilir (kart yerinde kalır; düğme "getiriliyor" durumunda).
     else if (o.durum === 'zincir' && adim) soru = { tur: 'veri', adim: o.adimlar.length, alanlar: adim.alanlar.map(alanGorunumu), not: null, getiriliyor: o.zincirIstegi ?? null };
     else if (o.durum === 'karar') {
@@ -1794,18 +1798,45 @@ export function hizliTestYoneticisiOlustur(s) {
       gonder(o, { tur: 'oku' });
       return { tamam: true };
     }
+    // "Doldurmadan burada bitir" (veri durağı, en az bir basıştan sonra): bu duraktaki alanlara hiçbir şey yazılmaz, hiçbir düğmeye
+    // basılmaz; durağın (sayfaya henüz uygulanmamış) soruları zincirden çıkarılır (senaryoya / tablolara girmez) ve "Burada bitir" ile
+    // aynı yoldan bitiş koşulu adımına geçilir (son basıştan sonra açılan pencere / öğeler bitiş adayıdır).
+    if (k === 'doldurmadanBitir') {
+      durumda(o, ['veri']);
+      const adim = guncelAdim(o);
+      if (o.basisNo === 0 || Number.isInteger(o.duzeltAdimi) || !adim || adim.bas) throw new HizliTestHatasi('KARAR', 'Doldurmadan bitirmek için önce bir düğmeye basılmış olmalı.');
+      const atilacak = new Set(adim.alanlar.filter((/** @type {Nesne} */ a) => o.uygulanan?.[a.anahtar] === undefined).map((/** @type {Nesne} */ a) => String(a.anahtar)));
+      adim.alanlar = adim.alanlar.filter((/** @type {Nesne} */ a) => !atilacak.has(String(a.anahtar)));
+      for (const x of atilacak) { o.alanlar.delete(x); delete o.degerler[x]; o.bagliUst.delete(x); }
+      for (const [alt, ust] of [...o.bagliUst]) if (atilacak.has(ust)) o.bagliUst.delete(alt);
+      o.gozlemler = o.gozlemler.filter((/** @type {Nesne} */ x) => !atilacak.has(String(x.anahtar)));
+      o.sorulacakBagli = [];
+      o.soruNotu = null;
+      gunluk(o, `Doldurmadan bitirildi: bu duraktaki ${atilacak.size} alan doldurulmadı ve teste alınmadı.`);
+      return bitiseGec(o);
+    }
     durumda(o, ['karar']);
     if (k === 'bitir') {
       if (o.basisNo === 0) throw new HizliTestHatasi('KARAR', 'Önce bir düğmeye basın: test en az bir basış içermeli.');
-      o.etiketler = varsayilanEtiketler(o.gorulenler, o.basisNo);
-      for (const m of o.cumle.mesajlar) for (const g2 of o.gorulenler) if (katla(g2.metin).includes(katla(m))) o.etiketler[g2.metin] = 'bitti';
-      for (const [m, c] of Object.entries(o.hataCevaplari ?? {})) if (c === 'hata' && m in o.etiketler) o.etiketler[m] = 'hata';
-      // Geri dönülüp zincire devam edildiyse daha önce verilen etiketler korunur (görülen metinlerde).
-      for (const [m, e] of Object.entries(o.saklananEtiketler ?? {})) if (m in o.etiketler) o.etiketler[m] = e;
-      o.adresBitti = null;
-      o.durum = 'bitis';
-      return { tamam: true };
+      return bitiseGec(o);
     }
+    return kararDevam(o, k, g);
+  }
+
+  /** "Burada bitir": görülen metinlerin varsayılan etiketleriyle bitiş koşulu adımına geçer. @param {Nesne} o */
+  function bitiseGec(o) {
+    o.etiketler = varsayilanEtiketler(o.gorulenler, o.basisNo);
+    for (const m of o.cumle.mesajlar) for (const g2 of o.gorulenler) if (katla(g2.metin).includes(katla(m))) o.etiketler[g2.metin] = 'bitti';
+    for (const [m, c] of Object.entries(o.hataCevaplari ?? {})) if (c === 'hata' && m in o.etiketler) o.etiketler[m] = 'hata';
+    // Geri dönülüp zincire devam edildiyse daha önce verilen etiketler korunur (görülen metinlerde).
+    for (const [m, e] of Object.entries(o.saklananEtiketler ?? {})) if (m in o.etiketler) o.etiketler[m] = e;
+    o.adresBitti = null;
+    o.durum = 'bitis';
+    return { tamam: true };
+  }
+
+  /** "Şimdi ne yapayım?" kararının bitir dışındaki seçimleri. @param {Nesne} o @param {string} k @param {Nesne} g */
+  function kararDevam(o, k, g) {
     if (k === 'duzelt') {
       // Önce sayfa yeniden okunur: sonradan beliren alanlar da veri durağında görünür.
       o.okumaAmaci = 'duzelt';
