@@ -156,7 +156,8 @@ test.describe('eşzamanlı ekran koşusu', () => {
     // Sunucu yuvası, ilk süreç bitince 6 sn dolu kalır; ikinci süreç ancak sonra başlar.
     const beklemeli = await ara(senaryolar[2], senaryolar[3]);
     expect(beklemeli).toBeGreaterThanOrEqual(6_000);
-    expect(beklemeli - beklemesiz).toBeGreaterThanOrEqual(4_500);
+    // Fark, beklemesiz koşunun açılış süresine bağlıdır (yavaş makinede ~2 sn); beklemenin etkisi için 3 sn yeter.
+    expect(beklemeli - beklemesiz).toBeGreaterThanOrEqual(3_000);
     await basarili('/platform/kosu-ayarlari/kaydet', { ayarlar: { ekranBeklemeMs: 0 } });
   });
 
