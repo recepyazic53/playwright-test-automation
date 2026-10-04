@@ -81,7 +81,8 @@ export function ornekCoz(govde: string, s?: { tur?: 'soap' | 'rest'; kok?: strin
 export function tipCikar(degerler: string[]): { tip: AlanTipi; bicim?: string } | null;
 export function adEslesmesi(alan: string, hedef: string): 'birebir' | 'esAnlam' | 'benzer' | null;
 export function hucreEsit(c: AnalizTablosu['sutunlar'][number] | undefined, hucre: unknown, v: string): boolean;
-export function satirYonlendir(eslemler: ReadonlyMap<string, ReadonlyMap<string, { sutun: string; gizli: boolean }>>, tablolar: ReadonlyArray<AnalizTablosu>, doluMu: (yol: string) => boolean):
+export function kokYolu(yollar: ReadonlyArray<string>): string;
+export function satirYonlendir(eslemler: ReadonlyMap<string, ReadonlyMap<string, { sutun: string; gizli: boolean }>>, tablolar: ReadonlyArray<AnalizTablosu>, doluMu: (yol: string) => boolean, kok?: string):
   { eslemler: Map<string, Map<string, { sutun: string; gizli: boolean }>>; gerekceler: Map<string, string> };
 export function degerOrtusmesi(degerler: string[], t: AnalizTablosu, c: AnalizTablosu['sutunlar'][number]):
   { dogrudan: string[]; karsilik: Array<[string, string]>; eksik: string[]; bulunan: number; toplam: number };

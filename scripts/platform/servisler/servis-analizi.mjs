@@ -494,16 +494,29 @@ export function adEslesmesi(alan, hedef) {
 }
 
 /**
+ * İsteğin kök seviyesinin üst yolu: tüm yollar ortak bir ilk elemanın altındaysa (SOAP'ta operasyon girdisi: "Input") o eleman,
+ * değilse (REST gövdesinin kök alanları) boş. @param {ReadonlyArray<string>} yollar
+ */
+export function kokYolu(yollar) {
+  const ilk = new Set(yollar.map((y) => String(y).split('/')[0]));
+  return ilk.size === 1 && yollar.length && yollar.every((y) => String(y).includes('/')) ? /** @type {string} */ ([...ilk][0]) : '';
+}
+
+/**
  * Satır yönlendirme (grup bütünlüğü; ÖRNEK / koşu başına): bir tablonun AYIRT EDİCİ sütununa (öteki aday tabloda karşılığı olmayan
- * sütun: "Pasaportlu kişi › Pasaport no") giden alan bu örnekte DOLUYSA, aynı XML grubundaki (aynı üst eleman) dolu alanlar o tabloda
- * karşılık sütunu bulduğunda bu örneğin satırında o tabloya yazılır (gizli ayırt edici sütun yönlendirmez). Karşılığı olmayan alan varsayılan tablosunda kalır (en az
+ * sütun: "Pasaportlu kişi › Pasaport no"; gizli sütun da sayılır, değeri yine yazılmaz) giden alan bu örnekte DOLUYSA, aynı ALT
+ * bölümdeki (aynı üst eleman: "Input/Customer/*") dolu alanlar o tabloda karşılık sütunu bulduğunda bu örneğin satırında o tabloya
+ * yazılır. İsteğin kök seviyesi (operasyon girdisinin doğrudan çocukları: "Input/*"; REST'te gövdenin kök alanları) grup DEĞİLDİR:
+ * orada her alan kendi varsayılan tablosunda kalır (ör. her istekte dolu kök parola diğer kök alanları sürüklemez). Karşılığı olmayan alan varsayılan tablosunda kalır (en az
  * bölünme). Yalnız varsayılan tablosu başka olan alanlar taşınır (geri taşıma yok). Servis düzeyindeki alan bağı DEĞİŞMEZ.
  * Karşılık: alan adı ya da varsayılan sütun adı hedef sütunla ad eşleşmesi (adPuani ≥ AD_ESIGI); hedefte zaten dolu sütun kullanılmaz.
  * @param {ReadonlyMap<string, ReadonlyMap<string, { sutun: string; gizli: boolean }>>} eslemler tablo → alan yolu → varsayılan sütun
  * @param {ReadonlyArray<AnalizTablosu>} tablolar @param {(yol: string) => boolean} doluMu bu örnekte dolu mu
+ * @param {string} [kok] kök seviyenin üst yolu (kokYolu; verilmezse eşlemlerin yollarından)
  * @returns {{ eslemler: Map<string, Map<string, { sutun: string; gizli: boolean }>>; gerekceler: Map<string, string> }}
  */
-export function satirYonlendir(eslemler, tablolar, doluMu) {
+export function satirYonlendir(eslemler, tablolar, doluMu, kok) {
+  const kokUst = kok ?? kokYolu([...eslemler.values()].flatMap((m) => [...m.keys()]));
   const ust = (/** @type {string} */ y) => y.split('/').slice(0, -1).join('/');
   const tablo = (/** @type {string} */ id) => tablolar.find((t) => t.id === id);
   /** @type {Map<string, { tid: string; sutun: string; gizli: boolean }>} */
@@ -529,9 +542,10 @@ export function satirYonlendir(eslemler, tablolar, doluMu) {
     const P = tablo(pid);
     if (!P) continue;
     for (const [d, e] of m) {
-      // Gizli sütun yönlendirmez: değeri yazılmadığından satırı tanımlayamaz (ör. her istekte dolu parola).
-      if (e.gizli || !doluMu(d)) continue;
+      if (!doluMu(d)) continue;
       const grup = ust(d);
+      // Kök seviye grup değildir: alanlar kendi varsayılan tablosunda kalır.
+      if (grup === kokUst) continue;
       for (const [s, v] of varsayilan) {
         if (v.tid === pid || tasinan.has(s) || ust(s) !== grup || !doluMu(s)) continue;
         const K = tablo(v.tid);
@@ -887,7 +901,8 @@ export function servisAnalizi(g) {
   // örnekler ve ek kanıtlar (adsız) girmez. Gizli alan / sütun değeri yazılmaz (önizlemede maskeli). Tabloda (ya da öneride)
   // bağlı sütunların değerlerinin HEPSİ aynı olan satır varsa eklenmez. Tek sütunlu (liste) tabloda her farklı değer bir satır.
   // Örnek başına satır yönlendirmesi (grup bütünlüğü): ayırt edici sütunu dolu olan tabloya grubun alanları da gider.
-  const yonler = new Map(cozulen.map((x) => [x, satirYonlendir(satirEslemleri, tablolar, (y) => x.c.alanlar.get(y)?.durum === 'dolu')]));
+  const kok = kokYolu(yollar);
+  const yonler = new Map(cozulen.map((x) => [x, satirYonlendir(satirEslemleri, tablolar, (y) => x.c.alanlar.get(y)?.durum === 'dolu', kok)]));
   for (const [tabloId, varsayilanEslem] of satirEslemleri) {
     const t = tablolar.find((x) => x.id === tabloId);
     if (!t) continue;
