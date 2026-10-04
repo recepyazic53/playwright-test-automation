@@ -919,7 +919,12 @@ function anaDuzen() {
   rehberBaglaminiAyarla({ projeKimligi: () => (durum.proje ? durum.proje.id : null) });
   sayfaRehberiBaglantisiKur(main);
 
+  // Gezinme nesli: tembel yüklenen sayfa modülü (senaryolar / servisler / uçtan uca / ekranlar) geç gelirse ve o arada başka sayfaya
+  // geçildiyse ana alana YAZMAZ; yoksa önceki sayfa yeni sayfanın üstüne çizilir (yük altında görülüyordu).
+  let cizimNesli = 0;
   const ciz = () => {
+    const nesil = ++cizimNesli;
+    const guncel = () => nesil === cizimNesli;
     const hash = location.hash || (basit ? '#/testlerim' : '#/sonuclar');
     const [, bolum, alt, ...kalan] = hash.split('/');
     // Ayarlar'dan taşınan sayfaların eski adresleri (yer imleri, eski bağlantılar): geçmişe eklemeden yeni adrese.
@@ -947,28 +952,28 @@ function anaDuzen() {
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Senaryolar');
-      senaryolarModulu().then((m) => m.senaryolarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
-        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Senaryolar ekranı yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+      senaryolarModulu().then((m) => { if (guncel()) m.senaryolarEkrani(main, alt ? [alt, ...kalan] : [], { durum }); })
+        .catch((hata) => guncel() && main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Senaryolar ekranı yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'servisler') {
       // Servisler, Senaryolar bölümünün "ÜRÜNLER > 2 · Servisler" kısmıdır (aynı sol panel).
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Servisler');
-      servislerModulu().then((m) => m.servislerEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
-        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Servisler yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+      servislerModulu().then((m) => { if (guncel()) m.servislerEkrani(main, alt ? [alt, ...kalan] : [], { durum }); })
+        .catch((hata) => guncel() && main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Servisler yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'akislar') {
       // Uçtan uca akışlar (servis + ekran + SQL; uctan-uca.js): Senaryolar bölümünün sol panelinde.
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Uçtan uca akışlar');
-      import('./uctan-uca.js').then((m) => m.uctanUcaEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
-        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Uçtan uca akışlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+      import('./uctan-uca.js').then((m) => { if (guncel()) m.uctanUcaEkrani(main, alt ? [alt, ...kalan] : [], { durum }); })
+        .catch((hata) => guncel() && main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Uçtan uca akışlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'ekranlar') {
       navEkranlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Ekranlar');
-      ekranlarModulu().then((m) => m.ekranlarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
-        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Ekranlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+      ekranlarModulu().then((m) => { if (guncel()) m.ekranlarEkrani(main, alt ? [alt, ...kalan] : [], { durum }); })
+        .catch((hata) => guncel() && main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Ekranlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'veri' || bolum === 'planli-kosular') {
       (bolum === 'veri' ? navVeri : navPlanli).setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
