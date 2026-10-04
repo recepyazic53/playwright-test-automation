@@ -806,6 +806,11 @@ async function tasmaYok(page: Page, ad: string): Promise<void> {
 test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI onayı, Doldur, Şimdi ne yapayım, bitiş etiketleri, doğrulama sorusu, kaydet); 1440 / 390 px taşma yok', async () => {
   test.setTimeout(300_000);
   await isBitsin();
+  // Test kendi içinde bağımsız: "Ad soyad" sütunlu ikinci bir tablo, "Doldur"un tek eşleşmede doğrudan yazmak yerine seçim listesi
+  // açmasını sağlar (önceki testlerin tablolarına bağlı kalınmaz).
+  await basarili('/platform/tablo/kaydet', {
+    projeId, ad: 'Kişi yedek', tur: 'kayit', sutunlar: [{ ad: 'Ad soyad' }], satirlar: [{ ad: 'Yedek', degerler: { 'Ad soyad': 'Yedek Kişi' } }]
+  });
   const tarayici = await korumaliTarayici();
   try {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 900 } });
@@ -870,7 +875,7 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(etiketSirasi).toHaveText([/Ad soyad/, /Müşteri tipi/, /Kanal/]);
     const adAlani = soru.locator('.hizli-alan').filter({ hasText: 'Ad soyad' });
     await adAlani.getByRole('button', { name: 'Doldur', exact: true }).click();
-    // Önceki testlerin kaydettiği otomatik tablolar da adı uyan sütunla listelenir: "Kişi" tablosunun satırı seçilir.
+    // Adı uyan sütunlu tablolar ("Kişi", "Kişi yedek" ve varsa önceki testlerin tabloları) listelenir: "Kişi" tablosunun satırı seçilir.
     await adAlani.getByRole('button', { name: 'Deneme — Deneme Kişi' }).click();
     await expect(adAlani.locator('.hizli-tablo-degeri')).toHaveText('${Kişi.Ad soyad}');
     // Seçim keşfi: koşullu "Vergi no" yalnız Müşteri tipi = Kurumsal seçilince açılır (anında, Nöbetçi'de); Bireysel'de kapanır.
@@ -932,6 +937,13 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await tasmaYok(page, 'Kaydet');
     // Özet YENİ SEKMEDE kendi adresiyle açılır (sayfanın altına dizilmez); kaydet sekmesi yerinde kalır.
     const oturumId = decodeURIComponent(page.url().split('#/hizli-test/o/')[1]);
+    // Test kendi içinde bağımsız: özetin yazacağı tabloların aynı adlısı projede yoksa (test tek başına koşunca) burada açılır; böylece
+    // "Birleştir" seçenekleri önceki testlerin tablolarına bağlı kalmadan her koşuda gelir. Özet isteği hiçbir şey yazmaz.
+    const planTablolari = (((await basarili('/platform/hizli-test/ozet', { id: oturumId })).ozet as Nesne).onizleme as Nesne).tablolar as Nesne[];
+    expect(planTablolari.length).toBeGreaterThan(0);
+    for (const t of planTablolari.filter((x) => !x.mevcut)) {
+      await basarili('/platform/tablo/kaydet', { projeId, ad: t.ad, tur: t.tur, sutunlar: (t.sutunlar as Nesne[]).map((s) => ({ ad: s.ad })), satirlar: [] });
+    }
     const [ozetSekmesi] = await Promise.all([baglam.waitForEvent('page'), soru.getByRole('button', { name: 'Hayır, kaydet' }).click()]);
     ozetSekmesi.on('pageerror', (e) => hatalar.push(String(e)));
     await expect(ozetSekmesi).toHaveURL(new RegExp(`#/hizli-test/ozet/${oturumId}$`));
@@ -973,9 +985,10 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await expect(page.getByRole('link', { name: 'Testlerim' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Senaryolara git' }).click();
     await expect(page).toHaveURL(/#\/senaryolar$/);
-    // Testlerim: Hayır izniyle (basılmadan) kaydedilen, henüz çalışmamış test "Doğrulanmadı" rozetiyle.
+    // Testlerim: doğrulama koşusu yapılmadan ("Hayır, kaydet") kaydedilen, henüz çalışmamış bu test "Doğrulanmadı" rozetiyle.
     await page.goto('/#/testlerim');
-    await expect(page.locator('.test-satiri').filter({ hasText: 'Başvuru formu basılmadan' }).locator('.rozet').filter({ hasText: 'Doğrulanmadı' })).toBeVisible();
+    await expect(page).toHaveURL(/#\/testlerim$/);
+    await expect(page.locator('.test-satiri').filter({ hasText: 'Arayüz başvurusu' }).locator('.rozet').filter({ hasText: 'Doğrulanmadı' })).toBeVisible({ timeout: 15_000 });
     expect(hatalar).toEqual([]);
     await baglam.close();
   } finally {

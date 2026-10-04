@@ -101,12 +101,47 @@ async function tasmaYok(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 }
 
-async function kutular(l: Locator): Promise<Array<{ x: number; y: number; width: number; height: number }>> {
-  const n = await l.count();
-  const sonuc = [];
-  for (let i = 0; i < n; i++) sonuc.push((await l.nth(i).boundingBox())!);
-  return sonuc;
+type Kutu = { x: number; y: number; width: number; height: number };
+/** Elemanların kutuları TEK ANDA (tek evaluate) ölçülür; yerleşim oturana dek (yazı tipleri yüklendi, art arda iki ölçüm aynı) beklenir.
+ *  Kutuları tek tek boundingBox ile ölçmek ölçümler arasında yerleşim kayarsa (geç yüklenen içerik, kaydırma çubuğu, yazı tipi) aynı satırdaki
+ *  kartlara farklı y verir — yük altında (tam koşu) kararsızdı. */
+async function kutular(l: Locator): Promise<Kutu[]> {
+  await l.page().evaluate(() => document.fonts.ready.then(() => undefined));
+  const olc = (): Promise<Kutu[]> => l.evaluateAll((els) => els.map((e) => {
+    const r = e.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  }));
+  let onceki = await olc();
+  for (const son = Date.now() + 5_000; Date.now() < son;) {
+    await new Promise((c) => setTimeout(c, 100));
+    const simdi = await olc();
+    if (JSON.stringify(simdi) === JSON.stringify(onceki)) return simdi;
+    onceki = simdi;
+  }
+  return onceki;
 }
+
+test('gezinme: önceki sayfanın modülü geç yüklenirse yeni sayfanın üstüne çizilmez (Senaryolar → Ekranlar)', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  await expect(page.getByRole('heading', { name: 'Ekranlar', level: 1 })).toBeAttached();
+  // Senaryolar modülünün yüklenmesi geciktirilir; bu arada Ekranlar'a geçilir.
+  let birak: () => void = () => {};
+  const yuklendi = new Promise<void>((c) => { birak = c; });
+  await page.route(/\/senaryolar\.js(\?|$)/, async (r) => { await yuklendi; await r.continue(); });
+  await page.goto('/#/senaryolar');
+  await page.goto('/#/ekranlar');
+  await expect(page.getByRole('heading', { name: 'Ekranlar', level: 1 })).toBeAttached();
+  birak();
+  await expect.poll(() => page.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/senaryolar\.js(\?|$)/.test(e.name))), { timeout: 10_000 }).toBe(true);
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/#\/ekranlar$/);
+  await expect(page.getByRole('heading', { name: 'Ekranlar', level: 1 })).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Senaryolar', level: 1 })).toHaveCount(0);
+  agKontrol(istekler);
+  await page.close();
+});
 
 test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit, tek eylem); paket yükleme ve yapay zekâ görünür bölümde (açılır değil); üst not yok; istek metni tek kaynaktan; 390px taşma yok', async () => {
   test.setTimeout(60_000);
