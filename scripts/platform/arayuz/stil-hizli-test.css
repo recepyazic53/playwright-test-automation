@@ -92,6 +92,11 @@
 .hizli-uzunluk { margin: 2px 0 0; overflow-wrap: anywhere; }
 .hizli-uzunluk[hidden] { display: none; }
 .hizli-uzunluk.hizli-uzunluk-asim { color: var(--hata); }
+/* Bu seçimde sayfanın doldurduğu (düzenlenemeyen) alan: aynı yerde, sayfadaki değeriyle kapalı girdi; kilit simgesi + kısa not; rozet yok. */
+.hizli-kilit-notu { display: flex; align-items: flex-start; gap: 4px; margin: 2px 0 0; min-width: 0; overflow-wrap: anywhere; }
+.hizli-kilit-notu[hidden], .hizli-alan-baslik > .hizli-hazir-rozet[hidden], .hizli-hazir-ipucu[hidden] { display: none; }
+.hizli-kilit-notu > .ikon { flex: none; width: 14px; height: 14px; margin-top: 1px; }
+.hizli-alan-kilitli .hizli-alan-girdisi input[disabled], .hizli-alan-kilitli .hizli-alan-girdisi select[disabled] { cursor: not-allowed; min-width: 0; max-width: 100%; }
 /* Sayfanın doldurduğu (salt okunur) alanlar: sorulmaz; bilgi olarak değerleriyle. */
 .hizli-salt-okunur { margin: 12px 0 0; padding: 8px 10px; border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); background: var(--panel); min-width: 0; }
 .hizli-salt-okunur > h4 { margin: 0 0 4px; }

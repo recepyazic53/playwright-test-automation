@@ -602,6 +602,13 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       alan.ozelBilesen = true;
       alan.bilesen = seciciOner(ozel.kap, null, null).secici;
     }
+    // Düzenlenebilirlik (salt okuma; alanKilidi — init betiğiyle bu belgenin penceresinde): yoksa okunmaz. Seçime göre değişirse keşif kaydeder.
+    if (!ozel) {
+      const kilidi = (window as unknown as { __nobetciAlanKilidi?: (e: Element) => string | null }).__nobetciAlanKilidi;
+      let k: string | null = null;
+      try { k = typeof kilidi === 'function' ? kilidi(el) : null; } catch { k = null; }
+      if (k) alan.kilit = k;
+    }
     alanlar.push(alan);
   });
 
@@ -654,6 +661,68 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     icOzel += alt.ozelBilesenSayisi;
   }
   return { alanlar, baslik: bosluk(document.title).slice(0, 200), ozelBilesenSayisi: ozelBilesenSayisi + icOzel, cerceveSayisi, okunamayanCerceveSayisi };
+}
+
+/**
+ * Alanın şu an DÜZENLENEMEZ olup olmadığı (sayfa içi; kendi içinde bağımsız — envanter, keşif, hızlı test ve normal koşunun ORTAK kuralı).
+ * YALNIZ OKUR: sayfaya yazmaz, olay göndermez, geri alacak bir şey bırakmaz. Nedeni döner (düzenlenebilirse null):
+ *  - 'devre-disi'      disabled ya da kapsayan fieldset disabled (:disabled),
+ *  - 'salt-okunur'     readonly ya da aria-readonly="true",
+ *  - 'aria-devre-disi' kendisi ya da kapsayanı aria-disabled="true",
+ *  - 'takvim-kilidi'   takvim bileşenine bağlı (hasDatepicker / datepicker / flatpickr sınıfı) ve kilit sınıfı taşıyor (disabled,
+ *                      readonly, locked…) ya da bileşenin kendi kaydında kapalı (jQuery UI datepicker'ın kapalı listesi; okunur),
+ *  - 'tus-deger'       tuş basımı VE değer değişikliği sayfanın betiğiyle engelli (satır içi işleyiciler, jQuery'nin olay kaydı ya da
+ *                      yazılamaz value özelliği; yalnız tuş engeli takvimden seçilen tarih alanıdır, kilit değildir),
+ *  - 'ortu'            alanın ortasındaki noktada tıklamayı alanı tümüyle örten, alana yakın boyutta başka bir öğe alıyor (sayfa
+ *                      boyu yüklenme perdesi sayılmaz; etiket sayılmaz; ekran dışındaki alan denetlenmez).
+ * Kural genel: alan adı / ekran / ürün bilgisi yoktur. Nöbetçi'nin kendi arayüzü (kimliği "nobetci" ile başlayan) örtü sayılmaz.
+ */
+export function alanKilidi(el: Element): string | null {
+  if (!el || el.nodeType !== 1) return null;
+  const g = (el.ownerDocument?.defaultView ?? window) as Window & { jQuery?: any };
+  const etiketAdi = el.tagName;
+  if (el.matches(':disabled')) return 'devre-disi';
+  if (((etiketAdi === 'INPUT' || etiketAdi === 'TEXTAREA') && (el as HTMLInputElement).readOnly) || el.getAttribute('aria-readonly') === 'true') return 'salt-okunur';
+  if (el.closest('[aria-disabled="true"]')) return 'aria-devre-disi';
+  const sinif = el.getAttribute('class') ?? '';
+  if (/(^|\s)(hasDatepicker|datepicker|date-picker|flatpickr-input)(\s|$)/i.test(sinif)) {
+    if (/(^|[\s_-])(disabled|readonly|read-only|locked|kilitli)($|[\s_-])/i.test(sinif.replace(/(^|\s)(hasDatepicker|datepicker|date-picker|flatpickr-input)(?=\s|$)/gi, ' '))) return 'takvim-kilidi';
+    try {
+      const dp = g.jQuery?.datepicker;
+      if (dp && typeof dp._isDisabledDatepicker === 'function' && dp._isDisabledDatepicker(el)) return 'takvim-kilidi';
+    } catch { /* okunamadı */ }
+  }
+  // Tuş VE değer engeli (ikisi birlikte): satır içi işleyiciler ya da jQuery'nin olay kaydı (işleyicinin kaynağı okunur, çağrılmaz).
+  const ENGEL = /return\s+false|preventDefault/i;
+  const satirIci = (...adlar: string[]): boolean => adlar.some((a) => ENGEL.test(el.getAttribute(a) ?? ''));
+  const jq = (...turler: string[]): boolean => {
+    try {
+      const olaylar = g.jQuery?._data?.(el, 'events');
+      return turler.some((t) => Array.isArray(olaylar?.[t]) && olaylar[t].some((x: { handler?: unknown }) => ENGEL.test(String(x?.handler ?? ''))));
+    } catch { return false; }
+  };
+  const tus = satirIci('onkeydown', 'onkeypress') || jq('keydown', 'keypress');
+  if (tus) {
+    const d = Object.getOwnPropertyDescriptor(el, 'value');
+    const yazilamaz = Boolean(d) && (d?.writable === false || (d?.get !== undefined && d?.set === undefined));
+    if (yazilamaz || satirIci('onbeforeinput', 'oninput', 'onchange', 'onpaste') || jq('beforeinput', 'input', 'change', 'paste')) return 'tus-deger';
+  }
+  // Örtü: alanın ortasındaki noktayı alan / etiketi değil, alanı tümüyle örten (alana yakın boyutta) başka bir öğe alıyor.
+  const r = el.getBoundingClientRect();
+  if (r.width > 0 && r.height > 0) {
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    if (x >= 0 && y >= 0 && x < g.innerWidth && y < g.innerHeight) {
+      const kok = el.getRootNode() as Document | ShadowRoot;
+      const ust = typeof kok.elementFromPoint === 'function' ? kok.elementFromPoint(x, y) : el.ownerDocument.elementFromPoint(x, y);
+      if (ust && ust !== el && !el.contains(ust) && !ust.contains(el) && !ust.closest('label') && !ust.closest('[id^="nobetci"]')) {
+        const o = ust.getBoundingClientRect();
+        const ortuyor = o.left <= r.left + 1 && o.top <= r.top + 1 && o.right >= r.right - 1 && o.bottom >= r.bottom - 1;
+        if (ortuyor && o.width * o.height <= r.width * r.height * 6) return 'ortu';
+      }
+    }
+  }
+  return null;
 }
 
 /**

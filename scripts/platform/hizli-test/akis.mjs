@@ -330,7 +330,8 @@ export function kayitEnvanteriKur(o, bitis) {
   // Modele keşfedilen BÜTÜN doldurulabilir alanlar (koşullu alanlar ve koşullarıyla) girer: değeri olanlar senaryoya değerleriyle,
   // boş bırakılanlar / sayfada hazır gelenler değersiz (koşu dokunmaz; sayfanın değeri kalır). Böylece sonradan bu alanlar için senaryo
   // yazılabilir ve liste tabloları alanlara bağlanabilir (yetim tablo kalmaz).
-  const dolu = (/** @type {any} */ a) => (o.degerler[a.anahtar] !== undefined && o.degerler[a.anahtar] !== '') || (!a.devreDisi && !a.saltOkunur);
+  // (Seçime göre düzenlenemeyen alan — kilitKosulu — keşifteki durumu kapalı / salt okunur olsa da girer: başka seçimde doldurulur.)
+  const dolu = (/** @type {any} */ a) => (o.degerler[a.anahtar] !== undefined && o.degerler[a.anahtar] !== '') || (!a.devreDisi && !a.saltOkunur) || Boolean(a.kilitKosulu);
   const adimlar = o.adimlar.map((a) => ({ ...a, alanlar: a.alanlar.filter(dolu) }));
   while (adimlar.length > 1 && !adimlar[adimlar.length - 1].alanlar.length && !adimlar[adimlar.length - 1].bas) adimlar.pop();
   const gosterge = (/** @type {string[]} */ l) => (!l.length ? null : l.length === 1

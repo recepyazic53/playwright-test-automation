@@ -68,6 +68,18 @@ export type HamAlan = {
   desen?: string | null;
   /** Yazınca öneri listesi açılan (otomatik tamamlama) alan: yazılır, öneriden seçilir; modelde doldurucuParametreleri.oneri. */
   oneri?: boolean;
+  /**
+   * Alan şu an düzenlenemez mi (SALT OKUMA ile; sayfaya yazılmaz) — nedeni: 'devre-disi' (disabled / kapsayan fieldset), 'salt-okunur'
+   * (readonly / aria-readonly), 'aria-devre-disi' (aria-disabled), 'takvim-kilidi' (takvim bileşeni + kilit sınıfı ya da kapalı takvim),
+   * 'tus-deger' (tuş basımı VE değer değişikliği betikle engelli), 'ortu' (alanın üstünde tıklamayı alan örtü). Düzenlenebilirse yok.
+   * (sayfa-envanteri.ts > alanKilidi; seçime göre değişirse keşif "kilitler" olarak kaydeder.)
+   */
+  kilit?: string | null;
+  /**
+   * Hızlı test oturumunda: seçimin değerine göre DÜZENLENEMEYEN alan (sayfa o seçimde alanı kendisi doldurur). kilitli: değer → o değerde
+   * düzenlenemez mi; varsayilan: seçimin değeri bilinmezken. Modelde doldurucuParametreleri.kilit (koşu, alan o an düzenlenemezse yazmaz).
+   */
+  kilitKosulu?: { secim: string; kilitli: Record<string, boolean>; varsayilan?: boolean } | null;
 };
 
 /**
@@ -94,6 +106,8 @@ export type KesifDegeri = {
   etiketler?: Record<string, string>;
   /** Bu seçenekte en çok karakter sayısı (maxlength) ya da deseni (pattern) DEĞİŞEN alanlar: anahtar → yeni kurallar. */
   kurallar?: Record<string, { enCok: number | null; desen: string | null }>;
+  /** Bu seçenekte DÜZENLENEBİLİRLİĞİ değişen alanlar (salt okuma; alanKilidi): anahtar → bu değerde düzenlenemez mi. */
+  kilitler?: Record<string, boolean>;
 };
 /**
  * Seçim keşfi. tur: 'secim' (açılır liste; değer = seçenek değeri), 'radyo' (değer = radyo değeri), 'onay' (onay kutusu; değer

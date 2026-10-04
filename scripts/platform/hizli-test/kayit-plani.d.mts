@@ -32,7 +32,8 @@ export type PlanOnizlemesi = {
 };
 export type SenaryoOnerisi = {
   indeks: number; baslik: string; gerekce: string; varsayilanSecili: boolean;
-  alt: { degisiklikler: Array<{ planAdi: string; sutun: string; deger: string; etiket: string; oturumAnahtar: string }> } | null;
+  /** kaldirilanlar: önerinin dalında düzenlenemeyen (sayfanın doldurduğu) alanlar (oturum anahtarı): değerleri senaryoya yazılmaz. */
+  alt: { degisiklikler: Array<{ planAdi: string; sutun: string; deger: string; etiket: string; oturumAnahtar: string }>; kaldirilanlar?: string[] } | null;
   /** Dalın açtığı, değeri olmayan alanların adları (değer üretilmez): seçilirse öneri "veri bekliyor" olarak koşu dışı kaydedilir. */
   veriGerekli: string[];
   /** veriGerekli'nin alanları (oturum anahtarı + o dalda sorulduğu ad). */

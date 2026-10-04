@@ -828,6 +828,29 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     const k = a.etiketKosulu ? bul(a.etiketKosulu.secim) : null;
     return degerdekiEnCok(a, k ? secimDegeri(k) : null);
   }
+  /**
+   * Alan şu anki seçimde DÜZENLENEMEZ mi (sayfa dolduruyor): seçime göre kilitlenen alanda seçimin şu anki değerine göre (seçim değişince
+   * anında), değilse sunucunun bildirdiği. Tablodan gelen seçim değeri bilinmez: sunucunun bildiği. @param {any} a @returns {boolean}
+   */
+  function kilitliMi(a) {
+    const kk = a.kilitKosulu;
+    if (!kk) return a.duzenlenemez === true;
+    const k = bul(kk.secim);
+    const d = durum[kk.secim];
+    if (!k || (d && d.kaynak === 'tablo')) return a.duzenlenemez === true;
+    const v = secimDegeri(k);
+    return v === null ? kk.varsayilan === true : kk.kilitli[v] === true;
+  }
+  /** Seçimin şu anki değerinin görünen metni ("Kısa"); bilinmiyorsa null. @param {any} k */
+  const secimDegerMetni = (k) => {
+    const v = secimDegeri(k);
+    if (v === null) return null;
+    if (k.tur === 'checkbox') return v === 'true' ? 'işaretli' : 'işaretsiz';
+    const x = (k.secenekler || []).find((/** @type {any} */ y) => String(y.deger) === v);
+    return x ? x.metin || x.deger : v;
+  };
+  /** Düzenlenebilirliği seçime göre değişen alanların çizicileri (seçim değişince alan aynı yerde kilitlenir / açılır). @type {Map<string, () => void>} */
+  const kilitCizenler = new Map();
   /** "Özel" → "Özel'de", "Tüzel" → "Tüzel'de", "Kurum" → "Kurum'da", "Şirket" → "Şirket'te" (Türkçe bulunma eki). @param {string} s */
   const bulunmaEki = (s) => {
     const t = String(s).trim();
@@ -901,7 +924,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     // En çok karakter (maxlength; seçime göre değişebilir): ipucu "En çok 10 karakter."; aşılırsa uyarı (engellemez, sayfa da kısaltabilir).
     const uzunlukIpucu = h('div', { class: 'hizli-uzunluk soluk kucuk', id: `${id}-uzunluk` });
     const uzunlukCiz = () => {
-      const n = ['checkbox', 'radio', 'file', 'select', 'select-one', 'select-multiple'].includes(String(a.tur)) || Array.isArray(a.secenekler) ? null : gosterilenEnCok(a);
+      const n = ['checkbox', 'radio', 'file', 'select', 'select-one', 'select-multiple'].includes(String(a.tur)) || Array.isArray(a.secenekler) || kilitliMi(a) ? null : gosterilenEnCok(a);
       const d = durum[a.anahtar];
       const v = d && d.kaynak !== 'tablo' && typeof d.deger === 'string' ? d.deger : '';
       uzunlukIpucu.hidden = n === null;
@@ -912,6 +935,17 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     };
     const ciz = () => {
       const d = durum[a.anahtar];
+      // Bu seçimde sayfanın doldurduğu (düzenlenemeyen) alan: AYNI YERDE, sayfadaki değeriyle kapalı girdi; "Doldur" yok (değer sorulmaz,
+      // gönderilmez). Seçim değişip alan düzenlenebilir olunca aynı yerde açılır (kilitCizenler).
+      if (kilitliMi(a) && a.tur !== 'file') {
+        const deger = a.mevcut === null || a.mevcut === undefined ? '' : String(a.mevcut);
+        const ortak = { id, disabled: true, 'aria-describedby': `${id}-kilit` };
+        const girdi = a.tur === 'checkbox' ? h('input', { ...ortak, type: 'checkbox', checked: a.hazir || null })
+          : Array.isArray(a.secenekler) ? h('select', ortak, h('option', { value: '' }, deger || 'şu an boş'))
+            : h('input', { ...ortak, type: 'text', value: deger, placeholder: deger ? null : 'şu an boş' });
+        yerlestir(kap, girdi);
+        return;
+      }
       if (a.bagli && kilitli.has(a.anahtar) && d.kaynak !== 'tablo') {
         // Seçenekler henüz yok: liste kilitli; tablodan (geçerli kombinasyon satırı) yine seçilebilir.
         const ust = bul(a.bagli.ust);
@@ -1017,21 +1051,38 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       etiketCizenler.set(a.anahtar, () => { etiketCiz(); uzunlukCiz(); });
       etiketCiz();
     } else digerAdlar.hidden = true;
-    return h('div', { class: `alan hizli-alan${a.yeni ? ' yeni' : ''}${derinlik ? ` hizli-alan-bagli zd-${derinlik}` : ''}${a.etiketKosulu ? ' hizli-alan-etiketli' : ''}`, 'data-anahtar': a.anahtar },
+    // "Sayfada hazır" rozeti etiketin dışında (alanın erişilebilir adı yalnız etiket kalır); sayfanın doldurduğu (kilitli) alanda kilit notu yerine.
+    const hazirRozeti = sd !== null ? h('span', { class: 'hizli-hazir-rozet' }, rozet('sayfada hazır', 'bilgi')) : null;
+    const hazirIpucu = sd !== null ? h('div', { class: 'hizli-hazir-ipucu soluk kucuk', id: `${id}-hazir` }, 'Sayfada bu değerle geliyor; değiştirmezseniz sayfadaki değer kullanılır.') : null;
+    // Bu seçimde sayfanın doldurduğu alan: kilit simgesi + kısa not (girdinin açıklaması).
+    const kilitNotu = h('div', { class: 'hizli-kilit-notu soluk kucuk', id: `${id}-kilit` }, ikon('kilit'), h('span', {}, 'Bu seçimde sayfa dolduruyor, değiştirilemez.'));
+    const satirKabi = h('div', { class: `alan hizli-alan${a.yeni ? ' yeni' : ''}${derinlik ? ` hizli-alan-bagli zd-${derinlik}` : ''}${a.etiketKosulu ? ' hizli-alan-etiketli' : ''}`, 'data-anahtar': a.anahtar },
       h('div', { class: 'hizli-alan-baslik' },
         h('label', { for: id, id: `${id}-etiket`, title: a.teknikAd && !a.etiketBulundu ? `Sayfadaki teknik ad: ${a.teknikAd}` : null },
           etiketYazi, a.zorunlu ? h('span', { class: 'soluk' }, ' (zorunlu)') : null, a.yeni ? ' ' : null, a.yeni ? rozet('yeni alan', 'bilgi') : null),
         digerAdlar,
-        // "Sayfada hazır" rozeti etiketin dışında (alanın erişilebilir adı yalnız etiket kalır).
-        sd !== null ? h('span', { class: 'hizli-hazir-rozet' }, rozet('sayfada hazır', 'bilgi')) : null,
+        hazirRozeti,
         sira),
       // Seçim keşfi: koşullu alan, kontrol eden seçimin grubunda durur; seçim bu durakta değilse hangi seçimde göründüğü yazılır.
       a.kosul && !grupSahibi(a) && !zincirde(a) ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
-      sd !== null ? h('div', { class: 'hizli-hazir-ipucu soluk kucuk', id: `${id}-hazir` }, 'Sayfada bu değerle geliyor; değiştirmezseniz sayfadaki değer kullanılır.') : null,
+      hazirIpucu,
       a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, a.bagli.belirsiz
         ? `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelebilir (keşifte kesinleşmedi; “${a.bagli.ustEtiket}” seçip yanındaki “↓ … seçeneklerini getir” ile deneyin).`
         : `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,
-      kap, otoDurumu, uzunlukIpucu, zincirKap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
+      kap, kilitNotu, otoDurumu, uzunlukIpucu, zincirKap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
+    // Kilit durumu: not, rozet ve satırın görünümü; seçim değişip durum değişince girdi aynı yerde yeniden çizilir.
+    let sonKilit = kilitliMi(a);
+    const kilitDurumuCiz = () => {
+      const k = kilitliMi(a);
+      kilitNotu.hidden = !k;
+      if (hazirRozeti) hazirRozeti.hidden = k;
+      if (hazirIpucu) hazirIpucu.hidden = k;
+      satirKabi.classList.toggle('hizli-alan-kilitli', k);
+      if (k !== sonKilit) { sonKilit = k; ciz(); uzunlukCiz(); }
+    };
+    if (a.kilitKosulu) kilitCizenler.set(a.anahtar, kilitDurumuCiz);
+    kilitDurumuCiz();
+    return satirKabi;
   };
   /** Üstleri bu durakta olan bağlı listenin zincirdeki derinliği (kök 0). */
   const zincirDerinligi = (/** @type {any} */ a) => {
@@ -1143,7 +1194,8 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     // belirleyen seçim alanla aynı bölümdeyse (ikisi de aynı üst seçimin değerinde beliriyor) alan o seçimin grubundadır.
     const ek = x && x.etiketKosulu ? bul(x.etiketKosulu.secim) : null;
     const ayniBolum = Boolean(ek && x.kosul && ek.kosul && ek.kosul.secim === x.kosul.secim);
-    const k = ayniBolum ? ek.anahtar : x && x.kosul ? x.kosul.secim : x && x.etiketKosulu ? x.etiketKosulu.secim : null;
+    // Düzenlenebilirliği seçime göre değişen alan (kilitKosulu) da o seçimin grubunda: her değerde AYNI YERDE (kilitli ya da açık) durur.
+    const k = ayniBolum ? ek.anahtar : x && x.kosul ? x.kosul.secim : x && x.etiketKosulu ? x.etiketKosulu.secim : x && x.kilitKosulu ? x.kilitKosulu.secim : null;
     return k && k !== a.anahtar && bul(k) ? k : null;
   }
   /** Seçimin şu anki değerinin görünen metni ("Müşteri tipi: Kurumsal"). @param {any} k */
@@ -1187,9 +1239,13 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     // Bu değerde değişenler: açılan / adı değişen alanlar grubun listesinde; gizlenenler burada (“Bu seçimde “Doğum tarihi” sorulmaz.”).
     const v = secimDegeri(k);
     const gizlenen = v === null ? [] : s.alanlar.filter((x) => x.kosul && x.kosul.secim === sahip && !x.kosul.degerler.includes(v));
-    const uyeVar = uyelerOf(sahip).length > 0;
-    g.not.textContent = gizlenen.length ? `Bu seçimde ${gizlenen.map((x) => `“${gosterilenEtiket(x)}”`).join(', ')} sorulmaz.`
-      : uyeVar ? '' : 'Bu seçimde ek ya da farklı alan yok; aynı alanlar sorulur.';
+    const uyeler = uyelerOf(sahip);
+    const uyeVar = uyeler.length > 0;
+    // Bu değerde sayfanın doldurduğu (düzenlenemeyen) alanlar özette: "Kısa: Başlangıç tarihi, Bitiş tarihi sayfa tarafından dolduruluyor."
+    const kilitliler = uyeler.filter((x) => x.kilitKosulu && x.kilitKosulu.secim === sahip && kilitliMi(x));
+    const notlar = [gizlenen.length ? `Bu seçimde ${gizlenen.map((x) => `“${gosterilenEtiket(x)}”`).join(', ')} sorulmaz.` : '',
+      kilitliler.length ? `${secimDegerMetni(k) ?? k.etiket}: ${kilitliler.map((x) => gosterilenEtiket(x)).join(', ')} sayfa tarafından dolduruluyor (değiştirilemez).` : ''].filter(Boolean);
+    g.not.textContent = notlar.length ? notlar.join(' ') : uyeVar ? '' : 'Bu seçimde ek ya da farklı alan yok; aynı alanlar sorulur.';
     g.not.hidden = !g.not.textContent;
   };
   /** O an sorulan alanlardan bu seçimin grubundakiler (sayfa sırasıyla). @param {string} sahip */
@@ -1342,6 +1398,8 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     if (devamIpucu.textContent) devam.setAttribute('aria-describedby', devamIpucu.id); else devam.removeAttribute('aria-describedby');
     // Etiketi seçime göre değişen alanların adları; koşullu alan gruplarının başlıkları ve notları seçimin şu anki değerine göre.
     for (const c of etiketCizenler.values()) c();
+    // Seçime göre sayfanın doldurduğu alanlar aynı yerde kilitlenir / açılır.
+    for (const c of kilitCizenler.values()) c();
     for (const k of gruplar.keys()) grupBasligi(k);
   };
   const listeyiCiz = () => {
@@ -1375,7 +1433,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     // Bekleyen anında uygulama gerekmez: "Devam et" tüm değerleri gönderir ve sayfaya uygular.
     otoBirak();
     const degerler = degerleriTopla();
-    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar)).map((a) => a.etiket);
+    const eksik = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && !degerler[a.anahtar] && aktifMi(a) && !kilitli.has(a.anahtar) && !kilitliMi(a)).map((a) => a.etiket);
     if (eksik.length) { m.goster(`Zorunlu alanlar boş: ${eksik.join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`); return; }
     void gonder(dugme, 'veri', { degerler, sira: siralama }, m);
   };
@@ -1456,8 +1514,9 @@ function veriDuragi(o, s, kart, m, gonder, y) {
   if (!getiriliyor && zincirOdagi && zincirOdagi.id === o.id && zincirOdagi.kosul) {
     const kontrol = bul(zincirOdagi.ust);
     zincirOdagi = null;
-    const gelen = sorulanlar().filter((x) => kontrol && ((x.kosul && x.kosul.secim === kontrol.anahtar) || (x.etiketKosulu && x.etiketKosulu.secim === kontrol.anahtar)));
-    const ilk = gelen.length ? satir(gelen[0]).querySelector('select, input') : null;
+    const gelen = sorulanlar().filter((x) => kontrol && ((x.kosul && x.kosul.secim === kontrol.anahtar) || (x.etiketKosulu && x.etiketKosulu.secim === kontrol.anahtar)
+      || (x.kilitKosulu && x.kilitKosulu.secim === kontrol.anahtar)));
+    const ilk = gelen.length ? satir(gelen[0]).querySelector('select:not([disabled]), input:not([disabled])') : null;
     if (ilk) ilk.setAttribute('data-odak-oncelik', '');
     // Duyuru: sunucunun değişiklik özeti (açılan / gizlenen / adı değişen alanlar); yoksa gelen alanlar.
     bekleyenDuyuru = s.not ? String(s.not) : kontrol ? (gelen.length ? `“${kontrol.etiket}” seçiminin alanları geldi: ${gelen.map((x) => gosterilenEtiket(x)).join(', ')}.` : `“${kontrol.etiket}” seçiminde ek ya da farklı alan yok; aynı alanlar sorulur.`) : '';
@@ -1474,7 +1533,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     bekleyenDuyuru = gelen.length ? gelen.map((x) => `“${x.etiket}” seçenekleri geldi (${x.secenekler.length} seçenek).`).join(' ')
       : altlar.length ? `${altlar.map((x) => `“${x.etiket}”`).join(', ')} için seçenek gelmedi.` : '';
   }
-  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar)).length;
+  const zorunluSayisi = s.alanlar.filter((a) => a.zorunlu && !a.hazir && a.tur !== 'file' && (a.deger === null || a.deger === '') && !kilitli.has(a.anahtar) && !kilitliMi(a)).length;
   return kart(s.gecmis ? `Adım ${s.adim}: veriyi düzenle` : o.adimlar.length > 1 ? `Adım ${s.adim}: veri gerekli` : 'Devam etmek için veri gerekli', 'veri',
     s.not ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, s.not) : null,
     // Keşfin notları (ör. seçimlerin sayfada tek tek denendiği) ilk veri durağında gösterilir.

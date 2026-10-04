@@ -269,7 +269,9 @@ export function hizliTestYoneticisiOlustur(s) {
    * @param {Nesne} o @param {string} anahtar @returns {boolean}
    */
   // Etiketi seçime göre değişen alanı (etiketKosulu) belirleyen seçim de "kontrol"dür: alanın adı (ve girilecek verinin anlamı) bu seçime bağlı.
-  const kontrolMu = (o, anahtar) => [...o.alanlar.values()].some((x) => x.alan.kosul?.secim === anahtar || x.alan.etiketKosulu?.secim === anahtar);
+  // Alanın düzenlenebilirliğini (kilitKosulu: o değerde sayfa alanı kendisi doldurur) belirleyen seçim de "kontrol"dür.
+  const kontrolMu = (o, anahtar) => [...o.alanlar.values()].some((x) => x.alan.kosul?.secim === anahtar || x.alan.etiketKosulu?.secim === anahtar
+    || x.alan.kilitKosulu?.secim === anahtar);
   /** Seçimin sayfadaki (uygulanmış) değeri: son doldurmada uygulanan, yoksa sayfanın ilk değeri (keşif). @param {Nesne} o @param {string} anahtar */
   const sayfadakiDeger = (o, anahtar) => {
     const u = o.uygulanan?.[anahtar];
@@ -338,8 +340,54 @@ export function hizliTestYoneticisiOlustur(s) {
       kayit.enCok = enCok;
     }
   };
-  /** Geçerli olmayan koşullu alanların değerleri kaydedilmez / gönderilmez. @param {Nesne} o */
-  const aktifDegerler = (o) => Object.fromEntries(Object.entries(o.degerler).filter(([k]) => { const a = o.alanlar.get(k)?.alan; return !a || kosulAktif(o, a); }));
+  // ---- Seçime göre düzenlenemeyen alanlar (sayfa o seçimde alanı kendisi doldurur; keşif "kilitler", alanKilidi) ----
+  /**
+   * Seçime bağlı olmadan da düzenlenemez sayılan kilitler (salt okuma): aria-disabled, kapalı takvim, tuş + değer engeli. Salt okunur
+   * (takvimden seçilen tarih alanı doldurulur), kapalı (zaten sorulmaz) ve örtü (anlık olabilir) yalnız seçime göre değişince sayılır.
+   */
+  const SERT_KILITLER = new Set(['aria-devre-disi', 'takvim-kilidi', 'tus-deger']);
+  /** Seçimin şu anki değeri: kullanıcının yazdığı (tablo başvurusu değilse), yoksa sayfadaki. @param {Nesne} o @param {string} anahtar */
+  const secimSimdi = (o, anahtar) => {
+    const v = o.degerler[anahtar];
+    return v && v.deger !== null && v.deger !== undefined && v.deger !== '' && !degerBasvurusu(v.deger) ? String(v.deger) : sayfadakiDeger(o, anahtar);
+  };
+  /**
+   * Alan şu anki seçimde DÜZENLENEMEZ mi (sayfa dolduruyor): seçime göre kilitlenen alanda seçimin şu anki değerindeki durum (bilinmeyen
+   * değerde düzenlenebilir), değilse açık kilit ya da yazarken toplanan kanıt (yazılan tutmadı, sayfa eski değeri geri yazdı). Böyle alan
+   * sorulmaz, yazılmaz, senaryoya / tabloya girmez. @param {Nesne} o @param {Nesne} a @returns {boolean}
+   */
+  const duzenlenemez = (o, a) => {
+    const kk = a.kilitKosulu;
+    if (kk) {
+      const v = secimSimdi(o, kk.secim);
+      return v === null ? kk.varsayilan === true : kk.kilitli?.[v] === true;
+    }
+    return a.kilitKanit === true || SERT_KILITLER.has(String(a.kilit ?? ''));
+  };
+  /**
+   * Doldurmadan sonra düzenlenebilirlik sayfadan tazelenir (salt okuma; alanKilidi): seçime göre kilitlenen alanda seçimin sayfadaki
+   * değerindeki durum kaydedilir; "Önce bunu seçin" isteğinde (istek) düzenlenebilirliği değişen alan o seçime bağlanır (önceki değer →
+   * eski durum, seçilen → yeni). @param {Nesne} o @param {Nesne} anlik
+   * @param {{ anahtar: string; onceki: string | null; secilen: string } | null} istek
+   */
+  const kilitleriTazele = (o, anlik, istek) => {
+    for (const yeni of Array.isArray(anlik?.alanlar) ? anlik.alanlar : []) {
+      const kayit = nesneMi(yeni) ? o.alanlar.get(yeni.anahtar)?.alan : null;
+      if (!kayit || kayit.tur === 'radio') continue;
+      const simdi = Boolean(yeni.kilit);
+      const once = Boolean(kayit.kilit);
+      const kk = kayit.kilitKosulu;
+      if (kk) {
+        const v = sayfadakiDeger(o, kk.secim);
+        if (v !== null) kk.kilitli[v] = simdi;
+      } else if (istek && istek.onceki !== null && kayit.anahtar !== istek.anahtar && once !== simdi && !(kayit.tur === 'select' && kayit.bagli)) {
+        kayit.kilitKosulu = { secim: istek.anahtar, kilitli: { [istek.onceki]: once, [istek.secilen]: simdi }, varsayilan: once };
+      }
+      kayit.kilit = typeof yeni.kilit === 'string' ? yeni.kilit : null;
+    }
+  };
+  /** Geçerli olmayan koşullu alanların ve şu anki seçimde düzenlenemeyen (sayfanın doldurduğu) alanların değerleri kaydedilmez / gönderilmez. @param {Nesne} o */
+  const aktifDegerler = (o) => Object.fromEntries(Object.entries(o.degerler).filter(([k]) => { const a = o.alanlar.get(k)?.alan; return !a || (kosulAktif(o, a) && !duzenlenemez(o, a)); }));
   /** Doldurma sırası: kullanıcının sırası korunur; koşullu alan her zaman kendi seçiminden SONRA doldurulur. @param {Nesne[]} liste @returns {Nesne[]} */
   const bagimliSirala = (liste) => {
     const s = [...liste];
@@ -348,7 +396,7 @@ export function hizliTestYoneticisiOlustur(s) {
       for (let i = 0; i < s.length; i++) {
         // Koşullu alan kendi seçiminden, bağlı liste üst listesinden SONRA.
         // Etiketi seçime göre değişen alan da seçiminden SONRA (seçim alanın anlamını belirler).
-        const ust = s[i].kosul?.secim ?? s[i].etiketKosulu?.secim ?? s[i].bagli?.ust;
+        const ust = s[i].kosul?.secim ?? s[i].etiketKosulu?.secim ?? s[i].kilitKosulu?.secim ?? s[i].bagli?.ust;
         if (!ust) continue;
         const j = s.findIndex((x) => x.anahtar === ust);
         if (j > i) { const [x] = s.splice(i, 1); s.splice(j, 0, x); degisti = true; break; }
@@ -360,9 +408,10 @@ export function hizliTestYoneticisiOlustur(s) {
   /**
    * Seçim keşfinin sonuçlarını ilk adıma işler: her değerde beliren alan koşullu alan olarak eklenir (kontrol alanının hemen sonrasına);
    * koşul "seçim şu değerlerden biri" biçiminde adımın koşullarına yazılır (modelde görünürlük koşulu olur).
-   * @param {Nesne} o @param {Nesne} adim @param {Nesne[]} kesifler
+   * sayfaAlanlari: bu okumadaki alanlar (ilk değerde düzenlenemediği için sorulmayan, başka değerde açılan alan buradan eklenir).
+   * @param {Nesne} o @param {Nesne} adim @param {Nesne[]} kesifler @param {Nesne[]} [sayfaAlanlari]
    */
-  const kosulluAlanlariEkle = (o, adim, kesifler) => {
+  const kosulluAlanlariEkle = (o, adim, kesifler, sayfaAlanlari = []) => {
     o.kesifIlk ??= {};
     for (const k of kesifler) if (typeof k.secim === 'string' && !(k.secim in o.kesifIlk)) o.kesifIlk[k.secim] = k.ilkDeger ?? null;
     adim.kosullar ??= {};
@@ -433,6 +482,30 @@ export function hizliTestYoneticisiOlustur(s) {
           const ilk = k.ilkDeger === null || k.ilkDeger === undefined ? null : String(k.ilkDeger);
           if (ilk !== null && alan.etiketKosulu.enCoklar[ilk] === undefined) alan.etiketKosulu.enCoklar[ilk] = alan.enCok ?? null;
           alan.etiketKosulu.enCoklar[String(d.deger)] = Number.isInteger(kural.enCok) ? kural.enCok : null;
+        }
+      }
+    }
+    // Bir seçimin belirli değerinde DÜZENLENEBİLİRLİĞİ değişen alanlar (kilitler; ör. bir değerde sayfa tarihleri kendisi doldurup kilitler):
+    // alan AYNI YERDE kalır; o değerde düzenlenemez gösterilir, sorulmaz, yazılmaz. İlk değerdeki durum keşifte okunan kilittir.
+    for (const k of kesifler) {
+      const ilk = k.ilkDeger === null || k.ilkDeger === undefined ? null : String(k.ilkDeger);
+      for (const d of Array.isArray(k.degerler) ? k.degerler : []) {
+        for (const [anahtar, kilitli] of Object.entries(nesneMi(d.kilitler) ? d.kilitler : {})) {
+          if (anahtar === k.secim || typeof kilitli !== 'boolean') continue;
+          let alan = o.alanlar.get(anahtar)?.alan;
+          // İlk değerde düzenlenemediği için (kapalı / salt okunur) sorulmayan alan bu değerde açılıyor: sayfadaki yerinde eklenir.
+          if (!alan && !kilitli) {
+            const ham = sayfaAlanlari.find((x) => nesneMi(x) && x.anahtar === anahtar);
+            if (ham && !DOLDURULMAZ.has(String(ham.tur))) {
+              alanEkle(o, { ...ham }, adim, false);
+              sayfaSirasinaYerlestir(adim, [anahtar], sayfaAlanlari);
+              alan = o.alanlar.get(anahtar)?.alan;
+            }
+          }
+          if (!alan || (alan.kilitKosulu && alan.kilitKosulu.secim !== String(k.secim))) continue;
+          alan.kilitKosulu ??= { secim: String(k.secim), kilitli: {}, varsayilan: Boolean(alan.kilit) };
+          if (ilk !== null && alan.kilitKosulu.kilitli[ilk] === undefined) alan.kilitKosulu.kilitli[ilk] = Boolean(alan.kilit);
+          alan.kilitKosulu.kilitli[String(d.deger)] = kilitli;
         }
       }
     }
@@ -615,7 +688,7 @@ export function hizliTestYoneticisiOlustur(s) {
     o.duzeltAdimi = null;
     for (const a of f.yeniAlanlar.filter(doldurulabilir)) alanEkle(o, a, adim, true);
     // Basıştan sonra beliren seçim alanlarının keşfi: içlerindeki koşullu alanlar bu adıma eklenir.
-    if (Array.isArray(o.sonKesif) && o.sonKesif.length) { kosulluAlanlariEkle(o, adim, o.sonKesif); o.sonKesif = []; }
+    if (Array.isArray(o.sonKesif) && o.sonKesif.length) { kosulluAlanlariEkle(o, adim, o.sonKesif, f.anlik?.alanlar ?? []); o.sonKesif = []; }
     adim.okumalar.push({ gorunen: f.anlik.alanlar.map((/** @type {Nesne} */ a) => a.anahtar), secimler: {} });
     if (adim.alanlar.length) veriDuragi(o, `${adim.alanlar.length} yeni alan belirdi; değerlerini girin.`);
     else o.durum = 'karar';
@@ -759,7 +832,7 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const a of anlik.alanlar.filter(doldurulabilir)) alanEkle(o, a, adim, false);
       for (const b of Array.isArray(z?.bulgular) ? z.bulgular : []) o.bulgular.push(bulguMetni(b, (k) => alanAdi(o, k)));
       const tabanSayisi = adim.alanlar.length;
-      kosulluAlanlariEkle(o, adim, Array.isArray(e.kesifler) ? e.kesifler : []);
+      kosulluAlanlariEkle(o, adim, Array.isArray(e.kesifler) ? e.kesifler : [], anlik.alanlar);
       // Seçimle beliren (koşullu) alan da bağlı liste olabilir (ör. marka seçilince beliren model listesi).
       for (const [alt, ust] of o.bagliUst) { const a = o.alanlar.get(alt)?.alan; if (a && !a.bagli) a.bagli = { ust }; }
       const kosullu = adim.alanlar.length - tabanSayisi;
@@ -866,10 +939,22 @@ export function hizliTestYoneticisiOlustur(s) {
       const kosulIstegi = zincirIstegi && o.kosulIstegi?.anahtar === zincirIstegi ? o.kosulIstegi : null;
       o.kosulIstegi = null;
       // Etiketler sayfadan tazelenir (seçim uygulandıysa aynı alanın adı değişmiş olabilir: "Kimlik no" → "Vergi no").
-      etiketleriTazele(o, e.anlik, kosulIstegi && !o.alanHatalari[zincirIstegi] ? {
+      const tazeIstek = kosulIstegi && !o.alanHatalari[zincirIstegi] ? {
         anahtar: zincirIstegi, onceki: kosulIstegi.onceki === null || kosulIstegi.onceki === undefined ? null : String(kosulIstegi.onceki),
         secilen: String(o.degerler[zincirIstegi]?.deger ?? '')
-      } : null);
+      } : null;
+      etiketleriTazele(o, e.anlik, tazeIstek);
+      // Düzenlenebilirlik de sayfadan tazelenir (salt okuma): seçim uygulanınca alan kilitlenmiş / açılmış olabilir.
+      kilitleriTazele(o, e.anlik, tazeIstek);
+      // Yazılan değeri tutmayan, sayfanın ESKİ değerini geri yazdığı alanlar: bu seçimde sayfa dolduruyor (düzenlenemez kanıtı; hata değil).
+      for (const k of Array.isArray(e.kilitliler) ? e.kilitliler : []) {
+        const a = typeof k === 'string' ? o.alanlar.get(k)?.alan : null;
+        if (!a) continue;
+        const v = a.kilitKosulu ? sayfadakiDeger(o, a.kilitKosulu.secim) : null;
+        if (a.kilitKosulu && v !== null) a.kilitKosulu.kilitli[v] = true; else a.kilitKanit = true;
+        delete o.uygulanan[k];
+        gunluk(o, `“${alanAdi(o, k)}”: yazılan değer tutmadı, sayfa önceki değeri geri yazdı; bu alanı sayfa dolduruyor, değiştirilemez (yazılmadı).`);
+      }
       if (kosulIstegi && !o.alanHatalari[zincirIstegi]) {
         const secilen = String(o.degerler[zincirIstegi]?.deger ?? '');
         adim.kosullar ??= {};
@@ -885,7 +970,7 @@ export function hizliTestYoneticisiOlustur(s) {
       // Yerinde keşif (doldurunca beliren, keşifte bilinmeyen seçimler; iç içe dahil): koşullu / adı değişen alanlar ilk keşifle aynı kuralla.
       const yerindeKesifler = Array.isArray(e.kesifler) ? e.kesifler.filter((/** @type {Nesne} */ k) => nesneMi(k) && typeof k.secim === 'string') : [];
       if (yerindeKesifler.length) {
-        kosulluAlanlariEkle(o, adim, yerindeKesifler);
+        kosulluAlanlariEkle(o, adim, yerindeKesifler, e.anlik.alanlar ?? []);
         const n = yerindeKesifler.reduce((t, k) => t + (Array.isArray(k.degerler) ? k.degerler.length : 0), 0);
         gunluk(o, `Yerinde keşif: ${yerindeKesifler.map((k) => `“${alanAdi(o, k.secim)}”`).join(', ')} seçimlerinin ${n} değeri sayfada denendi (hiçbir düğmeye basılmadı); seçimler ilk değerlerine döndü.`);
       }
@@ -932,7 +1017,14 @@ export function hizliTestYoneticisiOlustur(s) {
             if (x && y && x !== y) return [`${x} → ${y}${uzunluk}`];
             return uzunluk ? [`${y ?? alanAdi(o, a.anahtar)}: en çok ${n2} karakter`] : [];
           });
-        const degisiklikler = [acilan.length ? `${adlar(acilan)} açıldı` : '', gizlenen.length ? `${adlar(gizlenen)} gizlendi` : '', ...yeniAdlar].filter(Boolean);
+        // Düzenlenebilirliği değişen alanlar: bu seçimde sayfanın doldurduğu (kilitlenen) ve yeniden düzenlenebilir olan alanlar.
+        const kilitli = (/** @type {Nesne} */ a, /** @type {string | null} */ v) => v !== null && a.kilitKosulu?.kilitli?.[v] === true;
+        const kilitBagli = adim.alanlar.filter((/** @type {Nesne} */ a) => a.kilitKosulu?.secim === zincirIstegi && kosulAktif(o, a));
+        const kilitlenen = kilitBagli.filter((/** @type {Nesne} */ a) => kilitli(a, secilen) && !kilitli(a, once));
+        const kilitAcilan = kilitBagli.filter((/** @type {Nesne} */ a) => !kilitli(a, secilen) && kilitli(a, once));
+        const degisiklikler = [acilan.length ? `${adlar(acilan)} açıldı` : '', gizlenen.length ? `${adlar(gizlenen)} gizlendi` : '', ...yeniAdlar,
+          kilitlenen.length ? `${adlar(kilitlenen)} sayfa tarafından dolduruluyor, değiştirilemez` : '',
+          kilitAcilan.length ? `${adlar(kilitAcilan)} düzenlenebilir` : ''].filter(Boolean);
         const parcalar = [
           `“${k?.etiket ?? alanAdi(o, zincirIstegi)}” = “${metni}” sayfaya uygulandı: ${degisiklikler.length ? `${degisiklikler.join('; ')}.` : 'bu seçimde ek ya da farklı alan yok; aynı alanlar sorulur.'}`,
           sayfaHatalari.length ? `Sayfa uyarı gösterdi: ${sayfaHatalari.slice(0, 3).join(' · ')}` : ''
@@ -965,7 +1057,7 @@ export function hizliTestYoneticisiOlustur(s) {
         return;
       }
       // Boş bağlı listeler yalnız sayfa zorunlu sayıyorsa eksiktir (sayfa uyarırsa basıştan sonra görülür).
-      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliGelecek(x, o)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !duzenlenemez(o, x) && !bagliGelecek(x, o)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
       if (eksik.length) { veriDuragi(o, `${eksik.length} zorunlu alan boş.`); return; }
       verilerTamam(o);
       return;
@@ -1067,6 +1159,7 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const a of yeniler) alanEkle(o, a, adim, true);
       if (adim) sayfaSirasinaYerlestir(adim, yeniler.map((/** @type {Nesne} */ a) => a.anahtar), e.anlik.alanlar);
       hazirTazele(o, e.anlik);
+      kilitleriTazele(o, e.anlik, null);
       const duzelt = o.okumaAmaci === 'duzelt';
       o.okumaAmaci = null;
       if (yeniler.length) veriDuragi(o, `${yeniler.length} yeni alan belirdi; değerlerini girin.`);
@@ -1133,7 +1226,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const hayir = o.izin === 'hayir';
     return o.adimlar.map((/** @type {Nesne} */ a) => {
       const basildi = Boolean(a.bas) && !hayir;
-      const alanlar = bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x)
+      const alanlar = bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x) && !duzenlenemez(o, x)
         && (basildi || o.uygulanan[x.anahtar] === o.degerler[x.anahtar].deger)));
       return {
         alanlar: alanlar.map((/** @type {Nesne} */ x) => ({
@@ -1191,7 +1284,7 @@ export function hizliTestYoneticisiOlustur(s) {
     /** @type {Record<string, unknown>} */
     const deneme = Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger]));
     for (const [k, v] of Object.entries(yeni)) { if (v) deneme[k] = v.deger; else delete deneme[k]; }
-    const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliGelecek(x, o)), deneme);
+    const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !duzenlenemez(o, x) && !bagliGelecek(x, o)), deneme);
     if (eksik.length) {
       throw new HizliTestHatasi('EKSIK', `Zorunlu alanlar boş: ${eksik.slice(0, 5).map((a) => gecerliEtiket(o, a) ?? a.anahtar).join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`, 400,
         { eksikler: eksik.map((a) => a.anahtar) });
@@ -1356,6 +1449,10 @@ export function hizliTestYoneticisiOlustur(s) {
         } : null,
         // En çok karakter (maxlength): veri durağında ipucu ("en çok 10 karakter") ve uzunluk denetimi; seçime göre değişiyorsa enCoklar.
         enCok: Number.isInteger(a.enCok) ? a.enCok : null,
+        // Seçime göre düzenlenemeyen alan (sayfa o seçimde kendisi dolduruyor): arayüz seçim değişince alanı AYNI YERDE kilitler / açar.
+        // duzenlenemez: şu anki seçimde (sunucunun bildiği değerle) düzenlenemez mi — kilitli alan sorulmaz, sayfadaki değeriyle gösterilir.
+        kilitKosulu: a.kilitKosulu ? { secim: a.kilitKosulu.secim, kilitli: { ...a.kilitKosulu.kilitli }, varsayilan: a.kilitKosulu.varsayilan === true } : null,
+        duzenlenemez: duzenlenemez(o, a),
         // Sayfada hazır: yalnız değeri OKUNAN ve koşulu şu an geçerli alan (keşifte görülen / şu an gizli koşullu alan "hazır" değildir;
         // değeri okunamayan alan "dolu" diye gösterilmez). Parolalı alanın değeri gösterilmez.
         hazir: a.hazir === true && (gizliAlan(a) || (a.mevcut !== null && a.mevcut !== undefined && a.mevcut !== '')) && kosulAktif(o, a),
@@ -1473,7 +1570,8 @@ export function hizliTestYoneticisiOlustur(s) {
     // ("neden sorulmadı?" — sayfa kendisi dolduruyor). Takvimden seçilen salt okunur tarih alanı sorulur (burada değil).
     if (soru && (soru.tur === 'veri' || soru.tur === 'bitis')) {
       soru.saltOkunurlar = (Array.isArray(o.sonAnlik?.alanlar) ? o.sonAnlik.alanlar : [])
-        .filter((/** @type {Nesne} */ a) => nesneMi(a) && a.saltOkunur === true && a.takvimden !== true && a.devreDisi !== true
+        // (Seçime göre kilitlenen alan bu bölümde değil: veri durağında aynı yerinde, kilitli gösterilir.)
+        .filter((/** @type {Nesne} */ a) => nesneMi(a) && a.saltOkunur === true && a.takvimden !== true && a.devreDisi !== true && !o.alanlar.get(a.anahtar)?.alan?.kilitKosulu
           && !['radio', 'checkbox', 'file', 'select', 'select-one', 'select-multiple'].includes(String(a.tur)))
         .slice(0, 30).map((/** @type {Nesne} */ a) => ({ anahtar: a.anahtar, etiket: a.etiket ?? adsizEtiket(a), deger: gizliAlan(a) ? null : a.mevcut ?? null }));
     }
@@ -1708,7 +1806,7 @@ export function hizliTestYoneticisiOlustur(s) {
     // Bağlı listeler ek zorunluluk taşımaz: yalnız sayfanın zorunlu saydığı (required / aria-required) boş alan eksiktir. Seçenekleri
     // henüz gelmemiş, üstü seçili bağlı liste eksik sayılmaz (üst doldurulunca seçenekleri gelir). Yerinde zincir isteğinde eksik denetlenmez.
     if (!zincir) {
-      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliGelecek(x, o)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !duzenlenemez(o, x) && !bagliGelecek(x, o)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
       if (eksik.length) {
         throw new HizliTestHatasi('EKSIK', `Zorunlu alanlar boş: ${eksik.slice(0, 5).map((a) => gecerliEtiket(o, a) ?? a.anahtar).join(', ')}. Değer yazın ya da “Doldur” ile tablodan seçin.`, 400,
           { eksikler: eksik.map((a) => a.anahtar) });
@@ -1718,7 +1816,8 @@ export function hizliTestYoneticisiOlustur(s) {
     // yalnız o üst liste ve sayfaya henüz uygulanmamış üstleri gider (diğer girilen değerler oturumda saklanır, "Devam et"te gider).
     // İç içe seçimde üst seçimler (koşul zinciri) de: alt seçim sayfada ancak üst değer uygulanınca görünür.
     const zincirKumesi = zincir ? new Set([zincir.anahtar, ...ustleri(o, zincir.anahtar), ...kosulUstleri(o, zincir.anahtar).flatMap((u) => [u, ...ustleri(o, u)])]) : null;
-    const gidecek = bagimliSirala(adim.alanlar.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar] && kosulAktif(o, a)
+    // Şu anki seçimde düzenlenemeyen (sayfanın doldurduğu) alana hiç dokunulmaz: değeri girilmiş olsa bile yazılmaz.
+    const gidecek = bagimliSirala(adim.alanlar.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar] && kosulAktif(o, a) && !duzenlenemez(o, a)
       && (!zincirKumesi || (zincirKumesi.has(a.anahtar) && (a.anahtar === zincir?.anahtar || o.uygulanan[a.anahtar] !== o.degerler[a.anahtar].deger)))));
     const cozulecek = Object.fromEntries(gidecek.filter((/** @type {Nesne} */ a) => o.degerler[a.anahtar].kaynak === 'tablo').map((/** @type {Nesne} */ a) => [a.anahtar, o.degerler[a.anahtar].deger]));
     /** @type {Record<string, unknown>} */
@@ -2021,7 +2120,7 @@ export function hizliTestYoneticisiOlustur(s) {
     // Doldururken çıkan uyarı önemsiz: veri durağının devamı (henüz basış yok).
     if (dolduranKaynak) {
       const adim = guncelAdim(o);
-      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !bagliGelecek(x, o)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
+      const eksik = eksikAlanlar(adim.alanlar.filter((/** @type {Nesne} */ x) => kosulAktif(o, x) && !duzenlenemez(o, x) && !bagliGelecek(x, o)), Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger])));
       if (eksik.length) veriDuragi(o, `${eksik.length} zorunlu alan boş.`); else verilerTamam(o);
       return { tamam: true };
     }
@@ -2130,7 +2229,7 @@ export function hizliTestYoneticisiOlustur(s) {
   /** Doğrulama koşusunun planı ve arayüzdeki adım satırları. @param {Nesne} o */
   function dogrulamaPlani(o) {
     const adimlar = o.adimlar.map((/** @type {Nesne} */ a) => ({
-      alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x))).map((/** @type {Nesne} */ x) => ({
+      alanlar: bagimliSirala(a.alanlar.filter((/** @type {Nesne} */ x) => o.degerler[x.anahtar] && kosulAktif(o, x) && !duzenlenemez(o, x))).map((/** @type {Nesne} */ x) => ({
         anahtar: x.anahtar, alan: x,
         deger: o.degerler[x.anahtar].kaynak === 'dosya' ? String(o.dosyaYollari?.[x.anahtar] ?? '') : o.cozulmus?.[x.anahtar] ?? o.degerler[x.anahtar].deger
       })),
@@ -2182,7 +2281,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const degerler = Object.fromEntries(Object.entries(aktifDegerler(o)).map(([k, v]) => [k, v.deger]));
     // Koşullu alanları belirleyen seçim (radyo / liste / onay kutusu) için değer verilmediyse sayfanın İLK değeri (keşifte okunan; değer
     // üretilmez) senaryoya yazılır: hızlı test koşulları bu değerle değerlendirdi, normal koşu da aynı değerle değerlendirir.
-    const kontroller = new Set(o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).flatMap((/** @type {Nesne} */ a) => [a.kosul?.secim, a.etiketKosulu?.secim]).filter(Boolean));
+    const kontroller = new Set(o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).flatMap((/** @type {Nesne} */ a) => [a.kosul?.secim, a.etiketKosulu?.secim, a.kilitKosulu?.secim]).filter(Boolean));
     for (const k of kontroller) {
       // Kullanıcının koştuğu dalda görünmeyen (iç içe; üst seçimi başka değerde) seçim senaryoya hiç yazılmaz.
       const ka = o.alanlar.get(k)?.alan;
@@ -2237,7 +2336,10 @@ export function hizliTestYoneticisiOlustur(s) {
   function planAlanlari(o) {
     return o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).map((/** @type {Nesne} */ a00) => {
       // Kullanıcının koştuğu dalda görünmeyen (üst seçimi başka değerde) alan işaretlenir: tablosu yazılır ama senaryoya değeri yazılmaz.
-      const a0 = kosulAktif(o, a00, new Set(), true) ? a00 : { ...a00, dalDisi: true };
+      const a01 = kosulAktif(o, a00, new Set(), true) ? a00 : { ...a00, dalDisi: true };
+      // Kaydedilen dalda düzenlenemeyen (sayfanın doldurduğu) alan işaretlenir: değeri senaryoya / tabloya girmez, sayfadaki hazır değeri
+      // "dolu" sayılmaz (başka dalda düzenlenebilirse orada veri gerekir).
+      const a0 = duzenlenemez(o, a00) ? { ...a01, kilitli: true } : a01;
       // Etiketi seçime göre değişen alan senaryonun seçimindeki adıyla (sütun adı ve öneri başlığı o dalın anlamını taşır).
       const a = a0.etiketKosulu ? { ...a0, etiket: gecerliEtiket(o, a0) ?? a0.etiket } : a0;
       if (!o.bagliUst.has(a.anahtar) || a.tur !== 'select') return a;
@@ -2485,6 +2587,8 @@ export function hizliTestYoneticisiOlustur(s) {
           if (anahtar && veri2[anahtar] === undefined) veri2[anahtar] = basvuruYaz(y.ad, y.hedef(d.sutun));
         }
         if (!tamam) { gunluk(o, `“${oneri.baslik}” önerisi kaydedilmedi: tablosu yazılmadı (atlandı).`); continue; }
+        // Önerinin dalında düzenlenemeyen (sayfanın doldurduğu) alanların değeri senaryoya yazılmaz.
+        for (const k of Array.isArray(oneri.alt.kaldirilanlar) ? oneri.alt.kaldirilanlar : []) { const an = anahtarlar[k]; if (an) delete veri2[an]; }
         /** @type {ReturnType<typeof veriBekleyenSatirlariYaz>} */
         let bekleyen = [];
         if (eksikler.length) {

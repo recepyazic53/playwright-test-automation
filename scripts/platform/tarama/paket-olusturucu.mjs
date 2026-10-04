@@ -338,12 +338,16 @@ export function alanDonusturucu(sayac) {
     const { tip, not } = a.takvimden ? { tip: 'tarih', not: 'Takvimden seçilen tarih alanı (salt okunur ya da tuşla yazmayı engelliyor): değer yazılır, olmazsa takvimden gün seçilir.' } : modelTipi(a);
     const etiket = temizMetin(a.etiket, sayac, 120);
     if (!etiket) etiketsizler.push(id);
-    const dokunulmaz = a.devreDisi || (a.saltOkunur && !a.takvimden);
+    // Seçime göre düzenlenemeyen alan (kilitKosulu: bir seçimde sayfa kendisi doldurur, diğerinde girilir) taramadaki durumuna bakılmadan
+    // senaryodan doldurulur; koşu alan o an düzenlenemezse yazmaz (doldurucuParametreleri.kilit).
+    const secimeGoreKilit = Boolean(a.kilitKosulu && typeof a.kilitKosulu === 'object');
+    const dokunulmaz = !secimeGoreKilit && (a.devreDisi || (a.saltOkunur && !a.takvimden));
     /** @type {string[]} */
     const alanNotlari = [];
     if (not) alanNotlari.push(not);
-    if (a.devreDisi) alanNotlari.push('Taramada devre dışıydı.');
-    if (a.saltOkunur && !a.takvimden) alanNotlari.push('Taramada salt okunurdu.');
+    if (secimeGoreKilit) alanNotlari.push('Bazı seçimlerde sayfa bu alanı kendisi doldurur (düzenlenemez): o seçimde yazılmaz.');
+    else if (a.devreDisi) alanNotlari.push('Taramada devre dışıydı.');
+    if (a.saltOkunur && !a.takvimden && !secimeGoreKilit) alanNotlari.push('Taramada salt okunurdu.');
     if (a.grup) alanNotlari.push(`"${a.grup}" onay kutusu grubunun parçası.`);
     /** @type {Record<string, unknown>} */
     const alan = { id, tip, etiket: { ekran: etiket } };
@@ -388,6 +392,7 @@ export function alanDonusturucu(sayac) {
     }
     // Otomatik tamamlama: koşucu yazıp öneri listesinden eşleşeni seçer (doldurucuParametreleri.oneri).
     if (a.oneri && tip === 'metin') alan.doldurucuParametreleri = { ...(nesneMi(alan.doldurucuParametreleri) ? alan.doldurucuParametreleri : {}), oneri: true };
+    if (secimeGoreKilit) alan.doldurucuParametreleri = { ...(nesneMi(alan.doldurucuParametreleri) ? alan.doldurucuParametreleri : {}), kilit: true };
     if (tip === 'dosya') {
       const kabul = kabulUzantisi(a.kabul);
       if (kabul) alan.kabul = kabul;
