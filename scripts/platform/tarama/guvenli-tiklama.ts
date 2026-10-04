@@ -164,6 +164,10 @@ export async function guvenliTikla(page: Page, oge: Locator, s: {
   zamanMs: number; ag?: AgIzleyici | null; basariVarMi?: () => Promise<boolean>; tikla?: (oge: Locator, zamanMs: number) => Promise<void>;
   /** false: sakinlik çağıran tarafından zaten beklendi (ör. hızlı testte yazma izni açılmadan önce). */
   sakinlik?: boolean;
+  /** Düğmenin adı (açık hata iletisi için). */
+  ad?: string;
+  /** Düğmeyi örten yüklenme perdesinin kalkması için üst sınır (ms; verilmezse zamanMs). */
+  perdeMs?: number;
 }): Promise<TiklamaSonucu> {
   const tikla = s.tikla ?? ((l: Locator, ms: number) => l.click({ timeout: ms }));
   if (s.sakinlik !== false) {
@@ -171,6 +175,9 @@ export async function guvenliTikla(page: Page, oge: Locator, s: {
     await oge.waitFor({ state: 'visible', timeout: s.zamanMs }).catch(() => undefined);
     await sakinlikBekle(page, oge, { ag: s.ag });
   }
+  // Düğmeyi sayfanın kendi yüklenme perdesi örtüyorsa kalkması beklenir (Escape / boş yere tıklama yok); gerçek pencere örtüyorsa
+  // tıklama kendi hatasını verir (çağıran kapatmayı dener).
+  await perdeKalksin(page, oge, { ad: s.ad ?? 'Düğme', enCokMs: s.perdeMs ?? s.zamanMs, ag: s.ag });
   // Başarı göstergesi zaten görünüyorsa tekrar kararı verilemez: düz tıklama.
   const basariOnce = s.basariVarMi ? await s.basariVarMi().catch(() => false) : false;
   const once = await sayfaParmakIzi(page);
@@ -207,11 +214,72 @@ export async function ortuBul(hedef: Locator): Promise<string | null> {
   }).catch(() => null);
 }
 
+/** Yüklenme perdesinin kalkması için varsayılan üst sınır (ms; çağıran ayarlı süreyi verebilir). */
+export const PERDE_EN_COK_MS = 30_000;
+
 /**
- * Düğmeyi örten öğeyi kapatmayı dener (Escape → sayfanın boş bir yerine tıklama); kapanmazsa örten öğeyi söyleyen açık hata fırlatır
- * (ham "locator.click: Timeout" yerine). Örten yoksa hiçbir şey yapmaz.
+ * Düğmenin ortasındaki örten öğenin durumu (tarayıcıda): örten yoksa null. Örten kap = örten öğenin, hedefi içermeyen en dış atası (body
+ * hariç). Yüklenme perdesi adayı: kapta etkileşimli denetim (alan, düğme, bağlantı, seçenek, menü öğesi, odaklanabilir öğe) YOK, yazısı
+ * kısa (yalnız dönen gösterge / "yükleniyor" türü yazı) ve pencere / liste / menü değil. geniş: kap görünür alanın en az yarısını örter.
  */
-export async function ortuyuKaldir(page: Page, hedef: Locator, ad: string): Promise<void> {
+function ortuDurumu(e: Element): { tanim: string; aday: boolean; genis: boolean } | null {
+  const r = e.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0) return null;
+  const kok = e.getRootNode() as Document | ShadowRoot;
+  const ust = (typeof kok.elementFromPoint === 'function' ? kok : e.ownerDocument).elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  if (!ust || ust === e || e.contains(ust) || ust.contains(e)) return null;
+  let kap: Element = ust;
+  while (kap.parentElement && kap.parentElement !== document.body && kap.parentElement !== document.documentElement && !kap.parentElement.contains(e)) kap = kap.parentElement;
+  const pencere = ust.closest('[role="listbox"], [role="menu"], [role="dialog"], [role="alertdialog"], [role="tooltip"], ul, ol, dialog');
+  const sec = 'input:not([type="hidden"]), select, textarea, button, a[href], [role="button"], [role="link"], [role="option"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="tab"], [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+  const gorunur = (x: Element): boolean => { const b = x.getBoundingClientRect(); const s = getComputedStyle(x); return b.width > 0 && b.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const denetimVar = (kap.matches(sec) && gorunur(kap)) || [...kap.querySelectorAll(sec)].some(gorunur);
+  const yazi = ((kap as HTMLElement).innerText || '').replace(/\s+/g, ' ').trim();
+  const k = kap.getBoundingClientRect();
+  const gw = Math.max(1, window.innerWidth);
+  const gh = Math.max(1, window.innerHeight);
+  const ortulen = Math.max(0, Math.min(k.right, gw) - Math.max(k.left, 0)) * Math.max(0, Math.min(k.bottom, gh) - Math.max(k.top, 0));
+  const tanimKap = pencere ?? ust;
+  const ad = tanimKap.getAttribute('role') ?? tanimKap.tagName.toLowerCase();
+  const ustYazi = ((ust as HTMLElement).innerText || ust.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return { tanim: `${ad}${ustYazi ? `: “${ustYazi}”` : ''}`, aday: !pencere && !denetimVar && yazi.length <= 60, genis: ortulen >= (gw * gh) / 2 };
+}
+
+/**
+ * Düğmeyi örten öğe sayfanın kendi kendine kalkan YÜKLENME PERDESİ ise (geniş örtü ya da ağ isteği sürerken; içinde etkileşimli denetim
+ * yok, yalnız gösterge / kısa bekleme yazısı) kalkana — görünmez olana ya da DOM'dan çıkana — kadar beklenir (en çok enCokMs). Escape'e
+ * basılmaz, boş yere tıklanmaz. Sonuç: 'yok' (örten yok / perde kalktı), 'pencere' (örten perde değil: gerçek pencere / liste; çağıran
+ * eski yolla kapatmayı dener). Süre dolarsa beklendiğini söyleyen açık hata fırlatır.
+ */
+export async function perdeKalksin(page: Page, hedef: Locator, s: { ad: string; enCokMs?: number; ag?: AgIzleyici | null }): Promise<'yok' | 'pencere'> {
+  const enCok = s.enCokMs ?? PERDE_EN_COK_MS;
+  const bitis = Date.now() + enCok;
+  let tanim = '';
+  let ilk = true;
+  for (;;) {
+    if (ilk) await hedef.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => undefined);
+    ilk = false;
+    const d = await hedef.evaluate(ortuDurumu).catch(() => null);
+    if (!d) return 'yok';
+    const agMesgul = Boolean(s.ag) && !s.ag?.sakinMi(0, { sessizlikMs: AG_SESSIZLIK_MS });
+    if (!d.aday || (!d.genis && !agMesgul)) return 'pencere';
+    tanim = d.tanim;
+    if (page.isClosed() || Date.now() >= bitis) {
+      // Dar örtü yalnız ağ sürdüğü için beklendiyse (ör. sürekli yoklayan sayfada yapışkan başlık): perde sayılmaz, eski yol.
+      if (!d.genis) return 'pencere';
+      break;
+    }
+    await page.waitForTimeout(ORNEK_MS * 1.5);
+  }
+  throw new Error(`“${s.ad}” düğmesine basılamadı: sayfayı örten yüklenme perdesi (${tanim}) ${Math.round(enCok / 1000)} sn beklendi, kalkmadı. Sayfa yüklenmeyi bitirmedi; sayfayı denetleyip yeniden deneyin ya da Ayarlar'da alan işlem süresini artırın.`);
+}
+
+/**
+ * Düğmeyi örten öğeyi kapatmayı dener: önce yüklenme perdesiyse kalkması beklenir (perdeKalksin); değilse Escape → sayfanın boş bir yerine
+ * tıklama; kapanmazsa örten öğeyi söyleyen açık hata fırlatır (ham "locator.click: Timeout" yerine). Örten yoksa hiçbir şey yapmaz.
+ */
+export async function ortuyuKaldir(page: Page, hedef: Locator, ad: string, s: { enCokMs?: number; ag?: AgIzleyici | null } = {}): Promise<void> {
+  if ((await perdeKalksin(page, hedef, { ad, ...s })) === 'yok') return;
   let ortu = await ortuBul(hedef);
   if (!ortu) return;
   await page.keyboard.press('Escape').catch(() => undefined);

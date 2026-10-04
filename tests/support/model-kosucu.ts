@@ -939,7 +939,7 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
     const ad = a.aciklama || a.metin || a.secici;
     const guvenliBas = async (oge: Locator, zamanMs: number): Promise<void> => {
       const r = await guvenliTikla(page, oge, {
-        zamanMs, ag: agIzleri.get(page) ?? null, tikla: cerceveliTikla,
+        zamanMs, ag: agIzleri.get(page) ?? null, tikla: cerceveliTikla, ad,
         ...(kosu?.basariGostergesi ? { basariVarMi: () => basariVarMi(page, kosu) } : {})
       });
       const iz = tiklamaIzi(page);
