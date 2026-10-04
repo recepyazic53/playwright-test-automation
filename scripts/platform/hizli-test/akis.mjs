@@ -434,6 +434,32 @@ export function senaryoVerisiKur(model, anahtarlar, degerler, s = {}) {
 }
 
 /**
+ * Senaryodaki düz seçim değerlerini kaydedilecek modelin SENARYO DEĞERİNE çevirir (veri yerinde değişir): değer sayfanın iç kodu (ör. "O")
+ * ya da görünen metniyse ve modelde o seçeneğin senaryo değeri farklıysa (tabloya bağlı alanda tablodaki görünen ad, ör. "Özel"; sayfa
+ * kodu sütunun karşılığında durur) senaryo değeri yazılır. Tablo başvurusu ("${Tablo.Sütun}"), zaten geçerli değer ve seçeneği bulunmayan
+ * değer değişmez. @param {Record<string, any> | null | undefined} model @param {Record<string, unknown>} veri @returns {Record<string, unknown>}
+ */
+export function secimDegerleriniUydur(model, veri) {
+  if (!nesneMi(model)) return veri;
+  const alanlar = (Array.isArray(model.adimlar) ? model.adimlar : []).flatMap((a) => (nesneMi(a) && Array.isArray(a.bolumler) ? a.bolumler : []))
+    .flatMap((b) => (nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []))
+    .concat(nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : [])
+    .filter((x) => nesneMi(x) && ['secim', 'okluSecim', 'radyo'].includes(x.tip) && nesneMi(x.eslesme) && typeof x.eslesme.senaryo === 'string');
+  const senaryoDegeri = (/** @type {Record<string, any>} */ s) => String(s.senaryoDegeri !== undefined ? s.senaryoDegeri : s.deger);
+  for (const a of alanlar) {
+    const k = a.eslesme.senaryo;
+    const v = veri[k];
+    if (typeof v !== 'string' || v === '' || /^\s*\$\{/.test(v)) continue;
+    const havuz = [...(Array.isArray(a.secenekler) ? a.secenekler : []),
+      ...(nesneMi(a.bagimlilik) && nesneMi(a.bagimlilik.secenekHaritasi) ? Object.values(a.bagimlilik.secenekHaritasi).flat() : [])].filter(nesneMi);
+    if (!havuz.length || havuz.some((s) => senaryoDegeri(s) === v)) continue;
+    const s = havuz.find((x) => String(x.deger) === v) ?? havuz.find((x) => x.metin === v || x.formMetni === v);
+    if (s) veri[k] = senaryoDegeri(s);
+  }
+  return veri;
+}
+
+/**
  * Hayır izninde (basılmadan) bitiş seçenekleri: eylem keşfinin başarı adayları (Bitti), hata adayları (Hata), bekleme adayları (Devam)
  * ve cümledeki tırnaklı mesajlar (Bitti). Metni olmayan aday atlanır.
  * @param {{ basari?: Array<{ metin: string | null }>; hata?: Array<{ metin: string | null }>; bekleme?: Array<{ metin: string | null }> } | null} eylem

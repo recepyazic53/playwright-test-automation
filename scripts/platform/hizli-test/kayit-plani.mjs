@@ -277,7 +277,8 @@ export function planKur(g) {
   const degerler = { ...g.degerler };
   for (const a of g.alanlar) {
     const k = String(a.anahtar);
-    if (!kontroller.has(k) || !SECIM_TURLERI.includes(String(a.tur)) || degerler[k] !== undefined) continue;
+    // Kullanıcının koştuğu dalda görünmeyen (dalDisi) seçim senaryoya yazılmaz; seçenekleri aşağıda kendi liste tablosuna alınır.
+    if (!kontroller.has(k) || a.dalDisi || !SECIM_TURLERI.includes(String(a.tur)) || degerler[k] !== undefined) continue;
     const l = tumSecenekler(a);
     const sayfa = [a.sayfadaki, a.mevcut].map((v) => (v === undefined || v === null ? '' : String(v))).find(Boolean);
     const s = sayfa ? l.find((x) => x.kod === sayfa) ?? l.find((x) => x.metin === sayfa) : undefined;
@@ -867,7 +868,8 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   /** @typedef {{ degisiklikler: Degisiklik[]; parcalar: string[]; gerekce: string[]; veriGerekli: string[]; eksik: Eksik[]; zenginlik: number }} Aday */
   /** @param {DalYolu} y @returns {Aday} */
   const dalAdayi = (y) => ({
-    degisiklikler: y.d.filter((x) => !(kontroller.includes(x.oturumAnahtar) && kodu(x.oturumAnahtar, x.deger) === simdikiKod(x.oturumAnahtar))),
+    // Şimdiki değerindeki seçim değişiklik sayılmaz; kaydedilen dalda görünmeyen (dalDisi) seçimin değeri ise senaryoda yoktur: açıkça yazılır.
+    degisiklikler: y.d.filter((x) => !(kontroller.includes(x.oturumAnahtar) && !alan(x.oturumAnahtar)?.dalDisi && kodu(x.oturumAnahtar, x.deger) === simdikiKod(x.oturumAnahtar))),
     parcalar: y.adimlar.map((a) => `${etiketi(a.k)}: ${a.m}`), gerekce: [`görünürlük dalları: ${dalKapsami}`], veriGerekli: y.veriGerekli, eksik: tekEksik(y.eksik), zenginlik: y.d.length
   });
   /** @type {Aday[]} */

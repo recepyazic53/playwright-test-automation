@@ -537,7 +537,8 @@ export async function hizliTestiYurut(
       await sakinlikBekle(page, hedef, { ag });
       // Düğmeyi örten öğe (ör. açık kalan öneri listesi / açılır menü): Escape, sonra sayfanın boş bir yerine tıklanarak kapatılır;
       // kapanmazsa örten öğe açıkça söylenir (ham "locator.click: Timeout" yerine).
-      await ortuyuKaldir(page, hedef, metin ?? secici);
+      // Sayfanın kendi yüklenme perdesi örtüyorsa önce kalkması beklenir (en çok Ayarlar'daki alan işlem süresi).
+      await ortuyuKaldir(page, hedef, metin ?? secici, { enCokMs: taramaTarayiciAyarlari(g).alanIslemMs, ag });
       // Tıklama ile pencere yarışır: tıklama bir pencere açarsa (confirm / alert) pencere yanıtlanana kadar dönmez; pencere açılınca
       // tıklama yapılmış sayılır, pencerenin yanıtı (izin / kullanıcı) beklenir, sonra izleme sürer.
       const tikla = async (oge: Locator, ms: number): Promise<void> => {
@@ -550,7 +551,7 @@ export async function hizliTestiYurut(
       };
       let t: Awaited<ReturnType<typeof guvenliTikla>>;
       try {
-        t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false, tikla });
+        t = await guvenliTikla(page, hedef, { zamanMs: 15_000, ag, sakinlik: false, tikla, ad: metin ?? secici, perdeMs: taramaTarayiciAyarlari(g).alanIslemMs });
       } catch (hata) {
         const m = String(hata instanceof Error ? hata.message : hata);
         const ortu = /(<[a-z][^>]*>[^<]{0,80})(?:<\/[a-z]+>)?[^\n]*intercepts pointer events/i.exec(m)?.[1];

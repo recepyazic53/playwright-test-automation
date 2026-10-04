@@ -35,6 +35,7 @@ export declare function senaryoVerisiKur(
   model: Record<string, any>, anahtarlar: Record<string, string>, degerler: Record<string, unknown>,
   s?: { olumsuz?: { mesaj: string; adimId: string } | null; alanTurleri?: Record<string, string> }
 ): Record<string, unknown>;
+export declare function secimDegerleriniUydur(model: Record<string, any> | null | undefined, veri: Record<string, unknown>): Record<string, unknown>;
 export declare function adayMesajlari(
   eylem: { basari?: Array<{ metin: string | null }>; hata?: Array<{ metin: string | null }>; bekleme?: Array<{ metin: string | null }> } | null, cumleMesajlari?: string[]
 ): Array<{ metin: string; tur: 'basari' | 'hata' | 'bekleme'; kaynak: 'aday' | 'cumle' }>;

@@ -1440,6 +1440,13 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     otoGostergeleriCiz();
   };
   devam.addEventListener('click', () => ilerle(devam));
+  // "Doldurmadan burada bitir" (en az bir basıştan sonra): bu duraktaki alanlara hiçbir şey yazılmaz, düğmeye basılmaz; doğrudan bitiş
+  // koşulu adımına geçilir (açılan pencere / öğe bitiş adayıdır). Durağın soruları teste girmez.
+  const doldurmadan = s.doldurmadanBitir && !s.gecmis
+    ? h('button', { type: 'button', class: 'ikincil', title: 'Bu ekrandaki alanları doldurmadan test burada biter; açılan pencere ya da öğe görününce “bitti” seçilebilir.' }, 'Doldurmadan burada bitir')
+    : null;
+  if (doldurmadan) doldurmadan.addEventListener('click', () => { otoBirak(); void gonder(/** @type {HTMLButtonElement} */ (doldurmadan), 'karar', { karar: 'doldurmadanBitir' }, m); });
+  if (doldurmadan && getiriliyor) /** @type {HTMLButtonElement} */ (doldurmadan).disabled = true;
   listeyiCiz();
   kuruluyor = false;
   // Yerinde zincir isteği sürerken girdiler kapalıdır (sunucu sayfayı dolduruyor; sonuç gelince kart yeniden çizilir).
@@ -1475,7 +1482,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       ? h('ul', { class: 'soluk kucuk hizli-kesif-notlari' }, o.kesif.notlar.map((x) => h('li', {}, x))) : null,
     h('p', { class: 'soluk' }, 'Sayfadaki alanlar sayfadaki sırasıyla aşağıda; adları sayfadaki gibi yazıldı. Değeri yazın ya da “Doldur” ile test verisi tablosundan seçin; hiçbir değer uydurulmaz. Sayfada hazır gelen değerler önyazılı ve “sayfada hazır” işaretli: değiştirmezseniz sayfadaki değer kullanılır. Doldurduğunuzda akış kaldığı yerden sürer.'),
     kontrolKap, gosterge, m.kutu, satirlarKap, kesifAlanlariBolumu(s), saltOkunurBolumu(s, false),
-    h('div', { class: 'dugmeler' }, devam, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
+    h('div', { class: 'dugmeler' }, devam, doldurmadan, zorunluSayisi ? h('span', { class: 'soluk' }, `${zorunluSayisi} zorunlu alan eksik`) : null),
     devamIpucu);
 }
 
