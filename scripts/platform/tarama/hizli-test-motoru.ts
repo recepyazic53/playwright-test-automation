@@ -370,6 +370,8 @@ export async function hizliTestiYurut(
 
     /** Son doldurmada seçeneğini beklemek gereken listeler: anahtar → bekleme (ms; bağlı listenin dolma süresi ölçümü). */
     let beklemeler: Record<string, number> = {};
+    /** Son doldurmada yazılan değeri tutmayan, sayfanın ESKİ değerini geri yazdığı alanlar (düzenlenemez kanıtı; alan-cikisi.ts > alanaYaz). */
+    const kilitliYazilan = new Set<string>();
     /** Bir alanı doldurur (değer kullanıcının; motor üretmez). Hata metni döner (başarılıysa null). */
     async function alaniDoldur(page: Page, d: HizliDoldurulan): Promise<string | null> {
       const a = d.alan;
@@ -471,6 +473,8 @@ export async function hizliTestiYurut(
         // Önceden dolu (varsayılan değerli) alanın üzerine de yazılır; değer sayfadakiyle karşılaştırılır, tutmazsa tümü seçilip silinerek
         // yeniden yazılır, yine tutmazsa açık alan hatası.
         const sonuc = await alanaYaz(l, String(deger), { zamanAsimiMs: bekleMs, sonra: async () => { await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS)); } });
+        // Değer tutmadı ve sayfa ÖNCEKİ değeri geri yazdı: alan sayfa tarafından dolduruluyor (düzenlenemez) — hata değil, sunucuya bildirilir.
+        if (sonuc === 'kilitli') { kilitliYazilan.add(d.anahtar); return null; }
         const yh = await yazmaHatasi(l, String(deger), sonuc, a.etiket ?? d.anahtar);
         if (yh) return yh;
         // "Yazıp Enter'a basın" alanı (etiket / beceri girdisi): değer Enter ile eklenir (normal koşu aynı: doldurucuParametreleri.tus).
@@ -773,6 +777,8 @@ export async function hizliTestiYurut(
           await izleyici.denetle(ad(d));
           continue;
         }
+        // Sayfanın doldurduğu (yazılanı geri alan) alan izlenmez: yazılmadı sayılır.
+        if (kilitliYazilan.has(d.anahtar)) { await izleyici.denetle(ad(d)); continue; }
         if (yaziAlaniMi(d)) await izleyici.yazildi(d.anahtar, ad(d), String(d.deger), yer(d));
         else await izleyici.denetle(ad(d));
       }
@@ -887,7 +893,8 @@ export async function hizliTestiYurut(
         deger: d.deger, metin: d.metin ?? null, gorunenler: d.gorunenler, kaybolanlar: d.kaybolanlar,
         ...(d.secenekler ? { secenekler: d.secenekler } : {}), ...(d.etkinlesenler?.length ? { etkinlesenler: d.etkinlesenler } : {}),
         ...(d.etiketler && Object.keys(d.etiketler).length ? { etiketler: d.etiketler } : {}),
-        ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {})
+        ...(d.kurallar && Object.keys(d.kurallar).length ? { kurallar: d.kurallar } : {}),
+        ...(d.kilitler && Object.keys(d.kilitler).length ? { kilitler: d.kilitler } : {})
       }))
     });
     /** İç içe keşfin en çok derinliği (üst seçim → alt seçim → onun altı). */
@@ -1078,6 +1085,7 @@ export async function hizliTestiYurut(
           diyaloglar.length = 0;
           diyalogKayitlari.length = 0;
           beklemeler = {};
+          kilitliYazilan.clear();
           const doldurOncesi = new Set(sonAnlik.alanlar.map((a) => a.anahtar));
           // Yazılan alanlar ve sayfaya aynı değerle önceden uygulanmış (yeniden yazılmayan) alanlar: tur sonunda yeniden okunur; boşalan /
           // başka alan yüzünden değişen alan bir kez yeniden yazılır, yine değişirse alan hatası (turuDoldur).
@@ -1107,7 +1115,12 @@ export async function hizliTestiYurut(
           const yeniSecimler = k.kesfedilen ? yeniListeler.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur && !bilinen.has(a.anahtar)) : [];
           const kesifler = yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
           if (zincirYeni || kesifler.length) sonAnlik = await anlikOku(islem, false);
-          await gonder({ olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler, ...(zincirYeni ? { zincir: zincirYeni } : {}), ...(kesifler.length ? { kesifler } : {}) });
+          // (Yeniden yazılınca yine değişen alan hatadır: kilit kanıtı sayılmaz.)
+          const kilitliler = [...kilitliYazilan].filter((x) => !hatalar.some((h) => h.anahtar === x));
+          await gonder({
+            olay: 'dolduruldu', no: k.no, hatalar, anlik: sonAnlik, yeniMetinler, beklemeler, ...(zincirYeni ? { zincir: zincirYeni } : {}), ...(kesifler.length ? { kesifler } : {}),
+            ...(kilitliler.length ? { kilitliler } : {})
+          });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
           const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no, k.cerceve ?? null);

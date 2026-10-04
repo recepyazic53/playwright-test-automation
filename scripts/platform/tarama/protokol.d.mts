@@ -210,6 +210,8 @@ export type HizliKesif = {
     etiketler?: Record<string, string>;
     /** Bu değerde en çok karakter sayısı / deseni değişen alanlar. */
     kurallar?: Record<string, { enCok: number | null; desen: string | null }>;
+    /** Bu değerde düzenlenebilirliği değişen alanlar: anahtar → bu değerde düzenlenemez mi. */
+    kilitler?: Record<string, boolean>;
   }>;
 };
 export type HizliDoldurulan = { anahtar: string; alan: HamAlan; deger: string | boolean };
@@ -248,7 +250,9 @@ export type HizliOlay =
       /** Doldurunca beliren listeler arasında bulunan bağlı liste zinciri (yerinde keşif). */
       zincir?: ZincirSonucu | null;
       /** Doldurunca beliren seçimlerin yerinde keşfi (iç içe dahil; keşifte kaçırılanlar da). */
-      kesifler?: HizliKesif[] }
+      kesifler?: HizliKesif[];
+      /** Yazılan değeri tutmayan ve sayfanın ESKİ değerini geri yazdığı alanlar: düzenlenemez kanıtı (hata değildir). */
+      kilitliler?: string[] }
   | { olay: 'basildi'; no: number; fark: HizliFark; kesifler?: HizliKesif[]; zincir?: ZincirSonucu | null }
   | { olay: 'secildi'; no: number; oge: { secici: string; metin: string | null } }
   | { olay: 'secimIptal'; no: number }

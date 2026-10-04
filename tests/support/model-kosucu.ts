@@ -24,7 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
-import { DegerIzleyici, alanaYaz, alandanCik, oneridenYaz, takvimdenYaz, yazmaHatasi } from '../../scripts/platform/tarama/alan-cikisi';
+import { DegerIzleyici, KILITLI_ALAN_NOTU, alanaYaz, alandanCik, oneridenYaz, takvimdenYaz, yazmaHatasi } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
@@ -49,7 +49,7 @@ import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
-import { ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
+import { alanKilidi, ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
 import { GORUNURSE_BEKLEME_SN } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 import { GUVENLI_EKRAN_EYLEMLERI, ekranKapsamindaMi, type EkranKurali, type KurtarmaOlayi } from '../../scripts/platform/ayarlar/kurtarma-kurallari.mjs';
 
@@ -353,6 +353,17 @@ async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string,
  */
 /** Bağlı listelerin yavaşlama notları (adımdan sonra adım ayrıntısına yazılır; tıklama notlarıyla aynı yol). */
 const yavaslamaNotlari: string[] = [];
+/** Sayfanın doldurduğu (o an düzenlenemeyen) için yazılmayan alanların notları (hata değil; adım ayrıntısına yazılır). */
+const kilitNotlari: string[] = [];
+/** Seçime bağlı olmayan alanda da düzenlenemez sayılan kilitler (alanKilidi): aria-disabled, kapalı takvim, tuş + değer engeli. */
+const SERT_KILITLER = new Set(['aria-devre-disi', 'takvim-kilidi', 'tus-deger']);
+/** Yazılan değeri tutmayan, sayfanın ÖNCEKİ değerini geri yazdığı alanlar (bu adımda): izlenmez, yeniden yazılmaz. */
+const kilitliYazilanlar = new Set<PlanAlani>();
+/** Değer tutmadı ve sayfa önceki değeri geri yazdı: alan sayfa tarafından dolduruluyor (düzenlenemez kanıtı) — hata değil, not. */
+function kilitliYazildi(alan: PlanAlani): void {
+  kilitliYazilanlar.add(alan);
+  kilitNotlari.push(`“${alan.etiket}”: ${KILITLI_ALAN_NOTU}`);
+}
 
 /** Bağlı listenin bekleme sınırı: model gözlenen olağan dolma süresini biliyorsa ona göre, yoksa "Alan işlemi" ayarı. */
 const listeBeklemesi = (alan: { yuklenmeMs?: number | null }): { sinirMs: number; yavasMs: number | null } => yuklenmeBeklemesi(alan.yuklenmeMs, alanTiklamaSuresiMs());
@@ -617,6 +628,7 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
         // Ortak yazma kuralı (alan-cikisi.ts > alanaYaz): metin kutusundaki tarih (maskeli "gg.aa.yyyy") gerçek tuşlarla yazılır;
         // tarayıcının tarih denetimi (type=date) doğrudan.
         const r = await alanaYaz(l, String(deger), { zamanAsimiMs: alanTiklamaSuresiMs() });
+        if (r === 'kilitli') { kilitliYazildi(ham); return; }
         const h = r === 'tutmadi' ? await yazmaHatasi(l, String(deger), r, alan.etiket) : null;
         if (h) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${String(deger)}" yazılır`, h));
       }
@@ -644,6 +656,7 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       const r = await alanaYaz(l, metin, {
         tuslayarak, aralikMs: tuslayarak ? 25 : undefined, kip: ham.parametreler.maske ? 'dogrudan' : 'otomatik', zamanAsimiMs: alanTiklamaSuresiMs()
       });
+      if (r === 'kilitli') { kilitliYazildi(ham); return; }
       const h = r === 'tutmadi' ? await yazmaHatasi(l, metin, r, alan.etiket) : null;
       if (h) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${metin}" yazılır`, h));
     }
@@ -1396,6 +1409,16 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           if (alan.ustId && (await l.isDisabled().catch(() => false))) {
             for (const bitis = Date.now() + listeBeklemesi(alan).sinirMs; Date.now() < bitis && (await l.isDisabled().catch(() => false));) await new Promise((c) => setTimeout(c, 250));
           }
+          // Sayfanın doldurduğu (o an düzenlenemeyen) alana hiç dokunulmaz — senaryoda değeri olsa bile; hata değil, adım notu düşer
+          // (sayfanın doldurduğu değer boş da olabilir). Seçime göre kilitlenen alanda (kilit) her kilit, diğerlerinde yalnız açık kilitler
+          // (hızlı testle ORTAK kural: sayfa-envanteri.ts > alanKilidi; salt okuma).
+          if (!zorla && alan.tip !== 'radyo' && !alan.yalnizTus) {
+            const kilit = await l.evaluate(alanKilidi).catch(() => null);
+            if (kilit && (alan.parametreler.kilit === true || SERT_KILITLER.has(kilit))) {
+              kilitNotlari.push(`“${alan.etiket}”: ${KILITLI_ALAN_NOTU}`);
+              continue;
+            }
+          }
           // Kapalı (disabled) alan doldurulamaz: görünmeyen alan gibi atlanır (mutlaka görünmeli ise hata).
           if (await l.isDisabled().catch(() => false)) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, `${alan.etiket} alanı kapalı (disabled)`));
@@ -1418,6 +1441,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           const onceki = new Map<string, string>();
           for (const c of altlar) if (c.secici) onceki.set(c.id, await k.locator(c.secici).first().evaluate((e) => (e instanceof HTMLSelectElement ? [...e.options].map((o) => o.value).join('|') : '')).catch(() => ''));
           await alaniDoldur(page, alan, l, adim.baslik, k);
+          // Sayfanın doldurduğu (yazılanı geri alan) alan izlenmez, yeniden yazılmaz.
+          if (kilitliYazilanlar.has(alan)) { await izleyici.denetle(alan.etiket); continue; }
           if (altlar.length) await bagliListeyiOlc(alan, altlar, k, onceki);
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
@@ -1571,7 +1596,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           });
         } finally {
           // Tıklama notları ("ilk tıklama etkisizdi, bir kez daha tıklandı") adım ayrıntısına ayrı satır olarak (adım başarısız olsa da).
-          for (const n of [...tiklamaIzi(page).notlar.splice(0), ...yavaslamaNotlari.splice(0)]) await test.step(`${adim.baslik} — ${n}`, async () => undefined);
+          for (const n of [...tiklamaIzi(page).notlar.splice(0), ...yavaslamaNotlari.splice(0), ...kilitNotlari.splice(0)]) await test.step(`${adim.baslik} — ${n}`, async () => undefined);
         }
         tamamlanan.push(adim);
         simdikiAdim = null;

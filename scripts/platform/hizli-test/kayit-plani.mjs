@@ -271,8 +271,9 @@ export function planKur(g) {
   const zincir = zincirTablolari(g, new Set());
   // Görünürlüğü belirleyen seçim (başka alanların kosul.secim'i) kullanıcı değiştirmediyse sayfadaki değeriyle senaryonun değeri olur:
   // senaryo dalı açıkça kaydedilir ve alan liste tablosuna o satırla bağlanır (değer üretilmez: sayfada seçili gelen seçenek).
-  // (Alanın ETİKETİNİ belirleyen seçim de — etiketKosulu — böyledir: senaryonun dalı alanın anlamını belirler.)
-  const kontroller = new Set(g.alanlar.flatMap((a) => [a.kosul?.secim, a.etiketKosulu?.secim]).filter(Boolean).map(String));
+  // (Alanın ETİKETİNİ belirleyen seçim de — etiketKosulu — böyledir: senaryonun dalı alanın anlamını belirler. Alanın düzenlenebilirliğini
+  // belirleyen seçim — kilitKosulu — da: o dalda sayfa alanı kendisi doldurur.)
+  const kontroller = new Set(g.alanlar.flatMap((a) => [a.kosul?.secim, a.etiketKosulu?.secim, a.kilitKosulu?.secim]).filter(Boolean).map(String));
   /** @type {Record<string, { deger: unknown; kaynak?: string }>} */
   const degerler = { ...g.degerler };
   for (const a of g.alanlar) {
@@ -753,7 +754,8 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     const v = s.degerler?.[k];
     return v === undefined || v === null || v === '' ? null : String(v);
   };
-  const doluMu = (/** @type {Nesne} */ x) => Boolean(x.hazir) || !bosMu(s.degerler?.[x.anahtar]);
+  // (Kaydedilen dalda sayfanın doldurduğu — düzenlenemeyen — alanın sayfadaki değeri o dalındır: başka dalda "dolu" sayılmaz.)
+  const doluMu = (/** @type {Nesne} */ x) => !x.kilitli && (Boolean(x.hazir) || !bosMu(s.degerler?.[x.anahtar]));
   const degisiklik = (/** @type {string} */ k, /** @type {string} */ m) => {
     const y = /** @type {NonNullable<ReturnType<typeof yer.get>>} */ (yer.get(k));
     return { planAdi: y.t.ad, sutun: y.sutun, deger: m, etiket: y.etiket, oturumAnahtar: k };
@@ -761,12 +763,13 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
 
   /** @typedef {{ k: string; m: string; kod: string }} DalAdimi */
   /** @typedef {{ anahtar: string; etiket: string }} Eksik */
-  /** @typedef {{ adimlar: DalAdimi[]; d: Degisiklik[]; veriGerekli: string[]; eksik: Eksik[] }} DalYolu */
+  /** @typedef {{ adimlar: DalAdimi[]; d: Degisiklik[]; veriGerekli: string[]; eksik: Eksik[]; kaldir: string[] }} DalYolu */
   // 1) Görünürlük dalları: alan kümesini değiştiren seçimler (kontroller; iç içe olanlar dahil) dal ağacı olur, tüm yolların kartezyeni.
   // Alanın ETİKETİNİ değiştiren seçim (etiketKosulu: aynı alan bir değerde kimlik no, diğerinde vergi no sorar) de dal açar: alan kümesi
-  // aynı olsa da girilecek verinin anlamı değişir.
+  // aynı olsa da girilecek verinin anlamı değişir. Alanın DÜZENLENEBİLİRLİĞİNİ değiştiren seçim (kilitKosulu: bir değerde sayfa alanı
+  // kendisi doldurur) de dal açar: o dalda alan yazılmaz, diğerinde veri ister.
   const kontroller = [...new Set(alanlar.flatMap((x) => [x.kosul?.secim && Array.isArray(x.kosul.degerler) ? String(x.kosul.secim) : '',
-    x.etiketKosulu?.secim ? String(x.etiketKosulu.secim) : '']).filter(Boolean))].filter((k) => yer.has(k));
+    x.etiketKosulu?.secim ? String(x.etiketKosulu.secim) : '', x.kilitKosulu?.secim ? String(x.kilitKosulu.secim) : '']).filter(Boolean))].filter((k) => yer.has(k));
   const bagimlilari = (/** @type {string} */ k) => alanlar.filter((x) => x.kosul?.secim === k && Array.isArray(x.kosul.degerler));
   const acilanlar = (/** @type {string} */ k, /** @type {string} */ kod) => bagimlilari(k).filter((x) => x.kosul.degerler.map(String).includes(kod));
   /** Alanın seçimin kod değerindeki etiketi (etiketKosulu; bilinmiyorsa ilk görülen). @param {Nesne} x @param {string} kod */
@@ -774,6 +777,9 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   /** Seçimin kod değerinde etiketi senaryodakinden FARKLI olan alanlar (o değerde görünenler). @param {string} k @param {string} kod */
   const adiDegisenler = (k, kod) => alanlar.filter((x) => x.etiketKosulu?.secim === k && (x.kosul?.secim !== k || x.kosul.degerler.map(String).includes(kod))
     && kodEtiketi(x, kod) !== String(x.etiket ?? x.anahtar));
+  /** Seçimin kod değerinde görünen ve düzenlenebilirliği bu seçime bağlı alanlar; kilitli: o değerde düzenlenemez mi. @param {string} k @param {string} kod @param {boolean} kilitli */
+  const kilitDegisenler = (k, kod, kilitli) => alanlar.filter((x) => x.kilitKosulu?.secim === k && (x.kosul?.secim !== k || x.kosul.degerler.map(String).includes(kod))
+    && (x.kilitKosulu.kilitli?.[kod] === true) === kilitli && (kilitli || x.kilitKosulu.kilitli?.[kod] === false));
   /**
    * Bir seçimin dal yolları: aynı alanları açan değerler tek dal (tablodaki ilk değer); dal iç içe seçim açıyorsa onun yollarıyla çarpılır.
    * @param {string} k @param {Set<string>} gorulen @returns {DalYolu[]}
@@ -787,7 +793,9 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
       const kod = kodu(k, m);
       // (Aynı alanları açıp farklı adlar soran değerler ayrı dallardır.)
       const adlar = adiDegisenler(k, kod).map((x) => `${x.anahtar}=${kodEtiketi(x, kod)}`).sort().join('|');
-      const anahtar = `${acilanlar(k, kod).map((x) => x.anahtar).sort().join('|')}#${adlar}`;
+      // (Farklı alanları kilitleyen değerler de ayrı dallardır.)
+      const kilitler = kilitDegisenler(k, kod, true).map((x) => x.anahtar).sort().join('|');
+      const anahtar = `${acilanlar(k, kod).map((x) => x.anahtar).sort().join('|')}#${adlar}#${kilitler}`;
       // Şimdiki değer kendi dalının temsilcisidir (kaydedilen yol tanınsın).
       if (!dallar.has(anahtar) || kod === simdikiKod(k)) dallar.set(anahtar, { m, kod });
     }
@@ -819,13 +827,28 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
         veriGerekli.push(kodEtiketi(x, kod));
         eksik.push({ anahtar: String(x.anahtar), etiket: kodEtiketi(x, kod) });
       }
-      const baslikMetni = yeniAdlar.length ? `${m} (${yeniAdlar.map((x) => kodEtiketi(x, kod)).join(', ')})` : m;
+      // Bu değerde düzenlenemeyen (sayfanın doldurduğu) alan: senaryodaki değeri yazılmaz (kaldir), veri istenmez. Bu değerde düzenlenebilir
+      // olup değeri olmayan (kaydedilen dalda sayfa dolduruyordu) alan: değer ÜRETİLMEZ, veri gerekli.
+      const kilitlenen = kilitDegisenler(k, kod, true);
+      const kaldir = kilitlenen.filter((x) => !bosMu(s.degerler?.[x.anahtar])).map((x) => String(x.anahtar));
+      for (const x of kilitDegisenler(k, kod, false)) {
+        if (ac.includes(x) || ic.includes(x) || doluMu(x) || String(x.tur) === 'checkbox' || eksik.some((y) => y.anahtar === String(x.anahtar))) continue;
+        if (SECIM_TURLERI.includes(String(x.tur))) {
+          const l = tablodakiler(x.anahtar);
+          if (l.length) { d.push(degisiklik(x.anahtar, l[0])); continue; }
+        }
+        veriGerekli.push(kodEtiketi(x, kod));
+        eksik.push({ anahtar: String(x.anahtar), etiket: kodEtiketi(x, kod) });
+      }
+      const ekler = [yeniAdlar.length ? yeniAdlar.map((x) => kodEtiketi(x, kod)).join(', ') : '',
+        kilitlenen.length ? `${kilitlenen.map((x) => kodEtiketi(x, kod)).join(', ')} sayfa dolduruyor` : ''].filter(Boolean);
+      const baslikMetni = ekler.length ? `${m} (${ekler.join('; ')})` : m;
       /** @type {DalYolu[]} */
-      let alt = [{ adimlar: [{ k, m: baslikMetni, kod }], d, veriGerekli, eksik }];
+      let alt = [{ adimlar: [{ k, m: baslikMetni, kod }], d, veriGerekli, eksik, kaldir }];
       for (const n of ic) {
         const nl = dalYollari(String(n.anahtar), yeni);
         if (!nl.length) continue;
-        alt = alt.flatMap((y) => nl.map((z) => ({ adimlar: [...y.adimlar, ...z.adimlar], d: [...y.d, ...z.d], veriGerekli: [...y.veriGerekli, ...z.veriGerekli], eksik: [...y.eksik, ...z.eksik] })));
+        alt = alt.flatMap((y) => nl.map((z) => ({ adimlar: [...y.adimlar, ...z.adimlar], d: [...y.d, ...z.d], veriGerekli: [...y.veriGerekli, ...z.veriGerekli], eksik: [...y.eksik, ...z.eksik], kaldir: [...y.kaldir, ...z.kaldir] })));
       }
       yollar.push(...alt);
     }
@@ -836,7 +859,10 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   /** Kaydedilen yol mu (her adım şimdiki değerinde)? @param {DalYolu} y */
   const kaydedilenMi = (y) => y.adimlar.every((a) => a.kod === simdikiKod(a.k));
   /** @param {DalYolu[]} l @returns {DalYolu} */
-  const birlestir = (l) => ({ adimlar: l.flatMap((y) => y.adimlar), d: l.flatMap((y) => y.d), veriGerekli: [...new Set(l.flatMap((y) => y.veriGerekli))], eksik: tekEksik(l.flatMap((y) => y.eksik)) });
+  const birlestir = (l) => ({
+    adimlar: l.flatMap((y) => y.adimlar), d: l.flatMap((y) => y.d), veriGerekli: [...new Set(l.flatMap((y) => y.veriGerekli))], eksik: tekEksik(l.flatMap((y) => y.eksik)),
+    kaldir: [...new Set(l.flatMap((y) => y.kaldir))]
+  });
   /** @type {DalYolu[]} */
   let tumYollar = kokYollari.reduce((/** @type {DalYolu[][]} */ c, l) => c.flatMap((x) => l.map((y) => [...x, y])), [[]]).map(birlestir);
   if (!kokYollari.length) tumYollar = [];
@@ -865,12 +891,12 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
     dalKapsami = 'ikili kapsam';
   }
   yollar = yollar.slice(0, enCok);
-  /** @typedef {{ degisiklikler: Degisiklik[]; parcalar: string[]; gerekce: string[]; veriGerekli: string[]; eksik: Eksik[]; zenginlik: number }} Aday */
+  /** @typedef {{ degisiklikler: Degisiklik[]; parcalar: string[]; gerekce: string[]; veriGerekli: string[]; eksik: Eksik[]; zenginlik: number; kaldir?: string[] }} Aday */
   /** @param {DalYolu} y @returns {Aday} */
   const dalAdayi = (y) => ({
     // Şimdiki değerindeki seçim değişiklik sayılmaz; kaydedilen dalda görünmeyen (dalDisi) seçimin değeri ise senaryoda yoktur: açıkça yazılır.
     degisiklikler: y.d.filter((x) => !(kontroller.includes(x.oturumAnahtar) && !alan(x.oturumAnahtar)?.dalDisi && kodu(x.oturumAnahtar, x.deger) === simdikiKod(x.oturumAnahtar))),
-    parcalar: y.adimlar.map((a) => `${etiketi(a.k)}: ${a.m}`), gerekce: [`görünürlük dalları: ${dalKapsami}`], veriGerekli: y.veriGerekli, eksik: tekEksik(y.eksik), zenginlik: y.d.length
+    parcalar: y.adimlar.map((a) => `${etiketi(a.k)}: ${a.m}`), gerekce: [`görünürlük dalları: ${dalKapsami}`], veriGerekli: y.veriGerekli, eksik: tekEksik(y.eksik), zenginlik: y.d.length, kaldir: y.kaldir
   });
   /** @type {Aday[]} */
   const adaylar = yollar.map(dalAdayi);
@@ -932,13 +958,13 @@ export function senaryoOnerileri(plan, baslik, s = {}) {
   const gorulen = new Set();
   for (const x of adaylar) {
     if (liste.length > enCok) break;
-    const imza = x.degisiklikler.map((d) => `${d.planAdi}|${d.sutun}=${d.deger}`).sort().join('\u0001');
+    const imza = `${x.degisiklikler.map((d) => `${d.planAdi}|${d.sutun}=${d.deger}`).sort().join('\u0001')}#${[...(x.kaldir ?? [])].sort().join('|')}`;
     if (!x.degisiklikler.length || gorulen.has(imza)) continue;
     gorulen.add(imza);
     const gerekce = [...new Set(x.gerekce), ...(x.veriGerekli.length ? [`veri gerekli: ${x.veriGerekli.join(', ')}; seçilirse “veri bekliyor” olarak koşu dışı kaydedilir, değerleri test verisinde doldurursunuz`] : []), 'diğer değerler aynı'];
     liste.push({
       indeks: liste.length, baslik: `${baslik} — ${x.parcalar.join(' · ')}`.slice(0, 300), gerekce: gerekce.join('; ').slice(0, 600),
-      varsayilanSecili: false, alt: { degisiklikler: x.degisiklikler }, veriGerekli: x.veriGerekli, eksikAlanlar: x.eksik
+      varsayilanSecili: false, alt: { degisiklikler: x.degisiklikler, ...(x.kaldir?.length ? { kaldirilanlar: x.kaldir } : {}) }, veriGerekli: x.veriGerekli, eksikAlanlar: x.eksik
     });
   }
   return liste;

@@ -27,20 +27,23 @@ import { KESIF_TURLERI, adresOzeti, istekKarari, kesifGuvenligi, taramaAdresleri
 import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
 import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
-import { dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
+import { alanKilidi, dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
 import { zincirKesfet } from './zincir-motoru';
 import type { ZincirSonucu } from './zincir-kesfi.mjs';
 
-/** Sayfa envanteri okuyucusunu her belgeye (çerçeveler dahil) veren init betiği: çerçevelerin içi kendi penceresinde okunur. */
-export const ENVANTER_BETIGI = `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
+/**
+ * Sayfa envanteri okuyucusunu her belgeye (çerçeveler dahil) veren init betiği: çerçevelerin içi kendi penceresinde okunur. Alanın
+ * düzenlenebilirliği (alanKilidi; salt okuma) de aynı belgenin penceresinde.
+ */
+export const ENVANTER_BETIGI = `window.__nobetciAlanKilidi = ${alanKilidi.toString()}; window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
 
 /** Ekranın envanteri (aynı kökenli çerçeveler dahil). Init betiği yoksa (ör. betik yüklenmeden) doğrudan ana belgede okunur. */
 export async function envanterOku(sayfa: Page, secenek: { degerOku?: boolean } = {}): Promise<SayfaEnvanteri> {
   const degerOku = secenek.degerOku === true;
   const hazir = await sayfa.evaluate(() => typeof (window as unknown as { __nobetciSayfadakiAlanlar?: unknown }).__nobetciSayfadakiAlanlar === 'function');
   if (hazir) return sayfa.evaluate((o) => (window as unknown as { __nobetciSayfadakiAlanlar: (d: number, o?: boolean) => SayfaEnvanteri }).__nobetciSayfadakiAlanlar(0, o), degerOku);
-  return sayfa.evaluate<SayfaEnvanteri>(`(${sayfadakiAlanlar.toString()})(0, ${degerOku})`);
+  return sayfa.evaluate<SayfaEnvanteri>(`(window.__nobetciAlanKilidi = window.__nobetciAlanKilidi || ${alanKilidi.toString()}, (${sayfadakiAlanlar.toString()})(0, ${degerOku}))`);
 }
 
 /** Alanın kapsamı: çerçevesi varsa o çerçeve (iç içe), yoksa sayfa. */
@@ -391,7 +394,8 @@ function secimeTikla(el: Element): boolean {
  * Seçim keşfi: açılır listelerde diğer seçenekler, radyo gruplarında diğer seçenekler, onay kutularında ters durum sırayla denenir
  * (Ayarlar > Koşu > Açılır liste keşif sınırı; varsayılan 8). Beliren / kaybolan alanlar, seçenekleri DEĞİŞEN diğer seçim alanları
  * (bağımlı listeler; yalnız seçenek etiketi / değeri), etkinleşen alanlar ve etiketi DEĞİŞEN alanlar (anahtar aynı, görünen ad farklı:
- * etiketler) kaydedilir; sonunda ilk değer geri yüklenir. Seçim sayfayı
+ * etiketler) ve düzenlenebilirliği DEĞİŞEN alanlar (kilitler; salt okumayla — alanKilidi, sayfaya yazılmaz) kaydedilir; sonunda ilk
+ * değer geri yüklenir. Seçim sayfayı
  * başka adrese götürürse not düşülür ve hedefe dönülür. Keşif HİÇBİR düğmeye / bağlantıya basmaz; sayfanın betiği bassa da
  * tıklama yutulur (dugmeTiklamaKorumasi) ve yazma istekleri ağ katmanında iptal edilir.
  *
@@ -455,6 +459,9 @@ export async function secimleriKesfet(
     // Aynı alanın en çok karakter sayısı (maxlength) / deseni (pattern) de seçime göre değişebilir (ör. kimlik no 11, vergi no 10 hane).
     const kuralImzasi = (a: HamAlan): string => JSON.stringify([a.enCok ?? null, a.desen ?? null]);
     const temelKurallar = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar).map((a) => [a.anahtar, kuralImzasi(a)]));
+    // Aynı alanın DÜZENLENEBİLİRLİĞİ de seçime göre değişebilir (ör. bir değerde sayfa alanı kendisi doldurup kilitler): salt okumayla
+    // (alanKilidi; sayfaya yazılmaz) her değerde okunur, ilk değerdekinden farklıysa kaydedilir (radyo grupları hariç).
+    const temelKilitler = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar && a.tur !== 'radio').map((a) => [a.anahtar, Boolean(a.kilit)]));
     const degerler: KesifDegeri[] = [];
     const buAlt: Kesif[] = [];
     for (const o of denenecek) {
@@ -500,10 +507,19 @@ export async function secimleriKesfet(
         const once = temelKurallar.get(a.anahtar);
         if (once !== undefined && once !== kuralImzasi(a)) kurallar[a.anahtar] = { enCok: a.enCok ?? null, desen: a.desen ?? null };
       }
+      // (Bağlı açılır listenin seçenekleri gelince etkinleşmesi bağlı liste zinciridir; kilit sayılmaz.)
+      const kilitler: Record<string, boolean> = {};
+      for (const a of simdi.alanlar) {
+        const once = temelKilitler.get(a.anahtar);
+        if (once === undefined || once === Boolean(a.kilit)) continue;
+        if (a.tur === 'select' && (etkinlesenler.includes(a.anahtar) || secenekler[a.anahtar] || devreDisiAnahtarlar.has(a.anahtar))) continue;
+        kilitler[a.anahtar] = Boolean(a.kilit);
+      }
       degerler.push({
         deger: o.deger, metin: o.metin, gorunenler, kaybolanlar: [...temelAnahtarlar].filter((k) => !simdiAnahtarlar.has(k)), gezinme: null,
         ...(Object.keys(secenekler).length ? { secenekler } : {}), ...(etkinlesenler.length ? { etkinlesenler } : {}),
-        ...(Object.keys(etiketler).length ? { etiketler } : {}), ...(Object.keys(kurallar).length ? { kurallar } : {})
+        ...(Object.keys(etiketler).length ? { etiketler } : {}), ...(Object.keys(kurallar).length ? { kurallar } : {}),
+        ...(Object.keys(kilitler).length ? { kilitler } : {})
       });
       // İç içe: bu değerde beliren seçim alanları (değer uygulanmışken) aynı kurallarla denenir.
       const yeniSecimler = gorunenler.filter((a) => KESIF_TURLERI.includes(a.tur) && !a.devreDisi && !a.saltOkunur);

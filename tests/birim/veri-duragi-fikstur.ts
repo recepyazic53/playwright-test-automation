@@ -19,6 +19,7 @@
 //                    kutularının adı (ve en çok karakteri) değişir, doğum tarihi gizlenir. "Kaydet": POST /api/ic-ice → "Kayıt alındı".
 //   /adimli/         "İleri" → sayfanın en altına açılışta olmayan ikinci adım (Kişi tipi + adı değişen alanlar) + "Kaydet".
 //   /kesif-dugmeli/  Gizli bölümü sayfa içinde açan düğme (aria-expanded), yalnız betikle çalışan düğme ("Önizle") ve formu gönderen düğme.
+//   /kilitli-secim/  "Süre tipi" Kısa'da iki tarihi sayfa doldurup kilitler (readonly; takvim kapatma + tuş engeli), Uzun'da düzenlenebilir.
 import type { FiksturIstegi, FiksturYaniti } from './giris-fikstur';
 
 const html = (baslik: string, govde: string): FiksturYaniti => ({
@@ -382,7 +383,47 @@ export const KESIF_DUGMELI_SAYFASI = String.raw`<h1>Başvuru</h1>
   });
 </script>`;
 
+/**
+ * /kilitli-secim/: seçime göre DÜZENLENEMEYEN alanlar. "Süre tipi" (Kısa / Uzun; açılışta Kısa). Kısa'da sayfa iki tarihi kendisi doldurur
+ * ve kilitler: "Başlangıç tarihi" readonly niteliğiyle, "Bitiş tarihi" yalnız takvim bileşeninin kapatılmasıyla (kilit sınıfı) ve tuş
+ * engeliyle (readonly / disabled YOK). Uzun'da ikisi de düzenlenebilir (değerleri kalır). Kısa seçiliyken tarihlere gelen her tuş / girdi /
+ * değişiklik olayı sayılır (dokunma). "Kaydet": POST /api/kilitli-secim (değerler + dokunma) → "Kayıt alındı".
+ */
+export const KILITLI_SECIM_SAYFASI = String.raw`<h1>Başvuru</h1>
+<div><label for="ad">Ad</label><input id="ad" name="ad" autocomplete="off"></div>
+<fieldset><legend>Süre tipi</legend>
+  <label><input type="radio" name="sure" value="K" checked> Kısa</label> <label><input type="radio" name="sure" value="U"> Uzun</label></fieldset>
+<div><label for="baslangic">Başlangıç tarihi</label><input id="baslangic" name="baslangic" autocomplete="off"></div>
+<div><label for="bitis">Bitiş tarihi</label><input id="bitis" name="bitis" class="hasDatepicker" autocomplete="off"></div>
+<p><button type="button" id="kaydet">Kaydet</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var sec = function (ad) { var r = document.querySelector('input[name=' + ad + ']:checked'); return r ? r.value : ''; };
+  var dokunma = 0;
+  var engel = function (o) { o.preventDefault(); };
+  ['baslangic', 'bitis'].forEach(function (id) {
+    ['keydown', 'keypress', 'beforeinput', 'input', 'change', 'paste'].forEach(function (t) { $(id).addEventListener(t, function () { if (sec('sure') === 'K') dokunma++; }); });
+  });
+  function uygula() {
+    var kisa = sec('sure') === 'K';
+    if (kisa) { $('baslangic').value = '05.10.2026'; $('bitis').value = '05.11.2026'; }
+    $('baslangic').readOnly = kisa;
+    $('bitis').classList.toggle('disabled', kisa);
+    if (kisa) $('bitis').addEventListener('keydown', engel); else $('bitis').removeEventListener('keydown', engel);
+  }
+  document.querySelectorAll('input[name=sure]').forEach(function (r) { r.addEventListener('change', uygula); });
+  uygula();
+  $('kaydet').addEventListener('click', function () {
+    var v = { sure: sec('sure'), ad: $('ad').value, baslangic: $('baslangic').value, bitis: $('bitis').value, dokunma: dokunma };
+    fetch('/api/kilitli-secim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+  });
+</script>`;
+
 export class VeriDuragiUygulamasi {
+  /** /kilitli-secim/ gönderimleri (değerler + Kısa'dayken tarihlere gelen olay sayısı). */
+  readonly kilitliKayitlar: Array<Record<string, string | number>> = [];
   /** /ic-ice/, /adimli/ ve /kesif-dugmeli/ gönderimleri. */
   readonly icIceKayitlar: Array<Record<string, string>> = [];
   readonly adimliKayitlar: Array<Record<string, string>> = [];
@@ -409,6 +450,8 @@ export class VeriDuragiUygulamasi {
     if (i.yol === '/ic-ice/' && i.yontem === 'GET') return html('Başvuru', IC_ICE_SAYFASI);
     if (i.yol === '/adimli/' && i.yontem === 'GET') return html('Başvuru', ADIMLI_SAYFASI);
     if (i.yol === '/kesif-dugmeli/' && i.yontem === 'GET') return html('Başvuru', KESIF_DUGMELI_SAYFASI);
+    if (i.yol === '/kilitli-secim/' && i.yontem === 'GET') return html('Başvuru', KILITLI_SECIM_SAYFASI);
+    if (i.yol === '/api/kilitli-secim' && i.yontem === 'POST') { this.kilitliKayitlar.push(JSON.parse(i.govde) as Record<string, string | number>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/ic-ice-bolum' && i.yontem === 'GET') return { tur: 'application/json', govde: '{"tamam":true}', gecikmeMs: 3500 };
     if (i.yol === '/api/ic-ice' && i.yontem === 'POST') { this.icIceKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/adimli' && i.yontem === 'POST') { this.adimliKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
