@@ -10,7 +10,7 @@
 //    görülen satır güçlü — servis-analizi.mjs satır bütünlüğü kuralı), bağı
 //    olmayan alan için tablo eşleşmesi, başarılı koşuda boş / yok giden zorunlu alan için "isteğe bağlı" (#179 kuralları; koşu =
 //    durumu bilinen örnek), şüpheli alan notu. Kanıt: kaç başarılı koşuda görüldü, son görülme, senaryolar.
-import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, hucreEsit, satirYonlendir } from './servis-analizi.mjs';
+import { ornekCoz, adEslesmesi, alanAdi, oneriAnahtari, tabloEslesmesi, hucreEsit, kokYolu, satirYonlendir } from './servis-analizi.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
@@ -197,7 +197,8 @@ export function kosuOnerileri(g) {
   // satır varsa önerilmez. Satır ≥ GUCLU_KOSU_SAYISI başarılı koşuda görüldüyse güçlü; kart, satırlarının hepsi güçlüyse güçlü.
   // Satır kararları ayrı hatırlanır (satırın anahtarı); kartın Uygula / Yoksay'ı satırlarına da yazılır.
   // Koşu başına satır yönlendirmesi (grup bütünlüğü; servis-analizi.mjs > satirYonlendir).
-  const yonler = new Map(g.gozlemler.map((x) => [x, satirYonlendir(satirEslemleri, g.tablolar, (y) => x.alanlar[y]?.d === 'dolu')]));
+  const kok = kokYolu([...new Set(g.gozlemler.flatMap((x) => Object.keys(x.alanlar)))]);
+  const yonler = new Map(g.gozlemler.map((x) => [x, satirYonlendir(satirEslemleri, g.tablolar, (y) => x.alanlar[y]?.d === 'dolu', kok)]));
   for (const [tabloId, varsayilanEslem] of satirEslemleri) {
     const t = g.tablolar.find((x) => x.id === tabloId);
     if (!t) continue;

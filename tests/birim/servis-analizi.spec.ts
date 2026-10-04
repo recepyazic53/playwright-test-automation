@@ -6,7 +6,7 @@
 // değer listesi tablosu; evet/hayır liste tablosu olmaz; hata veren örneğin değerleri girmez), karar hatırlama. Ağ yok; veri sentetik.
 import { expect, test } from '@playwright/test';
 import {
-  AD_ESIGI, adEslesmesi, adPuani, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, satirYonlendir, servisAnalizi, tabloEslesmesi, tipCikar, xmlBaglami,
+  AD_ESIGI, adEslesmesi, adPuani, baglamUyumlu, bulunmaEki, gucluOneriler, kavramGrubu, oneriyiUygula, oneriyiYoksay, ornekCoz, kokYolu, satirYonlendir, servisAnalizi, tabloEslesmesi, tipCikar, xmlBaglami,
   type AnalizDurumu, type AnalizGirdisi, type AnalizOnerisi, type OrnekDurumu, type TabloSatiriOnerisi
 } from '../../scripts/platform/servisler/servis-analizi.mjs';
 import { ornekIstekleriniDogrula, ornekleriEkle, ornekleriMaskele } from '../../scripts/platform/servisler/servis-ornekleri.mjs';
@@ -409,9 +409,31 @@ test('satır yönlendirme (grup bütünlüğü): ayırt edici sütunu dolu örne
   expect([...(y.eslemler.get('kurum') ?? new Map()).keys()]).toEqual(['G/TaxId', 'G/Name']);
   expect([...(y.eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['H/Phone']);
   expect([...(satirYonlendir(eslem, kurum, (yol) => yol !== 'G/TaxId').eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['G/Name', 'H/Phone']);
-  // Gizli ayırt edici sütun (değeri yazılmaz) yönlendirmez.
+  // Gizli ayırt edici sütun da alt bölümünü yönlendirir (değeri yine yazılmaz); kök seviye grup değildir (gizli olsun olmasın).
   const gizliEslem = new Map([...eslem, ['kurum', new Map([['G/TaxId', { sutun: 'Vergi kimlik no', gizli: true }]])]]);
-  expect([...(satirYonlendir(gizliEslem, kurum, () => true).eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['G/Name', 'H/Phone']);
+  expect([...(satirYonlendir(gizliEslem, kurum, () => true).eslemler.get('kurum') ?? new Map()).keys()]).toEqual(['G/TaxId', 'G/Name']);
+  expect([...(satirYonlendir(gizliEslem, kurum, () => true, 'G').eslemler.get('kisi') ?? new Map()).keys()]).toEqual(['G/Name', 'H/Phone']);
+  expect(kokYolu(['Input/A', 'Input/B/C'])).toBe('Input');
+  expect(kokYolu(['A', 'B/C'])).toBe('');
+  // Analizde: kök seviyedeki gizli ayırt edici sütun (her istekte dolu parola) diğer kök alanları çekmez; alt bölümdeki gizli
+  // ayırt edici sütun bölümünün alanlarını yönlendirir, gizli değer yazılmaz.
+  const giris = [
+    { id: 'kanal', ad: 'Kanal', sutunlar: [{ ad: 'Kanal kodu' }, { ad: 'Kullanıcı' }], satirlar: [] },
+    { id: 'gir', ad: 'Servis girişi', sutunlar: [{ ad: 'Kanal kodu' }, { ad: 'Kullanıcı' }, { ad: 'Parola', gizli: true }], satirlar: [] },
+    { id: 'uye', ad: 'Üye', sutunlar: [{ ad: 'Ad' }, { ad: 'Telefon' }], satirlar: [] },
+    { id: 'kurum2', ad: 'Kurum', sutunlar: [{ ad: 'Ad' }, { ad: 'Telefon' }, { ad: 'Kurum anahtarı', gizli: true }], satirlar: [] }
+  ];
+  const gb = { 'Girdi/Channel': { tablo: 'kanal', sutun: 'Kanal kodu' }, 'Girdi/Username': { tablo: 'kanal', sutun: 'Kullanıcı' }, 'Girdi/Password': { tablo: 'gir', sutun: 'Parola' },
+    'Girdi/Party/Name': { tablo: 'uye', sutun: 'Ad' }, 'Girdi/Party/Phone': { tablo: 'uye', sutun: 'Telefon' }, 'Girdi/Party/Key': { tablo: 'kurum2', sutun: 'Kurum anahtarı' } };
+  const ga = servisAnalizi({ metot: 'Islem', sema: null, tablolar: giris, mevcut: { baglar: gb }, ornekler: [{ ad: 'Bir', durum: 'basarili',
+    govde: zarf('<Channel>51234</Channel><Username>51234001</Username><Password>gizli-deger-1</Password><Party><Name>Ali</Name><Phone>5550001122</Phone><Key>anahtar-1</Key></Party>') }] });
+  const gsatir = (id: string) => (bul(ga.oneriler, 'tabloyaSatir', `#${id}`)?.deger as TabloSatiriOnerisi | undefined)?.satirlar ?? [];
+  expect(gsatir('kanal').map((x) => x.degerler)).toEqual([{ 'Kanal kodu': '51234', 'Kullanıcı': '51234001' }]);
+  expect(gsatir('gir')).toEqual([]);
+  expect(gsatir('uye')).toEqual([]);
+  expect(gsatir('kurum2')).toEqual([{ ad: 'Bir', degerler: { Ad: 'Ali', Telefon: '5550001122' }, gerekce: 'Kurum tablosuna yazılır (Kurum anahtarı dolu)' }]);
+  expect(JSON.stringify(ga.oneriler)).not.toContain('gizli-deger-1');
+  expect(JSON.stringify(ga.oneriler)).not.toContain('anahtar-1');
 });
 
 test('örnekler arası fark, alan listesi olmayan metot; yeni tablolar kavram gruplarına ayrılır; hata veren örneğin değerleri tabloya girmez', () => {
