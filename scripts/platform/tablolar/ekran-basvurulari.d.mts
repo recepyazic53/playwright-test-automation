@@ -10,7 +10,15 @@ export declare function modelAlanBilgisi(model: unknown): {
   kabuller: Record<string, string>;
   /** Senaryo anahtarı → senaryo ayarının etiketi ve seçenekleri (tablodaki değer koda çevrilir). */
   ayarSecenekleri: Record<string, AyarBilgisi>;
+  /** Senaryo anahtarı → modelde zorunlu mu (alan.zorunlu === true). */
+  zorunluAnahtarlar: Record<string, boolean>;
+  /** Senaryo anahtarı → alanın etiketi. */
+  alanEtiketleri: Record<string, string>;
 };
+/** Boş hücre nedeniyle doldurulmayan (zorunlu olmayan) alanın notu: "‹Alan›: ‹Tablo› › ‹Sütun› boş, doldurulmadı". */
+export declare function bosHucreNotu(etiket: string, bos: { tablo: string; sutun: string }): string;
+/** Boş hücre nedeniyle doldurulmayan alan. */
+export type BosBirakilanAlan = { alan: string; etiket: string; tablo: string; sutun: string; not: string };
 /** Senaryo ayarı: etiket ve seçenekler (kod = senaryoya yazılan değer; metinler = formdaki / sayfadaki okunur adlar). */
 export type AyarBilgisi = { etiket: string; secenekler: Array<{ kod: string; metinler: string[] }> };
 /** Tablodaki değerin senaryo ayarı kodu (karşılık → kod; yoksa kod ya da seçenek metni); eşleşmezse okunur hata. */
@@ -25,7 +33,9 @@ export declare function ekranBasvurulariniCoz(veri: Record<string, unknown>, s: 
   tablolar: Tablo[]; baglar?: EkranBaglari; alanAnahtarlari?: Record<string, string>; secenekDegerleri?: Record<string, string[]>;
   alanTipleri?: Record<string, string>; kabuller?: Record<string, string>; ayarSecenekleri?: Record<string, AyarBilgisi>; dosyaDenetle?: (ad: string) => string | null;
   ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>>; satirSecimi?: import('./tablo-secimi.mjs').SatirSecimi;
-}): { veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number };
+  /** Verilirse boş hücre yalnız zorunlu alanda hata; zorunlu olmayan alan doldurulmaz (bosBirakilanlar). */
+  zorunluAnahtarlar?: Record<string, boolean>; alanEtiketleri?: Record<string, string>;
+}): { veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number; bosBirakilanlar: BosBirakilanAlan[] };
 /** Senaryo kaydında: tablodan gelen senaryo ayarlarında koşuya girebilecek her satırın değeri seçenek koduna çevrilebiliyor mu. */
 export declare function ayarBasvurulariniDenetle(veri: Record<string, unknown>, s: Parameters<typeof ekranBasvurulariniCoz>[1]): Array<{ alan: string; mesaj: string }>;
 /** Metinlerin içindeki ${Tablo.Sütun} başvuruları (tablodaki değer; ${akis:…} ve tablo dışı ${…} atlanır). */

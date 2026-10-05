@@ -68,7 +68,7 @@ test.describe('ayrıştırma ve çözüm (saf)', () => {
     });
     expect(bagli.veri).toEqual({ sehir: 'Ankara', ad: 'Veli' });
     // Başvuru yoksa hiçbir şey değişmez (tablo bile okunmaz).
-    expect(ekranBasvurulariniCoz({ a: 'b' }, { tablolar: [], ortamId: 'o1' })).toEqual({ veri: { a: 'b' }, gizliDegerler: [], hatalar: [], cozulen: 0 });
+    expect(ekranBasvurulariniCoz({ a: 'b' }, { tablolar: [], ortamId: 'o1' })).toEqual({ veri: { a: 'b' }, gizliDegerler: [], hatalar: [], cozulen: 0, bosBirakilanlar: [] });
   });
 
   test('çözülemeyen başvuru anlaşılır hata; gizli sütun değeri maskelenecekler listesinde', () => {
@@ -82,12 +82,28 @@ test.describe('ayrıştırma ve çözüm (saf)', () => {
     expect(r.gizliDegerler).toEqual(['gizli-deger-1']);
     // Seçimle uyan satır yok / seçilen satırda boş.
     expect(basvuruyuCoz(tablolar, { tablo: 'Kişi', etiket: '', sutun: 'Ad', bicim: '' }, { 'k|': { Şehir: 'Bursa' } }, 'o1')).toEqual({ hata: '"Kişi" tablosunda seçimlerle uyan satır yok' });
-    expect(basvuruyuCoz(tablolar, { tablo: 'Kişi', etiket: '', sutun: 'Parola', bicim: '' }, { 'k|': { Ad: 'Veli' } }, 'o1')).toEqual({ hata: '"Kişi" tablosunun seçilen satırında "Parola" boş' });
+    expect(basvuruyuCoz(tablolar, { tablo: 'Kişi', etiket: '', sutun: 'Parola', bicim: '' }, { 'k|': { Ad: 'Veli' } }, 'o1')).toEqual({ hata: '"Kişi" tablosunun seçilen satırında "Parola" boş', bos: { tablo: 'Kişi', sutun: 'Parola' } });
     // Koşucunun hata metni ve maskesi.
     const metin = veriHatalariMetni('Senaryo 1', r.hatalar);
     expect(metin).toContain('"Senaryo 1": senaryonun test verisi başvurusu çözülemedi');
     expect(metin).toContain('Tarayıcı açılmadı');
     expect(gizliDegerleriMaskele('Seçenek bulunamadı: gizli-deger-1 (ab)', ['gizli-deger-1', 'ab'])).toBe('Seçenek bulunamadı: ••• (ab)');
+  });
+
+  test('seçilen satırda boş hücre: zorunlu olmayan alan doldurulmaz (not + bilerekBos), zorunlu alanda hata; model bilgisi yoksa hata', () => {
+    const tablolar: Tablo[] = [{ id: 'h', ad: 'Hücre', sutunlar: [{ ad: 'Ad', gizli: false }, { ad: 'Not', gizli: false }], satirlar: [{ ortamId: null, degerler: { Ad: 'x', Not: '' } }] }];
+    const bilgi = { zorunluAnahtarlar: { not: false, zorunluNot: true }, alanEtiketleri: { not: 'Açıklama', zorunluNot: 'Zorunlu açıklama' } };
+    const r = ekranBasvurulariniCoz({ ad: '${Hücre.Ad}', not: '${Hücre.Not}', zorunluNot: '${Hücre.Not}' }, { tablolar, ortamId: 'o1', ...bilgi });
+    expect(r.veri).toEqual({ ad: 'x', zorunluNot: '${Hücre.Not}', bilerekBos: ['not'] });
+    expect(r.bosBirakilanlar).toEqual([{ alan: 'not', etiket: 'Açıklama', tablo: 'Hücre', sutun: 'Not', not: 'Açıklama: Hücre › Not boş, doldurulmadı' }]);
+    expect(r.hatalar.map((h) => h.alan)).toEqual(['zorunluNot']);
+    expect(r.hatalar[0].mesaj).toContain('"Hücre" tablosunun seçilen satırında "Not" boş');
+    // Model bilgisi verilmezse (zorunluluk bilinmiyor) eski davranış: hata.
+    expect(ekranBasvurulariniCoz({ not: '${Hücre.Not}' }, { tablolar, ortamId: 'o1' }).hatalar.map((h) => h.alan)).toEqual(['not']);
+    // Modelden: zorunlu ve etiket.
+    const b = modelAlanBilgisi(akisModeli());
+    expect(b.zorunluAnahtarlar).toMatchObject({ kategori: true, urun: true, plan: false });
+    expect(b.alanEtiketleri.plan).toBe('Plan');
   });
 
   test('model bilgisi: alan → senaryo anahtarı ve seçeneklerin senaryo değerleri (bağımlı liste dahil)', () => {
@@ -272,6 +288,52 @@ test.describe('uçtan uca: ${Tablo.Sütun} ile ekran senaryosu (127.0.0.1)', () 
     const yok = await kaydet('Olmayan tablodan', { plan: '${Olmayan.Plan}' });
     expect(yok.basarili).toBe(false);
     expect((yok.hatalar as Nesne[]).map((h) => h.mesaj)).toEqual([MESAJLAR.tabloYok('Plan', 'Olmayan')]);
+  });
+
+  test('seçilen satırda boş hücre: zorunlu olmayan alan doldurulmaz, koşu geçer + not; zorunlu alanda koşu durur; hazırlık ve form uyarı / engel', async () => {
+    test.setTimeout(180_000);
+    await basarili('/platform/tablo/kaydet', { projeId, ad: 'Boş hücre', sutunlar: [{ ad: 'Ad' }, { ad: 'Plan' }, { ad: 'Kategori' }], satirlar: [{ degerler: { Ad: 'satır 1', Plan: '', Kategori: '' } }] });
+    // Zorunlu olmayan "Plan" (modelde varsayılanı var): hücre boş → alana dokunulmaz (varsayılan da yazılmaz), koşu geçer, sonuçta not.
+    const istege = await kaydet('Boş hücreli plan', { plan: '${Boş hücre.Plan}' });
+    expect(istege.basarili, String(istege.mesaj ?? '')).toBe(true);
+    const hz = (await api(`/platform/senaryo/hazirlik?projeId=${projeId}&id=${String(istege.id)}&ortamId=${ortamId}`)).hazirlik as Nesne;
+    const veriMaddesi = (hz.maddeler as Nesne[]).find((m) => m.anahtar === 'veri') as Nesne;
+    expect(hz.calistirilabilir).toBe(true);
+    expect(veriMaddesi.durum).toBe('uyari');
+    expect(String(veriMaddesi.ayrinti)).toContain('Plan: Boş hücre › Plan boş, doldurulmadı');
+    const d = await kos(String(istege.id));
+    expect(d.durum, JSON.stringify(d.hataMesaji)).toBe('basarili');
+    expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ urun: 'U11', plan: '' });
+    expect(d.atlananAlanlar).toContainEqual({ alan: 'Plan', neden: 'Boş hücre › Plan boş, doldurulmadı' });
+    // Zorunlu "Kategori": bugünkü hata (koşuya alınmaz, tarayıcı açılmaz); hazırlıkta engel.
+    const once = uygulama.hesaplamalar.length;
+    const zorunlu = await kaydet('Boş hücreli kategori', { kategori: '${Boş hücre.Kategori}' });
+    expect(zorunlu.basarili, String(zorunlu.mesaj ?? '')).toBe(true);
+    const hz2 = (await api(`/platform/senaryo/hazirlik?projeId=${projeId}&id=${String(zorunlu.id)}&ortamId=${ortamId}`)).hazirlik as Nesne;
+    expect(hz2.calistirilabilir).toBe(false);
+    expect(((hz2.maddeler as Nesne[]).find((m) => m.anahtar === 'veri') as Nesne).durum).toBe('eksik');
+    const z = await kos(String(zorunlu.id));
+    expect([z.durum, z.hamDurum]).toEqual(['atlanan', 'calistirilamadi']);
+    expect(String(z.hataMesaji)).toContain('"Boş hücre" tablosunun seçilen satırında "Kategori" boş');
+    expect(uygulama.hesaplamalar.length).toBe(once);
+    // Senaryo formu: aynı ayrım (zorunlu olmayan → uyarı, zorunlu → engel).
+    const tarayici = await korumaliTarayici();
+    try {
+      const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } })).newPage();
+      const hatalar: string[] = [];
+      page.on('pageerror', (e) => hatalar.push(String(e)));
+      await page.goto(`/#/senaryolar/duzenle/${String(istege.id)}`);
+      const panel = page.getByRole('region', { name: 'Hazırlık kontrolü' });
+      await expect(panel.locator('[data-madde="veri"]')).toHaveClass(/uyari/, { timeout: 20_000 });
+      await expect(panel.locator('[data-madde="veri"]')).toContainText('Plan: Boş hücre › Plan boş, doldurulmadı');
+      await expect(panel.locator('.hazirlik-nedeni')).toBeHidden();
+      await page.goto(`/#/senaryolar/duzenle/${String(zorunlu.id)}`);
+      await expect(panel.locator('[data-madde="veri"]')).toHaveClass(/eksik/, { timeout: 20_000 });
+      await expect(panel.locator('[data-madde="veri"]')).toContainText('Boş hücre › Kategori seçilen satırda boş');
+      expect(hatalar).toEqual([]);
+    } finally {
+      await tarayici.close();
+    }
   });
 
   test('senaryo formu: bağlı alanda "Tablodan" seçilir, kaydedilir ve koşar; telefonda taşma yok', async () => {

@@ -1,29 +1,80 @@
-// Alan doldurulduktan sonra kullanıcı gibi alandan çıkma: (1) açık takvim / açılır pencere kapatılır (Escape),
-// (2) Tab ile change / blur (ve buna bağlı sorgu) tetiklenir, (3) pencere hâlâ açıksa sayfanın boş bir yerine tıklanır.
+// Alan doldurulduktan sonra kullanıcı gibi alandan çıkma: (1) Tab ile change / blur (ve buna bağlı sorgu) tetiklenir, (2) AÇILIR takvim
+// hâlâ açıksa sayfanın boş bir yerine tıklanır, (3) yine açıksa en son çare Escape — maske ipucu olan alanda Escape hiç basılmaz (maske
+// eklentileri Escape'i "geri al" sayar: değer odak anındaki değere döner).
 // Motor genel kalır: yalnız yaygın takvim bileşenlerinin sınıfları aranır; ürüne / siteye özgü sabit yoktur.
 import type { Locator, Page } from '@playwright/test';
 
-/** Görünür bir takvim / tarih seçici penceresi var mı (jQuery UI, Bootstrap, flatpickr, pikaday vb.). */
-export async function acikTakvimVar(sayfa: Page): Promise<boolean> {
-  return sayfa.evaluate(() => {
-    const secici = '.ui-datepicker, .datepicker-dropdown, .datepicker.dropdown-menu, .bootstrap-datetimepicker-widget, .flatpickr-calendar.open, .pika-single:not(.is-hidden), .react-datepicker-popper, .daterangepicker, .air-datepicker.-active-, [role="dialog"][class*="datepicker" i], [class*="calendar" i][class*="popup" i]';
+/** Açılır takvim sayılan öğelerin seçicisi (jQuery UI, Bootstrap, flatpickr, pikaday vb.). */
+const TAKVIM_SECICI = '.ui-datepicker, .datepicker-dropdown, .datepicker.dropdown-menu, .bootstrap-datetimepicker-widget, .flatpickr-calendar.open, .pika-single:not(.is-hidden), .react-datepicker-popper, .daterangepicker, .air-datepicker.-active-, [role="dialog"][class*="datepicker" i], [class*="calendar" i][class*="popup" i]';
+/** Gömülü (inline) takvim sınıfları: hiçbir zaman açılır takvim sayılmaz. */
+const GOMULU_TAKVIM_SECICI = '.ui-datepicker-inline, .flatpickr-calendar.inline, .datepicker-inline';
+
+/**
+ * Görünür bir AÇILIR (popup) takvim var mı. Sayılmayanlar: gömülü / inline takvim (inline sınıfları ya da kendisi ve yakın üstleri belge
+ * akışında duran — position static / relative — öğe), görünür alanın tümüyle dışındaki öğe (ör. left:-9999px) ve yalnizYeni ise
+ * takvimleriKaydet ile alana odaklanmadan ÖNCE zaten açık olduğu kaydedilen takvim (o alanın takvimi değildir).
+ */
+export async function acikTakvimVar(sayfa: Page, secenek: { yalnizYeni?: boolean } = {}): Promise<boolean> {
+  return sayfa.evaluate(([secici, gomulu, yalnizYeni]) => {
+    const once = (window as unknown as { __nobetciOncekiTakvimler?: WeakSet<Element> }).__nobetciOncekiTakvimler;
     return [...document.querySelectorAll(secici)].some((e) => {
+      if (e.matches(gomulu) || e.closest(gomulu)) return false;
+      if (yalnizYeni && once?.has(e)) return false;
       const r = e.getBoundingClientRect();
       const s = getComputedStyle(e);
-      return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) !== 0;
+      if (!(r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) !== 0)) return false;
+      if (r.right <= 0 || r.bottom <= 0 || r.left >= window.innerWidth || r.top >= window.innerHeight) return false;
+      // Açılır pencere: kendisi ya da yakın üstlerinden biri (3 düzey) belge akışının dışında (absolute / fixed).
+      let x: Element | null = e;
+      for (let i = 0; x && x !== document.body && i < 4; i++, x = x.parentElement) {
+        const p = getComputedStyle(x).position;
+        if (p === 'absolute' || p === 'fixed') return true;
+      }
+      return false;
     });
+  }, [TAKVIM_SECICI, GOMULU_TAKVIM_SECICI, Boolean(secenek.yalnizYeni)] as const).catch(() => false);
+}
+
+/**
+ * Alana odaklanmadan önce: o an açık olan takvimler kaydedilir (acikTakvimVar yalnizYeni ile bunları saymaz). Alan zaten odaktaysa kayıt
+ * boş kalır (açık takvim bu alanın olabilir).
+ */
+export async function takvimleriKaydet(alan: Locator): Promise<void> {
+  await alan.evaluate((el, secici) => {
+    const k = new WeakSet<Element>();
+    if (document.activeElement !== el) for (const e of document.querySelectorAll(secici)) k.add(e);
+    (window as unknown as { __nobetciOncekiTakvimler?: WeakSet<Element> }).__nobetciOncekiTakvimler = k;
+  }, TAKVIM_SECICI, { timeout: 2_000 }).catch(() => undefined);
+}
+
+/**
+ * Alanda maske ipucu var mı (yazmaKipiSec ve alandanCik ortak kuralı): data-*mask* / inputmask nitelikleri, placeholder'da "_" ya da
+ * değerde maske deseni ("(___) ___"). Beklemeden okunur (öğe yoksa false).
+ */
+export async function maskeIpucuVar(alan: Locator): Promise<boolean> {
+  return alan.evaluateAll((l) => {
+    const e = l[0] as HTMLInputElement | undefined;
+    if (!e) return false;
+    const nitelikler = [...e.attributes].map((a) => `${a.name}=${a.value}`).join(' ');
+    return /mask/i.test(nitelikler) || /_/.test(e.getAttribute('placeholder') ?? '') || (typeof e.value === 'string' && /_/.test(e.value));
   }).catch(() => false);
 }
 
-export async function alandanCik(alan: Locator): Promise<void> {
+/**
+ * Alandan çıkış. Sıra: Tab (blur / change); açılır takvim hâlâ açıksa boş noktaya tıklama; yine açıksa en son çare Escape — o an odaktaki
+ * öğeye (alan yeniden odaklanıp takvimini açmasın) ve yalnız alan da odaktaki öğe de maskesizse (maske Escape'te değeri geri alır).
+ * yalnizYeni: alana odaklanmadan önce zaten açık olan takvimler (takvimleriKaydet) bu alanın sayılmaz.
+ */
+export async function alandanCik(alan: Locator, secenek: { yalnizYeni?: boolean } = {}): Promise<void> {
   const sayfa = alan.page();
-  if (await acikTakvimVar(sayfa)) await alan.press('Escape', { timeout: 2_000 }).catch(() => undefined);
+  const maskeli = await maskeIpucuVar(alan);
   await alan.press('Tab', { timeout: 3_000 }).catch(() => alan.blur({ timeout: 2_000 }).catch(() => undefined));
-  if (await acikTakvimVar(sayfa)) {
-    const nokta = await bosNokta(sayfa);
-    if (nokta) await sayfa.mouse.click(nokta.x, nokta.y).catch(() => undefined);
-    await sayfa.waitForTimeout(100);
-  }
+  if (!(await acikTakvimVar(sayfa, secenek))) return;
+  const nokta = await bosNokta(sayfa);
+  if (nokta) await sayfa.mouse.click(nokta.x, nokta.y).catch(() => undefined);
+  await sayfa.waitForTimeout(100);
+  if (maskeli || !(await acikTakvimVar(sayfa, secenek))) return;
+  if (!(await maskeIpucuVar(sayfa.locator('input:focus, textarea:focus')))) await sayfa.keyboard.press('Escape').catch(() => undefined);
 }
 
 /** Tıklanınca hiçbir şey başlatmayacak boş bir nokta (bağlantı / düğme / alan / takvim üstü değil); yoksa null. */
@@ -59,6 +110,9 @@ export function degerTuttu(mevcut: string | null, deger: string): boolean {
   if (a && b) return a.gun === b.gun && a.ay === b.ay && a.yil === b.yil;
   return degerSade(mevcut).includes(istenen);
 }
+
+/** Değer boş mu: hiç yok ya da yalnız maske deseni (en az bir "_" ve hiç harf / rakam yok: "(___) ___ __ __"). */
+export const bosSayilir = (m: string): boolean => !m || (/_/.test(m) && !degerSade(m));
 
 /** Alanın sayfadaki değeri (okunamazsa null). */
 export async function alanDegeriOku(alan: Locator): Promise<string | null> {
@@ -128,8 +182,25 @@ export class DegerIzleyici<T> {
   bozani(oge: T): string | null { return this.bozanlar.get(oge) ?? null; }
 }
 
+/**
+ * Maske imleci kaydırdı mı: alandaki harf / rakam dizisi yazılanla aynı uzunlukta ama bir (ya da birkaç) yuva kaymış — baştan hane düşmüş
+ * ve sona eklenmiş ("5421245685" → "4212456855") ya da tersi. Yalnız değer tutmadığında anlamlıdır.
+ */
+export function maskeKaydirdi(deger: string, mevcut: string): boolean {
+  const a = degerSade(deger), b = degerSade(mevcut);
+  if (a.length < 4 || a === b || b.length < a.length - 2 || b.length > a.length) return false;
+  for (let k = 1; k <= 2; k++) {
+    // Sola kayma: ilk k hane düştü (sona hane eklenmiş ya da eksik kalmış olabilir). Sağa kayma: başa k yuva eklendi, son k hane düştü.
+    if (b.startsWith(a.slice(k)) || (b.length === a.length && b.slice(k) === a.slice(0, a.length - k))) return true;
+  }
+  return false;
+}
+
 /** Değeri sayfa tarafından değiştirilen alanın iletisi (yeniden yazıldı, yine değişti). */
 export function degisimMesaji(etiket: string, deger: string, mevcut: string, bozan: string | null): string {
+  if (maskeKaydirdi(deger, mevcut)) {
+    return `“${etiket}” ${deger} yazıldı; alanda ${mevcut.trim()} kaldı: maske imleci kaydırdı (hane düştü / fazladan eklendi; temizlenip imleç başa alınarak yeniden yazıldı, yine kaydı). Alanın maskesini kontrol edin.`;
+  }
   const sonra = mevcut.trim() ? `sayfa ${mevcut.trim()} yaptı` : 'sayfa alanı boşalttı';
   return `“${etiket}” ${deger} yazıldı; ${bozan ? `“${bozan}” doldurulunca ${sonra}` : `sonradan ${sonra}`} (yeniden yazıldı, yine değişti). Alanların sırasını ya da değerleri kontrol edin.`;
 }
@@ -155,9 +226,10 @@ export async function yazmaKipiSec(alan: Locator, deger: string, istek: 'otomati
     const el = e as HTMLInputElement;
     const etiket = el.tagName;
     const nitelikler = [...el.attributes].map((a) => `${a.name}=${a.value}`).join(' ');
+    // Maske ipucu: maskeIpucuVar ile aynı kural (nitelik, placeholder ya da değerde "_").
     return {
       girdi: etiket === 'INPUT', tur: etiket === 'INPUT' ? (el.getAttribute('type') ?? '').toLowerCase() : '',
-      maske: /mask/i.test(nitelikler) || /_/.test(el.getAttribute('placeholder') ?? '')
+      maske: /mask/i.test(nitelikler) || /_/.test(el.getAttribute('placeholder') ?? '') || (typeof el.value === 'string' && /_/.test(el.value))
     };
   }, undefined, { timeout: 2_000 }).catch(() => null);
   if (!bilgi || !bilgi.girdi || !TUSLANAN_TURLER.has(bilgi.tur)) return 'dogrudan';
@@ -168,26 +240,39 @@ export async function yazmaKipiSec(alan: Locator, deger: string, istek: 'otomati
  * Alanı gerçek tuşlarla yazar. Alanda değer varsa önce klavyeyle (tümünü seç + sil) temizlenir — tuş dinleyen maske de boşaldığını
  * görür; klavye temizleyemezse fill('') yedeği. Sonra değer tuşlanır (her karakter için keydown / keypress / input / keyup).
  */
-async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number): Promise<void> {
-  await alanTemizle(alan);
+async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number, yeniden = false): Promise<void> {
+  const temizlendi = await alanTemizle(alan);
+  // Maskeli alanda temiz başlangıç (yeniden yazmada ya da alan temizlendiyse): imleç başa alınır. Tıklama imleci tıklanan yere koyar;
+  // maske ortadaki boş yuvadan yazmaya başlarsa ilk hane düşer, sona fazladan hane eklenir ("maske imleci kaydırdı").
+  if ((yeniden || temizlendi) && (await maskeIpucuVar(alan))) await imleciBasaAl(alan);
   await alan.pressSequentially(deger, { delay: aralikMs, timeout: zamanAsimiMs });
+}
+
+/** Alana odaklanır ve imleci başa alır (Home + setSelectionRange(0, 0)); maskenin odak / tıklama işleyicisi önce çalışsın diye kısa bekler. */
+async function imleciBasaAl(alan: Locator): Promise<void> {
+  await alan.focus({ timeout: 2_000 }).catch(() => undefined);
+  await alan.page().waitForTimeout(30);
+  await alan.press('Home', { timeout: 2_000 }).catch(() => undefined);
+  await alan.evaluate((e) => { try { (e as HTMLInputElement).setSelectionRange(0, 0); } catch { /* seçim desteklenmeyen tür */ } }, undefined, { timeout: 2_000 }).catch(() => undefined);
 }
 
 /**
  * Alanda değer varsa klavyeyle temizler: odak + tümünü seç (Ctrl/Cmd+A; sayfa engellerse betikle seçim) + sil. Hâlâ doluysa (maske
- * seçimi bozdu / silmeyi engelledi) fill('') yedeği. Önceden dolu (varsayılan değerli) alanın üzerine yazmanın ilk adımı.
+ * seçimi bozdu / silmeyi engelledi) fill('') yedeği. Önceden dolu (varsayılan değerli) alanın üzerine yazmanın ilk adımı. Yalnız maske
+ * deseni (harf / rakamsız "(___) ___") boş sayılır. Dönüş: alanda temizlenecek değer vardı mı.
  */
-async function alanTemizle(alan: Locator): Promise<void> {
-  const dolu = async (): Promise<boolean> => Boolean(await alan.inputValue({ timeout: 1_000 }).catch(() => ''));
-  if (!(await dolu())) return;
+async function alanTemizle(alan: Locator): Promise<boolean> {
+  const dolu = async (): Promise<boolean> => !bosSayilir(await alan.inputValue({ timeout: 1_000 }).catch(() => ''));
+  if (!(await dolu())) return false;
   await alan.click({ timeout: 3_000 }).catch(() => undefined);
   await alan.press('ControlOrMeta+a', { timeout: 2_000 }).catch(() => undefined);
   await alan.press('Backspace', { timeout: 2_000 }).catch(() => undefined);
-  if (!(await dolu())) return;
+  if (!(await dolu())) return true;
   // Kısayol engellenmiş olabilir: seçim betikle yapılır, sonra yine tuşla silinir (tuş dinleyen maske boşaldığını görür).
   await alan.evaluate((e) => { (e as HTMLInputElement).focus(); (e as HTMLInputElement).select?.(); }, undefined, { timeout: 2_000 }).catch(() => undefined);
   await alan.press('Delete', { timeout: 2_000 }).catch(() => undefined);
   if (await dolu()) await alan.fill('', { timeout: 2_000 }).catch(() => undefined);
+  return true;
 }
 
 /**
@@ -205,29 +290,32 @@ export async function alanaYaz(
   alan: Locator, deger: string,
   secenek: { tuslayarak?: boolean; kip?: 'otomatik' | 'tus' | 'dogrudan'; aralikMs?: number; zamanAsimiMs: number; sonra?: () => Promise<void> }
 ): Promise<'tamam' | 'silindi' | 'tutmadi' | 'kilitli'> {
-  const bos = async (): Promise<boolean> => !(await alan.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim();
+  const bos = async (): Promise<boolean> => bosSayilir((await alan.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim());
   const tuttu = async (): Promise<boolean> => { const m = await alanDegeriOku(alan); return m === null || degerTuttu(m, deger); };
   const aralik = secenek.aralikMs ?? TUSLAMA_ARALIGI_MS;
-  const tusla = (): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs);
+  const tusla = (yeniden = false): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs, yeniden);
   // Alan henüz çizilmediyse (önceki basışın sonucu gecikmeli) görünmesi beklenir: kip, alanın kendisine bakılarak seçilir.
   await alan.waitFor({ state: 'visible', timeout: secenek.zamanAsimiMs });
   // Yazmadan önceki değer (yalnız okunur): değer tutmazsa sayfanın bu değeri geri yazıp yazmadığına bakılır (düzenlenemez kanıtı).
   const onceki = await alanDegeriOku(alan);
   const kip = await yazmaKipiSec(alan, deger, secenek.tuslayarak ? 'tus' : secenek.kip ?? 'otomatik');
+  // Odaktan önce açık olan takvimler bu alanın sayılmaz (sayfada sürekli duran takvim alandan çıkışta Escape / tıklama gerektirmez).
+  await takvimleriKaydet(alan);
   if (kip === 'tus') await tusla();
   else {
     await alan.fill(deger, { timeout: secenek.zamanAsimiMs });
     if (await bos()) await tusla();
   }
-  await alandanCik(alan);
+  await alandanCik(alan, { yalnizYeni: true });
   await secenek.sonra?.();
   if (!deger.trim() || (await tuttu())) return 'tamam';
-  // Tutmadı: tümünü seç + sil + tuşlayarak yeniden yaz (önceden dolu / maskeli alan). Tuşlama da tutmazsa (ör. her tuşta öneki yeniden
-  // ekleyen maske) değer doğrudan (tek input olayıyla) yazılır.
+  // Tutmadı (değer gerçekten tutmadıysa): tümünü seç + sil + imleç başta (maskeli alan) tuşlayarak yeniden yaz. Tuşlama da tutmazsa
+  // (ör. her tuşta öneki yeniden ekleyen maske) değer doğrudan (tek input olayıyla) yazılır.
+  await takvimleriKaydet(alan);
   await alan.click({ timeout: 3_000 }).catch(() => undefined);
-  await tusla().catch(() => undefined);
+  await tusla(true).catch(() => undefined);
   if (!(await tuttu())) await alan.fill(deger, { timeout: secenek.zamanAsimiMs }).catch(() => undefined);
-  await alandanCik(alan);
+  await alandanCik(alan, { yalnizYeni: true });
   await secenek.sonra?.();
   if (await tuttu()) return 'tamam';
   if (await bos()) return 'silindi';
@@ -245,6 +333,7 @@ export async function yazmaHatasi(alan: Locator, deger: string, sonuc: 'tamam' |
   if (sonuc === 'tamam' || sonuc === 'kilitli') return null;
   if (sonuc === 'silindi') return 'Değer yazıldı ama alandan çıkınca sayfa sildi (maske / doğrulama); alanın nasıl doldurulduğunu kontrol edin.';
   const m = ((await alanDegeriOku(alan)) ?? '').trim();
+  if (maskeKaydirdi(deger, m)) return `“${etiket}” ${deger} yazıldı ama alanda ${m} kaldı: maske imleci kaydırdı (hane düştü / fazladan eklendi; temizlenip imleç başa alınarak yeniden yazıldı, yine kaydı). Alanın maskesini kontrol edin.`;
   return `“${etiket}” ${deger} yazıldı ama alanda ${m || '(boş)'} kaldı (tümü seçilip silindi ve yeniden yazıldı; tutmadı). Alanın biçimini (maske) ya da değeri kontrol edin.`;
 }
 

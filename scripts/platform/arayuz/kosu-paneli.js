@@ -238,12 +238,21 @@ export function kosuOnayi(s) {
       const liste = hesap.calistirilamazlar || [];
       if (!s.hazirlik && !liste.length) return null;
       const toplam = hesap.senaryolar.length + liste.length;
+      // Koşacak senaryoların koşuyu durdurmayan uyarıları (sunucu hazırlığı: ortam kaydında ya da satırda "uyarilar"; ör. zorunlu
+      // olmayan alanın tablo hücresi boş — alan doldurulmaz).
+      const uyarilari = (x) => {
+        const k = ortam && Array.isArray(x.ortamlar) ? x.ortamlar.find((o) => o.ortamId === ortam.id) : null;
+        return (k && k.hazirlik ? k.hazirlik.uyarilar : x.hazirlik && x.hazirlik.uyarilar) || [];
+      };
       const madde = (anahtar) => {
         const n = liste.filter((x) => (x.eksikler || []).includes(anahtar)).length;
-        return h('li', { class: `hazirlik-maddesi ${n ? 'eksik' : 'tamam'}`, 'data-madde': anahtar },
-          h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, n ? '✕' : '✓'),
-          h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, h('span', { class: 'gorunmez' }, n ? 'Eksik: ' : 'Hazır: '), HAZIRLIK_BASLIKLARI[anahtar]),
-            h('small', { class: 'hazirlik-ayrinti' }, n ? `${n} senaryoda eksik` : 'Koşulacak senaryolarda hazır')));
+        const u = n ? 0 : (hesap.senaryolar || []).filter((x) => uyarilari(x).includes(anahtar)).length;
+        const durum = n ? 'eksik' : u ? 'uyari' : 'tamam';
+        return h('li', { class: `hazirlik-maddesi ${durum}`, 'data-madde': anahtar },
+          h('span', { class: 'hazirlik-simge', 'aria-hidden': 'true' }, n ? '✕' : u ? '!' : '✓'),
+          h('span', { class: 'hazirlik-govde' }, h('span', { class: 'hazirlik-basligi' }, h('span', { class: 'gorunmez' }, n ? 'Eksik: ' : u ? 'Uyarı: ' : 'Hazır: '), HAZIRLIK_BASLIKLARI[anahtar]),
+            h('small', { class: 'hazirlik-ayrinti' }, n ? `${n} senaryoda eksik`
+              : u ? `${u} senaryoda boş tablo hücresi: zorunlu olmayan alan doldurulmayacak (koşu durmaz)` : 'Koşulacak senaryolarda hazır')));
       };
       let ortamSatiri = null;
       if (s.hazirlik && ortam) {

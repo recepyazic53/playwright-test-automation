@@ -434,7 +434,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
     let metin;
     if (!r) metin = '— (uyan satır yok)';
     else if (sutun.gizli) metin = `${(r.gizliMaskeleri || {})[sutun.ad] || '•••'} (gizli)`;
-    else metin = r.degerler[sutun.ad] === null || r.degerler[sutun.ad] === undefined || r.degerler[sutun.ad] === '' ? '— (satırda boş)' : String(r.degerler[sutun.ad]);
+    // Boş hücre: zorunlu alanda koşu durur; zorunlu olmayanda alan doldurulmaz (koşu sürer, sonuçta not).
+    else metin = r.degerler[sutun.ad] === null || r.degerler[sutun.ad] === undefined || r.degerler[sutun.ad] === ''
+      ? (alan.zorunlu === true ? '— (satırda boş; zorunlu alan, koşu durur)' : '— (satırda boş; alan doldurulmaz)') : String(r.degerler[sutun.ad]);
     // Satır seçimi dili her yerde aynı: "tek test: koşullara uyan ilk satır" / "ayrı test: koşullara uyan her satır" / "ayrı test: listedeki her satır".
     const not = d.mod === 'coklu' ? ` · ayrı test: listedeki ${d.idler.length} satırın her biri` : d.mod === 'tumu' ? ' · ayrı test: koşullara uyan her satır' : d.mod === 'ilk' || d.mod === 'kosul' ? ' · tek test: koşullara uyan ilk satır' : '';
     yerlestir(ozet, ikon(sutun.gizli ? 'kilit' : 'veri'), h('span', { class: 'kayit-ozeti-deger' }, metin), h('small', { class: 'soluk' }, `${kaynak.textContent}${not}`));
@@ -2038,7 +2040,21 @@ function modelFormu(icerik, s, senaryo, baglam) {
       if (!r) return veriMaddesi({ kullaniliyor: true, sorun: `“${t.ad}${g.etiket ? ` (${g.etiket})` : ''}” tablosunda ${hazirlikOrtami().ad} ortamına uyan satır yok` });
       satirlar.push(`${t.ad}: ${r.ad || 'adsız satır'}`);
     }
-    return veriMaddesi({ kullaniliyor: true, satirlar });
+    // Satırda boş hücre (koşu kuralı, ekran-basvurulari.mjs): zorunlu alanda engel, zorunlu olmayanda uyarı (alan doldurulmaz).
+    const uyarilar = [];
+    for (const alan of tumAlanlar) {
+      const b = alan.anahtar && !alanGizliMi(alan) ? tabloBasvurusuCoz(degerler[alan.anahtar]) : null;
+      const t = b ? tabloBul(tabloListesi, b.tablo) : null;
+      const sutun = t ? sutunBul(t, b.sutun) : null;
+      if (!sutun || sutun.gizli) continue;
+      const r = onizlemeSatiri({ tablo: b.tablo, etiket: b.etiket }, t);
+      const d = r ? r.degerler[sutun.ad] : null;
+      if (!r || (d !== null && d !== undefined && d !== '')) continue;
+      const kaynak = `${t.ad}${b.etiket ? ` (${b.etiket})` : ''} › ${sutun.ad}`;
+      if (alan.zorunlu === true) return veriMaddesi({ kullaniliyor: true, sorun: `“${alan.etiket}” zorunlu; ${kaynak} seçilen satırda boş`, hedef: { tur: 'tablo', alan: alan.anahtar } });
+      uyarilar.push(`${alan.etiket}: ${kaynak} boş, doldurulmadı`);
+    }
+    return veriMaddesi({ kullaniliyor: true, satirlar, uyarilar });
   }
   /** Formun hazırlık durumu (maddeler + özet). */
   function hazirlikHesapla(d = sonDurum.gorunurluk ? sonDurum : hesapla()) {
@@ -2078,8 +2094,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       else bildir('Tabloyu Test verisi > Tablolar sayfasında tamamlayın (bu ortama uyan satır ekleyin).', 'hata');
     } }, 'Tamamla');
   }
-  const DURUM_OKUNUSU = { tamam: 'Hazır: ', eksik: 'Eksik: ', yok: 'Gerekmiyor: ', bekliyor: 'Denetleniyor: ' };
-  const DURUM_SIMGESI = { tamam: '✓', eksik: '✕', yok: '–', bekliyor: '…' };
+  const DURUM_OKUNUSU = { tamam: 'Hazır: ', eksik: 'Eksik: ', yok: 'Gerekmiyor: ', bekliyor: 'Denetleniyor: ', uyari: 'Uyarı: ' };
+  const DURUM_SIMGESI = { tamam: '✓', eksik: '✕', yok: '–', bekliyor: '…', uyari: '!' };
   let hazirlikImzasi = '';
   function hazirlikCiz(d) {
     ortamDenetiminiOku();

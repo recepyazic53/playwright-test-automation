@@ -127,6 +127,8 @@ export type PlatformModelSenaryosu = {
   tabloGizliDegerleri?: string[];
   /** Çözülemeyen tablo başvuruları (ör. tabloda bu ortamda satır yok): koşu tarayıcı açılmadan bu hatayla durur. */
   veriHatalari?: Array<{ alan: string; mesaj: string }>;
+  /** Zorunlu olmayan alanın tablo hücresi boş: alan doldurulmaz, koşu durmaz; sonuçta "atlanan alanlar"a yazılır ("‹Tablo› › ‹Sütun› boş, doldurulmadı"). */
+  bosHucreNotlari?: Array<{ alan: string; neden: string }>;
   /** İndirilen dosya beklentilerindeki ${Tablo.Sütun} başvurularının değerleri (başvurunun içi → değer; yalnızca bellekte). */
   dosyaBasvurulari?: Record<string, string>;
   mutlakaGorunmeli: string[];

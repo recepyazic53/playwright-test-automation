@@ -97,7 +97,8 @@ function testVerisiMaddesi(vt, projeId, ekranId, model, veri, icerik, ortamId, o
     const t = tablolar.find((x) => x.id === g.split('|')[0]);
     return `${t ? t.ad : '?'}: ${satir?.ad || 'adsız satır'}`;
   });
-  return veriMaddesi({ kullaniliyor: true, sorun, satirlar });
+  // Zorunlu olmayan alanın boş hücresi uyarıdır (koşu durmaz, alan doldurulmaz); zorunlu alanınki r.hatalar'da (engel).
+  return veriMaddesi({ kullaniliyor: true, sorun, satirlar, uyarilar: r.bosBirakilanlar.map((b) => b.not) });
 }
 
 /**
@@ -112,7 +113,9 @@ export function listeHazirliklari(vt, projeId, satirlar, ortamId) {
   const hesapla = (/** @type {string} */ id, /** @type {string} */ o) => {
     try {
       const h = senaryoHazirligi(vt, projeId, id, o, onbellek);
-      return { calistirilabilir: h.calistirilabilir, neden: h.neden, eksikler: h.eksikler };
+      // Koşuyu durdurmayan uyarılar (ör. zorunlu olmayan alanın boş hücresi): koşu diyaloğu madde başına sayar.
+      const uyarilar = h.maddeler.filter((m) => m.durum === 'uyari').map((m) => m.anahtar);
+      return { calistirilabilir: h.calistirilabilir, neden: h.neden, eksikler: h.eksikler, ...(uyarilar.length ? { uyarilar } : {}) };
     } catch {
       return null;
     }

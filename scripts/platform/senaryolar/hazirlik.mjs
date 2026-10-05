@@ -232,8 +232,9 @@ export function alanMaddesi(g) {
 
 /**
  * "Test verisi hazır" maddesi.
- * @param {{ kullaniliyor: boolean; bekliyor?: boolean; satirlar?: string[]; sorun?: string | null; hedef?: { tur: string; alan?: string } }} g
- *   satirlar: kullanılacak satırlar ("Tablo: satır adı"); sorun: bulunamayan satır / tablo (kısa)
+ * @param {{ kullaniliyor: boolean; bekliyor?: boolean; satirlar?: string[]; sorun?: string | null; uyarilar?: string[]; hedef?: { tur: string; alan?: string } }} g
+ *   satirlar: kullanılacak satırlar ("Tablo: satır adı"); sorun: bulunamayan satır / tablo ya da ZORUNLU alanın boş hücresi (kısa; engel);
+ *   uyarilar: zorunlu OLMAYAN alanın boş hücresi ("‹Alan›: ‹Tablo› › ‹Sütun› boş, doldurulmadı"; engel değil, durum 'uyari')
  * @returns {HazirlikMaddesi}
  */
 export function veriMaddesi(g) {
@@ -242,6 +243,13 @@ export function veriMaddesi(g) {
   if (g.bekliyor) return { anahtar: 'veri', durum: 'bekliyor', baslik, ayrinti: 'Tablolar denetleniyor…' };
   if (g.sorun) return { anahtar: 'veri', durum: 'eksik', baslik, neden: NEDENLER.veriEksik(g.sorun), ayrinti: g.sorun, hedef: g.hedef ?? { tur: 'tablo' } };
   const l = g.satirlar ?? [];
+  const u = g.uyarilar ?? [];
+  if (u.length) {
+    return {
+      anahtar: 'veri', durum: 'uyari', baslik, hedef: g.hedef ?? { tur: 'tablo' },
+      ayrinti: `${u.slice(0, 3).join('; ')}${u.length > 3 ? ` (+${u.length - 3})` : ''}. Zorunlu olmadığı için koşu durmaz; alan boş bırakılır.`
+    };
+  }
   return { anahtar: 'veri', durum: 'tamam', baslik, ayrinti: l.length ? `Kullanılacak satır: ${l.slice(0, 3).join(', ')}${l.length > 3 ? ` (+${l.length - 3})` : ''}.` : 'Bağlı tablo satırı var.' };
 }
 

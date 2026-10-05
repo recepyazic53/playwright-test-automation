@@ -271,7 +271,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     // aynı sabit satırlarla) çözülür.
     const dosyaMetinleri = mb ? dosyaBeklentiMetinleri(mb.model) : [];
     const dosyadaBasvuru = dosyaMetinleri.some((m) => /\$\{\s*(?!akis:)[^{}]*\.[^{}]*\}/.test(m));
-    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], dosyaBasvurulari: {}, satirlar: [] };
+    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], bosHucreNotlari: [], dosyaBasvurulari: {}, satirlar: [] };
     tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
     if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, etkinAlanBaglari(vt, ekranId));
     const satirSecimi = { ...satirSecimiOlustur(satirSecimKipi), ...sabit, kullanilan: new Map() };
@@ -290,7 +290,9 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     }).filter((x) => x !== null);
     return {
       veri: r.veri, tabloGizliDegerleri: [...r.gizliDegerler, ...d.gizliDegerler], veriHatalari: [...r.hatalar, ...d.hatalar],
-      dosyaBasvurulari: d.degerler, satirlar
+      dosyaBasvurulari: d.degerler, satirlar,
+      // Zorunlu olmayan alanın tablo hücresi boş: alan doldurulmaz, koşu sonucunda "atlanan alanlar"da not (ekran-basvurulari.mjs).
+      bosHucreNotlari: r.bosBirakilanlar.map((b) => ({ alan: b.etiket, neden: `${b.tablo} › ${b.sutun} boş, doldurulmadı` }))
     };
   };
   const senaryolar = [];
@@ -334,6 +336,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
         ...ortak, veri: cozum.veri,
         ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
         ...(hatalar.length ? { veriHatalari: hatalar } : {}),
+        ...(cozum.bosHucreNotlari.length ? { bosHucreNotlari: cozum.bosHucreNotlari } : {}),
         ...(Object.keys(cozum.dosyaBasvurulari).length ? { dosyaBasvurulari: cozum.dosyaBasvurulari } : {}),
         veriKosusu: { anahtar: vk.anahtar, ad: vk.ad, satirlar: cozum.satirlar }
       });
@@ -381,6 +384,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
         model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: cozum.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true,
         ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
         ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
+        ...(cozum.bosHucreNotlari.length ? { bosHucreNotlari: cozum.bosHucreNotlari } : {}),
         ...(Object.keys(cozum.dosyaBasvurulari).length ? { dosyaBasvurulari: cozum.dosyaBasvurulari } : {}),
         giris: deneme.giris, adimGoruntusu: deneme.adimGoruntusu
       });

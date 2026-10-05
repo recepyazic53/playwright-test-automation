@@ -72,6 +72,7 @@ import { HedefHatasi, ekKokenleri, hedefCoz } from '../tarama/koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturucu.mjs';
 import { kalipVar, katla } from '../tarama/eylem-kesfi.mjs';
 import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
+import { kilitEngeller } from '../tarama/alan-kilitleri.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { EkranDogrulamaHatasi, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
@@ -349,11 +350,9 @@ export function hizliTestYoneticisiOlustur(s) {
     }
   };
   // ---- Seçime göre düzenlenemeyen alanlar (sayfa o seçimde alanı kendisi doldurur; keşif "kilitler", alanKilidi) ----
-  /**
-   * Seçime bağlı olmadan da düzenlenemez sayılan kilitler (salt okuma): aria-disabled, kapalı takvim, tuş + değer engeli. Salt okunur
-   * (takvimden seçilen tarih alanı doldurulur), kapalı (zaten sorulmaz) ve örtü (anlık olabilir) yalnız seçime göre değişince sayılır.
-   */
-  const SERT_KILITLER = new Set(['aria-devre-disi', 'takvim-kilidi', 'tus-deger']);
+  // Seçime bağlı olmadan da düzenlenemez sayılan kilitler: aria-disabled, kapalı takvim, tuş + değer engeli (normal koşuyla ORTAK karar:
+  // tarama/alan-kilitleri.mjs > kilitEngeller). Salt okunur (takvimden seçilen tarih alanı doldurulur), kapalı (zaten sorulmaz) ve örtü
+  // (anlık olabilir) yalnız seçime göre değişince sayılır. Takvimden seçilen alan değeri betikle alır: tuş + değer engeli kilit değildir.
   /** Seçimin şu anki değeri: kullanıcının yazdığı (tablo başvurusu değilse), yoksa sayfadaki. @param {Nesne} o @param {string} anahtar */
   const secimSimdi = (o, anahtar) => {
     const v = o.degerler[anahtar];
@@ -370,7 +369,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const v = secimSimdi(o, kk.secim);
       return v === null ? kk.varsayilan === true : kk.kilitli?.[v] === true;
     }
-    return a.kilitKanit === true || SERT_KILITLER.has(String(a.kilit ?? ''));
+    return a.kilitKanit === true || kilitEngeller(typeof a.kilit === 'string' ? a.kilit : null, { betikle: a.takvimden === true });
   };
   /**
    * Doldurmadan sonra düzenlenebilirlik sayfadan tazelenir (salt okuma; alanKilidi): seçime göre kilitlenen alanda seçimin sayfadaki

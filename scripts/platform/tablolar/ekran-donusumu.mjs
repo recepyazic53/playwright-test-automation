@@ -243,7 +243,8 @@ function senaryoPlani(c) {
   // Seçilen (onaylıysa) adaylar; seçilmeyenler düz kalır.
   const secilenler = adaylar.filter((a) => !c.secili || c.secili.has(a.satir.anahtar));
   for (const a of adaylar) if (!secilenler.includes(a)) { a.satir.durum = 'secilmedi'; }
-  const ortak = { tablolar, baglar: c.baglar, ...bilgi };
+  // Dönüşüm değerin AYNI kalmasını arar: boş hücre her alanda hata sayılır (zorunluluk ayrımı yalnız koşu / hazırlıkta).
+  const ortak = { tablolar, baglar: c.baglar, ...bilgi, zorunluAnahtarlar: undefined };
   /** Senaryonun bu ortamdaki çözümü (verilen veri + seçimlerle). @param {Nesne} veri @param {string} o @param {Secimler} secimler */
   const coz = (veri, o, secimler) => ekranBasvurulariniCoz(veri, { ...ortak, ortamId: o, tabloSecimleri: secimler });
   /** Önceki çözüm (var olan başvurular değişmemeli). */

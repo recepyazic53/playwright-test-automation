@@ -1,4 +1,5 @@
-export type HazirlikDurumu = 'tamam' | 'eksik' | 'yok' | 'bekliyor';
+/** uyari: koşuyu durdurmayan uyarı (ör. zorunlu olmayan alanın tablo hücresi boş). */
+export type HazirlikDurumu = 'tamam' | 'eksik' | 'yok' | 'bekliyor' | 'uyari';
 export interface HazirlikMaddesi {
   anahtar: string;
   durum: HazirlikDurumu;
@@ -34,7 +35,7 @@ export declare function zincirNedeni(no: number, ad: string, durum?: string): st
 export declare function eylemDenetimi(model: unknown, g?: { adimDahil?: Record<string, boolean | null | undefined>; beklenen?: BeklenenSonuc | null }):
   { gonderme: HazirlikMaddesi; beklenen: HazirlikMaddesi; engeller: string[] };
 export declare function alanMaddesi(g: { toplam: number; hatali: number; ilkHata?: string | null }): HazirlikMaddesi;
-export declare function veriMaddesi(g: { kullaniliyor: boolean; bekliyor?: boolean; satirlar?: string[]; sorun?: string | null; hedef?: { tur: string; alan?: string } }): HazirlikMaddesi;
+export declare function veriMaddesi(g: { kullaniliyor: boolean; bekliyor?: boolean; satirlar?: string[]; sorun?: string | null; uyarilar?: string[]; hedef?: { tur: string; alan?: string } }): HazirlikMaddesi;
 export declare function hazirlikOzeti(maddeler: ReadonlyArray<HazirlikMaddesi>, engeller?: ReadonlyArray<string>):
   { calistirilabilir: boolean; nedenler: string[]; neden: string | null; eksikler: string[] };
 export declare function sayiIyelikEki(n: number): string;
