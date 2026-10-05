@@ -170,6 +170,10 @@ export function ekranBasvurulariniCoz(veri, s) {
   const bosBirakilanlar = [];
   let cozulen = 0;
   const basvurulu = Object.entries(veri).filter(([, v]) => degerBasvurusu(v));
+  // Tabloya bağlı alanın DÜZ değeri (satır seçimi; ör. "İstanbul"): başvuruyla aynı kural — seçenekler değeri senaryo değeri olarak
+  // tanımıyorsa ekrana sütunun SAYFA karşılığı gider (ör. "34"). Satır seçimi tablodaki değerle yapılır (senaryoSecimleri veri'yi okur).
+  const duzKarsiliklar = bagliDuzKarsiliklar(veri, s);
+  for (const [anahtar, sayfa] of duzKarsiliklar) sonuc[anahtar] = sayfa;
   if (!basvurulu.length) return { veri: sonuc, gizliDegerler, hatalar, cozulen, bosBirakilanlar };
   const secimler = senaryoSecimleri(veri, s);
   for (const [anahtar, ham] of basvurulu) {
@@ -274,6 +278,41 @@ export function metinBasvurulariniCoz(metinler, veri, s) {
     if (c.sutun.gizli) gizliDegerler.push(c.deger);
   }
   return { degerler, gizliDegerler, hatalar };
+}
+
+/**
+ * Tabloya bağlı alanların düz değerlerinden sayfa karşılığı olanlar: [senaryo anahtarı, sayfa değeri]. Atlananlar: başvuru, senaryo ayarı
+ * (koduna ayrıca çevrilir), onay kutusu / dosya, gizli sütun, seçeneklerin senaryo değeri olarak tanıdığı değer, karşılığı olmayan değer.
+ * @param {Record<string, unknown>} veri @param {Parameters<typeof ekranBasvurulariniCoz>[1]} s @returns {Array<[string, string]>}
+ */
+function bagliDuzKarsiliklar(veri, s) {
+  if (!s.baglar || !s.alanAnahtarlari || !s.tablolar?.length) return [];
+  /** @type {Array<[string, string]>} */
+  const sonuc = [];
+  const cozulmus = baglariCoz(s.baglar, (kontrolId) => { const k = s.alanAnahtarlari?.[kontrolId]; return k ? veri[k] : undefined; });
+  for (const [alanId, b] of Object.entries(cozulmus)) {
+    const anahtar = s.alanAnahtarlari[alanId];
+    const v = anahtar ? veri[anahtar] : undefined;
+    if (!anahtar || typeof v !== 'string' || !v.trim() || degerBasvurusu(v) || s.ayarSecenekleri?.[anahtar]) continue;
+    const tip = s.alanTipleri?.[anahtar];
+    if (tip === 'onayKutusu' || tip === 'dosya' || s.secenekDegerleri?.[anahtar]?.includes(v)) continue;
+    const t = s.tablolar.find((x) => x.id === b.tablo);
+    const sutun = t ? sutunBul(t, b.sutun) : undefined;
+    if (!sutun || sutun.gizli) continue;
+    const sayfa = sayfaDegeri(sutun, v);
+    if (sayfa !== v && !sonuc.some(([k]) => k === anahtar)) sonuc.push([anahtar, sayfa]);
+  }
+  return sonuc;
+}
+
+/**
+ * Senaryo verisinde tabloya bağlı alanın düz değeri var mı (koşu, karşılık çözümü için tabloları yalnız gerekirse okur).
+ * @param {unknown} veri @param {EkranBaglari | undefined} baglar @param {Record<string, string> | undefined} alanAnahtarlari
+ */
+export function bagliDuzDegerVarMi(veri, baglar, alanAnahtarlari) {
+  if (!nesneMi(veri) || !baglar || !alanAnahtarlari) return false;
+  const v = /** @type {Record<string, unknown>} */ (veri);
+  return Object.keys(baglar).some((id) => { const k = alanAnahtarlari[id]; const d = k ? v[k] : undefined; return typeof d === 'string' && d.trim() !== '' && !degerBasvurusu(d); });
 }
 
 /**

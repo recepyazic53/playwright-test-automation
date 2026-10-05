@@ -62,11 +62,11 @@ test.describe('ayrıştırma ve çözüm (saf)', () => {
     // tanıyan seçim alanına tablodaki değer yazılır.
     expect(r.veri).toEqual({ baslik: 'x', ad: 'Ali', sehirKodu: '34', sehirSecimi: 'İstanbul', kefil: 'Veli', duz: 'Sabit değer', sayi: 5 });
     expect(veri.ad).toBe('${Kişi.Ad}'); // girdi değişmez
-    // Tabloya bağlı alanın düz değeri aynı grubun seçimidir: Şehir = Ankara → Ad = Veli.
-    const bagli = ekranBasvurulariniCoz({ sehir: 'Ankara', ad: '${Kişi.Ad}' }, {
-      tablolar, ortamId: 'o1', baglar: { sehirAlani: { tablo: 'k', sutun: 'Şehir' } }, alanAnahtarlari: { sehirAlani: 'sehir' }
-    });
-    expect(bagli.veri).toEqual({ sehir: 'Ankara', ad: 'Veli' });
+    // Tabloya bağlı alanın düz değeri aynı grubun seçimidir: Şehir = Ankara → Ad = Veli. Ekrana (seçenekler değeri tanımadığı için)
+    // sütunun sayfa karşılığı gider (06); seçenekler tanıyorsa değer aynen kalır.
+    const bagliAyar = { tablolar, ortamId: 'o1', baglar: { sehirAlani: { tablo: 'k', sutun: 'Şehir' } }, alanAnahtarlari: { sehirAlani: 'sehir' } };
+    expect(ekranBasvurulariniCoz({ sehir: 'Ankara', ad: '${Kişi.Ad}' }, bagliAyar).veri).toEqual({ sehir: '06', ad: 'Veli' });
+    expect(ekranBasvurulariniCoz({ sehir: 'Ankara', ad: '${Kişi.Ad}' }, { ...bagliAyar, secenekDegerleri: { sehir: ['İstanbul', 'Ankara'] } }).veri).toEqual({ sehir: 'Ankara', ad: 'Veli' });
     // Başvuru yoksa hiçbir şey değişmez (tablo bile okunmaz).
     expect(ekranBasvurulariniCoz({ a: 'b' }, { tablolar: [], ortamId: 'o1' })).toEqual({ veri: { a: 'b' }, gizliDegerler: [], hatalar: [], cozulen: 0, bosBirakilanlar: [] });
   });
