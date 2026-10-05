@@ -681,7 +681,10 @@ function paneliCiz() {
     say.hata ? rozet(`${say.hata} çalıştırılamadı`, 'hata') : null, say.calisiyor ? rozet(`${say.calisiyor} çalışıyor`, 'vurgu') : null,
     say.sirada ? rozet(`${say.sirada} sırada`) : null);
   const ilerleme = h('progress', { max: String(toplam), value: String(biten), 'aria-label': `İlerleme: ${biten} / ${toplam}` });
-  yerlestir(panelEl, 
+  // Koşu sürerken panel yeniden çizilir: senaryo listesinin kaydırma konumu korunur (kullanıcı kaydırabilsin).
+  const listeKaydirma = panelEl.querySelector('.kosu-listesi')?.scrollTop ?? 0;
+  queueMicrotask(() => { const l = panelEl?.querySelector('.kosu-listesi'); if (l) l.scrollTop = listeKaydirma; });
+  yerlestir(panelEl,
     h('div', { class: 'panel-baslik' },
       h('div', { class: 'satir' },
         h('h2', {}, oturum.bitti ? ikon('onay') : h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), oturum.bitti ? 'Koşu bitti' : 'Koşu sürüyor'),
