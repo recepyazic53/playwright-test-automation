@@ -8,6 +8,7 @@
 // aynı satırdan gelir); satırın ortamı boşsa (Tümü) her ortamda geçerlidir.
 // Karşılıklar: sütun değerinin sayfadaki (seçenek değeri) ve servisteki karşılığı; senaryoya tablodaki değer yazılır, ekran
 // koşusu sayfa değeriyle seçer, servis gövdesine servis değeri gider (tanımsızsa tablodaki değer).
+import { olasiBaglar, secimeGoreVar } from './secime-gore-bag.mjs';
 
 /** Tablo / sütun adı karakterleri (tablo-deposu.mjs TABLO_ADI ile aynı): . [ ] { } $ < > & | ve denetim karakterleri yok. */
 export const AD_KALIBI = '[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}';
@@ -278,14 +279,17 @@ const dolu = (/** @type {unknown} */ v) => v !== null && v !== undefined && v !=
  * kendinden ÖNCE gelen bağlı alanların (en çok 3) değer birleşimleri için koşullu listeler. Form, koşulları tutan en çok koşullu
  * listeyi seçer; böylece seçtikçe alttaki alanlar satırlardan süzülür. Gizli sütun listeye girmez. Sayfa değeri tanımlı
  * değerde ekranDegeri (koşu seçeneği bununla seçer).
- * @param {Record<string, { tablo: string; sutun: string; etiket?: string }>} baglar @param {Tablo[]} tablolar @param {string} ekranId
+ * @param {Record<string, import('./secime-gore-bag.mjs').AlanBagi>} baglar @param {Tablo[]} tablolar @param {string} ekranId
  * @param {string[]} [sira] formdaki alan sırası (verilmezse bağlantıların sırası)
  */
 export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
   const yer = (/** @type {string} */ alan) => { const i = sira ? sira.indexOf(alan) : -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   /** @type {Map<string, Array<{ alan: string; t: Tablo; s: Sutun }>>} */
   const gruplar = new Map();
+  /** Seçime göre değişen bağlar (secime-gore-bag.mjs): grupta süzülmez; varsayılan + seçenek başına koşullu liste. @type {Array<[string, any]>} */
+  const kosullular = [];
   for (const [alan, b] of Object.entries(baglar)) {
+    if (secimeGoreVar(b)) { kosullular.push([alan, b]); continue; }
     const t = tablolar.find((x) => x.id === b.tablo);
     const s = t ? sutunBul(t, b.sutun) : undefined;
     if (!t || !s || s.gizli) continue;
@@ -334,6 +338,24 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
           degerler: degerler.map((deger) => ({ deger, ...(k[deger]?.sayfa ? { ekranDegeri: k[deger].sayfa } : {}) }))
         });
       }
+    }
+  }
+  // Seçime göre değişen bağ: varsayılan bağın koşulsuz listesi + her seçeneğin bağı için { kontrol = değer } koşullu liste (form
+  // koşulları tutan en çok koşullu listeyi seçer: kontrol o değerdeyse o seçeneğin tablosu).
+  for (const [alan, b] of kosullular) {
+    let n = 0;
+    for (const x of olasiBaglar(b)) {
+      const t = tablolar.find((y) => y.id === x.tablo);
+      const s = t ? sutunBul(t, x.sutun) : undefined;
+      if (!t || !s || s.gizli) continue;
+      const k = s.karsiliklar || {};
+      const degerler = [...new Set(t.satirlar.map((r) => r.degerler[s.ad]).filter(dolu).map(String))];
+      sonuc.push({
+        id: `tablo:${alan}:s${n++}`, ad: `${t.ad} → ${s.ad}`, tur: 'liste', kullanim: 'ekran', hedef: { ekranId, alan },
+        baglanti: { tablo: t.ad, sutun: s.ad, ...(x.etiket ? { etiket: String(x.etiket) } : {}) },
+        kosullar: x.deger === null ? [] : [{ alan: b.secimeGore.alan, deger: x.deger }],
+        degerler: degerler.map((deger) => ({ deger, ...(k[deger]?.sayfa ? { ekranDegeri: k[deger].sayfa } : {}) }))
+      });
     }
   }
   return sonuc;

@@ -17,3 +17,9 @@
 .dal-disi-notu { margin-bottom: 12px; }
 .dal-disi-notu[hidden] { display: none; }
 .dal-disi-notu p { margin: 0; overflow-wrap: anywhere; }
+/* Aynı kayıt grubu birden çok bölümde / adımda: kutu yalnız ilk görünen yuvada; diğerlerinde kutuya giden bağlantı satırı. */
+.kayit-grubu.kayit-grubu-baglanti { padding: 6px 10px; background: transparent; border: 1px dashed var(--cizgi-2); box-shadow: none; }
+.kayit-grubu-baglantisi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; font-size: 12px; color: var(--metin-2); min-width: 0; }
+.kayit-grubu-baglantisi > span { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.kayit-grubu-baglantisi .ikon { flex: none; width: 13px; height: 13px; }
+.secime-gore-notu[hidden] { display: none; }

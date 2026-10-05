@@ -94,11 +94,16 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   gizliBaglar?: Record<string, { tablo: string; sutun: string; etiket?: string }>;
   /** Bağlı sütun değerleri sayfadaki seçeneklerde bulunamayan alanlar: alan kimliği → uyarı. */
   tabloUyumsuzluklari?: Record<string, { duzey: 'guclu' | 'zayif'; metin: string }>;
+  /** Seçime göre değişen bağlar (adla): alan kimliği → kontrol alanı, varsayılan bağ ve seçenek değeri başına bağ. */
+  secimeGoreBaglar?: Record<string, { alan: string; varsayilan: SecimeGoreBagOzeti | null; degerler: Record<string, SecimeGoreBagOzeti> }>;
   akislar: AkisOzeti[];
   akisId: string | null;
 };
+export type SecimeGoreBagOzeti = { tablo: string; sutun: string; etiket?: string; gizli: boolean; kayit: boolean };
 export declare function tabloBagUyumlari(vt: Veritabani, projeId: string, ekranId: string, baglar?: Record<string, { tablo: string; sutun: string }>,
   tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[]): Record<string, import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { etiket: string; tablo: string; sutun: string }>;
+export declare function tabloBagUyumListesi(vt: Veritabani, projeId: string, ekranId: string, baglar: Record<string, unknown>,
+  tablolar: import('../tablolar/tablo-deposu.mjs').Tablo[]): Array<import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { alanId: string; etiket: string; tablo: string; sutun: string; deger: string | null; kontrol: string | null }>;
 export declare function modelHassasAnahtarlari(model: unknown): string[];
 export declare function senaryoKaydet(
   vt: Veritabani,

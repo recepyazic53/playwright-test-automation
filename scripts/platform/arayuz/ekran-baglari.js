@@ -10,6 +10,7 @@ import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, yeniKimlik,
 import { degerCipleri } from './parametre-tanimi-formu.js';
 import { onayIste } from './kosu-paneli.js';
 import { tabloSecenekUyumu } from './tablo-uyumu.mjs';
+import { bagOzeti } from './secime-gore-bag.mjs';
 
 const q = encodeURIComponent;
 const TIP = { secim: 'seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', telefon: 'telefon', onayKutusu: 'onay kutusu', dosya: 'dosya' };
@@ -112,7 +113,67 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       h('div', { class: 'acilir-baslik' }, h('h4', {}, dugme)), govde);
   };
   const sayac = h('p', { class: 'bag-sayaci soluk kucuk', 'aria-live': 'polite' });
+  // --- SEÇİME GÖRE DEĞİŞEN BAĞ (secime-gore-bag.mjs) ---------------------------------------------------------------------
+  // Kontrol adayları: bu alanın görünürlüğünü etkileyen ya da aynı bölümdeki, seçenekli seçim / radyo alanları (sunucu: bolum,
+  // kosulAlanlari, secenekler). Düzenleyici açık / kapalı durumu yeniden çizimde korunur.
+  /** @type {Set<string>} */
+  const secimAcik = new Set();
+  const tabloAdi = (/** @type {string} */ id) => (tablolar.find((t) => t.id === id) || { ad: '(silinmiş tablo)' }).ad;
+  /** @param {any} g */
+  const kontrolAdaylari = (g) => girdiler.filter((k) => k.id !== g.id && Array.isArray(k.secenekler) && k.secenekler.length
+    && ((g.kosulAlanlari || []).includes(k.id) || (g.bolum && k.bolum === g.bolum)));
+  /** Tablo sütunu seçimi (seçenek bağı): boş = varsayılan (üstteki bağ). @param {string} ad @param {any} secili @param {boolean} gizliOlur @param {string} odak */
+  const sutunSecimi = (ad, secili, gizliOlur, odak) => h('select', { 'aria-label': ad, 'data-odak': odak },
+    h('option', { value: '' }, '— varsayılan (üstteki bağ) —'),
+    tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
+      value: `${t.id}\u0001${c.ad}`, selected: Boolean(secili && secili.tablo === t.id && secili.sutun === c.ad)
+    }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))));
+  /** Bağlı satırın "Seçime göre değişsin" bölümü. @param {any} g @param {any} kendi @param {boolean} gizliOlur */
+  function secimeGoreBolumu(g, kendi, gizliOlur) {
+    const adaylar = kontrolAdaylari(g);
+    const sg = kendi.secimeGore;
+    if (!adaylar.length && !sg) return null;
+    const acik = Boolean(sg) || secimAcik.has(g.id);
+    if (!acik) {
+      return h('button', { type: 'button', class: 'kucuk-dugme hayalet secime-gore-ac', 'aria-label': `Seçime göre değişsin — ${g.etiket}`, 'data-odak': `${g.id}|ac`,
+        onclick: () => { secimAcik.add(g.id); ciz(); } }, ikon('isaret'), 'Seçime göre değişsin');
+    }
+    const kontrol = sg ? girdiler.find((k) => k.id === sg.alan) : null;
+    const kontrolSec = h('select', { 'aria-label': `${g.etiket}: kontrol alanı`, 'data-odak': `${g.id}|kontrol` }, h('option', { value: '' }, '— kontrol alanını seçin —'),
+      adaylar.map((k) => h('option', { value: k.id, selected: Boolean(sg && sg.alan === k.id) }, k.etiket)),
+      sg && !adaylar.some((k) => k.id === sg.alan) ? h('option', { value: sg.alan, selected: true }, kontrol ? kontrol.etiket : `${sg.alan} (bulunamadı)`) : null);
+    kontrolSec.addEventListener('change', () => {
+      if (!kontrolSec.value) delete kendi.secimeGore;
+      else kendi.secimeGore = { alan: kontrolSec.value, degerler: {} };
+      ciz();
+      degisti();
+    });
+    const kapat = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Seçime göre değişmesin — ${g.etiket}`, 'data-odak': `${g.id}|kapat`,
+      onclick: () => { delete kendi.secimeGore; secimAcik.delete(g.id); ciz(); degisti(); } }, ikon('carpi'), 'Seçime göre değişmesin');
+    const satirlar = kontrol ? kontrol.secenekler.map((/** @type {{ deger: string; metin: string }} */ x) => {
+      const sec = sutunSecimi(`${g.etiket}: ${kontrol.etiket} = ${x.metin} tablo sütunu`, sg.degerler[x.deger], gizliOlur, `${g.id}|d:${x.deger}`);
+      sec.addEventListener('change', () => {
+        if (!sec.value) delete sg.degerler[x.deger];
+        else { const [tablo, sutun] = sec.value.split('\u0001'); sg.degerler[x.deger] = { tablo, sutun }; }
+        ciz();
+        degisti();
+      });
+      return h('label', { class: 'secime-gore-satiri' }, h('span', { class: 'secime-gore-degeri' }, x.metin), sec);
+    }) : [h('p', { class: 'soluk kucuk' }, 'Önce hangi seçime göre değişeceğini seçin.')];
+    const ozet = sg && kontrol && Object.keys(sg.degerler).length
+      ? h('p', { class: 'secime-gore-ozeti kucuk', 'data-secime-gore-ozeti': '' }, ikon('veri'), h('span', {}, bagOzeti(kendi, {
+        tabloAdi, kontrolEtiketi: kontrol.etiket, degerMetni: (d) => (kontrol.secenekler.find((/** @type {any} */ x) => x.deger === d) || { metin: d }).metin,
+        secenekler: kontrol.secenekler.map((/** @type {any} */ x) => x.deger)
+      }))) : null;
+    return h('div', { class: 'secime-gore-duzenleyici', role: 'group', 'aria-label': `${g.etiket}: seçime göre değişen bağ` },
+      h('div', { class: 'secime-gore-ust' }, h('span', { class: 'kucuk' }, 'Seçime göre:'), kontrolSec, kapat),
+      h('div', { class: 'secime-gore-satirlari' }, satirlar),
+      ozet,
+      h('p', { class: 'soluk kucuk' }, 'Seçilmeyen seçeneklerde üstteki bağ kullanılır. Senaryo formunda "Tablodan al" kontrolün o anki değerine göre tabloyu seçer.'));
+  }
   const ciz = () => {
+    // Seçime göre düzenleyicideki odak (data-odak) yeniden çizimden sonra geri gelir.
+    const odakAnahtari = document.activeElement instanceof HTMLElement && kap.contains(document.activeElement) ? document.activeElement.dataset.odak : undefined;
     /** @type {HTMLElement[]} */
     const kendiSatirlari = [];
     /** @type {HTMLElement[]} */
@@ -146,7 +207,11 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         if (sec.value === '__yok') return;
         // Genel senaryodan gelen bağ değiştirilirse ekrana özel bağ olur (ezme); boş seçim ekranın bağını siler (varsa genel senaryonunkine döner).
         if (!sec.value) delete baglar[g.id];
-        else { const [tabloId, sutunAdi] = sec.value.split('\u0001'); baglar[g.id] = { tablo: tabloId, sutun: sutunAdi, ...(b && b.etiket ? { etiket: b.etiket } : {}) }; }
+        else {
+          const [tabloId, sutunAdi] = sec.value.split('\u0001');
+          // Seçime göre bağ (varsa) korunur: yalnız varsayılan değişir.
+          baglar[g.id] = { tablo: tabloId, sutun: sutunAdi, ...(b && b.etiket ? { etiket: b.etiket } : {}), ...(kendi && kendi.secimeGore ? { secimeGore: kendi.secimeGore } : {}) };
+        }
         ciz();
         degisti();
       });
@@ -162,6 +227,8 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       const etiket = kendi ? h('input', { type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${g.etiket} etiketi`,
         title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
       etiket?.addEventListener('change', () => { const e = etiket.value.trim(); if (e) kendi.etiket = e; else delete kendi.etiket; degisti(); });
+      // Seçime göre değişen bağ (yalnız ekranın kendi bağında): kontrol alanının her seçeneği için ayrı tablo sütunu.
+      const secimeGore = kendi ? secimeGoreBolumu(g, kendi, gizliOlur) : null;
       // Senaryo ayarı rozeti (bağlı değilken de): sütun seçiminin altında, değer çiplerinin üstünde.
       let alt = g.senaryoAyari ? ayarRozeti() : null;
       if (sutun && sutun.gizli) {
@@ -182,7 +249,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       if (uyumNotu) sec.setAttribute('aria-describedby', uyumNotu.id);
       const satir = h('div', { class: `alan-satiri ${b || gerekmez ? '' : 'gonderilmez'} ${uyum ? 'uyumsuz' : ''}`.trim(), 'data-alan': g.id },
         h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip), kaynakRozeti),
-        h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt, uyumNotu));
+        h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt, uyumNotu, secimeGore));
       if (gerekmez) { gerekmezSatirlari.push(satir); return; }
       if (!miras) { kendiSatirlari.push(satir); if (!b) bagsizSayisi += 1; return; }
       const grup = gruplar.get(miras.ortakAkis.id) || { o: miras.ortakAkis, satirlar: [], ozel: 0 };
@@ -202,6 +269,11 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
     sayac.textContent = `${kendiSatirlari.length} alan · ${bagsizSayisi ? `${bagsizSayisi} bağlı değil` : 'hepsi bağlı'}`;
     sayac.hidden = !kendiSatirlari.length;
     if (odakAlani) /** @type {HTMLElement | null} */ (kap.querySelector(`select[data-alan="${CSS.escape(odakAlani)}"]`))?.focus();
+    else if (odakAnahtari) {
+      const [alanId] = odakAnahtari.split('|');
+      /** @type {HTMLElement | null} */ (kap.querySelector(`[data-odak="${CSS.escape(odakAnahtari)}"]`) || kap.querySelector(`[data-odak^="${CSS.escape(`${alanId}|`)}"]`)
+        || kap.querySelector(`select[data-alan="${CSS.escape(alanId)}"]`))?.focus();
+    }
   };
   // "Otomatik eşleştir…": bağlantısız alanlar için tablo sütunu önerisi (önizleme → tek onay → geri al); senaryo değerlerini tabloya çevirme
   // adımları (değerler / kişi satırları) aynı pencerede sonraki adım olarak durur.

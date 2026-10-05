@@ -19,3 +19,16 @@
 .ekran-baglari .alan-satiri.uyumsuz { box-shadow: inset 3px 0 0 var(--atlanan); }
 .ekran-baglari .alan-satiri.uyumsuz:has(.tablo-uyumu.guclu) { box-shadow: inset 3px 0 0 var(--hata); }
 .veri-sagligi .uyumsuz-bag { overflow-wrap: anywhere; }
+/* Seçime göre değişen bağ (secime-gore-bag.mjs): kontrol seçimi + seçenek başına tablo sütunu + özet. Dar ekranda alt alta, taşmaz. */
+.secime-gore-ac { justify-self: start; }
+.secime-gore-duzenleyici { display: grid; gap: 6px; min-width: 0; padding: 8px 10px; border: 1px dashed var(--cizgi); border-radius: 8px; background: var(--panel-2); }
+.secime-gore-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.secime-gore-ust > select { flex: 1 1 180px; min-width: 0; max-width: 100%; }
+.secime-gore-satirlari { display: grid; gap: 4px; min-width: 0; }
+.secime-gore-satiri { display: grid; grid-template-columns: minmax(60px, max-content) minmax(0, 1fr); align-items: center; gap: 4px 8px; min-width: 0; }
+.secime-gore-satiri > select { min-width: 0; max-width: 100%; }
+.secime-gore-degeri { font-weight: 600; overflow-wrap: anywhere; }
+.secime-gore-ozeti { margin: 0; display: flex; gap: 6px; align-items: flex-start; overflow-wrap: anywhere; min-width: 0; }
+.secime-gore-ozeti > svg, .secime-gore-ozeti > .ikon { flex: none; margin-top: 2px; }
+.secime-gore-duzenleyici > p { margin: 0; }
+@media (max-width: 520px) { .secime-gore-satiri { grid-template-columns: minmax(0, 1fr); } }

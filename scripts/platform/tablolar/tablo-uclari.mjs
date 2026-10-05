@@ -14,6 +14,7 @@ import { kisiAlanlariniBagla } from './kisi-baglama.mjs';
 import { otomatikEslestir, otomatikEslestirmeyiGeriAl } from './otomatik-eslestirme.mjs';
 import { otomatikYedekAl } from '../yedek.mjs';
 import { kismiMaske } from './tablo-secimi.mjs';
+import { kosulBasvurulari, kosulHaritasi } from '../arayuz/senaryo-dallari.mjs';
 
 /** O an koşan ekran senaryosu denetimi (sunucu-platform.mjs koşucuyu verince ayarlar; tablo değişikliğinde koşan senaryo atlanır). */
 let kosuyorMu = (/** @type {string} */ _dosya, /** @type {string} */ _ad) => false;
@@ -23,6 +24,27 @@ export function tabloKosuDenetimiAyarla(fn) { kosuyorMu = fn; }
 export const tabloKosuDenetimi = () => ({ kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
+
+/**
+ * Modelin alan yapısı: alan → bölüm kimliği (adımdaki bölüm; senaryo düzeyi "senaryo") ve alan → görünürlüğünü belirleyen alanlar.
+ * @param {unknown} model @returns {{ bolum: Map<string, string>; kosul: Map<string, string[]> }}
+ */
+function alanYapisi(model) {
+  /** @type {Map<string, string>} */
+  const bolum = new Map();
+  /** @type {Map<string, string[]>} */
+  const kosul = new Map();
+  const m = /** @type {Record<string, any>} */ (model && typeof model === 'object' ? model : {});
+  const adimlar = [...(Array.isArray(m.adimlar) ? m.adimlar : []), ...(Array.isArray(m.akislar) ? m.akislar.flatMap((/** @type {any} */ a) => (a && Array.isArray(a.adimlar) ? a.adimlar : [])) : [])];
+  for (const adim of adimlar) {
+    for (const b of adim && Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      for (const a of b && Array.isArray(b.alanlar) ? b.alanlar : []) if (a && typeof a.id === 'string' && !bolum.has(a.id)) bolum.set(a.id, `${String(adim.id)}/${String(b.id)}`);
+    }
+  }
+  for (const a of m.senaryoDuzeyi && Array.isArray(m.senaryoDuzeyi.alanlar) ? m.senaryoDuzeyi.alanlar : []) if (a && typeof a.id === 'string' && !bolum.has(a.id)) bolum.set(a.id, 'senaryo');
+  for (const [id, ifade] of kosulHaritasi(m)) kosul.set(id, [...kosulBasvurulari(ifade).keys()].filter((x) => x !== id));
+  return { bolum, kosul };
+}
 
 /** @param {unknown} d @param {string} alan */
 function kimlik(d, alan = 'id') {
@@ -87,12 +109,18 @@ export const TABLO_GET_UCLARI = [
     for (const o of kullanilanOrtakAkislar(db, ekranId)) {
       for (const og of ekranGirdileri(db, projeId, o.id, { tumTipler: true }).girdiler) if (!kaynaklar.has(String(og.id))) kaynaklar.set(String(og.id), o);
     }
+    // Seçime göre bağın kontrol adayları için (ekran-baglari.js): alanın bölümü ve görünürlüğünü etkileyen alanlar (senaryo-dallari.mjs).
+    const yapi = alanYapisi(model ? model.model : null);
     return {
       baglar: ekranAlanBaglari(db, ekranId), ortakBaglar: ortakAkisBaglari(db, ekranId), ortakAkis: Boolean(model && model.model && model.model.tur === 'ortakAkis'),
       // senaryoAyari: ekranda karşılığı olmayan, akışı dallandıran seçim (rozetle gösterilir; tablodaki değer koda çevrilir).
       // modeldeSecenek: seçim alanının seçenekleri ekran modelinde zaten tanımlı (tabloya bağlamak gerekmez; "bağlı değil" uyarısı verilmez).
       girdiler: girdiler.map((g) => ({
         id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}),
+        ...(yapi.bolum.has(String(g.id)) ? { bolum: yapi.bolum.get(String(g.id)) } : {}),
+        ...(yapi.kosul.get(String(g.id))?.length ? { kosulAlanlari: yapi.kosul.get(String(g.id)) } : {}),
+        // Seçenekli seçim / radyo: seçime göre bağın kontrolü olabilir (seçenek değeri + metni).
+        ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { secenekler: g.secenekler.map((x) => ({ deger: x.deger, metin: x.metin })) } : {}),
         ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { modeldeSecenek: true } : {}),
         // modelSecenekleri + seceneklerDurumu (tablo listesi uygulanmamış, sayfadaki seçenekler): bağ seçilirken sütun değerleri bunlarla
         // anında karşılaştırılır (tablo-uyumu.mjs; sunucuyla aynı kural).

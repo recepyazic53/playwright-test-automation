@@ -145,7 +145,12 @@ function bosMu(deger) {
 
 /** Alanın kullanıcıya görünen etiketi; yoksa '' (mesajlar "Bu alan" yazar; iç anahtar gösterilmez). */
 function etiketi(alan) {
-  return (alan && alan.etiket && (alan.etiket.form || alan.etiket.ekran)) || (alan && alan.form && alan.form.etiket) || '';
+  // Yalnız metin değerler (etiket nesnesi "[object Object]" olmasın): form → ekran → form.etiket → not (etiketsiz liste açıklaması).
+  const m = (x) => (typeof x === 'string' && x.trim() ? x.trim() : '');
+  if (!alan) return '';
+  const e = alan.etiket;
+  if (e && typeof e === 'object') return m(e.form) || m(e.ekran) || m(alan.form && alan.form.etiket) || m(e.not);
+  return m(e) || m(alan.form && alan.form.etiket);
 }
 
 /** Alanın kayıt içindeki adı (eslesme.kayitAlani) ya da undefined. */
