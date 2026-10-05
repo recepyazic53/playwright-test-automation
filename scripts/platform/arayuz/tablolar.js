@@ -53,7 +53,9 @@ function kopya(t) {
     satirlar: t ? t.satirlar.map((r) => ({ id: r.id, ad: r.ad || '', ortamId: r.ortamId, degerler: { ...r.degerler }, doluGizli: new Set(r.doluGizli), degisti: false })) : [],
     silinen: new Set(), degisti: !t, baglam: Boolean(t && t.baglam),
     // Kullanıcının seçtiği tablo türü ('kayit' | 'liste' | 'servis'); null: seçilmedi (görünen tür sezgiden / kayıtlı türden).
-    tur: null
+    tur: null,
+    // Liste grubu (kaynak.grup; kullanıcı metni). grupIlk: kayıtlı değer — yalnız değişince gönderilir.
+    grup: (t && t.kaynak && t.kaynak.grup) || '', grupIlk: (t && t.kaynak && t.kaynak.grup) || ''
   };
 }
 
@@ -73,7 +75,8 @@ function kaynakMetni(k) {
 // "kayit" → "Kişi ve kayıt verileri", "liste" → "Ekran listeleri". Tür yoksa (eski kayıtlar) sezgi: kaynağı olan (ekran paketi /
 // tarama / akış kaydı) tablolar ile "<Ekran> — <Alan…>" adlı tablolardan tek sütunlu olanlar, bir ekranın alan bağlarında
 // kullanılanlar ya da "<Ekran>" kısmı projedeki bir ekranın adı olanlar (çok sütunlu bağımlı listeler dahil) ekran listesidir;
-// diğerleri kişi ve kayıt verisi. Ekran listeleri ekran başına alt gruptur. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
+// diğerleri kişi ve kayıt verisi. Tür gruplarının içinde ALT GRUP kullanıcının tabloya verdiği gruptur (kaynak.grup; alfabetik,
+// grubu olmayanlar en sonda "Diğer"); kaynak ekranın adına göre gruplama yapılmaz. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
 const GRUP_ANAHTARI = 'platform.tabloGruplari.kapali';
 const AD_DESENI = /^(.+?)\s+—\s+(.+)$/;
 let grupSayaci = 0;
@@ -88,11 +91,11 @@ function tabloGrubuDurumuYaz(anahtar, kapali) {
   try { localStorage.setItem(GRUP_ANAHTARI, JSON.stringify([...k].slice(-200))); } catch { /* yok sayılır */ }
 }
 /**
- * @template {{ ad: string; baglam?: boolean; sutunlar: unknown[]; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null }} T
+ * @template {{ ad: string; baglam?: boolean; sutunlar: unknown[]; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string; grup?: string } | null }} T
  * @param {T[]} liste
  * @param {{ ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }} [ek] projedeki ekran adları ve tablo kimliği →
  *   alan bağlarında kullanan ekranlar (sunucu: /platform/tablolar?baglam=1)
- * @returns {{ kayitlar: T[]; ekranlar: Map<string, T[]>; servisler: T[] }}
+ * @returns {{ kayitlar: T[]; listeler: T[]; servisler: T[] }}
  */
 export function tablolariGrupla(liste, ek = {}) {
   const ekranAdlari = new Set((ek.ekranAdlari || []).map(kucuk));
@@ -101,8 +104,8 @@ export function tablolariGrupla(liste, ek = {}) {
   const ekranAdiMi = (onEk) => ekranAdlari.has(kucuk(onEk)) || ekranAdlari.has(kucuk(onEk.replace(/\s*\([^)]*\)\s*$/, '')));
   /** @type {T[]} */
   const kayitlar = [];
-  /** @type {Map<string, T[]>} */
-  const ekranlar = new Map();
+  /** @type {T[]} */
+  const listeler = [];
   /** @type {T[]} */
   const servisler = [];
   for (const t of liste) {
@@ -113,12 +116,34 @@ export function tablolariGrupla(liste, ek = {}) {
     const kaynakli = Boolean(t.kaynak && t.kaynak.tur);
     const bagli = Boolean(/** @type {any} */ (t).id && kullanim[/** @type {any} */ (t).id]?.length);
     const ekranListesi = tur === 'liste' || (tur !== 'kayit' && (kaynakli || Boolean(desen && (t.sutunlar.length === 1 || bagli || ekranAdiMi(desen[1].trim())))));
-    if (t.baglam || !ekranListesi) { kayitlar.push(t); continue; }
-    const ekran = (t.kaynak && t.kaynak.ekran) || (desen ? desen[1].trim() : '') || 'Diğer ekranlar';
-    if (!ekranlar.has(ekran)) ekranlar.set(ekran, []);
-    /** @type {T[]} */ (ekranlar.get(ekran)).push(t);
+    (t.baglam || !ekranListesi ? kayitlar : listeler).push(t);
   }
-  return { kayitlar, ekranlar: new Map([...ekranlar.entries()].sort(([a], [b]) => a.localeCompare(b, 'tr'))), servisler };
+  return { kayitlar, listeler, servisler };
+}
+
+/** Grubu olmayan tabloların alt grubunun adı (her tür grubunda en sonda). */
+export const DIGER_GRUBU = 'Diğer';
+/**
+ * Bir tür grubundaki tabloları kullanıcının verdiği gruba (kaynak.grup) göre alt gruplara ayırır: gruplar alfabetik (tr; büyük /
+ * küçük harf farkı aynı grup, ilk görülen yazım), grubu olmayanlar en sonda "Diğer" (grup: null). Hiçbir tablonun grubu yoksa
+ * tek "Diğer" alt grubu döner (çağıran düz liste olarak gösterir).
+ * @template {{ kaynak?: { grup?: string } | null }} T @param {T[]} tablolar
+ * @returns {Array<{ grup: string | null; tablolar: T[] }>}
+ */
+export function altGruplaraAyir(tablolar) {
+  /** @type {Map<string, { grup: string; tablolar: T[] }>} */
+  const gruplar = new Map();
+  /** @type {T[]} */
+  const digerleri = [];
+  for (const t of tablolar) {
+    const g = String(t.kaynak?.grup ?? '').trim();
+    if (!g) { digerleri.push(t); continue; }
+    const k = kucuk(g);
+    if (!gruplar.has(k)) gruplar.set(k, { grup: g, tablolar: [] });
+    /** @type {{ tablolar: T[] }} */ (gruplar.get(k)).tablolar.push(t);
+  }
+  return [...[...gruplar.values()].sort((a, b) => a.grup.localeCompare(b.grup, 'tr')),
+    ...(digerleri.length ? [{ grup: null, tablolar: digerleri }] : [])];
 }
 
 const KARSILIK_ADIM = 200;
@@ -537,18 +562,27 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
   };
   function solCiz() {
     const a = kucuk(listeArama);
-    const uyan = liste.filter((t) => !a || kucuk(t.ad).includes(a) || kucuk(t.kaynak?.ekran).includes(a));
-    const { kayitlar, ekranlar, servisler } = tablolariGrupla(uyan, grupBilgisi);
+    // Arama: tablo adı, kaynak ekranı ve kullanıcının verdiği grup adı.
+    const uyan = liste.filter((t) => !a || kucuk(t.ad).includes(a) || kucuk(t.kaynak?.ekran).includes(a) || kucuk(t.kaynak?.grup).includes(a));
+    const { kayitlar, listeler, servisler } = tablolariGrupla(uyan, grupBilgisi);
     const seciliGrup = (tl) => tl.some((t) => t.id === seciliId);
-    const ekranGruplari = [...ekranlar.entries()].map(([ekran, tl]) => grupCiz(`ekran:${ekran}`, ekran, tl.map(tabloDugmesi), 'alt-grup', Boolean(a) || seciliGrup(tl)));
-    const ekranToplam = [...ekranlar.values()].flat();
+    /**
+     * Tür grubunun içeriği: kullanıcının verdiği gruplar (alfabetik) + en sonda "Diğer". Türde hiç grup yoksa düz liste.
+     * @param {string} tur tür grubunun anahtarı (açık / kapalı durumu bununla birlikte hatırlanır) @param {any[]} tl
+     */
+    const turIcerigi = (tur, tl) => {
+      const altlar = altGruplaraAyir(tl);
+      if (altlar.length === 1 && altlar[0].grup === null) return tl.map(tabloDugmesi);
+      return altlar.map((x) => grupCiz(x.grup === null ? `${tur}:diger` : `${tur}:grup:${kucuk(x.grup)}`, x.grup ?? DIGER_GRUBU,
+        x.tablolar.map(tabloDugmesi), `alt-grup${x.grup === null ? ' diger-grubu' : ''}`, Boolean(a) || seciliGrup(x.tablolar)));
+    };
     // Boş grup başlığı gösterilmez (grup silinebilir bir öğe değildir); hiç tablo yokken tek boş durum mesajı sağ paneldedir.
     listeAramaG.closest('.tablo-listesi-arama')?.toggleAttribute('hidden', !liste.length);
     yerlestir(listeKap,
       liste.length && !uyan.length ? h('p', { class: 'soluk kucuk tablo-grubu-bos' }, 'Aramayla eşleşen tablo yok.') : null,
-      kayitlar.length ? grupCiz('kayit', 'Kişi ve kayıt verileri', kayitlar.map(tabloDugmesi), 'ust-grup', Boolean(a) || seciliGrup(kayitlar)) : null,
-      ekranToplam.length ? grupCiz('ekran-listeleri', 'Ekran listeleri', ekranGruplari, 'ust-grup', Boolean(a) || seciliGrup(ekranToplam)) : null,
-      servisler.length ? grupCiz('servis-verileri', 'Servis verileri', servisler.map(tabloDugmesi), 'ust-grup', Boolean(a) || seciliGrup(servisler)) : null);
+      kayitlar.length ? grupCiz('kayit', 'Kişi ve kayıt verileri', turIcerigi('kayit', kayitlar), 'ust-grup', Boolean(a) || seciliGrup(kayitlar)) : null,
+      listeler.length ? grupCiz('ekran-listeleri', 'Ekran listeleri', turIcerigi('liste', listeler), 'ust-grup', Boolean(a) || seciliGrup(listeler)) : null,
+      servisler.length ? grupCiz('servis-verileri', 'Servis verileri', turIcerigi('servis', servisler), 'ust-grup', Boolean(a) || seciliGrup(servisler)) : null);
     if (!solKap.firstChild) {
       yerlestir(solKap, h('nav', { class: 'kart tablo-listesi', 'aria-label': 'Tablolar' },
         h('div', { class: 'arama-kutusu tablo-listesi-arama', hidden: !liste.length }, ikon('ara'), listeAramaG),
@@ -628,7 +662,9 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
       })),
       silinenSatirlar: [...is.silinen],
       // Tablo türü: yeni tabloda görünen tür (seçilen ya da önerilen) her zaman yazılır; var olan tabloda yalnız kullanıcı değiştirdiyse.
-      ...(is.baglam ? {} : is.tur ? { tur: is.tur } : !is.id ? { tur: gorunenTur() } : {})
+      ...(is.baglam ? {} : is.tur ? { tur: is.tur } : !is.id ? { tur: gorunenTur() } : {}),
+      // Grup: yalnız değiştiyse (boş = grubu kaldır).
+      ...(is.baglam || is.grup.trim() === is.grupIlk ? {} : { grup: is.grup.trim() || null })
     };
     // Var olan tabloda önce etki denetlenir: değişen değeri düz metin olarak kullanan senaryo varsa sunucu hiçbir şey yazmaz ve
     // onay ister (tablo-etkisi.mjs); yoksa doğrudan kaydeder.
@@ -776,6 +812,23 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           return h('label', { class: 'tablo-turu-secenegi' }, r, h('span', {}, h('b', {}, etiket), h('small', { class: 'soluk' }, aciklama)));
         })),
         is.tur || is.id ? null : h('small', { class: 'soluk' }, 'Sütun sayısına ve tablo adına göre önerildi; değiştirebilirsiniz. Kaydedince tablo bu türle listelenir.'));
+    }
+
+    /**
+     * Liste grubu (isteğe bağlı, en çok 40 karakter): var olan grup adları öneri olarak gelir, yeni ad da yazılabilir. Kaydet'le
+     * yazılır (kaynak.grup); listede tür grubunun içinde bu adla toplanır, boşsa "Diğer" altında.
+     */
+    function grupSecimi() {
+      if (is.baglam) return null;
+      const id = `tablo-grubu-girdisi-${++grupSayaci}`;
+      // Listedeki alt gruplarla aynı adlar (büyük / küçük harf farkı tek öneri; ilk görülen yazım).
+      const adlar = altGruplaraAyir(liste).map((x) => x.grup).filter((x) => x !== null);
+      const oneriler = h('datalist', { id: `${id}-oneriler` }, adlar.map((g) => h('option', { value: g })));
+      const g = h('input', { type: 'text', id, value: is.grup, maxlength: '40', list: oneriler.id, autocomplete: 'off', placeholder: 'ör. Adres bilgileri', class: 'tablo-grubu-girdisi' });
+      g.addEventListener('input', () => { is.grup = g.value; is.degisti = true; durumCiz(); });
+      return h('div', { class: 'tablo-grubu-alani' },
+        h('label', { for: id }, 'Grup'), g, oneriler,
+        h('small', { class: 'soluk' }, 'İsteğe bağlı. Listede tür grubunun içinde bu adla toplanır; boşsa “Diğer” altında durur.'));
     }
 
     const tablo = h('table', { class: 'veri-tablosu' });
@@ -993,6 +1046,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           is.id ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => tabloyuSil() }, ikon('cop'), 'Tabloyu sil') : null)),
       (() => { const k = is.id ? liste.find((x) => x.id === is.id)?.kaynak : null; return k && k.tur ? h('p', { class: 'kucuk soluk tablo-kaynagi' }, h('b', {}, 'Kaynak: '), kaynakMetni(k), ' — ekran paketinden içe aktarıldı (seçim alanlarının seçenekleri).') : null; })(),
       (turKutusu = turSecimi()),
+      grupSecimi(),
       h('div', { class: 'tablo-arac-cubugu' },
         h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => dosya.click() }, ikon('yukle'), 'Excel / CSV yükle'), dosya,

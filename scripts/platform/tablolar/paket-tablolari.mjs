@@ -2,7 +2,7 @@
 // (tablo-deposu.mjs: sütunlar + satırlar, satır = birlikte geçerli değerler) ve ekran alanı → sütun BAĞLANTILARININ
 // (ekran-baglari.mjs: alanBaglari) paket biçimidir:
 //   testVerisi: {
-//     tablolar:    [{ ad, tur?: 'liste' | 'kayit' | 'servis', aciklama?, sutunlar: [{ ad, gizli?, karsiliklar?: { <hücre değeri>: { sayfa?, servis? } } }], satirlar: [[hücre, …]] }],
+//     tablolar:    [{ ad, tur?: 'liste' | 'kayit' | 'servis', aciklama?, grup? (liste grubu, en çok 40), sutunlar: [{ ad, gizli?, karsiliklar?: { <hücre değeri>: { sayfa?, servis? } } }], satirlar: [[hücre, …]] }],
 //     baglantilar: [{ alanId, tablo, sutun, etiket?, secimeGore?: { alan, degerler: { <değer>: { tablo, sutun, etiket? } } } }]
 //   }
 // Tablo türü (isteğe bağlı): 'liste' = ekran listesi (seçim alanının seçenekleri; adı "<Ekran adı> — <Alan>"), 'kayit' = kişi ve
@@ -31,7 +31,15 @@ export const PAKET_HUCRE_EN_UZUN = 500;
 const TABLO_ADI = new RegExp(`^${AD_KALIBI}$`, 'u');
 const ETIKET = /^[\p{L}\p{N} _-]{1,40}$/u;
 const UST_ANAHTARLAR = new Set(['tablolar', 'baglantilar']);
-const TABLO_ANAHTARLARI = new Set(['ad', 'tur', 'aciklama', 'sutunlar', 'satirlar']);
+const TABLO_ANAHTARLARI = new Set(['ad', 'tur', 'aciklama', 'grup', 'sutunlar', 'satirlar']);
+/** Tablonun liste grubu (isteğe bağlı kullanıcı metni; tabloda kaynak.grup — tablo-deposu.mjs TABLO_GRUBU_EN_UZUN ile aynı). */
+const PAKET_GRUP_EN_UZUN = 40;
+/** @param {unknown} g @returns {string | null} */
+const paketGrubu = (g) => {
+  if (typeof g !== 'string') return null;
+  const x = g.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return x && [...x].length <= PAKET_GRUP_EN_UZUN ? x : null;
+};
 /** Paket tablosunun türü: ekran listesi (seçenekler) ya da kişi / kayıt verisi. */
 export const TABLO_TURLERI = Object.freeze(['liste', 'kayit', 'servis']);
 const SUTUN_ANAHTARLARI = new Set(['ad', 'gizli', 'karsiliklar']);
@@ -43,7 +51,7 @@ const SECIM_TIPLERI = new Set(['secim', 'okluSecim', 'radyo']);
 /** @typedef {Record<string, any>} Nesne */
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; karsiliklar: Record<string, Karsilik> }} PaketSutunu */
-/** @typedef {{ ad: string; tur: 'liste' | 'kayit' | 'servis' | null; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number }} PaketTablosu */
+/** @typedef {{ ad: string; tur: 'liste' | 'kayit' | 'servis' | null; aciklama: string | null; grup?: string; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number }} PaketTablosu */
 /** @typedef {{ alanId: string; tablo: string; sutun: string; etiket?: string; secimeGore?: { alan: string; degerler: Record<string, { tablo: string; sutun: string; etiket?: string }> } }} PaketBaglantisi */
 
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
@@ -104,6 +112,7 @@ export function testVerisiniDogrula(tv, model) {
     else if (tablolar.has(kucuk(ad))) hata(`${yer}.ad`, `"${ad}" tablosu pakette birden fazla kez var.`);
     else tablolar.set(kucuk(ad), tb);
     if (tb.aciklama !== undefined && typeof tb.aciklama !== 'string') hata(`${yer}.aciklama`, 'metin olmalı.');
+    if (tb.grup !== undefined && tb.grup !== null && (typeof tb.grup !== 'string' || [...tb.grup.trim()].length > PAKET_GRUP_EN_UZUN)) hata(`${yer}.grup`, `en çok ${PAKET_GRUP_EN_UZUN} karakterlik metin olmalı.`);
     if (tb.tur !== undefined && !TABLO_TURLERI.includes(tb.tur)) hata(`${yer}.tur`, '"liste" (ekran listesi: seçim alanının seçenekleri), "kayit" (kişi / kayıt verisi) ya da "servis" (yalnız servis isteklerinde kullanılan değerler) olmalı.');
     if (!Array.isArray(tb.sutunlar) || !tb.sutunlar.length) { hata(`${yer}.sutunlar`, 'en az bir sütun olmalı.'); return; }
     if (tb.sutunlar.length > PAKET_SUTUN_EN_COK) hata(`${yer}.sutunlar`, `en çok ${PAKET_SUTUN_EN_COK} sütun olabilir.`);
@@ -263,7 +272,8 @@ export function paketTablolari(tv, model) {
       imzalar.add(imza);
       satirlar.push(degerler);
     }
-    return { ad: String(tb.ad).trim(), tur: TABLO_TURLERI.includes(tb.tur) ? tb.tur : null, aciklama: typeof tb.aciklama === 'string' && tb.aciklama.trim() ? tb.aciklama.trim().slice(0, 300) : null, sutunlar, satirlar, tekrarSayisi };
+    const grup = paketGrubu(tb.grup);
+    return { ad: String(tb.ad).trim(), tur: TABLO_TURLERI.includes(tb.tur) ? tb.tur : null, aciklama: typeof tb.aciklama === 'string' && tb.aciklama.trim() ? tb.aciklama.trim().slice(0, 300) : null, ...(grup ? { grup } : {}), sutunlar, satirlar, tekrarSayisi };
   });
   // Bağlı seçim alanı: tablodaki görünen metnin sayfa değeri modelden (yalnız eksik olanlar).
   for (const b of baglantilar.flatMap((x) => olasiBaglar(x).map((o) => ({ ...o, alanId: x.alanId })))) {

@@ -3665,7 +3665,7 @@ dialog.karsilastir-diyalogu { width: min(40rem, calc(100vw - 2rem)); }
 .eski-parametre-karti .kart-basligi { flex-wrap: wrap; gap: 8px; }
 .eski-parametre-karti .onay-listesi li { white-space: normal; overflow-wrap: anywhere; }
 
-/* Test verisi > Tablolar: liste grupları ("Kişi ve kayıt verileri" / "Ekran listeleri" + ekran alt grupları; tablolar.js). */
+/* Test verisi > Tablolar: liste grupları ("Kişi ve kayıt verileri" / "Ekran listeleri" / "Servis verileri" + kullanıcının verdiği alt gruplar; tablolar.js). */
 .tablo-listesi-arama { margin-bottom: 6px; min-width: 0; }
 .tablo-listesi-arama input { min-width: 0; width: 100%; }
 .tablo-gruplari { display: grid; gap: 4px; min-width: 0; }
@@ -4392,6 +4392,12 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .tablo-turu-secenegi > span { display: grid; gap: 2px; min-width: 0; }
 .tablo-turu-secenegi small { font-size: 12px; line-height: 1.35; }
 @media (max-width: 720px) { .tablo-turu-secenekleri { grid-template-columns: minmax(0, 1fr); } }
+/* Liste grubu (kullanıcının verdiği ad; var olan gruplar öneri). */
+.tablo-grubu-alani { display: grid; grid-template-columns: auto minmax(0, 18rem) minmax(0, 1fr); align-items: center; gap: 4px 10px; margin: 0 0 10px; min-width: 0; }
+.tablo-grubu-alani > label { font-weight: 600; font-size: 13px; }
+.tablo-grubu-alani > input { width: 100%; min-width: 0; }
+.tablo-grubu-alani > small { font-size: 12px; line-height: 1.35; min-width: 0; }
+@media (max-width: 720px) { .tablo-grubu-alani { grid-template-columns: auto minmax(0, 1fr); } .tablo-grubu-alani > small { grid-column: 1 / -1; } }
 /* Kayıt grubu: formdaki seçimle aynı sütun notu ve uyan satırların nedeni. */
 .form-suzgeci { display: grid; gap: 6px; margin-top: 6px; }
 .form-suzgeci p { margin: 0; }

@@ -40,7 +40,7 @@ export declare function secimEtkisi(c: { kosullar: Record<string, string>; degis
   null | { durum: 'guncellenebilir' | 'silindi' | 'belirsiz'; yeniKosullar: Record<string, string>; degisenler: Array<{ sutun: string; eski: string; yeni: string | null }> };
 export declare function tabloKaydetEtkiyle(
   vt: Veritabani,
-  girdi: { projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; etki?: unknown; guncellenecekler?: unknown },
+  girdi: { projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; tur?: unknown; grup?: unknown; etki?: unknown; guncellenecekler?: unknown },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string }
 ): { id: string; onayGerekli?: true; etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi };
 export interface EtkiSecenekleri {

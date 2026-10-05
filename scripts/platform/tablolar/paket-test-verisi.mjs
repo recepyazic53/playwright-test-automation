@@ -9,7 +9,8 @@
 //                           Seçimi olmayan tablo YAZILMAZ (atla); aynı adlı tablo varken 'yeni'
 //                           reddedilir. Birleştirme mevcut sütun / satırları değiştirmez: eksik sütunlar ve tabloda olmayan
 //                           satırlar eklenir, karşılıklar tamamlanır; mevcut tablonun KAYNAĞI da değişmez (varsa korunur,
-//                           yoksa yok kalır). Kaynak (paket / tarama / kayıt, ekran, tarih, tablo türü) yalnız yeni tabloya yazılır.
+//                           yoksa yok kalır). Kaynak (paket / tarama / kayıt, ekran, tarih, tablo türü, grup) yalnız yeni tabloya
+//                           yazılır; birleştirmede mevcut tablonun grubu yoksa paketin grubu alınır.
 //                           ertele(alanId): true dönen alanların bağlantısı yazılmaz, "ertelenen" olarak döner (tekrar analizde
 //                           bulgu kararına kadar bekler; ekran-servisi.mjs > analizUygula yazar).
 // Çağıran veritabanı işleminin içinde çalışır (ekran + model ile birlikte ya hep ya hiç). Kasa AÇIK olmalıdır.
@@ -141,6 +142,7 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim, secenek
     tur: kaynakTuru, olusturan: String(meta.olusturan ?? '').slice(0, 120), olusturulma: String(meta.olusturulma ?? '').slice(0, 40),
     ...(nesneMi(meta.ekran) && typeof meta.ekran.ad === 'string' ? { ekran: meta.ekran.ad.slice(0, 120) } : {}),
     ...(t.tur ? { tabloTuru: t.tur } : kaynakTuru !== 'paket' ? { tabloTuru: 'liste' } : {}),
+    ...(t.grup ? { grup: t.grup } : {}),
     yazilma: new Date().toISOString()
   });
   /** @type {Map<string, { id: string; sutun: (ad: string) => string }>} paket tablo adı (küçük) → yazılan tablo */
@@ -176,9 +178,9 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim, secenek
       ...plan.yeniSutunlar.map((x) => ({ ad: x.ad, gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar }) }))
     ];
     const hedef = (/** @type {string} */ ad) => plan.eslesme.get(ad) ?? ad;
-    // Kaynak verilmez: mevcut tablonun kaynağı (varsa da yoksa da) olduğu gibi kalır.
+    // Kaynak verilmez: mevcut tablonun kaynağı (varsa da yoksa da) olduğu gibi kalır. Grup: mevcut tablonunki; yoksa paketinki.
     const id = tabloKaydet(vt, {
-      projeId, id: mevcut.id, ad: mevcut.ad, sutunlar,
+      projeId, id: mevcut.id, ad: mevcut.ad, sutunlar, ...(!mevcut.kaynak?.grup && t.grup ? { grup: t.grup } : {}),
       satirlar: plan.eklenecek.map((d) => ({ degerler: Object.fromEntries(Object.entries(d).filter(([, v]) => v !== null).map(([k, v]) => [hedef(k), v])) }))
     });
     yazilan.set(kucuk(t.ad), { id, sutun: hedef });

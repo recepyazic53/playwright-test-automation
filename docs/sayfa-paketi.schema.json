@@ -123,6 +123,7 @@
               "ad": { "type": "string", "pattern": "^[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}$" },
               "tur": { "enum": ["liste", "kayit"], "description": "liste = ekran listesi (seçim alanının seçenekleri); kayit = kişi ve kayıt verisi (satır = kayıt; senaryo ${Tablo.Sütun} ile başvurur)." },
               "aciklama": { "type": "string" },
+              "grup": { "type": "string", "maxLength": 40, "description": "İsteğe bağlı liste grubu (Test verisi listesinde tür grubunun içinde alt grup)." },
               "sutunlar": {
                 "type": "array",
                 "minItems": 1,

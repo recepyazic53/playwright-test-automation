@@ -24,7 +24,7 @@ import { kasaOnbellegi, onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }} TabloSutunu */
 /** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[]; guncellenme?: string }} TabloSatiri */
-/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' | 'servis' }} TabloKaynagi */
+/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' | 'servis'; grup?: string }} TabloKaynagi */
 /** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean; kaynak?: TabloKaynagi | null }} Tablo */
 
 export const BAGLAM_ONEKI = 'baglam_';
@@ -204,6 +204,57 @@ export function tabloTuruGecerliMi(tur) {
   return tur === 'kayit' || tur === 'liste' || tur === 'servis';
 }
 
+/** Tablo grubunun en çok uzunluğu (kullanıcının verdiği ad; Test verisi listesinde tür grubunun içinde alt grup). */
+export const TABLO_GRUBU_EN_UZUN = 40;
+/**
+ * Tablo grubu (kaynak.grup): isteğe bağlı kullanıcı metni. null / '' / yalnız boşluk = grup yok (null döner);
+ * metin değilse ya da en çok uzunluğu aşarsa DepoHatasi. Denetim karakterleri boşluğa çevrilir, ardışık boşluk teke iner.
+ * @param {unknown} grup @returns {string | null}
+ */
+export function tabloGrubuDogrula(grup) {
+  if (grup === null || grup === undefined) return null;
+  if (typeof grup !== 'string') throw new DepoHatasi('Tablo grubu metin olmalıdır.');
+  const g = grup.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!g) return null;
+  if ([...g].length > TABLO_GRUBU_EN_UZUN) throw new DepoHatasi(`Tablo grubu en çok ${TABLO_GRUBU_EN_UZUN} karakter olabilir.`);
+  return g;
+}
+
+/**
+ * Kaynağa grubu yazar (grup null → kaynaktan çıkarılır). Kaynakta başka bilgi kalmazsa null (elle oluşturulan tablo).
+ * @param {TabloKaynagi | null | undefined} kaynak @param {string | null} grup @returns {TabloKaynagi | null}
+ */
+function kaynagaGrup(kaynak, grup) {
+  const { grup: _eski, ...geri } = kaynak ?? {};
+  const yeni = grup ? { ...geri, grup } : geri;
+  return Object.keys(yeni).length ? yeni : null;
+}
+
+/**
+ * TOPLU GRUP ATAMA: verilen tabloların grubunu (kaynak.grup) tek işlemde yazar; tablonun diğer bilgileri değişmez.
+ * grup null / '' → grup kaldırılır. Bağlam tabloları grup almaz (reddedilir).
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} tabloIdler @param {unknown} grup
+ * @returns {{ guncellenen: number; grup: string | null }}
+ */
+export function tablolaraGrupAta(vt, projeId, tabloIdler, grup) {
+  if (!Array.isArray(tabloIdler) || !tabloIdler.length) throw new DepoHatasi('En az bir tablo seçin.');
+  if (tabloIdler.length > 1000) throw new DepoHatasi('Bir seferde en çok 1000 tabloya grup atanabilir.');
+  const g = tabloGrubuDogrula(grup);
+  return vt.islem(() => {
+    const turler = new Map(testVerisiTurleriniListele(vt, projeId).map((t) => [t.id, t]));
+    const zaman = new Date().toISOString();
+    let guncellenen = 0;
+    for (const id of new Set(tabloIdler)) {
+      const t = typeof id === 'string' ? turler.get(id) : undefined;
+      if (!t) throw new DepoHatasi(typeof id === 'string' && id.startsWith(BAGLAM_ONEKI) ? 'Bağlam tablolarına grup atanamaz.' : 'Tablo bulunamadı.');
+      const kaynak = kaynagaGrup(/** @type {TabloKaynagi | null} */ (t.kaynak), g);
+      vt.calistir('UPDATE test_verisi_turleri SET kaynak_json = ?, guncellenme = ? WHERE id = ? AND proje_id = ?', [kaynak ? JSON.stringify(kaynak) : null, zaman, t.id, projeId]);
+      guncellenen++;
+    }
+    return { guncellenen, grup: g };
+  });
+}
+
 /**
  * Tabloyu (sütunlar + değişen satırlar) tek işlemde kaydeder.
  * - sutunlar: [{ ad, eskiAd?, gizli, karsiliklar? }] — eskiAd verilen sütunun mevcut satırlardaki değerleri yeni ada taşınır;
@@ -214,8 +265,10 @@ export function tabloTuruGecerliMi(tur) {
  * - kaynak: ekran paketinden içe aktarımda tablonun kaynağı (verilmezse mevcut kaynak korunur).
  * - tur: 'kayit' (kişi / kayıt verisi) | 'liste' (ekran listesi) | 'servis' (yalnız servis isteklerinde kullanılan değerler);
  *   kaynak.tabloTuru olarak saklanır (verilmezse değişmez).
+ * - grup: kullanıcının verdiği liste grubu (en çok TABLO_GRUBU_EN_UZUN karakter); kaynak.grup olarak saklanır. Verilmezse
+ *   (undefined) değişmez; null / '' grubu kaldırır.
  * @param {Veritabani} vt
- * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; tur?: unknown }} girdi
+ * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; tur?: unknown; grup?: unknown }} girdi
  * @returns {string} tablo kimliği
  */
 export function tabloKaydet(vt, girdi) {
@@ -242,6 +295,8 @@ export function tabloKaydet(vt, girdi) {
   if (!Array.isArray(satirlar)) throw new DepoHatasi('"satirlar" bir dizi olmalıdır.');
   const silinenler = girdi.silinenSatirlar === undefined ? [] : girdi.silinenSatirlar;
   if (!Array.isArray(silinenler)) throw new DepoHatasi('"silinenSatirlar" bir dizi olmalıdır.');
+  const grupVar = girdi.grup !== undefined;
+  const grup = grupVar ? tabloGrubuDogrula(girdi.grup) : null;
 
   return vt.islem(() => {
     const turler = testVerisiTurleriniListele(vt, girdi.projeId);
@@ -280,8 +335,13 @@ export function tabloKaydet(vt, girdi) {
     // Tablo türü (arayüzde "Tablo ekle"de sorulur / düzenleyicide değiştirilir): kaynak.tabloTuru'na yazılır, kaynağın diğer
     // bilgileri korunur. Verilmezse (eski istemciler) kaynak ve tür olduğu gibi kalır.
     const tur = tabloTuruGecerliMi(girdi.tur) ? girdi.tur : null;
-    const kaynak = tur ? { ...(mevcut?.kaynak ?? {}), ...(girdi.kaynak ?? {}), tabloTuru: tur } : girdi.kaynak;
-    const tabloId = testVerisiTuruKaydet(vt, { id: mevcut?.id, projeId: girdi.projeId, ad, alanlar, ...(kaynak ? { kaynak: /** @type {Record<string, string>} */ (kaynak) } : {}) });
+    const turluKaynak = tur ? { ...(mevcut?.kaynak ?? {}), ...(girdi.kaynak ?? {}), tabloTuru: tur } : girdi.kaynak;
+    // Grup (kaynak.grup; verilmezse değişmez, null / '' kaldırır): kaynağın diğer bilgileri korunur.
+    const kaynak = grupVar ? kaynagaGrup(/** @type {TabloKaynagi | null | undefined} */ (turluKaynak ?? mevcut?.kaynak), grup) : turluKaynak;
+    const tabloId = testVerisiTuruKaydet(vt, {
+      id: mevcut?.id, projeId: girdi.projeId, ad, alanlar,
+      ...(kaynak ? { kaynak: /** @type {Record<string, string>} */ (kaynak) } : grupVar && mevcut?.kaynak ? { kaynak: null } : {})
+    });
     // Mevcut satırın adı korunur: ekran senaryoları eski kayıtları adıyla (ör. tc1) seçiyor olabilir.
     const satirAdlari = new Map(vt.tumu('SELECT id, ad FROM test_verisi_profilleri WHERE tur_id = ?', [tabloId]).map((x) => [String(x.id), String(x.ad)]));
     const mevcutSatirlar = new Set(satirAdlari.keys());

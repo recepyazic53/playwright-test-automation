@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { acikAnahtar } from '../kasa.mjs';
 import { onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 import { DepoHatasi, ekranModeliGetir } from '../veritabani/depo.mjs';
-import { tabloSil, tablolariListele, tabloTuruGecerliMi } from './tablo-deposu.mjs';
+import { tabloGrubuDogrula, tabloSil, tablolaraGrupAta, tablolariListele, tabloTuruGecerliMi } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, kullanilanOrtakAkislar, ortakAkisBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
@@ -149,12 +149,16 @@ export const TABLO_POST_UCLARI = [
       projeId, id: g.id ? kimlik(g.id) : undefined, ad: typeof g.ad === 'string' ? g.ad : '', sutunlar: g.sutunlar, satirlar: g.satirlar, silinenSatirlar: g.silinenSatirlar,
       // Tablo türü ('kayit' | 'liste' | 'servis'; isteğe bağlı): kaynak.tabloTuru (tablo-deposu.mjs). Başka değer yukarıda reddedilir.
       ...(tabloTuruGecerliMi(g.tur) ? { tur: g.tur } : {}),
+      // Grup (isteğe bağlı kullanıcı metni, en çok 40 karakter): kaynak.grup. Verilmezse değişmez; null / '' kaldırır.
+      ...(g.grup !== undefined ? { grup: tabloGrubuDogrula(g.grup) } : {}),
       etki: g.etki, guncellenecekler: g.guncellenecekler
     }, { kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
     if (s.onayGerekli) return { onayGerekli: true, etki: s.etki };
     const [tablo] = tablolariListele(db, projeId, { tabloId: s.id, baglamDahil: true });
     return { tablo, etki: s.etki, ...(s.guncelleme ? { guncelleme: s.guncelleme } : {}) };
   }],
+  // Toplu grup atama: { projeId, tabloIdler: [id], grup } — grup null / '' kaldırır. Tablonun başka bilgisi değişmez.
+  ['/platform/tablo/grup-ata', (db, g) => tablolaraGrupAta(db, kimlik(g.projeId, 'projeId'), g.tabloIdler, g.grup)],
   // Bağlantı kaydedilince bağlı sütunlara ekran modelindeki eksik sayfa değerleri eklenir (karsiliklar.mjs).
   ['/platform/ekran/alan-baglari/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');

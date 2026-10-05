@@ -587,13 +587,15 @@ alanlar sütunlara **bağlanır** (ekranın Test verisi sekmesi). İki tür tabl
 
 * **Ekran listesi** (`"tur": "liste"`): seçim alanının seçenekleri. Ad **"<Ekran adı> — <Alan>"** (bağımlı listede
   "<Ekran adı> — <Üst alan> - <Alt alan>"; en çok 60 karakter — sığmazsa ekran adı kısaltılır). Test verisi ekranında "Ekran
-  listeleri" grubunda, ekran başına alt grupta görünür. Otomatik tarama ve akış kaydı bu adla ve bu türle üretir; yapay zekâ aracının
+  listeleri" grubunda görünür. Otomatik tarama ve akış kaydı bu adla ve bu türle üretir; yapay zekâ aracının
   paketinde ad farklı gelirse Nöbetçi adı değiştirmez.
 * **Kişi ve kayıt verisi** (`"tur": "kayit"`): her satır bir kayıt (müşteri, araç, adres…); senaryo değeri `${Tablo.Sütun}`
   ile alır. "Kişi ve kayıt verileri" grubunda görünür.
 
 Tür tabloda kaynağıyla birlikte saklanır (`kaynak.tabloTuru`); gruplama önce türe bakar, tür yoksa (eski tablolar) ada / kaynağa
-göre tahmin eder. Biçim, mevcut tablo + alan bağlantısı modelinin paket karşılığıdır (`scripts/platform/tablolar/paket-tablolari.mjs`):
+göre tahmin eder. İsteğe bağlı `grup` (en çok 40 karakter) tablonun liste grubudur (`kaynak.grup`): tür grubunun içinde bu
+adla alt grup olur (alfabetik; grubu olmayanlar en sonda "Diğer"). Mevcut tabloya birleştirmede tablonun grubu yoksa paketinki
+alınır. Biçim, mevcut tablo + alan bağlantısı modelinin paket karşılığıdır (`scripts/platform/tablolar/paket-tablolari.mjs`):
 
 ```json
 "testVerisi": {
