@@ -3,7 +3,8 @@
 // Nöbetçi bu alanları o değerde "sayfada hazır" gösterip değiştirilebilir bırakıyordu; keşif düzenlenebilirlik değişimini kaydetmiyordu
 // (kilit çoğu zaman nitelik değil: takvim bileşeni, betik ya da sınıf).
 //  - Ortak algı (sayfa-envanteri.ts > alanKilidi): readonly / disabled / aria-readonly / aria-disabled / kapsayan fieldset / takvim + kilit
-//    sınıfı / tuş + değer engeli / örtü — YALNIZ OKUMA (sayfaya yazmaz, olay göndermez).
+//    sınıfı — YALNIZ OKUMA (sayfaya yazmaz, olay göndermez). Olay işleyicisinin kaynağına (tuş + değer engeli) ve alanın üstündeki öğeye
+//    (örtü) bakan sezgiler kaldırıldı: maske eklentilerinde ve anlık örtülerde yanlış pozitif üretiyordu (önce dene ilkesi).
 //  - Keşif: her seçim değerinde düzenlenebilirliği değişen alanlar "kilitler" olarak kaydedilir; keşif tarihlere hiç dokunmaz.
 //  - Veri durağı: kilitli alan AYNI YERDE, sayfadaki değeriyle kapalı girdi, kilit notu, Doldur yok; seçim değişince aynı yerde açılır;
 //    grup notunda ve günlükte özet. 1440 / 390'da taşma yok.
@@ -28,7 +29,7 @@ import { VeriDuragiUygulamasi } from './veri-duragi-fikstur';
 type Nesne = Record<string, any>;
 
 test.describe('düzenlenebilirlik algısı ve keşif (127.0.0.1)', () => {
-  test('alanKilidi: nitelik, kapsayan fieldset, aria, takvim kilit sınıfı, tuş + değer engeli ve örtü; yalnız tuş engeli ya da sayfa boyu perde kilit değildir; okurken hiçbir olay gitmez', async () => {
+  test('alanKilidi: nitelik, kapsayan fieldset, aria, takvim kilit sınıfı; tuş / değer engeli, örtü ve sayfa boyu perde kilit değildir; okurken hiçbir olay gitmez', async () => {
     const t = await korumaliTarayici();
     try {
       const page = await (await t.newContext()).newPage();
@@ -46,8 +47,9 @@ test.describe('düzenlenebilirlik algısı ve keşif (127.0.0.1)', () => {
       expect(await kilit('d')).toBe('takvim-kilidi');
       expect(await kilit('e')).toBeNull();
       expect(await kilit('f')).toBeNull();
-      expect(await kilit('g')).toBe('tus-deger');
-      expect(await kilit('h')).toBe('ortu');
+      // Sezgi kaldırıldı (önce dene): yazma yolu sayfanın yazılanı kabul etmediğini görür (alanaYaz → 'kilitli').
+      expect(await kilit('g')).toBeNull();
+      expect(await kilit('h')).toBeNull();
       expect(await kilit('j')).toBeNull();
       expect(await page.evaluate(() => (window as unknown as { olay: number }).olay)).toBe(0);
       await expect(page.locator('#j')).toHaveValue('x');

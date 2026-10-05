@@ -72,7 +72,6 @@ import { HedefHatasi, ekKokenleri, hedefCoz } from '../tarama/koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturucu.mjs';
 import { kalipVar, katla } from '../tarama/eylem-kesfi.mjs';
 import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
-import { kilitEngeller } from '../tarama/alan-kilitleri.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { EkranDogrulamaHatasi, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
@@ -350,9 +349,9 @@ export function hizliTestYoneticisiOlustur(s) {
     }
   };
   // ---- Seçime göre düzenlenemeyen alanlar (sayfa o seçimde alanı kendisi doldurur; keşif "kilitler", alanKilidi) ----
-  // Seçime bağlı olmadan da düzenlenemez sayılan kilitler: aria-disabled, kapalı takvim, tuş + değer engeli (normal koşuyla ORTAK karar:
-  // tarama/alan-kilitleri.mjs > kilitEngeller). Salt okunur (takvimden seçilen tarih alanı doldurulur), kapalı (zaten sorulmaz) ve örtü
-  // (anlık olabilir) yalnız seçime göre değişince sayılır. Takvimden seçilen alan değeri betikle alır: tuş + değer engeli kilit değildir.
+  // Önce dene (normal koşuyla ORTAK ilke: tarama/alan-kilitleri.mjs): seçime bağlı olmayan sezgisel kilit (aria, takvim sınıfı) alanı
+  // önden atlatmaz; alan yazılır, sayfa yazılanı kabul etmeyip eski değeri geri yazarsa (kilitKanit) düzenlenemez sayılır. Salt okunur
+  // (takvimden seçilen tarih alanı hariç) ve kapalı alan zaten sorulmaz (doldurulabilir).
   /** Seçimin şu anki değeri: kullanıcının yazdığı (tablo başvurusu değilse), yoksa sayfadaki. @param {Nesne} o @param {string} anahtar */
   const secimSimdi = (o, anahtar) => {
     const v = o.degerler[anahtar];
@@ -360,7 +359,7 @@ export function hizliTestYoneticisiOlustur(s) {
   };
   /**
    * Alan şu anki seçimde DÜZENLENEMEZ mi (sayfa dolduruyor): seçime göre kilitlenen alanda seçimin şu anki değerindeki durum (bilinmeyen
-   * değerde düzenlenebilir), değilse açık kilit ya da yazarken toplanan kanıt (yazılan tutmadı, sayfa eski değeri geri yazdı). Böyle alan
+   * değerde düzenlenebilir), değilse yazarken toplanan kanıt (yazılan tutmadı, sayfa eski değeri geri yazdı). Böyle alan
    * sorulmaz, yazılmaz, senaryoya / tabloya girmez. @param {Nesne} o @param {Nesne} a @returns {boolean}
    */
   const duzenlenemez = (o, a) => {
@@ -369,7 +368,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const v = secimSimdi(o, kk.secim);
       return v === null ? kk.varsayilan === true : kk.kilitli?.[v] === true;
     }
-    return a.kilitKanit === true || kilitEngeller(typeof a.kilit === 'string' ? a.kilit : null, { betikle: a.takvimden === true });
+    return a.kilitKanit === true;
   };
   /**
    * Doldurmadan sonra düzenlenebilirlik sayfadan tazelenir (salt okuma; alanKilidi): seçime göre kilitlenen alanda seçimin sayfadaki

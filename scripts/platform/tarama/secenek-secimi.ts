@@ -2,8 +2,9 @@
 // (hizli-test-motoru.ts) aynı kuralı kullanır.
 //  · Hedef { deger, metin }: senaryodaki seçenek (değer = sayfadaki kod, metin = görünen ad). Kod bilinmiyorsa ikisi de ad olabilir.
 //  · Eşleştirme sırası (secenekEslestir): (1) değer tam, (2) metin tam (boşluklar sadeleştirilmiş), (3) büyük / küçük harf duyarsız
-//    (Türkçe) değer ya da metin, (4) "kod - ad" biçimli metin: aranan, sözcük sınırıyla metnin başında, sonra içinde. Aynı kuraldaki
-//    birden çok adaydan ilki alınır; üstteki kural her zaman önce gelir.
+//    (Türkçe) değer ya da metin, (4) "kod - ad" biçimli metin: aranan, sözcük sınırıyla metnin başında, sonra içinde — kısmi eşleşmede
+//    YALNIZ TEK aday kabul edilir (birden çok aday varsa tahmin edilmez: "listede yok" iletisiyle düşer). Üstteki kural her zaman önce gelir.
+//  · Seçili seçenek zaten hedefse yeniden seçilmez (listedenSecenekSec): yeniden seçmek change gönderir, bağlı alt listeleri boşaltır.
 //  · Bekleme (secenekBekle): bağlı liste üst alan seçildikten sonra dolar. TEK döngüde her turda hedef değer YA DA metin olarak aranır;
 //    bulunduğu anda döner. Liste doluyken (yer tutucu dışında seçenek var) seçenekler bir süre (sabitMs) değişmiyor ve hedef yoksa
 //    sınır süresi beklenmeden biter: hedef listede yok.
@@ -32,7 +33,7 @@ function sinirlaGeciyor(metin: string, aranan: string, basta: boolean): boolean 
 
 /**
  * Listede hedef seçenek (yoksa null). Kural sırası dosya başında. Kısmi ("kod - ad") eşleşmede yer tutucu seçenekler ("Seçiniz")
- * aday sayılmaz.
+ * aday sayılmaz; birden çok aday belirsizdir (null).
  */
 export function secenekEslestir(liste: ReadonlyArray<ListeSecenegi>, hedef: ListeSecenegi): ListeSecenegi | null {
   const o = liste.map((x) => ({ deger: String(x.deger), metin: sade(x.metin) }));
@@ -49,8 +50,9 @@ export function secenekEslestir(liste: ReadonlyArray<ListeSecenegi>, hedef: List
   const arananlar = [...new Set([nm, nd].filter(Boolean))];
   for (const basta of [true, false]) {
     for (const a of arananlar) {
-      const k = gercek.find((x) => sinirlaGeciyor(secenekNormal(x.metin), a, basta));
-      if (k) return { deger: k.deger, metin: sade(k.metin) };
+      const adaylar = gercek.filter((x) => sinirlaGeciyor(secenekNormal(x.metin), a, basta));
+      if (adaylar.length > 1) return null;
+      if (adaylar.length === 1) return { deger: adaylar[0].deger, metin: sade(adaylar[0].metin) };
     }
   }
   return null;
@@ -120,12 +122,12 @@ export function listedeYokMetni(etiket: string, aranan: string, r: Pick<SecenekB
 
 /**
  * Hedef seçeneği bekleyip seçer (selectOption, bulunan seçeneğin değeriyle; olaylar sayfaya gider). Bulunamazsa { hata }
- * (listedeYokMetni). zatenSeciliyseAtla: değer zaten seçiliyse yeniden seçilmez (yeniden seçmek bağlı alt listeleri boşaltabilir).
+ * (listedeYokMetni). Değer zaten seçiliyse yeniden seçilmez (her seçimde: yeniden seçmek change gönderir, bağlı alt listeleri boşaltabilir).
  */
-export async function listedenSecenekSec(l: Locator, hedef: ListeSecenegi, s: { sinirMs: number; etiket: string; sabitMs?: number; secimMs?: number; zatenSeciliyseAtla?: boolean }):
+export async function listedenSecenekSec(l: Locator, hedef: ListeSecenegi, s: { sinirMs: number; etiket: string; sabitMs?: number; secimMs?: number }):
   Promise<{ secenek: ListeSecenegi; bekleyisMs: number } | { hata: string }> {
   const r = await secenekBekle(l, hedef, s);
   if (!r.secenek) return { hata: listedeYokMetni(s.etiket, sade(hedef.metin) || hedef.deger, r) };
-  if (!s.zatenSeciliyseAtla || (await listeDurumu(l))?.secili !== r.secenek.deger) await l.selectOption({ value: r.secenek.deger }, { timeout: s.secimMs ?? 5_000 });
+  if ((await listeDurumu(l))?.secili !== r.secenek.deger) await l.selectOption({ value: r.secenek.deger }, { timeout: s.secimMs ?? 5_000 });
   return { secenek: r.secenek, bekleyisMs: r.bekleyisMs };
 }

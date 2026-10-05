@@ -429,6 +429,8 @@ export async function hizliTestiYurut(
             if (await hepsi.nth(i).isVisible().catch(() => false)) { l = hepsi.nth(i); break; }
           }
           const secili = (): Promise<boolean> => l.isChecked({ timeout: 2_000 }).catch(() => false);
+          // Zaten işaretliyse dokunulmaz.
+          if (await secili()) return null;
           if (await l.isVisible().catch(() => false)) {
             await l.check({ timeout: bekleMs }).catch(async () => { await l.check({ timeout: 5_000, force: true }).catch(() => undefined); });
           }

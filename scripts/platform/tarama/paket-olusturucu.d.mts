@@ -70,8 +70,8 @@ export type HamAlan = {
   oneri?: boolean;
   /**
    * Alan şu an düzenlenemez mi (SALT OKUMA ile; sayfaya yazılmaz) — nedeni: 'devre-disi' (disabled / kapsayan fieldset), 'salt-okunur'
-   * (readonly / aria-readonly), 'aria-devre-disi' (aria-disabled), 'takvim-kilidi' (takvim bileşeni + kilit sınıfı ya da kapalı takvim),
-   * 'tus-deger' (tuş basımı VE değer değişikliği betikle engelli), 'ortu' (alanın üstünde tıklamayı alan örtü). Düzenlenebilirse yok.
+   * (readonly / aria-readonly), 'aria-devre-disi' (aria-disabled), 'takvim-kilidi' (takvim bileşeni + kilit sınıfı ya da kapalı takvim).
+   * Düzenlenebilirse yok.
    * (sayfa-envanteri.ts > alanKilidi; seçime göre değişirse keşif "kilitler" olarak kaydeder.)
    */
   kilit?: string | null;
