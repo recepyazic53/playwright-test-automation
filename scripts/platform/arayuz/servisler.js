@@ -1922,8 +1922,10 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     kayitDurumu.textContent = 'Kaydediliyor…';
     kayitDurumu.className = 'kayit-durumu soluk kucuk';
     try {
-      await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, ...govde } });
+      const r = await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, ...govde } });
       Object.assign(s.ayarlar, JSON.parse(JSON.stringify(govde)));
+      // Yeni bağ eski varsayılanı kaldırdı (sunucu): metot tablolarının gördüğü nesneden de silinir.
+      for (const { operasyon, yol } of r.kaldirilanVarsayilanlar || []) delete ((s.ayarlar.alanVarsayilanlari || {})[operasyon] || {})[yol];
       kayitDurumu.textContent = '✓ Kaydedildi';
     } catch (e) {
       kayitDurumu.textContent = `Kaydedilemedi: ${e.message}`;
@@ -1931,6 +1933,15 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     }
   };
   const degisti = () => { clearTimeout(kayitZamanlayici); kayitDurumu.textContent = 'Değişti…'; kayitZamanlayici = setTimeout(alanlariKaydet, 500); };
+  /** Bağ ile çakışan servis varsayılanını (★) kaldırır: yeni senaryolar bağdan dolar. Kayıtlı ayarın aynı nesnesinden silinir. */
+  const varsayilanKaldir = async (op, yol) => {
+    const yeni = JSON.parse(JSON.stringify(s.ayarlar.alanVarsayilanlari || {}));
+    if (yeni[op]) delete yeni[op][yol];
+    if (yeni[op] && !Object.keys(yeni[op]).length) delete yeni[op];
+    await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, alanVarsayilanlari: yeni } });
+    delete ((s.ayarlar.alanVarsayilanlari || {})[op] || {})[yol];
+    bildir(`"${yol.split('/').pop()}" alanının varsayılanı kaldırıldı; yeni senaryolar bağdan dolar.`);
+  };
 
   const metotKarti = h('div', { class: 'kart form-paneli' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, 'Metot alanları'), h('span', { class: 'sag' }, kayitDurumu,
@@ -1941,7 +1952,7 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
       ? metotKutulari(metotlar.map((m) => ({
         ad: m.sm.ad, sema: m.sm, zorunlu: m.zorunlu, ekler: m.ekler, degisti, baglar: m.baglar, tablolar,
         alanKurallari: (s.ayarlar.alanKurallari || {})[m.sm.ad] || {}, varsayilanlar: (s.ayarlar.alanVarsayilanlari || {})[m.sm.ad] || {},
-        oneriVar: oneriYollari(m),
+        oneriVar: oneriYollari(m), varsayilanKaldir: (yol) => varsayilanKaldir(m.sm.ad, yol),
         kurallar, kuralEkle: (ad, kural) => kurallariKaydet({ ...kurallar, [ad]: kural }).then(() => kuralKartiniYenile()), etki: etki(m.sm.ad)
       })), { anahtar: `servis:${s.id}` })
       : h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.'));
