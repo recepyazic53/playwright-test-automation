@@ -13,12 +13,13 @@
 //   bitir    tarayıcıyı kapatır
 //
 // GÜVENLİK: "bas" yalnız sunucunun komutuyla (kullanıcının izni / onayı) çalışır. İzin "Hayır" ise motor düğmeye BASMAZ (komut
-// reddedilir), sayfaya form gönderimi ve düğme tıklaması korumaları konur, GET/HEAD dışındaki istekler engellenir. Diğer izinlerde
-// yazma istekleri yalnız basış (ve doğrulama koşusu) sırasında serbesttir; keşif ve doldurma sırasında engellenir. Yasaklı host ve
+// reddedilir) ve giriş + bağlam değiştirme BİTTİKTEN sonra, hedef sayfa açılmadan önce sayfaya form gönderimi ve düğme tıklaması
+// korumaları konur (hayirKorumasiniAc; giriş / bağlam adımları normal koşudaki gibi engelsizdir). Ağ katmanında hızlı testin okuma
+// aşaması ('kayit') sorgu isteklerine izin verir; keşif basışı ('tarama') sırasında yazma istekleri engellenir. Yasaklı host ve
 // izinli köken engeli her aşamada sürer. Alan DEĞERLERİ sayfadan okunmaz; ekran görüntüsü diske yazılmaz.
 import { existsSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
-import type { Browser, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
+import type { Browser, BrowserContext, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
 import { DegerIzleyici, alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz, yazmaHatasi } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, ortuyuKaldir, sakinlikBekle, sayfaParmakIzi } from './guvenli-tiklama';
@@ -98,6 +99,25 @@ function dugmeDavranisi(el: Element): { uygun: boolean; emin: boolean; neden: st
   if (href !== null && href !== '') return { uygun: true, emin: true, neden: 'sayfa içi bağlantı' };
   // Yalnız betikle çalışan düğme (type=button, onclick / sayfa içi işleyici): ne yaptığı sayfadan anlaşılamaz → emin değil (sorulur).
   return { uygun: true, emin: false, neden: 'betikle çalışıyor; ne yaptığı sayfadan anlaşılamıyor' };
+}
+
+/**
+ * Hayır izninin sayfa korumalarını (form gönderimi + düğme tıklaması; sayfa-envanteri.ts) GİRİŞ VE BAĞLAM DEĞİŞTİRME BİTTİKTEN SONRA
+ * açar: bağlamın init betiği olarak eklenir (bundan sonraki her belge ve çerçeve, sayfanın ilk betiğinden önce korunur) ve o an açık
+ * belgelere de uygulanır (korumalar tekrar kurulmaz). Bayraklı (her belgede açılıp kapanan) bir koruma yerine bu sıra seçildi: init
+ * betiği yeni belgede eşzamanlı çalışır, oysa Node'dan gelen "etkin" bayrağı (exposeBinding / evaluate) belgeye ancak sonradan ulaşır;
+ * bu arada sayfanın betiği korumasız kalabilirdi. Koruma açıldıktan sonra bu bağlamda yeniden giriş yapılmaz: saklanan oturumun
+ * geçersizliği / baştan giriş taramaGirisiYap içinde (korumadan önce), "Tarayıcıyı yeniden aç" ise yeni bağlamla aynı sırayla çalışır.
+ */
+async function hayirKorumasiniAc(baglam: BrowserContext): Promise<void> {
+  await baglam.addInitScript(formGonderimKorumasi);
+  await baglam.addInitScript(dugmeTiklamaKorumasi);
+  for (const p of baglam.pages()) {
+    for (const f of p.frames()) {
+      await f.evaluate(formGonderimKorumasi).catch(() => undefined);
+      await f.evaluate(dugmeTiklamaKorumasi).catch(() => undefined);
+    }
+  }
 }
 
 export type KomutAlici = () => Promise<HizliKomut | null>;
@@ -219,11 +239,8 @@ export async function hizliTestiYurut(
       return { tamam: true };
     });
     await baglam.addInitScript({ content: ENVANTER_BETIGI });
-    // Hayır izni: sayfanın kendi betiği de form gönderemez / düğmeye basamaz (sunucu zaten "bas" göndermez).
-    if (!basabilir) {
-      await baglam.addInitScript(formGonderimKorumasi);
-      await baglam.addInitScript(dugmeTiklamaKorumasi);
-    }
+    // Hayır izninin sayfa korumaları (form gönderimi / düğme tıklaması) burada DEĞİL, giriş ve bağlam değiştirme bittikten sonra
+    // konur (hayirKorumasiniAc): giriş formu ve bağlam adımlarının form gönderimi normal koşudaki gibi engelsiz çalışır.
     // Pencere işleyicisi sayfa OLUŞTURULUR OLUŞTURULMAZ kurulur (ana sekme dahil): açılışta / ilk basışta çıkan confirm de yakalanır.
     const dinlenen = new WeakSet<Page>();
     const sayfayiDinle = (p: Page): void => { if (dinlenen.has(p)) return; dinlenen.add(p); p.on('dialog', diyalogIsle); };
@@ -271,6 +288,9 @@ export async function hizliTestiYurut(
       // Yazma engeli açılmadan önce bağlam değiştirmenin son isteği bitsin (açılır penceredeki form gönderimi geç kalıp engellenmesin).
       await isteklerBitsin(islem);
     }
+    // Hayır izni: giriş ve bağlam TAMAMLANDI; sayfanın kendi betiği de artık form gönderemez / düğmeye basamaz (sunucu zaten "bas"
+    // göndermez). Hedef sayfaya gidilmeden önce açılır: hedef belge ilk betiğinden itibaren korumalıdır.
+    if (!basabilir) await hayirKorumasiniAc(baglam);
     durum.asama = okumaAsamasi;
     const ac = async (): Promise<void> => {
       await hedefSayfayiAc(islem, g.hedefAdres, taramaTarayiciAyarlari(g).sayfaAcilmaMs, g.hedefYol);
