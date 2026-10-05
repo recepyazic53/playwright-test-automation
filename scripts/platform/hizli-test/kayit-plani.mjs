@@ -79,7 +79,7 @@ const bosMu = (/** @type {unknown} */ v) => v === undefined || v === null || v =
 
 /**
  * Plan sütunlarının bir mevcut tablonun sütunlarıyla ad eşlemesi (adEslesmesi; önce birebir, sonra benzer; her mevcut sütun bir kez).
- * Gizli plan sütunu açık sütuna, liste (seçim) tablosu gizli sütuna eşlenmez.
+ * Liste (seçim) tablosu gizli sütuna eşlenmez (gizli değer açık sütuna da eşlenebilir: karar kullanıcının).
  * @param {PlanTablosu} t @param {{ sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }} m @returns {SutunAdayi['eslesme']}
  */
 export function sutunEslemesi(t, m) {
@@ -90,7 +90,7 @@ export function sutunEslemesi(t, m) {
   for (const tur of /** @type {const} */ (['birebir', 'benzer'])) {
     for (const s of t.sutunlar) {
       if (eslesme.some((e) => e.plan === s.ad)) continue;
-      const c = m.sutunlar.find((x) => !kullanilan.has(x.ad) && !(s.gizli && !x.gizli) && !(t.tur === 'liste' && x.gizli)
+      const c = m.sutunlar.find((x) => !kullanilan.has(x.ad) && !(t.tur === 'liste' && x.gizli)
         && adlari(s.ad).some((ad) => adEslesmesi(ad, x.ad) === tur));
       if (c) { kullanilan.add(c.ad); eslesme.push({ plan: s.ad, hedef: c.ad, tur }); }
     }
@@ -355,7 +355,8 @@ export function planKur(g0) {
     kullanilanAdlar.add(kucuk(ad));
     tablolar.push({ ...z, ad });
   }
-  // Kullanıcının değer yazmadığı seçim alanları da analiz edilip kendi liste tablosuna alınır (tüm seçenekler; sayfada hazır gelenler dahil).
+  // Tabloya alınmayan seçim alanları (değer yazılmayan seçimler, radyo / onay kutusu) yalnız SENARYO ÖNERİLERİ için liste olarak tutulur
+  // (yalnizOneri): kullanıcıya tablo olarak önerilmez, hiçbir zaman yazılmaz; değeri senaryoda seçilir.
   let ek = 0;
   for (const a of g.alanlar) {
     if (ek >= EN_COK_LISTE_TABLOSU) break;
@@ -369,7 +370,7 @@ export function planKur(g0) {
     tablolar.push({
       ad, tur: 'liste', sutunlar: [{ ad, gizli: false, karsiliklar: Object.fromEntries([...secenekler.values()].filter((s) => s.metin !== s.kod).map((s) => [s.metin, { sayfa: s.kod }])) }],
       satirlar: [...secenekler.values()].map((s) => ({ [ad]: s.metin })), secilen: null,
-      alanlar: [{ oturumAnahtar: a.anahtar, sutun: ad, etiket, degerli: false }]
+      alanlar: [{ oturumAnahtar: a.anahtar, sutun: ad, etiket, degerli: false }], yalnizOneri: true
     });
     kullanilanAdlar.add(kucuk(ad));
     ek++;
@@ -413,7 +414,8 @@ export function planOnizle(vt, projeId, plan, ekranId, anahtarlar) {
     mevcutTablolar: hedefler.map((x) => ({
       id: x.id, ad: x.ad, tur: x.kaynak?.tabloTuru === 'liste' ? 'liste' : 'kayit', sutunlar: x.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli === true })), satirSayisi: x.satirlar.length
     })),
-    tablolar: plan.tablolar.map((t) => {
+    // Yalnız senaryo önerileri için tutulan listeler (yalnizOneri) kullanıcıya tablo olarak gösterilmez.
+    tablolar: plan.tablolar.filter((t) => !t.yalnizOneri).map((t) => {
       const m = mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
       const p = m ? birlestirmePlani(m, t) : null;
       const bagla = m ? [] : mevcutSutunAdaylari(t, mevcutlar).slice(0, EN_COK_BAGLA_ADAYI);
@@ -437,7 +439,7 @@ export function planOnizle(vt, projeId, plan, ekranId, anahtarlar) {
         mevcut: m && p ? { id: m.id, ad: m.ad, sutunSayisi: m.sutunlar.length, satirSayisi: m.satirlar.length, yeniSutunlar: p.yeniSutunlar.map((s) => s.ad), eklenecekSatir: p.eklenecek.length } : null
       };
     }),
-    baglantilar: plan.tablolar.flatMap((t) => t.alanlar.filter((a) => anahtarlar[a.oturumAnahtar] && !(t.sutunlar.find((s) => s.ad === a.sutun)?.gizli && t.tur === 'liste')).map((a) => {
+    baglantilar: plan.tablolar.filter((t) => !t.yalnizOneri).flatMap((t) => t.alanlar.filter((a) => anahtarlar[a.oturumAnahtar] && !(t.sutunlar.find((s) => s.ad === a.sutun)?.gizli && t.tur === 'liste')).map((a) => {
       const alanId = anahtarlar[a.oturumAnahtar];
       const eski = /** @type {{ tablo: string; sutun: string } | undefined} */ (mevcutBaglar[alanId]);
       return {
@@ -482,8 +484,8 @@ const listeSatirAdi = (d) => Object.values(d).filter((v) => !bosMu(v)).map(Strin
 
 /**
  * Elle sütun eşlemesi ("Mevcut tabloya bağla" — kullanıcı her plan sütunu için hedef sütunu seçti). Değer '' (ya da yok): o plan sütunu
- * tabloya YENİ sütun olarak eklenir. Kurallar: hedef sütun tabloda olmalı, iki plan sütunu aynı sütuna gidemez, gizli plan sütunu açık
- * sütuna, liste (seçim) tablosu gizli sütuna yazılamaz.
+ * tabloya YENİ sütun olarak eklenir. Kurallar: hedef sütun tabloda olmalı, iki plan sütunu aynı sütuna gidemez, liste (seçim)
+ * tablosu gizli sütuna yazılamaz.
  * @param {PlanTablosu} t @param {{ ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }} m @param {Record<string, unknown>} secilen
  * @returns {Array<{ plan: string; hedef: string }>}
  */
@@ -497,7 +499,6 @@ function elleEslesme(t, m, secilen) {
     const c = m.sutunlar.find((x) => x.ad === h) ?? m.sutunlar.find((x) => kucuk(x.ad) === kucuk(h));
     if (!c) throw new Error(`"${m.ad}" tablosunda "${h}" sütunu yok: özeti yenileyip yeniden seçin.`);
     if (kullanilan.has(c.ad)) throw new Error(`"${m.ad}" tablosunun "${c.ad}" sütunu iki alana seçildi: her sütuna bir alan bağlanır.`);
-    if (s.gizli && !c.gizli) throw new Error(`"${s.ad}" gizli bir değer: "${m.ad}" tablosunun açık "${c.ad}" sütununa yazılamaz (gizli sütun seçin ya da yeni sütun ekleyin).`);
     if (t.tur === 'liste' && c.gizli) throw new Error(`Seçim listesi "${m.ad}" tablosunun gizli "${c.ad}" sütununa bağlanamaz.`);
     kullanilan.add(c.ad);
     sonuc.push({ plan: s.ad, hedef: c.ad });
@@ -565,7 +566,7 @@ function planYazIslem(vt, projeId, plan, secim, bilgi) {
   /** @type {import('./kayit-plani.d.mts').YazilanTablo[]} */
   const sonuc = [];
   for (const t of plan.tablolar) {
-    const sec = secim.tablolar?.[t.ad] ?? { islem: 'atla' };
+    const sec = t.yalnizOneri ? { islem: 'atla' } : secim.tablolar?.[t.ad] ?? { islem: 'atla' };
     if (sec.islem === 'atla') continue;
     if (!['yeni', 'yeniAd', 'birlestir', 'bagla', 'sutunEkle'].includes(sec.islem)) throw new Error(`"${t.ad}" için bilinmeyen seçim: ${sec.islem}.`);
     const mevcutlar = tablolariListele(vt, projeId, sec.islem === 'bagla' ? { cozulsun: true } : {});

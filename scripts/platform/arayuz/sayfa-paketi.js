@@ -411,7 +411,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       yerlestir(esleme, m ? x.sutunlar.map((s) => {
         const sel = h('select', { 'aria-label': `${s.ad} → hedef sütun` },
           h('option', { value: '' }, '(yeni sütun olarak ekle)'),
-          ...m.sutunlar.map((c) => h('option', { value: c.ad, selected: (d.eslesme || {})[s.ad] === c.ad, disabled: (s.gizli && !c.gizli) || (x.tur === 'liste' && c.gizli) },
+          ...m.sutunlar.map((c) => h('option', { value: c.ad, selected: (d.eslesme || {})[s.ad] === c.ad, disabled: x.tur === 'liste' && c.gizli },
             c.gizli ? `${c.ad} (gizli)` : c.ad)));
         sel.addEventListener('change', () => { d.eslesme = { ...(d.eslesme || {}), [s.ad]: sel.value }; sec('bagla'); });
         return h('label', { class: 'tv-esleme-satiri' }, h('span', {}, s.gizli ? ikon('kilit') : null, `${s.ad} →`), sel);

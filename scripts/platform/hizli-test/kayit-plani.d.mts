@@ -8,6 +8,8 @@ export type PlanTablosu = {
   tetik?: string[];
   /** Bağlı liste zinciri tablosu: halkaların etiketleri (üstten alta). */
   zincir?: string[];
+  /** Yalnız senaryo önerileri için tutulan seçim listesi: kullanıcıya tablo olarak gösterilmez, yazılmaz. */
+  yalnizOneri?: boolean;
 };
 /** baglam: kullanıcının seçtiği değerler (seçim alanları) ve alanın tüm seçenekleri — mevcut tabloya eklenen satırın adı için. */
 export type KayitPlani = { satirAdi: string; tablolar: PlanTablosu[]; baglam?: Array<{ secilen: string; secenekler: string[] }> };

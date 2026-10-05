@@ -263,7 +263,8 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   // ÖZET (yazmadan): tablolar, birleştirme kararı (yeni tablo → "yeni"), bağlantılar ve senaryo önerileri.
   const oz = (await basarili('/platform/hizli-test/ozet', { id, baslik: 'Başvuru formu — kurumsal' })).ozet as Nesne;
   const ozTablolar = (oz.onizleme.tablolar as Nesne[]).map((t) => t.ad).sort();
-  expect(ozTablolar).toEqual(['Kanal', 'Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  // Değer yazılmayan seçim (Kanal: sayfada hazır) tablo olarak önerilmez (yalnız senaryo önerileri için tutulur).
+  expect(ozTablolar).toEqual(['Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
   expect(oz.secim.tablolar['Kişi bilgileri']).toEqual({ islem: 'yeni' });
   expect((oz.onizleme.tablolar as Nesne[]).every((t) => t.mevcut === null)).toBe(true);
   expect(oz.onizleme.baglantilar.length).toBeGreaterThanOrEqual(3);
@@ -299,7 +300,7 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   // Elle yazılan değerler test verisi tablolarına, anlamlı gruplara ayrılarak alındı (tek tablo değil): kişi alanı "Kişi bilgileri",
   // diğer her alan kendi başlığıyla kendi tablosunda; alanlar ekranın Test verisi bölümünde ilgili tabloya bağlandı.
   const kTablo = k.tablo as { tablolar: Array<{ tablo: string; sutunSayisi: number; yeni: boolean }>; baglanan: number };
-  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kanal', 'Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
+  expect(kTablo.tablolar.map((t) => t.tablo).sort()).toEqual(['Kişi bilgileri', 'Müşteri tipi', 'Ödeme şekli']);
   expect(kTablo.baglanan).toBeGreaterThanOrEqual(3);
   const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
   const kisiTablosu = tablolar.find((t: Nesne) => t.ad === 'Kişi bilgileri');
@@ -314,7 +315,7 @@ test('Evet izni: keşif basmaz; veri durağı (Doldur + elle, koşullu alan); ç
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${kayitli.ekranId}`)) as Nesne;
   const baglar = Object.values(bag.baglar as Record<string, Nesne>);
   // Sayfada hazır gelen "Kanal" da modelde (değersiz) olduğu için kendi liste tablosuna bağlanır (yetim tablo kalmaz).
-  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kanal.Kanal', 'Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
+  expect(baglar.map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort()).toEqual(['Kişi bilgileri.Vergi no', 'Müşteri tipi.Müşteri tipi', 'Ödeme şekli.Ödeme şekli']);
 });
 
 test('kaydedilen senaryo normal koşuda (model-senaryolari.spec.ts) aynı zinciri yürütür ve Bitti\'de başarılı olur', async () => {
@@ -472,7 +473,7 @@ test('kayıt formu: telefon maskesi + alandan çıkınca silen sayfa + sonradan 
   expect(ulke.satirlar.map((x: Nesne) => x.degerler['Gidilecek ülke'])).toEqual(['A.B.D', 'Fransa', 'Almanya']);
   const bag = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${r.ekranId}`)) as Nesne;
   expect(Object.values(bag.baglar as Record<string, Nesne>).map((b) => `${tablolar.find((t: Nesne) => t.id === b.tablo)?.ad}.${b.sutun}`).sort())
-    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon', 'Ödeyen.Ödeyen']); // hazır gelen Ödeyen radyosu da bağlı
+    .toEqual(['Gidilecek ülke.Gidilecek ülke', 'Kişi bilgileri.Doğum tarihi', 'Kişi bilgileri.Kimlik no', 'Kişi bilgileri.Telefon']); // hazır gelen Ödeyen radyosu tabloya bağlanmaz (senaryoda seçilir)
   // Senaryolardan yeniden başlat ("Testi koş"): aynı değerler, tablodan çözülerek, telefon dahil.
   const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: r.senaryoId, ortamId });
   expect(y.basarili, y.mesaj).toBe(true);
