@@ -10,12 +10,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { ORNEK_KULLANICI, ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, OrnekBasvuruUygulamasi, ornekGirisTarifi } from './model-fikstur';
-import { nobetciApi, nobetciBaslat, type Nobetci, type Yanit } from './nobetci-sunucusu';
+import { bosPort, nobetciApi, nobetciBaslat, type Nobetci, type Yanit } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, any>;
@@ -28,6 +28,7 @@ let klasor = '';
 let projeId = '';
 let ortamId = '';
 let bagsizOrtamId = '';
+let cdpPortu = 0;
 let profiller: Record<string, string> = {};
 let kayitli: { ekranId: string; senaryoId: string } | null = null;
 
@@ -75,8 +76,9 @@ test.beforeAll(async () => {
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
   izinleriAc(vt);
   vt.kapat();
+  cdpPortu = await bosPort();
   nobetci = await nobetciBaslat(klasor, vtYolu, {
-    NOBETCI_KAYIT_BASSIZ: '1', NOBETCI_TARAMA_IZINLI_KOKENLER: fikstur.adres, NOBETCI_KAYIT_ZAMAN_ASIMI_SN: '300', NOBETCI_REHBER_OTOMATIK: '0'
+    NOBETCI_KAYIT_BASSIZ: '1', NOBETCI_KAYIT_CDP_PORTU: String(cdpPortu), NOBETCI_TARAMA_IZINLI_KOKENLER: fikstur.adres, NOBETCI_KAYIT_ZAMAN_ASIMI_SN: '300', NOBETCI_REHBER_OTOMATIK: '0'
   });
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Bağlamlı Hızlı Test' })).proje as Nesne).id);
@@ -193,6 +195,93 @@ test('kaydedilen senaryonun normal koşusu aynı bağlamla koşar (şube değiş
   expect(sayi('POST /sube')).toBeGreaterThan(sube);
   expect(uygulama.hesaplamalar.length).toBe(hesap + 1);
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ sube: 'S02', indirim: '10' });
+});
+
+/** Hızlı test tarayıcısına (başsız, alt süreç) yerel hata ayıklama portundan bağlanıp verilen yoldaki sayfayı bulur. */
+async function hizliSayfa(yol: string): Promise<{ tarayici: Browser; sayfa: Page }> {
+  const son = Date.now() + 60_000;
+  let tarayici: Browser | null = null;
+  while (!tarayici) {
+    try { tarayici = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPortu}`); } catch {
+      if (Date.now() > son) throw new Error('hızlı test tarayıcısına bağlanılamadı');
+      await new Promise((c) => setTimeout(c, 250));
+    }
+  }
+  for (;;) {
+    const sayfa = tarayici.contexts().flatMap((b) => b.pages()).find((p) => p.url().includes(yol));
+    if (sayfa) return { tarayici, sayfa };
+    if (Date.now() > son) throw new Error(`${yol} sayfası bulunamadı`);
+    await new Promise((c) => setTimeout(c, 250));
+  }
+}
+
+test('Hayır izni + "Şube: Yetkili": giriş formu ve bağlam değişimi engelsiz; hedef sayfada korumalar açık (düğme / form gönderimi yutulur, sayaçlar 0)', async () => {
+  test.setTimeout(240_000);
+  await isBitsin();
+  const bas = uygulama.olaylar.length;
+  const once = { giris: sayi('POST /giris'), dogrulama: sayi('POST /dogrulama'), sube: sayi('POST /sube'), h: uygulama.hesaplamalar.length, o: uygulama.onaylar.length };
+  const id = String((await basarili('/platform/hizli-test/baslat', {
+    projeId, ortamId, hedef: '/basvuru/', ekranAdi: 'Başvuru yetkili basılmadan', izin: 'hayir', cumle: 'Hesapla\'ya bas, "Toplam:" görünsün',
+    baglamProfilleri: [{ tur: 'Şube', profilId: profiller.Yetkili }]
+  })).id);
+  let o = await bekle(id, ['veri']);
+  // Giriş (form gönderen: POST /giris + POST /dogrulama) ve bağlam değişimi (POST /sube) Hayır izninde de yapıldı, bu sırayla.
+  expect(sayi('POST /giris')).toBe(once.giris + 1);
+  expect(sayi('POST /dogrulama')).toBe(once.dogrulama + 1);
+  expect(sayi('POST /sube')).toBe(once.sube + 1);
+  const yeni = uygulama.olaylar.slice(bas);
+  expect(yeni.indexOf('POST /giris')).toBeLessThan(yeni.indexOf('POST /sube'));
+  expect(yeni.lastIndexOf('POST /sube')).toBeLessThan(yeni.lastIndexOf('GET /basvuru/'));
+  expect(o.baglam).toEqual({ tur: 'Şube', ad: 'Yetkili', uygulandi: true });
+  const alan = (b: string): string => String((o.soru.alanlar as Nesne[]).find((a) => String(a.etiket).startsWith(b))?.anahtar);
+  expect(alan('İndirim oranı')).not.toBe('undefined');
+
+  // Hedef sayfada korumalar açık: düğmeye tıklama ve form gönderimi (submit / requestSubmit / gönder düğmesi) sayfada yutulur.
+  const t = await hizliSayfa('/basvuru/');
+  try {
+    const korumalar = await t.sayfa.evaluate(() => {
+      const w = window as unknown as Record<string, unknown>;
+      return { form: w.__nobetciTaramaKorumasi === true, dugme: w.__nobetciDugmeKorumasi === true };
+    });
+    expect(korumalar).toEqual({ form: true, dugme: true });
+    await t.sayfa.locator('#hesapla').click();
+    await t.sayfa.evaluate(() => {
+      const f = document.createElement('form');
+      f.method = 'post';
+      f.action = '/basvuru/onayla';
+      const d = document.createElement('button');
+      d.type = 'submit';
+      d.textContent = 'Gönder';
+      f.append(d);
+      document.body.append(f);
+      d.click();
+      f.requestSubmit();
+      f.submit();
+    });
+    await t.sayfa.waitForTimeout(1_000);
+    expect(await t.sayfa.evaluate(() => (window as unknown as { __nobetciYutulanTiklama?: number }).__nobetciYutulanTiklama ?? 0)).toBeGreaterThanOrEqual(2);
+    expect(t.sayfa.url()).toContain('/basvuru/');
+  } finally { await t.tarayici.close(); }
+  expect(uygulama.hesaplamalar.length).toBe(once.h);
+  expect(uygulama.onaylar.length).toBe(once.o);
+
+  // Hayır akışı mevcut testteki gibi biter: doldurulur, basılmaz; düğme ve mesaj adaylardan; doğrulama yok, "doğrulanmadı" kaydedilir.
+  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ürün')]: { deger: 'A', kaynak: 'elle' }, [alan('Ad Soyad')]: { deger: 'Deneme Kişi', kaynak: 'elle' } } });
+  o = await bekle(id, ['hayirSecim']);
+  const hesapla = (o.soru.adaylar as Nesne[]).find((a) => a.metin === 'Hesapla') as Nesne;
+  expect(await api('/platform/hizli-test/karar', { id, karar: 'bas', secici: hesapla.secici })).toMatchObject({ basarili: false, kod: 'KARAR' });
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: hesapla.secici, mesajlar: ['Toplam:'] });
+  o = await bekle(id, ['bitis']);
+  await basarili('/platform/hizli-test/bitis', { id, etiketler: { ...o.soru.etiketler, 'Toplam:': 'bitti' } });
+  o = await bekle(id, ['kaydet']);
+  expect(o.soru).toMatchObject({ dogrulanabilir: false, dogrulama: { durum: 'yapilmadi' } });
+  const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Yetkili — basılmadan', tabloOlustur: false });
+  expect(k).toMatchObject({ dogrulandi: false });
+  await isBitsin();
+  // Siteye hiçbir düğme / form isteği gitmedi.
+  expect(uygulama.hesaplamalar.length).toBe(once.h);
+  expect(uygulama.onaylar.length).toBe(once.o);
+  expect(uygulama.olaylar.slice(bas).filter((x) => x.startsWith('POST /basvuru'))).toEqual([]);
 });
 
 test('arayüz: başlat formunda bağlam seçimi; profil yokken bilgi; oturumda seçilen bağlam; 1440 / 390 taşma yok', async () => {
