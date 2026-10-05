@@ -1,5 +1,5 @@
 // AKIŞ DİYAGRAMI — KORUNAN PARÇALAR: diyagramın gösteremediği parçalar (seçime bağlı düğmeli adım, alanlı + düğmeli isteğe
-// bağlı adım, kod yöntemi, adres / son adımda öğe başarı göstergesi, çok şartlı / çalışma anında alan koşulu, yazısıyla seçilen
+// bağlı adım, kod yöntemi, adres / son adımda öğe başarı göstergesi, iç içe / bağlam alan koşulu, yazısıyla seçilen
 // tıklama, aksiyon başına süre, öğeye bağlı bekleme, ekrana dön, seçicisiz alan, alt model adımı) akışı KİLİTLEMEZ: salt okunur
 // korunan blok / rozet olur ve kaydederken modeldeki hâliyle aynen yazılır. Dayandığı alan silinirse kayıt anlaşılır hatayla
 // reddedilir; korunan parça silinirse onayda listelenir. Nötr fikstür ("Talep": işlem tipine göre iki dal + kat penceresi);
@@ -155,13 +155,13 @@ test('saf: eskiden kilitleyen her durum düzenlenebilir ve kaydedince aynen koru
   // Adres (url) başarı göstergesi ve son adımda öğe göstergesi.
   dene('url göstergesi', (m) => { adimBul(m, 'islem').kosu.basariGostergesi = { tur: 'url', deger: '/talep/2' }; }, (m) => adimBul(m, 'islem').kosu.basariGostergesi);
   dene('son adımda öğe', (m) => { adimBul(m, 'kayit').kosu.basariGostergesi = { tur: 'eleman', deger: '#sonuc' }; }, (m) => [adimBul(m, 'kayit').kosu.basariGostergesi, adimBul(m, 'kayit').bolumler]);
-  // Çok şartlı ve çalışma anında alan koşulu (alanın tanımıyla; diyagramda kilitli).
+  // İç içe (karışık ve / veya) ve bağlam alan koşulu (alanın tanımıyla; diyagramda kilitli).
   const kosullu = dene('çok şartlı koşul', (m) => {
-    adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { ve: [{ alan: 'islemTipi', esit: 'yeni' }, { calismaZamani: 'gorunurse' }] } };
+    adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { ve: [{ alan: 'islemTipi', esit: 'yeni' }, { veya: [{ calismaZamani: 'gorunurse' }, { alan: 'islemTipi', dolu: false }] }] } };
   }, (m) => adimBul(m, 'islem').bolumler[0].alanlar[1]);
-  expect((kosullu.bloklar[0] as Nesne).korunanKosullar).toEqual({ musteriNo: '“İşlem tipi” = yeni ve çalışma anında görünürse' });
+  expect((kosullu.bloklar[0] as Nesne).korunanKosullar).toEqual({ musteriNo: '“İşlem tipi” = yeni ve çalışma anında görünürse veya “İşlem tipi” boş' });
   expect((kosullu.bloklar[0] as Nesne).kosullar).not.toHaveProperty('musteriNo');
-  dene('çalışma anında', (m) => { adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { calismaZamani: 'gorunurse' } }; }, (m) => adimBul(m, 'islem').bolumler[0].alanlar[1]);
+  dene('bağlam', (m) => { adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { baglam: { alanSeti: 'A' } } }; }, (m) => adimBul(m, 'islem').bolumler[0].alanlar[1]);
   // Kod yöntemi (pomMetodu) ve bölüm özellikleri.
   dene('kod yöntemi', (m) => { adimBul(m, 'islem').pomMetodu = 'islemiDoldur'; }, (m) => adimBul(m, 'islem').pomMetodu);
   // Yazısıyla seçilen tıklama, aksiyon başına süre, öğeye bağlı bekleme → korunan aksiyonlar (düğmesi adımın ilerlemesi).
@@ -274,14 +274,14 @@ test.describe('veritabanı: akış tasarımı → kaydet → yeniden oku', () =>
 
   test('çok şartlı alan koşulu: dayandığı alan çıkarılırsa ret; eklenen yeni akışta (kopya) korunan parçalar da aynen', () => {
     const m = talepModeli();
-    adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { ve: [{ alan: 'islemTipi', esit: 'yeni' }, { calismaZamani: 'gorunurse' }] } };
+    adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { ve: [{ alan: 'islemTipi', esit: 'yeni' }, { veya: [{ calismaZamani: 'gorunurse' }, { alan: 'islemTipi', dolu: false }] }] } };
     ekranModeliEkle(vt, { ekranId, model: m, aciklama: 'test' });
     const bloklar = tasarim();
     const islem = bloklar[0] as Extract<AkisBlogu, { tur: 'alanlar' }>;
-    expect(islem.korunanKosullar).toEqual({ musteriNo: '“İşlem tipi” = yeni ve çalışma anında görünürse' });
+    expect(islem.korunanKosullar).toEqual({ musteriNo: '“İşlem tipi” = yeni ve çalışma anında görünürse veya “İşlem tipi” boş' });
     // İşlem tipini başka bir gruba taşımak serbesttir; akıştan çıkarmak koşulu bozar → ret.
     const hatalar = hatalari([{ ...islem, alanlar: ['musteriNo'], zorunlu: [] }, ...bloklar.slice(1)]).map((h) => h.mesaj);
-    expect(hatalar).toContain('“Müşteri no” alanının diyagramda düzenlenemeyen görünürlük koşulu (“İşlem tipi” = yeni ve çalışma anında görünürse) korunamaz: dayandığı “İşlem tipi” alanı akışta yok (alanı geri ekleyin ya da bu parçayı taşıyan bloğu silin).');
+    expect(hatalar).toContain('“Müşteri no” alanının diyagramda düzenlenemeyen görünürlük koşulu (“İşlem tipi” = yeni ve çalışma anında görünürse veya “İşlem tipi” boş) korunamaz: dayandığı “İşlem tipi” alanı akışta yok (alanı geri ekleyin ya da bu parçayı taşıyan bloğu silin).');
     // Kopyadan yeni akış: aynı korunan parçalar yeni akışın adımlarında da aynen.
     const kopyaBloklar = akisTasarimi(vt, projeId, ekranId, { kopya: 'ana' }).bloklar;
     const y = akisKaydet(vt, projeId, ekranId, { ad: 'Kopya akış', bloklar: kopya(kopyaBloklar), onay: true }) as Nesne;
@@ -298,7 +298,7 @@ test('arayüz: korunan bloklar salt okunur ve kilitli görünür; korunan parça
   const PAROLA = 'Akis-Korunan-Arayuz-Parolasi-9';
   const vtYolu = join(klasor, 'platform.db');
   const m = talepModeli();
-  adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { calismaZamani: 'gorunurse' } };
+  adimBul(m, 'islem').bolumler[0].alanlar[1].gorunurluk = { ifade: { baglam: { alanSeti: 'A' } } };
   adimBul(m, 'islem').kosu.aksiyonlar[0].metin = 'Devam';
   let ekran = '';
   let projeId = '';
@@ -331,10 +331,10 @@ test('arayüz: korunan bloklar salt okunur ve kilitli görünür; korunan parça
     await expect(dal.getByText('korunan parça', { exact: true })).toBeVisible();
     await expect(dal.getByRole('note', { name: 'Diyagramda düzenlenemeyen parçalar' })).toContainText('görünürlük koşulu: İşlem tipi Yeni');
     await expect(dal.getByRole('textbox', { name: 'Adım adı' })).toBeEditable();
-    // Çalışma anında koşulu olan alan: koşul düğmesi yerine kilitli, salt okunur koşul.
+    // Bağlam koşulu olan alan: kilitli, salt okunur koşul; yanında yalnız "Koşulu değiştir" (düzenle / ekle yok).
     const islem = diyagram.getByRole('listitem', { name: /blok: Alan grubu \(İşlem\)$/ });
-    await expect(islem.getByRole('note', { name: 'Müşteri no: koşul (diyagramda düzenlenemez)' })).toHaveText('çalışma anında görünürse');
-    await expect(islem.getByRole('button', { name: 'Müşteri no: koşul' })).toHaveCount(0);
+    await expect(islem.getByRole('note', { name: 'Müşteri no: koşul (diyagramda düzenlenemez)' })).toHaveText('bağlam: A');
+    await expect(islem.getByRole('button', { name: 'Müşteri no: koşul' })).toHaveText('Koşulu değiştir');
     await expect(islem.getByRole('button', { name: 'İşlem tipi: koşul' })).toBeVisible();
     // Korunan parçalı bloğu silmek onay ister; vazgeçilince blok kalır.
     await dal.getByRole('button', { name: 'Bloğu sil' }).click();
