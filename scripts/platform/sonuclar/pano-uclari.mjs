@@ -5,6 +5,7 @@
 //   GET  /platform/pano/veri?projeId=&sablon=&p=       Nöbetçi verisi kartının sonucu (p: parametreler, JSON)
 //   POST /platform/pano/kaydet { projeId, duzen }      düzeni kaydeder ("Bitti")
 //   POST /platform/pano/tablo-ayari { projeId, kartId, sutunlar, sutunGenislikleri }  tablo sütun sırası / gizleme / genişlik
+//   POST /platform/pano/donem { projeId, donemler: { kartId: dönem } }  döneme bağlı kartların dönem seçimi
 //   POST /platform/pano/sql/denetle { projeId, sorgu } yalnız okuma kuralı (bağlantı AÇILMAZ; kart eklerken uyarı)
 //   POST /platform/pano/sql/yenile { projeId, kartId } SQL kartını çalıştırır (izin: Veritabanı okuma; CANLI'da canliOnay: true)
 // NOT: import.meta KULLANILMAZ.
@@ -15,6 +16,7 @@ import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { panoGetir, panoKaydet } from './ozet-panosu.mjs';
 import { PANO_SQL_SATIR_SINIRI, PANO_SQL_UCU, PANO_SQL_ZAMAN_ASIMI_MS, panoSorgusuDenetle, panoSqlYenile } from './pano-sql.mjs';
 import { sablonSecenekleri, sablonSonucu } from './pano-sablonlari.mjs';
+import { kartDonemle, kartDonemliMi } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -81,6 +83,21 @@ export const PANO_POST_UCLARI = [
     if (!p.duzen.kartlar.some((k) => k.id === kartId && k.tur === 'sql')) throw new DepoHatasi('SQL kartı bulunamadı.');
     panoKaydet(db, projeId, { ...p.duzen, kartlar: p.duzen.kartlar.map((k) => (k.id === kartId
       ? { ...k, ayar: { ...k.ayar, sutunlar: g.sutunlar, sutunGenislikleri: g.sutunGenislikleri } } : k)) });
+    return panoGetir(db, projeId);
+  }],
+  // Kart dönemi (döneme bağlı kartın başlığındaki seçim; düzenleme kipi gerekmez): { kartId: dönem } — birden çok kart tek istekte
+  // (eski düzenden göç). Döneme bağlı olmayan karta dönem yazılmaz. SQL sorgusu çalışmaz.
+  ['/platform/pano/donem', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const donemler = g.donemler && typeof g.donemler === 'object' && !Array.isArray(g.donemler) ? Object.entries(g.donemler) : [];
+    if (!donemler.length || donemler.length > 40) throw new DepoHatasi('Dönem seçimi eksik.');
+    let duzen = panoGetir(db, projeId).duzen;
+    for (const [kartId, donem] of donemler) {
+      const k = duzen.kartlar.find((x) => x.id === kimlik(kartId, 'kartId'));
+      if (!k || !kartDonemliMi(k)) throw new DepoHatasi('Döneme bağlı kart bulunamadı.');
+      try { duzen = kartDonemle(duzen, kartId, donem); } catch (e) { throw new DepoHatasi(/** @type {Error} */ (e).message); }
+    }
+    panoKaydet(db, projeId, duzen);
     return panoGetir(db, projeId);
   }],
   ['/platform/pano/sql/denetle', (db, g) => {

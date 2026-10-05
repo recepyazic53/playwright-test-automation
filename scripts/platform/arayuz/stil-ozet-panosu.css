@@ -234,3 +234,71 @@ a.pano-sayi:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px;
   .pano-grafik .cubuk, .pano-grafik .nokta { fill: CanvasText; }
   .pano-grafik .cizgi { stroke: CanvasText; }
 }
+
+/* Kaydırma konumu koruması (ozet-panosu.js): ölçüm geçişinde ve tablo yeniden kurulurken yükseklik bir anlık sabitlenir; sayfa kısalıp
+   tarayıcı kaydırmayı yukarı çekmez. Tablonun yatay kaydırması kenarda sayfaya / tarayıcı geri hareketine geçmez. */
+.ozet-panosu.olculuyor { min-height: var(--pano-olcu-yukseklik, 0px); }
+.pano-sql-karti > .pano-sql-govde { min-height: var(--pano-govde-yukseklik, 0px); }
+.pano-tablo { overscroll-behavior-x: contain; }
+
+/* Uzun metin hücresi (CLOB / TEXT): tek satır önizleme + "Görüntüle" */
+.pano-uzun-hucre { cursor: pointer; }
+.pano-hucre-ic { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pano-hucre-onizleme { display: block; min-width: 0; max-width: min(28rem, 60vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--yazi-mono); font-size: 12px; }
+.pano-tablo td.pano-uzun-hucre { overflow-wrap: normal; }
+.pano-hucre-goruntule { flex: none; min-height: 26px; padding-top: 0; padding-bottom: 0; }
+.pano-uzun-hucre:hover .pano-hucre-onizleme { color: var(--vurgu); }
+
+/* Uzun metin penceresi: tam metin, arama, kopyala, servis analizine örnek ekle */
+dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
+.pano-metin-penceresi .diyalog-govde { display: grid; gap: 10px; min-width: 0; }
+.pano-metin-penceresi h2 { overflow-wrap: anywhere; min-width: 0; }
+.pano-metin-bilgi { margin: -4px 0 0; overflow-wrap: anywhere; }
+.pano-metin-araclari { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.pano-metin-arama { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 16rem; min-width: 0; }
+.pano-metin-arama > .ikon { width: 15px; height: 15px; color: var(--metin-3); flex: none; }
+.pano-metin-ara { flex: 1 1 8rem; min-width: 0; width: 100%; }
+.pano-metin-sayac { white-space: nowrap; }
+.pano-metin-bicim { margin: 0; }
+.pano-ornek-ekle-dugmesi { max-width: 100%; white-space: normal; text-align: left; }
+.pano-metin-icerik { margin: 0; padding: 10px 12px; max-height: min(55vh, 36rem); overflow: auto; position: relative; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 12.5px/1.5 var(--yazi-mono); background: var(--panel-2); border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); min-width: 0; }
+.pano-metin-icerik:focus-visible { outline: 2px solid var(--odak); outline-offset: 1px; }
+.pano-metin-eslesme { background: color-mix(in srgb, var(--atlanan) 35%, transparent); color: inherit; border-radius: 2px; }
+.pano-metin-eslesme.etkin { background: var(--atlanan); color: var(--panel-kati); outline: 1px solid var(--metin); }
+.pano-ornek-alani { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); padding: 10px 12px; min-width: 0; }
+.pano-ornek-alani[hidden] { display: none; }
+.pano-ornek-formu { display: grid; gap: 10px; min-width: 0; }
+.pano-ornek-formu .alan { margin: 0; min-width: 0; }
+.pano-ornek-formu select, .pano-ornek-formu input[type="text"] { width: 100%; max-width: 100%; box-sizing: border-box; }
+.pano-ornek-formu p { margin: 0; overflow-wrap: anywhere; }
+.pano-ornek-durum { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); margin: 0; padding: 6px 12px; display: flex; flex-wrap: wrap; gap: 0 16px; min-width: 0; }
+.pano-ornek-durum legend { font-weight: 600; padding: 0 4px; }
+.pano-ornek-durum p { flex-basis: 100%; }
+.pano-ornek-sonuc:empty { display: none; }
+.pano-ornek-sonuc .not-kutusu { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; overflow-wrap: anywhere; margin: 0; }
+@media (forced-colors: active) {
+  .pano-metin-eslesme { forced-color-adjust: none; background: Mark; color: MarkText; }
+  .pano-metin-eslesme.etkin { background: Highlight; color: HighlightText; }
+}
+
+/* Kart dönemi: döneme bağlı kartın başlığında kısa seçim (genel dönem seçici yok). Açılır panel karta göre konumlanır (dar ekranda
+   kart genişliğinde); kısa etiket "Son veri" ve "Yenile" ile aynı yükseklikte. */
+.pano-donem { position: static; }
+.pano-donem .tarih-tetik { min-height: 30px; padding: 0 8px; gap: 5px; font-size: 12.5px; font-weight: 550; max-width: 12rem; }
+.pano-donem .tarih-tetik .ikon { width: 14px; height: 14px; }
+.pano-donem .tarih-paneli { top: auto; left: auto; right: 0; margin-top: 4px; }
+@media (max-width: 560px) { .pano-donem .tarih-paneli { left: 0; right: 0; } }
+.pano-donem-satiri { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; margin: 0 0 6px; min-width: 0; }
+.pano-icerik > .pano-donem-satiri, .pano-icerik > .ozet-donem-metni { flex: none; }
+.pano-donem-adi { font-size: 12.5px; font-weight: 600; color: var(--metin-2); min-width: 0; overflow-wrap: anywhere; }
+.ozet-donem-metni { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 0; overflow-wrap: anywhere; }
+.ozet-donem-metni .ikon { width: 13px; height: 13px; }
+.ozet-donem-metni[hidden], .ozet-donem-notu[hidden] { display: none; }
+.pano-donem-farki { color: var(--atlanan); }
+.pano-donem-yardimi { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; }
+.pano-donem-yardimi .ikon { width: 13px; height: 13px; flex: none; }
+/* Panel açıkken (stil.css: kabı position: relative yapar) kap konumlanmasın: panel karta göre dursun; kart diğer kartların üstünde. */
+.pano-kart-sag:has(> .pano-donem > .tarih-paneli:not([hidden])), .pano-donem-satiri:has(> .pano-donem > .tarih-paneli:not([hidden])) { position: static; }
+.pano-ogesi:has(.pano-donem > .tarih-paneli:not([hidden])) { z-index: 30; }

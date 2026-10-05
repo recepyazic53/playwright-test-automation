@@ -359,6 +359,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ozet-panosu.js', { dosya: 'ozet-panosu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-ozet-panosu.css', { dosya: 'stil-ozet-panosu.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/pano-duzeni.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sonuclar', 'pano-duzeni.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/buyuk-metin.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'buyuk-metin.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],

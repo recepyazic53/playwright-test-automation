@@ -1,5 +1,14 @@
 // scripts/platform/sonuclar/pano-duzeni.mjs için tip bildirimi.
-export type PanoKarti = { id: string; tur: string; boyut: string; yukseklik?: number; ayar?: Record<string, any> };
+export type KartDonemi = { hizli: string } | { baslangic: string; bitis: string };
+export type PanoKarti = { id: string; tur: string; boyut: string; yukseklik?: number; ayar?: Record<string, any>; donem?: KartDonemi };
+export declare const DONEM_SECIMLERI: ReadonlyArray<readonly [string, string]>;
+export declare const VARSAYILAN_DONEM: Readonly<{ hizli: string }>;
+export declare function donemTemizle(v: unknown): KartDonemi | null;
+export declare function donemAraligi(donem: unknown, simdi?: Date): { baslangic: Date; bitis: Date };
+export declare function donemMetni(donem: unknown): string;
+export declare function sqlDonemParametreleri(sorgu: unknown): { baslangic: boolean; bitis: boolean };
+export declare function kartDonemliMi(kart: { tur: string; ayar?: any }): boolean;
+export declare function kartDonemle<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, donem: unknown): D;
 export type PanoDuzeni = { surum: number; kartlar: PanoKarti[]; esitYukseklik?: boolean };
 export declare const SATIR_YUKSEKLIGI: number;
 export declare const YUKSEKLIK_SINIRI: Readonly<{ en: number; enCok: number }>;
@@ -8,13 +17,13 @@ export declare function yukseklikTemizle(v: unknown): 'oto' | number;
 export declare function yukseklikAdi(y: 'oto' | number): string;
 export declare function kartYukseklikle<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, yukseklik: unknown): D;
 export type SablonParametresi = { ad: string; etiket: string; tur: 'hedef' | 'sayi' | 'secim'; en?: number; enCok?: number; varsayilan?: string | number; secenekler?: ReadonlyArray<readonly [string, string]> };
-export type VeriSablonu = { anahtar: string; ad: string; aciklama: string; gorunum: 'sayi' | 'liste'; parametreler: ReadonlyArray<SablonParametresi> };
+export type VeriSablonu = { anahtar: string; ad: string; aciklama: string; gorunum: 'sayi' | 'liste'; donemli: boolean; parametreler: ReadonlyArray<SablonParametresi> };
 
 export declare const PANO_SURUMU: number;
 export declare const EN_COK_KART: number;
 export declare const KIMLIK_DESENI: RegExp;
 export declare const BOYUTLAR: ReadonlyArray<{ anahtar: string; ad: string; sutun: number }>;
-export declare const YERLESIK_KARTLAR: ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string; varsayilan: boolean }>;
+export declare const YERLESIK_KARTLAR: ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string; varsayilan: boolean; donemli: boolean }>;
 export declare const OZEL_KART_TURLERI: ReadonlyArray<{ tur: string; ad: string; aciklama: string; boyut: string }>;
 export declare const SQL_GORUNUMLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
 export declare const ESIK_ISLECLERI: ReadonlyArray<string>;

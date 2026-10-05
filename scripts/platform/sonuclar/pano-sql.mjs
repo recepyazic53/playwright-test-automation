@@ -30,6 +30,7 @@ import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { adMaskeleyici, bilinenGizliDegerler } from './html-rapor.mjs';
 import { tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { panoGetir, sqlSonucuYaz } from './ozet-panosu.mjs';
+import { VARSAYILAN_DONEM, donemAraligi, donemTemizle, sqlDonemParametreleri } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean; gizliSutunlar: string[]; satirSiniri: number }} PanoSqlSonucu */
@@ -107,7 +108,7 @@ const guvenli = (fn) => { try { return fn(); } catch { return undefined; } };
 export function sqlKarti(vt, projeId, kartId) {
   const k = panoGetir(vt, projeId).duzen.kartlar.find((x) => x.id === kartId && x.tur === 'sql');
   if (!k || !k.ayar) throw new DepoHatasi('SQL kartı bulunamadı. Panoyu kaydettikten sonra "Yenile"ye basın.');
-  return /** @type {{ id: string; ayar: { baslik: string; hedef: { veritabaniId?: string; ortamId?: string; baglantiId?: string }; sorgu: string } }} */ (k);
+  return /** @type {{ id: string; donem?: unknown; ayar: { baslik: string; hedef: { veritabaniId?: string; ortamId?: string; baglantiId?: string }; sorgu: string } }} */ (k);
 }
 
 /**
@@ -163,12 +164,21 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   const ayar = { ...veritabaniAyari(baglanti.alanlar), yalnizOkuma: true };
   const zamanAsimiMs = Math.max(200, Math.min(PANO_SQL_ZAMAN_ASIMI_MS, Number(s.zamanAsimiMs) || PANO_SQL_ZAMAN_ASIMI_MS));
   const satirSiniri = Math.max(1, Math.min(PANO_SQL_SATIR_SINIRI, Math.floor(Number(s.satirSiniri) || PANO_SQL_SATIR_SINIRI)));
+  // Dönem: sorguda :baslangic / :bitis varsa kartın dönemi (yoksa varsayılan) Date olarak SÜRÜCÜ PARAMETRESİ bağlanır (Oracle :ad,
+  // SQL Server @ad, PostgreSQL $n, MySQL ? — veritabani-suruculeri.mjs > parametreleriDonustur); SQL metnine hiçbir değer eklenmez.
+  const p = sqlDonemParametreleri(kart.ayar.sorgu);
+  const simdi = s.simdi ? s.simdi() : new Date();
+  const aralik = p.baslangic || p.bitis ? donemAraligi(kart.donem, simdi) : null;
+  /** @type {Record<string, Date>} */
+  const parametreler = {};
+  if (aralik && p.baslangic) parametreler.baslangic = aralik.baslangic;
+  if (aralik && p.bitis) parametreler.bitis = aralik.bitis;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let zamanlayici;
   let ham;
   try {
     ham = await Promise.race([
-      veritabaniSorgusu(ayar, kart.ayar.sorgu, {}, { zamanAsimiMs: Math.max(1000, zamanAsimiMs), satirSiniri, yasakDesenleri: etkinYasakDesenleri(vt) }),
+      veritabaniSorgusu(ayar, kart.ayar.sorgu, parametreler, { zamanAsimiMs: Math.max(1000, zamanAsimiMs), satirSiniri, yasakDesenleri: etkinYasakDesenleri(vt) }),
       new Promise((_, reddet) => { zamanlayici = setTimeout(() => reddet(Object.assign(new Error('zaman aşımı'), { code: 'PANO_ZAMAN_ASIMI' })), zamanAsimiMs); })
     ]);
   } catch (e) {
@@ -185,7 +195,8 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   const eski = panoGetir(vt, projeId).sqlSonuclari[kartId];
   const onceki = eski ? { zaman: eski.zaman, sutunlar: eski.sutunlar, ilkSatir: eski.satirlar[0] ?? null } : null;
   /** @type {PanoSqlSonucu} */
-  const sonuc = { zaman: (s.simdi ? s.simdi() : new Date()).toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri, onceki };
+  const sonuc = { zaman: simdi.toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri, onceki,
+    ...(aralik ? { donem: { secim: donemTemizle(kart.donem) ?? { ...VARSAYILAN_DONEM }, baslangic: aralik.baslangic.toISOString(), bitis: aralik.bitis.toISOString() } } : {}) };
   sqlSonucuYaz(vt, projeId, kartId, sonuc);
   return sonuc;
 }

@@ -17,8 +17,11 @@ import {
   BOYUTLAR, ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
   ORAN_SECENEKLERI, OZEL_KART_TURLERI, SATIR_YUKSEKLIGI, SQL_GORUNUMLERI, YUKSEKLIKLER, YUKSEKLIK_SINIRI, kartYukseklikle, yukseklikAdi, TARIH_BICIMLERI, VERI_SABLONLARI,
   bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartBoyutla, kartEkle, kartKaldir, kartTasi, kartTemizle,
-  SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri
+  SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
+  donemMetni, donemTemizle, kartDonemle, kartDonemliMi
 } from './pano-duzeni.mjs';
+import { SONUC_ARALIGI, tarihAraligiSecici } from './tarih-araligi.js';
+import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBicimle, metotOner, satirZamani, uzunMetinMi } from './buyuk-metin.mjs';
 import { oranSaglikSinifi } from './sonuclar.js';
 
 const SQL_UCU = '/platform/pano/sql/yenile';
@@ -34,6 +37,59 @@ const canliOnaylari = new Set();
 
 /** @param {unknown} v */
 const kopya = (v) => JSON.parse(JSON.stringify(v));
+
+/**
+ * Sayfanın kaydırma konumunu korur: fn içinde yeniden çizim / ölçüm sayfayı bir an kısaltıp tarayıcının konumu yukarı çekmesine
+ * yol açarsa konum geri yüklenir.
+ * @template T @param {() => T} fn @returns {T}
+ */
+function kaydirmayiKoru(fn) {
+  const x = window.scrollX; const y = window.scrollY;
+  try { return fn(); } finally { if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y); }
+}
+
+/**
+ * Yeniden çizimden sonra odağı geri verir: öğe görünüyorsa sayfa kaydırılmaz; görünmüyorsa (ör. kart klavyeyle başka sıraya taşındı)
+ * tarayıcının odak davranışı gibi ortalanır. @param {HTMLElement} el
+ */
+function odakla(el) {
+  el.focus({ preventScroll: true });
+  const r = el.getBoundingClientRect();
+  if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+}
+
+/** Kart öğesinin imzası: tür, ayar ve dönem (değişince kart yeniden kurulur). @param {{ tur: string; ayar?: unknown; donem?: unknown }} k */
+const kartImzasi = (k) => `${k.tur}:${JSON.stringify(k.ayar ?? null)}:${JSON.stringify(k.donem ?? null)}`;
+
+/**
+ * Eski düzenden göç: dönem seçimi olmayan döneme bağlı kartın başlangıç dönemi, eski GENEL seçimdir (oturumda seçilmişse); seçilmemişse
+ * eski varsayılan "Tümü" (Özet'te son 30 gün). @returns {object}
+ */
+function gocDonemi() {
+  let ham = null;
+  try { ham = JSON.parse(sessionStorage.getItem(SONUC_ARALIGI) || 'null'); } catch { ham = null; }
+  if (ham && typeof ham === 'object' && !ham.hizli && (ham.baslangic || ham.bitis)) {
+    ham = { baslangic: ham.baslangic || new Date(0).toISOString(), bitis: ham.bitis || new Date().toISOString() };
+  }
+  return donemTemizle(ham) ?? { hizli: 'tumu' };
+}
+
+/** Kaydırma kutularının (tablo, liste) konumları; ölçüm / yeniden çizimden sonra geri yüklenir. @param {ParentNode} kok */
+function icKaydirmalar(kok) {
+  const l = /** @type {HTMLElement[]} */ ([...kok.querySelectorAll('.tablo-kaydirma, .pano-liste, .pano-icerik > .kart')])
+    .filter((e) => e.scrollLeft || e.scrollTop).map((e) => /** @type {[HTMLElement, number, number]} */ ([e, e.scrollLeft, e.scrollTop]));
+  return () => { for (const [e, sl, st] of l) { if (e.scrollLeft !== sl) e.scrollLeft = sl; if (e.scrollTop !== st) e.scrollTop = st; } };
+}
+
+/**
+ * Kabın çocuklarını verilen sıraya getirir; zaten yerinde olan öğe yerinden oynatılmaz (DOM'dan çıkan kaydırma kutusu konumunu
+ * kaybeder ve kart yeniden çizilmiş gibi görünür). @param {HTMLElement} kap @param {HTMLElement[]} liste
+ */
+function cocuklariEsitle(kap, liste) {
+  const istenen = new Set(liste);
+  for (const c of [...kap.children]) if (!istenen.has(/** @type {HTMLElement} */ (c))) c.remove();
+  liste.forEach((el, i) => { const yer = kap.children[i] ?? null; if (yer !== el) kap.insertBefore(el, yer); });
+}
 /** @param {number} n */
 const iki = (n) => String(n).padStart(2, '0');
 /** "02.10.2026 14:35" (yerel saat). @param {string} iso */
@@ -137,31 +193,39 @@ export function ozetPanosu(kap, s0) {
 
   // ---- Çizim ------------------------------------------------------------------------------------------------------------
   /** @param {{ id: string; rol: string } | null} [odak] */
-  function ciz(odak = null) {
+  function ciz(odak = null) { kaydirmayiKoru(cizIc); odakVer(odak); }
+  function cizIc() {
     const duzen = etkinDuzen();
+    const geriYukle = icKaydirmalar(pano);
     pano.classList.toggle('duzenleniyor', duzenleniyor);
     pano.classList.toggle('esit-yukseklik', duzen.esitYukseklik !== false);
     esitKutusu.checked = duzen.esitYukseklik !== false;
     cubuk.hidden = !duzenleniyor;
     duzenleDugmesi.hidden = duzenleniyor;
     const n = duzen.kartlar.length;
-    yerlestir(pano, ...duzen.kartlar.map((k, i) => ogeHazirla(k, i, n)));
+    // Kartlar yerinde güncellenir: değişmeyen kart DOM'da kalır (kaydırma konumu, odak ve tablo durumu korunur).
+    cocuklariEsitle(pano, duzen.kartlar.map((k, i) => ogeHazirla(k, i, n)));
     bosNot.hidden = n > 0;
     yerlestir(bosNot, ...(n ? [] : [h('p', { class: 'soluk' }, ikon('izgara'), duzenleniyor
       ? 'Panoda kart yok. "Kart ekle" ile kart ekleyin ya da "Varsayılana dön"e basın.'
       : 'Panoda kart yok. "Panoyu düzenle" ile kart ekleyebilirsiniz.')]));
     varsayilanDugmesi.disabled = duzenleniyor && varsayilanMi(calisan);
     yerlesimiGuncelle();
+    geriYukle();
+  }
+  /** Odak (kaydırma korumasının DIŞINDA: görünmeyen denetime odak verilirken sayfa gerektiği kadar kayabilir). @param {{ id: string; rol: string } | null} odak */
+  function odakVer(odak) {
     if (odak) {
       const el = /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(odak.id)}"] [data-rol="${odak.rol}"]`));
-      if (el && !(/** @type {HTMLButtonElement} */ (el).disabled)) el.focus();
-      else /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(odak.id)}"] [data-rol="tutamak"]`))?.focus();
+      const hedef = el && !(/** @type {HTMLButtonElement} */ (el).disabled) ? el
+        : /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(odak.id)}"] [data-rol="tutamak"]`));
+      if (hedef) odakla(hedef);
     }
   }
 
-  /** Kartın sarmalayıcısı (içerik değişmediyse önceki öğe yeniden kullanılır; veri yeniden istenmez). */
+  /** Kartın sarmalayıcısı (içerik ve dönem değişmediyse önceki öğe yeniden kullanılır; veri yeniden istenmez). */
   function ogeHazirla(k, i, n) {
-    const imza = `${k.tur}:${JSON.stringify(k.ayar ?? null)}`;
+    const imza = kartImzasi(k);
     let o = ogeler.get(k.id);
     if (!o || o.imza !== imza) {
       const icerik = h('div', { class: 'pano-icerik' }, ...kartIcerigi(k));
@@ -191,13 +255,23 @@ export function ozetPanosu(kap, s0) {
     cancelAnimationFrame(yerlesimBekliyor);
     yerlesimBekliyor = requestAnimationFrame(yerlesimiGuncelle);
   }
-  function yerlesimiGuncelle() {
+  function yerlesimiGuncelle() { kaydirmayiKoru(yerlesimiGuncelleIc); }
+  // KÖK NEDEN (sayfa yukarı atıyordu): ölçüm geçişinde (.olculuyor) kartlar ızgara satırından çıkar ve pano bir an birkaç piksele
+  // iner; senkron ölçüm bu kısa belgeyle yerleşim yaptırınca tarayıcı sayfanın kaydırma konumunu yukarı çekiyordu (ve sabit
+  // yükseklikli kartların iç kaydırması sıfırlanıyordu). Ölçüm her içerik değişiminde (tablo yatay kaydırılınca güncellenen
+  // "N sütundan M tanesi görünüyor" notu dahil), köşe tutamağıyla boyutlandırmada ve sütun ayarlarında çalışır. Artık ölçüm boyunca
+  // pano yüksekliği sabitlenir (CSS değişkeni → min-height), ardından sayfa ve iç kaydırma konumları geri yüklenir.
+  function yerlesimiGuncelleIc() {
     if (!pano.isConnected) return;
     const kartlar = /** @type {HTMLElement[]} */ ([...pano.querySelectorAll(':scope > .pano-ogesi')]).filter((e) => getComputedStyle(e).display !== 'none');
     if (!kartlar.length) return;
+    const geriYukle = icKaydirmalar(pano);
+    pano.style.setProperty('--pano-olcu-yukseklik', `${Math.ceil(pano.getBoundingClientRect().height)}px`);
     pano.classList.add('olculuyor');
     const dogal = kartlar.map((e) => e.getBoundingClientRect().height);
     pano.classList.remove('olculuyor');
+    pano.style.removeProperty('--pano-olcu-yukseklik');
+    geriYukle();
     const tekSutun = window.matchMedia('(max-width: 860px)').matches;
     const panoGenislik = pano.getBoundingClientRect().width;
     const sutunBirimi = (panoGenislik + PANO_BOSLUK) / 12;
@@ -226,7 +300,13 @@ export function ozetPanosu(kap, s0) {
     const izleyici = new ResizeObserver(() => yerlesimiPlanla());
     izleyici.observe(pano);
     new MutationObserver((kayitlar) => {
-      yerlesimiPlanla();
+      // Yatay kaydırma notu ("N sütundan M tanesi tam görünüyor") her kaydırmada güncellenir: ölçüm gerektirmez (boyutu değişirse
+      // ResizeObserver yakalar). Yalnız bu nottaki değişimlerse yeniden ölçülmez.
+      const ilgili = kayitlar.some((k) => {
+        const el = k.target instanceof Element ? k.target : k.target.parentElement;
+        return !el?.closest('.kaydirma-bilgisi');
+      });
+      if (ilgili) yerlesimiPlanla();
       for (const kayit of kayitlar) for (const d of kayit.addedNodes) if (d instanceof HTMLElement && d.classList.contains('pano-icerik')) izleyici.observe(d);
     }).observe(pano, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'open', 'aria-expanded'] });
   }
@@ -304,15 +384,57 @@ export function ozetPanosu(kap, s0) {
   /** @returns {Node[]} */
   function kartIcerigi(k) {
     if (yerlesikMi(k.tur)) {
-      const el = yerlesik[k.tur] ? yerlesik[k.tur]() : h('p', { class: 'soluk' }, turAdi(k.tur));
+      const donemli = kartDonemliMi(k);
+      const el = yerlesik[k.tur] ? yerlesik[k.tur](donemli ? k.donem || gocDonemi() : null) : h('p', { class: 'soluk' }, turAdi(k.tur));
       // Başlarken tamamlanınca / gizlenince kaybolur; düzenleme kipinde yerini gösteren not.
-      return k.tur === 'baslarken'
-        ? [el, h('p', { class: 'pano-gizli-not soluk kucuk' }, ikon('gorunum'), 'Başlarken listesi bu projede şu an görünmüyor (tamamlandı ya da gizlendi).')]
-        : [el];
+      if (k.tur === 'baslarken') return [el, h('p', { class: 'pano-gizli-not soluk kucuk' }, ikon('gorunum'), 'Başlarken listesi bu projede şu an görünmüyor (tamamlandı ya da gizlendi).')];
+      // Döneme bağlı yerleşik kart: üstte ince dönem satırı (kartın adı + kısa dönem seçimi).
+      return donemli ? [h('div', { class: 'pano-donem-satiri' }, h('span', { class: 'pano-donem-adi' }, kartAdi(k)), donemSecici(k)), el] : [el];
     }
     if (k.tur === 'sql') return [sqlKarti(k)];
     if (k.tur === 'veri') return [veriKarti(k)];
     return [metinKarti(k)];
+  }
+
+  /**
+   * Kartın kısa dönem seçimi (kart başlığında; açılır panelde hızlı seçimler ve özel aralık). Seçim hemen kaydedilir (düzenleme kipi
+   * gerekmez; POST /platform/pano/donem) ve kart yeni dönemle yeniden kurulur. SQL kartında sorgu çalışmaz (Yenile'yi bekler).
+   * @param {any} k
+   */
+  function donemSecici(k) {
+    const kok = tarihAraligiSecici({
+      deger: k.donem || gocDonemi(), anahtar: null, kisa: true, etiket: `Dönem: ${kartAdi(k)}`,
+      ...(k.tur === 'ozetKutulari' ? { tumuMetni: 'Özet: son 30 gün' } : {}),
+      degisti: (d) => {
+        // Yalnız başlangıç ya da yalnız bitiş girildiyse eksik uç tamamlanır (kart dönemi iki ucu da saklar).
+        const x = /** @type {any} */ (d);
+        const donem = x.hizli ? { hizli: x.hizli } : { baslangic: x.baslangic || new Date(0).toISOString(), bitis: x.bitis || new Date().toISOString() };
+        donemSec(k.id, donem);
+      }
+    });
+    kok.classList.add('pano-donem');
+    return kok;
+  }
+
+  /** @param {string} id @param {object} donem */
+  async function donemSec(id, donem) {
+    const onceki = kayitli;
+    const uygula = (/** @type {any} */ d) => (d ? kartDonemle(d, id, donem) : d);
+    kayitli = { ...kayitli, duzen: uygula(kayitli.duzen) };
+    if (calisan) calisan = uygula(calisan);
+    ciz();
+    const k = etkinDuzen().kartlar.find((x) => x.id === id);
+    duyur(`${k ? kartAdi(k) : 'Kart'}: dönem ${donemMetni(donem)}.`);
+    /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(id)}"] .pano-donem .tarih-tetik`))?.focus({ preventScroll: true });
+    try {
+      const y = await api('/platform/pano/donem', { govde: { projeId: proje.id, donemler: { [id]: donem } } });
+      kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || kayitli.sqlSonuclari };
+    } catch (e) {
+      kayitli = onceki;
+      if (calisan) calisan = kartDonemle(calisan, id, onceki.duzen.kartlar.find((x) => x.id === id)?.donem || gocDonemi());
+      ciz();
+      if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata');
+    }
   }
 
   /** Düzenleme kipinde kartın üstündeki araçlar. */
@@ -564,6 +686,7 @@ export function ozetPanosu(kap, s0) {
       alan('Kart başlığı', baslik, { zorunlu: true }),
       alan('Veritabanı bağlantısı', hedef, { zorunlu: true, yardim: 'Nöbetçi\'de tanımlı bağlantılar (Ayarlar > Entegrasyonlar). CANLI ortama ait bağlantıda ilk "Yenile" onay ister.' }),
       alan('Sorgu', sorgu, { zorunlu: true, yardim: `Yalnız okuma: tek SELECT ya da WITH … SELECT (INSERT, UPDATE, DELETE, DROP, EXEC ve ";" ile birden çok ifade reddedilir). Sorgu yalnız "Yenile"ye basınca çalışır; en çok ${se.sinirlar?.zamanAsimiSn ?? 15} sn ve ${se.sinirlar?.satirSiniri ?? 500} satır. Gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir.` }),
+      h('p', { class: 'soluk kucuk pano-donem-yardimi' }, ikon('takvim'), 'Sorguda :baslangic ve :bitis kullanırsanız kartta dönem seçebilirsiniz (ör. WHERE tarih BETWEEN :baslangic AND :bitis); değerler parametre olarak bağlanır.'),
       alan('Görünüm', gorunum),
       sutunAlani,
       bicimAlani,
@@ -670,17 +793,35 @@ export function ozetPanosu(kap, s0) {
     const hedefRozeti = h('span', { class: 'pano-hedef' });
     const yenile = h('button', { type: 'button', class: 'kucuk-dugme pano-yenile', 'aria-label': `Yenile: ${a.baslik}`, title: 'Sorguyu şimdi çalıştır' }, ikon('yenile'), 'Yenile');
     const onayAnahtari = `${proje.id}:${k.id}:${JSON.stringify([a.hedef, a.sorgu])}`;
+    // Sorguda :baslangic / :bitis varsa kart başlığında dönem seçimi (değerler sunucuda sürücü parametresi olarak bağlanır).
+    const donemli = kartDonemliMi(k);
     const sonucCiz = (sonuc) => {
       if (!sonuc) {
         yerlestir(sonVeri, ikon('saat'), 'Henüz yenilenmedi');
         yerlestir(govde, h('p', { class: 'soluk kucuk pano-bos-sonuc' }, 'Sorgu yalnız "Yenile"ye basınca çalışır; son sonuç burada saklanır.'));
         return;
       }
+      // Dönemli sonuç: hangi dönemle alındığı; kartın dönemi sonradan değiştiyse Yenile gerektiği söylenir (sorgu kendiliğinden çalışmaz).
+      const farkli = donemli && sonuc.donem && JSON.stringify(sonuc.donem.secim) !== JSON.stringify(k.donem || gocDonemi());
       yerlestir(sonVeri, ikon('saat'), `Son veri: ${sonVeriMetni(sonuc.zaman)}`,
-        sonuc.kesildi ? h('span', { class: 'pano-kesildi' }, ` · ilk ${Number(sonuc.satirSiniri || sonuc.satirlar.length).toLocaleString('tr-TR')} satır`) : null);
+        sonuc.donem ? h('span', { class: 'pano-sonuc-donemi' }, ` · ${donemMetni(sonuc.donem.secim)}`) : null,
+        sonuc.kesildi ? h('span', { class: 'pano-kesildi' }, ` · ilk ${Number(sonuc.satirSiniri || sonuc.satirlar.length).toLocaleString('tr-TR')} satır`) : null,
+        farkli ? h('span', { class: 'pano-donem-farki' }, ` · Seçili dönem (${donemMetni(k.donem || gocDonemi())}) için Yenile'ye basın.`) : null);
       // Sayı / yüzde / değişim: sabit ya da eşitlenmiş yükseklikte dikeyde ortalanır.
       govde.classList.toggle('dikey-orta', ['sayi', 'yuzde', 'degisim'].includes(a.gorunum));
-      yerlestir(govde, a.gorunum === 'tablo' ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet }) : sonucGorunumu(a, sonuc));
+      // Tablo yeniden kurulurken (sıralama, sütun taşıma / gizleme / genişlik) eski tablonun yüksekliği bir anlık sabitlenir ve
+      // tablonun yatay / dikey kaydırması ile sayfanın kaydırma konumu korunur.
+      kaydirmayiKoru(() => {
+        const eski = /** @type {HTMLElement | null} */ (govde.querySelector('.pano-tablo'));
+        const konum = eski ? [eski.scrollLeft, eski.scrollTop] : null;
+        if (eski) govde.style.setProperty('--pano-govde-yukseklik', `${Math.ceil(govde.getBoundingClientRect().height)}px`);
+        yerlestir(govde, a.gorunum === 'tablo'
+          ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet, goster: (g) => metinPenceresi({ ...g, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }) })
+          : sonucGorunumu(a, sonuc));
+        const yeni = /** @type {HTMLElement | null} */ (govde.querySelector('.pano-tablo'));
+        if (yeni && konum) { yeni.scrollLeft = konum[0]; yeni.scrollTop = konum[1]; }
+        govde.style.removeProperty('--pano-govde-yukseklik');
+      });
       tabloOdak = null;
     };
     // Tablo: sıralama yalnız ekranda; sütun sırası / görünürlük / genişlik kartın ayarına hemen kaydedilir (düzenleme kipi gerekmez;
@@ -709,7 +850,7 @@ export function ozetPanosu(kap, s0) {
         }
         // Kart yeniden kurulmasın (odak ve sıralama korunur): öğenin imzası güncel ayarla eşitlenir.
         const guncel = etkinDuzen().kartlar.find((x) => x.id === k.id);
-        if (guncel) { a = guncel.ayar; const o = ogeler.get(k.id); if (o) o.imza = `${guncel.tur}:${JSON.stringify(guncel.ayar ?? null)}`; }
+        if (guncel) { a = guncel.ayar; const o = ogeler.get(k.id); if (o) o.imza = kartImzasi(guncel); }
       } catch (e) {
         a = onceki;
         sonucCiz(kayitli.sqlSonuclari[k.id]);
@@ -751,7 +892,7 @@ export function ozetPanosu(kap, s0) {
       }
     });
     return h('section', { class: 'kart pano-karti pano-sql-karti', 'aria-labelledby': basId },
-      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik), h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, yenile)),
+      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik), h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, donemli ? donemSecici(k) : null, yenile)),
       sonVeri, durum, hata, govde);
   }
 
@@ -798,8 +939,19 @@ export function ozetPanosu(kap, s0) {
 
   // ---- Yükleme ----------------------------------------------------------------------------------------------------------
   pano.append(h('div', { class: 'iskelet pano-iskelet', 'aria-busy': 'true' }, h('span', { class: 'gorunmez', role: 'status' }, 'Yükleniyor…'), h('i', {}), h('i', { class: 'yarim' })));
-  api(`/platform/pano?projeId=${encodeURIComponent(proje.id)}`).then((y) => {
+  api(`/platform/pano?projeId=${encodeURIComponent(proje.id)}`).then(async (y) => {
     kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || {} };
+    // Göç: dönem seçimi olmayan döneme bağlı kartlar eski genel seçimi (yoksa "Tümü") alır ve kayıtlı düzene bir kez yazılır.
+    // Hiç kaydedilmemiş (varsayılan) düzen açılışta kaydedilmez: değer yalnız ekranda kullanılır; kullanıcı dönemi seçince yazılır.
+    const eksik = kayitli.duzen.kartlar.filter((k) => kartDonemliMi(k) && !k.donem);
+    if (!eksik.length) return;
+    const donem = gocDonemi();
+    for (const k of eksik) kayitli = { ...kayitli, duzen: kartDonemle(kayitli.duzen, k.id, donem) };
+    if (!y.kayitli) return;
+    try {
+      const g = await api('/platform/pano/donem', { govde: { projeId: proje.id, donemler: Object.fromEntries(eksik.map((k) => [k.id, donem])) } });
+      kayitli = { duzen: g.duzen, sqlSonuclari: g.sqlSonuclari || kayitli.sqlSonuclari };
+    } catch { /* yazılamadıysa bu oturumda yerel değer kullanılır; sonraki açılışta yeniden denenir */ }
   }).catch((e) => {
     if (e && e.durum === 423) return;
     bildir(`Pano düzeni okunamadı; varsayılan düzen gösteriliyor (${e && e.message ? e.message : String(e)}).`, 'hata');
@@ -817,6 +969,9 @@ export function ozetPanosu(kap, s0) {
 function sutunSiralari(secili, sutunlar) {
   return (secili || []).map((ad) => sutunlar.findIndex((x) => x.toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'))).filter((i) => i >= 0);
 }
+
+/** Hücre metni; uzun metin (ör. CLOB) tek satır kısaltılır (tablo dışındaki görünümler). @param {unknown} v @param {any} b */
+const kisaBicim = (v, b) => { const m = hucreBicimle(v, b); return uzunMetinMi(m) ? metinKisalt(m) : m; };
 
 /** Eşik renginin ekran okuyucu notu. @param {string | null} renk */
 const esikNotu = (renk) => (renk ? h('span', { class: 'gorunmez' }, ` (eşik: ${ESIK_RENKLERI.find((r) => r.anahtar === renk)?.ad ?? renk})`) : null);
@@ -849,7 +1004,7 @@ function sonucGorunumu(a, sonuc) {
     if (a.gorunum === 'yuzde') return yuzdeGorunumu(a, b, n, ham, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi');
     const renk = n === null ? null : esikRengi(n, a.esikler || []);
     const kutu = h('div', { class: `pano-sayi${renk ? ` esik-${renk}` : ''}` },
-      h('strong', { class: 'pano-sayi-deger' }, satirlar.length ? (n !== null ? sayiBicimle(n, b) : hucreBicimle(ham, b)) : '—'),
+      h('strong', { class: 'pano-sayi-deger' }, satirlar.length ? (n !== null ? sayiBicimle(n, b) : kisaBicim(ham, b)) : '—'),
       h('span', { class: 'pano-sayi-alt' }, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi'), esikNotu(renk));
     if (a.gorunum === 'degisim') kutu.append(degisimSatiri(sonuc, sutunlar[i], n, b));
     return kutu;
@@ -858,7 +1013,7 @@ function sonucGorunumu(a, sonuc) {
   // Tablo: tabloGorunumu (sqlKarti çağırır; sütun taşıma / gizleme / genişlik / sıralama).
   if (a.gorunum === 'liste') {
     const i = degerSirasi(secili);
-    const degerler = satirlar.map((r) => hucreBicimle(r[i], b)).filter((m) => m !== '');
+    const degerler = satirlar.map((r) => kisaBicim(r[i], b)).filter((m) => m !== '');
     return h('div', { class: 'pano-liste-kap' },
       h('ul', { class: 'pano-liste', 'aria-label': `${a.baslik}: ${sutunlar[i]}` }, degerler.slice(0, LISTE_EN_COK).map((m) => h('li', {}, m))),
       degerler.length > LISTE_EN_COK ? h('p', { class: 'soluk kucuk pano-liste-fazla' }, `+${(degerler.length - LISTE_EN_COK).toLocaleString('tr-TR')} daha`) : null);
@@ -870,11 +1025,11 @@ function sonucGorunumu(a, sonuc) {
       const n = gizli.has(sutunlar[degerI]) ? null : sayiyaCevir(r[degerI]);
       const renk = n === null ? null : esikRengi(n, a.esikler || []);
       return h('li', { class: `pano-kutucuk${renk ? ` esik-${renk}` : ''}` },
-        h('span', { class: 'pano-kutucuk-etiket' }, hucreBicimle(r[etiketI], b)),
-        h('strong', { class: 'pano-kutucuk-deger' }, n !== null ? sayiBicimle(n, b) : hucreBicimle(r[degerI], b)), esikNotu(renk));
+        h('span', { class: 'pano-kutucuk-etiket' }, kisaBicim(r[etiketI], b)),
+        h('strong', { class: 'pano-kutucuk-deger' }, n !== null ? sayiBicimle(n, b) : kisaBicim(r[degerI], b)), esikNotu(renk));
     }));
   }
-  const noktalar = satirlar.slice(0, a.gorunum === 'pasta' ? 500 : 60).map((r) => ({ etiket: hucreBicimle(r[etiketI], b), deger: sayiyaCevir(r[degerI]) ?? 0 }));
+  const noktalar = satirlar.slice(0, a.gorunum === 'pasta' ? 500 : 60).map((r) => ({ etiket: kisaBicim(r[etiketI], b), deger: sayiyaCevir(r[degerI]) ?? 0 }));
   if (a.gorunum === 'pasta') return pasta(a, b, noktalar, sutunlar[degerI]);
   return grafik(a, b, noktalar, sutunlar[degerI]);
 }
@@ -896,7 +1051,7 @@ function degisimSatiri(sonuc, sutun, n, b) {
 /** "Yüzde / oran": %83,4; hedef verilmişse hedefe göre dolan çubuk ya da ibre (SVG öznitelikleri; satır içi stil yok). */
 function yuzdeGorunumu(a, b, n, ham, alt) {
   if (n === null) {
-    return h('div', { class: 'pano-sayi' }, h('strong', { class: 'pano-sayi-deger' }, ham === null || ham === undefined ? '—' : hucreBicimle(ham, b)), h('span', { class: 'pano-sayi-alt' }, alt));
+    return h('div', { class: 'pano-sayi' }, h('strong', { class: 'pano-sayi-deger' }, ham === null || ham === undefined ? '—' : kisaBicim(ham, b)), h('span', { class: 'pano-sayi-alt' }, alt));
   }
   const p = yuzdeDegeri(n, b);
   const renk = esikRengi(p, a.esikler || []);
@@ -1007,7 +1162,8 @@ const GENISLIK_ADIMI = 16;
  * sıralama yalnız ekranda (t.siralama). Maskeli sütunlar maskeli kalır (değerler sunucudan maskeli gelir; gizlemek maskeyi kaldırmaz).
  * @param {any} a kart ayarı @param {any} sonuc
  * @param {{ siralama: { ad: string; yon: string }; kaydet: (sutunlar: string[], genislikler: Record<string, number>, odak: { ad: string; rol: string } | null) => void;
- *   sirala: (ad: string, odak: { ad: string; rol: string }) => void; odak: { ad: string; rol: string } | null }} t
+ *   sirala: (ad: string, odak: { ad: string; rol: string }) => void; odak: { ad: string; rol: string } | null;
+ *   goster: (g: { sutun: string; satirNo: number; metin: string; sutunlar: string[]; satir: unknown[]; donus: HTMLElement }) => void }} t
  */
 function tabloGorunumu(a, sonuc, t) {
   const b = bicimTemizle(a.bicim);
@@ -1065,9 +1221,19 @@ function tabloGorunumu(a, sonuc, t) {
   const tablo = h('table', { class: 'ozet-tablosu pano-tablo-tablosu' },
     h('colgroup', {}, gorunen.map((ad) => h('col', { width: genislikler[ad] ? String(genislikler[ad]) : null, 'data-sutun': ad }))),
     h('thead', {}, h('tr', {}, gorunen.map((ad, j) => basHucresi(ad, j)))),
-    h('tbody', {}, sirali.map((r) => h('tr', {}, gorunen.map((ad) => {
+    h('tbody', {}, sirali.map((r, satirI) => h('tr', {}, gorunen.map((ad) => {
       const v = r[tum.indexOf(ad)];
-      return h('td', { class: typeof v === 'number' ? 'sayi' : null }, hucreBicimle(v, b));
+      const metin = hucreBicimle(v, b);
+      if (!uzunMetinMi(metin)) return h('td', { class: typeof v === 'number' ? 'sayi' : null }, metin);
+      // Uzun metin (ör. CLOB'daki servis isteği): tek satır önizleme + "Görüntüle" (hücreye tıklamak da açar).
+      const ac = () => t.goster({ sutun: ad, satirNo: satirI + 1, metin, sutunlar: tum, satir: r, donus: dugme });
+      const dugme = h('button', { type: 'button', class: 'kucuk-dugme hayalet pano-hucre-goruntule', 'aria-label': `Görüntüle: ${ad}, ${satirI + 1}. satır`,
+        title: 'Metnin tamamını aç' }, 'Görüntüle');
+      dugme.addEventListener('click', (o) => { o.stopPropagation(); ac(); });
+      const td = h('td', { class: 'pano-uzun-hucre', title: 'Tamamını görmek için tıklayın' },
+        h('span', { class: 'pano-hucre-ic' }, h('span', { class: 'pano-hucre-onizleme' }, metinKisalt(metin)), dugme));
+      td.addEventListener('click', (o) => { if (!(/** @type {HTMLElement} */ (o.target).closest('button')) && !String(getSelection()?.toString() ?? '')) ac(); });
+      return td;
     })))));
 
   /** Başlık hücresi: sıralama düğmesi, sütun menüsü (⋯), genişlik tutamağı; başlık sürüklenerek taşınır. @param {string} ad @param {number} j */
@@ -1158,6 +1324,14 @@ function tabloGorunumu(a, sonuc, t) {
   }
 
   const kaydirma = h('div', { class: 'tablo-kaydirma pano-tablo', tabindex: '0', role: 'region', 'aria-label': `${a.baslik} sonucu` }, tablo);
+  // Home / End: tablo dikeyde kaymıyorsa tarayıcı bu tuşları sayfaya geçirir (sayfa başa / sona atlar). Tablo odaktayken yatayda
+  // başa / sona gider; sayfanın dikey konumu değişmez.
+  kaydirma.addEventListener('keydown', (o) => {
+    if ((o.key !== 'Home' && o.key !== 'End') || o.target !== kaydirma || o.ctrlKey || o.metaKey || o.altKey) return;
+    if (kaydirma.scrollHeight > kaydirma.clientHeight + 1) return;
+    o.preventDefault();
+    kaydirma.scrollLeft = o.key === 'Home' ? 0 : kaydirma.scrollWidth;
+  });
   const kap = h('div', { class: 'pano-tablo-kap' },
     h('div', { class: 'pano-tablo-araclari' }, sutunlarDugmesi,
       t.siralama.ad && t.siralama.yon ? h('span', { class: 'soluk kucuk' }, `Sıralı: ${t.siralama.ad} (${t.siralama.yon}; yalnız ekranda)`) : null),
@@ -1170,8 +1344,198 @@ function tabloGorunumu(a, sonuc, t) {
       const hedef = t.odak && t.odak.ad
         ? kap.querySelector(`th[data-sutun="${CSS.escape(t.odak.ad)}"] [data-rol="${t.odak.rol}"]`)
         : kap.querySelector('[data-rol="sutunlar"]');
-      /** @type {HTMLElement | null} */ (hedef)?.focus();
+      if (hedef) odakla(/** @type {HTMLElement} */ (hedef));
     });
   }
   return kap;
+}
+
+// ---- Uzun metin penceresi: tam metin (XML / JSON girintili), arama, kopyala, servis analizine örnek ekle -----------------------
+/** Aramada işaretlenen en çok eşleşme. */
+const EN_COK_ISARET = 500;
+const DURUMLAR = [['basarili', 'Başarılı'], ['hata', 'Hata verdi'], ['', 'Bilinmiyor']];
+
+/**
+ * Hücrenin tam metni penceresi. Kapanınca odak açan düğmeye döner (Esc ya da "Kapat").
+ * @param {{ proje: { id: string; ad: string }; kartBaslik: string; zaman: string; sutun: string; satirNo: number; metin: string;
+ *   sutunlar: string[]; satir: unknown[]; donus: HTMLElement }} g
+ */
+function metinPenceresi(g) {
+  const baslikId = yeniKimlik('pano-metin');
+  const bicim = metniBicimle(g.metin);
+  const kesik = g.metin.endsWith(KESILDI_EKI);
+  let bicimli = bicim.bicimlendi;
+  const pre = h('pre', { class: 'pano-metin-icerik', tabindex: '0', role: 'region', 'aria-label': `${g.sutun} metni` });
+  const ara = h('input', { type: 'search', class: 'pano-metin-ara', placeholder: 'Metinde ara', 'aria-label': 'Metinde ara', autocomplete: 'off', spellcheck: 'false' });
+  const sayac = h('span', { class: 'soluk kucuk pano-metin-sayac', role: 'status', 'aria-live': 'polite' });
+  const onceki = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Önceki eşleşme', title: 'Önceki eşleşme (Shift + Enter)', disabled: true }, h('span', { 'aria-hidden': 'true' }, '↑'));
+  const sonraki = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Sonraki eşleşme', title: 'Sonraki eşleşme (Enter)', disabled: true }, h('span', { 'aria-hidden': 'true' }, '↓'));
+  const kopyala = h('button', { type: 'button', class: 'kucuk-dugme pano-metin-kopyala' }, ikon('kopya'), 'Kopyala');
+  const bicimKutusu = h('input', { type: 'checkbox', checked: bicimli });
+  const bicimSecimi = bicim.bicimlendi ? h('label', { class: 'secenek kucuk pano-metin-bicim' }, bicimKutusu, `Girintili göster (${bicim.tur.toUpperCase()})`) : null;
+  const duyuru = h('span', { class: 'gorunmez', role: 'status', 'aria-live': 'polite' });
+  const ekleDugmesi = govdeGibiMi(g.metin)
+    ? h('button', { type: 'button', class: 'kucuk-dugme pano-ornek-ekle-dugmesi', 'aria-expanded': 'false' }, ikon('arti'), 'Bu isteği servis analizine örnek olarak ekle')
+    : null;
+  const ornekAlani = h('div', { class: 'pano-ornek-alani', hidden: true });
+  const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+  const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay pano-metin-penceresi', 'aria-labelledby': baslikId },
+    h('div', { class: 'diyalog-govde' },
+      h('h2', { id: baslikId }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('dosya')), `${g.sutun} · ${g.satirNo}. satır`),
+      h('p', { class: 'soluk kucuk pano-metin-bilgi' }, `${g.kartBaslik} · ${g.metin.length.toLocaleString('tr-TR')} karakter`,
+        bicim.bicimlendi ? ` · ${bicim.tur.toUpperCase()}` : '', kesik ? ' · metin 100 KB\'ta kesildi' : ''),
+      h('div', { class: 'pano-metin-araclari' }, h('span', { class: 'pano-metin-arama' }, ikon('ara'), ara, onceki, sonraki, sayac), bicimSecimi, kopyala, ekleDugmesi),
+      ornekAlani, pre, duyuru),
+    h('div', { class: 'diyalog-alt' }, kapat));
+
+  /** @type {HTMLElement[]} */
+  let isaretler = [];
+  let etkin = -1;
+  const gosterilen = () => (bicimli ? bicim.metin : g.metin);
+  const etkinYap = (/** @type {number} */ i) => {
+    if (!isaretler.length) return;
+    isaretler[etkin]?.classList.remove('etkin');
+    etkin = (i + isaretler.length) % isaretler.length;
+    const m = isaretler[etkin];
+    m.classList.add('etkin');
+    // Yalnız metin kutusu kaydırılır (sayfa ve pencere yerinde kalır).
+    pre.scrollTop = Math.max(0, m.offsetTop - pre.clientHeight / 3);
+    sayac.textContent = `${etkin + 1} / ${isaretler.length}${isaretler.length >= EN_COK_ISARET ? '+' : ''}`;
+  };
+  const ciz = () => {
+    const metin = gosterilen();
+    const q = ara.value.trim();
+    isaretler = [];
+    etkin = -1;
+    if (!q) { pre.replaceChildren(document.createTextNode(metin)); sayac.textContent = ''; onceki.disabled = sonraki.disabled = true; return; }
+    const kucuk = metin.toLocaleLowerCase('tr');
+    const aranan = q.toLocaleLowerCase('tr');
+    const parcalar = /** @type {Node[]} */ ([]);
+    let i = 0;
+    while (isaretler.length < EN_COK_ISARET) {
+      const j = kucuk.indexOf(aranan, i);
+      if (j < 0) break;
+      if (j > i) parcalar.push(document.createTextNode(metin.slice(i, j)));
+      const m = h('mark', { class: 'pano-metin-eslesme' }, metin.slice(j, j + aranan.length));
+      isaretler.push(m);
+      parcalar.push(m);
+      i = j + aranan.length;
+    }
+    parcalar.push(document.createTextNode(metin.slice(i)));
+    pre.replaceChildren(...parcalar);
+    onceki.disabled = sonraki.disabled = !isaretler.length;
+    if (isaretler.length) etkinYap(0); else sayac.textContent = 'Eşleşme yok';
+  };
+  let bekleyen = 0;
+  ara.addEventListener('input', () => { clearTimeout(bekleyen); bekleyen = window.setTimeout(ciz, 120); });
+  ara.addEventListener('keydown', (o) => {
+    if (o.key === 'Enter') { o.preventDefault(); clearTimeout(bekleyen); if (etkin < 0) ciz(); else etkinYap(etkin + (o.shiftKey ? -1 : 1)); }
+  });
+  onceki.addEventListener('click', () => etkinYap(etkin - 1));
+  sonraki.addEventListener('click', () => etkinYap(etkin + 1));
+  bicimKutusu.addEventListener('change', () => { bicimli = bicimKutusu.checked; ciz(); });
+  // Kopyala: veritabanındaki metnin kendisi (biçimlenmemiş).
+  kopyala.addEventListener('click', async () => {
+    let tamam = false;
+    try { await navigator.clipboard.writeText(g.metin); tamam = true; } catch {
+      const alanMetin = h('textarea', { class: 'gorunmez', readonly: true, 'aria-hidden': 'true', tabindex: '-1' });
+      alanMetin.value = g.metin;
+      diyalog.append(alanMetin);
+      alanMetin.select();
+      try { tamam = document.execCommand('copy'); } catch { tamam = false; }
+      alanMetin.remove();
+      kopyala.focus();
+    }
+    duyuru.textContent = tamam ? 'Metin panoya kopyalandı.' : 'Kopyalanamadı; metni seçip Ctrl + C ile kopyalayın.';
+    bildir(duyuru.textContent, tamam ? 'basari' : 'hata');
+  });
+  ekleDugmesi?.addEventListener('click', () => {
+    const acik = ornekAlani.hidden;
+    ornekAlani.hidden = !acik;
+    ekleDugmesi.setAttribute('aria-expanded', String(acik));
+    if (acik && !ornekAlani.childElementCount) ornekFormu(ornekAlani, g, () => diyalog.close());
+    if (acik) /** @type {HTMLElement | null} */ (ornekAlani.querySelector('select, input'))?.focus();
+  });
+  kapat.addEventListener('click', () => diyalog.close());
+  diyalog.addEventListener('close', () => {
+    diyalog.remove();
+    if (g.donus.isConnected) g.donus.focus({ preventScroll: true });
+  });
+  ciz();
+  document.body.append(diyalog);
+  diyalog.showModal();
+  ara.focus();
+}
+
+/**
+ * "Bu isteği servis analizine örnek olarak ekle": servis + metot (gövdenin kök / işlem adına göre önerilir), örnek adı ve durumu.
+ * Örnek metodun örnek istekler listesine mevcut kayıt ucuyla eklenir (POST /platform/servis/kaydet; servise istek atılmaz).
+ * @param {HTMLElement} kap @param {Parameters<typeof metinPenceresi>[0]} g @param {() => void} kapat
+ */
+function ornekFormu(kap, g, kapat) {
+  const q = encodeURIComponent;
+  yerlestir(kap, h('div', { class: 'iskelet', 'aria-busy': 'true' }, h('span', { class: 'gorunmez', role: 'status' }, 'Servisler yükleniyor…'), h('i', {})));
+  api(`/platform/servisler?projeId=${q(g.proje.id)}`).then(({ servisler }) => {
+    const liste = (servisler || []).filter((s) => (s.ayarlar?.operasyonlar || []).length);
+    if (!liste.length) {
+      yerlestir(kap, h('p', { class: 'not-kutusu uyari' }, 'Bu projede metodu olan servis yok. Önce ', h('a', { href: '#/servisler' }, 'Servisler'), '\'den servis ekleyin.'));
+      return;
+    }
+    const kok = govdeKokAdi(g.metin);
+    let oneri = '';
+    for (const s of liste) {
+      const m = metotOner(kok, s.ayarlar.operasyonlar.map((o) => o.ad));
+      if (m) { oneri = `${s.id}|${m}`; break; }
+    }
+    const metot = h('select', {}, h('option', { value: '' }, 'Servis ve metot seçin'),
+      liste.map((s) => h('optgroup', { label: s.ad }, s.ayarlar.operasyonlar.map((o) => h('option', { value: `${s.id}|${o.ad}`, selected: `${s.id}|${o.ad}` === oneri }, `${s.ad} › ${o.ad}`)))));
+    const zaman = satirZamani(g.sutunlar, g.satir) ?? sonVeriMetni(g.zaman);
+    const ad = h('input', { type: 'text', maxlength: 80, autocomplete: 'off', value: `${g.kartBaslik} · ${zaman}`.slice(0, 80) });
+    const durumOnerisi = durumOner(g.sutunlar, g.satir);
+    const grup = yeniKimlik('pano-ornek-durum');
+    const durum = h('fieldset', { class: 'pano-ornek-durum' }, h('legend', {}, 'Durum'),
+      DURUMLAR.map(([d, e]) => h('label', { class: 'secenek' }, h('input', { type: 'radio', name: grup, value: d, checked: d === (durumOnerisi?.durum ?? '') }), e)),
+      durumOnerisi ? h('p', { class: 'soluk kucuk' }, `Satırdaki ${durumOnerisi.sutun} = ${durumOnerisi.deger} değerine göre önerildi; doğruysa olduğu gibi bırakın.`) : null);
+    const sonuc = h('div', { class: 'pano-ornek-sonuc', role: 'status', 'aria-live': 'polite' });
+    const ekle = h('button', { type: 'submit', class: 'birincil' }, ikon('arti'), 'Örneği ekle');
+    const form = h('form', { class: 'pano-ornek-formu', novalidate: true, 'aria-label': 'Servis analizine örnek ekle' },
+      h('p', { class: 'soluk kucuk' }, kok ? `Gövdenin işlemi: ${kok}.` : 'Gövdenin işlem adı bulunamadı; metodu seçin.',
+        ' Örnek yalnız kaydedilir; servise istek atılmaz.'),
+      alan('Servis ve metot', metot, { zorunlu: true }), alan('Örneğin adı', ad), durum, h('div', { class: 'dugmeler' }, ekle), sonuc);
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      const ayrac = metot.value.indexOf('|');
+      const servisId = ayrac > 0 ? metot.value.slice(0, ayrac) : '';
+      const op = ayrac > 0 ? metot.value.slice(ayrac + 1) : '';
+      if (!servisId || !op) { yerlestir(sonuc, h('p', { class: 'alan-uyarisi' }, 'Servis ve metodu seçin.')); metot.focus(); return; }
+      const secili = /** @type {HTMLInputElement | null} */ (durum.querySelector('input:checked'));
+      try {
+        const y = await mesgulIken(ekle, 'Ekleniyor…', async () => {
+          const { servis: s } = await api(`/platform/servis?projeId=${q(g.proje.id)}&id=${q(servisId)}`);
+          const a = s.ayarlar || {};
+          const mevcut = (a.ornekIstekler || {})[op] || [];
+          if (mevcut.some((x) => String(x.govde).trim() === g.metin.trim())) throw new Error(`Bu gövde ${op} metodunda zaten örnek olarak var.`);
+          const yeni = { ad: ad.value.trim() || `${g.kartBaslik} · ${zaman}`, govde: g.metin, kaynak: 'elle', ...(secili && secili.value ? { durum: secili.value } : {}) };
+          // Mevcut örnekler maskeli gelir; sunucu aynı kimlikli örneklerin gizli değerlerini saklanan asıllarıyla geri yazar.
+          await api('/platform/servis/kaydet', { govde: { projeId: g.proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: a.yol,
+            ornekIstekler: { ...(a.ornekIstekler || {}), [op]: [...mevcut, yeni] } } });
+          return { s, yeni };
+        });
+        const adres = `#/servisler/s/${q(y.s.id)}/analiz`;
+        const git = h('a', { class: 'dugme birincil kucuk-dugme', href: adres }, ikon('ara'), 'Servisi analiz et');
+        git.addEventListener('click', () => kapat());
+        yerlestir(sonuc, h('div', { class: 'not-kutusu basari' }, ikon('onay'), `"${y.yeni.ad}" ${y.s.ad} › ${op} örneklerine eklendi. `, git));
+        ekle.disabled = true;
+        git.focus();
+      } catch (e) {
+        if (e && e.durum === 423) return;
+        yerlestir(sonuc, h('p', { class: 'alan-uyarisi', role: 'alert' }, e && e.message ? e.message : String(e)));
+      }
+    });
+    yerlestir(kap, form);
+    metot.focus();
+  }).catch((e) => {
+    if (e && e.durum === 423) return;
+    yerlestir(kap, h('div', { class: 'not-kutusu hata', role: 'alert' }, e && e.message ? e.message : String(e)));
+  });
 }
