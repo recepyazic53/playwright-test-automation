@@ -20,7 +20,7 @@ import { GENEL_SUTUNLAR, baslikNormal, benzerTablolar } from '../tablolar/tablo-
 import { birlestirmePlani } from '../tablolar/paket-test-verisi.mjs';
 import { ayniKavramMi, benzerAdMi, kisiAdKavrami, kokEslesirMi } from '../tablolar/doldur-onerisi.mjs';
 import { degerBasvurusuYaz, grupAnahtari, satirSabitlemesi } from '../tablolar/tablo-secimi.mjs';
-import { adTemizle, alanGrubu, hassasAlanMi, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
+import { adTemizle, alanGrubu, cokParcaliIsaretle, hassasAlanMi, tabloTaslagiKur, tumSecenekler } from './test-verisi-tablosu.mjs';
 import { gercekSecenekler, ornekDegerler } from '../tarama/zincir-kesfi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -75,64 +75,91 @@ export function adEslesmesi(alanAdi, sutunAdi) {
 const ayniDeger = (x, y) => kucuk(x) === kucuk(y);
 const bosMu = (/** @type {unknown} */ v) => v === undefined || v === null || v === '';
 
+/** @typedef {ReadonlyArray<{ id?: string; ad?: string; degerler: Record<string, unknown> }>} MevcutSatirlar */
+
+/**
+ * Plan sütunlarının bir mevcut tablonun sütunlarıyla ad eşlemesi (adEslesmesi; önce birebir, sonra benzer; her mevcut sütun bir kez).
+ * Gizli plan sütunu açık sütuna, liste (seçim) tablosu gizli sütuna eşlenmez.
+ * @param {PlanTablosu} t @param {{ sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }} m @returns {SutunAdayi['eslesme']}
+ */
+export function sutunEslemesi(t, m) {
+  const adlari = (/** @type {string} */ sutun) => [...new Set([sutun, ...t.alanlar.filter((a) => a.sutun === sutun).map((a) => a.etiket)].filter(Boolean))];
+  const kullanilan = new Set();
+  /** @type {SutunAdayi['eslesme']} */
+  const eslesme = [];
+  for (const tur of /** @type {const} */ (['birebir', 'benzer'])) {
+    for (const s of t.sutunlar) {
+      if (eslesme.some((e) => e.plan === s.ad)) continue;
+      const c = m.sutunlar.find((x) => !kullanilan.has(x.ad) && !(s.gizli && !x.gizli) && !(t.tur === 'liste' && x.gizli)
+        && adlari(s.ad).some((ad) => adEslesmesi(ad, x.ad) === tur));
+      if (c) { kullanilan.add(c.ad); eslesme.push({ plan: s.ad, hedef: c.ad, tur }); }
+    }
+  }
+  return eslesme;
+}
+
+/**
+ * Plan tablosu verilen eşlemeyle (plan sütunu → mevcut sütun) mevcut tabloya bağlanırsa: yeni sütunlar (eşlenmeyen plan sütunları),
+ * eklenecek satırlar ve (kayıt tablosunda) değerleri birebir aynı mevcut satır. Liste / zincir tablosunda eşlenen sütunlardaki değerleri
+ * aynı satır zaten varsa eklenmez; kayıt tablosunda tüm sütunlar eşlenmiş ve dolu değerler bir satırla aynıysa o satır kullanılır
+ * (gizli değer çözülmüş listede karşılaştırılır; çözülmemişse eşleşmez), yoksa yeni satır.
+ * @param {PlanTablosu} t @param {{ satirlar: MevcutSatirlar }} m @param {ReadonlyArray<{ plan: string; hedef: string }>} eslesme
+ */
+function baglamaSonucu(t, m, eslesme) {
+  const hedef = new Map(eslesme.map((e) => [e.plan, e.hedef]));
+  const yeniSutunlar = t.sutunlar.filter((s) => !hedef.has(s.ad));
+  /** @type {Array<Record<string, string | null>>} */
+  let eklenecek;
+  /** @type {{ id: string; ad: string } | null} */
+  let mevcutSatir = null;
+  let ortusme = 0;
+  if (t.tur === 'liste') {
+    const imza = (/** @type {(ad: string) => unknown} */ oku) => JSON.stringify(eslesme.map((e) => kucuk(oku(e.plan))));
+    const var_ = new Set(eslesme.length ? m.satirlar.map((r) => imza((ad) => r.degerler[/** @type {string} */ (hedef.get(ad))])) : []);
+    eklenecek = t.satirlar.filter((d) => !var_.has(imza((ad) => d[ad])));
+    ortusme = t.satirlar.length ? (t.satirlar.length - eklenecek.length) / t.satirlar.length : 0;
+  } else {
+    const d = t.satirlar[0] ?? {};
+    const dolu = eslesme.filter((e) => !bosMu(d[e.plan]));
+    const r = !yeniSutunlar.length && dolu.length ? m.satirlar.find((x) => dolu.every((e) => !bosMu(x.degerler[e.hedef]) && ayniDeger(x.degerler[e.hedef], d[e.plan]))) : undefined;
+    mevcutSatir = r?.id ? { id: String(r.id), ad: String(r.ad ?? '') } : null;
+    eklenecek = mevcutSatir ? [] : [...t.satirlar];
+  }
+  return { yeniSutunlar, eklenecek, mevcutSatir, ortusme };
+}
+
 /**
  * Plan tablosunun sütunlarını karşılayan MEVCUT tablolar ("Mevcut tabloya bağla" adayları). Yeni tablo önermeden önce TÜM tabloların
- * sütunları planın sütun adı ve bağlı alanların etiketiyle eşlenir (adEslesmesi; önce birebir, sonra benzer; her mevcut sütun bir kez).
- * Tablo ADI eşleşme sayılmaz (aynı adlı tablo "birleştir" akışındadır; burada atlanır).
+ * sütunları planın sütun adı ve bağlı alanların etiketiyle eşlenir (sutunEslemesi). Tablo ADI eşleşme sayılmaz (aynı adlı tablo
+ * "birleştir" akışındadır; burada atlanır).
  *  - Tek sütunlu planda sütun eşleşmeli; çok sütunlu planda (kişi / kart / zincir) en az iki sütun ve sütunların çoğu.
- *  - Gizli plan sütunu açık sütuna bağlanmaz; liste (seçim) tablosu gizli sütuna bağlanmaz.
  *  - kesin: tüm sütunlar birebir eşleşti (tek sütunlu liste tablosunda ayrıca planın değerlerinin en az yarısı mevcut sütunda var) →
  *    varsayılan seçili.
- *  - mevcutSatir: kayıt tablosunda senaryonun değerleri (tüm sütunlar eşlenmişse) birebir aynı olan satır (gizli değer çözülmüş
- *    listede karşılaştırılır; çözülmemişse eşleşmez) — senaryo o satıra sabitlenir; yoksa yeni satır eklenir.
+ *  - mevcutSatir: kayıt tablosunda senaryonun değerleri (tüm sütunlar eşlenmişse) birebir aynı olan satır — senaryo o satıra sabitlenir;
+ *    yoksa yeni satır eklenir (baglamaSonucu).
  * Sıra: kesin önce, sonra karşılanan sütun oranı, birebir sayısı, satır sayısı.
  * @param {PlanTablosu} t
- * @param {ReadonlyArray<{ id: string; ad: string; baglam?: boolean; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }>; satirlar: ReadonlyArray<{ id?: string; ad?: string; degerler: Record<string, unknown> }> }>} mevcutlar
+ * @param {ReadonlyArray<{ id: string; ad: string; baglam?: boolean; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }>; satirlar: MevcutSatirlar }>} mevcutlar
  * @returns {SutunAdayi[]}
  */
 export function mevcutSutunAdaylari(t, mevcutlar) {
-  const adlari = (/** @type {string} */ sutun) => [...new Set([sutun, ...t.alanlar.filter((a) => a.sutun === sutun).map((a) => a.etiket)].filter(Boolean))];
   /** @type {Array<SutunAdayi & { _oran: number; _birebir: number }>} */
   const sonuc = [];
   for (const m of mevcutlar) {
     if (m.baglam || String(m.id).startsWith('baglam_') || kucuk(m.ad) === kucuk(t.ad) || !m.sutunlar.length) continue;
-    const kullanilan = new Set();
-    /** @type {SutunAdayi['eslesme']} */
-    const eslesme = [];
-    for (const tur of /** @type {const} */ (['birebir', 'benzer'])) {
-      for (const s of t.sutunlar) {
-        if (eslesme.some((e) => e.plan === s.ad)) continue;
-        const c = m.sutunlar.find((x) => !kullanilan.has(x.ad) && !(s.gizli && !x.gizli) && !(t.tur === 'liste' && x.gizli)
-          && adlari(s.ad).some((ad) => adEslesmesi(ad, x.ad) === tur));
-        if (c) { kullanilan.add(c.ad); eslesme.push({ plan: s.ad, hedef: c.ad, tur }); }
-      }
-    }
+    const eslesme = sutunEslemesi(t, m);
     const n = t.sutunlar.length;
     const k = eslesme.length;
     if (!k || (n === 1 ? k !== 1 : k < 2 || k * 2 <= n)) continue;
-    const hedef = new Map(eslesme.map((e) => [e.plan, e.hedef]));
-    const yeniSutunlar = t.sutunlar.filter((s) => !hedef.has(s.ad)).map((s) => s.ad);
-    let eklenecekSatir = 0;
-    /** @type {{ id: string; ad: string } | null} */
-    let mevcutSatir = null;
-    let ortusme = 0;
-    if (t.tur === 'liste') {
-      const imza = (/** @type {(ad: string) => unknown} */ oku) => JSON.stringify(eslesme.map((e) => kucuk(oku(e.plan))));
-      const var_ = new Set(m.satirlar.map((r) => imza((ad) => r.degerler[/** @type {string} */ (hedef.get(ad))])));
-      eklenecekSatir = t.satirlar.filter((d) => !var_.has(imza((ad) => d[ad]))).length;
-      ortusme = t.satirlar.length ? (t.satirlar.length - eklenecekSatir) / t.satirlar.length : 0;
-    } else {
-      const d = t.satirlar[0] ?? {};
-      const dolu = eslesme.filter((e) => !bosMu(d[e.plan]));
-      const r = !yeniSutunlar.length && dolu.length ? m.satirlar.find((x) => dolu.every((e) => !bosMu(x.degerler[e.hedef]) && ayniDeger(x.degerler[e.hedef], d[e.plan]))) : undefined;
-      mevcutSatir = r?.id ? { id: String(r.id), ad: String(r.ad ?? '') } : null;
-      eklenecekSatir = mevcutSatir ? 0 : t.satirlar.length;
-    }
+    const b = baglamaSonucu(t, m, eslesme);
     const birebir = eslesme.filter((e) => e.tur === 'birebir').length;
     // Tek sütunlu listede ad tek başına az ayırt edici ("Durum"): değerlerin yarısı da ortak olmalı; çok sütunluda (zincir) tüm sütunların
     // birebir eşleşmesi yeter (gözlenen yeni kombinasyonlar o tabloya yeni satır olarak eklenir).
-    const kesin = k === n && birebir === n && (t.tur !== 'liste' || n >= 2 || ortusme >= 0.5);
-    sonuc.push({ id: m.id, ad: m.ad, eslesme, yeniSutunlar, kesin, satirSayisi: m.satirlar.length, eklenecekSatir, mevcutSatir, _oran: k / n, _birebir: birebir });
+    const kesin = k === n && birebir === n && (t.tur !== 'liste' || n >= 2 || b.ortusme >= 0.5);
+    sonuc.push({
+      id: m.id, ad: m.ad, eslesme, yeniSutunlar: b.yeniSutunlar.map((s) => s.ad), kesin, satirSayisi: m.satirlar.length, eklenecekSatir: b.eklenecek.length,
+      mevcutSatir: b.mevcutSatir, _oran: k / n, _birebir: birebir
+    });
   }
   return sonuc.sort((a, b) => Number(b.kesin) - Number(a.kesin) || b._oran - a._oran || b._birebir - a._birebir || b.satirSayisi - a.satirSayisi)
     .map(({ _oran, _birebir, ...x }) => x);
@@ -262,10 +289,12 @@ function zincirTablolari(g, kullanilanAdlar) {
 
 /**
  * @param {{ baslik: string; alanlar: Nesne[]; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string>;
- *   iliskiler?: ReadonlyArray<{ ust: string; alt: string }>; gozlemler?: ReadonlyArray<{ anahtar: string; secimler?: Record<string, unknown>; secenekler?: ReadonlyArray<{ deger: unknown; metin?: unknown }> }> }} g
+ *   iliskiler?: ReadonlyArray<{ ust: string; alt: string }>; gozlemler?: ReadonlyArray<{ anahtar: string; secimler?: Record<string, unknown>; secenekler?: ReadonlyArray<{ deger: unknown; metin?: unknown }> }> }} g0
  * @returns {KayitPlani}
  */
-export function planKur(g) {
+export function planKur(g0) {
+  // Çok parçalı alanlar (aynı satırda "Ad" + "Ad (2)" kutuları) tek kayıt: aynı tabloya, ayrı sütunlar olarak girer (cokParcaliIsaretle).
+  const g = { ...g0, alanlar: cokParcaliIsaretle(g0.alanlar, g0.degerler) };
   const kullanilanAdlar = new Set();
   // Önce zincirler (kendi tabloları); zincirdeki alanlar tek alan tablolarına girmez.
   const zincir = zincirTablolari(g, new Set());
@@ -316,7 +345,8 @@ export function planKur(g) {
   let ek = 0;
   for (const a of g.alanlar) {
     if (ek >= EN_COK_LISTE_TABLOSU) break;
-    if (kullanilanAlanlar.has(a.anahtar) || !SECIM_TURLERI.includes(String(a.tur)) || a.devreDisi || a.saltOkunur) continue;
+    // Çok parçalı alanın parçası kendi liste tablosunu açmaz (parçalar birlikte tek kayıttır).
+    if (kullanilanAlanlar.has(a.anahtar) || !SECIM_TURLERI.includes(String(a.tur)) || a.devreDisi || a.saltOkunur || a.parca) continue;
     /** @type {Map<string, { metin: string; kod: string }>} */
     const secenekler = new Map(tumSecenekler(a).map((x) => [kucuk(x.metin), x]));
     const etiket = String(a.etiket ?? '');
@@ -354,14 +384,26 @@ export function planOnizle(vt, projeId, plan, ekranId, anahtarlar) {
   const mevcutlar = tablolariListele(vt, projeId);
   const mevcutBaglar = ekranId ? ekranAlanBaglari(vt, ekranId) : {};
   const tabloAdi = (/** @type {string} */ id) => mevcutlar.find((x) => x.id === id)?.ad ?? null;
+  const hedefler = mevcutlar.filter((x) => !x.baglam && !String(x.id).startsWith('baglam_') && x.sutunlar.length);
   return {
     kaynak: 'hizli',
+    // Elle seçim için projenin tabloları (yalnız ad / sütun adı / gizlilik ve satır sayısı; değer yok): "Mevcut tabloya bağla" ve
+    // "Mevcut tabloya yeni sütun olarak ekle".
+    mevcutTablolar: hedefler.map((x) => ({
+      id: x.id, ad: x.ad, tur: x.kaynak?.tabloTuru === 'liste' ? 'liste' : 'kayit', sutunlar: x.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli === true })), satirSayisi: x.satirlar.length
+    })),
     tablolar: plan.tablolar.map((t) => {
       const m = mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
       const p = m ? birlestirmePlani(m, t) : null;
       const bagla = m ? [] : mevcutSutunAdaylari(t, mevcutlar).slice(0, EN_COK_BAGLA_ADAYI);
+      /** @type {Record<string, Record<string, string>>} */
+      const eslemeOnerileri = {};
+      for (const x of hedefler) {
+        const e = sutunEslemesi(t, x);
+        if (e.length) eslemeOnerileri[x.id] = Object.fromEntries(e.map((y) => [y.plan, y.hedef]));
+      }
       return {
-        ad: t.ad, tur: t.tur, aciklama: null, zincir: t.zincir ?? null,
+        ad: t.ad, tur: t.tur, aciklama: null, zincir: t.zincir ?? null, eslemeOnerileri,
         sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, karsilikSayisi: Object.keys(s.karsiliklar).length })),
         satirSayisi: t.satirlar.length, tekrarSayisi: 0,
         ornek: t.satirlar.slice(0, 5).map((d) => t.sutunlar.map((s) => (s.gizli ? null : d[s.ad] ?? null))),
@@ -418,11 +460,77 @@ export function varsayilanSecim(onizleme) {
 const listeSatirAdi = (d) => Object.values(d).filter((v) => !bosMu(v)).map(String).join(' › ').slice(0, 60).trim() || 'Satır';
 
 /**
+ * Elle sütun eşlemesi ("Mevcut tabloya bağla" — kullanıcı her plan sütunu için hedef sütunu seçti). Değer '' (ya da yok): o plan sütunu
+ * tabloya YENİ sütun olarak eklenir. Kurallar: hedef sütun tabloda olmalı, iki plan sütunu aynı sütuna gidemez, gizli plan sütunu açık
+ * sütuna, liste (seçim) tablosu gizli sütuna yazılamaz.
+ * @param {PlanTablosu} t @param {{ ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }} m @param {Record<string, unknown>} secilen
+ * @returns {Array<{ plan: string; hedef: string }>}
+ */
+function elleEslesme(t, m, secilen) {
+  /** @type {Array<{ plan: string; hedef: string }>} */
+  const sonuc = [];
+  const kullanilan = new Set();
+  for (const s of t.sutunlar) {
+    const h = typeof secilen[s.ad] === 'string' ? String(secilen[s.ad]).trim() : '';
+    if (!h) continue;
+    const c = m.sutunlar.find((x) => x.ad === h) ?? m.sutunlar.find((x) => kucuk(x.ad) === kucuk(h));
+    if (!c) throw new Error(`"${m.ad}" tablosunda "${h}" sütunu yok: özeti yenileyip yeniden seçin.`);
+    if (kullanilan.has(c.ad)) throw new Error(`"${m.ad}" tablosunun "${c.ad}" sütunu iki alana seçildi: her sütuna bir alan bağlanır.`);
+    if (s.gizli && !c.gizli) throw new Error(`"${s.ad}" gizli bir değer: "${m.ad}" tablosunun açık "${c.ad}" sütununa yazılamaz (gizli sütun seçin ya da yeni sütun ekleyin).`);
+    if (t.tur === 'liste' && c.gizli) throw new Error(`Seçim listesi "${m.ad}" tablosunun gizli "${c.ad}" sütununa bağlanamaz.`);
+    kullanilan.add(c.ad);
+    sonuc.push({ plan: s.ad, hedef: c.ad });
+  }
+  return sonuc;
+}
+
+/**
+ * Kullanıcının düzenlediği sütun adları (plan sütunu → ad). Boş ad, tekrar eden ad ve (verilmişse) mevcut sütunla çakışan ad kabul edilmez.
+ * @param {PlanTablosu} t @param {unknown} adlar @param {{ tablo?: string; mevcut?: ReadonlyArray<{ ad: string }> }} [s]
+ * @returns {Map<string, string>} plan sütunu → yazılacak ad
+ */
+function sutunAdlariDogrula(t, adlar, s = {}) {
+  const verilen = adlar && typeof adlar === 'object' ? /** @type {Record<string, unknown>} */ (adlar) : {};
+  /** @type {Map<string, string>} */
+  const sonuc = new Map();
+  const gorulen = new Set();
+  const mevcut = new Set((s.mevcut ?? []).map((x) => kucuk(x.ad)));
+  for (const x of t.sutunlar) {
+    const ham = verilen[x.ad];
+    const ad = typeof ham === 'string' ? adTemizle(ham) : x.ad;
+    if (!ad) throw new Error(`"${t.ad}" için "${x.ad}" sütununun adını yazın.`);
+    if (gorulen.has(kucuk(ad))) throw new Error(`"${t.ad}" için "${ad}" sütun adı iki kez yazıldı.`);
+    if (mevcut.has(kucuk(ad))) throw new Error(`"${s.tablo}" tablosunda "${ad}" sütunu zaten var: o sütuna bağlayın (Mevcut tabloya bağla) ya da başka ad yazın.`);
+    gorulen.add(kucuk(ad));
+    sonuc.set(x.ad, ad);
+  }
+  return sonuc;
+}
+
+/**
+ * Plan tablosunun sütunları yeniden adlandırılmış kopyası (satırlar, karşılıklar, senaryo seçimi ve alan bağları da). @param {PlanTablosu} t
+ * @param {(ad: string) => string} ad
+ * @returns {PlanTablosu}
+ */
+const adlandirilmis = (t, ad) => ({
+  ...t,
+  sutunlar: t.sutunlar.map((s) => ({ ...s, ad: ad(s.ad) })),
+  satirlar: t.satirlar.map((d) => Object.fromEntries(Object.entries(d).map(([k, v]) => [ad(k), v]))),
+  secilen: t.secilen ? Object.fromEntries(Object.entries(t.secilen).map(([k, v]) => [ad(k), v])) : null,
+  alanlar: t.alanlar.map((a) => ({ ...a, sutun: ad(a.sutun) }))
+});
+
+/**
  * Seçimle yazar (TEK işlemde: bir tablo yazılamazsa hiçbiri yazılmaz). 'atla' tablo yazılmaz (alanlar senaryoda düz değerle kalır).
- * Birleştirmede / bağlamada mevcut satır / sütunlar değişmez: eksik sütunlar, olmayan satırlar ve eksik karşılıklar eklenir.
- *  - 'bagla' (hedefId): plan sütunları mevcut tablonun EŞLEŞEN sütunlarına yazılır (mevcutSutunAdaylari ile yeniden hesaplanır). Kayıt
- *    tablosunda değer o tabloda zaten varsa senaryo o satıra satır kimliğiyle sabitlenir; yoksa yeni satır eklenir (adı: seçilen değerlerden
- *    satır adlarıyla aynı türde olan — ör. il —, yoksa senaryo adı). Liste / zincir tablosunda olmayan satırlar (kombinasyonlar) eklenir.
+ * Mevcut tabloya yazarken mevcut satır / sütunlar değişmez: eksik sütunlar, olmayan satırlar ve eksik karşılıklar eklenir.
+ *  - 'yeni' / 'yeniAd' (yeniAd): yeni tablo; sutunAdlari verilmişse sütunlar o adlarla (kullanıcı düzenledi).
+ *  - 'birlestir' (hedefId yoksa aynı adlı tablo): birlestirmePlani.
+ *  - 'bagla' (hedefId): plan sütunları mevcut tablonun sütunlarına yazılır. eslesme verilmişse (elle: plan sütunu → mevcut sütun; '' =
+ *    yeni sütun) o eşleme, yoksa otomatik aday (mevcutSutunAdaylari). Kayıt tablosunda değer o tabloda zaten varsa senaryo o satıra satır
+ *    kimliğiyle sabitlenir; yoksa yeni satır eklenir (adı: seçilen değerlerden satır adlarıyla aynı türde olan — ör. il —, yoksa senaryo
+ *    adı). Liste / zincir tablosunda olmayan satırlar (kombinasyonlar) eklenir.
+ *  - 'sutunEkle' (hedefId, sutunAdlari): plan sütunları mevcut tabloya YENİ sütun olarak eklenir (ad tabloda varsa hata: bağla önerilir);
+ *    mevcut satırların yeni hücreleri boş kalır; kaydın değerleri yeni satıra (adı 'bagla' ile aynı kural) yazılır.
  * @param {Veritabani} vt @param {string} projeId @param {KayitPlani} plan
  * @param {import('./kayit-plani.d.mts').PlanSecimi} secim @param {{ ekranAdi: string }} bilgi
  * @returns {import('./kayit-plani.d.mts').YazilanTablo[]}
@@ -438,6 +546,7 @@ function planYazIslem(vt, projeId, plan, secim, bilgi) {
   for (const t of plan.tablolar) {
     const sec = secim.tablolar?.[t.ad] ?? { islem: 'atla' };
     if (sec.islem === 'atla') continue;
+    if (!['yeni', 'yeniAd', 'birlestir', 'bagla', 'sutunEkle'].includes(sec.islem)) throw new Error(`"${t.ad}" için bilinmeyen seçim: ${sec.islem}.`);
     const mevcutlar = tablolariListele(vt, projeId, sec.islem === 'bagla' ? { cozulsun: true } : {});
     const kaynak = { tur: 'kayit', olusturan: 'Nöbetçi hızlı test', ekran: bilgi.ekranAdi.slice(0, 120), yazilma: new Date().toISOString() };
     const kayitSatiri = (/** @type {Set<string>} */ kullanilan, /** @type {Record<string, string | null>} */ d, /** @type {string} */ temel = plan.satirAdi) => {
@@ -447,55 +556,66 @@ function planYazIslem(vt, projeId, plan, secim, bilgi) {
       return { ad, ortamId: null, degerler: Object.fromEntries(Object.entries(d).filter(([, v]) => v !== null)) };
     };
     if (sec.islem === 'yeni' || sec.islem === 'yeniAd') {
-      const ad = sec.islem === 'yeniAd' ? String(sec.yeniAd ?? '').trim() : t.ad;
+      const ad = sec.islem === 'yeniAd' ? adTemizle(sec.yeniAd ?? '') : t.ad;
       if (!ad) throw new Error(`"${t.ad}" tablosu için yeni ad yazın.`);
       if (mevcutlar.some((x) => kucuk(x.ad) === kucuk(ad))) throw new Error(`"${ad}" adında bir tablo zaten var: birleştir, yeni ad ya da atla seçin.`);
+      const adlar = sutunAdlariDogrula(t, sec.sutunAdlari);
+      const sutunAdi = (/** @type {string} */ s) => adlar.get(s) ?? s;
+      const t2 = adlandirilmis(t, sutunAdi);
       const kullanilan = new Set();
-      const kayitSatirlari = t.tur === 'liste' ? [] : t.satirlar.map((d) => kayitSatiri(kullanilan, d));
+      const kayitSatirlari = t2.tur === 'liste' ? [] : t2.satirlar.map((d) => kayitSatiri(kullanilan, d));
       const id = tabloKaydet(vt, {
-        projeId, ad, tur: t.tur, kaynak,
-        sutunlar: t.sutunlar.map((x) => ({ ad: x.ad, gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar }) })),
-        satirlar: t.tur === 'liste' ? t.satirlar.map((d) => ({ ad: listeSatirAdi(d), ortamId: null, degerler: d })) : kayitSatirlari
+        projeId, ad, tur: t2.tur, kaynak,
+        sutunlar: t2.sutunlar.map((x) => ({ ad: x.ad, gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar }) })),
+        satirlar: t2.tur === 'liste' ? t2.satirlar.map((d) => ({ ad: listeSatirAdi(d), ortamId: null, degerler: d })) : kayitSatirlari
       });
       sonuc.push({
-        planAdi: t.ad, ad, id, islem: sec.islem, eklenenSatir: t.satirlar.length, eklenenSutun: t.sutunlar.length, hedef: (s) => s, pin: t.secilen,
-        satirId: kayitSatirlari.length ? satirKimligi(vt, projeId, id, kayitSatirlari[0].ad) : zincirSatiri(vt, projeId, id, t, (s) => s), tur: t.tur, plan: t
+        planAdi: t.ad, ad, id, islem: sec.islem, eklenenSatir: t.satirlar.length, eklenenSutun: t.sutunlar.length, hedef: sutunAdi, pin: t2.secilen,
+        satirId: kayitSatirlari.length ? satirKimligi(vt, projeId, id, kayitSatirlari[0].ad) : zincirSatiri(vt, projeId, id, t, sutunAdi), tur: t.tur, plan: t
       });
       continue;
     }
-    /** @type {{ eslesme: Map<string, string>; yeniSutunlar: PlanTablosu['sutunlar']; eklenecek: Array<Record<string, string | null>> }} */
+    /** @type {{ eslesme: Map<string, string>; yeniSutunlar: PlanTablosu['sutunlar']; eklenecek: Array<Record<string, string | null>>; adlar?: Map<string, string> }} */
     let p;
     /** @type {(typeof mevcutlar)[number] | undefined} */
     let mevcut;
     /** @type {string | null} */
     let hazirSatir = null;
     if (sec.islem === 'bagla') {
-      const aday = mevcutSutunAdaylari(t, mevcutlar).find((x) => x.id === sec.hedefId);
       mevcut = mevcutlar.find((x) => x.id === sec.hedefId);
-      if (!aday || !mevcut) throw new Error(`"${t.ad}" için seçilen mevcut tablo artık uygun değil: özeti yenileyip yeniden seçin.`);
-      const eslesme = new Map(aday.eslesme.map((e) => [e.plan, e.hedef]));
-      const imza = (/** @type {(ad: string) => unknown} */ oku) => JSON.stringify(t.sutunlar.map((s) => (eslesme.has(s.ad) ? kucuk(oku(s.ad)) : null)));
-      const m = /** @type {NonNullable<typeof mevcut>} */ (mevcut);
-      const var_ = new Set(m.satirlar.map((r) => imza((ad) => r.degerler[/** @type {string} */ (eslesme.get(ad))])));
-      hazirSatir = aday.mevcutSatir?.id ?? null;
-      p = {
-        eslesme, yeniSutunlar: t.sutunlar.filter((s) => !eslesme.has(s.ad)),
-        eklenecek: t.tur === 'liste' ? t.satirlar.filter((d) => !var_.has(imza((ad) => d[ad]))) : hazirSatir ? [] : [...t.satirlar]
-      };
+      /** @type {ReadonlyArray<{ plan: string; hedef: string }>} */
+      let eslesme;
+      if (sec.eslesme && typeof sec.eslesme === 'object') {
+        if (!mevcut) throw new Error(`"${t.ad}" için seçilen mevcut tablo bulunamadı: özeti yenileyip yeniden seçin.`);
+        eslesme = elleEslesme(t, mevcut, sec.eslesme);
+      } else {
+        const aday = mevcutSutunAdaylari(t, mevcutlar).find((x) => x.id === sec.hedefId);
+        if (!aday || !mevcut) throw new Error(`"${t.ad}" için seçilen mevcut tablo artık uygun değil: özeti yenileyip yeniden seçin.`);
+        eslesme = aday.eslesme;
+      }
+      const b = baglamaSonucu(t, mevcut, eslesme);
+      hazirSatir = b.mevcutSatir?.id ?? null;
+      p = { eslesme: new Map(eslesme.map((e) => [e.plan, e.hedef])), yeniSutunlar: b.yeniSutunlar, eklenecek: b.eklenecek };
+    } else if (sec.islem === 'sutunEkle') {
+      mevcut = mevcutlar.find((x) => x.id === sec.hedefId);
+      if (!mevcut) throw new Error(`"${t.ad}" için seçilen mevcut tablo bulunamadı: özeti yenileyip yeniden seçin.`);
+      const adlar = sutunAdlariDogrula(t, sec.sutunAdlari, { tablo: mevcut.ad, mevcut: mevcut.sutunlar });
+      p = { eslesme: new Map(), yeniSutunlar: t.sutunlar, eklenecek: [...t.satirlar], adlar };
     } else {
-      mevcut = sec.islem === 'birlestir' && sec.hedefId ? mevcutlar.find((x) => x.id === sec.hedefId) : mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
+      mevcut = sec.hedefId ? mevcutlar.find((x) => x.id === sec.hedefId) : mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
       if (!mevcut) throw new Error(`"${t.ad}" adında birleştirilecek tablo yok.`);
       p = birlestirmePlani(mevcut, t);
     }
     const m = /** @type {NonNullable<typeof mevcut>} */ (mevcut);
     const paketSutunu = (/** @type {string} */ mevcutAd) => t.sutunlar.find((x) => p.eslesme.get(x.ad) === mevcutAd);
-    // Yeni sütun adı mevcut bir sütunla çakışırsa numaralanır.
+    // Yeni sütun adı mevcut bir sütunla çakışırsa numaralanır (sutunEkle'de çakışma önceden hata).
     const adlar = new Set(m.sutunlar.map((x) => kucuk(x.ad)));
     /** @type {Map<string, string>} */
     const yeniAd = new Map();
     for (const x of p.yeniSutunlar) {
-      let ad = x.ad;
-      for (let i = 2; adlar.has(kucuk(ad)); i++) ad = `${x.ad.slice(0, 55)} ${i}`;
+      const temel = p.adlar?.get(x.ad) ?? x.ad;
+      let ad = temel;
+      for (let i = 2; adlar.has(kucuk(ad)); i++) ad = `${temel.slice(0, 55)} ${i}`;
       adlar.add(kucuk(ad));
       yeniAd.set(x.ad, ad);
     }
@@ -509,8 +629,8 @@ function planYazIslem(vt, projeId, plan, secim, bilgi) {
     ];
     const hedef = (/** @type {string} */ ad) => p.eslesme.get(ad) ?? yeniAd.get(ad) ?? ad;
     const kullanilan = new Set(m.satirlar.map((r) => kucuk(r.ad)));
-    // Bağlamada yeni kayıt satırının adı: seçilen değerlerden mevcut satır adlarıyla aynı türde olan (ör. satırlar il adlarıysa seçilen il).
-    const baglamAdi = sec.islem === 'bagla' && t.tur !== 'liste'
+    // Mevcut tabloya yeni kayıt satırının adı: seçilen değerlerden mevcut satır adlarıyla aynı türde olan (ör. satırlar il adlarıysa seçilen il).
+    const baglamAdi = (sec.islem === 'bagla' || sec.islem === 'sutunEkle') && t.tur !== 'liste'
       ? (plan.baglam ?? []).find((b) => b.secenekler.some((x) => kullanilan.has(kucuk(x))))?.secilen ?? plan.satirAdi : plan.satirAdi;
     const yeniSatirlar = p.eklenecek.map((d) => {
       const esli = Object.fromEntries(Object.entries(d).filter(([, v]) => v !== null).map(([k, v]) => [hedef(k), v]));
@@ -531,7 +651,7 @@ function planYazIslem(vt, projeId, plan, secim, bilgi) {
     }
     if (!satirId) satirId = zincirSatiri(vt, projeId, id, t, hedef);
     sonuc.push({
-      planAdi: t.ad, ad: m.ad, id, islem: sec.islem === 'bagla' ? 'bagla' : 'birlestir', eklenenSatir: p.eklenecek.length, eklenenSutun: p.yeniSutunlar.length, hedef,
+      planAdi: t.ad, ad: m.ad, id, islem: sec.islem === 'bagla' || sec.islem === 'sutunEkle' ? sec.islem : 'birlestir', eklenenSatir: p.eklenecek.length, eklenenSutun: p.yeniSutunlar.length, hedef,
       pin: t.secilen ? Object.fromEntries(Object.entries(t.secilen).map(([k, v]) => [hedef(k), v])) : null, satirId: satirId ? String(satirId) : null, tur: t.tur, plan: t
     });
   }

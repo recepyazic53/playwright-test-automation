@@ -9,7 +9,13 @@ export type PlanTablosu = {
 };
 /** baglam: kullanıcının seçtiği değerler (seçim alanları) ve alanın tüm seçenekleri — mevcut tabloya eklenen satırın adı için. */
 export type KayitPlani = { satirAdi: string; tablolar: PlanTablosu[]; baglam?: Array<{ secilen: string; secenekler: string[] }> };
-export type PlanSecimi = { tablolar?: Record<string, { islem: string; yeniAd?: string; hedefId?: string }>; baglantilar?: string[] };
+/**
+ * Tablo başına karar: yeni / yeniAd / birlestir / bagla / sutunEkle / atla. eslesme (bagla, elle): plan sütunu → mevcut sütun ('' = yeni sütun);
+ * sutunAdlari (yeni, yeniAd, sutunEkle): plan sütunu → yazılacak sütun adı (kullanıcı düzenledi).
+ */
+export type PlanSecimi = {
+  tablolar?: Record<string, { islem: string; yeniAd?: string; hedefId?: string; eslesme?: Record<string, string>; sutunAdlari?: Record<string, string> }>; baglantilar?: string[];
+};
 export type YazilanTablo = {
   planAdi: string; ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number; hedef: (sutun: string) => string;
   pin: Record<string, string> | null; satirId: string | null; tur: 'kayit' | 'liste'; plan: PlanTablosu;
@@ -21,8 +27,12 @@ export type SutunAdayi = {
 };
 export type PlanOnizlemesi = {
   kaynak: 'hizli';
+  /** Projenin tabloları (elle bağlama / yeni sütun için; değer yok). */
+  mevcutTablolar: Array<{ id: string; ad: string; tur: 'kayit' | 'liste'; sutunlar: Array<{ ad: string; gizli: boolean }>; satirSayisi: number }>;
   tablolar: Array<{
-    ad: string; tur: 'kayit' | 'liste'; aciklama: null; zincir: string[] | null; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
+    ad: string; tur: 'kayit' | 'liste'; aciklama: null; zincir: string[] | null;
+    /** Mevcut tablo kimliği → (plan sütunu → ad olarak eşleşen sütun): elle bağlamada önseçim. */
+    eslemeOnerileri: Record<string, Record<string, string>>; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
     ornek: Array<Array<string | null>>; bagliAlanlar: string[];
     bagla: SutunAdayi[];
     benzer: Array<{ id: string; ad: string; puan: number; eklenecekSatir: number }>;
@@ -46,6 +56,7 @@ export declare const VARSAYILAN_ONERI_SAYISI: number;
 export declare const ZINCIR_EN_COK_SATIR: number;
 
 export declare function adEslesmesi(alanAdi: unknown, sutunAdi: unknown): 'birebir' | 'benzer' | null;
+export declare function sutunEslemesi(t: PlanTablosu, m: { sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }): SutunAdayi['eslesme'];
 export declare function mevcutSutunAdaylari(
   t: PlanTablosu,
   mevcutlar: ReadonlyArray<{ id: string; ad: string; baglam?: boolean; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }>; satirlar: ReadonlyArray<{ id?: string; ad?: string; degerler: Record<string, unknown> }> }>

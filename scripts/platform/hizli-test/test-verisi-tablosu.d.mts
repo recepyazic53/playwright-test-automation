@@ -1,6 +1,8 @@
 export declare const KISI_TABLOSU: string;
 export declare const KART_TABLOSU: string;
 export declare function adTemizle(m: unknown, en?: number): string;
+/** Çok parçalı alanları işaretler (kopya): parçalara parca = { temel, ad, sira, sayi }. */
+export declare function cokParcaliIsaretle(alanlar: ReadonlyArray<Record<string, any>>, degerler?: Record<string, { deger: unknown }>): Array<Record<string, any>>;
 export declare function alanGrubu(a: Record<string, any>): { tablo: string; sutun: string };
 export declare function hassasAlanMi(a: Record<string, any>, yer: { tablo: string; sutun: string }, ekler?: ReadonlyArray<string>): boolean;
 export declare function tumSecenekler(a: Record<string, any>): Array<{ metin: string; kod: string }>;
