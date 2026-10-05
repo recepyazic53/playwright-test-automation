@@ -173,7 +173,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'SQL kartı',
-        metin: 'SQL kartı Ayarlar > Entegrasyonlar\'daki bir veritabanı bağlantısında yalnız okuma sorgusu (tek SELECT ya da WITH … SELECT) çalıştırır; yalnız "Yenile"ye basınca çalışır, sayfa açılınca çalışmaz. Kartın üstünde verinin alındığı saat ("Son veri") yazar. En çok 15 sn ve 500 satır; gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir. Bağlantı CANLI ortama aitse ilk "Yenile" onay ister; "Veritabanı okuma" izni gerekir.',
+        metin: 'SQL kartı Ayarlar > Entegrasyonlar\'daki bir veritabanı bağlantısında yalnız okuma sorgusu (tek SELECT ya da WITH … SELECT) çalıştırır; yalnız "Yenile"ye basınca çalışır, sayfa açılınca çalışmaz. Kartın üstünde verinin alındığı saat ("Son veri") yazar. En çok 15 sn ve 500 satır; gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir. Bağlantı CANLI ortama aitse ilk "Yenile" onay ister; "Veritabanı okuma" izni gerekir. SQL kartı sonuçları yedeğe girmez (kartın kendisi girer): yedekten yüklenen panoda kart boş gelir, "Yenile" ile dolar.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Görünüm', alt: 'sayı, yüzde, değişim, tablo, liste, kutucuk, grafik', ikon: 'grafik' }, { baslik: 'Biçim', alt: 'ondalık, ön / son ek, tarih', ikon: 'duzenle' }, { baslik: 'Yenile', ikon: 'yenile' }] },
         ipucu: 'Görünüm tek sayı, yüzde, değişim ya da durum kutucuklarıysa renk eşiği verin (eşik biçimlenmemiş değere, yüzdede yüzde değerine bakar; ör. değer > 0 ise kırmızı): sorun olduğunda kart kendiliğinden kırmızı görünür.'
       }
@@ -697,7 +697,7 @@ export const REHBERLER = {
   'ayarlar-yedekleme': {
     baslik: 'Yedekleme',
     adimlar: [
-      { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır. Yedeğin tamamı yüklenince (ya da seçmeli içe aktarmada Ayarlar\'daki "izinler" kaydı alınınca) yedekteki izinler ve ortamların türleri (Test / Canlı) olduğu gibi geçerli olur; Nöbetçi açıldığında bir kez hangi izinlerin açık olduğunu gösteren bir uyarı çıkar ("Tamam" ya da "İzinlere git" ile kapatılınca kimse için bir daha çıkmaz).', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
+      { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. SQL kartı sonuçları yedeğe girmez (Özet panosu düzeni girer; yükledikten sonra kartta "Yenile"ye basın).İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır. Yedeğin tamamı yüklenince (ya da seçmeli içe aktarmada Ayarlar\'daki "izinler" kaydı alınınca) yedekteki izinler ve ortamların türleri (Test / Canlı) olduğu gibi geçerli olur; Nöbetçi açıldığında bir kez hangi izinlerin açık olduğunu gösteren bir uyarı çıkar ("Tamam" ya da "İzinlere git" ile kapatılınca kimse için bir daha çıkmaz).', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
       { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' },
       {
         baslik: 'Medyayı incelt (kademeli saklama)',

@@ -46,6 +46,7 @@ import {
 } from './yedek.mjs';
 import { medyaDosyaAdiGecerliMi, medyaKlasoru as medyaKlasoruBul } from './medya.mjs';
 import { IZIN_AYAR_ANAHTARI } from './guvenlik/izinler.mjs';
+import { PANO_AYAR_ANAHTARI, panoSonuclariniTemizle } from './sonuclar/ozet-panosu.mjs';
 import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
 import { eslemeyiUygula, projeEslemesiBilgisi } from './ice-aktarma-esleme.mjs';
 import { projeKalintilari } from './proje-yonetimi.mjs';
@@ -631,7 +632,9 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   let gecmiseYazilan = 0;
   // Seçmeli içe aktarma izinleri yalnız Ayarlar'daki "izinler" kaydı eklenir / üzerine yazılırsa değiştirir (uyarı o zaman).
   let izinlerYazildi = false;
-  const izinKaydiMi = (/** @type {string} */ tablo, /** @type {string} */ id) => tablo === 'ayarlar' && id === IZIN_AYAR_ANAHTARI;
+  // Özet panosu düzeni seçildiyse SQL kartı sonuç önbelleği temizlenir (sonuçlar yedeğe girmez; kartlar boş gelir, "Yenile" ile dolar).
+  const panoSecildi = Boolean(secilen.get('ayarlar')?.has(PANO_AYAR_ANAHTARI));
+  const izinKaydiMi =(/** @type {string} */ tablo, /** @type {string} */ id) => tablo === 'ayarlar' && id === IZIN_AYAR_ANAHTARI;
   const yapan = secenekler.yapan ?? `ice-aktarma:${hazirlik.manifest.makine?.id ?? 'bilinmeyen'}`;
 
   /**
@@ -746,6 +749,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
         }
       }
     }
+    if (panoSecildi) panoSonuclariniTemizle(vt);
     // DENETİM (aynı transaction): kimliği değişen yedek projesinin kimliğiyle yeni kayıt yazılmadı, proje kaydı oluşmadı.
     // Aksi halde her şey geri alınır (hata transaction'ı ROLLBACK eder).
     for (const [p, once] of onceki) {

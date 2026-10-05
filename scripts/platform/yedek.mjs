@@ -66,6 +66,7 @@ import {
 } from './kasa.mjs';
 import { MEDYA_SIHIRLI, medyaCoz, medyaDosyaAdiGecerliMi, medyaKlasoru, medyaSifrele } from './medya.mjs';
 import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
+import { PANO_SONUC_ANAHTARI } from './sonuclar/ozet-panosu.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -74,6 +75,18 @@ import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
  */
 
 export const YEDEK_UZANTISI = '.tayedek';
+
+/**
+ * Yedeğe GİRMEYEN ayarlar kayıtları (ayarlar.anahtar). Özet panosu SQL kartlarının son sonuçları yalnız önbellektir ("Yenile" ile
+ * yeniden alınır): yedek alınırken atılır, eski yedeklerde varsa açılırken yok sayılır. Pano düzeni ("ozetPanosu") yedeğe girer.
+ */
+export const YEDEK_DISI_AYARLAR = Object.freeze([PANO_SONUC_ANAHTARI]);
+
+/** Yedek dışı ayarlar kaydı mı? @param {unknown} satir */
+function yedekDisiAyarMi(satir) {
+  return typeof satir === 'object' && satir !== null
+    && YEDEK_DISI_AYARLAR.includes(String(/** @type {Record<string, unknown>} */ (satir).anahtar));
+}
 
 /**
  * Dışa aktarılan yedeğin önerilen dosya adı: çalışma alanı adı + yerel tarih/saat (ör. "Ekip-Calisma-2026-09-30-1415.tayedek").
@@ -320,6 +333,7 @@ function icerikHazirla(vt, secim, klasor, ilerleme) {
     tablolar[t.ad] = mevcutTablolar.has(t.ad) ? vt.tumu(`SELECT * FROM ${t.ad} ORDER BY rowid`) : [];
     ilerleme('veri okunuyor', 2 + Math.round((8 * (i + 1)) / TABLOLAR.length));
   });
+  tablolar.ayarlar = (tablolar.ayarlar ?? []).filter((s) => !yedekDisiAyarMi(s));
   /** @type {Array<{ id: string; yol: string; boyut: number; tur: string }>} */
   const medyaListesi = [];
   /** @type {Record<string, { sayi: number; bayt: number }>} */
@@ -799,6 +813,8 @@ function icerikDogrula(icerik, surum) {
   const bilinen = new Map(TABLOLAR.map((t) => [t.ad, t]));
   // Şemadan kaldırılmış tablolar (eski yedeklerde) yok sayılır.
   for (const ad of KALDIRILAN_TABLOLAR) delete /** @type {Record<string, unknown>} */ (i.tablolar)[ad];
+  // Eski yedeklerde yedek dışı ayarlar (ör. SQL kartı sonuçları) varsa yok sayılır.
+  if (Array.isArray(i.tablolar.ayarlar)) i.tablolar.ayarlar = i.tablolar.ayarlar.filter((s) => !yedekDisiAyarMi(s));
   for (const [ad, satirlar] of Object.entries(i.tablolar)) {
     const tablo = bilinen.get(ad);
     if (!tablo) throw new YedekHatasi('VERI', `Yedekte bilinmeyen tablo: "${ad}".`);
@@ -960,6 +976,9 @@ export function tamYukleYaz(vt, tablolar, kasa, kasaAnahtari, ilerleme = () => {
     for (const t of TABLOLAR) {
       const tSutun = /** @type {string[]} */ (sutunlar.get(t.ad));
       for (const satir of tablolar[t.ad] ?? []) {
+        // Hedefteki ayarlar (SQL kartı sonuç önbelleği dahil) yukarıda silindi; yedek dışı kayıtlar yedekten de yazılmaz:
+        // geri yüklenen panodaki SQL kartları boş gelir ("Yenile" ile dolar).
+        if (t.ad === 'ayarlar' && yedekDisiAyarMi(satir)) continue;
         satirEkle(vt, t.ad, satir, tSutun);
         if (++yazilan % 500 === 0) ilerleme('yazılıyor', 60 + Math.round((35 * yazilan) / toplam));
       }

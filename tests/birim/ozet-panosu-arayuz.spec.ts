@@ -246,6 +246,7 @@ test('SQL kartı: yalnız okuma uyarısı; yalnız Yenile\'de çalışır (sayfa
   const sayiKarti = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: 'Hatalı kayıtlar' }) });
   const tabloKarti = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: 'Son kayıtlar' }) });
   await expect(sayiKarti.locator('.pano-son-veri')).toHaveText('Henüz yenilenmedi');
+  await expect(sayiKarti.locator('.pano-bos-sonuc')).toHaveText('Henüz veri yok — Yenile\'ye basın.');
   await expect(sayiKarti).toContainText('test-db');
   expect(sorgular()).toEqual([]);
   expect(yenilemeler()).toBe(0);
