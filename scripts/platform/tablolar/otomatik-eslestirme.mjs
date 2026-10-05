@@ -37,7 +37,8 @@ const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLower
 export function otomatikEslestir(vt, projeId, girdi) {
   const { girdiler } = ekranGirdileri(vt, projeId, girdi.ekranId, { tumTipler: true });
   const baglar = etkinAlanBaglari(vt, girdi.ekranId);
-  const tablolar = tablolariListele(vt, projeId).filter((t) => !t.id.startsWith(BAGLAM_ONEKI));
+  // Servis tabloları (yalnız servis isteklerinde kullanılan değerler) ekran alanlarına kendiliğinden önerilmez; elle seçilebilir.
+  const tablolar = tablolariListele(vt, projeId).filter((t) => !t.id.startsWith(BAGLAM_ONEKI) && t.kaynak?.tabloTuru !== 'servis');
   const bagsiz = girdiler.filter((g) => !baglar[g.id] && TIPLER.has(g.tip));
 
   /** @typedef {{ tablo: typeof tablolar[number]; sutun: typeof tablolar[number]['sutunlar'][number]; puan: number; neden: string }} Aday */

@@ -37,6 +37,29 @@ export function cikmaEki(ad) {
   return `'${sert ? 't' : 'd'}${kalin ? 'a' : 'e'}n`;
 }
 
+/** Servis tablosu (kaynak.tabloTuru 'servis'): yalnız servis isteklerinde kullanılan değerler. @param {any} t */
+const servisTablosuMu = (t) => Boolean(t && t.kaynak && t.kaynak.tabloTuru === 'servis');
+/** Servis tablolarının ayrı grubu (ekran tablolarının sonunda). */
+export const SERVIS_TABLOLARI_GRUBU = 'Servis verileri (ekranda karşılığı olmayan)';
+
+/**
+ * Tablo sütunu seçimi seçenekleri: ekran tabloları tablo başına <optgroup>; servis tabloları listenin sonunda tek ayrı grupta
+ * (seçilebilir ama ekran tablolarıyla karışmaz). @param {any[]} tablolar @param {boolean} gizliOlur
+ * @param {{ tablo?: string; sutun?: string } | null | undefined} secili
+ */
+function tabloSecenekleri(tablolar, gizliOlur, secili) {
+  const secenek = (/** @type {any} */ t, /** @type {any} */ c) => h('option', {
+    value: `${t.id}\u0001${c.ad}`, selected: Boolean(secili && secili.tablo === t.id && secili.sutun === c.ad)
+  }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`);
+  const sutunlar = (/** @type {any} */ t) => t.sutunlar.filter((/** @type {any} */ c) => gizliOlur || !c.gizli);
+  const servis = tablolar.filter(servisTablosuMu);
+  const servisSecenekleri = servis.flatMap((t) => sutunlar(t).map((/** @type {any} */ c) => secenek(t, c)));
+  return [
+    ...tablolar.filter((t) => !servisTablosuMu(t)).map((t) => h('optgroup', { label: t.ad }, sutunlar(t).map((/** @type {any} */ c) => secenek(t, c)))),
+    servisSecenekleri.length ? h('optgroup', { label: SERVIS_TABLOLARI_GRUBU, 'data-servis-tablolari': '' }, servisSecenekleri) : null
+  ];
+}
+
 /** @param {HTMLElement} kap @param {{ proje: { id: string } }} s @param {{ id: string; ad: string }} ekran */
 export async function ekranBaglariSekmesi(kap, s, ekran) {
   yerlestir(kap, iskelet('liste'));
@@ -125,9 +148,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
   /** Tablo sütunu seçimi (seçenek bağı): boş = varsayılan (üstteki bağ). @param {string} ad @param {any} secili @param {boolean} gizliOlur @param {string} odak */
   const sutunSecimi = (ad, secili, gizliOlur, odak) => h('select', { 'aria-label': ad, 'data-odak': odak },
     h('option', { value: '' }, '— varsayılan (üstteki bağ) —'),
-    tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
-      value: `${t.id}\u0001${c.ad}`, selected: Boolean(secili && secili.tablo === t.id && secili.sutun === c.ad)
-    }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))));
+    tabloSecenekleri(tablolar, gizliOlur, secili));
   /** Bağlı satırın "Seçime göre değişsin" bölümü. @param {any} g @param {any} kendi @param {boolean} gizliOlur */
   function secimeGoreBolumu(g, kendi, gizliOlur) {
     const adaylar = kontrolAdaylari(g);
@@ -199,9 +220,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       // Bağlamak gerekmez: tabloya bağlı değil ve seçenekleri modelde tanımlı ya da senaryo ayarı. Bağlanınca ana listeye geçer.
       const gerekmez = !b && (Boolean(g.modeldeSecenek) || Boolean(g.senaryoAyari));
       const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu`, 'data-alan': g.id }, h('option', { value: '' }, modelde ? '— seçenekler ekranda tanımlı (bağlamak gerekmez) —' : '— bağlı değil —'),
-        tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
-          value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
-        }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
+        tabloSecenekleri(tablolar, gizliOlur, b),
         b && !sutun ? h('option', { value: '__yok', selected: true }, 'Bulunamadı (tablo ya da sütun silinmiş)') : null);
       sec.addEventListener('change', () => {
         if (sec.value === '__yok') return;

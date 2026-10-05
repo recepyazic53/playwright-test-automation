@@ -52,7 +52,7 @@ function kopya(t) {
       : [{ ad: 'Değer', eskiAd: null, gizli: false, tip: 'metin', karsiliklar: {} }],
     satirlar: t ? t.satirlar.map((r) => ({ id: r.id, ad: r.ad || '', ortamId: r.ortamId, degerler: { ...r.degerler }, doluGizli: new Set(r.doluGizli), degisti: false })) : [],
     silinen: new Set(), degisti: !t, baglam: Boolean(t && t.baglam),
-    // Kullanıcının seçtiği tablo türü ('kayit' | 'liste'); null: seçilmedi (görünen tür sezgiden / kayıtlı türden).
+    // Kullanıcının seçtiği tablo türü ('kayit' | 'liste' | 'servis'); null: seçilmedi (görünen tür sezgiden / kayıtlı türden).
     tur: null
   };
 }
@@ -92,7 +92,7 @@ function tabloGrubuDurumuYaz(anahtar, kapali) {
  * @param {T[]} liste
  * @param {{ ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }} [ek] projedeki ekran adları ve tablo kimliği →
  *   alan bağlarında kullanan ekranlar (sunucu: /platform/tablolar?baglam=1)
- * @returns {{ kayitlar: T[]; ekranlar: Map<string, T[]> }}
+ * @returns {{ kayitlar: T[]; ekranlar: Map<string, T[]>; servisler: T[] }}
  */
 export function tablolariGrupla(liste, ek = {}) {
   const ekranAdlari = new Set((ek.ekranAdlari || []).map(kucuk));
@@ -103,9 +103,13 @@ export function tablolariGrupla(liste, ek = {}) {
   const kayitlar = [];
   /** @type {Map<string, T[]>} */
   const ekranlar = new Map();
+  /** @type {T[]} */
+  const servisler = [];
   for (const t of liste) {
     const desen = AD_DESENI.exec(String(t.ad || ''));
     const tur = t.kaynak && t.kaynak.tabloTuru;
+    // Servis tablosu yalnız kullanıcı seçince olur (sezgi önermez): ayrı "Servis verileri" grubu.
+    if (!t.baglam && tur === 'servis') { servisler.push(t); continue; }
     const kaynakli = Boolean(t.kaynak && t.kaynak.tur);
     const bagli = Boolean(/** @type {any} */ (t).id && kullanim[/** @type {any} */ (t).id]?.length);
     const ekranListesi = tur === 'liste' || (tur !== 'kayit' && (kaynakli || Boolean(desen && (t.sutunlar.length === 1 || bagli || ekranAdiMi(desen[1].trim())))));
@@ -114,7 +118,7 @@ export function tablolariGrupla(liste, ek = {}) {
     if (!ekranlar.has(ekran)) ekranlar.set(ekran, []);
     /** @type {T[]} */ (ekranlar.get(ekran)).push(t);
   }
-  return { kayitlar, ekranlar: new Map([...ekranlar.entries()].sort(([a], [b]) => a.localeCompare(b, 'tr'))) };
+  return { kayitlar, ekranlar: new Map([...ekranlar.entries()].sort(([a], [b]) => a.localeCompare(b, 'tr'))), servisler };
 }
 
 const KARSILIK_ADIM = 200;
@@ -486,13 +490,14 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
   const degistiMi = () => Boolean(is && (is.degisti || is.silinen.size || is.satirlar.some((r) => r.degisti)));
   /**
    * Düzenlenen tablonun görünen türü: kullanıcının seçtiği; yoksa var olan tabloda listedeki grubu (kayıtlı tür ya da sezgi —
-   * tablolariGrupla), yeni tabloda öneri (tek sütun: liste tablosu; birden çok sütun: kayıt tablosu).
-   * @returns {'kayit' | 'liste'}
+   * tablolariGrupla), yeni tabloda öneri (tek sütun: liste tablosu; birden çok sütun: kayıt tablosu). Servis tablosu önerilmez;
+   * yalnız kullanıcı seçer (ya da kayıtlı türdür).
+   * @returns {'kayit' | 'liste' | 'servis'}
    */
   function gorunenTur() {
     if (is.tur) return is.tur;
     const t = is.id ? liste.find((x) => x.id === is.id) : null;
-    if (t) return tablolariGrupla([t], grupBilgisi).kayitlar.length ? 'kayit' : 'liste';
+    if (t) { const g = tablolariGrupla([t], grupBilgisi); return g.servisler.length ? 'servis' : g.kayitlar.length ? 'kayit' : 'liste'; }
     if (is.sutunlar.length === 1) return 'liste';
     return tablolariGrupla([{ ad: is.ad, sutunlar: is.sutunlar, kaynak: null }], grupBilgisi).kayitlar.length ? 'kayit' : 'liste';
   }
@@ -533,7 +538,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
   function solCiz() {
     const a = kucuk(listeArama);
     const uyan = liste.filter((t) => !a || kucuk(t.ad).includes(a) || kucuk(t.kaynak?.ekran).includes(a));
-    const { kayitlar, ekranlar } = tablolariGrupla(uyan, grupBilgisi);
+    const { kayitlar, ekranlar, servisler } = tablolariGrupla(uyan, grupBilgisi);
     const seciliGrup = (tl) => tl.some((t) => t.id === seciliId);
     const ekranGruplari = [...ekranlar.entries()].map(([ekran, tl]) => grupCiz(`ekran:${ekran}`, ekran, tl.map(tabloDugmesi), 'alt-grup', Boolean(a) || seciliGrup(tl)));
     const ekranToplam = [...ekranlar.values()].flat();
@@ -542,7 +547,8 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
     yerlestir(listeKap,
       liste.length && !uyan.length ? h('p', { class: 'soluk kucuk tablo-grubu-bos' }, 'Aramayla eşleşen tablo yok.') : null,
       kayitlar.length ? grupCiz('kayit', 'Kişi ve kayıt verileri', kayitlar.map(tabloDugmesi), 'ust-grup', Boolean(a) || seciliGrup(kayitlar)) : null,
-      ekranToplam.length ? grupCiz('ekran-listeleri', 'Ekran listeleri', ekranGruplari, 'ust-grup', Boolean(a) || seciliGrup(ekranToplam)) : null);
+      ekranToplam.length ? grupCiz('ekran-listeleri', 'Ekran listeleri', ekranGruplari, 'ust-grup', Boolean(a) || seciliGrup(ekranToplam)) : null,
+      servisler.length ? grupCiz('servis-verileri', 'Servis verileri', servisler.map(tabloDugmesi), 'ust-grup', Boolean(a) || seciliGrup(servisler)) : null);
     if (!solKap.firstChild) {
       yerlestir(solKap, h('nav', { class: 'kart tablo-listesi', 'aria-label': 'Tablolar' },
         h('div', { class: 'arama-kutusu tablo-listesi-arama', hidden: !liste.length }, ikon('ara'), listeAramaG),
@@ -750,7 +756,8 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
 
     /**
      * Tablo türü seçimi (yeni tabloda "bu tablo ne tutuyor?" sorusu; var olanda şu anki sınıflandırma açıkça): kayıt tablosu →
-     * "Kişi ve kayıt verileri", liste tablosu → "Ekran listeleri". Seçim Kaydet'le yazılır (kaynak.tabloTuru).
+     * "Kişi ve kayıt verileri", liste tablosu → "Ekran listeleri", servis tablosu → "Servis verileri" (kayıt tablosu gibi çalışır;
+     * yalnız servis isteklerinde kullanılır, önerilmez). Seçim Kaydet'le yazılır (kaynak.tabloTuru).
      */
     function turSecimi() {
       if (is.baglam) return null;
@@ -758,13 +765,14 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
       const secili = gorunenTur();
       const secenekler = [
         ['kayit', 'Kayıt tablosu', 'Kişi, müşteri, kart gibi kayıtlar: bir satırın değerleri birlikte kullanılır (ör. Ad | Kimlik no | Telefon). Listede “Kişi ve kayıt verileri” altında.'],
-        ['liste', 'Liste tablosu', 'Ekrandaki bir seçim listesinin seçenekleri (ör. İl listesi, İl → İlçe). Listede “Ekran listeleri” altında.']
+        ['liste', 'Liste tablosu', 'Ekrandaki bir seçim listesinin seçenekleri (ör. İl listesi, İl → İlçe). Listede “Ekran listeleri” altında.'],
+        ['servis', 'Servis tablosu', 'Yalnız servis isteklerinde kullanılan, ekranda karşılığı olmayan değerler (ör. yazdırma türü, Channel, kanal / kullanıcı kodları). Listede “Servis verileri” altında.']
       ];
       return h('fieldset', { class: 'tablo-turu-secimi', 'data-tablo-turu': secili },
         h('legend', {}, is.id ? 'Tablo türü' : 'Tablo türü — bu tablo ne tutuyor?'),
         h('div', { class: 'tablo-turu-secenekleri' }, secenekler.map(([d, etiket, aciklama]) => {
           const r = h('input', { type: 'radio', name: ad, value: d, checked: secili === d });
-          r.addEventListener('change', () => { if (!r.checked) return; is.tur = /** @type {'kayit' | 'liste'} */ (d); is.degisti = true; durumCiz(); });
+          r.addEventListener('change', () => { if (!r.checked) return; is.tur = /** @type {'kayit' | 'liste' | 'servis'} */ (d); is.degisti = true; durumCiz(); });
           return h('label', { class: 'tablo-turu-secenegi' }, r, h('span', {}, h('b', {}, etiket), h('small', { class: 'soluk' }, aciklama)));
         })),
         is.tur || is.id ? null : h('small', { class: 'soluk' }, 'Sütun sayısına ve tablo adına göre önerildi; değiştirebilirsiniz. Kaydedince tablo bu türle listelenir.'));

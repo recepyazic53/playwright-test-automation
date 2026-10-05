@@ -146,6 +146,7 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   const baglar = etkinAlanBaglari(vt, ekran.id);
   const tablolar = tablolariListele(vt, projeId, { cozulsun: true }).filter((t) => !t.id.startsWith(BAGLAM_ONEKI));
   const ek = tabloEkranKullanimi(vt, projeId);
+  // Yalnız kayıt tabloları: servis tabloları (yalnız servis isteklerinde kullanılan değerler) ekran alanlarına önerilmez.
   const kayitTablolari = tablolar.filter((t) => tabloTuru(t, ek) === 'kayit');
   const ortamAdi = new Map(ortamlariListele(vt, projeId).map((o) => [o.id, o.ad]));
 

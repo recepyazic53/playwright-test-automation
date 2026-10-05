@@ -24,7 +24,7 @@ import { kasaOnbellegi, onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }} TabloSutunu */
 /** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[]; guncellenme?: string }} TabloSatiri */
-/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' }} TabloKaynagi */
+/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' | 'servis' }} TabloKaynagi */
 /** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean; kaynak?: TabloKaynagi | null }} Tablo */
 
 export const BAGLAM_ONEKI = 'baglam_';
@@ -198,6 +198,12 @@ const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
 });
 // Gizli işareti olmayan eski alanlarda (tablolardan önceki kayıtlar) sır niteliğindeki adlar gizli sayılır (gizli-adlar.mjs).
 
+/** Geçerli tablo türü mü (kaynak.tabloTuru)? 'servis': kayıt tablosu gibi çalışır, yalnız servis isteklerinde kullanılır.
+ * @param {unknown} tur @returns {tur is 'kayit' | 'liste' | 'servis'} */
+export function tabloTuruGecerliMi(tur) {
+  return tur === 'kayit' || tur === 'liste' || tur === 'servis';
+}
+
 /**
  * Tabloyu (sütunlar + değişen satırlar) tek işlemde kaydeder.
  * - sutunlar: [{ ad, eskiAd?, gizli, karsiliklar? }] — eskiAd verilen sütunun mevcut satırlardaki değerleri yeni ada taşınır;
@@ -206,7 +212,8 @@ const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
  *   kayıtlı değer korunur; '' siler. ad boşsa mevcut ad korunur (yeni satırda değerlerden üretilir).
  * - silinenSatirlar: satır kimlikleri.
  * - kaynak: ekran paketinden içe aktarımda tablonun kaynağı (verilmezse mevcut kaynak korunur).
- * - tur: 'kayit' (kişi / kayıt verisi) | 'liste' (ekran listesi); kaynak.tabloTuru olarak saklanır (verilmezse değişmez).
+ * - tur: 'kayit' (kişi / kayıt verisi) | 'liste' (ekran listesi) | 'servis' (yalnız servis isteklerinde kullanılan değerler);
+ *   kaynak.tabloTuru olarak saklanır (verilmezse değişmez).
  * @param {Veritabani} vt
  * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; tur?: unknown }} girdi
  * @returns {string} tablo kimliği
@@ -272,7 +279,7 @@ export function tabloKaydet(vt, girdi) {
     }
     // Tablo türü (arayüzde "Tablo ekle"de sorulur / düzenleyicide değiştirilir): kaynak.tabloTuru'na yazılır, kaynağın diğer
     // bilgileri korunur. Verilmezse (eski istemciler) kaynak ve tür olduğu gibi kalır.
-    const tur = girdi.tur === 'kayit' || girdi.tur === 'liste' ? girdi.tur : null;
+    const tur = tabloTuruGecerliMi(girdi.tur) ? girdi.tur : null;
     const kaynak = tur ? { ...(mevcut?.kaynak ?? {}), ...(girdi.kaynak ?? {}), tabloTuru: tur } : girdi.kaynak;
     const tabloId = testVerisiTuruKaydet(vt, { id: mevcut?.id, projeId: girdi.projeId, ad, alanlar, ...(kaynak ? { kaynak: /** @type {Record<string, string>} */ (kaynak) } : {}) });
     // Mevcut satırın adı korunur: ekran senaryoları eski kayıtları adıyla (ör. tc1) seçiyor olabilir.

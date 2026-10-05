@@ -56,6 +56,16 @@ export function varsayilanOzeti(v) {
 }
 
 /**
+ * Servis alanı bağlarken tablo sırası: servis tabloları (kaynak.tabloTuru 'servis'; yalnız servis isteklerinde kullanılan değerler)
+ * önce, diğerleri kendi sıralarıyla sonra. Yeni dizi döner.
+ * @template {{ kaynak?: { tabloTuru?: string } | null }} T @param {ReadonlyArray<T>} tablolar @returns {T[]}
+ */
+export function servisTablolariOnce(tablolar) {
+  const servisMi = (/** @type {T} */ t) => Boolean(t.kaynak && t.kaynak.tabloTuru === 'servis');
+  return [...tablolar.filter(servisMi), ...tablolar.filter((t) => !servisMi(t))];
+}
+
+/**
  * @param {{
  *   ad: string;                                  // metot adı (etiketlerde)
  *   sema: import('./servis-govdesi.mjs').OperasyonSemasi;   // WSDL şeması (ekler hariç)
@@ -66,7 +76,7 @@ export function varsayilanOzeti(v) {
  *   kurallar?: Record<string, string>;            // servisin hesaplama kuralları (tarih kuralları dahil); verilirse "Hesaplama kuralları" grubu
  *   kuralEkle?: (ad: string, kural: string) => Promise<void> | void;   // "+ Yeni kural…" kaydı (kurallar'a da eklemeli)
  *   etki?: (yol: string, kural: string) => string | null;   // kurala bağlanınca etki notu (hangi senaryolar zaten kuraldan alıyor)
- *   tablolar?: Array<{ id: string; ad: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satirlar: Array<{ degerler: Record<string, string | null> }> }>;
+ *   tablolar?: Array<{ id: string; ad: string; kaynak?: { tabloTuru?: string } | null; sutunlar: Array<{ ad: string; gizli: boolean }>; satirlar: Array<{ degerler: Record<string, string | null> }> }>;
  *   ust?: HTMLElement;                            // tablonun üstünde gösterilen bölüm (servis analizi: örnek istekler)
  *   analiz?: { satir: (yol: string) => HTMLElement | null; bagRozeti?: (yol: string) => HTMLElement | null };   // satır altı öneriler, seçim yanında tablo önerisi (servis analizi)
  *   tabloyuYenile?: () => void;                   // burada atanır: tabloyu yeniden çizer (öneri uygulanınca)
@@ -107,7 +117,7 @@ export function metotAlanTablosu(s) {
     const kurallar = s.kurallar || {};
     const kuralVar = Boolean(b && b.kural && Object.hasOwn(kurallar, b.kural));
     const tarihMi = st.alan && (st.alan.tip === 'tarih' || st.alan.tip === 'tarihSaat');
-    const tabloGruplari = (s.tablolar || []).map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', {
+    const tabloGruplari = servisTablolariOnce(s.tablolar || []).map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', {
       value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
     }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`))));
     // Hesaplama kuralları (tarih kuralları dahil): tarih / tarih-saat alanlarında üstte.

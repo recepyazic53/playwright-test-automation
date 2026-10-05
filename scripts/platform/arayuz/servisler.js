@@ -27,7 +27,7 @@ import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-s
 import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
 import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
-import { metotKutulari } from './servis-alanlari.js';
+import { metotKutulari, servisTablolariOnce } from './servis-alanlari.js';
 import { servisAnalizi } from './servis-analizi.mjs';
 import { kosuOnerileri } from './kosu-ogrenmesi.mjs';
 import { servisKosuPaneliniKenaraAl, servisKosusuBaslat } from './servis-kosu-paneli.js';
@@ -1210,7 +1210,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (!sutun) {
       const sec = h('select', { 'aria-label': `${alanT.ad} tablo sütunu` },
         h('option', { value: '' }, v.deger ? `Bulunamadı: ${v.deger}` : '— tablo sütunu seçin —'),
-        tablolar.map((x) => h('optgroup', { label: x.ad }, x.sutunlar.map((c) => h('option', { value: basvuru(x.ad, c.ad) }, `${x.ad} → ${c.ad}`)))));
+        servisTablolariOnce(tablolar).map((x) => h('optgroup', { label: x.ad }, x.sutunlar.map((c) => h('option', { value: basvuru(x.ad, c.ad) }, `${x.ad} → ${c.ad}`)))));
       sec.addEventListener('change', () => { if (sec.value) { v.deger = sec.value; tabloCiz(); } });
       return h('span', { class: 'tablo-degeri' }, sec, tablolar.length ? null : h('span', { class: 'soluk kucuk' }, 'Test verisinde tablo yok (Test verisi > Tablolar).'));
     }
