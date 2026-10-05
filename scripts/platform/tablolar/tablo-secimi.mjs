@@ -27,6 +27,22 @@ const BASVURU = new RegExp(`^\\s*(${AD_KALIBI})(?:\\[(${ETIKET_KALIBI})\\])?\\.(
  */
 
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
+/**
+ * Tablo / sütun ADI karşılaştırması için kucuk (aynı sonuç), bellekli: satır süzmede her satırda aynı birkaç ad yeniden küçültülüyordu
+ * (toLocaleLowerCase('tr') pahalı). Yalnız adlar için kullanılır (değerler — sırlar dahil — belleğe alınmaz).
+ * @type {Map<string, string>}
+ */
+const kucukAdlar = new Map();
+const kucukAd = (/** @type {unknown} */ x) => {
+  const s = String(x ?? '');
+  let k = kucukAdlar.get(s);
+  if (k === undefined) {
+    k = kucuk(s);
+    if (kucukAdlar.size >= 5000) kucukAdlar.clear();
+    kucukAdlar.set(s, k);
+  }
+  return k;
+};
 
 /** "Tablo.Sütun" / "Tablo[etiket].Sütun" (+ "|biçim") → { tablo, etiket, sutun, bicim } | null. @param {string} ad @returns {Basvuru | null} */
 export function basvuruCoz(ad) {
@@ -66,7 +82,7 @@ export function kismiMaske(deger) {
 export const grupAnahtari = (tabloId, etiket = '') => `${tabloId}|${etiket}`;
 
 /** @template {{ ad: string }} T @param {T[]} liste @param {string} ad @returns {T | undefined} */
-const adla = (liste, ad) => liste.find((x) => kucuk(x.ad) === kucuk(ad));
+const adla = (liste, ad) => liste.find((x) => kucukAd(x.ad) === kucukAd(ad));
 /** @param {Tablo[]} tablolar @param {string} ad */
 export const tabloBul = (tablolar, ad) => adla(tablolar, ad);
 /** @param {Tablo} tablo @param {string} ad */
@@ -87,12 +103,12 @@ export const satirSabitlemesi = (satirId) => ({ [SATIR_KIMLIGI]: String(satirId)
  * @param {Tablo} tablo @param {Record<string, string>} [secim] @param {{ ortamId?: string | null; haric?: string }} [s]
  */
 export function uyanSatirlar(tablo, secim = {}, s = {}) {
-  const kosullar = Object.entries(secim).filter(([sutun, d]) => d !== '' && d !== undefined && d !== null && sutun !== SATIR_KIMLIGI && kucuk(sutun) !== kucuk(s.haric ?? '\u0000'));
+  const kosullar = Object.entries(secim).filter(([sutun, d]) => d !== '' && d !== undefined && d !== null && sutun !== SATIR_KIMLIGI && kucukAd(sutun) !== kucukAd(s.haric ?? '\u0000'));
   const kimlik = secim[SATIR_KIMLIGI];
   return tablo.satirlar.filter((r) => (!r.ortamId || !s.ortamId || r.ortamId === s.ortamId)
     && (!kimlik || String(r.id ?? '') === String(kimlik))
     && kosullar.every(([sutun, d]) => {
-      const gercek = tablo.sutunlar.find((x) => kucuk(x.ad) === kucuk(sutun));
+      const gercek = tablo.sutunlar.find((x) => kucukAd(x.ad) === kucukAd(sutun));
       return gercek ? String(r.degerler[gercek.ad] ?? '') === String(d) : true;
     }));
 }
@@ -127,12 +143,12 @@ export function sutunSecenekleri(tablo, secim, sutun, ortamId) {
 export function formSuzgecleri(tablo, secim, alanlar) {
   /** @type {Array<{ etiket: string; sutun: string; formDegeri: string; tabloDegeri: string | null }>} */
   const sonuc = [];
-  const kosulda = new Set(Object.entries(secim || {}).filter(([, d]) => d !== '' && d !== null && d !== undefined).map(([k]) => kucuk(k)));
+  const kosulda = new Set(Object.entries(secim || {}).filter(([, d]) => d !== '' && d !== null && d !== undefined).map(([k]) => kucukAd(k)));
   for (const a of alanlar) {
     const formDegeri = String(a.deger ?? '').trim();
     if (!formDegeri) continue;
     const s = (a.sutun ? sutunBul(/** @type {Tablo} */ (tablo), a.sutun) : undefined) ?? sutunBul(/** @type {Tablo} */ (tablo), a.etiket);
-    if (!s || s.gizli || kosulda.has(kucuk(s.ad)) || sonuc.some((x) => x.sutun === s.ad)) continue;
+    if (!s || s.gizli || kosulda.has(kucukAd(s.ad)) || sonuc.some((x) => x.sutun === s.ad)) continue;
     const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[s.ad]).filter((v) => v !== null && v !== undefined && v !== '').map(String))];
     const adaylar = [formDegeri, ...(a.metin && a.metin.trim() ? [a.metin.trim()] : [])];
     const tabloDegeri = degerler.find((v) => adaylar.includes(v)) ?? degerler.find((v) => adaylar.includes(sayfaDegeri(s, v)))
@@ -153,7 +169,7 @@ export function formSuzgecleri(tablo, secim, alanlar) {
 export function satirUyumu(tablo, satir, secim, suzgecler = []) {
   const nedenler = Object.entries(secim || {}).filter(([, d]) => d !== '' && d !== null && d !== undefined).map(([k, d]) => {
     if (k === SATIR_KIMLIGI) return `satır: ${/** @type {{ ad?: string }} */ (satir).ad || d}`;
-    const s = tablo.sutunlar.find((x) => kucuk(x.ad) === kucuk(k));
+    const s = tablo.sutunlar.find((x) => kucukAd(x.ad) === kucukAd(k));
     return `${s ? s.ad : k} = ${d}`;
   });
   const celisenler = suzgecler.filter((f) => String(satir.degerler[f.sutun] ?? '') !== String(f.tabloDegeri ?? '\u0000'))
@@ -284,8 +300,12 @@ const dolu = (/** @type {unknown} */ v) => v !== null && v !== undefined && v !=
  * değerde ekranDegeri (koşu seçeneği bununla seçer).
  * @param {Record<string, import('./secime-gore-bag.mjs').AlanBagi>} baglar @param {Tablo[]} tablolar @param {string} ekranId
  * @param {string[]} [sira] formdaki alan sırası (verilmezse bağlantıların sırası)
+ * @param {{ hedefler?: ReadonlySet<string>; atlananVar?: boolean }} [secenekler] hedefler: yalnız bu alanların listeleri üretilir
+ *   (diğer bağlı alanlar gruptaki koşul olarak yine kullanılır; sonuçtaki listeler hedefsiz çağrıdakilerle aynıdır). Hedef dışı bir
+ *   alanın en az bir listesi olacak idiyse atlananVar = true yazılır.
  */
-export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
+export function tabloDegerListeleri(baglar, tablolar, ekranId, sira, secenekler = {}) {
+  const hedefMi = (/** @type {string} */ alan) => !secenekler.hedefler || secenekler.hedefler.has(alan);
   const yer = (/** @type {string} */ alan) => { const i = sira ? sira.indexOf(alan) : -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   /** @type {Map<string, Array<{ alan: string; t: Tablo; s: Sutun }>>} */
   const gruplar = new Map();
@@ -304,31 +324,44 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
   const sonuc = [];
   for (const uyeler of gruplar.values()) {
     for (const u of uyeler) {
+      if (!hedefMi(u.alan)) {
+        if (u.t.satirlar.some((r) => dolu(r.degerler[u.s.ad]))) secenekler.atlananVar = true;
+        continue;
+      }
       const onceki = sira ? uyeler.filter((x) => x !== u && yer(x.alan) < yer(u.alan)) : uyeler.slice(0, uyeler.indexOf(u));
       const digerleri = onceki.slice(-3);
-      /** @type {Map<string, { kosullar: Array<{ alan: string; deger: string }>; degerler: string[] }>} */
+      // Değerler ilk görülme sırasıyla. Büyük tablolarda (binlerce satır) satır × koşul birleşimi başına iş az tutulur: anahtar,
+      // seçilen diğer alanların (sıra no + JSON değer) birleşimidir; koşullar nesnesi yalnız yeni listede kurulur; kalabalık listede
+      // tekrar denetimi kümeyle. Sonuç (liste sırası, koşullar, değer sırası) öncekiyle aynıdır.
+      /** @type {Map<string, { kosullar: Array<{ alan: string; deger: string }>; degerler: string[]; gorulen: Set<string> | null }>} */
       const harita = new Map();
-      const ekle = (/** @type {Array<{ alan: string; deger: string }>} */ kosullar, /** @type {string} */ v) => {
-        const imza = JSON.stringify(kosullar);
+      const ekle = (/** @type {string} */ imza, /** @type {() => Array<{ alan: string; deger: string }>} */ kosullar, /** @type {string} */ v) => {
         let e = harita.get(imza);
-        if (!e) { e = { kosullar, degerler: [] }; harita.set(imza, e); }
-        if (!e.degerler.includes(v)) e.degerler.push(v);
+        if (!e) { e = { kosullar: kosullar(), degerler: [], gorulen: null }; harita.set(imza, e); }
+        if (e.gorulen) { if (!e.gorulen.has(v)) { e.gorulen.add(v); e.degerler.push(v); } return; }
+        if (e.degerler.includes(v)) return;
+        e.degerler.push(v);
+        if (e.degerler.length >= 16) e.gorulen = new Set(e.degerler);
       };
+      const bos = () => [];
       for (const r of u.t.satirlar) {
         const v = r.degerler[u.s.ad];
         if (!dolu(v)) continue;
-        ekle([], String(v));
+        const sv = String(v);
+        ekle('', bos, sv);
+        if (!digerleri.length) continue;
+        const xv = digerleri.map((x) => r.degerler[x.s.ad]);
+        const xs = xv.map((d) => (dolu(d) ? JSON.stringify(String(d)) : null));
         for (let m = 1; m < (1 << digerleri.length); m++) {
-          /** @type {Array<{ alan: string; deger: string }>} */
-          const kosullar = [];
+          let imza = '';
           let tamam = true;
-          digerleri.forEach((x, i) => {
-            if (!(m & (1 << i)) || !tamam) return;
-            const xv = r.degerler[x.s.ad];
-            if (!dolu(xv)) { tamam = false; return; }
-            kosullar.push({ alan: x.alan, deger: String(xv) });
-          });
-          if (tamam) ekle(kosullar, String(v));
+          for (let i = 0; i < digerleri.length; i++) {
+            if (!(m & (1 << i))) continue;
+            if (xs[i] === null) { tamam = false; break; }
+            imza += `${i}:${xs[i]},`;
+          }
+          if (!tamam) continue;
+          ekle(imza, () => digerleri.flatMap((x, i) => (m & (1 << i) ? [{ alan: x.alan, deger: String(xv[i]) }] : [])), sv);
         }
       }
       let n = 0;
@@ -351,6 +384,7 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
       const t = tablolar.find((y) => y.id === x.tablo);
       const s = t ? sutunBul(t, x.sutun) : undefined;
       if (!t || !s || s.gizli) continue;
+      if (!hedefMi(alan)) { secenekler.atlananVar = true; continue; }
       const k = s.karsiliklar || {};
       const degerler = [...new Set(t.satirlar.map((r) => r.degerler[s.ad]).filter(dolu).map(String))];
       sonuc.push({

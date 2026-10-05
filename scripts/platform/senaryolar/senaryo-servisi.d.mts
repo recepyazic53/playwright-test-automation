@@ -26,6 +26,8 @@ export declare function modelBaglami(vt: Veritabani, ekranId: string, akisId?: s
   /** Akışlarla birlikte ham model. */ tamModel: Record<string, unknown>; akislar: AkisOzeti[]; akisId: string;
   /** Bulunamayan ortak akış dosyaları (açılamayan adımlar modelden düşer). */ eksikOrtakAkislar: string[];
 } | null;
+/** modelBaglami'nın önbellekli hâli (son sürüm; nesil-onbellegi.mjs). Dönen nesne paylaşılır — değiştirilmemelidir. */
+export declare function modelBaglamiOnbellekli(vt: Veritabani, ekranId: string, akisId?: string | null, secenekler?: { listesiz?: boolean }): ReturnType<typeof modelBaglami>;
 export declare function ekranVeriKaynagi(
   vt: Veritabani, projeId: string, ekran: { id: string; anahtar: string }
 ): { spec: string; dosya: string; yol: string; model: boolean } | null;

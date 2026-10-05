@@ -12,6 +12,8 @@ export declare const EN_COK_SATIR: number;
 export declare const EN_COK_SUTUN: number;
 export declare const EN_COK_KARSILIK: number;
 export declare function tablolariListele(vt: Veritabani, projeId: string, secenekler?: { cozulsun?: boolean; tabloId?: string; baglamDahil?: boolean }): Tablo[];
+/** Önbellekli (gizli değerler çözülmeden); dönen nesneler paylaşılır — değiştirilmemelidir. */
+export declare function tablolariListeleOnbellekli(vt: Veritabani, projeId: string): Tablo[];
 export declare function tabloKaydet(vt: Veritabani, girdi: {
   projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi; tur?: unknown;
 }): string;

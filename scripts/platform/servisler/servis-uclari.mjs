@@ -119,6 +119,38 @@ function servisOzeti(vt, s) {
 }
 
 /**
+ * Liste görünümünde gönderilen (küçük) ayarlar. Ağır ayarlar (örnek istekler, operasyon şemaları, sözleşmeler ve geçmişleri, alan
+ * varsayılanları, analiz kararları…) listede yoktur; arayüz gerektiğinde tekil ucu (GET /platform/servis) okur.
+ */
+const LISTE_AYARLARI = Object.freeze(['yol', 'tabanlar', 'tabanGrubu', 'wsdlYolu', 'soapSurumu', 'adresler', 'yalnizTestOperasyonlari', 'tekrarDenenebilirOperasyonlar',
+  'tlsDogrulama', 'kimlikProfili', 'tarihKurallari', 'veriProfilleri', 'alanBaglari', 'oturumAkisi', 'erisim']);
+
+/** Projedeki servislerin senaryo sayıları (içerik çözülmeden; satır sütunlarından). @param {Veritabani} vt @param {string} projeId */
+function servisSenaryoSayilari(vt, projeId) {
+  /** @type {Map<string, { toplam: number; dahil: number }>} */
+  const m = new Map();
+  for (const r of vt.tumu(`SELECT servis_id, COUNT(*) AS toplam, SUM(CASE WHEN kosuya_dahil = 1 THEN 1 ELSE 0 END) AS dahil
+      FROM servis_senaryolari WHERE proje_id = ? GROUP BY servis_id`, [projeId])) {
+    m.set(String(r.servis_id), { toplam: Number(r.toplam ?? 0), dahil: Number(r.dahil ?? 0) });
+  }
+  return m;
+}
+
+/**
+ * Liste satırı: servis kimliği / adı / türü / durumu, senaryo sayıları, son koşu ve küçük ayarlar (operasyon listesi dahil;
+ * şemaları ayrı ayarda durur). @param {Veritabani} vt @param {import('./servis-deposu.mjs').Servis} s @param {{ toplam: number; dahil: number } | undefined} sayi
+ */
+function servisListeOzeti(vt, s, sayi) {
+  const [son] = servisKosulariniListele(vt, { servisId: s.id, sinir: 1 });
+  const a = /** @type {Record<string, unknown>} */ (s.ayarlar ?? {});
+  /** @type {Record<string, unknown>} */
+  const ayarlar = {};
+  for (const k of LISTE_AYARLARI) if (a[k] !== undefined) ayarlar[k] = a[k];
+  if (a.operasyonlar !== undefined) ayarlar.operasyonlar = a.operasyonlar;
+  return { ...s, ayarlar, senaryoSayisi: sayi?.toplam ?? 0, kosuyaDahilSayisi: sayi?.dahil ?? 0, sonKosu: son ?? null };
+}
+
+/**
  * Servis analizi ayarları (kayıt uçları; doğrulama servis-ornekleri.mjs'de): verilmeyen korunur.
  * @param {Govde} g
  */
@@ -137,9 +169,12 @@ export const SERVIS_GET_UCLARI = [
     const ekler = ekGizliAdlar(db);
     return { plan: { ...p, testler: p.testler.map((t) => ({ satirId: t.satirId, senaryoId: t.senaryoId, baslik: raporMetniniMaskele(t.baslik, ekler) })) } };
   }],
+  // Liste görünümü (yan panel, hızlı arama, oluştur menüsü, sihirbaz önerileri, akış tasarımı…): yalnız listede kullanılan alanlar
+  // (servisListeOzeti). Örnek istekler, şemalar, sözleşmeler gibi ağır ayarlar için tekil uç: GET /platform/servis.
   ['/platform/servisler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
-    return { servisler: servisleriListele(db, projeId).map((s) => servisOzeti(db, s)) };
+    const sayilar = servisSenaryoSayilari(db, projeId);
+    return { servisler: servisleriListele(db, projeId).map((s) => servisListeOzeti(db, s, sayilar.get(s.id))) };
   }],
   ['/platform/servis', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');

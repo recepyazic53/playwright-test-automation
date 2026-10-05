@@ -99,9 +99,18 @@ export function modeleListeleriUygula(model, listeler) {
   const yeni = JSON.parse(JSON.stringify(model));
   // Senaryo ayarının seçenekleri modelin kodlarıdır (koşullar onlarla karşılaştırır): tablo bağı seçenekleri değiştirmez.
   const ayarlar = senaryoAyariAlanlari(yeni);
+  // Listeler hedef alana göre bir kez gruplanır (sıra korunur): büyük tablolarda alan başına tüm listeleri taramak yavaştı.
+  /** @type {Map<unknown, typeof listeler>} */
+  const alanListeleri = new Map();
+  for (const l of listeler) {
+    if (!Array.isArray(l.degerler) || !l.degerler.length) continue;
+    const k = l.hedef?.alan;
+    const g = alanListeleri.get(k);
+    if (g) g.push(l); else alanListeleri.set(k, [l]);
+  }
   for (const alan of modelSecimAlanlari(yeni)) {
     if (ayarlar.has(alan.id)) continue;
-    const bu = listeler.filter((l) => l.hedef?.alan === alan.id && Array.isArray(l.degerler) && l.degerler.length);
+    const bu = alanListeleri.get(alan.id) ?? [];
     if (!bu.length) continue;
     const bag = nesneMi(alan.bagimlilik) && nesneMi(alan.bagimlilik.secenekHaritasi) ? alan.bagimlilik : null;
     const havuz = [...(Array.isArray(alan.secenekler) ? alan.secenekler : []), ...(bag ? Object.values(bag.secenekHaritasi).flat() : [])].filter(nesneMi);
@@ -123,12 +132,23 @@ export function modeleListeleriUygula(model, listeler) {
       yeniHarita.set(k, birlestir(yeniHarita.get(k) || [], cevir(l.degerler || [])));
     }
     for (const [k, d] of yeniHarita) bag.secenekHaritasi[k] = d;
-    // 3) Diğer koşullu listeler: değerleri geçerli seçeneklere eklenir.
-    for (const l of bu.filter((x) => (x.kosullar || []).length && !haritaListeleri.includes(x))) {
+    // 3) Diğer koşullu listeler: değerleri geçerli seçeneklere eklenir. Bağımlılıksız alanda birleştirme artımlıdır (eklenmiş
+    //    senaryo değerleri kümede tutulur; sonuç birlestir'in ardışık uygulanmasıyla aynıdır: yalnız önceki seçeneklere karşı süzülür).
+    const haritadakiler = new Set(haritaListeleri);
+    const digerleri = bu.filter((x) => (x.kosullar || []).length && !haritadakiler.has(x));
+    if (!bag && digerleri.length) {
+      const sonuc = Array.isArray(alan.secenekler) ? [...alan.secenekler] : [];
+      const gorulen = new Set(sonuc.map(senaryoDegeri));
+      for (const l of digerleri) {
+        const yeniler = cevir(l.degerler || []).filter((s) => !gorulen.has(senaryoDegeri(s)));
+        for (const s of yeniler) { sonuc.push(s); gorulen.add(senaryoDegeri(s)); }
+      }
+      alan.secenekler = sonuc;
+    }
+    for (const l of bag ? digerleri : []) {
       const d = cevir(l.degerler || []);
-      const k = bag ? (l.kosullar || []).find((x) => x.alan === bag.alan)?.deger : undefined;
-      if (bag) for (const anahtar of k !== undefined ? [k] : Object.keys(bag.secenekHaritasi)) bag.secenekHaritasi[anahtar] = birlestir(bag.secenekHaritasi[anahtar] || [], d);
-      else alan.secenekler = birlestir(Array.isArray(alan.secenekler) ? alan.secenekler : [], d);
+      const k = (l.kosullar || []).find((x) => x.alan === bag.alan)?.deger;
+      for (const anahtar of k !== undefined ? [k] : Object.keys(bag.secenekHaritasi)) bag.secenekHaritasi[anahtar] = birlestir(bag.secenekHaritasi[anahtar] || [], d);
     }
     // Varsayılan modelde sayfa değeriyle yazılmışsa (ör. "H") ve listede o sayfa değerli bir değer varsa (ör. "Hayır"), o değer olur.
     const v = nesneMi(alan.varsayilan) ? alan.varsayilan.deger : undefined;

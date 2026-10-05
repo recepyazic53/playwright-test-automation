@@ -23,10 +23,11 @@ import { acikAnahtar, adliAlanlariDonustur, sifrele, zarflariCoz } from '../kasa
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula, senaryoAyariAlanlari } from './deger-listesi-modeli.mjs';
 import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
-import { BAGLAM_ONEKI, tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { BAGLAM_ONEKI, tabloKaydet, tablolariListele, tablolariListeleOnbellekli } from '../tablolar/tablo-deposu.mjs';
 import { basvuru, basvurununTekDegeri, grupAnahtari, sutunBul, tabloBul, tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari.mjs';
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
+import { onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 import { ayarBasvurulariniDenetle, modelAlanBilgisi, tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { basvuruGruplari, veriKosulariniAc, veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 import { tabloSecenekUyumu } from '../tablolar/tablo-uyumu.mjs';
@@ -40,11 +41,27 @@ import { bekleyenAlanlar, veriBekliyorAyikla } from './veri-bekliyor.mjs';
  * ortamda geçerli satırlar.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string | null} [ortamId] @param {string[]} [sira] formdaki alan sırası
  */
-function ekranListeleri(vt, projeId, ekranId, ortamId = null, sira = undefined) {
+function ekranListeleri(vt, projeId, ekranId, ortamId = null, sira = undefined, secenekler = {}) {
   const baglar = etkinAlanBaglari(vt, ekranId);
   if (!Object.keys(baglar).length) return [];
-  const tablolar = tablolariListele(vt, projeId).map((t) => (ortamId ? { ...t, satirlar: t.satirlar.filter((r) => !r.ortamId || r.ortamId === ortamId) } : t));
-  return tabloDegerListeleri(baglar, tablolar, ekranId, sira);
+  const tablolar = tablolariListeleOnbellekli(vt, projeId).map((t) => (ortamId ? { ...t, satirlar: t.satirlar.filter((r) => !r.ortamId || r.ortamId === ortamId) } : t));
+  return tabloDegerListeleri(baglar, tablolar, ekranId, sira, secenekler);
+}
+
+/**
+ * Tablo listelerini modele uygular (modelBaglami). modeleListeleriUygula yalnız modelin seçim alanlarını (senaryo ayarları hariç)
+ * değiştirdiği için listeler yalnız o alanlar için üretilir: kişi / kayıt tablosuna bağlı metin alanlarının binlerce satırlık koşullu
+ * listeleri hiç kurulmaz. Sonuç tüm listelerle uygulanmışla aynıdır: hiçbir seçim alanının listesi yoksa ama başka alanların listesi
+ * olacak idiyse, modeleListeleriUygula yine (boş bir listeyle) çağrılır — kopyalama ve bağımlılık anahtarı eşleme aynen yapılır.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {Nesne} model @param {Record<string, Nesne>} altModeller
+ */
+function modeleListeleriniUygula(vt, projeId, ekranId, model, altModeller) {
+  const ayarlar = senaryoAyariAlanlari(model);
+  const hedefler = new Set(modelSecimAlanlari(model).map((a) => String(a.id)).filter((id) => !ayarlar.has(id)));
+  /** @type {{ hedefler: Set<string>; atlananVar?: boolean }} */
+  const s = { hedefler };
+  const listeler = ekranListeleri(vt, projeId, ekranId, null, alanSirasi(model, altModeller), s);
+  return modeleListeleriUygula(model, /** @type {any} */ (listeler.length || !s.atlananVar ? listeler : [{ hedef: null, degerler: [] }]));
 }
 /**
  * Senaryo ayarı alanlarının (deger-listesi-modeli.mjs senaryoAyariAlanlari) tablo listelerini işaretler (senaryoAyari: true): form
@@ -219,8 +236,27 @@ export function modelBaglami(vt, ekranId, akisId = null, secenekler = {}) {
   // Ortak akış adımları açılır (form, doğrulama ve koşu düz modeli görür; ortak akış hep son sürümüyle).
   const acik = ortakAkislariAc(model, altModeller);
   // Tablo bağlantıları (Test verisi > Tablolar) modelin seçeneklerinin önüne geçer; model yalnız yedektir. listesiz: modelin kendisi.
-  const sonModel = secenekler.listesiz || !ekran ? acik.model : modeleListeleriUygula(acik.model, /** @type {any} */ (ekranListeleri(vt, String(ekran.proje_id), ekranId, null, alanSirasi(acik.model, altModeller))));
+  const sonModel = secenekler.listesiz || !ekran ? acik.model : modeleListeleriniUygula(vt, String(ekran.proje_id), ekranId, acik.model, altModeller);
   return { model: sonModel, altModeller, surum: kayit.surum, tamModel, akislar, akisId: akis.id, eksikOrtakAkislar: acik.eksikler };
+}
+
+/**
+ * Model bağlamının dayandığı tablolar: model sürümleri, ekranlar (anahtar → kimlik, ayarlardaki alan bağları), test verisi tabloları
+ * (seçim listeleri) ve ayarlar (ek gizli adlar → gizli sütunlar). Bunlardan biri değişmedikçe sonuç aynıdır.
+ */
+const MODEL_BAGLAMI_TABLOLARI = Object.freeze(['ekranlar', 'ekran_modelleri', 'test_verisi_turleri', 'test_verisi_profilleri', 'ayarlar']);
+
+/**
+ * modelBaglami'nın önbellekli hâli (son sürüm; nesil-onbellegi.mjs): liste uçları (senaryo listesi, hazırlık, ekran girdileri, veri
+ * sağlığı) aynı ekranın bağlamını istek içinde ve istekler arasında bir kez kurar. Dönen nesne PAYLAŞILIR — değiştirilmemelidir.
+ * @param {Veritabani} vt @param {string} ekranId @param {string | null} [akisId] @param {{ listesiz?: boolean }} [secenekler]
+ * @returns {ReturnType<typeof modelBaglami>}
+ */
+export function modelBaglamiOnbellekli(vt, ekranId, akisId = null, secenekler = {}) {
+  acikAnahtar(vt);
+  const listesiz = secenekler.listesiz === true;
+  return onbellekte(vt, `modelBaglami\u0000${ekranId}\u0000${akisId ?? ''}\u0000${listesiz ? 1 : 0}`,
+    () => modelBaglami(vt, ekranId, akisId, listesiz ? { listesiz } : {}), { tablolar: MODEL_BAGLAMI_TABLOLARI });
 }
 
 /** Formdaki alan sırası (tablo bağlantılarında yukarıdan aşağı süzme). @param {Nesne} model @param {Record<string, Nesne>} altModeller */
@@ -249,7 +285,7 @@ export function ekranVeriKaynagi(vt, projeId, ekran) {
       return { spec: kaynak.dosya, dosya: String(icerik.veri.dosya), yol: String(icerik.veri.yol), model: nesneMi(icerik.paket) || icerik.kosucu === 'model' };
     }
   }
-  if (modelBaglami(vt, ekran.id)) return { spec: `scenarios/${ekran.anahtar}/${ekran.anahtar}.spec.ts`, dosya: ekran.anahtar, yol: 'senaryolar', model: true };
+  if (modelBaglamiOnbellekli(vt, ekran.id)) return { spec: `scenarios/${ekran.anahtar}/${ekran.anahtar}.spec.ts`, dosya: ekran.anahtar, yol: 'senaryolar', model: true };
   return null;
 }
 
@@ -296,7 +332,7 @@ export function senaryoListesi(vt, projeId, ortamId) {
   for (const e of ekranlar) {
     const k = ekranModeliGetir(vt, e.id);
     if (k && nesneMi(k.model) && ['altModel', 'ortakAkis'].includes(k.model.tur)) altModelEkranlari.add(e.id);
-    const mb = modelBaglami(vt, e.id);
+    const mb = modelBaglamiOnbellekli(vt, e.id);
     let sema = null;
     try { sema = mb ? formSemasiOlustur(mb.model, mb.altModeller) : null; } catch { sema = null; }
     semalar.set(e.id, { sema, model: Boolean(mb), akislar: mb ? mb.akislar : [] });
@@ -309,7 +345,7 @@ export function senaryoListesi(vt, projeId, ortamId) {
     if (!akis || !bilgi || !bilgi.akislar.length || bilgi.akislar[0].id === akis) return bilgi?.sema ?? null;
     const k = `${ekranId}\u0000${akis}`;
     if (!akisSemalari.has(k)) {
-      const mb = modelBaglami(vt, ekranId, akis);
+      const mb = modelBaglamiOnbellekli(vt, ekranId, akis);
       let sema = null;
       try { sema = mb ? formSemasiOlustur(mb.model, mb.altModeller) : null; } catch { sema = null; }
       akisSemalari.set(k, sema);
@@ -389,7 +425,7 @@ export function senaryoListesi(vt, projeId, ortamId) {
       // Hızlı testle oluşturulan ve henüz doğrulanmamış (Hayır izni) senaryo: listede "doğrulanmadı" rozeti için.
       ...(nesneMi(icerik.hizliTest) ? { hizliTest: { izin: icerik.hizliTest.izin, dogrulandi: icerik.hizliTest.dogrulandi === true } } : {}),
       // "Veri bekliyor": hücresi hâlâ boş alanların adları (doldurulunca listeden düşer; liste boşsa rozet yok).
-      ...(Array.isArray(icerik.veriBekliyor) ? { veriBekliyor: [...new Set(bekleyenAlanlar(icerik.veriBekliyor, (vbTablolari ??= tablolariListele(vt, projeId))).map((x) => x.etiket))] } : {}),
+      ...(Array.isArray(icerik.veriBekliyor) ? { veriBekliyor: [...new Set(bekleyenAlanlar(icerik.veriBekliyor, (vbTablolari ??= tablolariListeleOnbellekli(vt, projeId))).map((x) => x.etiket))] } : {}),
       ...(ortamId ? {} : { ortamlar })
     });
   }
@@ -645,7 +681,7 @@ export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
   // Ortak akış (kendi başına koşmaz): kendi modelinin alanları (Test verisi sekmesi; bağları onu kullanan ekranlara geçer).
   const kayit = ekranModeliGetir(vt, ekranId);
   const ortak = kayit && nesneMi(kayit.model) && kayit.model.tur === 'ortakAkis' && Array.isArray(kayit.model.adimlar) ? /** @type {Nesne} */ (kayit.model) : null;
-  const mb = ortak ? { model: ortak, altModeller: {} } : modelBaglami(vt, ekranId, null);
+  const mb = ortak ? { model: ortak, altModeller: {} } : modelBaglamiOnbellekli(vt, ekranId, null);
   if (!mb) return { girdiler: [] };
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   // Seçenekler sayfa değeri / metniyle (liste kaydında korunur; model seçeneği kaldırılsa da koşu doğru seçer).
@@ -654,7 +690,7 @@ export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
   // modelSecenekleri: tablo / değer listeleri UYGULANMADAN modelin kendi seçenekleri ve listesinin durumu (tam / kismi / bilinmiyor /
   // dinamik). Tablo bağı uyum denetimi (tablo-uyumu.mjs) sütun değerlerini SAYFADAKİ seçeneklerle karşılaştırır; uygulanmış liste
   // bağlı tablonun kendi değerlerini içerdiği için kullanılmaz.
-  const hamMb = secenekler.modelSecenekleri && !ortak ? modelBaglami(vt, ekranId, null, { listesiz: true }) : mb;
+  const hamMb = secenekler.modelSecenekleri && !ortak ? modelBaglamiOnbellekli(vt, ekranId, null, { listesiz: true }) : mb;
   const hamAlanlar = hamMb ? modelSecimAlanlari(hamMb.model) : [];
   const modelSecenekleri = new Map(hamAlanlar.map((a) => [a.id, [...(Array.isArray(a.secenekler) ? a.secenekler : []),
     ...Object.values(a.bagimlilik?.secenekHaritasi || {}).flat()].filter((x) => x && typeof x === 'object').map(listeDegeri)

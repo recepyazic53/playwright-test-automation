@@ -31,7 +31,7 @@ import {
   servisAkislariniListele, servisAkisiKaydet, servisKaydet, servisleriListele, servisSenaryolariniListele, servisSenaryosuKaydet
 } from '../servisler/servis-deposu.mjs';
 import { servisIstegiKuruCoz } from '../servisler/servis-islemleri.mjs';
-import { BAGLAM_ONEKI, EN_COK_SATIR, EN_COK_SUTUN, TABLO_ADI, tabloKaydet, tabloSil, tablolariListele } from './tablo-deposu.mjs';
+import { BAGLAM_ONEKI, EN_COK_SATIR, EN_COK_SUTUN, TABLO_ADI, tabloKaydet, tabloSil, tablolariListele, tablolariListeleOnbellekli } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { bagTablolari, bagiDonustur, baglariCoz, olasiBaglar } from './secime-gore-bag.mjs';
@@ -156,7 +156,7 @@ export function secimleriYenidenYaz(secimler, idEslem) {
  * @returns {{ kullanim: Record<string, Kullanim>; kirik: KirikBasvuru[] }}
  */
 export function tabloKullanimlari(vt, projeId) {
-  const tablolar = tablolariListele(vt, projeId);
+  const tablolar = tablolariListeleOnbellekli(vt, projeId);
   const adla = new Map(tablolar.map((t) => [kucuk(t.ad), t]));
   const idle = new Map(tablolar.map((t) => [t.id, t]));
   /** @type {Record<string, Kullanim>} */
@@ -285,9 +285,16 @@ function uyumsuzBaglar(vt, projeId, tablolar) {
   return sonuc.sort((a, b) => Number(a.duzey !== 'guclu') - Number(b.duzey !== 'guclu'));
 }
 
-/** Satır imzası (sütun normal adıyla, sıradan bağımsız; ortam dahil; gizli değerler dahil — yalnız özet, değer dönmez). */
-const satirImzasi = (/** @type {{ ortamId: string | null; degerler: Record<string, string | null> }} */ r, /** @type {Array<{ ad: string }>} */ sutunlar) =>
-  ozet([r.ortamId ?? '', sutunlar.map((s) => [baslikNormal(s.ad), String(r.degerler[s.ad] ?? '')]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))]);
+/**
+ * Satır imzası (sütun normal adıyla, sıradan bağımsız; ortam dahil; gizli değerler dahil — yalnız özet, değer dönmez) üreticisi:
+ * sütunların normal adları ve sıralaması tablo başına bir kez hesaplanır (satır başına yeniden sıralanmıyordu; sıralama kararlı
+ * olduğundan her satırda aynı sıra çıkar). @param {Array<{ ad: string }>} sutunlar
+ */
+function satirImzacisi(sutunlar) {
+  const sirali = sutunlar.map((s) => [baslikNormal(s.ad), s.ad]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return (/** @type {{ ortamId: string | null; degerler: Record<string, string | null> }} */ r) =>
+    ozet([r.ortamId ?? '', sirali.map(([n, ad]) => [n, String(r.degerler[ad] ?? '')])]);
+}
 
 /**
  * Veri sağlığı özeti (Test verisi ekranının üstü): birleştirilebilecek tablolar, hiç kullanılmayan tablolar, boş sütunlar, kırık
@@ -299,7 +306,7 @@ export function veriSagligi(vt, projeId) {
   const tablolar = tablolariListele(vt, projeId, { cozulsun: true });
   const ek = tabloEkranKullanimi(vt, projeId);
   const { kullanim, kirik } = tabloKullanimlari(vt, projeId);
-  const oneriler = birlestirmeOnerileri(tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunlar: t.sutunlar, kaynak: t.kaynak ?? null, satirImzalari: t.satirlar.map((r) => satirImzasi(r, t.sutunlar)) })), ek);
+  const oneriler = birlestirmeOnerileri(tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunlar: t.sutunlar, kaynak: t.kaynak ?? null, satirImzalari: t.satirlar.map(satirImzacisi(t.sutunlar)) })), ek);
   const ad = new Map(tablolar.map((t) => [t.id, t.ad]));
   const gecmis = gecmisOku(vt, projeId);
   // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Test verisi sayfasında.

@@ -11,6 +11,10 @@ export declare class Veritabani {
   private constructor();
   readonly yol: string | null;
   readonly kapali: boolean;
+  /** Veritabanı nesli: satır değiştiren her işlemde artar (nesil-onbellegi.mjs). */
+  readonly nesil: number;
+  /** Tablonun en son değiştiği nesil. */
+  tabloNesli(tablo: string): number;
   calistir(sql: string, parametreler?: readonly unknown[]): void;
   tumu(sql: string, parametreler?: readonly unknown[]): HamSatir[];
   tek(sql: string, parametreler?: readonly unknown[]): HamSatir | undefined;

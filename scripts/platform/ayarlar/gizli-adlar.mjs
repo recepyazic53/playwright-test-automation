@@ -15,19 +15,31 @@ const duz = (/** @type {string} */ s) => s.toLocaleLowerCase('tr').replace(/[\s_
 /** "PinKodu" / "pin_kodu" / "x-api-key" → sözcükler. @param {string} ad */
 const sozcukler = (ad) => ad.replace(/([a-zçğıöşü])([A-ZÇĞİÖŞÜ])/g, '$1 $2').toLocaleLowerCase('tr').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 
+/** Ek ad listesi → { normalleştirilmiş parçalar, ad → sonuç }. @type {Map<string, { parcalar: string[]; sonuc: Map<string, boolean> }>} */
+const gizliAdSonuclari = new Map();
+
 /**
  * Ad gizli mi (çekirdek + kullanıcının ek adları).
  * @param {string} ad @param {ReadonlyArray<string>} [ekler]
  */
 export function gizliAdMi(ad, ekler = []) {
   if (typeof ad !== 'string' || !ad) return false;
+  // Saf hesap; gövde maskelemede aynı adlar binlerce kez sorulur: ek ad listesi başına sonuç bellekte (sınırlı).
+  const ekAnahtari = ekler.length ? ekler.join('\u0000') : '';
+  let m = gizliAdSonuclari.get(ekAnahtari);
+  if (!m) {
+    if (gizliAdSonuclari.size >= 16) gizliAdSonuclari.clear();
+    m = { parcalar: [...CEKIRDEK_GIZLI_ADLAR, ...ekler].map((p) => duz(String(p))).filter(Boolean), sonuc: new Map() };
+    gizliAdSonuclari.set(ekAnahtari, m);
+  }
+  const onceki = m.sonuc.get(ad);
+  if (onceki !== undefined) return onceki;
   const d = duz(ad);
   const s = sozcukler(ad);
-  return [...CEKIRDEK_GIZLI_ADLAR, ...ekler].some((p) => {
-    const k = duz(String(p));
-    if (!k) return false;
-    return k.length >= 4 ? d.includes(k) : s.includes(k);
-  });
+  const sonuc = m.parcalar.some((k) => (k.length >= 4 ? d.includes(k) : s.includes(k)));
+  if (m.sonuc.size >= 20000) m.sonuc.clear();
+  m.sonuc.set(ad, sonuc);
+  return sonuc;
 }
 
 // ---- Metinde adı gizli alanların değerleri (servis senaryosu gövdesi / başlıkları / yolu) ----
