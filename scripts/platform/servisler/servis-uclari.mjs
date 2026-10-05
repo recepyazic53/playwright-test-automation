@@ -327,7 +327,11 @@ export const SERVIS_POST_UCLARI = [
         erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
       });
     });
-    return { id };
+    // Yeni tablo / kural bağıyla silinen eski varsayılanlar (servis-islemleri.mjs > bagaGecenVarsayilanlariSil); arayüz kendi kopyasından siler.
+    const sonraki = g.alanBaglari !== undefined && onceki ? servisGetir(db, id)?.ayarlar.alanVarsayilanlari ?? {} : null;
+    const kaldirilanVarsayilanlar = sonraki ? Object.entries(onceki?.ayarlar.alanVarsayilanlari ?? {})
+      .flatMap(([operasyon, alanlar]) => Object.keys(alanlar).filter((yol) => !sonraki[operasyon]?.[yol]).map((yol) => ({ operasyon, yol }))) : [];
+    return { id, kaldirilanVarsayilanlar };
   }],
   // WSDL şemasını yeniden al (TEST'e istek; arayüz kullanıcıya sorarak çağırır).
   ['/platform/servis/sema/yenile', async (db, g) => {

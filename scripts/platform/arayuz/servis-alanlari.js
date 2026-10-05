@@ -49,9 +49,15 @@ export function degerKaynagi(s, st) {
   return { tur: 'yok', metin: 'Bağlı değil — senaryoda yazılır' };
 }
 
+/** Alan varsayılanının kısa özeti (ör. "sabit: 1"). @param {{ kaynak: string; deger?: string }} v */
+export function varsayilanOzeti(v) {
+  const ad = { sabit: 'sabit', parametre: 'kural', hesap: 'kural', tablo: 'tablo', akis: 'akış', bos: 'boş', nil: 'nil', gonderme: 'gönderme' }[v.kaynak] || v.kaynak;
+  return v.deger !== undefined ? `${ad}: ${v.deger}` : ad;
+}
+
 /**
  * @param {{
- *   ad: string;                                   // metot adı (etiketlerde)
+ *   ad: string;                                  // metot adı (etiketlerde)
  *   sema: import('./servis-govdesi.mjs').OperasyonSemasi;   // WSDL şeması (ekler hariç)
  *   zorunlu: Set<string>;                         // zorunlu yollar; DEĞİŞTİRİLİR
  *   ekler?: Array<{ yol: string; tip?: string }>; // elle eklenen alanlar; verilirse "Alan ekle" gösterilir; DEĞİŞTİRİLİR
@@ -67,10 +73,13 @@ export function degerKaynagi(s, st) {
  *   alanKurallari?: Record<string, { tip?: string }>;   // onaylanmış analiz kuralları (tip rozeti kaynağı "örneklerden")
  *   varsayilanlar?: Record<string, { kaynak: string; deger?: string }>;   // alan varsayılanları (akış / kural kaynağı)
  *   oneriVar?: (yol: string) => string | boolean;  // alan için analiz önerisi var mı (dize: "Öneri var" bağlantı adresi)
+ *   varsayilanKaldir?: (yol: string) => Promise<void>;   // kayıtlı servis (Parametreler): bağ + varsayılan çakışma notu ve "kaldır"
  * }} s
  */
 export function metotAlanTablosu(s) {
   const kap = h('div', { class: 'metot-alanlari' });
+  /** Açılıştaki (kayıtlı) bağlar: yeni seçilen bağ eski varsayılanı kaldırır (sunucu); kayıtlı bağ + varsayılan = çakışma. */
+  const kayitliBaglar = JSON.parse(JSON.stringify(s.baglar));
   const sayac = h('span', { class: 'soluk' });
   const sayacGuncelle = () => { sayac.textContent = ` · ${s.zorunlu.size} zorunlu${s.ekler && s.ekler.length ? ` · ${s.ekler.length} elle eklenen` : ''}`; };
   const tablo = h('div', { class: 'alan-formu sihirbaz-alanlari listeli' });
@@ -167,7 +176,37 @@ export function metotAlanTablosu(s) {
       const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
       alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
     }
-    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), s.analiz?.bagRozeti?.(st.yol) ?? null, alt, kuralVar ? null : kaynakSatiri(st), formKap);
+    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), s.analiz?.bagRozeti?.(st.yol) ?? null, alt, cakismaNotu(st), kuralVar ? null : kaynakSatiri(st), formKap);
+  };
+  /**
+   * Bağ + servis varsayılanı (★) aynı alanda. Yeni seçilen bağ kaydedilince varsayılan kaldırılır (not); kayıtlı bağda varsayılan
+   * bağdan önce gelir — "kaldır" ile tek tıkla çözülür. Yalnız kayıtlı serviste (varsayilanKaldir verilmişse).
+   * @param {{ yol: string }} st
+   */
+  const cakismaNotu = (st) => {
+    const b = s.baglar[st.yol];
+    const v = s.varsayilanlar?.[st.yol];
+    if (!s.varsayilanKaldir || !b || !v) return null;
+    const ozet = varsayilanOzeti(v);
+    const kural = Boolean(b.kural);
+    if (JSON.stringify(kayitliBaglar[st.yol] ?? null) !== JSON.stringify(b)) {
+      return h('span', { class: 'soluk kucuk varsayilan-cakismasi', 'data-cakisma': 'kaldirilacak' },
+        `Bu alanın varsayılanı (${ozet}) kaldırılacak; yeni senaryolar ${kural ? 'kuraldan' : 'tablodan'} dolar.`);
+    }
+    const kaldir = h('button', { type: 'button', class: 'baglanti-dugmesi', 'aria-label': `${s.ad} ${st.yol} varsayılanını kaldır` }, 'kaldır');
+    const not = h('span', { class: 'kucuk alan-uyarisi varsayilan-cakismasi', 'data-cakisma': 'varsayilan-once' },
+      `Varsayılan (${ozet}) ${kural ? 'kural' : 'tablo'} bağından önce gelir — `, kaldir);
+    kaldir.addEventListener('click', async () => {
+      kaldir.disabled = true;
+      try {
+        await s.varsayilanKaldir?.(st.yol);
+        ciz();
+      } catch (e) {
+        kaldir.disabled = false;
+        not.append(h('span', { role: 'alert' }, ` ${/** @type {Error} */ (e).message}`));
+      }
+    });
+    return not;
   };
   const ciz = () => {
     const birlesik = semaBirlestir(s.sema, s.ekler || []);

@@ -35,6 +35,11 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
   tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari>;
 }): string;
+/** Yeni tablo / kural bağı kaydedilince aynı alanın eski varsayılanını siler (ayarlar değiştirilir); silinenleri döner. */
+export declare function bagaGecenVarsayilanlariSil(
+  onceki: { alanBaglari?: Record<string, Record<string, unknown>>; alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>> } | undefined,
+  ayarlar: { alanBaglari?: Record<string, Record<string, unknown>>; alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>> }
+): Array<{ operasyon: string; yol: string }>;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
   adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];
 }>;

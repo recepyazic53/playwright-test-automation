@@ -229,4 +229,84 @@ test.describe('servis alanları tablolardan', () => {
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
+
+  test('bağ ve varsayılan: en son karar geçerli — kayıtlı çakışmada "kaldır"; sonradan konan varsayılan önce gelir; yeni bağ eski varsayılanı siler (1440 / 390 px taşmasız)', async () => {
+    test.setTimeout(90_000);
+    const servisAyari = async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis.ayarlar as Nesne;
+    const once = await servisAyari();
+    const kaydet = (ek: Nesne) => basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', ...ek });
+    const SABIT = { kaynak: 'sabit', deger: '1' };
+    // Göç durumu: bağ ve varsayılan aynı kayıtta (kullanıcının kararı belirsiz) → ikisi de kalır.
+    await kaydet({
+      alanBaglari: { ...once.alanBaglari, Siparis: { ...once.alanBaglari.Siparis, 'Input/EndDate': { tablo: kisiId, sutun: 'Telefon' } } },
+      alanVarsayilanlari: { Siparis: { 'Input/EndDate': SABIT } }
+    });
+    let a = await servisAyari();
+    expect(a.alanVarsayilanlari.Siparis['Input/EndDate']).toEqual(SABIT);
+    expect(a.alanBaglari.Siparis['Input/EndDate']).toEqual({ tablo: kisiId, sutun: 'Telefon' });
+
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    const parametreler = async () => {
+      await page.goto(`/#/servisler/s/${servisId}/parametreler`);
+      // Son açılan metot yeniden açık gelir: kutucuk yalnız kapalıysa tıklanır.
+      const kutu = page.getByRole('button', { name: 'Siparis metodu' });
+      await expect(kutu).toBeVisible();
+      if ((await kutu.getAttribute('aria-pressed')) !== 'true') await kutu.click();
+      await expect(kutu).toHaveAttribute('aria-pressed', 'true');
+      return page.locator('.metot-cercevesi .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^EndDate/ }) });
+    };
+    /** Sayfa yatay taşmaz; not kendi hücresinin içinde kalır. */
+    const tasmaYok = async () => {
+      const r = await page.evaluate(() => {
+        const not = document.querySelector('.varsayilan-cakismasi');
+        const hucre = not?.closest('.kaynak-hucresi');
+        const n = not?.getBoundingClientRect();
+        const h = hucre?.getBoundingClientRect();
+        return { sayfa: document.documentElement.scrollWidth - innerWidth, not: n && h ? Math.max(n.right - h.right, h.left - n.left) : 0 };
+      });
+      expect(r.sayfa).toBeLessThanOrEqual(1);
+      expect(r.not).toBeLessThanOrEqual(1);
+    };
+    let satir = await parametreler();
+    const cakisma = satir.locator('[data-cakisma="varsayilan-once"]');
+    await expect(cakisma).toHaveText('Varsayılan (sabit: 1) tablo bağından önce gelir — kaldır');
+    await tasmaYok();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(cakisma).toBeVisible();
+    await tasmaYok();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    // Tek tıkla çözülür: varsayılan silinir, bağ kalır.
+    await cakisma.getByRole('button', { name: 'Siparis Input/EndDate varsayılanını kaldır' }).click();
+    await expect(satir.locator('.varsayilan-cakismasi')).toHaveCount(0);
+    a = await servisAyari();
+    expect(a.alanVarsayilanlari?.Siparis?.['Input/EndDate']).toBeUndefined();
+    expect(a.alanBaglari.Siparis['Input/EndDate']).toEqual({ tablo: kisiId, sutun: 'Telefon' });
+
+    // ★ varsayılan sonradan konursa (bağ silinmez) yeni senaryoda varsayılan gelir.
+    await kaydet({ alanVarsayilanlari: { Siparis: { 'Input/EndDate': SABIT } } });
+    a = await servisAyari();
+    expect(a.alanBaglari.Siparis['Input/EndDate']).toEqual({ tablo: kisiId, sutun: 'Telefon' });
+    const form = page.locator('.alan-formu');
+    const formSatiri = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    await expect(formSatiri('EndDate').getByLabel('EndDate değer kaynağı')).toHaveValue('sabit');
+
+    // Parametreler'de alan başka sütuna bağlanınca: not gösterilir, kayıtta eski varsayılan silinir; yeni senaryo "Tablodan".
+    satir = await parametreler();
+    await page.getByLabel('Siparis Input/EndDate tablo sütunu').selectOption(`${kisiId}\u0001TC`);
+    await expect(satir.locator('[data-cakisma="kaldirilacak"]')).toHaveText('Bu alanın varsayılanı (sabit: 1) kaldırılacak; yeni senaryolar tablodan dolar.');
+    await tasmaYok();
+    await expect(page.getByText('✓ Kaydedildi')).toBeVisible();
+    a = await servisAyari();
+    expect(a.alanVarsayilanlari?.Siparis?.['Input/EndDate']).toBeUndefined();
+    expect(a.alanBaglari.Siparis['Input/EndDate']).toEqual({ tablo: kisiId, sutun: 'TC' });
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    await expect(formSatiri('EndDate').getByLabel('EndDate değer kaynağı')).toHaveValue('tablo');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+    await kaydet({ alanBaglari: once.alanBaglari, alanVarsayilanlari: once.alanVarsayilanlari ?? {} });
+  });
 });

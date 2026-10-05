@@ -3498,6 +3498,7 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .hesap-girdisi { display: inline-flex; align-items: center; gap: var(--b1); flex-wrap: wrap; min-width: 0; }
 .hesap-girdisi input { min-width: 12ch; flex: 1 1 16ch; }
 .kural-bagi-notu { display: block; margin-top: var(--b1); overflow-wrap: anywhere; }
+.varsayilan-cakismasi { display: block; margin-top: var(--b1); overflow-wrap: anywhere; min-width: 0; }
 .kaynak-secimi { display: flex; flex-wrap: wrap; gap: var(--b2); align-items: center; min-width: 0; }
 .kaynak-secimi > select { flex: 1 1 200px; min-width: 0; }
 @media (max-width: 640px) {

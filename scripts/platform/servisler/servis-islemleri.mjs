@@ -456,6 +456,7 @@ export function servisiKaydet(vt, projeId, girdi) {
     else delete ayarlar.tabanGrubu;
   }
   if (karar.ayir) delete ayarlar.tabanGrubu;
+  if (girdi.alanBaglari !== undefined) bagaGecenVarsayilanlariSil(mevcut?.ayarlar, ayarlar);
   kuralBaglariniDenetle(ayarlar);
   // REST servisinde WSDL yoktur: adres değişikliği erişim kontrolü (WSDL isteği) gerektirmez.
   if (adresDegisti && mevcut?.tur !== 'rest') {
@@ -482,6 +483,32 @@ export function servisiKaydet(vt, projeId, girdi) {
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
     return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: mevcut?.tur ?? 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
   });
+}
+
+/**
+ * En son kullanıcı kararı geçerli: alan tablo sütununa / hesaplama kuralına YENİ bağlandıysa (bağ eklendi ya da değişti) aynı
+ * metot + alanın ESKİ varsayılanı silinir (yeni senaryolar bağdan dolar). Aynı kayıtta konan / değişen varsayılan korunur
+ * (varsayılan bağdan önce gelir); değişmeyen bağa dokunulmaz. ayarlar DEĞİŞTİRİLİR. Döner: silinen { operasyon, yol } listesi.
+ * @param {Partial<ServisAyarlari> | undefined} onceki @param {ServisAyarlari} ayarlar
+ */
+export function bagaGecenVarsayilanlariSil(onceki, ayarlar) {
+  /** @type {Array<{ operasyon: string; yol: string }>} */
+  const silinen = [];
+  if (!ayarlar.alanVarsayilanlari) return silinen;
+  const ayni = (/** @type {unknown} */ x, /** @type {unknown} */ y) => JSON.stringify(x ?? null) === JSON.stringify(y ?? null);
+  /** @type {Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>} */
+  const yeni = JSON.parse(JSON.stringify(ayarlar.alanVarsayilanlari));
+  for (const [op, alanlar] of Object.entries(ayarlar.alanBaglari ?? {})) {
+    for (const [yol, b] of Object.entries(alanlar)) {
+      if (!b || !yeni[op]?.[yol] || ayni(onceki?.alanBaglari?.[op]?.[yol], b)) continue;
+      if (!ayni(onceki?.alanVarsayilanlari?.[op]?.[yol], yeni[op][yol])) continue;
+      delete yeni[op][yol];
+      if (!Object.keys(yeni[op]).length) delete yeni[op];
+      silinen.push({ operasyon: op, yol });
+    }
+  }
+  if (silinen.length) ayarlar.alanVarsayilanlari = yeni;
+  return silinen;
 }
 
 /**
