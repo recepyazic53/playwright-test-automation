@@ -5,7 +5,7 @@ export type OrnekDurumu = 'basarili' | 'hata' | 'bilinmiyor';
 export type OrnekGozlemi = { durum: 'dolu' | 'bos' | 'nil'; deger: string; coklu: boolean };
 export type CozulenOrnek = { kok: string; ns: string; alanlar: Map<string, OrnekGozlemi>; gruplar: Set<string>; hata: string | null };
 export type AnalizTablosu = {
-  id: string; ad: string; baglam?: boolean;
+  id: string; ad: string; baglam?: boolean; kaynak?: { tabloTuru?: string } | null;
   sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean; karsiliklar?: Record<string, { sayfa?: string; servis?: string }> }>;
   satirlar: ReadonlyArray<{ ad?: string; degerler: Record<string, string | null | undefined> }>;
 };

@@ -360,7 +360,9 @@ function planla(vt, projeId, girdi) {
   /** @type {string[]} */
   const engeller = [];
   const kalanTuru = tabloTuru(kalan, ek);
-  for (const k of kaynaklar) if (tabloTuru(k, ek) !== kalanTuru) engeller.push(`"${k.ad}" ${kalanTuru === 'liste' ? 'bir kişi / kayıt tablosu' : 'bir ekran listesi'}; yalnız aynı türdeki tablolar birleştirilir.`);
+  // Servis tablosu yalnız servis tablosuyla birleşir (kayıt tablosu gibi çalışsa da ekran tablolarıyla karışmaz).
+  const TUR_METNI = { kayit: 'bir kişi / kayıt tablosu', liste: 'bir ekran listesi', servis: 'bir servis tablosu' };
+  for (const k of kaynaklar) { const t = tabloTuru(k, ek); if (t !== kalanTuru) engeller.push(`"${k.ad}" ${TUR_METNI[t]}; yalnız aynı türdeki tablolar birleştirilir.`); }
   const yeniAd = typeof girdi.yeniAd === 'string' && girdi.yeniAd.trim() ? girdi.yeniAd.trim() : kalan.ad;
   if (!TABLO_ADI.test(yeniAd)) throw new DepoHatasi(`Tablo adı geçersiz: "${yeniAd}" (en çok 60 karakter; . [ ] { } $ < > & | kullanılamaz).`);
   const cakisanAd = tumu.find((t) => t.id !== kalan.id && kucuk(t.ad) === kucuk(yeniAd));

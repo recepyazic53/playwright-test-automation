@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { acikAnahtar } from '../kasa.mjs';
 import { onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 import { DepoHatasi, ekranModeliGetir } from '../veritabani/depo.mjs';
-import { tabloSil, tablolariListele } from './tablo-deposu.mjs';
+import { tabloSil, tablolariListele, tabloTuruGecerliMi } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, kullanilanOrtakAkislar, ortakAkisBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
@@ -144,10 +144,11 @@ export const TABLO_POST_UCLARI = [
   // guncellenecekler'deki senaryolar tek işlemde ([] = yalnız tablo). Verilmezse yalnız tablo. Bkz. tablo-etkisi.mjs.
   ['/platform/tablo/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
+    if (g.tur !== undefined && g.tur !== null && !tabloTuruGecerliMi(g.tur)) throw new DepoHatasi('Tablo türü geçersiz: kayıt, liste ya da servis olmalıdır.');
     const s = tabloKaydetEtkiyle(db, {
       projeId, id: g.id ? kimlik(g.id) : undefined, ad: typeof g.ad === 'string' ? g.ad : '', sutunlar: g.sutunlar, satirlar: g.satirlar, silinenSatirlar: g.silinenSatirlar,
-      // Tablo türü ('kayit' | 'liste'; isteğe bağlı): kaynak.tabloTuru (tablo-deposu.mjs).
-      ...(g.tur === 'kayit' || g.tur === 'liste' ? { tur: g.tur } : {}),
+      // Tablo türü ('kayit' | 'liste' | 'servis'; isteğe bağlı): kaynak.tabloTuru (tablo-deposu.mjs). Başka değer yukarıda reddedilir.
+      ...(tabloTuruGecerliMi(g.tur) ? { tur: g.tur } : {}),
       etki: g.etki, guncellenecekler: g.guncellenecekler
     }, { kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
     if (s.onayGerekli) return { onayGerekli: true, etki: s.etki };

@@ -80,11 +80,11 @@ const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLower
 /**
  * Tablo türü: kaynak.tabloTuru; yoksa sezgi (Tablolar ekranındaki liste gruplamasıyla aynı kural).
  * @param {BTablo} t @param {{ ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }} [ek]
- * @returns {'liste' | 'kayit'}
+ * @returns {'liste' | 'kayit' | 'servis'}
  */
 export function tabloTuru(t, ek = {}) {
   const tur = t.kaynak?.tabloTuru;
-  if (tur === 'liste' || tur === 'kayit') return tur;
+  if (tur === 'liste' || tur === 'kayit' || tur === 'servis') return tur;
   const desen = AD_DESENI.exec(String(t.ad || ''));
   const ekranlar = new Set((ek.ekranAdlari ?? []).map(kucuk));
   const ekranAdiMi = (/** @type {string} */ onEk) => ekranlar.has(kucuk(onEk)) || ekranlar.has(kucuk(onEk.replace(/\s*\([^)]*\)\s*$/, '')));
@@ -132,7 +132,7 @@ export function satirOrtusmesi(a, b) {
 }
 
 /** @typedef {'birebir' | 'cogu' | 'veriFarkli'} BenzerlikGrubu */
-/** @typedef {{ tablolar: string[]; grup: BenzerlikGrubu; puan: number; tur: 'liste' | 'kayit'; eslemeGerekli: boolean }} BirlestirmeOnerisi */
+/** @typedef {{ tablolar: string[]; grup: BenzerlikGrubu; puan: number; tur: 'liste' | 'kayit' | 'servis'; eslemeGerekli: boolean }} BirlestirmeOnerisi */
 
 /**
  * Birleştirilebilecek tablolar: adları farklı, başlıkları aynı (esnek) ya da çoğu aynı, türü aynı tablolar. Aynı başlık kümesindekiler
@@ -182,7 +182,7 @@ export function birlestirmeOnerileri(tablolar, ek = {}) {
     const grup = ayni ? 'birebir' : ort >= 0.5 ? 'cogu' : 'veriFarkli';
     // Başlıklar aynı: başlık payı başlıkların ayırt ediciliğiyle (genel adlar düşük); satırlar da aynıysa 100.
     const baslikPayi = ayni ? 1 : baslikAyirtEdiciligi(ts[0].sutunlar);
-    sonuc.push({ tablolar: ts.map((t) => t.id), grup, puan: Math.round(100 * (0.6 * baslikPayi + 0.4 * (ayni ? 1 : Math.max(enAz, ort)))), tur: /** @type {'liste' | 'kayit'} */ (tur.get(ts[0].id)), eslemeGerekli: false });
+    sonuc.push({ tablolar: ts.map((t) => t.id), grup, puan: Math.round(100 * (0.6 * baslikPayi + 0.4 * (ayni ? 1 : Math.max(enAz, ort)))), tur: /** @type {'liste' | 'kayit' | 'servis'} */ (tur.get(ts[0].id)), eslemeGerekli: false });
   }
   // Başlıkların çoğu aynı (ama tamamı değil): ikili öneri, sütun eşleme gerekir.
   for (let i = 0; i < adaylar.length; i++) {
@@ -193,7 +193,7 @@ export function birlestirmeOnerileri(tablolar, ek = {}) {
       const j2 = baslikBenzerligi(a.sutunlar, b.sutunlar);
       if (j2 < 0.6) continue;
       const o = satirOrtusmesi(a.satirImzalari ?? [], b.satirImzalari ?? []);
-      sonuc.push({ tablolar: [a.id, b.id], grup: 'cogu', puan: Math.round(100 * (0.6 * agirlikliBaslikBenzerligi(a.sutunlar, b.sutunlar) + 0.4 * o)), tur: /** @type {'liste' | 'kayit'} */ (tur.get(a.id)), eslemeGerekli: true });
+      sonuc.push({ tablolar: [a.id, b.id], grup: 'cogu', puan: Math.round(100 * (0.6 * agirlikliBaslikBenzerligi(a.sutunlar, b.sutunlar) + 0.4 * o)), tur: /** @type {'liste' | 'kayit' | 'servis'} */ (tur.get(a.id)), eslemeGerekli: true });
     }
   }
   const sira = { birebir: 0, cogu: 1, veriFarkli: 2 };

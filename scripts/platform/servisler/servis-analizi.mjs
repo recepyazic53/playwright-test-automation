@@ -599,6 +599,9 @@ function ortusmeKaniti(o, t, c, gizli) {
   return parca.join(' · ');
 }
 
+/** Servis tablosunun (kaynak.tabloTuru 'servis') aday puanına eki: eşit ya da yakın kanıtta servis tablosu önce önerilir. */
+const SERVIS_TABLOSU_PAYI = 3;
+
 /**
  * Alanın EN UYGUN tablo sütunu (kavram düzeyinde ad puanı + değer kanıtı). Her sütun puanlanır (adPuani: sütun adı, tablo adı
  * bağlam); ad puanı ≥ AD_ESIGI olan ya da yalnız değerden güçlü kanıtı olan sütunlar aday olur, en yüksek puanlı önerilir (ikinci
@@ -645,7 +648,9 @@ export function tabloEslesmesi(ad, degerler, tablolar, gizli = false, ekAdlar = 
       if (!kabul) continue;
       const adPuan = adVar ? ap.puan : 0;
       // Ad eşleşmesi değerlerle çelişiyorsa (değer var, hiçbiri sütunda yok) ad ağırlığı yarıya iner: tüm değerleri içeren sütun öne geçer.
-      const puan = adPuan * (oran === 0 ? 15 : 30) + (oran ?? 0.4) * 20 + (desenAyni ? 2 : 0) + (c.gizli === gizli ? 1 : 0);
+      // Servis tablosu (yalnız servis isteklerinde kullanılan değerler) servis alanı önerisinde önce gelir: küçük ek puan.
+      const puan = adPuan * (oran === 0 ? 15 : 30) + (oran ?? 0.4) * 20 + (desenAyni ? 2 : 0) + (c.gizli === gizli ? 1 : 0)
+        + (t.kaynak?.tabloTuru === 'servis' ? SERVIS_TABLOSU_PAYI : 0);
       const guclu = (adVar && adPuan >= 0.75 && o.bulunan >= 1) || (adTur === 'birebir' && oran === null);
       const kim = ekAd ? `${ekAd} (eski sütun adı)` : ad;
       const kanit = [

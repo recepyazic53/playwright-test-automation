@@ -575,7 +575,8 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
 function tabloBaglariOzeti(vt, projeId, ekranId) {
   const baglar = etkinAlanBaglari(vt, ekranId);
   const tablolar = tablolariListele(vt, projeId);
-  const kayitIdleri = new Set(tablolar.filter((t) => tabloTuru(t, tabloEkranKullanimi(vt, projeId)) === 'kayit').map((t) => t.id));
+  // Servis tablosu kayıt tablosu gibi çalışır (satırın değerleri birlikte): ekranda elle bağlanırsa kayıt grubu olarak gösterilir.
+  const kayitIdleri = new Set(tablolar.filter((t) => tabloTuru(t, tabloEkranKullanimi(vt, projeId)) !== 'liste').map((t) => t.id));
   /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
   const gizliBaglar = {};
   /** @type {Record<string, { tablo: string; sutun: string; etiket?: string; gizli: boolean }>} */
