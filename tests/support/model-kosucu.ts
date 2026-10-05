@@ -50,7 +50,7 @@ import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
-import { alanKilidi, ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
+import { alanKilidi, ozelBilesenIsaretle, secimeTikla } from '../../scripts/platform/tarama/sayfa-envanteri';
 import { BETIKLE_YAZAN_DOLDURUCULAR, kilitEngeller } from '../../scripts/platform/tarama/alan-kilitleri.mjs';
 import { GORUNURSE_BEKLEME_SN } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 import { GUVENLI_EKRAN_EYLEMLERI, ekranKapsamindaMi, type EkranKurali, type KurtarmaOlayi } from '../../scripts/platform/ayarlar/kurtarma-kurallari.mjs';
@@ -341,7 +341,9 @@ async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string,
   const sayfada = await l.waitFor({ state: 'attached', timeout: beklemeMs }).then(() => true, () => false);
   if (!sayfada) throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, `seçenek sayfada yok (${beklemeMs / 1000} sn beklendi)`));
   if ((await l.isChecked({ timeout: 5_000 })) === isaretli) return;
-  await l.setChecked(isaretli, { force: true, timeout: 3_000 }).catch(() => undefined);
+  // Önce görünen çizime (kullanıcı gibi; bileşen gösterimini de günceller), olmazsa zorla tıklama, sonra betikle girdiye.
+  await l.evaluate(secimeTikla).catch(() => undefined);
+  if ((await l.isChecked({ timeout: 5_000 })) !== isaretli) await l.setChecked(isaretli, { force: true, timeout: 3_000 }).catch(() => undefined);
   if ((await l.isChecked({ timeout: 5_000 })) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
   if ((await l.isChecked({ timeout: 5_000 })) !== isaretli) {
     throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, 'zorla ve betikle tıklandı, durum değişmedi'));

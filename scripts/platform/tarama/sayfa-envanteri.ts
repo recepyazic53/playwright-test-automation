@@ -794,6 +794,15 @@ export function dugmeTiklamaKorumasi(): void {
     if (!(t instanceof Element)) return;
     if (t.matches('input[type="radio"], input[type="checkbox"], select, option')) return;
     if (!t.closest(DUGME)) return;
+    // Gizli onay kutusu / radyonun yerine çizilen kutu (hemen yanında ya da içinde tek gizli seçim girdisi): seçim sayılır; yalnız
+    // bağlantı gezinmesi engellenir, bileşenin kendi işleyicisi çalışır.
+    const SECIM = 'input[type="radio"], input[type="checkbox"]';
+    const gizli = (e: Element | null): boolean => Boolean(e) && (e as Element).matches(SECIM) && (e as HTMLElement).getBoundingClientRect().width === 0;
+    const ic = t.querySelectorAll(SECIM);
+    if (gizli(t.previousElementSibling) || gizli(t.nextElementSibling) || (ic.length === 1 && gizli(ic[0]) && !t.querySelector('input:not([type="radio"]):not([type="checkbox"]), select, textarea, button'))) {
+      if (t.closest('a[href]')) o.preventDefault();
+      return;
+    }
     o.preventDefault();
     o.stopImmediatePropagation();
     w.__nobetciYutulanTiklama = (w.__nobetciYutulanTiklama ?? 0) + 1;
@@ -813,4 +822,32 @@ export function formGonderimKorumasi(): void {
   try {
     Object.defineProperty(navigator, 'sendBeacon', { value: (): boolean => false, configurable: true });
   } catch { /* desteklenmiyor */ }
+}
+
+/**
+ * Sayfa içi: radyo / onay kutusuna TIKLAR (yalnız bu öğeye; öğe bir düğmenin / bağlantının içindeyse hiç dokunmaz). Tıklama
+ * tarayıcının kendi olaylarını (click → input → change) üretir; çerçeveler arası diye sınıf yerine etiket adıyla denetlenir.
+ */
+export function secimeTikla(el: Element): boolean {
+  const t = el as HTMLInputElement;
+  if (el.tagName !== 'INPUT' || !['radio', 'checkbox'].includes(t.type) || t.disabled) return false;
+  if (el.closest('a[href], button, [role="button"], [role="link"]')) return false;
+  // Gizli girdili özel çizimli kutu: kullanıcı gibi görünen çizime tıklanır (bileşen kendi gösterimini ve durumunu birlikte günceller;
+  // gizli girdiye doğrudan tıklamak çizimi eski durumda bırakabilir). Çizim: girdinin hemen önceki / sonraki kardeşi ya da yalnız bu
+  // girdiyi saran ebeveyni (görünür, başka form denetimi yok, en çok 64 piksel — sayfadakiAlanlar > gorselVekil ile aynı kural).
+  const gorunur = (e: Element): boolean => { const r = e.getBoundingClientRect(); const st = getComputedStyle(e); return r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden'; };
+  if (!gorunur(t) && !(t.labels && [...t.labels].some(gorunur))) {
+    for (const v of [t.previousElementSibling, t.nextElementSibling, t.parentElement]) {
+      if (!(v instanceof HTMLElement) || v.matches('label,form,body,fieldset,select,input,textarea')) continue;
+      if ([...v.querySelectorAll('input,select,textarea')].some((x) => x !== t) || !gorunur(v)) continue;
+      const r = v.getBoundingClientRect();
+      if (r.width > 64 || r.height > 64) continue;
+      const once = t.checked;
+      v.click();
+      if (t.checked !== once || t.type === 'radio') return true;
+      break;
+    }
+  }
+  t.click();
+  return true;
 }

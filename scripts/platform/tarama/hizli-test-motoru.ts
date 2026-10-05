@@ -42,7 +42,7 @@ import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiY
 import { ogeBilgisi, type SeciciAdayi } from './oge-secme-paneli';
 import { adaySirasi } from './oge-secme-motoru';
 import { beklemeDurumu, hizliMetinleriTopla, hizliPencereleri, hizliSecimSeridiKur } from './hizli-test-sayfasi';
-import { dugmeTiklamaKorumasi, formGonderimKorumasi } from './sayfa-envanteri';
+import { dugmeTiklamaKorumasi, formGonderimKorumasi, ozelBilesenIsaretle, secimeTikla } from './sayfa-envanteri';
 import { listedenSec, zincirKesfet } from './zincir-motoru';
 import { listedeYokMetni, secenekBekle } from './secenek-secimi';
 import { ZINCIR_SECENEK_BEKLEME_MS, gercekSecenekler, type ZincirSonucu } from './zincir-kesfi.mjs';
@@ -450,10 +450,10 @@ export async function hizliTestiYurut(
         }
         const l = k.locator(a.secici).first();
         if (a.tur === 'checkbox') {
-          // Gizli girdili özel çizimli kutu: girdi betikle tıklanır (sayfanın kendi işleyicileri çalışır; normal koşunun onayKutusuZorla'sı gibi).
+          // Gizli girdili özel çizimli kutu: görünen çizime (yoksa girdiye) betikle tıklanır (secimeTikla; keşif ve normal koşu aynı).
           if (a.gizliGirdi) {
             const isaretli = dogruMu(deger);
-            if ((await l.isChecked({ timeout: bekleMs })) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
+            if ((await l.isChecked({ timeout: bekleMs })) !== isaretli) await l.evaluate(secimeTikla);
             return (await l.isChecked({ timeout: 3_000 })) === isaretli ? null : `“${a.etiket ?? a.anahtar}” işaretlenemedi (betikle tıklandı, durum değişmedi).`;
           }
           await l.setChecked(dogruMu(deger), { timeout: bekleMs });
@@ -472,7 +472,27 @@ export async function hizliTestiYurut(
           // Zaten bu değerdeyse yeniden seçilmez: yeniden seçmek sayfada bağlı alt listeleri boşaltıp yeniden yükletir.
           if ((await l.inputValue({ timeout: 2_000 }).catch(() => null)) === hedef) return null;
           if (a.ozelBilesen) {
-            // Özel bileşenin gizli listesi: değer + input / change olayları.
+            // Önce görünen kutudan (normal koşunun ozelSecim'i gibi): kutuya tıklanır, açılan listede seçeneğin görünen metnine tıklanır —
+            // sayfanın bileşeni kendi gösterimini de günceller. Olmazsa gizli listeye değer + input / change olayları.
+            const isaret = `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+            if (await l.evaluate(ozelBilesenIsaretle, isaret).catch(() => false)) {
+              const kutu = k.locator(`[data-nobetci-ozel="${isaret}"]`).first();
+              try {
+                await kutu.click({ timeout: 3_000 });
+                const metin = r.secenek.metin ?? aranan.metin;
+                // Açılan liste önce bileşenin kendi kabında (gizli listeyi saran öğe), yoksa sayfada aranır (gövdeye eklenen açılır listeler).
+                const kabinda = l.locator('xpath=..').getByText(metin, { exact: true }).filter({ visible: true }).first();
+                const secenek = (await kabinda.count()) ? kabinda : k.getByText(metin, { exact: true }).filter({ visible: true }).first();
+                await secenek.click({ timeout: 3_000 });
+                await sakinles(page, Math.min(bekleMs, ALAN_SAKINLIK_EN_COK_MS));
+              } catch { /* görünen kutudan seçilemedi: yedek yol */ } finally {
+                await kutu.evaluate((e) => e.removeAttribute('data-nobetci-ozel'), undefined, { timeout: 1_000 }).catch(() => undefined);
+              }
+              if ((await l.inputValue({ timeout: 2_000 }).catch(() => null)) === hedef) {
+                if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas;
+                return null;
+              }
+            }
             const yazildi = await l.evaluate((el, v) => {
               const sec = el as HTMLSelectElement;
               if (![...sec.options].some((o) => o.value === v)) return false;

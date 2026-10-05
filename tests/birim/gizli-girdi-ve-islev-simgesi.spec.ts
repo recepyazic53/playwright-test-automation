@@ -3,7 +3,8 @@
 // yazısız simge bağlantısının adı sınıf / dosya adından tanınmasa da çağırdığı işlevden çıkar (CheckIdentity → Sorgula); böyle bir simge
 // "Alan ikonu" sayılmaz (keşifte basılır, adım adımda işlem adayıdır). Güvenlik: page.setContent (ağsız), korumalı tarayıcı.
 import { expect, test } from '@playwright/test';
-import { sayfadakiAlanlar } from '../../scripts/platform/tarama/sayfa-envanteri';
+import { dugmeTiklamaKorumasi, sayfadakiAlanlar } from '../../scripts/platform/tarama/sayfa-envanteri';
+import { envanterOku, secimleriKesfet } from '../../scripts/platform/tarama/tarama-motoru';
 import { eylemAdaylariniCikar } from '../../scripts/platform/tarama/eylem-kesfi-motoru';
 import { korumaliTarayici } from './giris-fikstur';
 
@@ -67,5 +68,34 @@ test('CheckIdentity çağıran güncelle simgesi "Sorgula (alan)" olarak adlanı
     const s = e.gonderim.find((a) => a.metin === 'Sorgula (Kimlik Numarası)');
     expect(s, bilgi).toBeTruthy();
     expect(s?.alanIkonu).toBeFalsy();
+  } finally { await tarayici.close(); }
+});
+
+test('keşif gizli kutuyu görünen çizimden dener (tıklama koruması altında); sonunda çizim ve girdi sayfanın varsayılanına döner', async () => {
+  const tarayici = await korumaliTarayici();
+  try {
+    const page = await tarayici.newPage();
+    const icerik = `<style>.gizli{display:none}.kutu{display:inline-block;width:19px;height:19px;border:1px solid}.kutu.isaretli{background:#333}</style>
+      <main><div><span>Teminat</span> <span><a href="#" class="kutu"></a><input type="checkbox" id="T1" name="T1" class="gizli"></span></div>
+      <div id="ek" class="gizli"><label for="ekalan">Ek bedel</label><input id="ekalan"></div></main>
+      <script>
+        // Çizim kütüphanesi gibi: çizime tıklanınca girdi ve çizim birlikte değişir; girdiye doğrudan tıklamak çizimi güncellemez.
+        document.querySelector('.kutu').addEventListener('click', function (o) { o.preventDefault(); var i = document.getElementById('T1'); i.checked = !i.checked; this.classList.toggle('isaretli', i.checked); i.dispatchEvent(new Event('change', { bubbles: true })); });
+        // Girdiye doğrudan tıklama geri alınır (yalnız çizim yolu geçerli): test çizimden denendiğini ayırt eder.
+        document.getElementById('T1').addEventListener('click', function (o) { o.preventDefault(); });
+        document.getElementById('T1').addEventListener('change', function () { document.getElementById('ek').classList.toggle('gizli', !this.checked); });
+      </script>`;
+    await page.addInitScript(dugmeTiklamaKorumasi);
+    await page.setContent(icerik);
+    await page.evaluate(dugmeTiklamaKorumasi);
+    const temel = await envanterOku(page);
+    const kesifler = await secimleriKesfet(page, temel, [], async () => { await page.setContent(icerik); }, async (p, ms) => { await p.waitForTimeout(Math.min(ms, 100)); }, 8);
+    const k = kesifler.find((x) => x.secim.includes('T1'));
+    expect(k?.geriAlindi, JSON.stringify(kesifler)).toBe(true);
+    // Çizimden denendi: işaretliyken beliren "Ek bedel" görüldü.
+    expect(k?.degerler.find((d) => d.deger === 'true')?.gorunenler.map((a) => a.etiket), JSON.stringify(k)).toContain('Ek bedel');
+    // Sonunda çizim de girdi de işaretsiz (sayfanın varsayılanı).
+    expect(await page.locator('#T1').isChecked()).toBe(false);
+    await expect(page.locator('.kutu')).not.toHaveClass(/isaretli/);
   } finally { await tarayici.close(); }
 });
