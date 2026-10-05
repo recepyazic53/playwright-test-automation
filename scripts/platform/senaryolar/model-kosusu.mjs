@@ -195,6 +195,19 @@ function etiketi(alan) {
   return (e && e.ekran) || (e && e.form) || (alan.form && alan.form.etiket) || alan.id;
 }
 
+/**
+ * Plan alanının seçenekleri: modeldeki seçenekler ve bağlı listenin üst değere göre seçenek haritası (secenekHaritasi) birlikte —
+ * seçenekler boş dizi olsa da haritadakiler kaybolmaz (senaryo değeri / metin → sayfa kodu çevrimi için; secenekBul). Aynı değer + metin
+ * bir kez; modeldeki seçenekler önce.
+ * @param {any} alan @returns {any[]}
+ */
+function planSecenekleri(alan) {
+  const harita = alan.bagimlilik && nesneMi(alan.bagimlilik.secenekHaritasi) ? Object.values(alan.bagimlilik.secenekHaritasi).flat() : [];
+  const tum = [...(Array.isArray(alan.secenekler) ? alan.secenekler : []), ...harita].filter(nesneMi);
+  const goruldu = new Set();
+  return tum.filter((s) => { const k = `${s.deger}\u0000${s.metin ?? ''}`; if (goruldu.has(k)) return false; goruldu.add(k); return true; }).map((s) => ({ ...s }));
+}
+
 /** @param {any} alan @returns {string[]} */
 function senaryoAnahtarlari(alan) {
   const s = alan && alan.eslesme && alan.eslesme.senaryo;
@@ -295,8 +308,7 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       deger, secici: konum ? konum.secici : null, yardimci: konum && nesneMi(konum.yardimci) ? { ...konum.yardimci } : {},
       // Çerçeve (iframe) seçicileri: koşucu alanı (ve yardımcı seçicilerini) o çerçevede arar.
       cerceve: konum && Array.isArray(konum.cerceve) && konum.cerceve.length ? konum.cerceve.map(String) : null,
-      secenekler: Array.isArray(alan.secenekler) ? alan.secenekler.map((/** @type {any} */ s) => ({ ...s }))
-        : alan.bagimlilik && nesneMi(alan.bagimlilik.secenekHaritasi) ? Object.values(alan.bagimlilik.secenekHaritasi).flat().map((/** @type {any} */ s) => ({ ...s })) : [],
+      secenekler: planSecenekleri(alan),
       parametreler: nesneMi(alan.doldurucuParametreleri) ? { ...alan.doldurucuParametreleri } : {},
       // Bağlı liste: gözlenen olağan dolma süresi (koşucu bekleme sınırı ve yavaşlama notu; zincir-kesfi.mjs > yuklenmeBeklemesi).
       yuklenmeMs: alan.bagimlilik && Number.isFinite(alan.bagimlilik.yuklenmeMs) ? Number(alan.bagimlilik.yuklenmeMs) : null,
@@ -518,9 +530,22 @@ export function kimlikAlaniCoz(k, tur) {
   return { ad: ref.ad, dilim: d };
 }
 
+/**
+ * Seçenek karşılaştırma biçimi (açılır liste, radyo, oklu seçim — koşu ve hızlı test ortak; tarama/secenek-secimi.ts): boşluklar
+ * sadeleşir, Türkçe büyük harf ("Erkek" ↔ "ERKEK", "İstanbul" ↔ "İSTANBUL"). @param {unknown} t @returns {string}
+ */
+export const secenekNormal = (t) => String(t ?? '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('tr-TR');
+
+/**
+ * Önce tam eşleşme (senaryo değeri, sonra değer / metin); yoksa aynı sıra secenekNormal ile (büyük / küçük harf, boşluk). Birden çok
+ * aday olsa da tam eşleşme kazanır. Hiç yoksa değer olduğu gibi (seçici yok).
+ */
 export function secenekBul(secenekler, deger) {
   const d = String(deger);
-  const s = secenekler.find((x) => (x.senaryoDegeri ?? x.deger) === d) ?? secenekler.find((x) => x.deger === d || x.metin === d);
+  const n = secenekNormal(d);
+  const s = secenekler.find((x) => (x.senaryoDegeri ?? x.deger) === d) ?? secenekler.find((x) => x.deger === d || x.metin === d)
+    ?? (n ? secenekler.find((x) => secenekNormal(x.senaryoDegeri ?? x.deger) === n)
+      ?? secenekler.find((x) => secenekNormal(x.deger) === n || secenekNormal(x.metin) === n) : undefined);
   return { deger: s ? s.deger : d, metin: s && s.metin ? s.metin : s ? s.deger : d, secici: s && s.secici ? s.secici : null };
 }
 

@@ -45,3 +45,5 @@ export declare function metinBasvurulariniCoz(metinler: ReadonlyArray<string>, v
 export declare function tabloSecimleriniAyikla(v: unknown, tablolar: ReadonlyArray<{ id: string; ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }>; satirlar?: ReadonlyArray<{ id?: string }> }>):
   { secimler: Record<string, Record<string, string>> | undefined; hatalar: string[] };
 export declare function tabloBasvurusuVarMi(veri: unknown): boolean;
+/** Senaryo verisinde tabloya bağlı alanın düz (başvuru olmayan) değeri var mı. */
+export declare function bagliDuzDegerVarMi(veri: unknown, baglar: EkranBaglari | undefined, alanAnahtarlari: Record<string, string> | undefined): boolean;

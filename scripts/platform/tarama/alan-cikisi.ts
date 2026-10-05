@@ -1,6 +1,6 @@
 // Alan doldurulduktan sonra kullanıcı gibi alandan çıkma: (1) Tab ile change / blur (ve buna bağlı sorgu) tetiklenir, (2) AÇILIR takvim
-// hâlâ açıksa sayfanın boş bir yerine tıklanır, (3) yine açıksa en son çare Escape — maske ipucu olan alanda Escape hiç basılmaz (maske
-// eklentileri Escape'i "geri al" sayar: değer odak anındaki değere döner).
+// hâlâ açıksa sayfanın boş bir yerine tıklanır. Escape basılmaz: maske eklentileri Escape'i "geri al" sayar, açık pencereler (modal)
+// Escape'le kapanır; açık kalan takvim sonraki alanın yazılmasını engellemez.
 // Motor genel kalır: yalnız yaygın takvim bileşenlerinin sınıfları aranır; ürüne / siteye özgü sabit yoktur.
 import type { Locator, Page } from '@playwright/test';
 
@@ -61,23 +61,22 @@ export async function maskeIpucuVar(alan: Locator): Promise<boolean> {
 }
 
 /**
- * Alandan çıkış. Sıra: Tab (blur / change); açılır takvim hâlâ açıksa boş noktaya tıklama; yine açıksa en son çare Escape — o an odaktaki
- * öğeye (alan yeniden odaklanıp takvimini açmasın) ve yalnız alan da odaktaki öğe de maskesizse (maske Escape'te değeri geri alır).
+ * Alandan çıkış. Sıra: Tab (blur / change); açılır takvim hâlâ açıksa boş noktaya tıklama (kullanıcı gibi). Escape basılmaz.
  * yalnizYeni: alana odaklanmadan önce zaten açık olan takvimler (takvimleriKaydet) bu alanın sayılmaz.
  */
 export async function alandanCik(alan: Locator, secenek: { yalnizYeni?: boolean } = {}): Promise<void> {
   const sayfa = alan.page();
-  const maskeli = await maskeIpucuVar(alan);
   await alan.press('Tab', { timeout: 3_000 }).catch(() => alan.blur({ timeout: 2_000 }).catch(() => undefined));
   if (!(await acikTakvimVar(sayfa, secenek))) return;
   const nokta = await bosNokta(sayfa);
   if (nokta) await sayfa.mouse.click(nokta.x, nokta.y).catch(() => undefined);
   await sayfa.waitForTimeout(100);
-  if (maskeli || !(await acikTakvimVar(sayfa, secenek))) return;
-  if (!(await maskeIpucuVar(sayfa.locator('input:focus, textarea:focus')))) await sayfa.keyboard.press('Escape').catch(() => undefined);
 }
 
-/** Tıklanınca hiçbir şey başlatmayacak boş bir nokta (bağlantı / düğme / alan / takvim üstü değil); yoksa null. */
+/**
+ * Tıklanınca hiçbir şey başlatmayacak boş bir nokta (bağlantı / düğme / alan / takvim üstü değil; açık pencerenin arka perdesi de değil —
+ * perdeye tıklamak pencereyi kapatır); yoksa null.
+ */
 export async function bosNokta(sayfa: Page): Promise<{ x: number; y: number } | null> {
   return sayfa.evaluate(() => {
     const engel = 'a, button, input, select, textarea, label, summary, [role="button"], [role="link"], [onclick], [tabindex], iframe, video, canvas, .ui-datepicker, [class*="datepicker" i], [class*="calendar" i]';
@@ -86,7 +85,12 @@ export async function bosNokta(sayfa: Page): Promise<{ x: number; y: number } | 
       for (const fx of [0.97, 0.9, 0.75, 0.5, 0.25, 0.05]) {
         const px = Math.round(g * fx), py = Math.round(y * fy);
         const e = document.elementFromPoint(px, py);
-        if (e && !e.closest(engel)) return { x: px, y: py };
+        if (!e || e.closest(engel)) continue;
+        // Görünür alanın neredeyse tümünü kaplayan sabit / mutlak konumlu öğe pencere perdesidir.
+        const r = e.getBoundingClientRect();
+        const kap = getComputedStyle(e).position;
+        if ((kap === 'fixed' || kap === 'absolute') && r.width >= g * 0.9 && r.height >= y * 0.9) continue;
+        return { x: px, y: py };
       }
     }
     return null;
@@ -111,6 +115,20 @@ export function degerTuttu(mevcut: string | null, deger: string): boolean {
   return degerSade(mevcut).includes(istenen);
 }
 
+/**
+ * Sayfadaki değer istenenle AYNI mı (yazmadan önce: aynıysa alana hiç dokunulmaz): harf / rakam dizisi birebir aynı ya da ikisi de tarihse
+ * gün / ay / yıl aynı. degerTuttu'dan sıkıdır ("içeriyor" sayılmaz: alanda "11" varken "1" yazılmalıdır). Boş istenen hiçbir zaman aynı
+ * sayılmaz (boşaltma isteği yazma yoluna gider).
+ */
+export function degerAyni(mevcut: string | null, deger: string): boolean {
+  const istenen = degerSade(deger);
+  if (!istenen || mevcut === null) return false;
+  const a = tarihParcalari(deger);
+  const b = tarihParcalari(mevcut);
+  if (a && b) return a.gun === b.gun && a.ay === b.ay && a.yil === b.yil;
+  return degerSade(mevcut) === istenen;
+}
+
 /** Değer boş mu: hiç yok ya da yalnız maske deseni (en az bir "_" ve hiç harf / rakam yok: "(___) ___ __ __"). */
 export const bosSayilir = (m: string): boolean => !m || (/_/.test(m) && !degerSade(m));
 
@@ -123,12 +141,9 @@ export async function alanDegeriOku(alan: Locator): Promise<string | null> {
   }).catch(() => null);
 }
 
-/** Alanın sayfadaki değeri istenen değerle aynı mı (biçim farkları yok sayılır: boşluk, tire, parantez, büyük/küçük harf). */
+/** Alanın sayfadaki değeri istenen değerle aynı mı (degerAyni: biçim farkları yok sayılır — boşluk, tire, parantez, büyük/küçük harf, tarih biçimi). */
 export async function alanZatenDolu(alan: Locator, deger: string): Promise<boolean> {
-  const istenen = degerSade(deger);
-  if (!istenen) return false;
-  const mevcut = await alanDegeriOku(alan);
-  return mevcut !== null && degerSade(mevcut) === istenen;
+  return degerAyni(await alanDegeriOku(alan), deger);
 }
 
 /**
@@ -240,11 +255,12 @@ export async function yazmaKipiSec(alan: Locator, deger: string, istek: 'otomati
  * Alanı gerçek tuşlarla yazar. Alanda değer varsa önce klavyeyle (tümünü seç + sil) temizlenir — tuş dinleyen maske de boşaldığını
  * görür; klavye temizleyemezse fill('') yedeği. Sonra değer tuşlanır (her karakter için keydown / keypress / input / keyup).
  */
-async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number, yeniden = false): Promise<void> {
-  const temizlendi = await alanTemizle(alan);
-  // Maskeli alanda temiz başlangıç (yeniden yazmada ya da alan temizlendiyse): imleç başa alınır. Tıklama imleci tıklanan yere koyar;
-  // maske ortadaki boş yuvadan yazmaya başlarsa ilk hane düşer, sona fazladan hane eklenir ("maske imleci kaydırdı").
-  if ((yeniden || temizlendi) && (await maskeIpucuVar(alan))) await imleciBasaAl(alan);
+async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number): Promise<void> {
+  await alanTemizle(alan);
+  // Maskeli alanda İLK yazışta da (yeniden yazmada ve temizlemeden sonra olduğu gibi) imleç başa alınır. Tıklama / odak imleci ortaya
+  // koyabilir (ör. alan bir seçimden sonra beliriyor); maske ortadaki boş yuvadan yazmaya başlarsa ilk hane düşer, sona fazladan hane
+  // eklenir ("maske imleci kaydırdı") ve değer ancak yeniden yazmada düzelir (kullanıcı numarayı iki kez yazılırken görür).
+  if (await maskeIpucuVar(alan)) await imleciBasaAl(alan);
   await alan.pressSequentially(deger, { delay: aralikMs, timeout: zamanAsimiMs });
 }
 
@@ -277,7 +293,8 @@ async function alanTemizle(alan: Locator): Promise<boolean> {
 
 /**
  * Metin alanına değer yazar ve alandan çıkar — hızlı test, doğrulama koşusu ve normal koşunun (model-kosucu.ts) ORTAK yazma yolu
- * (kural tek yerde). Sıra: (1) kipe göre yaz (yazmaKipiSec: kısa metin gerçek tuşlarla, "yaz-sil-yaz" olmaz); doğrudan yazılan değer
+ * (kural tek yerde). Sıra: (0) alandaki değer istenenle zaten aynıysa (degerAyni) alana HİÇ dokunulmaz — yeniden yazmak sayfanın
+ * change işleyicisini boşuna tetikler (ör. değeri artıran sayı alanı), (1) kipe göre yaz (yazmaKipiSec: kısa metin gerçek tuşlarla, "yaz-sil-yaz" olmaz); doğrudan yazılan değer
  * hemen boş kaldıysa tuşlayarak, (2) alandan çık (+ sonra: sayfanın sakinleşmesi), (3) sayfa değeri alandan çıkınca sildiyse (ör. sonraki
  * sorgu satırı yeniden çizdi) ya da değer yazılanı TUTMUYORSA (önceden dolu alanda tuşlama eski değerin üstüne eklenmedi / maske eski
  * değeri geri koydu) bir kez temizleyip (tümünü seç + sil) tuşlayarak yeniden yaz ve yeniden çık. Değer sayfada biçimlenebilir (maske
@@ -293,11 +310,12 @@ export async function alanaYaz(
   const bos = async (): Promise<boolean> => bosSayilir((await alan.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim());
   const tuttu = async (): Promise<boolean> => { const m = await alanDegeriOku(alan); return m === null || degerTuttu(m, deger); };
   const aralik = secenek.aralikMs ?? TUSLAMA_ARALIGI_MS;
-  const tusla = (yeniden = false): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs, yeniden);
+  const tusla = (): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs);
   // Alan henüz çizilmediyse (önceki basışın sonucu gecikmeli) görünmesi beklenir: kip, alanın kendisine bakılarak seçilir.
   await alan.waitFor({ state: 'visible', timeout: secenek.zamanAsimiMs });
   // Yazmadan önceki değer (yalnız okunur): değer tutmazsa sayfanın bu değeri geri yazıp yazmadığına bakılır (düzenlenemez kanıtı).
   const onceki = await alanDegeriOku(alan);
+  if (degerAyni(onceki, deger)) return 'tamam';
   const kip = await yazmaKipiSec(alan, deger, secenek.tuslayarak ? 'tus' : secenek.kip ?? 'otomatik');
   // Odaktan önce açık olan takvimler bu alanın sayılmaz (sayfada sürekli duran takvim alandan çıkışta Escape / tıklama gerektirmez).
   await takvimleriKaydet(alan);
@@ -313,7 +331,7 @@ export async function alanaYaz(
   // (ör. her tuşta öneki yeniden ekleyen maske) değer doğrudan (tek input olayıyla) yazılır.
   await takvimleriKaydet(alan);
   await alan.click({ timeout: 3_000 }).catch(() => undefined);
-  await tusla(true).catch(() => undefined);
+  await tusla().catch(() => undefined);
   if (!(await tuttu())) await alan.fill(deger, { timeout: secenek.zamanAsimiMs }).catch(() => undefined);
   await alandanCik(alan, { yalnizYeni: true });
   await secenek.sonra?.();
@@ -359,6 +377,8 @@ export async function takvimdenYaz(alan: Locator, deger: string, zamanAsimiMs: n
   const sayfa = alan.page();
   const tutuyor = async (): Promise<boolean> => Boolean((await alan.inputValue({ timeout: 1_000 }).catch(() => '')).trim());
   await alan.waitFor({ state: 'visible', timeout: zamanAsimiMs });
+  // Değer zaten aynıysa dokunulmaz (alanaYaz ile aynı kural).
+  if (degerAyni(await alanDegeriOku(alan), deger)) return null;
   await alan.evaluate((e, v) => {
     const i = e as HTMLInputElement;
     const yaz = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;

@@ -126,6 +126,8 @@ export declare function modelKosuPlani(
   secenekler?: { altModeller?: Record<string, unknown>; mutlakaGorunmeli?: string[]; kimlikProfilleri?: Record<string, Record<string, Record<string, unknown>>>; simdi?: Date }
 ): ModelKosuPlani;
 
+/** Seçenek karşılaştırma biçimi: boşluk sadeleşir, Türkçe büyük harf. */
+export declare function secenekNormal(t: unknown): string;
 export declare function secenekBul(secenekler: PlanSecenegi[], deger: unknown): { deger: string; metin: string; secici: string | null };
 
 export declare function yuklemeDosyasiYolu(

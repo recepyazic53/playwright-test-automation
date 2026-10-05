@@ -1,5 +1,6 @@
 // Maskeli alan + sayfada sürekli duran takvim: alandan çıkış Escape basmaz (maske Escape'te değeri geri alır), değer tek seferde yazılır;
-// yeniden yazma temiz başlangıçtan (alan boş, imleç başta) yapılır. Gerçek açılır takvim yine kapanır.
+// yeniden yazma temiz başlangıçtan (alan boş, imleç başta) yapılır. Escape hiçbir alanda basılmaz (yalnız Escape'le kapanan takvim açık
+// kalır; değer korunur).
 // Güvenlik: yalnızca 127.0.0.1'deki sahte sayfa.
 import { expect, test, type Page } from '@playwright/test';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
@@ -101,6 +102,20 @@ test('maskeli alan + sürekli görünen takvim: tek seferde doğru yazılır, Es
   } finally { await kapat(); }
 });
 
+test('imleç ortadayken İLK yazış: imleç önce başa alınır, tek turda doğru (yeniden yazma yok)', async () => {
+  const { page, kapat } = await sayfaAc();
+  try {
+    const l = page.locator('#tel');
+    // Alan bir seçimden sonra belirip tıklanmış gibi: tıklama imleci ortadaki yuvaya koyar (sahte maske).
+    await l.click();
+    await expect.poll(() => l.evaluate((e) => (e as HTMLInputElement).selectionStart)).toBe(8);
+    expect(await alanaYaz(l, '5442312456', { zamanAsimiMs: 5_000 })).toBe('tamam');
+    await expect(l).toHaveValue('(544) 231 24 56');
+    // Tek tur (10 tuş): ilk yazış doğru çıktı, yeniden yazılmadı.
+    expect(await sayac(page)).toEqual({ tus: 10, esc: 0 });
+  } finally { await kapat(); }
+});
+
 test('odaktan önce zaten açık takvim bu alanın sayılmaz; Escape basılmaz', async () => {
   const { page, kapat } = await sayfaAc('?onceden=1');
   try {
@@ -125,16 +140,19 @@ test('sayfa değeri sildi: yeniden yazma temiz başlangıçtan (imleç başta), 
   } finally { await kapat(); }
 });
 
-test('gerçek açılır takvim (yalnız Escape ile kapanan) maskesiz tarih alanında yine kapanır', async () => {
+// Escape kuralı kaldırıldı (önce dene): Escape açık pencereyi (modal) kapatabilir ve maskeli değeri geri alabilir; yalnız Escape'le
+// kapanan takvim açık kalır, değer korunur ve sonraki alanın yazılmasını engellemez.
+test('yalnız Escape ile kapanan takvim: Escape basılmaz, değer korunur, sonraki alan yazılır', async () => {
   const { page, kapat } = await sayfaAc();
   try {
     const l = page.locator('#dt');
     await l.fill('13.04.1998');
     expect(await acikTakvimVar(page)).toBe(true);
     await alandanCik(l);
-    expect(await acikTakvimVar(page)).toBe(false);
     await expect(l).toHaveValue('13.04.1998');
-    expect((await sayac(page)).esc).toBe(1);
+    expect((await sayac(page)).esc).toBe(0);
+    expect(await alanaYaz(page.locator('#sonraki'), 'abc', { zamanAsimiMs: 5_000 })).toBe('tamam');
+    await expect(l).toHaveValue('13.04.1998');
   } finally { await kapat(); }
 });
 
