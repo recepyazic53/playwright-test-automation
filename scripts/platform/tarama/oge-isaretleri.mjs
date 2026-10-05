@@ -13,6 +13,7 @@
 //   Koşu tanımı eklenince model şema sürümü 2 olur; "adım/aksiyon çıkarılamadı" bilinmeyeni kalkar.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: oge-isaretleri.d.mts.
 
+import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { AKSIYON_BILINMEYENI, alanDonusturucu, kimlikUret, sabitGostergeMetni, temizMetin } from './paket-olusturucu.mjs';
 
 /** Seçilen öğenin türleri (sırası arayüzdeki sıradır). */
@@ -127,7 +128,7 @@ export function kesifBulgulari(model) {
   const kosullar = nesneMi(model.kosullar) ? model.kosullar : {};
   const alanlar = (Array.isArray(model.adimlar) ? model.adimlar : []).filter(nesneMi)
     .flatMap((a) => (Array.isArray(a.bolumler) ? a.bolumler : []).filter(nesneMi).flatMap((b) => (Array.isArray(b.alanlar) ? b.alanlar : []).filter(nesneMi)));
-  const etiketi = (/** @type {Record<string, any>} */ a) => String((nesneMi(a.etiket) && (a.etiket.ekran || a.etiket.form)) || a.id);
+  const etiketi = (/** @type {Record<string, any>} */ a) => etiketMetni(a.etiket, a.id);
   const adi = (/** @type {string} */ id) => { const a = alanlar.find((x) => x.id === id); return a ? etiketi(a) : id; };
   for (const a of alanlar) {
     const k = nesneMi(a.gorunurluk) && typeof a.gorunurluk.kosul === 'string' ? kosullar[a.gorunurluk.kosul] : null;

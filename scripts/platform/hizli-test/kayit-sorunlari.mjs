@@ -2,6 +2,7 @@
 // anlayacağı maddelere çevirir: konum (adım / alan / tablo / bitiş koşulu) modelden ADIYLA yazılır, teknik ileti "ayrinti"de kalır ve her
 // madde için mümkünse "Düzelt" hedefi verilir (hızlı testin geri dönüş uçları: 'bitis' | 'karar'; özet sekmesinde 'tablo' kartı).
 // Motor geneldir: ürüne / ekrana özgü hiçbir kural yoktur; yalnız model yollarının biçimi okunur.
+import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { anlasilirDogrulamaIletisi } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 
 /** @typedef {Record<string, any>} Nesne */
@@ -13,8 +14,7 @@ const metinMi = (/** @type {unknown} */ d) => typeof d === 'string' && d.trim() 
 
 /** Alanın gösterilen adı (etiket metni ya da { form, ekran }; yoksa kimlik). @param {Nesne} a */
 function alanAdi(a) {
-  const e = nesneMi(a.etiket) ? a.etiket.form || a.etiket.ekran : a.etiket;
-  return metinMi(e) ? String(e) : String(a.id ?? '');
+  return etiketMetni(a.etiket, a.id);
 }
 
 /** Modeldeki bütün alanlar (adımlar, akışlar, senaryo düzeyi; iç içe alt alanlar dahil). @param {unknown} model @returns {Nesne[]} */

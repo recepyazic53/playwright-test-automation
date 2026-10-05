@@ -24,6 +24,7 @@
 //    değişmesin). Senaryosu olan ya da varsayılan akış silinemez.
 // NOT: import.meta KULLANILMAZ. Tipler: akis-servisi.d.mts.
 
+import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { DepoHatasi, ekranKaydet, ekranModeliEkle, ekranModeliGetir, ekranlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet } from '../veritabani/depo.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli } from '../senaryolar/model-formu.mjs';
 import { senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
@@ -46,7 +47,7 @@ const AD_EN_COK = 80;
 const SINIRLI_TIPLER = ['sayi', 'tarih', 'metin', 'telefon'];
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const kopya = (/** @type {any} */ d) => JSON.parse(JSON.stringify(d));
-const etiketi = (/** @type {Nesne} */ a) => (nesneMi(a.etiket) && (a.etiket.form || a.etiket.ekran)) || a.id;
+const etiketi = (/** @type {Nesne} */ a) => etiketMetni(a.etiket, a.id);
 /** Model alan tipi → sayfa envanteri türü. */
 const TURLER = { secim: 'select', okluSecim: 'select', radyo: 'radio', onayKutusu: 'checkbox', tarih: 'date', sayi: 'number', dosya: 'file', telefon: 'tel' };
 

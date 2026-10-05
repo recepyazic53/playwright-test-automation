@@ -30,6 +30,7 @@ import { BICIM_ATFI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-ist
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { modelAlanlari, alanEtiketi as paketAlanEtiketi } from '../tablolar/paket-tablolari.mjs';
+import { bagTablolari, etiketMetni, secimeGoreVar } from '../tablolar/secime-gore-bag.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
 /** Yapay zekâ aracının inceleme kuralları ve tekrar analiz ek kuralı: TEK kaynak paket-istekleri.mjs (arayüz de aynı dosyayı kullanır). */
@@ -145,7 +146,7 @@ function hassasAdlar(/** @type {Veritabani} */ vt, /** @type {string} */ projeId
   return new Set(testVerisiTurleriniListele(vt, projeId).flatMap((t) => t.alanlar.filter((a) => a.hassas !== false).map((a) => a.ad)));
 }
 
-const alanEtiketi = (/** @type {Nesne} */ a) => (nesneMi(a.etiket) && (a.etiket.ekran || a.etiket.form)) || (nesneMi(a.form) && a.form.etiket) || a.id;
+const alanEtiketi = (/** @type {Nesne} */ a) => etiketMetni(a.etiket, '') || (nesneMi(a.form) && typeof a.form.etiket === 'string' && a.form.etiket) || String(a.id);
 const senaryoAnahtari = (/** @type {Nesne} */ a) => {
   const s = nesneMi(a.eslesme) ? a.eslesme.senaryo : undefined;
   return typeof s === 'string' ? s : Array.isArray(s) && s.length === 1 && typeof s[0] === 'string' ? s[0] : null;
@@ -1131,12 +1132,14 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const baglar = etkinAlanBaglari(vt, ekranId);
   const tumTablolar = Object.keys(baglar).length ? tablolariListele(vt, projeId) : [];
   const alanHaritasi = model ? modelAlanlari(model) : new Map();
-  const bagliTablolar = tumTablolar.filter((t) => Object.values(baglar).some((b) => b.tablo === t.id));
+  const bagliTablolar = tumTablolar.filter((t) => Object.values(baglar).some((b) => bagTablolari(b).includes(t.id)));
+  const tabloAdi = (/** @type {string} */ id) => tumTablolar.find((x) => x.id === id)?.ad ?? '(silinmiş tablo)';
   const testVerisi = {
+    // Seçime göre değişen bağ (secime-gore-bag.mjs) paket biçimindeki gibi adla: secimeGore { alan, degerler: { değer: { tablo, sutun, etiket? } } }.
     alanBaglari: Object.entries(baglar).map(([alanId, b]) => {
-      const t = tumTablolar.find((x) => x.id === b.tablo);
       const a = alanHaritasi.get(alanId);
-      return { alanId, alanEtiketi: a ? paketAlanEtiketi(a) : alanId, tablo: t ? t.ad : '(silinmiş tablo)', sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}) };
+      return { alanId, alanEtiketi: a ? paketAlanEtiketi(a) : alanId, tablo: tabloAdi(b.tablo), sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}),
+        ...(b.secimeGore && secimeGoreVar(b) ? { secimeGore: { alan: b.secimeGore.alan, degerler: Object.fromEntries(Object.entries(b.secimeGore.degerler).map(([d, x]) => [d, { ...x, tablo: tabloAdi(x.tablo) }])) } } : {}) };
     }),
     tablolar: bagliTablolar.map((t) => ({
       ad: t.ad, ...(t.kaynak?.tabloTuru ? { tur: t.kaynak.tabloTuru } : {}),

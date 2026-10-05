@@ -3,7 +3,7 @@
 export type Karsilik = { sayfa?: string; servis?: string };
 export type PaketSutunu = { ad: string; gizli: boolean; karsiliklar: Record<string, Karsilik> };
 export type PaketTablosu = { ad: string; tur: 'liste' | 'kayit' | null; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number };
-export type PaketBaglantisi = { alanId: string; tablo: string; sutun: string; etiket?: string };
+export type PaketBaglantisi = { alanId: string; tablo: string; sutun: string; etiket?: string; secimeGore?: { alan: string; degerler: Record<string, { tablo: string; sutun: string; etiket?: string }> } };
 export type Secenek = { deger: string; metin: string };
 export type UretimAlani = { anahtar: string; id: string; etiket: string; secenekler: Secenek[] };
 /** Bir seçim alanının bir anda gözlenen seçenekleri ve o andaki DİĞER seçimlerin değerleri (anahtar → seçenek değeri). */

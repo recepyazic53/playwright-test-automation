@@ -21,6 +21,7 @@
 
 import { KANIT_BOYUT_SINIRI, KANIT_EN_COK, SAYFA_PAKETI_SURUMU, SAYFA_PAKETI_TURU, gizliKalipBul, kanitVerisiniCoz } from '../ekranlar/sayfa-paketi.mjs';
 import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/paket-tablolari.mjs';
+import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { yerTutucuSecenekMi } from './yer-tutucu-secenek.mjs';
 import { bulguMetni, olaganYuklenme, zincirBagimliliklari } from './zincir-kesfi.mjs';
@@ -554,7 +555,7 @@ export function taramaPaketiOlustur(meta, envanter) {
           const hedef = seciciNormal(alan.konum.secici);
           const bulunan = [...hamlar.values()].find((h) => !eslesen.has(h.anahtar) && cerceveAyni(h.cerceve, alan.konum.cerceve) && [h.secici, ...h.adaySeciciler].some((s) => seciciNormal(s) === hedef));
           if (bulunan) eslesen.set(bulunan.anahtar, { alan, bolum });
-          else eslesmeyenler.push(String((nesneMi(alan.etiket) && (alan.etiket.ekran || alan.etiket.form)) || alan.id));
+          else eslesmeyenler.push(etiketMetni(alan.etiket, alan.id));
         }
       }
     }
@@ -1546,7 +1547,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (nesneMi(model.baglamGorunurlugu) && nesneMi(model.baglamGorunurlugu.alanlar)) {
       for (const id of Object.keys(model.baglamGorunurlugu.alanlar)) if (!alanIdleri.has(id)) delete model.baglamGorunurlugu.alanlar[id];
     }
-    const kaybolan = anaAlanlar.filter((a) => !eslesenMevcut.has(a)).map((a) => String((nesneMi(a.etiket) && (a.etiket.ekran || a.etiket.form)) || a.id));
+    const kaybolan = anaAlanlar.filter((a) => !eslesenMevcut.has(a)).map((a) => etiketMetni(a.etiket, a.id));
     if (kaybolan.length) {
       bilinmeyenler.push(`Mevcut modeldeki ${kaybolan.length} alan kayıtta seçilmedi ve yeni modelde yok (Bulgular'da "kaldırıldı" görünür; istemiyorsanız reddedin): ${kaybolan.slice(0, 15).join(', ')}${kaybolan.length > 15 ? '…' : ''}.`);
     }
@@ -1593,7 +1594,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     a.seceneklerDurumu = 'kismi';
     a.seceneklerKaynagi = 'hızlı test keşfi (bağlı liste)';
     a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Seçenekleri "')),
-      `Seçenekleri "${(u.etiket && typeof u.etiket === 'object' ? u.etiket.ekran ?? u.etiket.form : u.etiket) ?? u.id}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
+      `Seçenekleri "${etiketMetni(u.etiket, u.id)}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
   }
   // Tetikler (hızlı test: bir metin alanına değer girilince başka alan beliriyor / listesi doluyor): hedef alanın "tetik"i; koşucu kaynak
   // alanı doldurduktan sonra hedefin dolmasını / belirmesini bekler (bağlı liste beklemesiyle aynı sınır).
@@ -1602,7 +1603,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     const u = hamdanModel.get(kaynak);
     if (!a || !u || a === u || a.tetik !== undefined) continue;
     a.tetik = { alan: String(u.id), olay: olay === 'belirdi' ? 'belirdi' : 'doldu' };
-    const ustEtiket = (u.etiket && typeof u.etiket === 'object' ? u.etiket.ekran ?? u.etiket.form : u.etiket) ?? u.id;
+    const ustEtiket = etiketMetni(u.etiket, u.id);
     a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Tetik: ')),
       `Tetik: "${ustEtiket}" girilince ${olay === 'belirdi' ? 'belirir' : 'seçenekleri gelir'} (hızlı test; koşu bunu bekler).`];
   }

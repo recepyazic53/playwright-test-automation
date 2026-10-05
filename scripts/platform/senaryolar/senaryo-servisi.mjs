@@ -30,6 +30,7 @@ import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { ayarBasvurulariniDenetle, modelAlanBilgisi, tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { basvuruGruplari, veriKosulariniAc, veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 import { tabloSecenekUyumu } from '../tablolar/tablo-uyumu.mjs';
+import { olasiBaglar, secimeGoreVar } from '../tablolar/secime-gore-bag.mjs';
 import { icerikTalepleri, talepleriAyikla } from './talepler.mjs';
 import { bekleyenAlanlar, veriBekliyorAyikla } from './veri-bekliyor.mjs';
 
@@ -543,15 +544,39 @@ function tabloBaglariOzeti(vt, projeId, ekranId) {
   const gizliBaglar = {};
   /** @type {Record<string, { tablo: string; sutun: string; etiket?: string; gizli: boolean }>} */
   const kayitBaglari = {};
-  for (const [alan, b] of Object.entries(baglar)) {
+  /**
+   * Seçime göre değişen bağlar (secime-gore-bag.mjs): alan → { alan: kontrol, varsayilan, degerler }; her bağ adla (tablo / sütun adı,
+   * etiket, gizli, kayıt tablosu mu). Form "Tablodan al" ve kayıt grubunu kontrolün o anki değerine göre seçer.
+   * @type {Record<string, { alan: string; varsayilan: BagOzeti | null; degerler: Record<string, BagOzeti> }>}
+   */
+  const secimeGoreBaglar = {};
+  /** @typedef {{ tablo: string; sutun: string; etiket?: string; gizli: boolean; kayit: boolean }} BagOzeti */
+  /** @param {{ tablo: string; sutun: string; etiket?: string }} b @returns {BagOzeti | null} */
+  const ozetle = (b) => {
     const t = tablolar.find((x) => x.id === b.tablo);
     const s = t ? t.sutunlar.find((c) => c.ad === b.sutun) : undefined;
-    if (!t || !s) continue;
-    const ozet = { tablo: t.ad, sutun: s.ad, ...(b.etiket ? { etiket: String(b.etiket) } : {}) };
-    if (s.gizli) gizliBaglar[alan] = ozet;
-    if (kayitIdleri.has(t.id)) kayitBaglari[alan] = { ...ozet, gizli: s.gizli === true };
+    if (!t || !s) return null;
+    return { tablo: t.ad, sutun: s.ad, ...(b.etiket ? { etiket: String(b.etiket) } : {}), gizli: s.gizli === true, kayit: kayitIdleri.has(t.id) };
+  };
+  for (const [alan, b] of Object.entries(baglar)) {
+    const o = ozetle(b);
+    if (secimeGoreVar(b)) {
+      /** @type {Record<string, BagOzeti>} */
+      const degerler = {};
+      for (const x of olasiBaglar(b)) { const y = x.deger === null ? null : ozetle(x); if (x.deger !== null && y) degerler[x.deger] = y; }
+      secimeGoreBaglar[alan] = { alan: String(b.secimeGore?.alan), varsayilan: o, degerler };
+      // Önerilerin "hariç alanları" ve eski istemciler için: varsayılan ya da ilk kayıt tablosundaki bağ.
+      const k = [o, ...Object.values(degerler)].find((x) => x && x.kayit);
+      if (k) kayitBaglari[alan] = { tablo: k.tablo, sutun: k.sutun, ...(k.etiket ? { etiket: k.etiket } : {}), gizli: k.gizli };
+      if (o && o.gizli) gizliBaglar[alan] = { tablo: o.tablo, sutun: o.sutun, ...(o.etiket ? { etiket: o.etiket } : {}) };
+      continue;
+    }
+    if (!o) continue;
+    const ozet = { tablo: o.tablo, sutun: o.sutun, ...(o.etiket ? { etiket: o.etiket } : {}) };
+    if (o.gizli) gizliBaglar[alan] = ozet;
+    if (o.kayit) kayitBaglari[alan] = { ...ozet, gizli: o.gizli };
   }
-  return { gizliBaglar, kayitBaglari, kayitTablolari: tablolar.filter((t) => kayitIdleri.has(t.id)).map((t) => t.ad) };
+  return { gizliBaglar, kayitBaglari, secimeGoreBaglar, kayitTablolari: tablolar.filter((t) => kayitIdleri.has(t.id)).map((t) => t.ad) };
 }
 
 /**
@@ -565,17 +590,45 @@ function tabloBaglariOzeti(vt, projeId, ekranId) {
 export function tabloBagUyumlari(vt, projeId, ekranId, baglar, tablolar) {
   const b = baglar ?? etkinAlanBaglari(vt, ekranId);
   if (!Object.keys(b).length) return {};
-  const { girdiler } = ekranGirdileri(vt, projeId, ekranId, { modelSecenekleri: true });
   const tl = tablolar ?? tablolariListele(vt, projeId);
   /** @type {Record<string, import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { etiket: string; tablo: string; sutun: string }>} */
   const sonuc = {};
-  for (const [alan, bag] of Object.entries(b)) {
+  for (const x of tabloBagUyumListesi(vt, projeId, ekranId, b, tl)) {
+    // Alan başına bir uyarı: önce güçlü, sonra varsayılan bağ (seçime göre bağda her olası bağ ayrı denetlenir; Veri sağlığı hepsini listeler).
+    const once = sonuc[x.alanId];
+    if (!once || (x.duzey === 'guclu' && once.duzey !== 'guclu')) {
+      const { alanId: _a, deger: _d, kontrol: _k, ...u } = x;
+      sonuc[x.alanId] = u;
+    }
+  }
+  return sonuc;
+}
+
+/**
+ * Tablo bağı uyumu, HER OLASI bağ için ayrı (seçime göre değişen bağda varsayılan + her seçenek; secime-gore-bag.mjs). Seçenekli bağda
+ * metin "<kontrol> = <değer>: …" ile başlar. @param {Veritabani} vt @param {string} projeId @param {string} ekranId
+ * @param {Record<string, any>} baglar @param {import('../tablolar/tablo-deposu.mjs').Tablo[]} tablolar
+ * @returns {Array<import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { alanId: string; etiket: string; tablo: string; sutun: string; deger: string | null; kontrol: string | null }>}
+ */
+export function tabloBagUyumListesi(vt, projeId, ekranId, baglar, tablolar) {
+  if (!Object.keys(baglar).length) return [];
+  const { girdiler } = ekranGirdileri(vt, projeId, ekranId, { modelSecenekleri: true });
+  /** @type {ReturnType<typeof tabloBagUyumListesi>} */
+  const sonuc = [];
+  for (const [alan, bag] of Object.entries(baglar)) {
     const g = girdiler.find((x) => x.id === alan);
-    const t = tl.find((x) => x.id === bag.tablo);
-    const s = t ? t.sutunlar.find((c) => c.ad === bag.sutun) : undefined;
-    if (!g || g.tip !== 'secim' || !t || !s) continue;
-    const u = tabloSecenekUyumu({ etiket: g.etiket, secenekler: g.modelSecenekleri, seceneklerDurumu: g.seceneklerDurumu }, s, t.satirlar.map((r) => r.degerler[s.ad]));
-    if (u) sonuc[alan] = { ...u, etiket: g.etiket, tablo: t.ad, sutun: s.ad };
+    if (!g || g.tip !== 'secim') continue;
+    const kontrolAlan = secimeGoreVar(bag) ? girdiler.find((x) => x.id === bag.secimeGore.alan) : undefined;
+    const kontrol = secimeGoreVar(bag) ? (kontrolAlan ? kontrolAlan.etiket : String(bag.secimeGore.alan)) : null;
+    for (const ob of olasiBaglar(bag)) {
+      const t = tablolar.find((x) => x.id === ob.tablo);
+      const s = t ? t.sutunlar.find((c) => c.ad === ob.sutun) : undefined;
+      if (!t || !s) continue;
+      const u = tabloSecenekUyumu({ etiket: g.etiket, secenekler: g.modelSecenekleri, seceneklerDurumu: g.seceneklerDurumu }, s, t.satirlar.map((r) => r.degerler[s.ad]));
+      if (!u) continue;
+      const degerMetni = ob.deger === null ? 'diğer' : (kontrolAlan?.secenekler.find((x) => x.deger === ob.deger)?.metin ?? ob.deger);
+      sonuc.push({ ...u, ...(kontrol ? { metin: `${kontrol} = ${degerMetni}: ${u.metin}` } : {}), alanId: alan, etiket: g.etiket, tablo: t.ad, sutun: s.ad, deger: ob.deger, kontrol });
+    }
   }
   return sonuc;
 }

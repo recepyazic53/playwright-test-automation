@@ -14,6 +14,7 @@
 // geriye uyum için korunur) GEREKEN TABLO ADLARIDIR.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: sayfa-paketi.d.mts.
 
+import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { bagsizKosulUyarilari, ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { senaryoyuDogrula, tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
@@ -208,8 +209,7 @@ function modelTarihAlanlari(model) {
     const s = a.eslesme.senaryo;
     const anahtar = typeof s === 'string' ? s : Array.isArray(s) && s.length === 1 && typeof s[0] === 'string' ? s[0] : null;
     if (!anahtar) continue;
-    const e = nesneMi(a.etiket) ? a.etiket.form || a.etiket.ekran : a.etiket;
-    sonuc.push({ anahtar, etiket: typeof e === 'string' && e ? e : anahtar, bicim: typeof a.bicim === 'string' ? a.bicim : null });
+    sonuc.push({ anahtar, etiket: etiketMetni(a.etiket, anahtar), bicim: typeof a.bicim === 'string' ? a.bicim : null });
   }
   return sonuc;
 }
