@@ -3,59 +3,47 @@
 // kasada saklanır (sonuclar/ozet-panosu.mjs). Bu modül düzenin biçimini, varsayılanını, doğrulamasını ve düzenleme işlemlerini
 // (kaldır / ekle / taşı / boyutlandır) tanımlar; kodda kullanıcıya ait seçim yoktur.
 //
-// Düzen: { surum: 1, kartlar: [{ id, tur, boyut, ayar? }] }
+// Düzen: { surum: 2, kartlar: [{ id, tur, x, y, w, h, ayar?, donem? }] } — SERBEST IZGARA.
 //   Yerleşik kartlar (tur = id; her biri en çok bir kez): baslarken, ozetKutulari, dikkat, bakim, kapsam, kosuTrendi.
 //   Kullanıcı kartları (id "k-…"): sql (SQL sorgusu), veri (Nöbetçi verisi; hazır şablon), metin (kısa not + iç sayfa bağlantıları).
-//   boyut: kucuk (1/3) | orta (1/2) | genis (2/3) | tam (tam satır) — 12 sütunlu ızgarada 4 / 6 / 8 / 12 sütun.
+//   x / y: kartın sol üst hücresi (sütun 0–11, satır 0…); w / h: kapladığı sütun (1–12) ve satır (1–EN_COK_YUKSEKLIK) sayısı.
+//   Izgara 12 sütundur; satır birimi SATIR_BIRIMI px (satırlar arası IZGARA_BOSLUK px). Kartlar ÜST ÜSTE BİNMEZ; üstte / yanda boşluk
+//   kalabilir (otomatik yukarı sıkıştırma YOK). Bir kart başka kartın yerine konunca çakışanlar AŞAĞI itilir (kartYerlestir); komşu
+//   kartların boyu değişmez. Kartın en küçük boyutu türüne / görünümüne göredir (enKucukBoyut); daha küçük kayıt o boyuta büyütülür.
+//   Kartlar okuma sırasıyla (y, sonra x) saklanır: dar ekranda tek sütunda bu sırayla alt alta dizilir.
 //   donem: döneme bağlı kartın dönem seçimi ({ hizli } ya da { baslangic, bitis }); bkz. "Kart dönemi". Panonun genel dönemi yoktur.
+// Eski (sürüm 1) SIRALI düzen { kartlar: [{ id, tur, boyut, yukseklik? }], esitYukseklik } okunurken ızgara konumlarına çevrilir
+// (eskiDuzenGocu: sıra ve genişlik / yükseklik seçimleri korunur, hiçbir kart kaybolmaz); arayüz göçü bir kez kaydeder.
 // Varsayılan düzen bugünkü Özet'tir: Başlarken, Özet kutuları, Dikkat, Bakım, Kapsam ve güvenlik.
 
-export const PANO_SURUMU = 1;
+export const PANO_SURUMU = 2;
 export const EN_COK_KART = 40;
 export const KIMLIK_DESENI = /^[A-Za-z0-9_-]{1,64}$/;
 const DIS_KIMLIK = /^[A-Za-z0-9_-]{1,200}$/;
 // eslint-disable-next-line no-control-regex
 const KONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 
-/** Kart boyutları (12 sütunlu ızgara). */
-export const BOYUTLAR = Object.freeze([
-  Object.freeze({ anahtar: 'kucuk', ad: 'Küçük (1/3)', sutun: 4 }),
-  Object.freeze({ anahtar: 'orta', ad: 'Orta (1/2)', sutun: 6 }),
-  Object.freeze({ anahtar: 'genis', ad: 'Geniş (2/3)', sutun: 8 }),
-  Object.freeze({ anahtar: 'tam', ad: 'Tam satır', sutun: 12 })
-]);
-const BOYUT_ANAHTARLARI = BOYUTLAR.map((b) => b.anahtar);
+/** Izgara: sütun sayısı, satır birimi (px) ve hücreler arası boşluk (px; stil-ozet-panosu.css ile aynı). */
+export const IZGARA_SUTUN = 12;
+export const SATIR_BIRIMI = 48;
+export const IZGARA_BOSLUK = 14;
+/** Kartın en çok yüksekliği (satır) ve kartın üst kenarının en alt satırı. */
+export const EN_COK_YUKSEKLIK = 24;
+export const EN_COK_SATIR = 2000;
+/** h satırlık kartın piksel yüksekliği (aradaki boşluklar dahil). @param {number} h */
+export const satirPikseli = (h) => h * SATIR_BIRIMI + (h - 1) * IZGARA_BOSLUK;
 
 /**
- * Kart yüksekliği: 'oto' (içeriğe göre; varsayılan) ya da SATIR sayısı (2–12; bir satır SATIR_YUKSEKLIGI px, satırlar arası boşluk dahil).
- * Hazır seçimler: Küçük 3, Orta 4, Büyük 6, Çok büyük 8 satır; köşe tutamağıyla 2–12 arası her değer seçilebilir.
+ * Yerleşik kartlar (mevcut Özet bileşenleri). varsayilan: varsayılan panoda var mı. w / h: eklenince (ve varsayılan düzende) boyutu;
+ * en: en küçük boyutu.
  */
-export const SATIR_YUKSEKLIGI = 88;
-export const YUKSEKLIK_SINIRI = Object.freeze({ en: 2, enCok: 12 });
-export const YUKSEKLIKLER = Object.freeze([
-  Object.freeze({ anahtar: 'oto', ad: 'Otomatik' }), Object.freeze({ anahtar: 3, ad: 'Küçük' }), Object.freeze({ anahtar: 4, ad: 'Orta' }),
-  Object.freeze({ anahtar: 6, ad: 'Büyük' }), Object.freeze({ anahtar: 8, ad: 'Çok büyük' })
-]);
-/** Kartın yüksekliği (eski kayıtta yoksa 'oto'). @param {unknown} v @returns {'oto' | number} */
-export function yukseklikTemizle(v) {
-  if (v === undefined || v === null || v === '' || v === 'oto') return 'oto';
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < YUKSEKLIK_SINIRI.en || n > YUKSEKLIK_SINIRI.enCok) {
-    throw new PanoHatasi(`Kart yüksekliği ${YUKSEKLIK_SINIRI.en}–${YUKSEKLIK_SINIRI.enCok} satır ya da Otomatik olmalıdır.`);
-  }
-  return n;
-}
-/** Yüksekliğin görünen adı. @param {'oto' | number} y */
-export const yukseklikAdi = (y) => YUKSEKLIKLER.find((x) => x.anahtar === y)?.ad ?? `Özel (${y} satır)`;
-
-/** Yerleşik kartlar (mevcut Özet bileşenleri). varsayilan: varsayılan panoda var mı. */
 export const YERLESIK_KARTLAR = Object.freeze([
-  Object.freeze({ tur: 'baslarken', ad: 'Başlarken', aciklama: 'İlk koşuya giden yedi adım; liste tamamlanınca ya da gizlenince kendiliğinden kaybolur.', boyut: 'tam', varsayilan: true, donemli: false }),
-  Object.freeze({ tur: 'ozetKutulari', ad: 'Özet kutuları', aciklama: 'Ekranlar, Servisler ve Uçtan uca: dönemin başarı oranı ve önceki döneme göre fark.', boyut: 'tam', varsayilan: true, donemli: true }),
-  Object.freeze({ tur: 'dikkat', ad: 'Dikkat', aciklama: 'Hemen bakılması gerekenler: kritik, P1 ya da uzun süredir kırmızı öğeler, yavaşlayan servisler, kaçan planlı koşular.', boyut: 'kucuk', varsayilan: true, donemli: false }),
-  Object.freeze({ tur: 'bakim', ad: 'Bakım', aciklama: 'Eskiyen tarihler, koşmayan senaryolar, bekleyen bulgular, test verisi sağlığı.', boyut: 'kucuk', varsayilan: true, donemli: false }),
-  Object.freeze({ tur: 'kapsam', ad: 'Kapsam ve güvenlik', aciklama: 'Senaryosuz metotlar, denenmemiş koşul dalları, yedek, riskli izinler, ortam türü.', boyut: 'kucuk', varsayilan: true, donemli: false }),
-  Object.freeze({ tur: 'kosuTrendi', ad: 'Koşu trendi', aciklama: 'Genel kapsamlı tam koşuların seçili dönemdeki çubuk grafiği.', boyut: 'tam', varsayilan: false, donemli: true })
+  Object.freeze({ tur: 'baslarken', ad: 'Başlarken', aciklama: 'İlk koşuya giden yedi adım; liste tamamlanınca ya da gizlenince kendiliğinden kaybolur.', w: 12, h: 6, en: Object.freeze({ w: 4, h: 3 }), varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'ozetKutulari', ad: 'Özet kutuları', aciklama: 'Ekranlar, Servisler ve Uçtan uca: dönemin başarı oranı ve önceki döneme göre fark.', w: 12, h: 5, en: Object.freeze({ w: 4, h: 3 }), varsayilan: true, donemli: true }),
+  Object.freeze({ tur: 'dikkat', ad: 'Dikkat', aciklama: 'Hemen bakılması gerekenler: kritik, P1 ya da uzun süredir kırmızı öğeler, yavaşlayan servisler, kaçan planlı koşular.', w: 4, h: 7, en: Object.freeze({ w: 3, h: 3 }), varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'bakim', ad: 'Bakım', aciklama: 'Eskiyen tarihler, koşmayan senaryolar, bekleyen bulgular, test verisi sağlığı.', w: 4, h: 7, en: Object.freeze({ w: 3, h: 3 }), varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'kapsam', ad: 'Kapsam ve güvenlik', aciklama: 'Senaryosuz metotlar, denenmemiş koşul dalları, yedek, riskli izinler, ortam türü.', w: 4, h: 7, en: Object.freeze({ w: 3, h: 3 }), varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'kosuTrendi', ad: 'Koşu trendi', aciklama: 'Genel kapsamlı tam koşuların seçili dönemdeki çubuk grafiği.', w: 12, h: 6, en: Object.freeze({ w: 4, h: 4 }), varsayilan: false, donemli: true })
 ]);
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -127,9 +115,9 @@ const YERLESIK = new Map(YERLESIK_KARTLAR.map((k) => [k.tur, k]));
 
 /** Kullanıcı kartı türleri. */
 export const OZEL_KART_TURLERI = Object.freeze([
-  Object.freeze({ tur: 'sql', ad: 'SQL sorgusu', aciklama: 'Tanımlı bir veritabanı bağlantısında yalnız okuma sorgusu; "Yenile"ye basınca çalışır.', boyut: 'orta' }),
-  Object.freeze({ tur: 'veri', ad: 'Nöbetçi verisi', aciklama: 'Hazır sorgu şablonları: başarı oranı, bugün başarısız olanlar, talep no\'su olmayanlar, en çok başarısız olanlar.', boyut: 'kucuk' }),
-  Object.freeze({ tur: 'metin', ad: 'Metin ve bağlantılar', aciklama: 'Kısa not ve Nöbetçi içindeki sayfalara bağlantılar.', boyut: 'kucuk' })
+  Object.freeze({ tur: 'sql', ad: 'SQL sorgusu', aciklama: 'Tanımlı bir veritabanı bağlantısında yalnız okuma sorgusu; "Yenile"ye basınca çalışır.' }),
+  Object.freeze({ tur: 'veri', ad: 'Nöbetçi verisi', aciklama: 'Hazır sorgu şablonları: başarı oranı, bugün başarısız olanlar, talep no\'su olmayanlar, en çok başarısız olanlar.' }),
+  Object.freeze({ tur: 'metin', ad: 'Metin ve bağlantılar', aciklama: 'Kısa not ve Nöbetçi içindeki sayfalara bağlantılar.' })
 ]);
 const OZEL = new Map(OZEL_KART_TURLERI.map((k) => [k.tur, k]));
 
@@ -204,9 +192,6 @@ export function iciAdresMi(adres) {
   return typeof adres === 'string' && adres.length <= 300 && /^#\/[A-Za-z0-9/_\-.%~]*$/.test(adres);
 }
 
-/** Boyutun ızgara sütunu (bilinmeyen: 12). @param {string} boyut */
-export const boyutSutunu = (boyut) => BOYUTLAR.find((b) => b.anahtar === boyut)?.sutun ?? 12;
-
 /** Kart türünün görünen adı. @param {string} tur */
 export const turAdi = (tur) => YERLESIK.get(tur)?.ad ?? OZEL.get(tur)?.ad ?? tur;
 
@@ -216,16 +201,164 @@ export const kartAdi = (kart) => (kart.ayar && typeof kart.ayar.baslik === 'stri
 /** Yerleşik kart mı? @param {string} tur */
 export const yerlesikMi = (tur) => YERLESIK.has(tur);
 
-/** Varsayılan düzen (bugünkü Özet). @returns {{ surum: number; kartlar: Array<{ id: string; tur: string; boyut: string }> }} */
-export function varsayilanDuzen() {
-  return { surum: PANO_SURUMU, kartlar: YERLESIK_KARTLAR.filter((k) => k.varsayilan).map((k) => ({ id: k.tur, tur: k.tur, boyut: k.boyut })), esitYukseklik: true };
+// ---------------------------------------------------------------------------------------------------------------------
+// Izgara boyutları
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** SQL kartı görünümlerinin en küçük ve eklenince aldığı boyutu: tek sayı küçük, tablo büyük. */
+const SQL_BOYUTLARI = Object.freeze({
+  sayi: [{ w: 2, h: 3 }, { w: 3, h: 3 }], yuzde: [{ w: 2, h: 3 }, { w: 3, h: 3 }], degisim: [{ w: 2, h: 3 }, { w: 3, h: 3 }],
+  tablo: [{ w: 4, h: 4 }, { w: 6, h: 6 }], cubuk: [{ w: 3, h: 4 }, { w: 6, h: 5 }], cizgi: [{ w: 3, h: 4 }, { w: 6, h: 5 }],
+  pasta: [{ w: 3, h: 4 }, { w: 4, h: 5 }], liste: [{ w: 3, h: 3 }, { w: 4, h: 5 }], kutucuk: [{ w: 3, h: 3 }, { w: 4, h: 4 }]
+});
+
+/** @param {{ tur: string; ayar?: any }} kart @returns {[{ w: number; h: number }, { w: number; h: number }]} [en küçük, eklenince] */
+function turBoyutlari(kart) {
+  const y = YERLESIK.get(kart.tur);
+  if (y) return [y.en, { w: y.w, h: y.h }];
+  if (kart.tur === 'sql') return /** @type {any} */ (SQL_BOYUTLARI)[String(kart.ayar?.gorunum ?? 'sayi')] ?? SQL_BOYUTLARI.sayi;
+  if (kart.tur === 'veri') return SABLON.get(String(kart.ayar?.sablon ?? ''))?.gorunum === 'liste' ? [{ w: 3, h: 3 }, { w: 4, h: 5 }] : [{ w: 2, h: 3 }, { w: 3, h: 3 }];
+  return [{ w: 2, h: 2 }, { w: 4, h: 3 }];
+}
+/** Kartın en küçük boyutu (türüne / görünümüne göre). @param {{ tur: string; ayar?: any }} kart */
+export const enKucukBoyut = (kart) => ({ ...turBoyutlari(kart)[0] });
+/** Yeni eklenen kartın boyutu. @param {{ tur: string; ayar?: any }} kart */
+export const varsayilanBoyut = (kart) => ({ ...turBoyutlari(kart)[1] });
+
+/** İki dikdörtgen üst üste biniyor mu? @param {{ x: number; y: number; w: number; h: number }} a @param {{ x: number; y: number; w: number; h: number }} b */
+export const cakisiyorMu = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/** Okuma sırası (y, sonra x; eşitse kimlik). @param {{ x: number; y: number; id: string }} a @param {{ x: number; y: number; id: string }} b */
+const okumaSirasi = (a, b) => a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+/** Kartları okuma sırasına dizer (yeni dizi). @template {{ x: number; y: number; id: string }} K @param {ReadonlyArray<K>} kartlar @returns {K[]} */
+export const okumaSirasinaDiz = (kartlar) => kartlar.slice().sort(okumaSirasi);
+
+/** Kartların kapladığı en alt satır (boş panoda 0). @param {ReadonlyArray<{ y: number; h: number }>} kartlar */
+export const altSinir = (kartlar) => kartlar.reduce((m, k) => Math.max(m, k.y + k.h), 0);
+
+/** Sayıyı [en, enCok] aralığına tam sayı olarak sıkıştırır. @param {unknown} v @param {number} en @param {number} enCok @param {number} yedek */
+const sikistir = (v, en, enCok, yedek) => { const n = Math.round(Number(v)); return Math.max(en, Math.min(enCok, Number.isFinite(n) ? n : yedek)); };
+
+/**
+ * İstenen konumu / boyutu kartın sınırlarına oturtur: genişlik en küçük–12, yükseklik en küçük–EN_COK_YUKSEKLIK, x ızgarada kalır.
+ * @param {{ tur: string; ayar?: any; x: number; y: number; w: number; h: number }} kart @param {{ x?: number; y?: number; w?: number; h?: number }} istek
+ */
+function sinirla(kart, istek) {
+  const en = enKucukBoyut(kart);
+  const w = sikistir(istek.w ?? kart.w, en.w, IZGARA_SUTUN, kart.w);
+  const h = sikistir(istek.h ?? kart.h, en.h, EN_COK_YUKSEKLIK, kart.h);
+  return { x: sikistir(istek.x ?? kart.x, 0, IZGARA_SUTUN - w, kart.x), y: sikistir(istek.y ?? kart.y, 0, EN_COK_SATIR, kart.y), w, h };
 }
 
-/** Düzen varsayılanla aynı mı (sıra, boyut, kart). @param {{ kartlar: Array<{ id: string; tur: string; boyut: string; ayar?: unknown }> }} duzen */
+/**
+ * Çakışma çözümü: sabit kartlar yerinde kalır; diğerleri (özgün okuma sırasıyla) bir sabit karta ya da önceden yerleşmiş bir karta
+ * değiyorsa onun hemen altına İTİLİR (yalnız aşağı; boyutları değişmez, yukarı sıkıştırma yok).
+ * @template {{ id: string; x: number; y: number; w: number; h: number }} K @param {K[]} sabitler @param {ReadonlyArray<K>} digerleri @returns {K[]}
+ */
+function cakismalariCoz(sabitler, digerleri) {
+  /** @type {K[]} */
+  const yerlesen = [...sabitler];
+  for (const d of okumaSirasinaDiz(digerleri)) {
+    let y = d.y;
+    for (;;) {
+      const engel = yerlesen.find((s) => cakisiyorMu({ ...d, y }, s));
+      if (!engel) break;
+      y = engel.y + engel.h;
+    }
+    yerlesen.push(y === d.y ? d : { ...d, y });
+  }
+  return okumaSirasinaDiz(yerlesen);
+}
+
+/** Varsayılan düzen (bugünkü Özet; ızgara konumlarıyla). @returns {PanoDuzeniT} */
+export function varsayilanDuzen() {
+  /** @type {PanoKartiT[]} */
+  const kartlar = [];
+  let x = 0; let y = 0; let satirH = 0;
+  for (const k of YERLESIK_KARTLAR.filter((v) => v.varsayilan)) {
+    if (x + k.w > IZGARA_SUTUN) { y += satirH; x = 0; satirH = 0; }
+    kartlar.push({ id: k.tur, tur: k.tur, x, y, w: k.w, h: k.h });
+    x += k.w; satirH = Math.max(satirH, k.h);
+  }
+  return { surum: PANO_SURUMU, kartlar };
+}
+
+/** Düzen varsayılanla aynı mı (kartlar, konum ve boyut; dönem sayılmaz). @param {{ kartlar: ReadonlyArray<PanoKartiT> }} duzen */
 export function varsayilanMi(duzen) {
   const v = varsayilanDuzen().kartlar;
-  return duzen.esitYukseklik !== false && duzen.kartlar.length === v.length && duzen.kartlar.every((k, i) => k.id === v[i].id && k.boyut === v[i].boyut
-    && k.ayar === undefined && (k.yukseklik === undefined || k.yukseklik === 'oto'));
+  const d = okumaSirasinaDiz(duzen.kartlar);
+  return d.length === v.length && d.every((k, i) => k.id === v[i].id && k.x === v[i].x && k.y === v[i].y && k.w === v[i].w && k.h === v[i].h
+    && k.ayar === undefined);
+}
+
+/**
+ * @typedef {{ id: string; tur: string; x: number; y: number; w: number; h: number; ayar?: Record<string, any>; donem?: object }} PanoKartiT
+ * @typedef {{ surum: number; kartlar: PanoKartiT[] }} PanoDuzeniT
+ */
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Göç: eski sıralı düzen → ızgara
+// ---------------------------------------------------------------------------------------------------------------------
+// Eski düzende kartlar sırayla 12 sütuna akardı: boyut kucuk 4 / orta 6 / genis 8 / tam 12 sütun; yükseklik 'oto' (içerik) ya da N satır
+// (88 px + 14 px boşluk). Çeviri aynı akışı izler: kart satıra sığmazsa alt satıra iner; satırın üstü bir önceki satırın en uzun
+// kartının altıdır. N satır → yeni birimde aynı piksel boyu (yuvarlanır); 'oto' → türün varsayılan yüksekliği. "Aynı satırdaki kartlar
+// aynı yükseklikte" açıksa (eski varsayılan) satırdaki kartlar satırın en uzununa eşitlenir. Sonuç en küçük boyutlardan küçük olmaz.
+const ESKI_SUTUN = Object.freeze({ kucuk: 4, orta: 6, genis: 8, tam: 12 });
+const ESKI_SATIR_PX = 88 + 14;
+
+/**
+ * Konumsuz kartları eski sıralı akışla ızgaraya yerleştirir (ustY satırından başlayarak).
+ * @template {{ id: string; tur: string; ayar?: any }} K
+ * @param {ReadonlyArray<{ kart: K; boyut?: unknown; yukseklik?: unknown }>} liste @param {boolean} esit @param {number} [ustY]
+ * @returns {Array<K & { x: number; y: number; w: number; h: number }>}
+ */
+export function eskiDuzenGocu(liste, esit, ustY = 0) {
+  /** @type {Array<Array<K & { x: number; y: number; w: number; h: number }>>} */
+  const satirlar = [[]];
+  let x = 0;
+  for (const { kart, boyut, yukseklik } of liste) {
+    const en = enKucukBoyut(kart);
+    const v = varsayilanBoyut(kart);
+    // Boyutu yoksa eski varsayılan: yerleşikte bugünkü genişlik, SQL Orta (6), Nöbetçi verisi ve metin Küçük (4).
+    const w = Math.max(en.w, /** @type {Record<string, number>} */ (ESKI_SUTUN)[String(boyut)] ?? (YERLESIK.has(kart.tur) ? v.w : kart.tur === 'sql' ? 6 : 4));
+    const n = Number(yukseklik);
+    const h = Math.min(EN_COK_YUKSEKLIK, Math.max(en.h, Number.isInteger(n) && n > 0 ? Math.round((n * ESKI_SATIR_PX) / (SATIR_BIRIMI + IZGARA_BOSLUK)) : v.h));
+    if (x + w > IZGARA_SUTUN) { satirlar.push([]); x = 0; }
+    satirlar[satirlar.length - 1].push({ ...kart, x, y: 0, w, h });
+    x += w;
+  }
+  let y = ustY;
+  /** @type {Array<K & { x: number; y: number; w: number; h: number }>} */
+  const sonuc = [];
+  for (const s of satirlar) {
+    if (!s.length) continue;
+    const enUzun = Math.max(...s.map((k) => k.h));
+    for (const k of s) sonuc.push({ ...k, y, h: esit ? enUzun : k.h });
+    y += enUzun;
+  }
+  return sonuc;
+}
+
+/** Ham düzen eski (sıralı) biçimde mi: sürüm 2 değil ya da bir kartın konumu yok. @param {unknown} ham */
+export function eskiBicimMi(ham) {
+  if (!nesneMi(ham) || !Array.isArray(ham.kartlar)) return false;
+  return ham.surum !== PANO_SURUMU || ham.kartlar.some((k) => !nesneMi(k) || !['x', 'y', 'w', 'h'].every((a) => a in k));
+}
+
+/**
+ * Görünür yerleşim (yalnız ekranda; kaydedilmez): gizlenen kartların (ör. tamamlanan Başlarken) kapladığı ve görünen hiçbir kartın
+ * kullanmadığı satırlar daralır; kullanıcının bıraktığı boşluklar korunur.
+ * @template {{ id: string; y: number; h: number }} K @param {ReadonlyArray<K>} kartlar @param {ReadonlySet<string>} gizli @returns {K[]}
+ */
+export function gorunurYerlesim(kartlar, gizli) {
+  const gorunen = kartlar.filter((k) => !gizli.has(k.id));
+  if (gorunen.length === kartlar.length) return [...kartlar];
+  const dolu = new Set();
+  for (const k of gorunen) for (let r = k.y; r < k.y + k.h; r++) dolu.add(r);
+  const bos = new Set();
+  for (const k of kartlar) if (gizli.has(k.id)) for (let r = k.y; r < k.y + k.h; r++) if (!dolu.has(r)) bos.add(r);
+  const kayma = (/** @type {number} */ y) => { let n = 0; for (const r of bos) if (r < y) n++; return n; };
+  return gorunen.map((k) => ({ ...k, y: k.y - kayma(k.y) }));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -340,17 +473,31 @@ function metinAyari(ham) {
 }
 
 /**
- * Tek kartın doğrulaması. @param {unknown} ham
- * @returns {{ id: string; tur: string; boyut: string; ayar?: Record<string, unknown> }}
+ * Kartın ızgara konumu: x / y / w / h dördü birlikte verilir (hiçbiri yoksa {} — konumu düzen belirler). Sınır dışı ya da tam sayı
+ * olmayan değer PanoHatasi. En küçük boyuttan küçükse burada hata verilmez (duzenTemizle büyütür).
+ * @param {Record<string, unknown>} ham @returns {{ x: number; y: number; w: number; h: number } | {}}
+ */
+function konumTemizle(ham) {
+  const alanlar = /** @type {const} */ (['x', 'y', 'w', 'h']);
+  const var_ = alanlar.filter((a) => ham[a] !== undefined && ham[a] !== null);
+  if (!var_.length) return {};
+  if (var_.length < 4) throw new PanoHatasi('Kartın konumu eksik (x, y, w, h birlikte verilmelidir).');
+  const [x, y, w, h] = alanlar.map((a) => Number(ham[a]));
+  if (![x, y, w, h].every(Number.isInteger)) throw new PanoHatasi('Kartın konumu tam sayı olmalıdır.');
+  if (w < 1 || w > IZGARA_SUTUN || x < 0 || x + w > IZGARA_SUTUN) throw new PanoHatasi(`Kart ızgaranın ${IZGARA_SUTUN} sütununa sığmalıdır.`);
+  if (h < 1 || h > EN_COK_YUKSEKLIK) throw new PanoHatasi(`Kart yüksekliği 1–${EN_COK_YUKSEKLIK} satır olmalıdır.`);
+  if (y < 0 || y > EN_COK_SATIR) throw new PanoHatasi('Kartın satırı geçersiz.');
+  return { x, y, w, h };
+}
+
+/**
+ * Tek kartın doğrulaması (konum varsa dahil). @param {unknown} ham
+ * @returns {{ id: string; tur: string; x?: number; y?: number; w?: number; h?: number; ayar?: Record<string, unknown>; donem?: object }}
  */
 export function kartTemizle(ham) {
   if (!nesneMi(ham)) throw new PanoHatasi('Kart bir nesne olmalıdır.');
   const tur = typeof ham.tur === 'string' ? ham.tur : '';
-  const boyut = BOYUT_ANAHTARLARI.includes(/** @type {string} */ (ham.boyut)) ? /** @type {string} */ (ham.boyut)
-    : YERLESIK.get(tur)?.boyut ?? OZEL.get(tur)?.boyut ?? 'orta';
-  // Yükseklik yalnız 'oto' değilse yazılır (eski kayıtlar ve varsayılan düzen değişmez).
-  const yukseklik = yukseklikTemizle(ham.yukseklik);
-  const yk = yukseklik === 'oto' ? {} : { yukseklik };
+  const yk = konumTemizle(ham);
   // Dönem yalnız döneme bağlı kartta saklanır; yoksa (eski kayıt) yazılmaz — arayüz göçle doldurur.
   const donemi = (/** @type {{ tur: string; ayar?: any }} */ k) => {
     if (ham.donem === undefined || !kartDonemliMi(k)) return {};
@@ -358,29 +505,48 @@ export function kartTemizle(ham) {
     if (!d) throw new PanoHatasi('Kartın dönemi geçersiz.');
     return { donem: d };
   };
-  if (YERLESIK.has(tur)) return { id: tur, tur, boyut, ...yk, ...donemi({ tur }) };
+  if (YERLESIK.has(tur)) return { id: tur, tur, ...yk, ...donemi({ tur }) };
   if (!OZEL.has(tur)) throw new PanoHatasi(`Bilinmeyen kart türü: "${String(tur).slice(0, 40)}".`);
   const id = typeof ham.id === 'string' && KIMLIK_DESENI.test(ham.id) && !YERLESIK.has(ham.id) ? ham.id : '';
   if (!id) throw new PanoHatasi('Kart kimliği geçersiz.');
   const ayar = tur === 'sql' ? sqlAyari(ham.ayar) : tur === 'veri' ? veriAyari(ham.ayar) : metinAyari(ham.ayar);
-  return { id, tur, boyut, ...yk, ayar, ...donemi({ tur, ayar }) };
+  return { id, tur, ...yk, ayar, ...donemi({ tur, ayar }) };
 }
 
 /**
- * Düzenin doğrulaması (biçim, sınırlar, tekil kimlik; yerleşik kart en çok bir kez). Bozuksa PanoHatasi.
- * @param {unknown} ham @returns {{ surum: number; kartlar: Array<{ id: string; tur: string; boyut: string; ayar?: Record<string, unknown> }> }}
+ * Düzenin doğrulaması (biçim, tekil kimlik, yerleşik kart en çok bir kez; ızgara sınırları ve ÇAKIŞMASIZLIK). Bozuksa PanoHatasi.
+ * Konumu olmayan kartlar (eski sıralı düzen ya da konumsuz eklenen kart) konumlu kartların altına eski akışla yerleştirilir (göç).
+ * En küçük boyuttan küçük kart o boyuta büyütülür; büyümenin yol açtığı çakışma aşağı itilerek çözülür. Kartlar okuma sırasıyla döner.
+ * @param {unknown} ham @returns {PanoDuzeniT}
  */
 export function duzenTemizle(ham) {
   if (!nesneMi(ham) || !Array.isArray(ham.kartlar)) throw new PanoHatasi('Pano düzeni geçersiz.');
   if (ham.kartlar.length > EN_COK_KART) throw new PanoHatasi(`Panoda en çok ${EN_COK_KART} kart olabilir.`);
-  const kartlar = ham.kartlar.map(kartTemizle);
+  const temiz = ham.kartlar.map(kartTemizle);
   const gorulen = new Set();
-  for (const k of kartlar) {
+  for (const k of temiz) {
     if (gorulen.has(k.id)) throw new PanoHatasi(`"${kartAdi(k)}" panoda birden çok kez var.`);
     gorulen.add(k.id);
   }
-  // Aynı satırdaki kartlar aynı yükseklikte (pano geneli; varsayılan açık; eski kayıtta yoksa açık).
-  return { surum: PANO_SURUMU, kartlar, esitYukseklik: ham.esitYukseklik !== false };
+  const konumlu = /** @type {PanoKartiT[]} */ (temiz.filter((k) => k.x !== undefined));
+  for (let i = 0; i < konumlu.length; i++) {
+    for (let j = i + 1; j < konumlu.length; j++) {
+      if (cakisiyorMu(konumlu[i], konumlu[j])) throw new PanoHatasi(`"${kartAdi(konumlu[i])}" ile "${kartAdi(konumlu[j])}" üst üste biniyor.`);
+    }
+  }
+  const hamKartlar = /** @type {Array<Record<string, unknown>>} */ (ham.kartlar);
+  const konumsuz = temiz.map((kart, i) => ({ kart, boyut: hamKartlar[i].boyut, yukseklik: hamKartlar[i].yukseklik })).filter((g) => g.kart.x === undefined);
+  /** @type {PanoKartiT[]} */
+  let kartlar = [...konumlu, ...eskiDuzenGocu(konumsuz, ham.esitYukseklik !== false, altSinir(konumlu))];
+  // En küçük boyut: küçük kart büyütülür (x gerekirse sola kayar), büyüyen kart yerinde kalır ve değdiği kartlar aşağı itilir.
+  for (const k of okumaSirasinaDiz(kartlar)) {
+    const en = enKucukBoyut(k);
+    if (k.w >= en.w && k.h >= en.h) continue;
+    const guncel = /** @type {PanoKartiT} */ (kartlar.find((x) => x.id === k.id));
+    const b = sinirla(guncel, {});
+    kartlar = cakismalariCoz([{ ...guncel, ...b }], kartlar.filter((x) => x.id !== k.id));
+  }
+  return { surum: PANO_SURUMU, kartlar: okumaSirasinaDiz(kartlar) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -396,9 +562,10 @@ export function kartKaldir(duzen, id) {
 }
 
 /**
- * Kart ekler (yerleşik kart zaten varsa düzen değişmez). konum verilmezse sona.
- * @template {{ kartlar: Array<{ id: string; tur: string; boyut: string }> }} D @param {D} duzen
- * @param {{ id?: string; tur: string; boyut?: string; ayar?: unknown }} kart @param {number} [konum]
+ * Kart ekler (yerleşik kart zaten varsa düzen değişmez). Boyut türün varsayılanı (kart.w / kart.h verilirse o; en küçükten küçük
+ * olmaz). konum { x, y } verilmezse panonun en altına, sola; verilirse oraya konur ve çakışanlar aşağı itilir.
+ * @template {{ kartlar: any[] }} D @param {D} duzen
+ * @param {{ id?: string; tur: string; ayar?: unknown; donem?: unknown; w?: number; h?: number }} kart @param {{ x: number; y: number }} [konum]
  * @returns {D}
  */
 export function kartEkle(duzen, kart, konum) {
@@ -406,24 +573,28 @@ export function kartEkle(duzen, kart, konum) {
   const yerlesik = YERLESIK.get(kart.tur);
   if (yerlesik && duzen.kartlar.some((k) => k.id === kart.tur)) return duzen;
   /** @type {Record<string, any>} */
-  const eklenen = yerlesik ? { id: kart.tur, tur: kart.tur, boyut: kart.boyut ?? yerlesik.boyut }
-    : { id: String(kart.id ?? ''), tur: kart.tur, boyut: kart.boyut ?? OZEL.get(kart.tur)?.boyut ?? 'orta', ayar: kart.ayar };
+  const eklenen = yerlesik ? { id: kart.tur, tur: kart.tur } : { id: String(kart.id ?? ''), tur: kart.tur, ayar: kart.ayar };
+  const v = varsayilanBoyut(/** @type {any} */ (eklenen));
+  const b = sinirla(/** @type {any} */ ({ ...eklenen, x: 0, y: 0, ...v }), { w: kart.w ?? v.w, h: kart.h ?? v.h, x: konum?.x ?? 0, y: konum?.y ?? altSinir(duzen.kartlar) });
+  Object.assign(eklenen, b);
   // Yeni eklenen döneme bağlı kartın varsayılan dönemi.
-  if (kartDonemliMi(/** @type {any} */ (eklenen))) eklenen.donem = donemTemizle(/** @type {any} */ (kart).donem) ?? { ...VARSAYILAN_DONEM };
-  const liste = duzen.kartlar.slice();
-  const i = konum === undefined ? liste.length : Math.max(0, Math.min(liste.length, Math.floor(konum)));
-  liste.splice(i, 0, /** @type {any} */ (eklenen));
-  return yeni(duzen, liste);
+  if (kartDonemliMi(/** @type {any} */ (eklenen))) eklenen.donem = donemTemizle(kart.donem) ?? { ...VARSAYILAN_DONEM };
+  return yeni(duzen, cakismalariCoz([/** @type {any} */ (eklenen)], duzen.kartlar));
 }
 
-/** Kartın ayarını değiştirir. @template {{ kartlar: Array<{ id: string; ayar?: unknown }> }} D @param {D} duzen @param {string} id @param {unknown} ayar @returns {D} */
+/**
+ * Kartın ayarını değiştirir. Görünüm değişip en küçük boyut büyüdüyse kart büyütülür (çakışanlar aşağı itilir).
+ * @template {{ kartlar: any[] }} D @param {D} duzen @param {string} id @param {unknown} ayar @returns {D}
+ */
 export function kartAyarla(duzen, id, ayar) {
-  return yeni(duzen, duzen.kartlar.map((k) => {
+  const d = yeni(duzen, duzen.kartlar.map((k) => {
     if (k.id !== id) return k;
     const { donem, ...kalan } = /** @type {any} */ ({ ...k, ayar });
     // Sorgu döneme bağlı hâle geldiyse varsayılan dönem; döneme bağlı değilse dönem kaldırılır.
     return kartDonemliMi(kalan) ? { ...kalan, donem: donemTemizle(donem) ?? { ...VARSAYILAN_DONEM } } : kalan;
   }));
+  const k = d.kartlar.find((x) => x.id === id);
+  return k && typeof k.x === 'number' ? kartYerlestir(d, id, {}) : d;
 }
 
 /** Kartın dönemini değiştirir (yalnız döneme bağlı kart). @template {{ kartlar: Array<{ id: string }> }} D @param {D} duzen @param {string} id @param {unknown} donem @returns {D} */
@@ -434,37 +605,38 @@ export function kartDonemle(duzen, id, donem) {
 }
 
 /**
- * Kartı taşır: hedef sayıysa o sıraya, 'yukari' / 'asagi' ise bir adım. Sınırda düzen değişmez.
- * @template {{ kartlar: Array<{ id: string }> }} D @param {D} duzen @param {string} id @param {number | 'yukari' | 'asagi'} hedef @returns {D}
+ * Kartı istenen konuma / boyuta koyar (taşıma, boyutlandırma; sürükle-bırak, köşe tutamağı ve klavye). İstek ızgara sınırlarına ve
+ * kartın en küçük boyutuna oturtulur. Kart tam o hücreye konur (üstünde / yanında boşluk kalabilir); değdiği kartlar AŞAĞI itilir,
+ * hiçbir kartın boyu değişmez ve kartlar yukarı sıkıştırılmaz. Değişiklik yoksa aynı düzen döner.
+ * @template {{ kartlar: any[] }} D @param {D} duzen @param {string} id @param {{ x?: number; y?: number; w?: number; h?: number }} istek @returns {D}
  */
-export function kartTasi(duzen, id, hedef) {
-  const i = duzen.kartlar.findIndex((k) => k.id === id);
-  if (i < 0) return duzen;
-  const j = hedef === 'yukari' ? i - 1 : hedef === 'asagi' ? i + 1 : Math.floor(Number(hedef));
-  if (!Number.isFinite(j) || j < 0 || j >= duzen.kartlar.length || j === i) return duzen;
-  const liste = duzen.kartlar.slice();
-  const [k] = liste.splice(i, 1);
-  liste.splice(j, 0, k);
-  return yeni(duzen, liste);
-}
-
-/** Kartın boyutunu değiştirir. @template {{ kartlar: Array<{ id: string; boyut: string }> }} D @param {D} duzen @param {string} id @param {string} boyut @returns {D} */
-export function kartBoyutla(duzen, id, boyut) {
-  if (!BOYUT_ANAHTARLARI.includes(boyut)) throw new PanoHatasi('Kart boyutu geçersiz.');
-  return yeni(duzen, duzen.kartlar.map((k) => (k.id === id ? { ...k, boyut } : k)));
+export function kartYerlestir(duzen, id, istek) {
+  const k = duzen.kartlar.find((x) => x.id === id);
+  if (!k) return duzen;
+  const b = sinirla(k, istek);
+  if (b.x === k.x && b.y === k.y && b.w === k.w && b.h === k.h) return duzen;
+  return yeni(duzen, cakismalariCoz([{ ...k, ...b }], duzen.kartlar.filter((x) => x.id !== id)));
 }
 
 /**
- * Kartın yüksekliğini değiştirir ('oto' ya da 2–12 satır; 'oto' kayıttan alanı kaldırır).
- * @template {{ kartlar: Array<{ id: string }> }} D @param {D} duzen @param {string} id @param {unknown} yukseklik @returns {D}
+ * Okuma sırasında (y, sonra x) bir öne / bir sonraya taşır (dar ekran ve ↑ ↓ düğmeleri): kart komşusunun yerini alır, komşu kartın
+ * eski yerine (gerekirse hemen altına) geçer; değdikleri aşağı itilir. Sınırda düzen değişmez.
+ * @template {{ kartlar: any[] }} D @param {D} duzen @param {string} id @param {'yukari' | 'asagi'} yon @returns {D}
  */
-export function kartYukseklikle(duzen, id, yukseklik) {
-  const y = yukseklikTemizle(yukseklik);
-  return yeni(duzen, duzen.kartlar.map((k) => {
-    if (k.id !== id) return k;
-    const { yukseklik: _eski, ...kalan } = /** @type {any} */ (k);
-    return y === 'oto' ? kalan : { ...kalan, yukseklik: y };
-  }));
+export function kartSiraTasi(duzen, id, yon) {
+  const sirali = okumaSirasinaDiz(duzen.kartlar);
+  const i = sirali.findIndex((k) => k.id === id);
+  if (i < 0) return duzen;
+  if (yon === 'asagi') return i + 1 < sirali.length ? kartSiraTasi(duzen, sirali[i + 1].id, 'yukari') : duzen;
+  if (i === 0) return duzen;
+  const k = sirali[i]; const o = sirali[i - 1];
+  const d = kartYerlestir(duzen, k.id, { x: Math.min(o.x, IZGARA_SUTUN - k.w), y: o.y });
+  const kYeni = d.kartlar.find((x) => x.id === k.id);
+  const oSimdi = d.kartlar.find((x) => x.id === o.id);
+  const hedef = { x: Math.min(k.x, IZGARA_SUTUN - o.w), y: k.y };
+  // Komşu tümüyle üstteyse (alt alta kartlar) ya da yeni yerine değiyorsa kartın hemen altına iner (arada boşluk açılmaz).
+  if (o.y + o.h <= k.y || cakisiyorMu({ ...oSimdi, ...hedef }, kYeni)) hedef.y = kYeni.y + kYeni.h;
+  return kartYerlestir(d, o.id, hedef);
 }
 
 /** Panoda olmayan yerleşik kartlar ("Kart ekle" listesi). @param {{ kartlar: Array<{ id: string }> }} duzen */

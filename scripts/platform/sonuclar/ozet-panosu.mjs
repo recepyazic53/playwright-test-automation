@@ -2,13 +2,14 @@
 // (ayarlar tablosu, anahtar "ozetPanosu": { [projeId]: { surum, kartlar, guncellenme } }); yedeğe ayarlar tablosuyla birlikte girer.
 // SQL kartı sonuçları ("ozetPanosuSonuclari") yedeğe GİRMEZ (yedek.mjs > YEDEK_DISI_AYARLAR); yedekten yüklenen panoda boş gelir.
 // Kayıt yoksa varsayılan düzen (bugünkü Özet) kullanılır. Biçim ve doğrulama: pano-duzeni.mjs (saf, arayüzle ORTAK).
+// Eski (sıralı) biçimdeki kayıt okunurken ızgara konumlarına çevrilir ve "goc: true" döner; arayüz göçü bir kez kaydeder (GET yazmaz).
 // SQL kartlarının son sonucu ayrı anahtarda önbellektir ("ozetPanosuSonuclari": { [projeId]: { [kartId]: sonuç } }); yalnız
 // MASKELİ sonuç yazılır (pano-sql.mjs). Sonuç, kartın hedefi ve sorgusunun imzasıyla saklanır: kart değişince eski sonuç gösterilmez.
 // Kart panodan kaldırılınca önbellekteki sonucu da silinir. Silinmiş projelerin kayıtları ilk yazmada temizlenir.
 // NOT: import.meta KULLANILMAZ.
 import { createHash } from 'node:crypto';
 import { DepoHatasi, ayarGetir, ayarYaz, projeGetir } from '../veritabani/depo.mjs';
-import { PanoHatasi, duzenTemizle, varsayilanDuzen, varsayilanMi } from './pano-duzeni.mjs';
+import { PanoHatasi, duzenTemizle, eskiBicimMi, varsayilanDuzen, varsayilanMi } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./pano-duzeni.mjs').PanoDuzeni} PanoDuzeni */
@@ -42,10 +43,10 @@ export function sqlImzasi(kart) {
 }
 
 /**
- * Projenin panosu: düzen (kayıt yoksa varsayılan), varsayılanla aynı mı ve SQL kartlarının önbellekteki son sonuçları.
- * Kayıt bozuksa varsayılan düzen döner (kullanıcı yeniden düzenleyebilir).
+ * Projenin panosu: düzen (kayıt yoksa varsayılan), varsayılanla aynı mı, eski biçimden çevrildi mi (goc) ve SQL kartlarının
+ * önbellekteki son sonuçları. Kayıt bozuksa varsayılan düzen döner (kullanıcı yeniden düzenleyebilir).
  * @param {Veritabani} vt @param {string} projeId
- * @returns {{ duzen: PanoDuzeni; varsayilan: boolean; kayitli: boolean; sqlSonuclari: Record<string, SqlSonucu> }}
+ * @returns {{ duzen: PanoDuzeni; varsayilan: boolean; kayitli: boolean; goc: boolean; sqlSonuclari: Record<string, SqlSonucu> }}
  */
 export function panoGetir(vt, projeId) {
   kimlik(projeId, 'projeId');
@@ -53,8 +54,9 @@ export function panoGetir(vt, projeId) {
   /** @type {PanoDuzeni} */
   let duzen = varsayilanDuzen();
   let kayitli = false;
+  let goc = false;
   if (ham) {
-    try { duzen = duzenTemizle(ham); kayitli = true; } catch { duzen = varsayilanDuzen(); }
+    try { duzen = duzenTemizle(ham); kayitli = true; goc = eskiBicimMi(ham); } catch { duzen = varsayilanDuzen(); }
   }
   const onbellek = kayit(vt, PANO_SONUC_ANAHTARI)[projeId] ?? {};
   /** @type {Record<string, SqlSonucu>} */
@@ -64,7 +66,7 @@ export function panoGetir(vt, projeId) {
     const s = onbellek[k.id];
     if (s && typeof s === 'object' && s.imza === sqlImzasi(k) && s.sonuc && typeof s.sonuc.zaman === 'string') sqlSonuclari[k.id] = s.sonuc;
   }
-  return { duzen, varsayilan: varsayilanMi(duzen), kayitli, sqlSonuclari };
+  return { duzen, varsayilan: varsayilanMi(duzen), kayitli, goc, sqlSonuclari };
 }
 
 /**
