@@ -1545,6 +1545,17 @@ export function kayitPaketiOlustur(meta, envanter) {
     a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Seçenekleri "')),
       `Seçenekleri "${(u.etiket && typeof u.etiket === 'object' ? u.etiket.ekran ?? u.etiket.form : u.etiket) ?? u.id}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
   }
+  // Tetikler (hızlı test: bir metin alanına değer girilince başka alan beliriyor / listesi doluyor): hedef alanın "tetik"i; koşucu kaynak
+  // alanı doldurduktan sonra hedefin dolmasını / belirmesini bekler (bağlı liste beklemesiyle aynı sınır).
+  for (const { kaynak, hedef, olay } of envanter.tetikler ?? []) {
+    const a = hamdanModel.get(hedef);
+    const u = hamdanModel.get(kaynak);
+    if (!a || !u || a === u || a.tetik !== undefined) continue;
+    a.tetik = { alan: String(u.id), olay: olay === 'belirdi' ? 'belirdi' : 'doldu' };
+    const ustEtiket = (u.etiket && typeof u.etiket === 'object' ? u.etiket.ekran ?? u.etiket.form : u.etiket) ?? u.id;
+    a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Tetik: ')),
+      `Tetik: "${ustEtiket}" girilince ${olay === 'belirdi' ? 'belirir' : 'seçenekleri gelir'} (hızlı test; koşu bunu bekler).`];
+  }
   for (const m of envanter.zincirBulgulari ?? []) {
     const t = temizMetin(m, sayac, 400);
     if (!t) continue;

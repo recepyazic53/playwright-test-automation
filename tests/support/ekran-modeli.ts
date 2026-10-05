@@ -132,6 +132,8 @@ export type Alan = {
   seceneklerDurumu?: SecenekDurumu;
   seceneklerKaynagi?: string;
   bagimlilik?: { alan: string | string[]; secenekHaritasi?: Record<string, Secenek[]>; not?: string };
+  /** Tetik: "alan" (metin) doldurulunca bu alan belirir ya da seçenekleri gelir; koşucu kaynağı doldurduktan sonra bekler. */
+  tetik?: { alan: string; olay: 'belirdi' | 'doldu' };
   zorunlu?: boolean | null;
   benzersiz?: boolean;
   varsayilan?: { deger: JsonDeger; kaynak?: string; not?: string };

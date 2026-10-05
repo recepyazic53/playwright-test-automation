@@ -126,7 +126,7 @@ const ALAN_ANAHTARLARI = new Set([
   'benzersiz', 'varsayilan', 'yapilandirma', 'eslesme', 'konum', 'doldurucu', 'doldurucuParametreleri',
   'gorunurluk', 'form', 'dogrulama', 'altAlanlar', 'ekranAlanlari', 'altModel', 'varyantlar', 'akisPlani',
   'kimlikTuru', 'bicim', 'kabul', 'birim', 'hassas', 'ekrandaAlanDegil', 'sira', 'sonKontrol', 'kullanim',
-  'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger', 'sinirlar'
+  'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger', 'sinirlar', 'tetik'
 ]);
 /**
  * Alanın uygulamadaki değer kuralları (sınır değer önerileri yalnız bunlardan üretilir; senaryo verisini kısıtlamaz):
@@ -425,6 +425,15 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
           seceneklerDogrula(h, `${aYer}.bagimlilik.secenekHaritasi.${anahtar}`, liste);
         }
       }
+    }
+  }
+  // Tetik: başka bir alan (metin) doldurulunca bu alan belirir / seçenekleri gelir; koşucu kaynağı doldurduktan sonra bunu bekler.
+  if (alan.tetik !== undefined) {
+    if (!nesneMi(alan.tetik)) h.ekle(aYer, '"tetik" nesne olmalı');
+    else {
+      if (!metinMi(alan.tetik.alan)) h.ekle(aYer, '"tetik.alan" metin olmalı');
+      else b.alanlar.push([`${aYer}.tetik`, alan.tetik.alan]);
+      if (!['belirdi', 'doldu'].includes(String(alan.tetik.olay))) h.ekle(aYer, '"tetik.olay" "belirdi" ya da "doldu" olmalı');
     }
   }
   if (alan.altModel !== undefined) altModelBasvurusuDogrula(h, `${aYer}.altModel`, alan.altModel, b);

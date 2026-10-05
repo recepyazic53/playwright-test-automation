@@ -238,6 +238,8 @@ export type KayitEnvanteri = {
   bagliListeler?: Array<{ ust: string; alt: string; yuklenmeMs?: number | null }>;
   /** Zincir keşfinin sayfa bulguları (kullanıcıya gösterilen cümleler); bilinmeyenlere yazılır. */
   zincirBulgulari?: string[];
+  /** Hızlı testin tetikleri: kaynak metin alanı girilince hedef alan belirir / seçenekleri gelir (modelde hedefin "tetik"i). */
+  tetikler?: Array<{ kaynak: string; hedef: string; olay: 'belirdi' | 'doldu' }>;
 };
 
 export type PaketMetasi = {

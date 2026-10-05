@@ -4,6 +4,8 @@ export type PlanTablosu = {
   ad: string; tur: 'kayit' | 'liste'; sutunlar: Array<{ ad: string; gizli: boolean; karsiliklar: Record<string, { sayfa: string }> }>;
   satirlar: Array<Record<string, string | null>>; secilen: Record<string, string> | null;
   alanlar: Array<{ oturumAnahtar: string; sutun: string; etiket: string; degerli: boolean }>;
+  /** Tetik notları (metin alanı girilince bu tablonun alanı dolar / belirir). */
+  tetik?: string[];
   /** Bağlı liste zinciri tablosu: halkaların etiketleri (üstten alta). */
   zincir?: string[];
 };
@@ -30,7 +32,7 @@ export type PlanOnizlemesi = {
   /** Projenin tabloları (elle bağlama / yeni sütun için; değer yok). */
   mevcutTablolar: Array<{ id: string; ad: string; tur: 'kayit' | 'liste'; sutunlar: Array<{ ad: string; gizli: boolean }>; satirSayisi: number }>;
   tablolar: Array<{
-    ad: string; tur: 'kayit' | 'liste'; aciklama: null; zincir: string[] | null;
+    ad: string; tur: 'kayit' | 'liste'; aciklama: string | null; zincir: string[] | null;
     /** Mevcut tablo kimliği → (plan sütunu → ad olarak eşleşen sütun): elle bağlamada önseçim. */
     eslemeOnerileri: Record<string, Record<string, string>>; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
     ornek: Array<Array<string | null>>; bagliAlanlar: string[];
@@ -65,6 +67,8 @@ export declare function planKur(g: {
   baslik: string; alanlar: Array<Record<string, any>>; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string>;
   iliskiler?: ReadonlyArray<{ ust: string; alt: string }>;
   gozlemler?: ReadonlyArray<{ anahtar: string; secimler?: Record<string, unknown>; secenekler?: ReadonlyArray<{ deger: unknown; metin?: unknown }> }>;
+  /** Tetikler: kaynak metin alanı girilince hedef alan belirir / seçenekleri gelir. */
+  tetikler?: ReadonlyArray<{ kaynak: string; hedef: string; olay: 'belirdi' | 'doldu' }>;
 }): KayitPlani;
 export declare function planOnizle(vt: Veritabani, projeId: string, plan: KayitPlani, ekranId: string | null, anahtarlar: Record<string, string>): PlanOnizlemesi;
 export declare function varsayilanSecim(onizleme: PlanOnizlemesi): { tablolar: Record<string, { islem: string; hedefId?: string }>; baglantilar: string[] };

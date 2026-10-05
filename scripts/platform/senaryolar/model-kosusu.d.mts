@@ -38,6 +38,8 @@ export type PlanAlani = {
   yuklenmeMs?: number | null;
   /** Bağlı liste: üst alanın kimliği (modelde bagimlilik.alan); dolma süresi üst alanın doldurulduğu andan ölçülür. */
   ustId?: string | null;
+  /** Bu alan doldurulunca beliren / seçenekleri dolan alanlar (modelde hedefin tetik'i): koşucu doldurduktan sonra bekler. */
+  tetikler?: Array<{ id: string; etiket: string; secici: string; cerceve: string[] | null; olay: 'belirdi' | 'doldu' }>;
   /** Doldurulamayacaksa nedeni (koşuda atlanan alan olarak kaydedilir). */
   atla: string | null;
   /** Değeri olmayan "mutlaka görünmeli" alanı: yalnızca görünürlüğü denetlenir. */
