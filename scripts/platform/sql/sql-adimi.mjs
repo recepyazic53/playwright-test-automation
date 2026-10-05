@@ -220,10 +220,15 @@ export function sqlBagla(sql, coz) {
 /** Metindeki yer tutucuları metin olarak çözer (beklenen değerler). @param {string} m @param {(ifade: string) => string | undefined} coz */
 const metniCoz = (m, coz) => String(m ?? '').replace(YER_TUTUCU, (tum, ic) => coz(String(ic).trim()) ?? tum);
 
-/** Hücre → karşılaştırma / rapor metni. @param {unknown} v */
+/**
+ * Hücre → karşılaştırma / rapor metni. Sürücü katmanı büyük metinleri (CLOB / NCLOB, TEXT, nvarchar(max)) zaten metne çevirir
+ * (sql/buyuk-metin.mjs; 100 KB'ta kesilir, ikili veri "(ikili veri, N bayt)"): kontroller metin üzerinden çalışır. Buraya yine de bayt
+ * dizisi gelirse aynı ileti yazılır (bu modül içe aktarma yapmaz). @param {unknown} v
+ */
 export function hucreMetni(v) {
   if (v === null || v === undefined) return 'NULL';
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? 'NULL' : v.toISOString();
+  if (v instanceof Uint8Array) return `(ikili veri, ${v.length} bayt)`;
   if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
   return String(v);
 }

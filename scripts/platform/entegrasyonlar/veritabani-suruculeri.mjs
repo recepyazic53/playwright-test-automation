@@ -4,9 +4,12 @@
 // Sorgu parametreleri SQL içinde ":ad" biçiminde yazılır ve sürücünün kendi bağlama biçimine çevrilir (değerler SQL'e
 // metin olarak EKLENMEZ). "Yalnız okuma" açıkken (varsayılan) yalnız SELECT / WITH ile başlayan TEK ifade çalışır; destekleyen
 // sürücülerde oturum da salt okunur açılır. Hata mesajlarına parola yazılmaz (maskelenir).
+// Hücreler sql/buyuk-metin.mjs ile metne çevrilir (CLOB / NCLOB metin olarak; hücre başına 100 KB, aşan kesilir; BLOB / ikili veri
+// "(ikili veri, N bayt)"): özet panosu SQL kartı ve SQL adımı aynı kuralı görür.
 // Testler gerçek veritabanına bağlanmaz: surucuYukleyiciAyarla ile sahte sürücü verilir.
 // NOT: import.meta KULLANILMAZ.
 import { EntegrasyonHatasi, gizlileriMaskele, hostDenetle } from './istek.mjs';
+import { satirlariDuzenle } from '../sql/buyuk-metin.mjs';
 
 /**
  * @typedef {'mssql' | 'oracle' | 'postgres' | 'mysql'} SurucuAdi
@@ -160,15 +163,17 @@ export function parametreleriDonustur(surucu, sql, parametreler) {
   return { sql: cikti, degerler, adlar };
 }
 
-/** Hücre değerini JSON'a uygun hâle getirir. @param {unknown} v @returns {unknown} */
-function hucre(v) {
-  if (v === null || v === undefined) return null;
-  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString();
-  if (typeof v === 'bigint') return v.toString();
-  if (Buffer.isBuffer(v)) return `<ikili veri: ${v.length} bayt>`;
-  if (typeof v === 'object') { try { return JSON.parse(JSON.stringify(v)); } catch { return String(v); } }
-  return v;
+/**
+ * Satır sınırına göre kesip hücreleri metne çevirir (Lob okumaları bağlantı kapanmadan beklenir).
+ * @param {unknown[][]} ham @param {number} sinir @param {ReadonlyArray<boolean | undefined>} [ikili] sütun türü ikili mi (bilinmiyorsa undefined)
+ */
+async function sonucSatirlari(ham, sinir, ikili) {
+  return { satirlar: await satirlariDuzenle(ham.slice(0, sinir), ikili), kesildi: ham.length > sinir };
 }
+
+/** PostgreSQL tür kimlikleri: bytea ikili; text / varchar / bpchar / name / xml / json / jsonb metin. */
+const PG_IKILI = new Set([17]);
+const PG_METIN = new Set([25, 1043, 1042, 19, 142, 114, 3802]);
 
 // ---------------------------------------------------------------------------------------
 // Sürücü uyarlamaları
@@ -198,8 +203,9 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
     try {
       if (salt) await c.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
       const r = await c.query({ text: metin, values: degerler, rowMode: 'array' });
-      const satirlar = (r.rows ?? []).map((/** @type {unknown[]} */ x) => x.map(hucre));
-      return { sutunlar: (r.fields ?? []).map((/** @type {{ name: string }} */ f) => f.name), satirlar: satirlar.slice(0, sinir), kesildi: satirlar.length > sinir };
+      const alanlar = /** @type {Array<{ name: string; dataTypeID?: number }>} */ (r.fields ?? []);
+      const ikili = alanlar.map((f) => (PG_IKILI.has(Number(f.dataTypeID)) ? true : PG_METIN.has(Number(f.dataTypeID)) ? false : undefined));
+      return { sutunlar: alanlar.map((f) => f.name), ...(await sonucSatirlari(r.rows ?? [], sinir, ikili)) };
     } finally { await c.end().catch(() => {}); }
   }
 
@@ -212,8 +218,11 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
     try {
       if (salt) await c.query('SET SESSION TRANSACTION READ ONLY');
       const [rows, fields] = await c.query({ sql: metin, values: degerler, timeout: s.zamanAsimiMs, rowsAsArray: true });
-      const satirlar = (Array.isArray(rows) ? rows : []).map((/** @type {unknown[]} */ x) => (Array.isArray(x) ? x.map(hucre) : []));
-      return { sutunlar: (fields ?? []).map((/** @type {{ name: string }} */ f) => f.name), satirlar: satirlar.slice(0, sinir), kesildi: satirlar.length > sinir };
+      // characterSet 63 = binary (BLOB / VARBINARY); diğer karakter kümeleri metin (TEXT / LONGTEXT Buffer gelirse metne çevrilir).
+      const alanlar = /** @type {Array<{ name: string; characterSet?: number }>} */ (fields ?? []);
+      const ikili = alanlar.map((f) => (f.characterSet === undefined ? undefined : f.characterSet === 63));
+      const ham = (Array.isArray(rows) ? rows : []).map((/** @type {unknown} */ x) => (Array.isArray(x) ? x : []));
+      return { sutunlar: alanlar.map((f) => f.name), ...(await sonucSatirlari(ham, sinir, ikili)) };
     } finally { await c.end().catch(() => {}); }
   }
 
@@ -230,10 +239,15 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
       for (const [ad, deger] of Object.entries(adlar)) istek.input(ad, deger);
       const r = await istek.query(metin);
       const kume = r.recordset ?? [];
-      const kolonlar = kume.columns ? Object.values(kume.columns).sort((x, y) => Number(/** @type {any} */ (x).index) - Number(/** @type {any} */ (y).index)).map((x) => String(/** @type {any} */ (x).name))
-        : kume.length ? Object.keys(kume[0]) : [];
-      const satirlar = kume.map((/** @type {Record<string, unknown>} */ x) => kolonlar.map((k) => hucre(x[k])));
-      return { sutunlar: kolonlar, satirlar: satirlar.slice(0, sinir), kesildi: satirlar.length > sinir };
+      const tanimlar = kume.columns ? /** @type {any[]} */ (Object.values(kume.columns)).sort((x, y) => Number(x.index) - Number(y.index)) : null;
+      const kolonlar = tanimlar ? tanimlar.map((x) => String(x.name)) : kume.length ? Object.keys(kume[0]) : [];
+      // varbinary / binary / image ikili; nvarchar(max) / ntext / varchar metin (zaten metin gelir; dokunulmaz).
+      const ikili = tanimlar ? tanimlar.map((x) => {
+        const t = String(x.type?.declaration ?? x.type?.name ?? '').toLowerCase();
+        return /binary|image/.test(t) ? true : /char|text|xml/.test(t) ? false : undefined;
+      }) : [];
+      const ham = kume.map((/** @type {Record<string, unknown>} */ x) => kolonlar.map((k) => x[k]));
+      return { sutunlar: kolonlar, ...(await sonucSatirlari(ham, sinir, ikili)) };
     } finally { await havuz.close().catch(() => {}); }
   }
 
@@ -247,9 +261,17 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
   try {
     c.callTimeout = s.zamanAsimiMs;
     if (salt) await c.execute('SET TRANSACTION READ ONLY');
-    const r = await c.execute(metin, adlar, { outFormat: mod.OUT_FORMAT_ARRAY, maxRows: sinir + 1 });
-    const satirlar = (r.rows ?? []).map((/** @type {unknown[]} */ x) => x.map(hucre));
-    return { sutunlar: (r.metaData ?? []).map((/** @type {{ name: string }} */ m) => m.name), satirlar: satirlar.slice(0, sinir), kesildi: satirlar.length > sinir };
+    // CLOB / NCLOB metin olarak, BLOB bayt olarak alınır (Lob nesnesi gelmez; yine de gelirse buyuk-metin.mjs okur).
+    const lobTurleri = new Set([mod.DB_TYPE_CLOB, mod.DB_TYPE_NCLOB].filter(Boolean));
+    const ikiliTurler = new Set([mod.DB_TYPE_BLOB, mod.DB_TYPE_RAW, mod.DB_TYPE_LONG_RAW].filter(Boolean));
+    const r = await c.execute(metin, adlar, {
+      outFormat: mod.OUT_FORMAT_ARRAY, maxRows: sinir + 1,
+      fetchTypeHandler: (/** @type {{ dbType?: unknown }} */ m) => (lobTurleri.has(m.dbType) ? { type: mod.STRING }
+        : mod.DB_TYPE_BLOB && m.dbType === mod.DB_TYPE_BLOB ? { type: mod.BUFFER } : undefined)
+    });
+    const meta = /** @type {Array<{ name: string; dbType?: unknown }>} */ (r.metaData ?? []);
+    const ikili = meta.map((m) => (ikiliTurler.has(m.dbType) ? true : lobTurleri.has(m.dbType) ? false : undefined));
+    return { sutunlar: meta.map((m) => m.name), ...(await sonucSatirlari(r.rows ?? [], sinir, ikili)) };
   } finally {
     if (salt) await c.rollback().catch(() => {});
     await c.close().catch(() => {});

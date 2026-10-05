@@ -732,12 +732,14 @@ export function yatayKaydirmaIpucu(kap, secenek = {}) {
     const tasiyor = fazla > 2;
     sarmal.classList.toggle('sol-tasma', tasiyor && kap.scrollLeft > 2);
     sarmal.classList.toggle('sag-tasma', tasiyor && kap.scrollLeft < fazla - 2);
-    if (!tasiyor) { bilgi.hidden = true; return; }
+    if (!tasiyor) { if (!bilgi.hidden) bilgi.hidden = true; return; }
     const k = kap.getBoundingClientRect();
     const sutunlar = secenek.sutunSecici ? [...kap.querySelectorAll(secenek.sutunSecici)] : [];
     const gorunen = sutunlar.filter((s) => { const r = s.getBoundingClientRect(); return r.left >= k.left - 1 && r.right <= k.right + 1; }).length;
-    bilgi.hidden = false;
-    bilgi.textContent = sutunlar.length ? `${sutunlar.length} sütundan ${gorunen} tanesi tam görünüyor · diğerleri için yana kaydırın` : 'Tablo yana kaydırılabilir';
+    // Yalnız değişince yazılır: her kaydırma olayında DOM değişmesin (çevreleyen düzenler değişimi izleyip yeniden ölçebilir).
+    if (bilgi.hidden) bilgi.hidden = false;
+    const yeni = sutunlar.length ? `${sutunlar.length} sütundan ${gorunen} tanesi tam görünüyor · diğerleri için yana kaydırın` : 'Tablo yana kaydırılabilir';
+    if (bilgi.textContent !== yeni) bilgi.textContent = yeni;
   };
   const planla = () => { cancelAnimationFrame(bekleyen); bekleyen = requestAnimationFrame(guncelle); };
   kap.addEventListener('scroll', planla, { passive: true });
