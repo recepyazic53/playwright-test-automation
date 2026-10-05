@@ -16,6 +16,9 @@
 //            null: kaldır; verilmeyen alanın mevcut ayarı korunur). Alandan çıkınca çıkan uyarılar için (ör. zorunlu alan uyarısı).
 //   aksiyon  { dugme: sıra, istegeBagli, gorunurse? } düğmeye basılır (isteğe bağlıysa senaryoda "… dahil" ile seçilir;
 //            gorunurse: "Yalnız görünürse bas" — ilerleme düğmesinden sonra, kısa sürede görünmezse atlanır; adımı kapatmaz)
+//            gosterge (yalnız ilerleme düğmesinde; "Sonra bekler > Değiştir"): düğmeden sonra beklenen — { tur: 'alan', anahtar }
+//            ya da { tur: 'dugme', sira } (seçici sağ listedeki öğeden), { tur: 'metin', deger, secici? }, { tur: 'oge', secici,
+//            metin?, cerceve? } (sayfada seçilen öğe). Modelde adımın kosu.basariGostergesi olur; ardından beklenen mesaj gelemez.
 //   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır). Bir
 //            aksiyondan ya da bir ALAN GRUBUNDAN sonra gelir: alan grubundan sonraki mesaj, alanlar doldurulup (alanın
 //            "Doldurduktan sonra" tuşuna basılıp) alandan çıkınca beklenir — adımın düğmesi yoktur, adım orada kapanır (ardından
@@ -332,6 +335,54 @@ const SINIR_ANAHTARLARI = ['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunlu
 export const ALAN_TUSLARI = ['Tab', 'Enter'];
 
 /**
+ * Aksiyonun "Sonra bekler" göstergesi (bkz. dosya başı): biçim denetimi. Yoksa null, bozuksa false.
+ * @param {unknown} g @returns {import('./akis-tasarimi.d.mts').AksiyonGostergesi | null | false}
+ */
+function aksiyonGostergesiAyikla(g) {
+  if (g === undefined || g === null) return null;
+  if (!nesneMi(g)) return false;
+  const secici = (/** @type {unknown} */ x) => (typeof x === 'string' && x.trim() && x.length <= SECICI_EN_COK && !/[\r\n]/.test(x) ? x.trim() : null);
+  const cerceve = Array.isArray(g.cerceve) && g.cerceve.length && g.cerceve.length <= 5 && g.cerceve.every((x) => secici(x)) ? { cerceve: g.cerceve.map(String) } : {};
+  if (g.tur === 'alan') return typeof g.anahtar === 'string' && g.anahtar && g.anahtar.length <= 200 ? { tur: 'alan', anahtar: g.anahtar } : false;
+  if (g.tur === 'dugme') return Number.isInteger(g.sira) && g.sira >= 0 ? { tur: 'dugme', sira: g.sira } : false;
+  if (g.tur === 'metin') {
+    const m = metin(g.deger, METIN_EN_COK);
+    const s = g.secici === undefined || g.secici === null || g.secici === '' ? null : secici(g.secici);
+    if (!m || (g.secici && !s)) return false;
+    return { tur: 'metin', deger: m, ...(s ? { secici: s, ...cerceve } : {}) };
+  }
+  if (g.tur === 'oge') {
+    const s = secici(g.secici);
+    if (!s) return false;
+    const m = metin(g.metin, METIN_EN_COK);
+    return { tur: 'oge', secici: s, ...(m ? { metin: m } : {}), ...cerceve };
+  }
+  return false;
+}
+
+/**
+ * Aksiyon göstergesinin modeldeki karşılığı (kosu.basariGostergesi): alan / düğmenin seçicisi envanterden (kayıt ya da model).
+ * @param {import('./akis-tasarimi.d.mts').AksiyonGostergesi} g @param {import('./akis-tasarimi.d.mts').AkisEnvanteri} env
+ * @returns {{ gosterge: Record<string, unknown> } | { hata: string }}
+ */
+function aksiyonGostergesiCoz(g, env) {
+  const cer = (/** @type {unknown} */ c) => (Array.isArray(c) && c.length ? { cerceve: c.map(String) } : {});
+  if (g.tur === 'alan') {
+    const a = env.alanlar.find((x) => x.alan.anahtar === g.anahtar)?.alan;
+    if (!a || a.tur === 'kimlik' || !a.secici || a.secici.startsWith('kimlik:')) return { hata: 'Düğmeden sonra beklenen alan bu ekranda yok (ya da seçicisi yok); başka bir alan seçin.' };
+    return { gosterge: { tur: 'eleman', deger: a.secici, ...cer(a.cerceve) } };
+  }
+  if (g.tur === 'dugme') {
+    const d = env.dugmeler[g.sira];
+    if (!d || !d.secici) return { hata: 'Düğmeden sonra beklenen düğme bu ekranda yok; başka bir öğe seçin.' };
+    return { gosterge: { tur: 'eleman', deger: d.secici, ...cer(d.cerceve) } };
+  }
+  if (g.tur === 'metin') return { gosterge: { tur: 'metin', deger: g.deger, ...(g.secici ? { secici: g.secici, ...cer(g.cerceve) } : {}) } };
+  const sabit = sabitGostergeMetni(g.metin ?? null);
+  return { gosterge: sabit ? { tur: 'metin', deger: sabit, secici: g.secici, ...cer(g.cerceve) } : { tur: 'eleman', deger: g.secici, ...cer(g.cerceve) } };
+}
+
+/**
  * Arayüzden gelen blokları tek biçime getirir (bilinmeyen alanlar atılır; uzunluklar sınırlanır). Biçimi bozuk blok
  * hatadır. @param {unknown} ham
  * @returns {{ bloklar: import('./akis-tasarimi.d.mts').AkisBlogu[]; hatalar: import('./akis-tasarimi.d.mts').AkisHatasi[] }}
@@ -400,7 +451,9 @@ export function bloklariAyikla(ham) {
       bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true, ...(b.istegeBagli === true && b.dahilVarsayilan === true ? { dahilVarsayilan: true } : {}) });
     }
     else if (b.tur === 'aksiyon') {
-      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.gorunurse === true ? { gorunurse: true } : {}), ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...(b.tekrarDenenebilir === true ? { tekrarDenenebilir: true } : {}), ...korunanEki(b) });
+      const g = aksiyonGostergesiAyikla(b.gosterge);
+      if (g === false) { hatalar.push({ blok: i, mesaj: 'Düğmeden sonra beklenen (“Sonra bekler”) okunamadı; yeniden seçin.' }); return; }
+      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.gorunurse === true ? { gorunurse: true } : {}), ...(g ? { gosterge: g } : {}), ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...(b.tekrarDenenebilir === true ? { tekrarDenenebilir: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'korunan') {
       // Salt okunur korunan parça: yalnız anahtarı (ve gösterilen adı) alınır; içeriği sunucudaki modelden gelir.
       if (typeof b.korunan !== 'string' || !b.korunan || b.korunan.length > KORUNAN_ANAHTAR_EN_COK) { hatalar.push({ blok: i, mesaj: 'Korunan parça okunamadı; diyagramı yeniden açın.' }); return; }
@@ -513,6 +566,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
     kullanilanKorunan.add(b.korunan);
     return k;
   };
+  /** "Sonra bekler" seçimiyle aynen korunan başarı göstergesi bırakılan adımlar (korunan parça kimliği). @type {Set<string>} */
+  const gostergesiDegisen = new Set();
   /** Adımın (herhangi bir parçasının) başarı göstergesi aynen korunuyor mu? @param {(typeof adimlar)[number]} a */
   const gostergesiKorunan = (a) => (a.korunanlar ?? []).some((x) => x && x.tur === 'ek' && x.kosuEk && Object.prototype.hasOwnProperty.call(x.kosuEk, 'basariGostergesi'));
 
@@ -598,6 +653,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         // "Yalnız görünürse bas" (ör. bazı ekranlarda çıkan ara pencere düğmesi): adımın ilerleme düğmesinden sonra; kısa sürede
         // görünmezse atlanır. Adım kapanmaz (ardından gelen beklemeler / mesajlar aynı adımın).
         if (b.istegeBagli) { hata(i, '“Yalnız görünürse bas” ile “Her senaryoda basılmaz” birlikte seçilemez.'); return; }
+        if (b.gosterge) { hata(i, '“Yalnız görünürse bas” düğmesinden sonra beklenen ayrıca seçilmez; adımın ilerleme düğmesinde (“Sonra bekler”) seçin.'); return; }
         const c0 = /** @type {(typeof adimlar)[number] | null} */ (cur);
         if (!c0 || !kapali || !c0.ilerleme || c0.aksiyonlarAynen || bekleyen) { hata(i, '“Yalnız görünürse bas” düğmesi adımın ilerleme düğmesinden (her senaryoda basılan aksiyon) hemen sonra gelir; ör. onaydan sonra bazen açılan ara penceredeki düğme.'); return; }
         if (b.korunan) { hata(i, 'Bu aksiyonun korunan parçaları “Yalnız görünürse bas” düğmesinde tutulamaz.'); return; }
@@ -612,6 +668,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       if (b.tekrarDenenebilir) c.tekrarDenenebilir = true;
       const korunan = korunanAl(b, i);
       if (korunan && korunan.tur !== 'ek') { hata(i, 'Bu korunan parça aksiyonda kullanılamaz.'); return; }
+      if (b.istegeBagli && b.gosterge) { hata(i, '“Her senaryoda basılmaz” düğmesinden sonra beklenen seçilmez (her senaryoda basılmaz); adımın ilerleme düğmesinde seçin.'); return; }
       if (b.istegeBagli) {
         c.acicilar.push({ ...og, secimli: true, ...(sure ? { onceBekle: sure } : {}), ...(korunan ? { korunan } : {}) });
         bekleyen = true;
@@ -623,6 +680,21 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         }
         c.ilerleme = og;
         if (b.zamanAsimiSn !== undefined) c.zamanAsimiSn = b.zamanAsimiSn;
+        // "Sonra bekler" (Değiştir): adımın başarı göstergesi bu olur; adımın aynen korunan göstergesi (varsa) bunun yerine geçmez.
+        if (b.gosterge) {
+          const g = aksiyonGostergesiCoz(b.gosterge, env);
+          if ('hata' in g) { hata(i, g.hata); return; }
+          c.elleGosterge = g.gosterge;
+          if (c.korunanlar) {
+            c.korunanlar = c.korunanlar.map((k) => {
+              if (!k || k.tur !== 'ek' || !k.kosuEk || !Object.prototype.hasOwnProperty.call(k.kosuEk, 'basariGostergesi')) return k;
+              const { basariGostergesi: _g, ...kalan } = k.kosuEk;
+              gostergesiDegisen.add(k.id);
+              const { kosuEk: _k, ...temel } = k;
+              return Object.keys(kalan).length ? { ...temel, kosuEk: kalan } : temel;
+            });
+          }
+        }
         if (sure) c.onceBekle = (c.onceBekle ?? 0) + sure;
         kapali = true;
         bekleyen = false;
@@ -799,6 +871,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       }
       if (bekleyen) { hata(i, 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).'); return; }
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
+      if (!b.uyari && c.elleGosterge) { hata(i, 'Bu düğmeden sonra beklenen “Sonra bekler > Değiştir” ile seçildi; bu beklenen mesajı silin ya da seçimi değiştirin.'); return; }
       // Alan grubundan sonra (düğmesiz) gelen, son olmayan mesaj: alanlar doldurulup alandan çıkınca beklenir (ör. zorunlu alan
       // uyarısı Tab'la çıkar). Adım burada kapanır: ardından gelen aksiyon / alan grubu yeni adımdır. Mesajdan önceki bekleme
       // süresi alanlardan sonradır.
@@ -874,6 +947,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       kip: 'kayit', profil: env.profil, adimlar, basariGostergesi, engellenenler: env.engellenenler, notlar: env.notlar,
       secenekGozlemleri: secenekGozlemleriniAyikla(env.secenekGozlemleri)
     },
-    hatalar
+    hatalar,
+    gostergesiDegisen: [...gostergesiDegisen]
   };
 }

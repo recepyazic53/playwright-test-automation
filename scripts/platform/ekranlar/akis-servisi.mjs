@@ -27,6 +27,7 @@
 import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { DepoHatasi, ekranKaydet, ekranModeliEkle, ekranModeliGetir, ekranlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet } from '../veritabani/depo.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli } from '../senaryolar/model-formu.mjs';
+import { gostergeOkunusu, seciciAdlari } from '../senaryolar/akis-diyagrami.mjs';
 import { senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
 import { ALAN_TUSLARI, akisPaleti, akistanKayitEnvanteri, bloklariAyikla, elleOgeleriEkle } from '../tarama/akis-tasarimi.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
@@ -603,6 +604,47 @@ function kapsamAyari(model, adim) {
 }
 
 /**
+ * Ara adımın kendiliğinden kurulan başarı göstergesinin seçicisi (paket-olusturucu.mjs > ilkSecici ile aynı kural, modelden):
+ * sonraki (SQL olmayan) adımın ilk seçicili alanı (özel açılır liste hariç), yoksa ilk tıklanan düğmesi; bilinemezse null.
+ * @param {Nesne[]} sonrakiler
+ */
+function kendiliginden(sonrakiler) {
+  const x = sonrakiler.find((a) => !nesneMi(a.sqlKontrolu));
+  if (!x || nesneMi(x.ortakAkis)) return null;
+  for (const b of Array.isArray(x.bolumler) ? x.bolumler : []) {
+    for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) {
+      if (!nesneMi(a) || ['buton', 'cikti'].includes(a.tip) || a.doldurucu === 'ozelSecim') continue;
+      if (nesneMi(a.konum) && typeof a.konum.secici === 'string' && a.konum.secici) return a.konum.secici;
+    }
+  }
+  const t = nesneMi(x.kosu) && Array.isArray(x.kosu.aksiyonlar) ? x.kosu.aksiyonlar.find((y) => nesneMi(y) && y.tur === 'tikla' && typeof y.secici === 'string') : undefined;
+  return t ? String(t.secici) : null;
+}
+
+/**
+ * İlerleme düğmesinin "Sonra bekler" bilgisi (aksiyon bloğuna eklenir). Mesaj bloklarıyla gösterilen gösterge (metin / kalıp; son
+ * adımda öğe) için boş: arayüz okunuşu o bloklardan kurar. Diğerlerinde beklenenOkunus (null: gösterge yok — koşucu beklemez).
+ * Ara adımın öğe göstergesi kendiliğinden kurulandan (sonraki adımın ilk öğesi) farklıysa seçim "gosterge" olarak taşınır: kaydedince
+ * aynen yazılır (kullanıcının seçimi sessizce değişmez). Aynen korunan gösterge (ör. adres) korunan parçasıyla kalır.
+ * @param {unknown} g kosu.basariGostergesi @param {boolean} korunur @param {number} sira @param {Nesne[]} sirali
+ * @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env @param {Map<string, { ad: string; tur: 'alan' | 'dugme' }>} adlar
+ */
+function aksiyonBeklemesi(g, korunur, sira, sirali, env, adlar) {
+  if (!nesneMi(g)) return { beklenenOkunus: null };
+  const sonrakiler = sirali.slice(sira + 1);
+  const sonAdim = sonrakiler.every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu));
+  const liste = g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
+  if (!korunur && (sonAdim || liste.some((s) => nesneMi(s) && (s.tur === 'metin' || s.tur === 'desen')))) return {};
+  const okunus = { beklenenOkunus: gostergeOkunusu(g, adlar) };
+  if (korunur || g.tur !== 'eleman' || typeof g.deger !== 'string' || !g.deger || g.deger === kendiliginden(sonrakiler)) return okunus;
+  const alan = env.alanlar.find((x) => x.alan.secici === g.deger && x.alan.tur !== 'kimlik');
+  const dugme = env.dugmeler.findIndex((x) => x.secici === g.deger);
+  /** @type {import('../tarama/akis-tasarimi.d.mts').AksiyonGostergesi} */
+  const gosterge = alan ? { tur: 'alan', anahtar: alan.alan.anahtar } : dugme >= 0 ? { tur: 'dugme', sira: dugme } : { tur: 'oge', secici: g.deger, ...cerceveEki(g.cerceve) };
+  return { ...okunus, gosterge };
+}
+
+/**
  * Akışın adımlarından diyagram blokları (kayıt çevirisinin tersi): adım → alan grubu (+ zorunluluk, koşul), koşu aksiyonları
  * (bekleme, düğme — isteğe bağlı adımdaysa "her senaryoda basılmaz"), metin göstergesi → beklenen mesaj; sonunda Bitir.
  * Diyagramın gösteremediği parçalar (akisKorumasi) salt okunur korunan bloklar / rozetler olur: "korunan" anahtarı kaydederken
@@ -619,6 +661,8 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
   const analizler = akisKorumasi(model, sirali, env);
   /** Modelin alanları (bu modelde olmayan koşul alanı genel senaryodandır). */
   const modelEtiketleri = alanEtiketleri(model);
+  /** Seçicilerin okunur adları ("Sonra bekler" okunuşu). */
+  const adlar = seciciAdlari(model);
   for (const [sira, adim] of sirali.entries()) {
     const an = analizler[sira];
     // Diyagramda düzenlenecek içeriği olmayan korunan adım: tek salt okunur blok (tamamı aynen).
@@ -722,8 +766,10 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
           }
           // Adımın sonucu bekleme süresi (kosu.zamanAsimiSn) ilerleme düğmesinde taşınır.
           const sure = !istegeBagli && Number.isInteger(kosu.zamanAsimiSn) ? { zamanAsimiSn: kosu.zamanAsimiSn } : {};
+          // "Sonra bekler": mesaj bloklarıyla gösterilmeyen göstergenin okunuşu ve (kendiliğinden kurulamayan) seçimi.
+          const bekleme = istegeBagli ? {} : aksiyonBeklemesi(kosu.basariGostergesi, an.gostergeKorunur, sira, sirali, env, adlar);
           if (d >= 0) {
-            bloklar.push({ tur: 'aksiyon', dugme: d, istegeBagli, ...sure, ...(ekAnahtari ? { korunan: ekAnahtari, korunanOzet: ekOzet } : {}) });
+            bloklar.push({ tur: 'aksiyon', dugme: d, istegeBagli, ...sure, ...bekleme, ...(ekAnahtari ? { korunan: ekAnahtari, korunanOzet: ekOzet } : {}) });
             ekAnahtari = null;
           }
         }
@@ -1115,9 +1161,10 @@ const ardisikParcaMi = (buyuk, kucuk) => {
  * @param {Nesne} tam @param {Nesne} yeni @param {Nesne[]} akisAdimlari @param {import('../tarama/akis-tasarimi.d.mts').AkisBlogu[]} bloklar
  * @param {ReturnType<typeof korunanParcalari>} korunan
  * @param {Nesne[]} oncekiAdimlar güncellenen akışın kaydetmeden önceki adımları (bölüm özellikleri denetimi; yeni akışta boş)
+ * @param {Set<string>} [gostergesiDegisen] başarı göstergesi "Sonra bekler > Değiştir" ile değiştirilen korunan parçaların adım kimlikleri
  * @returns {Array<{ blok: number | null; mesaj: string }>}
  */
-function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan, oncekiAdimlar) {
+function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan, oncekiAdimlar, gostergesiDegisen = new Set()) {
   /** @type {Array<{ blok: number | null; mesaj: string }>} */
   const hatalar = [];
   const etiketler = alanEtiketleri(tam);
@@ -1168,7 +1215,8 @@ function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan, oncekiAdimla
       /** @type {string[]} */
       const sorunlar = [];
       for (const [x, v] of Object.entries(k.adimEk ?? {})) if (!son || !esitMi(son[x], v) || (x === 'gorunurluk' && eksikDayanaklar({ gorunurluk: v }).length)) sorunlar.push(`${ozellikAdi(x)} ${neden(x === 'gorunurluk' ? { gorunurluk: v } : v)}`);
-      for (const [x, v] of Object.entries(k.kosuEk ?? {})) if (!son || !nesneMi(son.kosu) || !esitMi(son.kosu[x], v)) sorunlar.push(`${ozellikAdi(x)} kaydederken korunamadı (diyagramı yeniden açıp deneyin)`);
+      // "Sonra bekler > Değiştir" ile değiştirilen gösterge artık korunmaz (yerine kullanıcının seçtiği yazıldı).
+      for (const [x, v] of Object.entries(k.kosuEk ?? {})) if (!(x === 'basariGostergesi' && gostergesiDegisen.has(k.id))) if (!son || !nesneMi(son.kosu) || !esitMi(son.kosu[x], v)) sorunlar.push(`${ozellikAdi(x)} kaydederken korunamadı (diyagramı yeniden açıp deneyin)`);
       const sonAlanlar = son && Array.isArray(son.bolumler) ? son.bolumler.flatMap((/** @type {unknown} */ bb) => (nesneMi(bb) && Array.isArray(bb.alanlar) ? bb.alanlar : [])) : [];
       for (const ka of k.alanlar ?? []) {
         const a = sonAlanlar.find((/** @type {unknown} */ x) => nesneMi(x) && x.id === ka.alan.id);
@@ -1382,7 +1430,7 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   // Korunan parçalar aynen yazıldı mı (dayandığı alan silindiyse anlaşılır hatayla reddedilir; sessiz kayıp olmaz)?
   // Bölüm özellikleri yalnız diyagramdan kaydederken denetlenir (akış kaydında bölümler sayfanın bölümleridir).
   const oncekiAdimlar = mevcutAkis && !g.kayitEnvanteri ? /** @type {Nesne[]} */ (/** @type {Nesne} */ (akisModeli(tam, mevcutAkis.id)).adimlar ?? []) : [];
-  const korunmayan = korunanDenetimi(tam, yeni, akisAdimlari, ayik.bloklar, korunan, oncekiAdimlar);
+  const korunmayan = korunanDenetimi(tam, yeni, akisAdimlari, ayik.bloklar, korunan, oncekiAdimlar, new Set('gostergesiDegisen' in cevrim ? cevrim.gostergesiDegisen : []));
   if (korunmayan.length) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${korunmayan.length} sorun var.`, korunmayan);
   modeliDogrula(vt, projeId, yeni, `${ekran.anahtar}.model.json`);
   // Eski biçimli (sürüm 1; ör. otomatik tarama) modele diyagram koşu tanımı yazdıysa model sürüm 2'ye yükseltildi (modeliDogrula).

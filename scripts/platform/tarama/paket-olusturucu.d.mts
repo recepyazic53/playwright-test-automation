@@ -205,6 +205,8 @@ export type KayitAdimi = {
   kosullar?: Record<string, { secim: string; degerler: string[] } | import('./gorunurluk-kosulu.mjs').YeniKosul | null>;
   /** Adımın ilerleme düğmesine basıldıktan sonra beklenen mesaj (akış tasarımı; yoksa sonraki adımın ilk alanı görünür). */
   gosterge?: KayitGostergesi | null;
+  /** Akış tasarımında "Sonra bekler > Değiştir" ile seçilen başarı göstergesi (model biçiminde; kosu.basariGostergesi olarak AYNEN yazılır). */
+  elleGosterge?: Record<string, unknown>;
   /** Adımda kabul edilen iş kuralı uyarıları (akış tasarımında "Uyarı" işaretli mesajlar). */
   uyarilar?: KayitGostergesi[];
   /** İlerleme düğmesinden sonra sonucu en çok bekleme süresi (sn; kosu.zamanAsimiSn). */

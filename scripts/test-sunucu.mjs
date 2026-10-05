@@ -424,6 +424,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/kosul-duzenleyici.js', { dosya: 'kosul-duzenleyici.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gorunurluk-kosulu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tarama', 'gorunurluk-kosulu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-kosul-duzenleyici.css', { dosya: 'stil-kosul-duzenleyici.css', tur: 'text/css; charset=utf-8' }],
+  // "Sonra bekler" (düğmeden sonra ne beklenir; akış tasarımı ve görünümü): kendi stil dosyası.
+  ['/arayuz/stil-akis-bekleme.css', { dosya: 'stil-akis-bekleme.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/tablo-siralama.js', { dosya: 'tablo-siralama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/aranabilir-secim.js', { dosya: 'aranabilir-secim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/playwright-disa-aktarma.js', { dosya: 'playwright-disa-aktarma.js', tur: 'text/javascript; charset=utf-8' }],

@@ -29,6 +29,8 @@ export interface DiyagramAdimi {
   ilerleme: string[];
   aksiyonMetinleri: string[];
   gosterge: string | null;
+  /** Düğmeden sonra ne beklenir: "Sonra bekler: … · zaman aşımı N sn" (adımda ilerleme düğmesi yoksa null). */
+  sonraBekler: string | null;
   hedef: 'basari' | 'hata' | null;
   sonuc: DiyagramAdimSonucu | null;
   /** Akışın başındaki ortak akış adımı: ekran açılmadan önce koşar (yalnız öyleyse true). */
@@ -56,6 +58,13 @@ export interface DiyagramSecenekleri {
 export declare function ifadeMetni(ifade: unknown, model: object): string;
 export declare function gorunurlukMetni(gorunurluk: unknown, model: object): string | null;
 export declare function akisDiyagrami(model: object, s?: DiyagramSecenekleri): AkisDiyagrami;
+export declare const ZAMAN_ASIMI_SINIRI: Readonly<{ enAz: number; enCok: number }>;
+export declare const GOSTERGESIZ_METNI: string;
+export declare function seciciAdlari(model: unknown): Map<string, { ad: string; tur: 'alan' | 'dugme' }>;
+export declare function gostergeOkunusu(g: unknown, adlar?: Map<string, { ad: string; tur: 'alan' | 'dugme' }>): string | null;
+export declare function sonraBeklerMetni(okunus: string | null, zamanAsimiSn: unknown): string;
+export declare function gostergeSabitMetni(m: unknown): string | null;
+export declare function sayfadanGosterge(o: { secici: string; metin?: string | null; cerceve?: string[] }): { tur: 'metin' | 'eleman'; deger: string; secici?: string; cerceve?: string[] };
 export declare const GIRIS_DUGUMU: 'giris';
 export declare const SONUC_DUGUMU: 'sonuc';
 export declare function adimDugumu(adimId: string): string;

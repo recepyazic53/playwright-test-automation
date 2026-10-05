@@ -141,6 +141,7 @@ export function akisDiyagrami(model, s = {}) {
   const hataAdimi = s.beklenen && s.beklenen.hataAdimi ? s.beklenen.hataAdimi : null;
   const degerler = nesneMi(s.degerler) ? s.degerler : null;
   const sirali = model.adimlar.slice().sort((a, b) => (a.sira || 0) - (b.sira || 0));
+  const adlar = seciciAdlari(model);
   const hataSirasi = hataAdimi ? sirali.findIndex((a) => a.id === hataAdimi) : -1;
 
   const adimlar = sirali.map((adim, i) => {
@@ -191,6 +192,8 @@ export function akisDiyagrami(model, s = {}) {
       // Adımdan sonraki bağlantıda okunan aksiyonlar, sırayla (düğmeye basma, süreli ya da öğeye bağlı bekleme).
       aksiyonMetinleri: aksiyonlar.map(aksiyonMetni).filter(Boolean),
       gosterge: gostergeMetni(kosu.basariGostergesi),
+      // Düğmeden (yalnız görünürse basılanlar hariç) sonra ne beklenir: "Sonra bekler: … · zaman aşımı N sn" (düğme yoksa null).
+      sonraBekler: tikla.some((x) => x.kosul !== 'gorunurse') ? sonraBeklerMetni(gostergeOkunusu(kosu.basariGostergesi, adlar), kosu.zamanAsimiSn) : null,
       hedef: /** @type {'basari' | 'hata' | null} */ (null),
       sonuc: /** @type {null | { durum: string; sureMs: number | null; hataMesaji: string | null }} */ (null)
     };
@@ -321,4 +324,107 @@ export function hataDugumleri(alanHatalari, sema) {
     for (const d of kontrolDugumleri(anahtar, sema)) (sonuc[d] = sonuc[d] || []).push(...(Array.isArray(mesajlar) ? mesajlar : []));
   }
   return sonuc;
+}
+
+// ---- Düğmeden sonra NE BEKLENİR (adımın kosu.basariGostergesi + kosu.zamanAsimiSn) -----------------------------------------
+// Akış görünümü (bu dosya), akış tasarımı (arayuz/akis-tasarimi.js) ve sunucu (ekranlar/akis-servisi.mjs) AYNI okunuşu kullanır.
+// Koşucu (tests/support/model-kosucu.ts > adimSonucunuDogrula): gösterge yoksa düğmeye bastıktan sonra beklemeden sonraki adıma
+// geçer; varsa zaman aşımı (adımın zamanAsimiSn'i, yoksa Ayarlar'daki adım süresi) dolana kadar göstergeyi bekler.
+
+/** "Sonra bekler" zaman aşımının sınırları (sn; akış tasarımı sunucusuyla aynı). */
+export const ZAMAN_ASIMI_SINIRI = Object.freeze({ enAz: 1, enCok: 600 });
+/** Gösterge yokken koşucunun gerçek davranışı. */
+export const GOSTERGESIZ_METNI = 'belirtilmemiş (düğmeden sonra beklemeden sonraki adıma geçer)';
+
+/**
+ * Modelin öğe seçicilerinin okunur adları (tüm akışlar): alan → "‹etiket› alanı", düğme (buton alanı / tıklama aksiyonu) →
+ * "“‹yazı›” düğmesi". @param {any} model @returns {Map<string, { ad: string; tur: 'alan' | 'dugme' }>}
+ */
+export function seciciAdlari(model) {
+  const harita = new Map();
+  if (!nesneMi(model)) return harita;
+  const listeler = [model.adimlar, ...(Array.isArray(model.akislar) ? model.akislar.map((a) => (nesneMi(a) ? a.adimlar : null)) : [])];
+  for (const l of listeler) {
+    for (const adim of Array.isArray(l) ? l : []) {
+      if (!nesneMi(adim)) continue;
+      for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+        for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) {
+          const s = nesneMi(a) && nesneMi(a.konum) && typeof a.konum.secici === 'string' ? a.konum.secici : '';
+          if (s && !harita.has(s)) harita.set(s, { ad: String(etiketi(a)), tur: a.tip === 'buton' ? 'dugme' : 'alan' });
+        }
+      }
+      const aksiyonlar = nesneMi(adim.kosu) && Array.isArray(adim.kosu.aksiyonlar) ? adim.kosu.aksiyonlar : [];
+      for (const x of aksiyonlar) {
+        if (nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string' && x.secici && !harita.has(x.secici)) {
+          harita.set(x.secici, { ad: typeof x.aciklama === 'string' && x.aciklama ? x.aciklama : x.secici, tur: 'dugme' });
+        }
+      }
+    }
+  }
+  return harita;
+}
+
+/** Bilinen genel kalıpların okunuşu (yoksa null). @param {string} d */
+function kalipOkunusu(d) {
+  if (d === '\\S' || d === '.+' || d === '\\S+') return 'boş değil';
+  if (d === '[1-9]') return 'sıfırdan farklı bir rakam içerir';
+  if (d === '\\d' || d === '\\d+' || d === '[0-9]') return 'bir sayı içerir';
+  return null;
+}
+
+/**
+ * Başarı göstergesinin okunuşu ("İl alanı görünür", "“Kaydedildi” yazısı görünür"…); gösterge yoksa null.
+ * @param {unknown} g kosu.basariGostergesi @param {Map<string, { ad: string; tur: 'alan' | 'dugme' }>} [adlar] seciciAdlari(model)
+ * @returns {string | null}
+ */
+export function gostergeOkunusu(g, adlar = new Map()) {
+  if (!nesneMi(g)) return null;
+  if (g.tur === 'veya' && Array.isArray(g.secenekler)) {
+    const l = g.secenekler.map((s) => gostergeOkunusu(s, adlar)).filter(Boolean);
+    return l.length ? l.join(' ya da ') : null;
+  }
+  if (typeof g.deger !== 'string' || !g.deger) return null;
+  const yer = typeof g.secici === 'string' && g.secici ? adlar.get(g.secici) : undefined;
+  if (g.tur === 'eleman') {
+    const o = adlar.get(g.deger);
+    return o ? (o.tur === 'dugme' ? `${tirnak(o.ad)} düğmesi görünür` : `${o.ad} alanı görünür`) : `${tirnak(g.deger)} öğesi görünür`;
+  }
+  if (g.tur === 'metin') return `${tirnak(g.deger)} yazısı görünür${yer ? ` (${yer.ad} içinde)` : ''}`;
+  if (g.tur === 'desen') {
+    const kim = yer ? `${yer.ad} yazısı` : typeof g.secici === 'string' && g.secici ? `${tirnak(g.secici)} öğesinin yazısı` : 'Sayfanın yazısı';
+    const k = kalipOkunusu(g.deger);
+    return k ? `${kim} ${k}` : `${kim} şu kalıba uyar: ${g.deger}`;
+  }
+  if (g.tur === 'url') return `Adres şu kalıba uyar: ${g.deger}`;
+  return null;
+}
+
+/**
+ * "Sonra bekler: ‹okunuş› · zaman aşımı N sn". okunus null: gösterge yok (koşucunun gerçek davranışı yazılır); zamanAsimiSn yoksa
+ * Ayarlar'daki adım süresi. @param {string | null} okunus @param {unknown} zamanAsimiSn @returns {string}
+ */
+export function sonraBeklerMetni(okunus, zamanAsimiSn) {
+  const sure = Number.isInteger(zamanAsimiSn) ? `zaman aşımı ${zamanAsimiSn} sn` : 'zaman aşımı: Ayarlar’daki adım süresi';
+  return okunus ? `Sonra bekler: ${okunus} · ${sure}` : `Sonra bekler: ${GOSTERGESIZ_METNI}`;
+}
+
+/**
+ * Metnin sabit kısmı (ilk rakamlı sözcükten öncesi; en az 3 karakter) — tarama/paket-olusturucu.mjs > sabitGostergeMetni ile AYNI
+ * kural (bu dosya tarayıcıda da çalışır, içe aktarmaz; birim testi ikisini karşılaştırır). @param {unknown} m @returns {string | null}
+ */
+export function gostergeSabitMetni(m) {
+  if (typeof m !== 'string' || !m) return null;
+  const i = m.search(/[^\s:;,()]*\d/);
+  const s = (i >= 0 ? m.slice(0, i) : m).replace(/[\s:;,.#№(\-–—]+$/u, '').trim();
+  return s.length >= 3 ? s : null;
+}
+
+/**
+ * Sayfada seçilen öğe → başarı göstergesi ("Sayfada seç" > Başarı göstergesi; tarama/oge-isaretleri.mjs ile aynı kural): yazısının
+ * sabit kısmı varsa o yazı (öğenin içinde), yoksa öğenin görünmesi. @param {{ secici: string; metin?: string | null; cerceve?: string[] }} o
+ */
+export function sayfadanGosterge(o) {
+  const c = Array.isArray(o.cerceve) && o.cerceve.length ? { cerceve: o.cerceve.map(String) } : {};
+  const sabit = gostergeSabitMetni(typeof o.metin === 'string' ? o.metin.replace(/\s+/g, ' ').trim() : null);
+  return sabit ? { tur: 'metin', deger: sabit, secici: o.secici, ...c } : { tur: 'eleman', deger: o.secici, ...c };
 }
