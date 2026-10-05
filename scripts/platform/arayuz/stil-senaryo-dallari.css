@@ -22,4 +22,11 @@
 .kayit-grubu-baglantisi { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; font-size: 12px; color: var(--metin-2); min-width: 0; }
 .kayit-grubu-baglantisi > span { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
 .kayit-grubu-baglantisi .ikon { flex: none; width: 13px; height: 13px; }
+/* Devam adımı (aksiyonlu adımdan sonra elle doldurulan, aksiyonsuz adım): önceki adımın kartı içinde alt bölüm, ayrı numara yok. */
+.devam-bolumu { display: grid; gap: 10px; min-width: 0; margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--cizgi-2); }
+.devam-bolumu.kapsam-disi { opacity: .6; }
+.devam-basligi { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.devam-basligi .ikon { flex: none; width: 14px; height: 14px; margin-top: 3px; color: var(--vurgu); }
+.devam-basligi h4 { margin: 0; overflow-wrap: anywhere; }
+.devam-basligi small { display: block; color: var(--metin-2); overflow-wrap: anywhere; }
 .secime-gore-notu[hidden] { display: none; }

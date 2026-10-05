@@ -406,9 +406,16 @@ test.describe('seçime göre bağ, kayıt grupları ve devam adımı (127.0.0.1)
   });
 
   for (const genislik of [1440, 390]) {
-    test(`aynı grup birden çok adımda tek kutu + bağlantı satırı (${genislik} px)`, async () => {
+    test(`aynı grup birden çok adımda tek kutu + bağlantı satırı; aksiyonsuz devam adımı önceki adımın içinde (${genislik} px)`, async () => {
       test.setTimeout(120_000);
       const { page, hatalar } = await formAc(`/#/senaryolar/yeni/${ekranId}`, genislik);
+      // Adım numaraları: "Ek bilgiler" 1. adımın içinde; Onay (kendi aksiyonu) ve Serbest (grupsuz alan) birleşmez.
+      expect(await page.locator('.adim-karti .adim-no').allTextContents()).toEqual(['1', '2', '3', '4', '5']);
+      const ilk = page.locator('.adim-karti').first();
+      const devam = ilk.locator('[data-devam-adimi="ek"]');
+      await expect(devam.getByRole('heading', { name: '“Sorgula” sonrasında girilecekler' })).toBeVisible();
+      await expect(page.locator('.adim-karti[data-adim="onay"] .adim-no')).toHaveText('3');
+      await expect(page.locator('.adim-karti[data-adim="serbest"] .adim-no')).toHaveText('4');
       await sec(page, 'A');
       // Kayıt-A: kutu yalnız 1. adımın bölümünde; devam bölümünde, Adres ve Onay adımlarında bağlantı satırı.
       await expect(page.locator('.kayit-grubu[data-kayit-grubu="Kayıt-A"]:not(.kayit-grubu-baglanti):visible')).toHaveCount(1);

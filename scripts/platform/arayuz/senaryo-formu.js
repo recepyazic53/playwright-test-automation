@@ -35,7 +35,7 @@ import { tarihGirdisi } from './goreli-tarih-girdisi.js';
 import { talepAlani } from './talep-alani.js';
 import { veriBekliyorNotu } from './veri-bekliyor.js';
 import { HAZIRLIK_BASLIKLARI, alanMaddesi, eylemDenetimi, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
-import { bolumDuzeni, grupDali, grupGorunurlugu, kosulHaritasi } from './senaryo-dallari.mjs';
+import { bolumDuzeni, grupDali, grupGorunurlugu, kosulBasvurulari, kosulHaritasi } from './senaryo-dallari.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -1509,10 +1509,43 @@ function modelFormu(icerik, s, senaryo, baglam) {
   /** İsteğe bağlı adımın grubunun etiketi (ör. "“Çıkış” dahil"). @param {{ ayar: string | null }} adim */
   const kapsamEtiketi = (adim) => sema.adimKapsami.find((k) => k.ayar === adim.ayar)?.etiket ?? 'Dahil';
 
+  // --- DEVAM ADIMI (yalnız görünüm): kendi aksiyonu olmayan, alanlarının hepsi önceki adımın kayıt gruplarından ya da önceki
+  // adımla aynı kontrol dalına bağlı olan ve önceki adımı aksiyonlu (ör. "sorgula") olan adım, formda önceki adımın İÇİNDE "… sonrasında
+  // girilecekler" alt bölümü olarak gösterilir: ayrı numara almaz. Kayıt verisi, koşu sırası ve adım kimlikleri değişmez; isteğe
+  // bağlı (adım kapsamı) ve genel senaryo adımları birleşmez.
+  const hamAdimlar = new Map((Array.isArray(baglam.model?.adimlar) ? baglam.model.adimlar : []).filter((x) => x && typeof x.id === 'string').map((x) => [x.id, x]));
+  const aksiyonlari = (adim) => { const x = hamAdimlar.get(adim.id); return x && x.kosu && Array.isArray(x.kosu.aksiyonlar) ? x.kosu.aksiyonlar.filter((a) => a && typeof a === 'object') : []; };
+  const adimAlanlari = (adim) => adim.bolumler.flatMap((b) => b.alanlar);
+  function devamAdimiMi(adim, onceki) {
+    if (!onceki || adim.ayar || onceki.ayar || adim.ortakAkis || onceki.ortakAkis || !hamAdimlar.has(adim.id)) return false;
+    if (aksiyonlari(adim).length || !aksiyonlari(onceki).length) return false;
+    const alanlarim = adimAlanlari(adim);
+    const oncekiler = adimAlanlari(onceki);
+    if (!alanlarim.length || !oncekiler.length) return false;
+    const oncekiIdler = new Set(oncekiler.map((a) => a.id));
+    // Önceki adımın kontrol kümesi: önceki adımdaki alanlar ve önceki adımın alanlarını koşullayan alanlar.
+    const kontrolKumesi = new Set([...oncekiIdler, ...oncekiler.flatMap((a) => [...kosulBasvurulari(kosullar.get(a.id)).keys()])]);
+    const oncekiGruplari = [...kayitGruplari.values()].filter((g) => [...g.adaylar].some((id) => oncekiIdler.has(id)));
+    return alanlarim.every((a) => oncekiGruplari.some((g) => g.adaylar.has(a.id))
+      || [...kosulBasvurulari(kosullar.get(a.id)).keys()].some((k) => kontrolKumesi.has(k)));
+  }
+  /** Devam bölümünün başlığı: önceki adımın aksiyonundan ("“Sorgula” sonrasında girilecekler"). */
+  function devamBasligi(onceki) {
+    const a = aksiyonlari(onceki).find((x) => x.tur === 'tikla') || aksiyonlari(onceki)[0];
+    const ad = a ? String(a.metin || a.aciklama || '').trim() : '';
+    return ad ? `“${ad.length > 60 ? `${ad.slice(0, 57)}…` : ad}” sonrasında girilecekler` : 'İşlemden sonra girilecekler';
+  }
+
   const adimAkisi = h('div', { class: 'adim-akisi' });
+  let gosterilenNo = 0;
+  /** @type {{ adim: any; govde: HTMLElement } | null} */
+  let sonKart = null;
   sema.adimlar.forEach((adim, i) => {
     const alanSayisi = adim.bolumler.reduce((t, b) => t + b.alanlar.length, 0);
-    yuvaYeri = `${i + 1}. adımdaki`;
+    // Yalnız hemen önceki adım (ayrı kartı olan, aksiyonlu) ile birleşir; zincirleme devam yok.
+    const devam = Boolean(sonKart && i > 0 && sonKart.adim === sema.adimlar[i - 1] && devamAdimiMi(adim, sonKart.adim));
+    if (!devam) gosterilenNo += 1;
+    yuvaYeri = `${gosterilenNo}. adımdaki`;
     // Genel senaryo adımı: isteğe bağlıysa anahtar (başlıkta), her senaryoda çalışıyorsa yalnız bilgi rozeti.
     const ortakOnEki = adim.ortakAkis ? `“${adim.ortakAkis}” adımları · ` : '';
     const altMetin = adim.ayar ? `${ortakOnEki}İsteğe bağlı adım${alanSayisi ? ` · ${alanSayisi} alan` : ''}`
@@ -1536,14 +1569,25 @@ function modelFormu(icerik, s, senaryo, baglam) {
       bolumKaplari.set(bolum.id, grup);
       govde.append(grup);
     }
+    if (devam && sonKart) {
+      // Önceki adımın kartının sonunda alt bölüm (aynı numara); kapsam / görünürlük için adım kimliği korunur.
+      const devamEl = h('section', { class: 'devam-bolumu', 'data-devam-adimi': adim.id, 'aria-labelledby': `adim-${adim.id}` },
+        h('div', { class: 'devam-basligi' }, ikon('isaret'), h('div', {}, h('h4', { id: `adim-${adim.id}` }, devamBasligi(sonKart.adim)),
+          h('small', {}, `${adim.baslik}`, ' · ', alt))),
+        govde);
+      sonKart.govde.append(devamEl);
+      adimKartlari.set(adim.id, { el: devamEl, alt, altMetin, govde, alanSayisi });
+      return;
+    }
     const el = h('section', { class: `kart adim-karti ${alanSayisi ? '' : 'bos'}`.trim(), 'aria-labelledby': `adim-${adim.id}`, 'data-adim': adim.id },
-      h('div', { class: 'adim-basligi' }, h('span', { class: 'adim-no', 'aria-hidden': 'true' }, String(i + 1)),
+      h('div', { class: 'adim-basligi' }, h('span', { class: 'adim-no', 'aria-hidden': 'true' }, String(gosterilenNo)),
         h('div', {}, h('h3', { id: `adim-${adim.id}` }, adim.baslik), alt),
         adim.ayar ? h('div', { class: 'sag' }, kapsamAnahtari(adim))
           : adim.ortakAkis ? h('div', { class: 'sag' }, rozet('her senaryoda çalışır', 'basari', { title: `“${adim.ortakAkis}” adımları bu akışta her senaryoda çalışır (akış diyagramında “İsteğe bağlı” seçilirse burada “… dahil” anahtarı çıkar).`, 'data-ortak-durumu': 'her-zaman' })) : null),
       govde);
     adimKartlari.set(adim.id, { el, alt, altMetin, govde, alanSayisi });
     adimAkisi.append(el);
+    sonKart = { adim, govde };
   });
   yuvaYeri = 'Senaryo kartındaki';
 
