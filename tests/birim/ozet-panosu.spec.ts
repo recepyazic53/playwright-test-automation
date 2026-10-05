@@ -22,10 +22,10 @@ import {
   EN_COK_DILIM, EN_COK_KART, EN_COK_YUKSEKLIK, IZGARA_SUTUN, LISTE_EN_COK, SATIR_BIRIMI, VARSAYILAN_BICIM, bicimTemizle, cakisiyorMu, degisimHesapla,
   duzenTemizle, eksikYerlesikler, enKucukBoyut, esikRengi, eskiBicimMi, gorunurYerlesim, hucreBicimle, kartAyarla, kartEkle, kartKaldir, kartSiraTasi,
   kartYerlestir, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
-  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, type PanoDuzeni
+  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, sqlZamanAsimiTemizle, type PanoDuzeni
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
-import { MASKE, PANO_SQL_UCU, hataIletisi, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
+import { MASKE, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
 import { PANO_POST_UCLARI } from '../../scripts/platform/sonuclar/pano-uclari.mjs';
 import { sablonSonucu } from '../../scripts/platform/sonuclar/pano-sablonlari.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
@@ -35,7 +35,7 @@ import { iceAktarmaHazirla, iceAktarmaUygula } from '../../scripts/platform/ice-
 import { anahtarTuret, kasaKdfOku } from '../../scripts/platform/kasa.mjs';
 import { TABLOLAR, mevcutSemaSurumu } from '../../scripts/platform/veritabani/gocler.mjs';
 import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
-import { SAHTE_IBAN, SAHTE_TC, yukleyici } from './sahte-sql-surucusu.mjs';
+import { SAHTE_IBAN, SAHTE_TC, istemciZamanAsimlari, yukleyici } from './sahte-sql-surucusu.mjs';
 
 type YedekIcerigi = { tablolar: Record<string, Record<string, unknown>[]> };
 
@@ -454,6 +454,56 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     // Sürücünün kendi iletisi adres taşısa da çıkarılır.
     expect(hataIletisi(new Error('Veritabanı hatası (PostgreSQL, db.ornek.local): relation "x" does not exist at db.ornek.local:5432 (tcp://10.1.2.3:5432)'),
       { sunucu: 'db.ornek.local', port: 5432, parola: 'p' }, 15_000)).toBe('Sorgu çalıştırılamadı: relation "x" does not exist at •••:••• (•••)');
+  });
+
+  test('kartın zaman aşımı ayarı: kaydedilir / okunur, 1–120 sn sınırı; Yenile sürücüye kartın süresini iletir; hata iletisinde doğru sn', async () => {
+    // Doğrulama: boş → ayar yok (varsayılan), 0 → 1, 500 → 120, sayı değil → hata.
+    expect(sqlZamanAsimiTemizle(undefined)).toBeUndefined();
+    expect(sqlZamanAsimiTemizle('')).toBeUndefined();
+    expect(sqlZamanAsimiTemizle(0)).toBe(1);
+    expect(sqlZamanAsimiTemizle(500)).toBe(120);
+    expect(sqlZamanAsimiTemizle('45')).toBe(45);
+    expect(() => sqlZamanAsimiTemizle('çok')).toThrow('Zaman aşımı bir sayı olmalıdır');
+    expect([kartZamanAsimiMs(undefined), kartZamanAsimiMs(30), kartZamanAsimiMs(999), kartZamanAsimiMs('x')]).toEqual([15_000, 30_000, 120_000, 15_000]);
+    kaydetUcu(vt, { projeId: projeA, duzen: { kartlar: [
+      sqlKarti('k-sifir', 'SELECT 1', { zamanAsimiSn: 0 }),
+      sqlKarti('k-buyuk', 'SELECT 1', { zamanAsimiSn: 500 }),
+      sqlKarti('k-yedi', 'SELECT COUNT(*) AS n FROM kayitlar', { zamanAsimiSn: 7 }),
+      sqlKarti('k-eski', 'SELECT COUNT(*) AS n FROM kayitlar'),
+      sqlKarti('k-bir', '/* bekle:1500 */ SELECT 1', { zamanAsimiSn: 1 })
+    ] } });
+    expect(() => kaydetUcu(vt, { projeId: projeA, duzen: { kartlar: [sqlKarti('k-kotu', 'SELECT 1', { zamanAsimiSn: 'çok' })] } })).toThrow('Zaman aşımı bir sayı olmalıdır');
+    const ayar = (id: string) => panoGetir(vt, projeA).duzen.kartlar.find((k) => k.id === id)?.ayar as Record<string, unknown>;
+    expect(ayar('k-sifir').zamanAsimiSn).toBe(1);
+    expect(ayar('k-buyuk').zamanAsimiSn).toBe(120);
+    expect(ayar('k-yedi').zamanAsimiSn).toBe(7);
+    // Eski kart (ayarı yok): ayar eklenmez, varsayılan 15 sn kullanılır.
+    expect(ayar('k-eski')).not.toHaveProperty('zamanAsimiSn');
+    // Tablo ayarı kaydı kartın zaman aşımını korur.
+    const tabloAyari = PANO_POST_UCLARI.find(([y]) => y === '/platform/pano/tablo-ayari')?.[1] as (db: Veritabani, g: Record<string, unknown>) => unknown;
+    tabloAyari(vt, { projeId: projeA, kartId: 'k-yedi', sutunlar: ['n'], sutunGenislikleri: {} });
+    expect(ayar('k-yedi').zamanAsimiSn).toBe(7);
+    // Yenile (uç üzerinden): sürücüye kartın süresi gider.
+    const yenileUcu = PANO_POST_UCLARI.find(([y]) => y === PANO_SQL_UCU)?.[1] as (db: Veritabani, g: Record<string, unknown>) => Promise<{ sonuc: { satirlar: unknown[][] } }>;
+    istemciZamanAsimlari.length = 0;
+    expect((await yenileUcu(vt, { projeId: projeA, kartId: 'k-yedi' })).sonuc.satirlar).toEqual([[12]]);
+    expect(istemciZamanAsimlari).toEqual([{ connectionTimeoutMillis: 7000, query_timeout: 7000, statement_timeout: 7000 }]);
+    istemciZamanAsimlari.length = 0;
+    await yenileUcu(vt, { projeId: projeA, kartId: 'k-eski' });
+    expect(istemciZamanAsimlari.map((z) => z.statement_timeout)).toEqual([15_000]);
+    // Ayarı 120'ye çekilmiş kart: sürücüye 120 sn (üst sınır).
+    istemciZamanAsimlari.length = 0;
+    await yenileUcu(vt, { projeId: projeA, kartId: 'k-buyuk' });
+    expect(istemciZamanAsimlari.map((z) => z.statement_timeout)).toEqual([120_000]);
+    // Test seçeneği de üst sınırı aşamaz.
+    istemciZamanAsimlari.length = 0;
+    await panoSqlYenile(vt, projeA, 'k-eski', { zamanAsimiMs: 600_000 });
+    expect(istemciZamanAsimlari.map((z) => z.statement_timeout)).toEqual([120_000]);
+    // Hata iletisi kartın süresini söyler.
+    const bas = Date.now();
+    await expect(yenileUcu(vt, { projeId: projeA, kartId: 'k-bir' })).rejects.toThrow('Sorgu 1 sn içinde bitmedi (zaman aşımı)');
+    expect(Date.now() - bas).toBeLessThan(1450);
+    expect(hataIletisi(Object.assign(new Error('x'), { code: 'PANO_ZAMAN_ASIMI' }), {}, 45_000)).toContain('Sorgu 45 sn içinde bitmedi');
   });
 
   test('izin: Veritabanı okuma kapalıyken çalışmaz; uç izni ve CANLI ortamda açık onay gerekir', async () => {

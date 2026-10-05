@@ -7,7 +7,8 @@
 //     reddedilir). Bağlantının "Yalnız okuma" seçimi KAPALI olsa da pano sorgusu salt okunur çalışır: oturum read-only açılır
 //     (PostgreSQL / MySQL: SET SESSION … READ ONLY; Oracle: SET TRANSACTION READ ONLY + geri alma; SQL Server: kural denetimi).
 //   - Sorgu metni istemciden ALINMAZ: yalnız kaydedilmiş kartın sorgusu çalışır.
-//   - Zaman aşımı (PANO_SQL_ZAMAN_ASIMI_MS) ve satır sınırı (PANO_SQL_SATIR_SINIRI; aşılırsa "kesildi").
+//   - Zaman aşımı: kartın "Zaman aşımı (sn)" ayarı (1–120; ayarı olmayan kartta PANO_SQL_ZAMAN_ASIMI_MS = 15 sn) ve satır sınırı
+//     (PANO_SQL_SATIR_SINIRI; aşılırsa "kesildi").
 //   - İzinler: "Veritabanı okuma" (uç denetimi + burada yeniden); CANLI ortama ait bağlantıda istek canliOnay: true ister
 //     (guvenlik/uc-denetimi.mjs; arayüz ilk Yenile'de standart CANLI penceresini açar).
 //   - Maskeleme: adı gizli sayılan sütunlar (Ayarlar > Güvenlik > Maskeleme listesi + kişisel veri adları: T.C. kimlik, kart, IBAN,
@@ -30,13 +31,14 @@ import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { adMaskeleyici, bilinenGizliDegerler } from './html-rapor.mjs';
 import { tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { panoGetir, sqlSonucuYaz } from './ozet-panosu.mjs';
-import { VARSAYILAN_DONEM, donemAraligi, donemTemizle, sqlDonemParametreleri } from './pano-duzeni.mjs';
+import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean; gizliSutunlar: string[]; satirSiniri: number }} PanoSqlSonucu */
 
 export const PANO_SQL_UCU = '/platform/pano/sql/yenile';
-export const PANO_SQL_ZAMAN_ASIMI_MS = 15_000;
+export const PANO_SQL_ZAMAN_ASIMI_MS = SQL_ZAMAN_ASIMI_SN.varsayilan * 1000;
+export const PANO_SQL_EN_COK_ZAMAN_ASIMI_MS = SQL_ZAMAN_ASIMI_SN.enCok * 1000;
 export const PANO_SQL_SATIR_SINIRI = 500;
 export const MASKE = '•••';
 
@@ -97,6 +99,13 @@ export function hataIletisi(hata, ayar, zamanAsimiMs) {
   return `Sorgu çalıştırılamadı: ${m.slice(0, 300)}`;
 }
 
+/** Kartın zaman aşımı (ms): ayarı yoksa ya da geçersizse varsayılan 15 sn; 1–120 sn. @param {unknown} sn */
+export function kartZamanAsimiMs(sn) {
+  let n;
+  try { n = sqlZamanAsimiTemizle(sn); } catch { n = undefined; }
+  return n === undefined ? PANO_SQL_ZAMAN_ASIMI_MS : n * 1000;
+}
+
 /** @param {unknown} v */
 const metin = (v) => (typeof v === 'string' ? v : '');
 /** @param {() => any} fn */
@@ -108,7 +117,7 @@ const guvenli = (fn) => { try { return fn(); } catch { return undefined; } };
 export function sqlKarti(vt, projeId, kartId) {
   const k = panoGetir(vt, projeId).duzen.kartlar.find((x) => x.id === kartId && x.tur === 'sql');
   if (!k || !k.ayar) throw new DepoHatasi('SQL kartı bulunamadı. Panoyu kaydettikten sonra "Yenile"ye basın.');
-  return /** @type {{ id: string; donem?: unknown; ayar: { baslik: string; hedef: { veritabaniId?: string; ortamId?: string; baglantiId?: string }; sorgu: string } }} */ (k);
+  return /** @type {{ id: string; donem?: unknown; ayar: { baslik: string; hedef: { veritabaniId?: string; ortamId?: string; baglantiId?: string }; sorgu: string; zamanAsimiSn?: unknown } }} */ (k);
 }
 
 /**
@@ -150,6 +159,7 @@ export function panoSorgusuDenetle(sql) {
 /**
  * SQL kartını yeniler: kaydedilmiş sorgu bağlantıda yalnız okuma olarak çalışır, sonuç maskelenir ve önbelleğe yazılır.
  * @param {Veritabani} vt @param {string} projeId @param {string} kartId
+ * Zaman aşımı: kartın ayarı (zamanAsimiSn; 1–120 sn), yoksa 15 sn; üst sınır 120 sn.
  * @param {{ zamanAsimiMs?: number; satirSiniri?: number; simdi?: () => Date }} [s] (testler daha kısa süre / sınır verebilir)
  * @returns {Promise<PanoSqlSonucu>}
  */
@@ -162,7 +172,7 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
     { projeId, ...(h.ortamId ? { ortamId: h.ortamId } : {}) });
   // Bağlantının "Yalnız okuma" seçimi ne olursa olsun pano sorgusu salt okunur oturumda çalışır.
   const ayar = { ...veritabaniAyari(baglanti.alanlar), yalnizOkuma: true };
-  const zamanAsimiMs = Math.max(200, Math.min(PANO_SQL_ZAMAN_ASIMI_MS, Number(s.zamanAsimiMs) || PANO_SQL_ZAMAN_ASIMI_MS));
+  const zamanAsimiMs = Math.max(200, Math.min(PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, Number(s.zamanAsimiMs) || kartZamanAsimiMs(kart.ayar.zamanAsimiSn)));
   const satirSiniri = Math.max(1, Math.min(PANO_SQL_SATIR_SINIRI, Math.floor(Number(s.satirSiniri) || PANO_SQL_SATIR_SINIRI)));
   // Dönem: sorguda :baslangic / :bitis varsa kartın dönemi (yoksa varsayılan) Date olarak SÜRÜCÜ PARAMETRESİ bağlanır (Oracle :ad,
   // SQL Server @ad, PostgreSQL $n, MySQL ? — veritabani-suruculeri.mjs > parametreleriDonustur); SQL metnine hiçbir değer eklenmez.

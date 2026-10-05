@@ -1,5 +1,6 @@
 // tests/birim/sahte-sql-surucusu.mjs için tip bildirimi.
 export declare const SAHTE_TC: string;
+export declare const istemciZamanAsimlari: Array<Record<string, unknown>>;
 export declare const SAHTE_IBAN: string;
 export declare const SAHTE_SOAP_ISTEGI: string;
 export declare const SAHTE_SOAP_YANITI: string;

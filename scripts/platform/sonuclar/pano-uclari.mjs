@@ -14,7 +14,7 @@ import { sqlBaglantilari } from '../sql/sorgu-bagdastirici.mjs';
 import { veritabanlariListele } from '../sql/veritabanlari.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { panoGetir, panoKaydet } from './ozet-panosu.mjs';
-import { PANO_SQL_SATIR_SINIRI, PANO_SQL_UCU, PANO_SQL_ZAMAN_ASIMI_MS, panoSorgusuDenetle, panoSqlYenile } from './pano-sql.mjs';
+import { PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, PANO_SQL_SATIR_SINIRI, PANO_SQL_UCU, PANO_SQL_ZAMAN_ASIMI_MS, panoSorgusuDenetle, panoSqlYenile } from './pano-sql.mjs';
 import { sablonSecenekleri, sablonSonucu } from './pano-sablonlari.mjs';
 import { kartDonemle, kartDonemliMi } from './pano-duzeni.mjs';
 
@@ -49,7 +49,7 @@ export function panoSecenekleri(vt, projeId) {
       id: b.id, ad: b.ad, surucu: b.surucu, etkin: b.etkin, canli: [...b.ortamIdleri, ...(eslenen.get(b.id) ?? [])].some(canliMi)
     })),
     ...sablonSecenekleri(vt, projeId),
-    sinirlar: { zamanAsimiSn: PANO_SQL_ZAMAN_ASIMI_MS / 1000, satirSiniri: PANO_SQL_SATIR_SINIRI }
+    sinirlar: { zamanAsimiSn: PANO_SQL_ZAMAN_ASIMI_MS / 1000, enCokZamanAsimiSn: PANO_SQL_EN_COK_ZAMAN_ASIMI_MS / 1000, satirSiniri: PANO_SQL_SATIR_SINIRI }
   };
 }
 

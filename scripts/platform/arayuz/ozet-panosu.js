@@ -24,7 +24,7 @@ import {
   gorunurYerlesim, kartSiraTasi, kartYerlestir, okumaSirasinaDiz, satirPikseli,
   bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartEkle, kartKaldir, kartTemizle,
   SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
-  donemMetni, donemTemizle, kartDonemle, kartDonemliMi
+  donemMetni, donemTemizle, kartDonemle, kartDonemliMi, SQL_ZAMAN_ASIMI_SN, sqlZamanAsimiTemizle
 } from './pano-duzeni.mjs';
 import { SONUC_ARALIGI, tarihAraligiSecici } from './tarih-araligi.js';
 import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBicimle, metotOner, satirZamani, uzunMetinMi } from './buyuk-metin.mjs';
@@ -646,6 +646,9 @@ export function ozetPanosu(kap, s0) {
     const sorgu = h('textarea', { rows: 6, class: 'mono pano-sorgu', spellcheck: 'false', maxlength: 20000 });
     sorgu.value = a.sorgu || '';
     const gorunum = h('select', {}, SQL_GORUNUMLERI.map((g) => h('option', { value: g.anahtar, selected: g.anahtar === (a.gorunum || 'sayi') }, g.ad)));
+    const zs = SQL_ZAMAN_ASIMI_SN;
+    const zamanAsimi = h('input', { type: 'number', min: zs.en, max: se.sinirlar?.enCokZamanAsimiSn ?? zs.enCok, step: 1, inputmode: 'numeric',
+      value: String(sqlZamanAsimiTemizle(a.zamanAsimiSn) ?? se.sinirlar?.zamanAsimiSn ?? zs.varsayilan), class: 'pano-zaman-asimi' });
     const sutunlar = h('input', { type: 'text', value: (a.sutunlar || []).join(', '), autocomplete: 'off' });
     const bilinen = mevcut && kayitli.sqlSonuclari[mevcut.id] ? kayitli.sqlSonuclari[mevcut.id].sutunlar : null;
     // Renk eşikleri (yalnız "Tek sayı"): ilk eşleşen uygulanır.
@@ -699,8 +702,9 @@ export function ozetPanosu(kap, s0) {
         '\'dan "Veritabanı bağlantısı" ekleyin.') : null,
       alan('Kart başlığı', baslik, { zorunlu: true }),
       alan('Veritabanı bağlantısı', hedef, { zorunlu: true, yardim: 'Nöbetçi\'de tanımlı bağlantılar (Ayarlar > Entegrasyonlar). CANLI ortama ait bağlantıda ilk "Yenile" onay ister.' }),
-      alan('Sorgu', sorgu, { zorunlu: true, yardim: `Yalnız okuma: tek SELECT ya da WITH … SELECT (INSERT, UPDATE, DELETE, DROP, EXEC ve ";" ile birden çok ifade reddedilir). Sorgu yalnız "Yenile"ye basınca çalışır; en çok ${se.sinirlar?.zamanAsimiSn ?? 15} sn ve ${se.sinirlar?.satirSiniri ?? 500} satır. Gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir.` }),
+      alan('Sorgu', sorgu, { zorunlu: true, yardim: `Yalnız okuma: tek SELECT ya da WITH … SELECT (INSERT, UPDATE, DELETE, DROP, EXEC ve ";" ile birden çok ifade reddedilir). Sorgu yalnız "Yenile"ye basınca çalışır; en çok ${se.sinirlar?.satirSiniri ?? 500} satır. Gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir.` }),
       h('p', { class: 'soluk kucuk pano-donem-yardimi' }, ikon('takvim'), 'Sorguda :baslangic ve :bitis kullanırsanız kartta dönem seçebilirsiniz (ör. WHERE tarih BETWEEN :baslangic AND :bitis); değerler parametre olarak bağlanır.'),
+      alan('Zaman aşımı (sn)', zamanAsimi, { yardim: 'Sorgu bu süre içinde bitmezse kart hata gösterir; yavaş sorgularda artırın.' }),
       alan('Görünüm', gorunum),
       sutunAlani,
       bicimAlani,
@@ -708,8 +712,11 @@ export function ozetPanosu(kap, s0) {
     yardimYaz();
     return async () => {
       const [t, x, y] = hedef.value.split(':');
+      // Boşsa varsayılan (kaydedilmez); 1–120 dışı sınıra çekilir (sunucu da sınırlar).
+      const zaman = sqlZamanAsimiTemizle(zamanAsimi.value);
       const ayarYeni = {
         baslik: baslik.value.trim(), sorgu: sorgu.value, gorunum: gorunum.value,
+        ...(zaman === undefined ? {} : { zamanAsimiSn: zaman }),
         hedef: t === 'v' ? { veritabaniId: x, ortamId: y } : t === 'b' ? { baglantiId: x } : null,
         sutunlar: sutunlar.value.split(',').map((m) => m.trim()).filter(Boolean),
         esikler: ESIKLI.includes(gorunum.value) ? [...esikListesi.children].map((satir) => {
@@ -886,7 +893,10 @@ export function ozetPanosu(kap, s0) {
     yenile.addEventListener('click', async () => {
       hata.hidden = true;
       govde.classList.add('yenileniyor');
-      yerlestir(durum, h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), 'Sorgu çalışıyor…');
+      // Yükleniyor durumu yanıt gelene dek (en çok kartın zaman aşımı kadar) kalır; diğer kartlar bağımsızdır.
+      let zs;
+      try { zs = sqlZamanAsimiTemizle(a.zamanAsimiSn); } catch { zs = undefined; }
+      yerlestir(durum, h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), `Sorgu çalışıyor… (en çok ${zs ?? SQL_ZAMAN_ASIMI_SN.varsayilan} sn)`);
       try {
         const y = await mesgulIken(yenile, 'Yenileniyor…', () => api(SQL_UCU, {
           govde: { projeId: proje.id, kartId: k.id, ...(canliOnaylari.has(onayAnahtari) ? { canliOnay: true } : {}) }

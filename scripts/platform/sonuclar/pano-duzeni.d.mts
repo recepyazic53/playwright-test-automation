@@ -41,6 +41,8 @@ export declare const ESIK_RENKLERI: ReadonlyArray<{ anahtar: string; ad: string 
 export declare const EN_COK_ESIK: number;
 export declare const EN_COK_SUTUN: number;
 export declare const SQL_EN_UZUN: number;
+export declare const SQL_ZAMAN_ASIMI_SN: Readonly<{ varsayilan: number; en: number; enCok: number }>;
+export declare function sqlZamanAsimiTemizle(v: unknown): number | undefined;
 export declare const NOT_EN_UZUN: number;
 export declare const EN_COK_BAGLANTI: number;
 export declare const VERI_SABLONLARI: ReadonlyArray<VeriSablonu>;
