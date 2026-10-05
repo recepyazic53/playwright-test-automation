@@ -260,7 +260,14 @@ export async function hizliTestiYurut(
     const profil = g.profiller[0] ?? { ad: null, degerler: null };
     if (profil.degerler && g.tarif?.baglamDegistirme) {
       durum.asama = 'baglam';
-      await baglamiDegistir(islem, g.tarif, profil.degerler);
+      // Bağlam değiştirme normal koşuyla AYNI işlev (giris-motoru.ts > baglamiDegistir): beklemeler ve hata iletileri aynı.
+      await olay({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `Bağlam değiştiriliyor (${g.tarif.baglamDegistirme.baglamTuru}: ${profil.ad ?? '—'})…` });
+      try {
+        await baglamiDegistir(islem, g.tarif, profil.degerler);
+      } catch (hata) {
+        await olay({ tur: 'adim', adim: 'hizli', durum: 'hata', mesaj: hataBilgisi(hata).mesaj });
+        throw hata;
+      }
       // Yazma engeli açılmadan önce bağlam değiştirmenin son isteği bitsin (açılır penceredeki form gönderimi geç kalıp engellenmesin).
       await isteklerBitsin(islem);
     }

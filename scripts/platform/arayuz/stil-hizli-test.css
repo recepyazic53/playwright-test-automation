@@ -19,6 +19,9 @@
 .hizli-baslat textarea, .hizli-baslat input[type="text"], .hizli-baslat select { width: 100%; max-width: 100%; box-sizing: border-box; }
 .hizli-izinler, .hizli-kararlar, .hizli-mesajlar { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
 .hizli-izinler legend, .hizli-mesajlar legend { font-weight: 600; margin-bottom: 6px; }
+/* Başlat formunun bağlam bölümü (tür başına bir seçim; dar ekranda taşmaz). */
+.hizli-baglam fieldset { min-width: 0; }
+.hizli-baglam select { max-width: 100%; }
 .hizli-izin-secenegi, .hizli-karar-secenegi {
   align-items: flex-start; padding: 8px 10px; border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); background: var(--panel);
   overflow-wrap: anywhere; min-width: 0;
