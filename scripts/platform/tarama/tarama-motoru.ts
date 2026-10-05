@@ -379,6 +379,51 @@ function kesifAdaylari(temel: SayfaEnvanteri, sinir: number, atlananlar: Kesif[]
 }
 
 /**
+ * Sayfa içi UYARI PENCERESİ (keşif denemesinin açtığı mesaj kutusu; ör. "önce X girilmeden bu seçilemez"): mod 'isaretle' o an açık
+ * pencereleri işaretler (önceden açık olanlara dokunulmaz); mod 'kapat' işaretsiz (yeni) açık pencerenin metnini döndürür ve onu kapatma
+ * düğmesiyle (Tamam / Kapat / OK / ×, ya da close / kapat sınıflı / adlı öğe) kapatır. Pencere: dialog / modal rolleri ve sınıfları ya da
+ * önde (fixed / absolute, z-index ≥ 100) duran, ekranı kaplamayan, kısa metinli öğe. Kapatma düğmesi yoksa dokunulmaz. Kütüphane adına bakılmaz.
+ */
+function sayfaIciUyari(mod: 'isaretle' | 'kapat'): string | null {
+  const IS = 'data-nobetci-onceki-pencere';
+  const gorunur = (e: Element): boolean => {
+    const st = getComputedStyle(e);
+    const r = e.getBoundingClientRect();
+    return st.display !== 'none' && st.visibility !== 'hidden' && Number(st.opacity) > 0 && r.width > 0 && r.height > 0;
+  };
+  const katla = (s: string): string => s.toLocaleLowerCase('tr').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i').trim();
+  const KAPAT_YAZI = new Set(['tamam', 'kapat', 'ok', 'close', 'x', '×', '✕', '✖', 'anladim', 'evet, anladim']);
+  const kapatici = (p: Element): HTMLElement | null => {
+    const ogeler = [...p.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"], [onclick], span, i, img')].filter(gorunur) as HTMLElement[];
+    const yazi = (e: HTMLElement): string => katla(e instanceof HTMLInputElement ? e.value : e.innerText || '');
+    const ipucu = (e: HTMLElement): string => katla(`${e.className} ${e.id} ${e.getAttribute('title') ?? ''} ${e.getAttribute('aria-label') ?? ''} ${e.getAttribute('alt') ?? ''}`);
+    return ogeler.find((e) => KAPAT_YAZI.has(yazi(e)) && !e.querySelector('button, a'))
+      ?? ogeler.find((e) => /(^|[^a-z])(close|kapat|dismiss)/.test(ipucu(e)) && yazi(e).length <= 12) ?? null;
+  };
+  const vw = innerWidth, vh = innerHeight;
+  const adaylar = [...document.querySelectorAll('body *')].filter((e) => {
+    if (!gorunur(e)) return false;
+    if (e.matches('dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"], .modal, .ui-dialog, .popup, .dialog')) return true;
+    const st = getComputedStyle(e);
+    if (st.position !== 'fixed' && st.position !== 'absolute') return false;
+    const z = Number(st.zIndex);
+    const r = e.getBoundingClientRect();
+    return Number.isFinite(z) && z >= 100 && r.width < vw * 0.9 && r.height < vh * 0.9 && r.width > 120 && r.height > 50;
+  }).filter((e, _i, l) => !l.some((x) => x !== e && x.contains(e)));
+  if (mod === 'isaretle') { for (const e of adaylar) e.setAttribute(IS, ''); return null; }
+  for (const p of adaylar) {
+    if (p.hasAttribute(IS)) continue;
+    const metin = (p as HTMLElement).innerText.replace(/\s+/g, ' ').trim();
+    if (!metin || metin.length > 400) continue;
+    const k = kapatici(p);
+    if (!k) continue;
+    k.click();
+    return metin;
+  }
+  return null;
+}
+
+/**
  * Sayfa içi: radyo / onay kutusuna TIKLAR (yalnız bu öğeye; öğe bir düğmenin / bağlantının içindeyse hiç dokunmaz). Tıklama
  * tarayıcının kendi olaylarını (click → input → change) üretir; çerçeveler arası diye sınıf yerine etiket adıyla denetlenir.
  */
@@ -464,6 +509,14 @@ export async function secimleriKesfet(
     const temelKilitler = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar && a.tur !== 'radio').map((a) => [a.anahtar, Boolean(a.kilit)]));
     const degerler: KesifDegeri[] = [];
     const buAlt: Kesif[] = [];
+    // Denemenin açtığı sayfa içi uyarı penceresi kapatılır (açık kalırsa sonraki alanların önünü keser); metni keşif notuna yazılır.
+    const uyariyiKapat = async (ne: string): Promise<void> => {
+      const m = await sayfa.evaluate(sayfaIciUyari, 'kapat' as const).catch(() => null);
+      if (!m) return;
+      notlar.push(`“${s.etiket ?? s.anahtar}” ${ne} sayfada uyarı çıktı ve kapatıldı: “${m.slice(0, 200)}”`);
+      await sakinles(sayfa, SECIM_BEKLEME_MS);
+    };
+    await sayfa.evaluate(sayfaIciUyari, 'isaretle' as const).catch(() => null);
     for (const o of denenecek) {
       if (o.deger === ilk) continue;
       const onceki = sayfa.url();
@@ -475,6 +528,7 @@ export async function secimleriKesfet(
       }
       await sayfa.waitForLoadState('domcontentloaded', { timeout: SECIM_BEKLEME_MS }).catch(() => undefined);
       await sakinles(sayfa, SECIM_BEKLEME_MS);
+      await uyariyiKapat(`= “${o.metin}” denenince`);
       if (!adresAyni(onceki, sayfa.url())) {
         degerler.push({ deger: o.deger, metin: o.metin, gorunenler: [], kaybolanlar: [], gezinme: yolu(sayfa.url()) });
         await git();
@@ -557,6 +611,7 @@ export async function secimleriKesfet(
           });
         }
         await sakinles(sayfa, SECIM_BEKLEME_MS);
+        await uyariyiKapat('ilk değerine geri alınınca');
       }
       geriAlindi = (await oku()) === ilk;
     } catch {

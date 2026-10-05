@@ -112,7 +112,38 @@ export function degerTuttu(mevcut: string | null, deger: string): boolean {
   const a = tarihParcalari(deger);
   const b = tarihParcalari(mevcut);
   if (a && b) return a.gun === b.gun && a.ay === b.ay && a.yil === b.yil;
+  // Tutar / sayı (binlik ayraçlı, ondalıklı, para birimli: "1.000,00 TL", "5.000"): sayı değeri karşılaştırılır. "İçeriyor" kuralı burada
+  // yanlış pozitif verir (alanda eski değer kalıp yenisi eklendiğinde "5.000.000" ⊃ "5000").
+  // (Ayraçsız salt rakam dizileri — kimlik, kart, önekli telefon — eski kurala kalır.)
+  const x = sayiDegeri(deger);
+  const y = /[.,]|\p{L}/u.test(mevcut) ? sayiDegeri(mevcut) : null;
+  if (x !== null && y !== null) return x === y;
   return degerSade(mevcut).includes(istenen);
+}
+
+/**
+ * Yalnız sayı biçimindeki değerin sayısal değeri (değilse null): rakamlar, binlik / ondalık ayracı (. ,), işaret ve en çok 4 harflik birim
+ * ("TL", "EUR"). İki ayraç birden varsa sondaki ondalıktır; tek tür ayraç birden çok kez geçiyorsa binliktir; bir kez geçip ardından tam
+ * 3 rakam geliyorsa binlik, değilse ondalık sayılır. Telefon / kimlik gibi boşluklu, parantezli değerler sayı sayılmaz.
+ */
+export function sayiDegeri(m: string): number | null {
+  const t = m.trim().replace(/\s*\p{L}{1,4}$/u, '').replace(/^\p{L}{1,4}\s*/u, '');
+  if (!/^[-+]?\d[\d.,]*$/.test(t)) return null;
+  const isaret = t.startsWith('-') ? -1 : 1;
+  const g = t.replace(/^[-+]/, '');
+  const sonNokta = g.lastIndexOf('.'), sonVirgul = g.lastIndexOf(',');
+  let tam = g, ondalik = '';
+  if (sonNokta >= 0 && sonVirgul >= 0) {
+    const i = Math.max(sonNokta, sonVirgul);
+    tam = g.slice(0, i); ondalik = g.slice(i + 1);
+  } else if (sonNokta >= 0 || sonVirgul >= 0) {
+    const ayrac = sonNokta >= 0 ? '.' : ',';
+    const parcalar = g.split(ayrac);
+    if (parcalar.length === 2 && parcalar[1].length !== 3) { tam = parcalar[0]; ondalik = parcalar[1]; }
+  }
+  tam = tam.replace(/[.,]/g, '');
+  if (!/^\d+$/.test(tam) || (ondalik && !/^\d+$/.test(ondalik))) return null;
+  return isaret * Number(`${tam}${ondalik ? `.${ondalik}` : ''}`);
 }
 
 /**
