@@ -193,7 +193,10 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
       .map((id) => (typeof kok.getElementById === 'function' ? kok.getElementById(id) : null)).map((x) => (x ? tumMetin(x) : '')).filter(Boolean).join(' ');
     const hucre = c.closest('td, th');
     const onceki = hucre?.previousElementSibling && hucre.previousElementSibling.matches('td, th') ? yaziKardesi(hucre.previousElementSibling) : '';
-    const m = lab || bosluk(c.getAttribute('aria-label')) || bosluk(bagli) || onceki || yaziKardesi(c.previousElementSibling)
+    // Etiketi ayrı sütunda duran satırlar (<div><div>Etiket</div><div><input></div></div>): yalnız bu alanı içeren atanın önceki kardeş yazısı.
+    let satir = '';
+    for (let x = ata(c), i = 0; x && i < 4 && !satir && x.querySelectorAll(ALAN).length === 1; x = ata(x), i++) satir = yaziKardesi(x.previousElementSibling);
+    const m = lab || bosluk(c.getAttribute('aria-label')) || bosluk(bagli) || onceki || yaziKardesi(c.previousElementSibling) || satir
       || bosluk(c.getAttribute('placeholder')) || bosluk(c.getAttribute('title'));
     return bosluk(m).replace(/[\s:*]+$/, '').slice(0, 60);
   };
@@ -278,7 +281,8 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   // 1b) Yalnız simgeli tıklanabilir öğeler (yenile / ara ikonu): ad aria-label → title → alt → görsel dosya adı / sınıf ipucu, yoksa
   // "Simge"; yakın form alanının etiketi bağlam olarak eklenir ("Ara (Adres Kodu)").
   const IKON_IPUCLARI: Array<[RegExp, string]> = [
-    [/^(refresh\w*|reload\w*|yenile\w*|sync\w*|redo)$/, 'Yenile'], [/^(query|sorgu\w*|lookup|inquiry)$/, 'Sorgula'],
+    [/^(query|sorgu\w*|lookup|inquiry|check|verify|validate|kontrol\w*|denetle\w*|dogrula\w*)$/, 'Sorgula'],
+    [/^(refresh\w*|reload\w*|yenile\w*|sync\w*|redo|update\w*|guncelle\w*)$/, 'Yenile'],
     [/^(search\w*|ara|arama|find|bul|magnif\w*|lens|loupe)$/, 'Ara'], [/^(add|plus|ekle|new|yeni|create)$/, 'Ekle'],
     [/^(delete|remove|sil|trash\w*|bin|erase)$/, 'Sil'], [/^(edit|duzenle|pencil|pen|modify)$/, 'Düzenle'],
     [/^(calendar\w*|takvim|datepicker|date)$/, 'Takvim'], [/^(print\w*|yazdir)$/, 'Yazdır'], [/^(download|indir)$/, 'İndir'],
@@ -289,7 +293,17 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
   /** Eylem bildiren simgeler (alanın yanında olsa da asıl işlem: arama, sorgu…); diğerleri (bilgi, takvim, göster…) alan ikonudur. */
   const EYLEM_SIMGELERI = new Set(['Yenile', 'Sorgula', 'Ara', 'Ekle', 'Sil', 'Düzenle', 'Yazdır', 'İndir', 'Yükle', 'Kaydet', 'Temizle', 'Kopyala']);
   const dosyaAdi = (u: string | null | undefined): string => ((u ?? '').split(/[?#]/)[0].split('/').pop() ?? '').replace(/\.\w+$/, '');
+  /** Öğenin çağırdığı betik işlevinin adı (href="javascript:CheckIdentity(…)" / onclick="Sorgula()"): ilk tanıtıcı. */
+  const betikIslevi = (e: Element): string => {
+    const h = (e.getAttribute('href') ?? '').trim();
+    const kod = /^javascript:/i.test(h) ? h.slice(11) : (e.getAttribute('onclick') ?? '');
+    return /([A-Za-z_$][\w$]*)\s*\(/.exec(kod)?.[1] ?? '';
+  };
+  const ipucuKelimeleri = (s: string): string[] => katla(s.replace(/([a-z])([A-Z])/g, '$1 $2')).split(/[^a-z0-9]+/).filter(Boolean);
   const ikonIpucu = (e: Element): string | null => {
+    // Önce çağrılan işlevin adı (sayfanın kendi söylediği iş: CheckIdentity → Sorgula), sonra sınıf / görsel dosya adı.
+    const islev = ipucuKelimeleri(betikIslevi(e));
+    for (const [re, ad] of IKON_IPUCLARI) if (islev.some((w) => re.test(w))) return ad;
     const parcalar: string[] = [];
     for (const x of [e, ...e.querySelectorAll('img, i, svg, span, use, input[type="image"]')].slice(0, 6)) {
       parcalar.push(x.getAttribute('class') ?? '', x.id, dosyaAdi(x.getAttribute('src')));
@@ -297,7 +311,7 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
       const arka = getComputedStyle(x).backgroundImage;
       if (arka && arka !== 'none') parcalar.push(dosyaAdi(/url\(["']?([^"')]+)/.exec(arka)?.[1]));
     }
-    const kelimeler = katla(parcalar.join(' ').replace(/([a-z])([A-Z])/g, '$1 $2')).split(/[^a-z0-9]+/).filter(Boolean);
+    const kelimeler = ipucuKelimeleri(parcalar.join(' '));
     for (const [re, ad] of IKON_IPUCLARI) if (kelimeler.some((w) => re.test(w))) return ad;
     return null;
   };
@@ -346,7 +360,8 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
       const ad = erisilebilirAd(e) || alt || ipucu || '';
       const alan = yakinAlan(e);
       const alanAdi = alan ? alanEtiketi(alan) : '';
-      if (alanAdi) { metin = `${ad || 'Simge'} (${alanAdi})`; ikonAdli = true; alanIkonu = !EYLEM_SIMGELERI.has(ad); } else if (ad) metin = ad;
+      // Adı tanınmayan ama bir betik işlevi çağıran simge alan ikonu sayılmaz (önce dene): keşifte basılır, adım adımda işlem adayıdır.
+      if (alanAdi) { metin = `${ad || 'Simge'} (${alanAdi})`; ikonAdli = true; alanIkonu = ad ? !EYLEM_SIMGELERI.has(ad) : !betikIslevi(e); } else if (ad) metin = ad;
     }
     // Yazısız, simgesi tanınmayan öğe (ör. yazı tipi / ::before simgesi): yakın alanın ya da yanındaki alan etiketinin / radyo seçeneğinin
     // adıyla "“X” yanındaki simge" olarak adlanır (etiketin kendisiymiş gibi gösterilmez) ve "Alan ikonları"na gider.

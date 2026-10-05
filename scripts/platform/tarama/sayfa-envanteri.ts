@@ -139,6 +139,21 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   const kaplar = [...ozelKaplar.values()].map((b) => b.kap);
   /** Öğe bir özel bileşenin (kabı ya da açılır parçası) içinde mi? (Bileşenin kendi arama kutusu ayrı alan sayılmaz.) */
   // (Kabın içindeki gizli <select>'in kendisi alandır: sarmalayıcı kap onu içerir.)
+  /**
+   * Gizli onay kutusu / radyo girdisinin GÖRÜNEN yerine geçen çizimi (özel çizimli kutular: gerçek girdi gizli, yanında kutu çizen
+   * küçük bir öğe): girdinin hemen önceki / sonraki kardeşi ya da yalnız bu girdiyi saran ebeveyni; görünür, başka form denetimi
+   * içermez, kutu boyunda (en çok 64 piksel). Kütüphane / sınıf adına bakılmaz.
+   */
+  const gorselVekil = (el: Element): HTMLElement | null => {
+    if (gorunurMu(el)) return null;
+    for (const v of [el.previousElementSibling, el.nextElementSibling, el.parentElement]) {
+      if (!(v instanceof HTMLElement) || v.matches('label,form,body,fieldset,select,input,textarea')) continue;
+      if ([...v.querySelectorAll('input,select,textarea')].some((x) => x !== el) || !gorunurMu(v)) continue;
+      const r = v.getBoundingClientRect();
+      if (r.width <= 64 && r.height <= 64) return v;
+    }
+    return null;
+  };
   const ozelIcinde = (el: Element): boolean => !(el instanceof HTMLSelectElement && ozelKaplar.has(el)) && (kaplar.some((k) => k.contains(el)) || !!el.closest(OZEL_ACILIR));
   const saltMetin = (el: Element): string => {
     const k = el.cloneNode(true) as Element;
@@ -489,7 +504,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
         if (!grup.includes(radyo)) grup = [radyo];
       }
       for (const r of grup) islenenRadyoOgeleri.add(r);
-      const gorunenler = grup.filter((r) => gorunurMu(r) || (r.labels ? [...r.labels].some(gorunurMu) : false));
+      const gorunenler = grup.filter((r) => gorunurMu(r) || (r.labels ? [...r.labels].some(gorunurMu) : false) || Boolean(gorselVekil(r)));
       if (!gorunenler.length) return;
       const secenekMetni = (r: HTMLInputElement): string | null => {
         const lm = r.labels && r.labels.length ? saltMetin(r.labels[0]) : sonrakiMetin(r);
@@ -536,6 +551,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
         adaySeciciler: gercekAd ? [secici, `input[name="${tirnak(gercekAd)}"]`, `[name="${tirnak(gercekAd)}"]`] : [secici],
         zorunlu: grup.some((r) => r.required) || rg?.getAttribute('aria-required') === 'true', devreDisi: grup.every((r) => r.disabled),
         saltOkunur: false, coklu: false, radyolar, bolum: bolumBul(el, grupFieldset),
+        ...(gorunenler.every((r) => !gorunurMu(r) && !(r.labels && [...r.labels].some(gorunurMu))) ? { gizliGirdi: true } : {}),
         ...(() => {
           const i = grup.findIndex((r) => r.checked);
           return { hazir: i >= 0, mevcut: i >= 0 && degerOku ? (radyolar[i].metin ?? radyolar[i].deger).slice(0, 80) : null };
@@ -545,7 +561,9 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     }
 
     const ozel = el instanceof HTMLSelectElement ? ozelKaplar.get(el) : undefined;
-    const gorunur = Boolean(ozel) || gorunurMu(el) || ((tur === 'checkbox' || tur === 'file') && el.labels ? [...el.labels].some(gorunurMu) : false);
+    // Gizli onay kutusunun yerine çizilen görünür kutu (etiketi olmasa da alan görünür sayılır; doldurulurken girdi betikle tıklanır).
+    const vekil = tur === 'checkbox' ? gorselVekil(el) : null;
+    const gorunur = Boolean(ozel) || gorunurMu(el) || ((tur === 'checkbox' || tur === 'file') && el.labels ? [...el.labels].some(gorunurMu) : false) || Boolean(vekil);
     if (!gorunur) return;
     const e = etiketBul(el, tur === 'checkbox');
     // Özel bileşende rol seçicisi (role=combobox[name=…]) gizli <select>'i bulamaz: kimlik / ad / CSS yolu.
@@ -598,6 +616,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
       const yanindaListe = Boolean(el.parentElement?.querySelector(':scope > [role="listbox"]'));
       if (['list', 'both'].includes(el.getAttribute('aria-autocomplete') ?? '') || el.getAttribute('role') === 'combobox' || el.hasAttribute('list') || bagliListe || yanindaListe) alan.oneri = true;
     }
+    if (vekil && !gorunurMu(el) && !(el.labels && [...el.labels].some(gorunurMu))) alan.gizliGirdi = true;
     if (ozel) {
       alan.ozelBilesen = true;
       alan.bilesen = seciciOner(ozel.kap, null, null).secici;

@@ -50,6 +50,8 @@ export type HamAlan = {
    * <select>'indir, seçenekler ondan okunur; modelde doldurucu "ozelSecim" önerilir.
    */
   ozelBilesen?: boolean;
+  /** Onay kutusu / radyonun gerçek girdisi gizli, yerine görünen bir kutu çizili: modelde doldurucu "onayKutusuZorla" / "radyoZorla". */
+  gizliGirdi?: boolean;
   /** Özel bileşenin görünen kabının seçicisi (aynı çerçevede; kayıt panelinde dokunma ve açılan liste eşleştirmesi için). */
   bilesen?: string | null;
   /**

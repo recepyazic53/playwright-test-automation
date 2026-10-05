@@ -386,6 +386,8 @@ export function alanDonusturucu(sayac) {
       alan.doldurucu = OZEL_SECIM_DOLDURUCUSU;
       alanNotlari.push('Özel açılır liste (gerçek liste gizli, görünen aramalı kutu): doldurucu "ozelSecim".');
     }
+    // Gizli girdili özel çizimli onay kutusu / radyo: koşucu girdiyi zorla (görünmüyorsa betikle) işaretler.
+    if (a.gizliGirdi && (tip === 'onayKutusu' || tip === 'radyo')) alan.doldurucu = tip === 'radyo' ? 'radyoZorla' : 'onayKutusuZorla';
     if (a.cerceve?.length) alanNotlari.push(`Çerçeve (iframe) içinde: ${a.cerceve.join(' › ')}.`);
     if (tip === 'tarih') alan.bicim = 'YYYY-AA-GG';
     if (a.takvimden) {
@@ -1019,6 +1021,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (typeof e.zorunlu !== 'boolean' && e.yapilandirma === 'senaryo') sonuc.zorunlu = t.zorunlu;
       // Özel açılır liste: mevcut tanımda doldurucu yoksa önerilen doldurucu eklenir (kullanıcının seçtiği doldurucu korunur).
       if (h.ozelBilesen && e.tip === 'secim' && e.doldurucu === undefined) sonuc.doldurucu = OZEL_SECIM_DOLDURUCUSU;
+      if (h.gizliGirdi && (e.tip === 'onayKutusu' || e.tip === 'radyo') && e.doldurucu === undefined) sonuc.doldurucu = e.tip === 'radyo' ? 'radyoZorla' : 'onayKutusuZorla';
       return sonuc;
     }
     yeniAlanSayisi++;
