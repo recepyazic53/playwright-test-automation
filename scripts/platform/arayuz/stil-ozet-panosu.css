@@ -282,3 +282,23 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
   .pano-metin-eslesme { forced-color-adjust: none; background: Mark; color: MarkText; }
   .pano-metin-eslesme.etkin { background: Highlight; color: HighlightText; }
 }
+
+/* Kart dönemi: döneme bağlı kartın başlığında kısa seçim (genel dönem seçici yok). Açılır panel karta göre konumlanır (dar ekranda
+   kart genişliğinde); kısa etiket "Son veri" ve "Yenile" ile aynı yükseklikte. */
+.pano-donem { position: static; }
+.pano-donem .tarih-tetik { min-height: 30px; padding: 0 8px; gap: 5px; font-size: 12.5px; font-weight: 550; max-width: 12rem; }
+.pano-donem .tarih-tetik .ikon { width: 14px; height: 14px; }
+.pano-donem .tarih-paneli { top: auto; left: auto; right: 0; margin-top: 4px; }
+@media (max-width: 560px) { .pano-donem .tarih-paneli { left: 0; right: 0; } }
+.pano-donem-satiri { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; margin: 0 0 6px; min-width: 0; }
+.pano-icerik > .pano-donem-satiri, .pano-icerik > .ozet-donem-metni { flex: none; }
+.pano-donem-adi { font-size: 12.5px; font-weight: 600; color: var(--metin-2); min-width: 0; overflow-wrap: anywhere; }
+.ozet-donem-metni { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 0; overflow-wrap: anywhere; }
+.ozet-donem-metni .ikon { width: 13px; height: 13px; }
+.ozet-donem-metni[hidden], .ozet-donem-notu[hidden] { display: none; }
+.pano-donem-farki { color: var(--atlanan); }
+.pano-donem-yardimi { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; }
+.pano-donem-yardimi .ikon { width: 13px; height: 13px; flex: none; }
+/* Panel açıkken (stil.css: kabı position: relative yapar) kap konumlanmasın: panel karta göre dursun; kart diğer kartların üstünde. */
+.pano-kart-sag:has(> .pano-donem > .tarih-paneli:not([hidden])), .pano-donem-satiri:has(> .pano-donem > .tarih-paneli:not([hidden])) { position: static; }
+.pano-ogesi:has(.pano-donem > .tarih-paneli:not([hidden])) { z-index: 30; }

@@ -89,7 +89,7 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(page.locator('.farkindalik-karti [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByRole('tab', { name: 'Özet' })).toHaveAttribute('aria-selected', 'true');
   expect(await page.locator('.sonuc-sekmeleri [role="tab"]').allTextContents()).toEqual(['Özet', 'Ekranlar', 'Servisler', 'Uçtan uca akışlar']);
-  await expect(page.locator('.sayfa-basligi .meta')).toContainText('15.09.2026 – 28.09.2026 · önceki 01.09.2026 – 14.09.2026');
+  await expect(page.locator('.ozet-donem-metni')).toContainText('15.09.2026 – 28.09.2026 · önceki 01.09.2026 – 14.09.2026');
   // Özet kutuları: dönem başarı oranları ve sayılar (genel raporla aynı hesap).
   const kutular = page.locator('.ozet-kutulari a.ozet-kutusu');
   await expect(kutular).toHaveCount(3);
@@ -108,22 +108,25 @@ test('"Genel" Özet\'i açar: sekme sırası, özet kutuları (tıklayınca sekm
   await expect(kart(page, 'Dikkat')).toContainText('Kayıt Servisi › POST /kayit');
   // Özet sayfasında rapor düğmesi yok: rapor Raporlar sekmesinden alınır.
   await expect(page.getByRole('button', { name: 'Rapor al (PDF)' })).toHaveCount(0);
-  // Tarih aralığı: hızlı seçimler açılır takvim panelindedir (üstte düğme); "Son 7 gün" seçilince Bitiş boş kalmaz.
-  const aralik = page.locator('.sonuc-araligi');
+  // Genel dönem seçici yok; Özet kutuları kartının başlığında kendi dönemi (hızlı seçimler açılır panelde); "Son 7 gün" seçilince
+  // Bitiş boş kalmaz.
+  await expect(page.locator('.sonuc-araligi')).toHaveCount(0);
+  const aralik = page.getByRole('group', { name: 'Dönem: Özet kutuları' });
   await expect(aralik.getByRole('button', { name: 'Son 7 gün' })).toBeHidden();
   await aralik.locator('.tarih-tetik').click();
   const panel = aralik.getByRole('dialog', { name: 'Tarih aralığı seç' });
   await expect(panel.getByRole('button', { name: 'Son 7 gün' })).toBeVisible();
   await panel.getByRole('button', { name: 'Son 7 gün' }).click();
-  await expect(panel).toBeHidden();
-  await expect(aralik.locator('.tarih-tetik')).toContainText('Son 7 gün');
-  await aralik.locator('.tarih-tetik').click();
-  await expect(panel.getByLabel('Başlangıç')).not.toHaveValue('');
-  await expect(panel.getByLabel('Bitiş')).not.toHaveValue('');
-  // "Tümü": Özet sabit son 30 günü kullanır; seçici "Tüm zamanlar" demez, başlıktaki dönemle çelişmez.
-  await panel.getByRole('button', { name: 'Tümü (Özet: son 30 gün)' }).click();
-  await expect(page.locator('.sonuc-araligi .tarih-tetik')).toHaveText('Özet: son 30 gün');
-  await expect(page.locator('.sayfa-basligi .meta')).toContainText('son 30 gün', { timeout: 30_000 });
+  const aralik2 = page.getByRole('group', { name: 'Dönem: Özet kutuları' });
+  await expect(aralik2.locator('.tarih-tetik')).toHaveText('Son 7 gün');
+  await aralik2.locator('.tarih-tetik').click();
+  const panel2 = aralik2.getByRole('dialog', { name: 'Tarih aralığı seç' });
+  await expect(panel2.getByLabel('Başlangıç')).not.toHaveValue('');
+  await expect(panel2.getByLabel('Bitiş')).not.toHaveValue('');
+  // "Tümü": Özet sabit son 30 günü kullanır; seçici "Tüm zamanlar" demez, kartın dönem satırıyla çelişmez.
+  await panel2.getByRole('button', { name: 'Tümü (Özet: son 30 gün)' }).click();
+  await expect(page.getByRole('group', { name: 'Dönem: Özet kutuları' }).locator('.tarih-tetik')).toHaveText('Özet: son 30 gün');
+  await expect(page.locator('.ozet-donem-metni')).toContainText('son 30 gün', { timeout: 30_000 });
   await expect(page.locator('.farkindalik-karti [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
   // Kutuya tıklayınca ilgili sekme.
   await kutular.nth(1).click();
@@ -186,7 +189,7 @@ test('ekran / ürün sayfasında Özet kartları ve kutuları yok; 390 px\'te Ö
   const tasma = await dar.page.evaluate(() => {
     const sorunlar: string[] = [];
     if (document.documentElement.scrollWidth > window.innerWidth) sorunlar.push(`sayfa ${document.documentElement.scrollWidth} > ${window.innerWidth}`);
-    for (const el of Array.from(document.querySelectorAll('.ozet-kutusu, .farkindalik-karti, .farkindalik-maddesi, .sonuc-araligi, .sayfa-basligi'))) {
+    for (const el of Array.from(document.querySelectorAll('.ozet-kutusu, .farkindalik-karti, .farkindalik-maddesi, .pano-donem, .pano-donem-satiri, .sayfa-basligi'))) {
       const r = el.getBoundingClientRect();
       if (r.right > window.innerWidth + 1 || r.left < -1) sorunlar.push(`${el.className}: ${Math.round(r.left)}–${Math.round(r.right)}`);
     }
@@ -203,7 +206,7 @@ test('Özet rehberi bölümleri ekrandaki sırayla anlatır ve vurgular; Sonuçl
   await git(page, '#/sonuclar/ozet');
   const bolumler: Array<[string, string]> = [
     ['Ekran / servis seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Başlık', '.sonuc-icerik > .sayfa-basligi'],
-    ['Rapor sekmeleri', '.sonuc-sekmeleri'], ['Tarih aralığı', '.sonuc-araligi'], ['Özet kutuları', '.ozet-kutulari'],
+    ['Rapor sekmeleri', '.sonuc-sekmeleri'], ['Kartın dönemi', '.pano-donem'], ['Özet kutuları', '.ozet-kutulari'],
     ['Dikkat', '.farkindalik-karti.dikkat'], ['Bakım', '.farkindalik-karti.bakim'], ['Kapsam ve güvenlik', '.farkindalik-karti.kapsam']
   ];
   // Ekrandaki sıra: her bölüm bir öncekinden sonra gelir (sol panel içeriğin önünde).

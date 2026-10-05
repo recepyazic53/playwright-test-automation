@@ -17,8 +17,10 @@ import {
   BOYUTLAR, ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
   ORAN_SECENEKLERI, OZEL_KART_TURLERI, SATIR_YUKSEKLIGI, SQL_GORUNUMLERI, YUKSEKLIKLER, YUKSEKLIK_SINIRI, kartYukseklikle, yukseklikAdi, TARIH_BICIMLERI, VERI_SABLONLARI,
   bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartBoyutla, kartEkle, kartKaldir, kartTasi, kartTemizle,
-  SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri
+  SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
+  donemMetni, donemTemizle, kartDonemle, kartDonemliMi
 } from './pano-duzeni.mjs';
+import { SONUC_ARALIGI, tarihAraligiSecici } from './tarih-araligi.js';
 import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBicimle, metotOner, satirZamani, uzunMetinMi } from './buyuk-metin.mjs';
 import { oranSaglikSinifi } from './sonuclar.js';
 
@@ -54,6 +56,22 @@ function odakla(el) {
   el.focus({ preventScroll: true });
   const r = el.getBoundingClientRect();
   if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+}
+
+/** Kart öğesinin imzası: tür, ayar ve dönem (değişince kart yeniden kurulur). @param {{ tur: string; ayar?: unknown; donem?: unknown }} k */
+const kartImzasi = (k) => `${k.tur}:${JSON.stringify(k.ayar ?? null)}:${JSON.stringify(k.donem ?? null)}`;
+
+/**
+ * Eski düzenden göç: dönem seçimi olmayan döneme bağlı kartın başlangıç dönemi, eski GENEL seçimdir (oturumda seçilmişse); seçilmemişse
+ * eski varsayılan "Tümü" (Özet'te son 30 gün). @returns {object}
+ */
+function gocDonemi() {
+  let ham = null;
+  try { ham = JSON.parse(sessionStorage.getItem(SONUC_ARALIGI) || 'null'); } catch { ham = null; }
+  if (ham && typeof ham === 'object' && !ham.hizli && (ham.baslangic || ham.bitis)) {
+    ham = { baslangic: ham.baslangic || new Date(0).toISOString(), bitis: ham.bitis || new Date().toISOString() };
+  }
+  return donemTemizle(ham) ?? { hizli: 'tumu' };
 }
 
 /** Kaydırma kutularının (tablo, liste) konumları; ölçüm / yeniden çizimden sonra geri yüklenir. @param {ParentNode} kok */
@@ -205,9 +223,9 @@ export function ozetPanosu(kap, s0) {
     }
   }
 
-  /** Kartın sarmalayıcısı (içerik değişmediyse önceki öğe yeniden kullanılır; veri yeniden istenmez). */
+  /** Kartın sarmalayıcısı (içerik ve dönem değişmediyse önceki öğe yeniden kullanılır; veri yeniden istenmez). */
   function ogeHazirla(k, i, n) {
-    const imza = `${k.tur}:${JSON.stringify(k.ayar ?? null)}`;
+    const imza = kartImzasi(k);
     let o = ogeler.get(k.id);
     if (!o || o.imza !== imza) {
       const icerik = h('div', { class: 'pano-icerik' }, ...kartIcerigi(k));
@@ -366,15 +384,57 @@ export function ozetPanosu(kap, s0) {
   /** @returns {Node[]} */
   function kartIcerigi(k) {
     if (yerlesikMi(k.tur)) {
-      const el = yerlesik[k.tur] ? yerlesik[k.tur]() : h('p', { class: 'soluk' }, turAdi(k.tur));
+      const donemli = kartDonemliMi(k);
+      const el = yerlesik[k.tur] ? yerlesik[k.tur](donemli ? k.donem || gocDonemi() : null) : h('p', { class: 'soluk' }, turAdi(k.tur));
       // Başlarken tamamlanınca / gizlenince kaybolur; düzenleme kipinde yerini gösteren not.
-      return k.tur === 'baslarken'
-        ? [el, h('p', { class: 'pano-gizli-not soluk kucuk' }, ikon('gorunum'), 'Başlarken listesi bu projede şu an görünmüyor (tamamlandı ya da gizlendi).')]
-        : [el];
+      if (k.tur === 'baslarken') return [el, h('p', { class: 'pano-gizli-not soluk kucuk' }, ikon('gorunum'), 'Başlarken listesi bu projede şu an görünmüyor (tamamlandı ya da gizlendi).')];
+      // Döneme bağlı yerleşik kart: üstte ince dönem satırı (kartın adı + kısa dönem seçimi).
+      return donemli ? [h('div', { class: 'pano-donem-satiri' }, h('span', { class: 'pano-donem-adi' }, kartAdi(k)), donemSecici(k)), el] : [el];
     }
     if (k.tur === 'sql') return [sqlKarti(k)];
     if (k.tur === 'veri') return [veriKarti(k)];
     return [metinKarti(k)];
+  }
+
+  /**
+   * Kartın kısa dönem seçimi (kart başlığında; açılır panelde hızlı seçimler ve özel aralık). Seçim hemen kaydedilir (düzenleme kipi
+   * gerekmez; POST /platform/pano/donem) ve kart yeni dönemle yeniden kurulur. SQL kartında sorgu çalışmaz (Yenile'yi bekler).
+   * @param {any} k
+   */
+  function donemSecici(k) {
+    const kok = tarihAraligiSecici({
+      deger: k.donem || gocDonemi(), anahtar: null, kisa: true, etiket: `Dönem: ${kartAdi(k)}`,
+      ...(k.tur === 'ozetKutulari' ? { tumuMetni: 'Özet: son 30 gün' } : {}),
+      degisti: (d) => {
+        // Yalnız başlangıç ya da yalnız bitiş girildiyse eksik uç tamamlanır (kart dönemi iki ucu da saklar).
+        const x = /** @type {any} */ (d);
+        const donem = x.hizli ? { hizli: x.hizli } : { baslangic: x.baslangic || new Date(0).toISOString(), bitis: x.bitis || new Date().toISOString() };
+        donemSec(k.id, donem);
+      }
+    });
+    kok.classList.add('pano-donem');
+    return kok;
+  }
+
+  /** @param {string} id @param {object} donem */
+  async function donemSec(id, donem) {
+    const onceki = kayitli;
+    const uygula = (/** @type {any} */ d) => (d ? kartDonemle(d, id, donem) : d);
+    kayitli = { ...kayitli, duzen: uygula(kayitli.duzen) };
+    if (calisan) calisan = uygula(calisan);
+    ciz();
+    const k = etkinDuzen().kartlar.find((x) => x.id === id);
+    duyur(`${k ? kartAdi(k) : 'Kart'}: dönem ${donemMetni(donem)}.`);
+    /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(id)}"] .pano-donem .tarih-tetik`))?.focus({ preventScroll: true });
+    try {
+      const y = await api('/platform/pano/donem', { govde: { projeId: proje.id, donemler: { [id]: donem } } });
+      kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || kayitli.sqlSonuclari };
+    } catch (e) {
+      kayitli = onceki;
+      if (calisan) calisan = kartDonemle(calisan, id, onceki.duzen.kartlar.find((x) => x.id === id)?.donem || gocDonemi());
+      ciz();
+      if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata');
+    }
   }
 
   /** Düzenleme kipinde kartın üstündeki araçlar. */
@@ -626,6 +686,7 @@ export function ozetPanosu(kap, s0) {
       alan('Kart başlığı', baslik, { zorunlu: true }),
       alan('Veritabanı bağlantısı', hedef, { zorunlu: true, yardim: 'Nöbetçi\'de tanımlı bağlantılar (Ayarlar > Entegrasyonlar). CANLI ortama ait bağlantıda ilk "Yenile" onay ister.' }),
       alan('Sorgu', sorgu, { zorunlu: true, yardim: `Yalnız okuma: tek SELECT ya da WITH … SELECT (INSERT, UPDATE, DELETE, DROP, EXEC ve ";" ile birden çok ifade reddedilir). Sorgu yalnız "Yenile"ye basınca çalışır; en çok ${se.sinirlar?.zamanAsimiSn ?? 15} sn ve ${se.sinirlar?.satirSiniri ?? 500} satır. Gizli adlı sütunlar (T.C. kimlik, kart, IBAN, parola…) maskelenir.` }),
+      h('p', { class: 'soluk kucuk pano-donem-yardimi' }, ikon('takvim'), 'Sorguda :baslangic ve :bitis kullanırsanız kartta dönem seçebilirsiniz (ör. WHERE tarih BETWEEN :baslangic AND :bitis); değerler parametre olarak bağlanır.'),
       alan('Görünüm', gorunum),
       sutunAlani,
       bicimAlani,
@@ -732,14 +793,20 @@ export function ozetPanosu(kap, s0) {
     const hedefRozeti = h('span', { class: 'pano-hedef' });
     const yenile = h('button', { type: 'button', class: 'kucuk-dugme pano-yenile', 'aria-label': `Yenile: ${a.baslik}`, title: 'Sorguyu şimdi çalıştır' }, ikon('yenile'), 'Yenile');
     const onayAnahtari = `${proje.id}:${k.id}:${JSON.stringify([a.hedef, a.sorgu])}`;
+    // Sorguda :baslangic / :bitis varsa kart başlığında dönem seçimi (değerler sunucuda sürücü parametresi olarak bağlanır).
+    const donemli = kartDonemliMi(k);
     const sonucCiz = (sonuc) => {
       if (!sonuc) {
         yerlestir(sonVeri, ikon('saat'), 'Henüz yenilenmedi');
         yerlestir(govde, h('p', { class: 'soluk kucuk pano-bos-sonuc' }, 'Sorgu yalnız "Yenile"ye basınca çalışır; son sonuç burada saklanır.'));
         return;
       }
+      // Dönemli sonuç: hangi dönemle alındığı; kartın dönemi sonradan değiştiyse Yenile gerektiği söylenir (sorgu kendiliğinden çalışmaz).
+      const farkli = donemli && sonuc.donem && JSON.stringify(sonuc.donem.secim) !== JSON.stringify(k.donem || gocDonemi());
       yerlestir(sonVeri, ikon('saat'), `Son veri: ${sonVeriMetni(sonuc.zaman)}`,
-        sonuc.kesildi ? h('span', { class: 'pano-kesildi' }, ` · ilk ${Number(sonuc.satirSiniri || sonuc.satirlar.length).toLocaleString('tr-TR')} satır`) : null);
+        sonuc.donem ? h('span', { class: 'pano-sonuc-donemi' }, ` · ${donemMetni(sonuc.donem.secim)}`) : null,
+        sonuc.kesildi ? h('span', { class: 'pano-kesildi' }, ` · ilk ${Number(sonuc.satirSiniri || sonuc.satirlar.length).toLocaleString('tr-TR')} satır`) : null,
+        farkli ? h('span', { class: 'pano-donem-farki' }, ` · Seçili dönem (${donemMetni(k.donem || gocDonemi())}) için Yenile'ye basın.`) : null);
       // Sayı / yüzde / değişim: sabit ya da eşitlenmiş yükseklikte dikeyde ortalanır.
       govde.classList.toggle('dikey-orta', ['sayi', 'yuzde', 'degisim'].includes(a.gorunum));
       // Tablo yeniden kurulurken (sıralama, sütun taşıma / gizleme / genişlik) eski tablonun yüksekliği bir anlık sabitlenir ve
@@ -783,7 +850,7 @@ export function ozetPanosu(kap, s0) {
         }
         // Kart yeniden kurulmasın (odak ve sıralama korunur): öğenin imzası güncel ayarla eşitlenir.
         const guncel = etkinDuzen().kartlar.find((x) => x.id === k.id);
-        if (guncel) { a = guncel.ayar; const o = ogeler.get(k.id); if (o) o.imza = `${guncel.tur}:${JSON.stringify(guncel.ayar ?? null)}`; }
+        if (guncel) { a = guncel.ayar; const o = ogeler.get(k.id); if (o) o.imza = kartImzasi(guncel); }
       } catch (e) {
         a = onceki;
         sonucCiz(kayitli.sqlSonuclari[k.id]);
@@ -825,7 +892,7 @@ export function ozetPanosu(kap, s0) {
       }
     });
     return h('section', { class: 'kart pano-karti pano-sql-karti', 'aria-labelledby': basId },
-      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik), h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, yenile)),
+      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik), h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, donemli ? donemSecici(k) : null, yenile)),
       sonVeri, durum, hata, govde);
   }
 
@@ -872,8 +939,19 @@ export function ozetPanosu(kap, s0) {
 
   // ---- Yükleme ----------------------------------------------------------------------------------------------------------
   pano.append(h('div', { class: 'iskelet pano-iskelet', 'aria-busy': 'true' }, h('span', { class: 'gorunmez', role: 'status' }, 'Yükleniyor…'), h('i', {}), h('i', { class: 'yarim' })));
-  api(`/platform/pano?projeId=${encodeURIComponent(proje.id)}`).then((y) => {
+  api(`/platform/pano?projeId=${encodeURIComponent(proje.id)}`).then(async (y) => {
     kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || {} };
+    // Göç: dönem seçimi olmayan döneme bağlı kartlar eski genel seçimi (yoksa "Tümü") alır ve kayıtlı düzene bir kez yazılır.
+    // Hiç kaydedilmemiş (varsayılan) düzen açılışta kaydedilmez: değer yalnız ekranda kullanılır; kullanıcı dönemi seçince yazılır.
+    const eksik = kayitli.duzen.kartlar.filter((k) => kartDonemliMi(k) && !k.donem);
+    if (!eksik.length) return;
+    const donem = gocDonemi();
+    for (const k of eksik) kayitli = { ...kayitli, duzen: kartDonemle(kayitli.duzen, k.id, donem) };
+    if (!y.kayitli) return;
+    try {
+      const g = await api('/platform/pano/donem', { govde: { projeId: proje.id, donemler: Object.fromEntries(eksik.map((k) => [k.id, donem])) } });
+      kayitli = { duzen: g.duzen, sqlSonuclari: g.sqlSonuclari || kayitli.sqlSonuclari };
+    } catch { /* yazılamadıysa bu oturumda yerel değer kullanılır; sonraki açılışta yeniden denenir */ }
   }).catch((e) => {
     if (e && e.durum === 423) return;
     bildir(`Pano düzeni okunamadı; varsayılan düzen gösteriliyor (${e && e.message ? e.message : String(e)}).`, 'hata');

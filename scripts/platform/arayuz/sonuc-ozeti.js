@@ -2,7 +2,7 @@
 // (ozet-panosu.js). Varsayılan pano bugünkü Özet'tir: Başlarken, Ekranlar / Servisler / Uçtan uca özet kutuları (seçili dönemin
 // başarı oranı, önceki eşit döneme göre ▲▼; tıklayınca ilgili sekme) ve Dikkat / Bakım / Kapsam ve güvenlik kartları. Kullanıcı
 // "Panoyu düzenle" ile kartları kaldırır, "Kart ekle" ile geri ekler ya da SQL / Nöbetçi verisi / metin kartı ekler, taşır,
-// boyutlandırır; düzen proje başına kasada saklanır. Bu dosya sayfa kabuğunu (başlık, sekmeler, tarih aralığı) ve YERLEŞİK kartları
+// boyutlandırır; düzen proje başına kasada saklanır. Bu dosya sayfa kabuğunu (başlık, sekmeler; genel dönem seçici yok — dönem kart başına) ve YERLEŞİK kartları
 // üretir. Yerleşik kart verisi tek uçtan gelir (GET /platform/sonuclar/farkindalik — sonuclar/farkindalik.mjs; sunucuda kısa
 // önbellekli) ve yalnız panoda o kartlardan biri varsa istenir; kartlar iskeletle ayrı yüklenir (sayfa açılışını bekletmez).
 // Kurallar: her madde tıklanabilir ve ilgili ekranı açar; kartta ilk KART_ILK maddesi görünür, gerisi "Tümü (N)" ile açılır; madde
@@ -10,7 +10,7 @@
 // yazılır (h(); innerHTML yok). Eşikler Ayarlar > Arayüz > Sonuçlar özeti'ndedir.
 // Adresler: #/sonuclar/ozet/duzenle düzenleme kipini, #/sonuclar/ozet/kart-ekle "Kart ekle" penceresini açar (hızlı arama).
 import { api, h, ikon, rozet } from './ortak.js';
-import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
+import { araligiSorguyaEkle } from './tarih-araligi.js';
 import { farkHapi, oranSaglikSinifi, trendKarti } from './sonuclar.js';
 import { baslarkenKarti } from './baslarken.js';
 import { ozetPanosu } from './ozet-panosu.js';
@@ -42,9 +42,8 @@ const yuzde = (v) => (v === null || v === undefined ? '—' : `%${Math.round(v).
  * @param {string} [altAdres] "duzenle" (düzenleme kipi) ya da "kart-ekle" (düzenleme kipi + Kart ekle penceresi)
  */
 export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti, altAdres) {
-  const donemMetni = h('span', { class: 'mono' }, aralikMetni(kayitliAralik()) || '');
-  const donemNotu = h('span', { class: 'soluk kucuk ozet-donem-notu', hidden: true },
-    'Özet, önceki dönemle karşılaştırabilmek için sabit bir dönem kullanır; başka dönem için tarih aralığını seçin.');
+  // Panonun GENEL dönem seçicisi yoktur: döneme bağlı her kartın başlığında kendi dönem seçimi durur (ozet-panosu.js; kart.donem).
+  void aralikDegisti;
   const notAlani = h('div', {});
   const panoAlani = h('div', { class: 'ozet-panosu-kap' });
   const eylemler = h('div', { class: 'eylemler' });
@@ -53,63 +52,74 @@ export function sonucOzetiEkrani(icerik, proje, sekmeler, aralikDegisti, altAdre
       h('div', {},
         h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar/ozet' }, 'Sonuçlar'),
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Genel')),
-        h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Sonuçlar — '), 'Genel')),
-        h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), 'Dönem ', donemMetni), donemNotu)),
+        h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Sonuçlar — '), 'Genel'))),
       eylemler),
     sekmeler,
-    // "Tümü" seçiliyken Özet sabit son 30 günü kullanır (önceki eşit dönemle karşılaştırma): seçici de bunu söyler, başlıkla çelişmez.
-    h('section', { class: 'kart sonuc-araligi', 'aria-label': 'Tarih aralığı süzgeci' }, tarihAraligiSecici({ degisti: () => aralikDegisti(), tumuMetni: 'Özet: son 30 gün' })),
     panoAlani,
     notAlani);
 
-  // Yerleşik kartların verisi: ilk isteyen kart çağırır (panoda bu kartlardan hiçbiri yoksa istek gitmez).
-  /** @type {Promise<any> | null} */
-  let farkindalikSozu = null;
-  const farkindalik = () => {
-    farkindalikSozu ??= api(`/platform/sonuclar/farkindalik?${araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik())}`).then((v) => {
-      // Tarih aralığı "Tümü" iken özet, önceki eşit dönemle karşılaştırılabilsin diye son 30 günü kullanır; bunu açıkça söyle.
-      if (v.donem) {
-        donemMetni.textContent = v.donem.tumu
-          ? `son 30 gün (${v.donem.etiket}) · önceki 30 gün (${v.donem.oncekiEtiket})`
-          : `${v.donem.etiket} · önceki ${v.donem.oncekiEtiket}`;
-        donemNotu.hidden = !v.donem.tumu;
-      }
-      if (v.hesaplanamayan && v.hesaplanamayan.length) {
-        notAlani.replaceChildren(h('p', { class: 'soluk kucuk farkindalik-notu', role: 'note' }, ikon('uyari'),
-          `Hesaplanamayan: ${v.hesaplanamayan.map((x) => `${x.sinyal} (${x.neden})`).join('; ')}`));
-      }
-      return v;
-    });
-    return farkindalikSozu;
+  // Yerleşik kartların verisi (tek uç): döneme göre ayrı istek; aynı dönemi isteyen kartlar aynı yanıtı paylaşır. Dikkat / Bakım /
+  // Kapsam ve güvenlik döneme bağlı değildir (dönemsiz istek: sunucunun varsayılan penceresi). Panoda bu kartlardan hiçbiri yoksa
+  // istek gitmez.
+  /** @type {Map<string, Promise<any>>} */
+  const sozler = new Map();
+  const farkindalik = (/** @type {object | null} */ donem) => {
+    const d = donem && !(/** @type {any} */ (donem).hizli === 'tumu') ? donem : null;
+    const anahtar = JSON.stringify(d);
+    if (!sozler.has(anahtar)) {
+      const sorgu = new URLSearchParams({ projeId: proje.id });
+      if (d) araligiSorguyaEkle(sorgu, d);
+      sozler.set(anahtar, api(`/platform/sonuclar/farkindalik?${sorgu}`).then((v) => {
+        if (v.hesaplanamayan && v.hesaplanamayan.length) {
+          notAlani.replaceChildren(h('p', { class: 'soluk kucuk farkindalik-notu', role: 'note' }, ikon('uyari'),
+            `Hesaplanamayan: ${v.hesaplanamayan.map((x) => `${x.sinyal} (${x.neden})`).join('; ')}`));
+        }
+        return v;
+      }).catch((e) => { sozler.delete(anahtar); throw e; }));
+    }
+    return /** @type {Promise<any>} */ (sozler.get(anahtar));
   };
 
-  /** Yerleşik kartlar (pano türü → öğe üreticisi). */
+  /** Yerleşik kartlar (pano türü → öğe üreticisi; döneme bağlı kartlar kartın dönemini alır). */
   const yerlesik = {
     // Başlarken: ilk koşuya giden yol (tamamlanınca ya da gizlenince kaybolur; baslarken.js).
     baslarken: () => baslarkenKarti(proje),
-    ozetKutulari: () => ozetKutulariKarti(farkindalik),
-    dikkat: () => farkindalikKarti(KARTLAR[0], farkindalik),
-    bakim: () => farkindalikKarti(KARTLAR[1], farkindalik),
-    kapsam: () => farkindalikKarti(KARTLAR[2], farkindalik),
-    kosuTrendi: () => kosuTrendiKarti(proje)
+    ozetKutulari: (/** @type {object} */ donem) => ozetKutulariKarti(() => farkindalik(donem)),
+    dikkat: () => farkindalikKarti(KARTLAR[0], () => farkindalik(null)),
+    bakim: () => farkindalikKarti(KARTLAR[1], () => farkindalik(null)),
+    kapsam: () => farkindalikKarti(KARTLAR[2], () => farkindalik(null)),
+    kosuTrendi: (/** @type {object} */ donem) => kosuTrendiKarti(proje, donem)
   };
   ozetPanosu(panoAlani, { proje, yerlesik, eylemler, altAdres: altAdres || '' });
 }
 
-/** Özet kutuları (üç kutu; veri gelince dolar). @param {() => Promise<any>} veri */
+/** Özet kutuları (üç kutu; veri gelince dolar) ve altında dönem açıklaması. @param {() => Promise<any>} veri */
 function ozetKutulariKarti(veri) {
   const kutuAlani = h('div', { class: 'sonuc-kartlari ozet-kutulari', 'aria-busy': 'true' },
     KUTULAR.map(([anahtar, etiket]) => h('div', { class: 'sonuc-karti ozet-kutusu yukleniyor', 'data-kutu': anahtar },
       h('span', { class: 'kart-etiket' }, etiket), h('div', { class: 'iskelet' }, h('i', { class: 'yarim' }), h('i', {})))));
+  // Kartın dönemi "Tümü" iken özet, önceki eşit dönemle karşılaştırılabilsin diye son 30 günü kullanır; bunu açıkça söyler.
+  const donemMetni = h('span', { class: 'mono' });
+  const donemNotu = h('span', { class: 'ozet-donem-notu', hidden: true }, ' Özet, önceki dönemle karşılaştırabilmek için sabit bir dönem kullanır; başka dönem için kartın dönemini seçin.');
+  const donemSatiri = h('p', { class: 'soluk kucuk ozet-donem-metni', hidden: true }, ikon('takvim'), 'Dönem ', donemMetni, donemNotu);
   veri().then((v) => {
     kutuAlani.removeAttribute('aria-busy');
     kutuAlani.replaceChildren(...KUTULAR.map(([anahtar, etiket, ikonAd, adres]) => ozetKutusu(v.ozet[anahtar], etiket, ikonAd, adres)));
+    if (v.donem) {
+      donemMetni.textContent = v.donem.tumu
+        ? `son 30 gün (${v.donem.etiket}) · önceki 30 gün (${v.donem.oncekiEtiket})`
+        : `${v.donem.etiket} · önceki ${v.donem.oncekiEtiket}`;
+      donemNotu.hidden = !v.donem.tumu;
+      donemSatiri.hidden = false;
+    }
   }).catch((e) => {
     kutuAlani.removeAttribute('aria-busy');
     kutuAlani.replaceChildren();
     if (!(e && e.durum === 423)) kutuAlani.append(h('div', { class: 'not-kutusu hata', role: 'alert' }, e && e.message ? e.message : String(e)));
   });
-  return kutuAlani;
+  const parca = document.createDocumentFragment();
+  parca.append(kutuAlani, donemSatiri);
+  return parca;
 }
 
 /** Dikkat / Bakım / Kapsam ve güvenlik kartı. @param {string[]} tanim @param {() => Promise<any>} veri */
@@ -129,10 +139,10 @@ function farkindalikKarti([anahtar, baslik, ikonAd, aciklama], veri) {
 }
 
 /** Koşu trendi (Genel kapsamlı tam koşular; Ekranlar sekmesindeki grafikle aynı bileşen). @param {{ id: string }} proje */
-function kosuTrendiKarti(proje) {
+function kosuTrendiKarti(proje, donem) {
   const kap = h('div', { class: 'pano-trend' }, h('section', { class: 'kart' }, h('div', { class: 'iskelet', 'aria-busy': 'true' },
     h('span', { class: 'gorunmez', role: 'status' }, 'Yükleniyor…'), h('i', {}), h('i', { class: 'yarim' }))));
-  api(`/platform/sonuclar/ozet?${araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik())}`)
+  api(`/platform/sonuclar/ozet?${araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), donem || { hizli: 'tumu' })}`)
     .then((ozet) => kap.replaceChildren(trendKarti(ozet.trend, null, { digerNoktalar: ozet.trendTumKapsamlar || [] })))
     .catch((e) => { if (!(e && e.durum === 423)) kap.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, e && e.message ? e.message : String(e))); });
   return kap;

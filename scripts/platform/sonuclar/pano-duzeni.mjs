@@ -7,6 +7,7 @@
 //   Yerleşik kartlar (tur = id; her biri en çok bir kez): baslarken, ozetKutulari, dikkat, bakim, kapsam, kosuTrendi.
 //   Kullanıcı kartları (id "k-…"): sql (SQL sorgusu), veri (Nöbetçi verisi; hazır şablon), metin (kısa not + iç sayfa bağlantıları).
 //   boyut: kucuk (1/3) | orta (1/2) | genis (2/3) | tam (tam satır) — 12 sütunlu ızgarada 4 / 6 / 8 / 12 sütun.
+//   donem: döneme bağlı kartın dönem seçimi ({ hizli } ya da { baslangic, bitis }); bkz. "Kart dönemi". Panonun genel dönemi yoktur.
 // Varsayılan düzen bugünkü Özet'tir: Başlarken, Özet kutuları, Dikkat, Bakım, Kapsam ve güvenlik.
 
 export const PANO_SURUMU = 1;
@@ -49,13 +50,79 @@ export const yukseklikAdi = (y) => YUKSEKLIKLER.find((x) => x.anahtar === y)?.ad
 
 /** Yerleşik kartlar (mevcut Özet bileşenleri). varsayilan: varsayılan panoda var mı. */
 export const YERLESIK_KARTLAR = Object.freeze([
-  Object.freeze({ tur: 'baslarken', ad: 'Başlarken', aciklama: 'İlk koşuya giden yedi adım; liste tamamlanınca ya da gizlenince kendiliğinden kaybolur.', boyut: 'tam', varsayilan: true }),
-  Object.freeze({ tur: 'ozetKutulari', ad: 'Özet kutuları', aciklama: 'Ekranlar, Servisler ve Uçtan uca: dönemin başarı oranı ve önceki döneme göre fark.', boyut: 'tam', varsayilan: true }),
-  Object.freeze({ tur: 'dikkat', ad: 'Dikkat', aciklama: 'Hemen bakılması gerekenler: kritik, P1 ya da uzun süredir kırmızı öğeler, yavaşlayan servisler, kaçan planlı koşular.', boyut: 'kucuk', varsayilan: true }),
-  Object.freeze({ tur: 'bakim', ad: 'Bakım', aciklama: 'Eskiyen tarihler, koşmayan senaryolar, bekleyen bulgular, test verisi sağlığı.', boyut: 'kucuk', varsayilan: true }),
-  Object.freeze({ tur: 'kapsam', ad: 'Kapsam ve güvenlik', aciklama: 'Senaryosuz metotlar, denenmemiş koşul dalları, yedek, riskli izinler, ortam türü.', boyut: 'kucuk', varsayilan: true }),
-  Object.freeze({ tur: 'kosuTrendi', ad: 'Koşu trendi', aciklama: 'Genel kapsamlı tam koşuların seçili dönemdeki çubuk grafiği.', boyut: 'tam', varsayilan: false })
+  Object.freeze({ tur: 'baslarken', ad: 'Başlarken', aciklama: 'İlk koşuya giden yedi adım; liste tamamlanınca ya da gizlenince kendiliğinden kaybolur.', boyut: 'tam', varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'ozetKutulari', ad: 'Özet kutuları', aciklama: 'Ekranlar, Servisler ve Uçtan uca: dönemin başarı oranı ve önceki döneme göre fark.', boyut: 'tam', varsayilan: true, donemli: true }),
+  Object.freeze({ tur: 'dikkat', ad: 'Dikkat', aciklama: 'Hemen bakılması gerekenler: kritik, P1 ya da uzun süredir kırmızı öğeler, yavaşlayan servisler, kaçan planlı koşular.', boyut: 'kucuk', varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'bakim', ad: 'Bakım', aciklama: 'Eskiyen tarihler, koşmayan senaryolar, bekleyen bulgular, test verisi sağlığı.', boyut: 'kucuk', varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'kapsam', ad: 'Kapsam ve güvenlik', aciklama: 'Senaryosuz metotlar, denenmemiş koşul dalları, yedek, riskli izinler, ortam türü.', boyut: 'kucuk', varsayilan: true, donemli: false }),
+  Object.freeze({ tur: 'kosuTrendi', ad: 'Koşu trendi', aciklama: 'Genel kapsamlı tam koşuların seçili dönemdeki çubuk grafiği.', boyut: 'tam', varsayilan: false, donemli: true })
 ]);
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Kart dönemi: döneme bağlı her kartın kendi dönem seçimi (kart.donem; düzenle birlikte saklanır). Döneme bağlı kartlar: yerleşik
+// kartlardan donemli olanlar, donemli Nöbetçi verisi şablonları ve sorgusunda :baslangic / :bitis geçen SQL kartları. Dönem seçimi
+// olmayan (eski) kartın başlangıç değeri arayüzde eski genel seçimden gelir (göç); yeni eklenen kartın varsayılanı VARSAYILAN_DONEM.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Hızlı dönem seçimleri (tarih-araligi.js ile aynı anahtarlar). */
+export const DONEM_SECIMLERI = Object.freeze([
+  Object.freeze(['1s', 'Son 1 saat']), Object.freeze(['24s', 'Son 24 saat']), Object.freeze(['bugun', 'Bugün']), Object.freeze(['7g', 'Son 7 gün']),
+  Object.freeze(['15g', 'Son 15 gün']), Object.freeze(['30g', 'Son 30 gün']), Object.freeze(['tumu', 'Tümü'])
+]);
+export const VARSAYILAN_DONEM = Object.freeze({ hizli: '24s' });
+const SAAT = 3_600_000;
+const DONEM_MS = Object.freeze({ '1s': SAAT, '24s': 24 * SAAT, '7g': 7 * 24 * SAAT, '15g': 15 * 24 * SAAT, '30g': 30 * 24 * SAAT });
+
+/**
+ * Dönem seçimi: { hizli } ya da özel aralık { baslangic, bitis } (ISO; ikisi de zorunlu, bitiş başlangıçtan önce olamaz). Geçersizse null.
+ * @param {unknown} v @returns {{ hizli: string } | { baslangic: string; bitis: string } | null}
+ */
+export function donemTemizle(v) {
+  if (!nesneMi(v)) return null;
+  if (typeof v.hizli === 'string') return DONEM_SECIMLERI.some(([a]) => a === v.hizli) ? { hizli: v.hizli } : null;
+  const bas = typeof v.baslangic === 'string' && v.baslangic.length <= 40 ? Date.parse(v.baslangic) : NaN;
+  const bit = typeof v.bitis === 'string' && v.bitis.length <= 40 ? Date.parse(v.bitis) : NaN;
+  if (!Number.isFinite(bas) || !Number.isFinite(bit) || bit < bas) return null;
+  return { baslangic: new Date(bas).toISOString(), bitis: new Date(bit).toISOString() };
+}
+
+/**
+ * Dönemin somut aralığı (SQL parametreleri): hızlı seçimlerde bitiş "şimdi"; "Bugün" yerel gün başı; "Tümü" 1970'ten bugüne.
+ * @param {unknown} donem @param {Date} [simdi] @returns {{ baslangic: Date; bitis: Date }}
+ */
+export function donemAraligi(donem, simdi = new Date()) {
+  const d = donemTemizle(donem) ?? VARSAYILAN_DONEM;
+  if ('baslangic' in d) return { baslangic: new Date(d.baslangic), bitis: new Date(d.bitis) };
+  if (d.hizli === 'tumu') return { baslangic: new Date(0), bitis: new Date(simdi) };
+  if (d.hizli === 'bugun') { const g = new Date(simdi); g.setHours(0, 0, 0, 0); return { baslangic: g, bitis: new Date(simdi) }; }
+  return { baslangic: new Date(simdi.getTime() - (DONEM_MS[/** @type {keyof typeof DONEM_MS} */ (d.hizli)] ?? 24 * SAAT)), bitis: new Date(simdi) };
+}
+
+/** Kısa dönem metni ("Son 24 saat", "01.10.2026 → 05.10.2026"). @param {unknown} donem */
+export function donemMetni(donem) {
+  const d = donemTemizle(donem) ?? VARSAYILAN_DONEM;
+  if ('hizli' in d) return DONEM_SECIMLERI.find(([a]) => a === d.hizli)?.[1] ?? '';
+  const g = (/** @type {string} */ iso) => { const t = new Date(iso); return `${String(t.getDate()).padStart(2, '0')}.${String(t.getMonth() + 1).padStart(2, '0')}.${t.getFullYear()}`; };
+  return `${g(d.baslangic)} → ${g(d.bitis)}`;
+}
+
+/**
+ * SQL sorgusunun dönem parametreleri: kodda (dizgi / yorum dışında) ":baslangic" ve ":bitis" geçiyor mu. "::" (tür dönüşümü) sayılmaz.
+ * @param {unknown} sorgu @returns {{ baslangic: boolean; bitis: boolean }}
+ */
+export function sqlDonemParametreleri(sorgu) {
+  const kod = String(sorgu ?? '').replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, ' ');
+  const var_ = (/** @type {string} */ ad) => new RegExp(`(^|[^:\\w]):${ad}(?![\\w])`).test(kod);
+  return { baslangic: var_('baslangic'), bitis: var_('bitis') };
+}
+
+/** Kart döneme bağlı mı (dönem seçimi gösterilir ve saklanır)? @param {{ tur: string; ayar?: any }} kart */
+export function kartDonemliMi(kart) {
+  if (YERLESIK.has(kart.tur)) return Boolean(YERLESIK.get(kart.tur)?.donemli);
+  if (kart.tur === 'sql') { const p = sqlDonemParametreleri(kart.ayar?.sorgu); return p.baslangic || p.bitis; }
+  if (kart.tur === 'veri') return Boolean(SABLON_DONEMLI.get(String(kart.ayar?.sablon ?? '')));
+  return false;
+}
 const YERLESIK = new Map(YERLESIK_KARTLAR.map((k) => [k.tur, k]));
 
 /** Kullanıcı kartı türleri. */
@@ -89,25 +156,26 @@ export const EN_COK_BAGLANTI = 8;
 
 /**
  * Nöbetçi verisi şablonları. Parametre türleri: hedef ("ekran:<id>" | "servis:<id>"), sayi (en / enCok), secim (secenekler).
- * gorunum: sayi (tek değer) | liste (madde listesi).
+ * gorunum: sayi (tek değer) | liste (madde listesi). donemli: kartta dönem seçimi olur mu (açıkça işaretlenir). Bugünkü şablonların
+ * zaman penceresi kendi parametresinde ("Son kaç gün") ya da adındadır ("Bugün"): kart dönemine bağlı değildirler.
  */
 export const VERI_SABLONLARI = Object.freeze([
   Object.freeze({
-    anahtar: 'basariOrani', ad: 'Başarı oranı', aciklama: 'Seçilen ekranın ya da servisin son N gündeki başarı oranı (Dene hariç).', gorunum: 'sayi',
+    anahtar: 'basariOrani', ad: 'Başarı oranı', aciklama: 'Seçilen ekranın ya da servisin son N gündeki başarı oranı (Dene hariç).', gorunum: 'sayi', donemli: false,
     parametreler: Object.freeze([
       Object.freeze({ ad: 'hedef', etiket: 'Ekran ya da servis', tur: 'hedef' }),
       Object.freeze({ ad: 'gun', etiket: 'Son kaç gün', tur: 'sayi', en: 1, enCok: 90, varsayilan: 7 })
     ])
   }),
-  Object.freeze({ anahtar: 'bugunBasarisiz', ad: 'Bugün başarısız olan senaryolar', aciklama: 'Bugünkü koşularda başarısız olan ekran ve servis senaryoları.', gorunum: 'liste', parametreler: Object.freeze([]) }),
+  Object.freeze({ anahtar: 'bugunBasarisiz', ad: 'Bugün başarısız olan senaryolar', aciklama: 'Bugünkü koşularda başarısız olan ekran ve servis senaryoları.', gorunum: 'liste', donemli: false, parametreler: Object.freeze([]) }),
   Object.freeze({
-    anahtar: 'talepsiz', ad: 'Talep no\'su olmayan senaryolar', aciklama: 'Hiçbir talep numarasına bağlanmamış senaryolar.', gorunum: 'liste',
+    anahtar: 'talepsiz', ad: 'Talep no\'su olmayan senaryolar', aciklama: 'Hiçbir talep numarasına bağlanmamış senaryolar.', gorunum: 'liste', donemli: false,
     parametreler: Object.freeze([
       Object.freeze({ ad: 'tur', etiket: 'Senaryo türü', tur: 'secim', secenekler: Object.freeze([['hepsi', 'Ekran ve servis'], ['ekran', 'Yalnız ekran'], ['servis', 'Yalnız servis']]), varsayilan: 'hepsi' })
     ])
   }),
   Object.freeze({
-    anahtar: 'enCokBasarisiz', ad: 'En çok başarısız olan senaryolar', aciklama: 'Son N günde en çok başarısız olan senaryolar (Dene hariç).', gorunum: 'liste',
+    anahtar: 'enCokBasarisiz', ad: 'En çok başarısız olan senaryolar', aciklama: 'Son N günde en çok başarısız olan senaryolar (Dene hariç).', gorunum: 'liste', donemli: false,
     parametreler: Object.freeze([
       Object.freeze({ ad: 'gun', etiket: 'Son kaç gün', tur: 'sayi', en: 1, enCok: 90, varsayilan: 30 }),
       Object.freeze({ ad: 'adet', etiket: 'Kaç senaryo', tur: 'sayi', en: 1, enCok: 20, varsayilan: 5 })
@@ -115,6 +183,7 @@ export const VERI_SABLONLARI = Object.freeze([
   })
 ]);
 const SABLON = new Map(VERI_SABLONLARI.map((s) => [s.anahtar, s]));
+const SABLON_DONEMLI = new Map(VERI_SABLONLARI.map((s) => [s.anahtar, /** @type {{ donemli?: boolean }} */ (s).donemli === true]));
 
 /** Panoya bağlantı verilebilecek iç sayfalar (yalnız Nöbetçi içi adresler; seçim listesi). */
 export const IC_SAYFALAR = Object.freeze([
@@ -282,12 +351,19 @@ export function kartTemizle(ham) {
   // Yükseklik yalnız 'oto' değilse yazılır (eski kayıtlar ve varsayılan düzen değişmez).
   const yukseklik = yukseklikTemizle(ham.yukseklik);
   const yk = yukseklik === 'oto' ? {} : { yukseklik };
-  if (YERLESIK.has(tur)) return { id: tur, tur, boyut, ...yk };
+  // Dönem yalnız döneme bağlı kartta saklanır; yoksa (eski kayıt) yazılmaz — arayüz göçle doldurur.
+  const donemi = (/** @type {{ tur: string; ayar?: any }} */ k) => {
+    if (ham.donem === undefined || !kartDonemliMi(k)) return {};
+    const d = donemTemizle(ham.donem);
+    if (!d) throw new PanoHatasi('Kartın dönemi geçersiz.');
+    return { donem: d };
+  };
+  if (YERLESIK.has(tur)) return { id: tur, tur, boyut, ...yk, ...donemi({ tur }) };
   if (!OZEL.has(tur)) throw new PanoHatasi(`Bilinmeyen kart türü: "${String(tur).slice(0, 40)}".`);
   const id = typeof ham.id === 'string' && KIMLIK_DESENI.test(ham.id) && !YERLESIK.has(ham.id) ? ham.id : '';
   if (!id) throw new PanoHatasi('Kart kimliği geçersiz.');
   const ayar = tur === 'sql' ? sqlAyari(ham.ayar) : tur === 'veri' ? veriAyari(ham.ayar) : metinAyari(ham.ayar);
-  return { id, tur, boyut, ...yk, ayar };
+  return { id, tur, boyut, ...yk, ayar, ...donemi({ tur, ayar }) };
 }
 
 /**
@@ -329,8 +405,11 @@ export function kartEkle(duzen, kart, konum) {
   if (duzen.kartlar.length >= EN_COK_KART) throw new PanoHatasi(`Panoda en çok ${EN_COK_KART} kart olabilir.`);
   const yerlesik = YERLESIK.get(kart.tur);
   if (yerlesik && duzen.kartlar.some((k) => k.id === kart.tur)) return duzen;
+  /** @type {Record<string, any>} */
   const eklenen = yerlesik ? { id: kart.tur, tur: kart.tur, boyut: kart.boyut ?? yerlesik.boyut }
     : { id: String(kart.id ?? ''), tur: kart.tur, boyut: kart.boyut ?? OZEL.get(kart.tur)?.boyut ?? 'orta', ayar: kart.ayar };
+  // Yeni eklenen döneme bağlı kartın varsayılan dönemi.
+  if (kartDonemliMi(/** @type {any} */ (eklenen))) eklenen.donem = donemTemizle(/** @type {any} */ (kart).donem) ?? { ...VARSAYILAN_DONEM };
   const liste = duzen.kartlar.slice();
   const i = konum === undefined ? liste.length : Math.max(0, Math.min(liste.length, Math.floor(konum)));
   liste.splice(i, 0, /** @type {any} */ (eklenen));
@@ -339,7 +418,19 @@ export function kartEkle(duzen, kart, konum) {
 
 /** Kartın ayarını değiştirir. @template {{ kartlar: Array<{ id: string; ayar?: unknown }> }} D @param {D} duzen @param {string} id @param {unknown} ayar @returns {D} */
 export function kartAyarla(duzen, id, ayar) {
-  return yeni(duzen, duzen.kartlar.map((k) => (k.id === id ? { ...k, ayar } : k)));
+  return yeni(duzen, duzen.kartlar.map((k) => {
+    if (k.id !== id) return k;
+    const { donem, ...kalan } = /** @type {any} */ ({ ...k, ayar });
+    // Sorgu döneme bağlı hâle geldiyse varsayılan dönem; döneme bağlı değilse dönem kaldırılır.
+    return kartDonemliMi(kalan) ? { ...kalan, donem: donemTemizle(donem) ?? { ...VARSAYILAN_DONEM } } : kalan;
+  }));
+}
+
+/** Kartın dönemini değiştirir (yalnız döneme bağlı kart). @template {{ kartlar: Array<{ id: string }> }} D @param {D} duzen @param {string} id @param {unknown} donem @returns {D} */
+export function kartDonemle(duzen, id, donem) {
+  const d = donemTemizle(donem);
+  if (!d) throw new PanoHatasi('Dönem geçersiz.');
+  return yeni(duzen, duzen.kartlar.map((k) => (k.id === id && kartDonemliMi(/** @type {any} */ (k)) ? { ...k, donem: d } : k)));
 }
 
 /**

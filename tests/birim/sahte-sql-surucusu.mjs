@@ -85,7 +85,12 @@ export class Client {
     const bekle = /\/\*\s*bekle:(\d+)\s*\*\//.exec(metin);
     if (bekle) await new Promise((coz) => setTimeout(coz, Number(bekle[1])));
     if (/\/\*\s*artan\s*\*\//.test(metin)) this.db.run('UPDATE sayac SET n = n + 1');
-    const degerler = typeof q === 'string' ? [] : q.values ?? [];
+    // pg Date parametresini sürücü bağlar; bellek içi SQLite Date bilmez: ISO metne çevrilir. SAHTE_SQL_DEGER_GUNLUGU verilirse
+    // bağlanan değerler (tür + değer) ayrı dosyaya yazılır (testler değerin SQL'e gömülmediğini, parametre olduğunu doğrular).
+    const ham = typeof q === 'string' ? [] : q.values ?? [];
+    const degerGunlugu = process.env.SAHTE_SQL_DEGER_GUNLUGU;
+    if (degerGunlugu && ham.length) appendFileSync(degerGunlugu, `${JSON.stringify(ham.map((v) => ({ tur: v instanceof Date ? 'Date' : typeof v, deger: v instanceof Date ? v.toISOString() : v })))}\n`);
+    const degerler = ham.map((v) => (v instanceof Date ? v.toISOString() : v));
     const sonuc = this.db.exec(metin.replace(/\$(\d+)/g, '?$1'), degerler);
     const son = sonuc[sonuc.length - 1] ?? { columns: [], values: [] };
     // "/* lob */": *CONTENT sütunlarının metni oracledb Lob'u gibi nesne olarak döner (getData ile okunur).

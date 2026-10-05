@@ -6,7 +6,7 @@
 import { alan, alanHatasi, h, ikon, yeniKimlik } from './ortak.js';
 
 export const HIZLI_SECIMLER = Object.freeze([
-  ['1s', 'Son 1 saat'], ['bugun', 'Bugün'], ['7g', 'Son 7 gün'], ['15g', 'Son 15 gün'], ['30g', 'Son 30 gün'], ['tumu', 'Tümü']
+  ['1s', 'Son 1 saat'], ['24s', 'Son 24 saat'], ['bugun', 'Bugün'], ['7g', 'Son 7 gün'], ['15g', 'Son 15 gün'], ['30g', 'Son 30 gün'], ['tumu', 'Tümü']
 ]);
 /** Sonuçlar ekranlarının (ekran + servis + hata kalıpları) ortak oturum anahtarı. */
 export const SONUC_ARALIGI = 'platform.sonucAraligi';
@@ -48,6 +48,7 @@ export function araligiCoz(deger, simdi = new Date()) {
   switch (d.hizli) {
     case 'tumu': return { baslangic: null, bitis: null };
     case '1s': return { baslangic: new Date(n - SAAT_MS).toISOString(), bitis: null };
+    case '24s': return { baslangic: new Date(n - GUN_MS).toISOString(), bitis: null };
     case 'bugun': { const g = new Date(simdi); g.setHours(0, 0, 0, 0); return { baslangic: g.toISOString(), bitis: null }; }
     case '7g': return { baslangic: new Date(n - 7 * GUN_MS).toISOString(), bitis: null };
     case '15g': return { baslangic: new Date(n - 15 * GUN_MS).toISOString(), bitis: null };
@@ -93,7 +94,8 @@ export function araligiKaydet(deger, anahtar = SONUC_ARALIGI) {
  * Süzgeç bileşeni. degisti(yeniDeger) yalnız geçerli seçimde çağrılır; seçim (anahtar verilirse) oturumda saklanır.
  * tumuMetni: "Tümü" seçiliyken düğmede ve hızlı seçimde gösterilecek metin (ör. Özet "Tümü"de sabit son 30 günü kullanır; seçici
  * "Tüm zamanlar" deyip başlıkla çelişmesin).
- * @param {{ deger?: object; degisti: (d: object) => void; anahtar?: string | null; etiket?: string; tumuMetni?: string }} secenek
+ * kisa: düğmede yalnız seçimin kısa adı (pano kart başlığı); etiket düğmenin erişilebilir adına eklenir.
+ * @param {{ deger?: object; degisti: (d: object) => void; anahtar?: string | null; etiket?: string; tumuMetni?: string; kisa?: boolean }} secenek
  */
 export function tarihAraligiSecici(secenek) {
   let deger = temizle(secenek.deger ?? (secenek.anahtar === null ? TUMU : kayitliAralik(secenek.anahtar || SONUC_ARALIGI)));
@@ -115,9 +117,11 @@ export function tarihAraligiSecici(secenek) {
   };
   const metniCiz = () => {
     const c = araligiCoz(deger);
-    const ozet = deger.hizli && deger.hizli !== 'tumu' ? `${aralikMetni(deger)} · ${kisa(c.baslangic)} → şimdi`
+    const uzun = deger.hizli && deger.hizli !== 'tumu' ? `${aralikMetni(deger)} · ${kisa(c.baslangic)} → şimdi`
       : deger.hizli === 'tumu' && secenek.tumuMetni ? secenek.tumuMetni : aralikMetni(deger);
-    metin.textContent = ozet;
+    // Kısa kip (pano kart başlığı): yalnız seçimin adı; ayrıntı ipucunda.
+    metin.textContent = secenek.kisa ? (deger.hizli === 'tumu' && secenek.tumuMetni ? secenek.tumuMetni : aralikMetni(deger)) : uzun;
+    if (secenek.kisa) tetik.title = `${secenek.etiket || 'Dönem'}: ${uzun}`;
   };
   // Düğmeler bir kez oluşturulur; seçimde yalnız aria-pressed güncellenir.
   hizli.append(...HIZLI_SECIMLER.map(([a, m]) => h('button', { type: 'button', 'data-aralik': a, onclick: () => sec({ hizli: a }) }, a === 'tumu' && secenek.tumuMetni ? `Tümü (${secenek.tumuMetni})` : m)));

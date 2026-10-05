@@ -145,7 +145,7 @@ test('3. Özet: %83 sarı (uyarı eşiği ≥ %75), kırmızı değil; "Tümü"d
   await expect(ekranKutusu).not.toHaveClass(/\bbasarisiz\b/);
   // Soldaki sağlık noktası açıklamasıyla aynı eşik: sol listedeki "Başvuru" noktası da sarı.
   await expect(page.locator('.alt-nav a').filter({ hasText: 'Başvuru' }).locator('.saglik')).toHaveClass(/\buyari\b/);
-  const meta = page.locator('.sayfa-basligi .meta');
+  const meta = page.locator('.ozet-donem-metni');
   await expect(meta).toContainText('son 30 gün (');
   await expect(meta).not.toContainText('Tümü seçiliyken');
   await expect(page.locator('.ozet-donem-notu')).toBeVisible();

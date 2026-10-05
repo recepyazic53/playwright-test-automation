@@ -126,7 +126,7 @@ export const REHBERLER = {
     ]
   },
   // Sonuçlar > Genel > Özet (#/sonuclar/ozet): bölümler ekrandaki sırayla — sol panel, sağlık noktası, başlık + Rapor al (PDF),
-  // sekmeler, tarih aralığı, özet kutuları, Dikkat, Bakım, Kapsam ve güvenlik.
+  // sekmeler, kartın dönemi, özet kutuları, Dikkat, Bakım, Kapsam ve güvenlik.
   'sonuclar-ozet': {
     baslik: 'Sonuçlar özeti',
     adimlar: [
@@ -138,9 +138,9 @@ export const REHBERLER = {
       },
       { baslik: 'Ekran / servis seçimi', hedef: '.alt-nav', metin: '"Genel" bu sayfayı (Özet) açar. Bir ekran ya da servis seçerseniz yalnız onun sonuçları açılır; Özet kartları yalnız Genel\'de görünür.' },
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta son tam koşunun başarısına göre yeşil, sarı ya da kırmızıdır. Özet\'teki "gündür kırmızı" da aynı sarı eşiğe bakar.' },
-      { baslik: 'Başlık', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Başlığın altında kartların hesaplandığı dönem ve önceki eşit dönem yazar. PDF raporu almak için Raporlar sekmesini açın.' },
+      { baslik: 'Başlık', hedef: '.sonuc-icerik > .sayfa-basligi', metin: 'Projenin genel sonuçları. Panonun genel bir dönemi yoktur: döneme bağlı her kart kendi dönemini başlığında gösterir. PDF raporu almak için Raporlar sekmesini açın.' },
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: 'Sıra: Özet (bu sayfa), Ekranlar, Servisler, Uçtan uca akışlar (Raporlar üst menüdedir). Ekranlar sekmesi kartlar, eğilim, başarısız testler ve koşu geçmişini gösterir.' },
-      { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Özet kutuları ve kartlar seçtiğiniz aralığın günlerine göre, önceki eşit dönemle karşılaştırılarak hesaplanır. "Tümü" seçiliyken son 30 gün kullanılır.' },
+      { baslik: 'Kartın dönemi', hedef: '.pano-donem', metin: 'Döneme bağlı kartların (Özet kutuları, Koşu trendi, sorgusunda :baslangic / :bitis olan SQL kartları) başlığında kendi dönem seçimi vardır; seçim kartla birlikte saklanır. Özet kutuları önceki eşit dönemle karşılaştırılır; "Tümü" seçiliyken son 30 gün kullanılır. Dikkat, Bakım, Kapsam ve güvenlik döneme bağlı değildir.' },
       {
         baslik: 'Özet kutuları', hedef: '.ozet-kutulari',
         metin: 'Ekranlar (tam koşu testleri), Servisler (servis çağrıları) ve Uçtan uca (akış koşuları): dönemin başarı oranı, önceki eşit döneme göre fark (▲ ▼, puan) ve sayılar. Kutuya tıklayınca ilgili sekme açılır.'
