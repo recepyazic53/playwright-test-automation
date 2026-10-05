@@ -1,4 +1,4 @@
-export type KosulIslemi = 'esit' | 'degil' | 'dolu' | 'bos';
+export type KosulIslemi = 'esit' | 'degil' | 'dolu' | 'bos' | 'gorunurse';
 export type KosulSatiri = { alan: string; islem: KosulIslemi | string; degerler: string[]; ortak?: boolean; onay?: boolean; etiket?: string };
 export type EskiKosul = { secim: string; degerler: string[] };
 export type YeniKosul = { bag: 've' | 'veya'; satirlar: KosulSatiri[] };
@@ -8,6 +8,9 @@ export declare const KOSUL_ISLEMLERI: readonly KosulIslemi[];
 export declare const KOSUL_SATIR_EN_COK: number;
 export declare const KOSUL_DEGER_EN_COK: number;
 export declare const ISLEM_ADLARI: Readonly<Record<KosulIslemi, string>>;
+export declare const GORUNURSE_METNI: string;
+export declare function gorunurseSatiriMi(s: unknown): boolean;
+export declare function gorunurseVar(k: unknown): boolean;
 export declare function yeniBicimMi(k: unknown): k is YeniKosul;
 export declare function kosulSatirlari(k: unknown): YeniKosul | null;
 export declare function kosulAyikla(ham: unknown): DiyagramKosulu | undefined;

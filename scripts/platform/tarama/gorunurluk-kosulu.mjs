@@ -7,24 +7,34 @@
 //  - yeni biçim  { bag: 've' | 'veya', satirlar: [KosulSatiri] }  tek düzey VE ya da VEYA (karışık iç içe yok).
 //    KosulSatiri { alan, islem, degerler, ortak?, onay?, etiket? }
 //      alan     diyagram anahtarı (ekranın alanı) ya da ortak: true ise genel senaryo alanının MODEL kimliği
-//      islem    'esit' (= şunlardan biri) | 'degil' (≠ hiçbiri) | 'dolu' | 'bos'
+//      islem    'esit' (= şunlardan biri) | 'degil' (≠ hiçbiri) | 'dolu' | 'bos' | 'gorunurse' (ekranda görünürse: koşuda belli
+//               olur; alanı yoktur — alan '' —, koşulda en çok bir kez; VE / VEYA ile diğer satırlarla birleşir)
 //      degerler esit / degil için en az bir değer (onay kutusunda tek değer: "true" / "false")
 //      ortak    genel senaryo (ortak akış) alanı: senaryo verisinde ekranın alanlarıyla aynı düz nesnede durur; açılmış modelde
 //               (model-formu.mjs > ortakAkislariAc) alan kimliği değişmez. Bu yüzden model koşulu ona kendi kimliğiyle başvurur.
 //      onay     alan onay kutusu: değer mantıksal (true / false) yazılır
 //      etiket   (yalnız genel senaryo alanında) koşulun açıklamasında kullanılan görünen ad
 // Model ifadesi (satır başına): esit → { alan, esit } / { alan, icinde }; degil → { degil: { alan, esit | icinde } };
-// dolu → { alan, dolu: true }; bos → { alan, dolu: false }. Birden çok satır: { ve: [...] } ya da { veya: [...] }.
+// dolu → { alan, dolu: true }; bos → { alan, dolu: false }; gorunurse → { calismaZamani: 'gorunurse' }. Birden çok satır: { ve: [...] } ya da { veya: [...] }.
 // Tipler: gorunurluk-kosulu.d.mts.
 
-export const KOSUL_ISLEMLERI = Object.freeze(['esit', 'degil', 'dolu', 'bos']);
+export const KOSUL_ISLEMLERI = Object.freeze(['esit', 'degil', 'dolu', 'bos', 'gorunurse']);
 /** Bir koşulda en çok satır ve satır başına en çok değer. */
 export const KOSUL_SATIR_EN_COK = 10;
 export const KOSUL_DEGER_EN_COK = 50;
 /** Karşılaştırmaların okunuşu (düzenleyicideki seçenekler). */
-export const ISLEM_ADLARI = Object.freeze({ esit: '= (şunlardan biri)', degil: '≠ (hiçbiri)', dolu: 'dolu', bos: 'boş' });
+export const ISLEM_ADLARI = Object.freeze({ esit: '= (şunlardan biri)', degil: '≠ (hiçbiri)', dolu: 'dolu', bos: 'boş', gorunurse: 'ekranda görünürse (koşuda belli olur)' });
+/** "Ekranda görünürse" satırının özetteki okunuşu. */
+export const GORUNURSE_METNI = 'ekranda görünüyor';
 
 const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
+/** Satır "ekranda görünürse" mi (alanı yok; koşuda belli olur)? @param {unknown} s */
+export const gorunurseSatiriMi = (s) => nesneMi(s) && /** @type {{ islem?: unknown }} */ (s).islem === 'gorunurse';
+/** Koşulda "ekranda görünürse" satırı var mı? @param {unknown} k diyagram koşulu */
+export function gorunurseVar(k) {
+  const ks = kosulSatirlari(k);
+  return Boolean(ks && ks.satirlar.some(gorunurseSatiriMi));
+}
 const degerliIslem = (islem) => islem === 'esit' || islem === 'degil';
 
 /** Yeni biçimli diyagram koşulu mu? */
@@ -54,7 +64,7 @@ export function kosulAyikla(ham) {
     if (typeof ham.secim !== 'string' || !Array.isArray(ham.degerler)) return undefined;
     return { secim: ham.secim, degerler: degerler(ham.degerler) };
   }
-  const satirlar = ham.satirlar.filter(nesneMi).slice(0, KOSUL_SATIR_EN_COK).map((s) => ({
+  const satirlar = ham.satirlar.filter(nesneMi).slice(0, KOSUL_SATIR_EN_COK).map((s) => (s.islem === 'gorunurse' ? { alan: '', islem: 'gorunurse', degerler: [] } : {
     alan: typeof s.alan === 'string' ? s.alan.slice(0, 300) : '',
     islem: KOSUL_ISLEMLERI.includes(s.islem) ? s.islem : '',
     degerler: degerliIslem(s.islem) ? degerler(s.degerler) : [],
@@ -73,6 +83,7 @@ const modelDegeri = (d, onay) => (onay ? d === 'true' : d);
  * @param {{ islem: string; degerler: string[] }} satir @param {string} alanId @param {boolean} onay
  */
 export function satirIfadesi(satir, alanId, onay) {
+  if (satir.islem === 'gorunurse') return { calismaZamani: 'gorunurse' };
   if (satir.islem === 'dolu' || satir.islem === 'bos') return { alan: alanId, dolu: satir.islem === 'dolu' };
   const d = satir.degerler.map((x) => modelDegeri(x, onay));
   const esit = d.length === 1 ? { alan: alanId, esit: d[0] } : { alan: alanId, icinde: d };
@@ -107,6 +118,7 @@ function satirOku(x) {
     const onay = e.degerler.some((d) => typeof d === 'boolean');
     return { alan: e.alan, islem, degerler: e.degerler.map(String), ...(onay ? { onay: true } : {}) };
   };
+  if (anahtarlar === 'calismaZamani' && x.calismaZamani === 'gorunurse') return { alan: '', islem: 'gorunurse', degerler: [] };
   if (anahtarlar === 'alan,dolu' && typeof x.alan === 'string' && typeof x.dolu === 'boolean') return { alan: x.alan, islem: x.dolu ? 'dolu' : 'bos', degerler: [] };
   if (anahtarlar === 'degil') { const e = esitOku(x.degil); return e ? satir(e, 'degil') : null; }
   const e = esitOku(x);
@@ -115,7 +127,9 @@ function satirOku(x) {
 
 /**
  * Model ifadesinden diyagram satırları (alanlar MODEL kimliğiyle): tek satır ya da tek düzey ve / veya. Okunamıyorsa null
- * (ör. iç içe, karışık, senaryo ayarı, çalışma anında görünürse): düzenleyicide salt okunur gösterilir, modeldeki hâliyle korunur.
+ * (ör. iç içe, karışık, senaryo ayarı, bağlam): düzenleyicide kilitli gösterilir ("Koşulu değiştir" ile yerine yenisi yazılabilir),
+ * değiştirilmezse modeldeki hâliyle korunur. { calismaZamani: 'gorunurse' } (tek başına ya da tek düzey ve / veya içinde) "ekranda
+ * görünürse" satırıdır.
  * @returns {{ bag: 've' | 'veya'; satirlar: Array<{ alan: string; islem: string; degerler: string[]; onay?: boolean }> } | null}
  */
 export function ifadedenSatirlar(ifade) {
@@ -124,7 +138,9 @@ export function ifadedenSatirlar(ifade) {
     if (Object.keys(ifade).length === 1 && Array.isArray(ifade[bag])) {
       if (!ifade[bag].length || ifade[bag].length > KOSUL_SATIR_EN_COK) return null;
       const satirlar = ifade[bag].map(satirOku);
-      return satirlar.every(Boolean) ? { bag, satirlar: /** @type {any[]} */ (satirlar) } : null;
+      // "Ekranda görünürse" koşulda en çok bir kez (düzenleyicinin kuralı); fazlası kilitli kalır.
+      if (!satirlar.every(Boolean) || satirlar.filter(gorunurseSatiriMi).length > 1) return null;
+      return { bag, satirlar: /** @type {any[]} */ (satirlar) };
     }
   }
   const s = satirOku(ifade);
@@ -141,6 +157,7 @@ export function kosulOzeti(k, etiketBul, degerMetni = (_s, d) => d) {
   const ks = kosulSatirlari(k);
   if (!ks || !ks.satirlar.length) return null;
   const parca = (/** @type {any} */ s) => {
+    if (gorunurseSatiriMi(s)) return GORUNURSE_METNI;
     const ad = etiketBul(s);
     if (s.islem === 'dolu') return `${ad} dolu`;
     if (s.islem === 'bos') return `${ad} boş`;

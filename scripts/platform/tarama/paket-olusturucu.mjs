@@ -25,7 +25,7 @@ import { etiketMetni } from '../tablolar/secime-gore-bag.mjs';
 import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { yerTutucuSecenekMi } from './yer-tutucu-secenek.mjs';
 import { bulguMetni, olaganYuklenme, zincirBagimliliklari } from './zincir-kesfi.mjs';
-import { ifadeBirlestir, kosulOzeti, satirIfadesi, yeniBicimMi } from './gorunurluk-kosulu.mjs';
+import { gorunurseSatiriMi, ifadeBirlestir, kosulOzeti, satirIfadesi, yeniBicimMi } from './gorunurluk-kosulu.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
@@ -1424,13 +1424,15 @@ export function kayitPaketiOlustur(meta, envanter) {
   /**
    * Akış tasarımının yeni biçimli koşulu (gorunurluk-kosulu.mjs: =, ≠, dolu, boş; VE / VEYA; genel senaryo alanı) → adlandırılmış koşul.
    * Ekranın alanı kayıt anahtarından model kimliğine çevrilir; genel senaryo alanı kendi kimliğiyle yazılır. Aynı ifadeli koşul varsa
-   * (bu kayıtta ya da mevcut modelde) o kullanılır. Alan bulunamazsa false.
-   * @param {Record<string, any>} alan @param {import('./gorunurluk-kosulu.d.mts').YeniKosul} k
+   * (bu kayıtta ya da mevcut modelde) o kullanılır; alanın önceki satır içi ifadesi aynıysa ({ ifade }) o aynen kalır. Alan bulunamazsa false.
+   * @param {Record<string, any>} alan @param {import('./gorunurluk-kosulu.d.mts').YeniKosul} k @param {unknown} [onceki] alanın önceki görünürlüğü
    */
-  const yeniKosulYaz = (alan, k) => {
+  const yeniKosulYaz = (alan, k, onceki) => {
     /** @type {unknown[]} */
     const ifadeler = [];
     for (const s of k.satirlar) {
+      // "Ekranda görünürse": alanı yok → { calismaZamani: 'gorunurse' }.
+      if (gorunurseSatiriMi(s)) { ifadeler.push(satirIfadesi(s, '', false)); continue; }
       if (s.ortak) { ifadeler.push(satirIfadesi(s, s.alan, s.onay === true)); ortakBasvurular.add(s.alan); continue; }
       const m = hamdanModel.get(s.alan);
       if (!m) return false;
@@ -1439,6 +1441,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (!ifadeler.length) return false;
     const ifade = ifadeBirlestir(k.bag, ifadeler);
     const imza = kararli(ifade);
+    if (nesneMi(onceki) && Object.keys(onceki).length === 1 && nesneMi(onceki.ifade) && kararli(onceki.ifade) === imza) { alan.gorunurluk = onceki; return true; }
     const ayniMi = (/** @type {unknown} */ x) => nesneMi(x) && kararli(x.ifade) === imza;
     const ayni = Object.keys(yeniKosullar).find((ad) => ayniMi(yeniKosullar[ad]))
       ?? (mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar).find((ad) => ayniMi(mevcut.kosullar[ad])) : undefined);
@@ -1454,7 +1457,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       return temizMetin([...(h?.secenekler ?? []), ...(h?.radyolar ?? [])].find((x) => x.deger === d)?.metin, sayac, 80) ?? d;
     };
     const ad = benzersiz(`${String(alan.id)}Gorunur`, kosulAdlari);
-    yeniKosullar[ad] = { aciklama: `${kosulOzeti(k, etiketBul, degerMetni)?.replace(/ ise$/, '') ?? ''} ise görünür (akış tasarımı).`, ifade };
+    yeniKosullar[ad] = { aciklama: `${kosulOzeti(k, etiketBul, degerMetni)?.replace(/ ise$/, '') ?? ''} ise ${k.satirlar.some(gorunurseSatiriMi) ? 'doldurulur' : 'görünür'} (akış tasarımı).`, ifade };
     alan.gorunurluk = { kosul: ad };
     return true;
   };
@@ -1469,8 +1472,9 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (k.kosullar && Object.prototype.hasOwnProperty.call(k.kosullar, h.anahtar)) {
         const elle = k.kosullar[h.anahtar];
         if (elle && yeniBicimMi(elle)) {
+          const onceki = alan.gorunurluk;
           delete alan.gorunurluk;
-          if (!yeniKosulYaz(alan, elle)) bilinmeyenler.push(`"${etiket}" alanının koşulundaki alan akışta yok; koşul yazılmadı.`);
+          if (!yeniKosulYaz(alan, elle, onceki)) bilinmeyenler.push(`"${etiket}" alanının koşulundaki alan akışta yok; koşul yazılmadı.`);
           continue;
         }
         // Modeldeki koşulla aynıysa korunur (her kayıtta yeni koşul adı birikmesin).

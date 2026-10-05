@@ -34,9 +34,9 @@ import { ekranAnahtariOner, kayitPaketiOlustur, kimlikUret } from '../tarama/pak
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
 import { EKRAN_ANAHTARI_DESENI } from './sayfa-paketi.mjs';
-import { sinirHatalari } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { bagsizKosulUyarilari, sinirHatalari } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
-import { ifadedenSatirlar } from '../tarama/gorunurluk-kosulu.mjs';
+import { gorunurseSatiriMi, gorunurseVar, ifadedenSatirlar } from '../tarama/gorunurluk-kosulu.mjs';
 import { etkinAlanBaglari, ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 
@@ -168,6 +168,7 @@ function diyagramKosulu(ifade, env, korunanAlanlar, modelAlanlari) {
   const ks = ifadedenSatirlar(ifade);
   if (!ks) return null;
   for (const s of ks.satirlar) {
+    if (gorunurseSatiriMi(s)) continue; // "ekranda görünürse": alanı yok
     if (!modelAlanlari.has(s.alan)) { s.ortak = true; continue; }
     if (korunanAlanlar.has(s.alan) || !env.alanlar.some((x) => x.alan.anahtar === s.alan)) return null;
   }
@@ -248,7 +249,7 @@ function aksiyonOzeti(a) {
  *    bölüme bağlıdır: kaydederken bölümle birlikte taşınır (paket-olusturucu.mjs > bolumOzellikleriniTasi; korunanDenetimi).
  *  - aksiyonlar: gösterilemeyen koşu aksiyonu (metinle süzülen / kendi süreli tıklama, öğeye bağlı bekleme, ekrana dön) →
  *    adımın aksiyonları salt okunur "korunan aksiyonlar" bloğu olur (düğmesi adımın ilerlemesidir).
- *  - alanKosullari: düzenlenebilir alanın gösterilemeyen görünürlük koşulu (çok şartlı, çalışma anında, korunan alana bağlı…)
+ *  - alanKosullari: düzenlenebilir alanın gösterilemeyen görünürlük koşulu (iç içe / karışık, bağlam, korunan alana bağlı…)
  *    → alanın yanında kilitli; alan modeldeki tanımıyla eşleştiği için koşul aynen kalır (kaydederken denetlenir).
  * Koşul, korunan (diyagramda olmayan) bir alana bağlıysa gösterilemez: korunan alanlar kararlı olana kadar yinelenir.
  * @param {Nesne} model @param {Nesne[]} sirali akışın adımları (sırayla) @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env
@@ -318,7 +319,11 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
         && nesneMi(onc.kosu) && Array.isArray(onc.kosu.aksiyonlar) && onc.kosu.aksiyonlar.some((x) => nesneMi(x) && x.tur === 'tikla');
       kurulur = !sonuc.aksiyonlar && !(alanli && (tikla || !oncekiAcici));
       istegeBagli = kurulur;
-    } else kurulur = !tikla && kosulGosterilir(gorunurlukIfadesi(model, adim.gorunurluk));
+    } else {
+      // Adım düzeyinde "ekranda görünürse" alanlara taşınmaz (adımın kendi koşulu olarak aynen korunur).
+      const k = diyagramKosulu(gorunurlukIfadesi(model, adim.gorunurluk), env, korunanAlanlar, etiketler);
+      kurulur = !tikla && k !== null && !gorunurseVar(k);
+    }
     if (!kurulur) {
       sonuc.gorunurlukKorunur = true;
       ek.adimEk.gorunurluk = kopya(adim.gorunurluk);
@@ -408,7 +413,8 @@ function adimKosulu(adim, model, env) {
   const ifade = gorunurlukIfadesi(model, g);
   if (nesneMi(ifade) && typeof ifade.senaryoAyari === 'string') return null; // isteğe bağlı adım (kapsam ayarı): ayrı işlenir
   if (aksiyonlu) return false;
-  return diyagramKosulu(ifade, env, new Set(), alanEtiketleri(model)) ?? false;
+  const k = diyagramKosulu(ifade, env, new Set(), alanEtiketleri(model));
+  return k && !gorunurseVar(k) ? k : false;
 }
 
 /** Akışın adımları sırayla. @param {Nesne[]} adimlar */
@@ -721,7 +727,7 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
         const k = diyagramKosulu(gorunurlukIfadesi(model, g), env, new Set(), modelEtiketleri);
         if (!g) kosullar[anahtar] = nesneMi(adimKosul) ? adimKosul : null;
         else if (k) kosullar[anahtar] = k;
-        // Başka biçimdeki koşul (ör. çalışma anında görünürse): yazılmaz → modeldeki koşul korunur.
+        // Başka biçimdeki koşul (ör. iç içe ve / veya): yazılmaz → modeldeki koşul korunur.
       }
     }
     const kosu = nesneMi(adim.kosu) ? adim.kosu : {};
@@ -1407,6 +1413,20 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   yeni.akislar = akislar;
   // Ortak akış tek akışlıdır (örtük "Ana akış").
   if (ortakAkis) delete yeni.akislar;
+  // Kilitli koşulu değiştirilen / kaldırılan alanların ("Koşulu değiştir") eski adlı koşulu artık hiçbir yerde kullanılmıyorsa
+  // çıkarılır (yerine yenisi yazıldı; bağsız koşul olarak kalmaz). Başka bir yerde kullanılıyorsa kalır.
+  /** @type {Set<string>} */
+  const degisenKosullar = new Set();
+  for (const b of ayik.bloklar) {
+    if (b.tur !== 'alanlar' || !b.kosullar) continue;
+    for (const x of korunan.alanKosullari.values()) {
+      if (Object.prototype.hasOwnProperty.call(b.kosullar, x.anahtar) && b.alanlar.includes(x.anahtar) && typeof x.gorunurluk.kosul === 'string') degisenKosullar.add(x.gorunurluk.kosul);
+    }
+  }
+  if (degisenKosullar.size) {
+    const bagsiz = new Set(bagsizKosulUyarilari(yeni).map((u) => u.yer.replace(/^kosullar\./, '')));
+    for (const ad of degisenKosullar) if (bagsiz.has(ad)) delete yeni.kosullar[ad];
+  }
   // Korunan parçalar aynen yazıldı mı (dayandığı alan silindiyse anlaşılır hatayla reddedilir; sessiz kayıp olmaz)?
   // Bölüm özellikleri yalnız diyagramdan kaydederken denetlenir (akış kaydında bölümler sayfanın bölümleridir).
   const oncekiAdimlar = mevcutAkis && !g.kayitEnvanteri ? /** @type {Nesne[]} */ (/** @type {Nesne} */ (akisModeli(tam, mevcutAkis.id)).adimlar ?? []) : [];

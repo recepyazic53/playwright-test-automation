@@ -8,7 +8,7 @@
 //            kosullar: { [alan]: { secim, degerler } | null } — alanın görünürlük koşulu ("<seçim> şu değerlerdeyken görünür";
 //            null: koşulsuz). Taslakta kayıt okumalarından otomatik bulunur (secimKosuluCikar); kullanıcı düzeltir. Listede
 //            olmayan alan için koşul otomatik çıkarılır. Koşuldaki seçim alanı akışta (bir alan grubunda) olmalı.
-//            Yeni biçim { bag: 've' | 'veya', satirlar: [{ alan, islem: esit | degil | dolu | bos, degerler, ortak? }] }: birden çok
+//            Yeni biçim { bag: 've' | 'veya', satirlar: [{ alan, islem: esit | degil | dolu | bos | gorunurse, degerler, ortak? }] }: birden çok
 //            satır, ekranın herhangi bir alanı ya da genel senaryo alanı (ortak) — bkz. gorunurluk-kosulu.mjs. Koşullar döngü kuramaz.
 //            sinirlar: { [alan]: { enAz?, enCok?, artis?, enAzUzunluk?, enCokUzunluk?, desen? } | null } — alanın değer kuralları
 //            (model alan.sinirlar; null: kaldır; verilmeyen alanın mevcut kuralı korunur). Ekranın akışını düzenlerken yazılır.
@@ -64,7 +64,7 @@ import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { gitYoluHatasi } from '../../dogrulama/gezinme-yolu.mjs';
 import { gezinmePlani } from './gezinme-plani.mjs';
-import { kosulAyikla, yeniBicimMi } from './gorunurluk-kosulu.mjs';
+import { gorunurseSatiriMi, kosulAyikla, yeniBicimMi } from './gorunurluk-kosulu.mjs';
 
 export const BLOK_EN_COK = 200;
 export const BEKLEME_EN_COK_SN = 120;
@@ -485,6 +485,7 @@ function yeniKosulHatalari(kosul, alan, ad, alanlar, kullanilan) {
   const hatalar = [];
   for (const s of kosul.satirlar) {
     if (!s.islem) { hatalar.push(`“${ad}” alanının koşulunda karşılaştırma seçilmemiş.`); continue; }
+    if (gorunurseSatiriMi(s)) continue; // "ekranda görünürse": alanı yok (koşuda belli olur)
     if (!s.alan) { hatalar.push(`“${ad}” alanının koşulunda alan seçilmemiş.`); continue; }
     const h = s.ortak ? null : alanlar.get(s.alan);
     const kAd = s.ortak ? (s.etiket || s.alan) : h ? alanEtiketi(h) : s.alan;
@@ -499,6 +500,7 @@ function yeniKosulHatalari(kosul, alan, ad, alanlar, kullanilan) {
         : `“${ad}” alanının koşulunda “${kAd}” için en az bir değer seçin ya da yazın.`);
     }
   }
+  if (kosul.satirlar.filter(gorunurseSatiriMi).length > 1) hatalar.push(`“${ad}” alanının koşulunda “ekranda görünürse” yalnız bir kez olabilir.`);
   return hatalar;
 }
 
@@ -512,7 +514,7 @@ function kosulDongusu(elleKosullar) {
   for (const { alan, kosul } of elleKosullar) {
     if (!kosul) continue;
     // Kendine bağlanma ayrıca bildirilir (yeniKosulHatalari); döngü yalnız alanlar arasında aranır.
-    kenar.set(alan, (yeniBicimMi(kosul) ? kosul.satirlar.filter((s) => !s.ortak).map((s) => s.alan) : [kosul.secim]).filter((x) => x !== alan));
+    kenar.set(alan, (yeniBicimMi(kosul) ? kosul.satirlar.filter((s) => !s.ortak && !gorunurseSatiriMi(s)).map((s) => s.alan) : [kosul.secim]).filter((x) => x !== alan));
   }
   /** @type {Map<string, number>} 1: ziyarette, 2: bitti */
   const durum = new Map();
