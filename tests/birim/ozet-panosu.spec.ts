@@ -1,5 +1,6 @@
 // KORUMA TESTLERİ — Sonuçlar > Genel > Özet panosu (sunucu): düzen PROJE BAŞINA kasada (şifreli) saklanır ve geri yüklenir; kayıt
-// yoksa varsayılan (bugünkü Özet); kaldır / geri ekle / taşı / boyutlandır / varsayılana dön (saf düzen modülü); yedekte pano.
+// yoksa varsayılan (bugünkü Özet); serbest ızgara modeli (sınırlar, çakışmasızlık, aşağı itme, en küçük boyut, eski sıralı düzenden göç);
+// kaldır / geri ekle / taşı / boyutlandır / varsayılana dön (saf düzen modülü); yedekte pano.
 // SQL kartı: yalnız okuma (INSERT / DROP / EXEC / çoklu ifade reddedilir, bağlantı açılmaz), bağlantının "Yalnız okuma"sı kapalı olsa
 // da salt okunur oturum, zaman aşımı ve satır sınırı, gizli adlı sütun + T.C. / IBAN maskelemesi, "Son veri" saati ve önbellek (kart
 // değişince geçersiz), anlaşılır hata (adres / parola yok), izin (Veritabanı okuma) ve CANLI onayı gereksinimi. Nöbetçi verisi
@@ -11,16 +12,17 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
-import { ortamKaydet, projeKaydet, veritabaniniHazirla, ekranKaydet, senaryoKaydet } from '../../scripts/platform/veritabani/depo.mjs';
+import { ayarGetir, ayarYaz, ortamKaydet, projeKaydet, veritabaniniHazirla, ekranKaydet, senaryoKaydet } from '../../scripts/platform/veritabani/depo.mjs';
 import { baglantiKaydet } from '../../scripts/platform/entegrasyonlar/depo.mjs';
 import { surucuYukleyiciAyarla } from '../../scripts/platform/entegrasyonlar/veritabani-suruculeri.mjs';
 import { veritabaniKaydet } from '../../scripts/platform/sql/veritabanlari.mjs';
 import { izinDegistir, IzinHatasi } from '../../scripts/platform/guvenlik/izinler.mjs';
 import { gerekenIzinler } from '../../scripts/platform/guvenlik/uc-denetimi.mjs';
 import {
-  BOYUTLAR, EN_COK_DILIM, EN_COK_KART, LISTE_EN_COK, VARSAYILAN_BICIM, bicimTemizle, degisimHesapla, duzenTemizle, eksikYerlesikler, esikRengi,
-  hucreBicimle, kartBoyutla, kartEkle, kartKaldir, kartTasi, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
-  yuzdeDegeri, YUKSEKLIKLER, kartYukseklikle, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, type PanoDuzeni
+  EN_COK_DILIM, EN_COK_KART, EN_COK_YUKSEKLIK, IZGARA_SUTUN, LISTE_EN_COK, SATIR_BIRIMI, VARSAYILAN_BICIM, bicimTemizle, cakisiyorMu, degisimHesapla,
+  duzenTemizle, eksikYerlesikler, enKucukBoyut, esikRengi, eskiBicimMi, gorunurYerlesim, hucreBicimle, kartAyarla, kartEkle, kartKaldir, kartSiraTasi,
+  kartYerlestir, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
+  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, type PanoDuzeni
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -89,26 +91,37 @@ async function eskiBicimYedek(vt: Veritabani, parola: string): Promise<Buffer> {
 const PAROLA = 'Gecici-Pano-Kasa-1';
 const BAGLANTI_PAROLASI = 'pano-parola-gizli-7f2a';
 
-test('düzen modülü: varsayılan bugünkü Özet; kaldır, geri ekle, taşı, boyutlandır; doğrulama', () => {
+/** Kartların konumları ("id:x,y,w,h"; okuma sırasıyla). */
+const konumlar = (d: { kartlar: ReadonlyArray<{ id: string; x: number; y: number; w: number; h: number }> }) => d.kartlar.map((k) => `${k.id}:${k.x},${k.y},${k.w},${k.h}`);
+
+test('düzen modülü: varsayılan bugünkü Özet (ızgara konumlarıyla); kaldır, geri ekle, sıra taşı; doğrulama', () => {
   const v = varsayilanDuzen();
-  expect(v.kartlar.map((k) => [k.id, k.boyut])).toEqual([['baslarken', 'tam'], ['ozetKutulari', 'tam'], ['dikkat', 'kucuk'], ['bakim', 'kucuk'], ['kapsam', 'kucuk']]);
+  expect(v.surum).toBe(2);
+  expect(konumlar(v)).toEqual(['baslarken:0,0,12,6', 'ozetKutulari:0,6,12,5', 'dikkat:0,11,4,7', 'bakim:4,11,4,7', 'kapsam:8,11,4,7']);
   expect(varsayilanMi(v)).toBe(true);
-  expect(BOYUTLAR.map((b) => b.sutun)).toEqual([4, 6, 8, 12]);
+  expect(IZGARA_SUTUN).toBe(12);
+  expect(SATIR_BIRIMI).toBeGreaterThanOrEqual(40);
+  expect(SATIR_BIRIMI).toBeLessThanOrEqual(60);
   let d: PanoDuzeni = kartKaldir(v, 'bakim');
   expect(d.kartlar.map((k) => k.id)).toEqual(['baslarken', 'ozetKutulari', 'dikkat', 'kapsam']);
   expect(eksikYerlesikler(d).map((k) => k.tur)).toEqual(['bakim', 'kosuTrendi']);
-  d = kartEkle(d, { tur: 'bakim' }, 1);
-  expect(d.kartlar.map((k) => k.id)).toEqual(['baslarken', 'bakim', 'ozetKutulari', 'dikkat', 'kapsam']);
-  // Yerleşik kart iki kez eklenmez.
+  // Kaldırılan kartın yeri boş kalır (yukarı / sola sıkıştırma yok).
+  expect(konumlar(d)).toContain('kapsam:8,11,4,7');
+  // Geri ekle: konum verilmezse panonun altına, türün boyutuyla; konum verilirse oraya (çakışan aşağı itilir).
+  d = kartEkle(d, { tur: 'bakim' });
+  expect(konumlar(d).at(-1)).toBe('bakim:0,18,4,7');
   expect(kartEkle(d, { tur: 'bakim' })).toBe(d);
-  d = kartTasi(d, 'bakim', 'asagi');
+  d = kartEkle(kartKaldir(d, 'bakim'), { tur: 'bakim' }, { x: 4, y: 11 });
+  expect(konumlar(d)).toEqual(konumlar(v));
+  // Sıra taşı (okuma sırası; dar ekran ve ↑ ↓): Bakım bir öne → Dikkat ile yer değiştirir.
+  d = kartSiraTasi(v, 'bakim', 'yukari');
   expect(d.kartlar.map((k) => k.id)).toEqual(['baslarken', 'ozetKutulari', 'bakim', 'dikkat', 'kapsam']);
-  expect(kartTasi(d, 'baslarken', 'yukari')).toBe(d);
-  d = kartTasi(d, 'kapsam', 0);
-  expect(d.kartlar[0].id).toBe('kapsam');
-  d = kartBoyutla(d, 'dikkat', 'genis');
-  expect(d.kartlar.find((k) => k.id === 'dikkat')?.boyut).toBe('genis');
-  expect(() => kartBoyutla(d, 'dikkat', 'dev')).toThrow('Kart boyutu geçersiz');
+  expect(konumlar(d)).toEqual(['baslarken:0,0,12,6', 'ozetKutulari:0,6,12,5', 'bakim:0,11,4,7', 'dikkat:4,11,4,7', 'kapsam:8,11,4,7']);
+  expect(kartSiraTasi(v, 'baslarken', 'yukari')).toBe(v);
+  expect(kartSiraTasi(v, 'kapsam', 'asagi')).toBe(v);
+  // Alt alta kartlarda: Özet kutuları bir sonraya → Dikkat öne geçer, Özet kutuları onun altına iner.
+  d = kartSiraTasi(v, 'ozetKutulari', 'asagi');
+  expect(d.kartlar.map((k) => k.id)).toEqual(['baslarken', 'dikkat', 'ozetKutulari', 'bakim', 'kapsam']);
   expect(varsayilanMi(d)).toBe(false);
   // Doğrulama: bilinmeyen tür, dış bağlantı, çoğul kimlik, sınır.
   expect(() => duzenTemizle({ kartlar: [{ id: 'x', tur: 'yok' }] })).toThrow('Bilinmeyen kart türü');
@@ -121,24 +134,96 @@ test('düzen modülü: varsayılan bugünkü Özet; kaldır, geri ekle, taşı, 
   expect(() => duzenTemizle({ kartlar: Array.from({ length: EN_COK_KART + 1 }, (_, i) => ({ id: `k-${i}`, tur: 'metin', ayar: { baslik: 'A', not: 'x' } })) }))
     .toThrow(`en çok ${EN_COK_KART} kart`);
   expect(() => duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', sorgu: 'SELECT 1' } }] })).toThrow('bağlantısı seçin');
-  // Yükseklik: eski kayıt (yalnız genişlik) → Otomatik ve eşit yükseklik açık; 2–12 satır; 'oto' alanı kaldırır.
-  const eski = duzenTemizle({ kartlar: [{ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }] });
-  expect(eski).toEqual({ surum: 1, kartlar: [{ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }], esitYukseklik: true });
-  expect(duzenTemizle({ kartlar: [], esitYukseklik: false }).esitYukseklik).toBe(false);
-  let y = kartYukseklikle(varsayilanDuzen(), 'dikkat', 6);
-  expect(y.kartlar.find((x) => x.id === 'dikkat')).toEqual({ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk', yukseklik: 6 });
-  expect(varsayilanMi(y)).toBe(false);
-  expect(duzenTemizle(y).kartlar.find((x) => x.id === 'dikkat')?.yukseklik).toBe(6);
-  y = kartYukseklikle(y, 'dikkat', 'oto');
-  expect(y.kartlar.find((x) => x.id === 'dikkat')).toEqual({ id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' });
-  expect(varsayilanMi(y)).toBe(true);
-  expect(varsayilanMi({ ...varsayilanDuzen(), esitYukseklik: false })).toBe(false);
-  expect(() => kartYukseklikle(y, 'dikkat', 13)).toThrow('2–12 satır');
-  expect(() => duzenTemizle({ kartlar: [{ id: 'dikkat', tur: 'dikkat', yukseklik: 1 }] })).toThrow('2–12 satır');
-  expect(YUKSEKLIKLER.map((x) => x.anahtar)).toEqual(['oto', 3, 4, 6, 8]);
   // Eşik: ilk tutan eşik.
   const esikler = [{ islec: '>', deger: 0, renk: 'kirmizi' }, { islec: '=', deger: 0, renk: 'yesil' }];
   expect([esikRengi(3, esikler), esikRengi(0, esikler), esikRengi(-1, esikler)]).toEqual(['kirmizi', 'yesil', null]);
+});
+
+test('ızgara modeli: sınırlar, en küçük boyut (türe / görünüme göre), çakışmasızlık, aşağı itme, boşluk korunur', () => {
+  const k = (id: string, x: number, y: number, w: number, h: number) => ({ id, tur: 'metin', x, y, w, h, ayar: { baslik: id, not: 'x' } });
+  // Sınırlar: tam sayı, 12 sütuna sığma, yükseklik, dördü birlikte.
+  expect(() => duzenTemizle({ surum: 2, kartlar: [k('k-a', 10, 0, 4, 2)] })).toThrow('12 sütununa sığmalıdır');
+  expect(() => duzenTemizle({ surum: 2, kartlar: [k('k-a', -1, 0, 4, 2)] })).toThrow('12 sütununa sığmalıdır');
+  expect(() => duzenTemizle({ surum: 2, kartlar: [k('k-a', 0, 0, 4, EN_COK_YUKSEKLIK + 1)] })).toThrow(`1–${EN_COK_YUKSEKLIK} satır`);
+  expect(() => duzenTemizle({ surum: 2, kartlar: [k('k-a', 0, 1.5, 4, 2)] })).toThrow('tam sayı');
+  expect(() => duzenTemizle({ surum: 2, kartlar: [{ ...k('k-a', 0, 0, 4, 2), h: undefined }] })).toThrow('x, y, w, h birlikte');
+  // Çakışma: girdi üst üste binerse hata.
+  expect(() => duzenTemizle({ surum: 2, kartlar: [k('k-a', 0, 0, 6, 3), k('k-b', 5, 2, 4, 3)] })).toThrow('üst üste biniyor');
+  // Yan yana / alt alta değen kartlar geçerli; boş satır korunur (üstte 5 satır boşluk).
+  const d = duzenTemizle({ surum: 2, kartlar: [k('k-b', 6, 5, 6, 3), k('k-a', 0, 5, 6, 3), k('k-c', 0, 8, 12, 2)] });
+  expect(konumlar(d)).toEqual(['k-a:0,5,6,3', 'k-b:6,5,6,3', 'k-c:0,8,12,2']);
+  expect(cakisiyorMu({ x: 0, y: 0, w: 6, h: 3 }, { x: 6, y: 0, w: 6, h: 3 })).toBe(false);
+  expect(cakisiyorMu({ x: 0, y: 0, w: 6, h: 3 }, { x: 5, y: 2, w: 2, h: 2 })).toBe(true);
+  // En küçük boyut: tek sayı küçük, tablo büyük; daha küçük kayıt büyütülür, büyüme çakışırsa alttaki itilir.
+  const sql = (gorunum: string) => ({ tur: 'sql', ayar: { gorunum } });
+  expect(enKucukBoyut(sql('sayi')).w).toBeLessThan(enKucukBoyut(sql('tablo')).w);
+  expect(enKucukBoyut(sql('sayi')).h).toBeLessThan(enKucukBoyut(sql('tablo')).h);
+  const kucuk = duzenTemizle({ surum: 2, kartlar: [
+    { id: 'k-t', tur: 'sql', x: 0, y: 0, w: 2, h: 2, ayar: { baslik: 'T', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1', gorunum: 'tablo' } }, k('k-alt', 0, 2, 4, 2)] });
+  const t = kucuk.kartlar.find((x) => x.id === 'k-t')!;
+  expect([t.w, t.h]).toEqual([enKucukBoyut(sql('tablo')).w, enKucukBoyut(sql('tablo')).h]);
+  expect(kucuk.kartlar.find((x) => x.id === 'k-alt')!.y).toBe(t.h);
+  // Yerleştir: istenen boş yere konur, üstü boş kalır (yukarı sıkıştırma yok); sınırlara oturtulur.
+  const v = varsayilanDuzen();
+  let y = kartYerlestir(v, 'kapsam', { x: 8, y: 20 });
+  expect(konumlar(y)).toEqual(['baslarken:0,0,12,6', 'ozetKutulari:0,6,12,5', 'dikkat:0,11,4,7', 'bakim:4,11,4,7', 'kapsam:8,20,4,7']);
+  expect(konumlar(kartYerlestir(v, 'kapsam', { x: 11, y: -3 }))).toContain('kapsam:8,0,4,7');
+  expect(kartYerlestir(v, 'kapsam', { x: 8, y: 11 })).toBe(v);
+  // Çakışmada aşağı itme: Kapsam en üste (Başlarken'in üstüne) → Başlarken ve altındakiler aşağı iner; boyları değişmez.
+  y = kartYerlestir(v, 'kapsam', { x: 8, y: 0 });
+  expect(konumlar(y)).toEqual(['kapsam:8,0,4,7', 'baslarken:0,7,12,6', 'ozetKutulari:0,13,12,5', 'dikkat:0,18,4,7', 'bakim:4,18,4,7']);
+  // Boyutlandırma: Kapsam aşağı uzar; soldaki Dikkat / Bakım'ın boyu ve yeri değişmez.
+  y = kartYerlestir(v, 'kapsam', { h: 14 });
+  expect(konumlar(y)).toEqual(['baslarken:0,0,12,6', 'ozetKutulari:0,6,12,5', 'dikkat:0,11,4,7', 'bakim:4,11,4,7', 'kapsam:8,11,4,14']);
+  // Kullanıcının isteği: geniş kart sol iki sütunun altına (Kapsam sağda uzarken).
+  y = kartEkle(y, { id: 'k-raw', tur: 'metin', ayar: { baslik: 'RAWLOG', not: 'x' }, w: 8, h: 6 }, { x: 0, y: 18 });
+  expect(konumlar(y).at(-1)).toBe('k-raw:0,18,8,6');
+  expect(konumlar(y)).toContain('kapsam:8,11,4,14');
+  expect(() => duzenTemizle(y)).not.toThrow();
+  // Genişlik / yükseklik sınırları: en küçük ve en çok.
+  expect(konumlar(kartYerlestir(v, 'dikkat', { w: 1, h: 1 }))).toContain('dikkat:0,11,3,3');
+  expect(konumlar(kartYerlestir(v, 'dikkat', { w: 40, h: 99 }))[2]).toBe(`dikkat:0,11,12,${EN_COK_YUKSEKLIK}`);
+  // Zincirleme itme: itilen kart altındakini de iter; hiçbir zaman üst üste binme yok.
+  y = kartYerlestir(v, 'ozetKutulari', { h: 10 });
+  for (const a of y.kartlar) for (const b of y.kartlar) if (a !== b) expect(cakisiyorMu(a, b), `${a.id} / ${b.id}`).toBe(false);
+  expect(y.kartlar.find((x) => x.id === 'dikkat')!.y).toBe(16);
+  // Görünüm değişip en küçük boyut büyürse kart büyür (kartAyarla).
+  const s = kartEkle(v, { id: 'k-s', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1', gorunum: 'sayi' } });
+  const s1 = s.kartlar.find((x) => x.id === 'k-s')!;
+  const s2 = kartAyarla(s, 'k-s', { ...s1.ayar, gorunum: 'tablo' }).kartlar.find((x) => x.id === 'k-s')!;
+  expect(s2.w).toBeGreaterThanOrEqual(enKucukBoyut(sql('tablo')).w);
+  // Görünür yerleşim: gizlenen Başlarken'in satırları daralır, kullanıcının bıraktığı boşluk korunur.
+  const g = gorunurYerlesim(kartYerlestir(v, 'kapsam', { y: 20 }).kartlar, new Set(['baslarken']));
+  expect(g.map((x) => `${x.id}:${x.y}`)).toEqual(['ozetKutulari:0', 'dikkat:5', 'bakim:5', 'kapsam:14']);
+});
+
+test('göç: eski sıralı düzen (sıra, genişlik, yükseklik, eşit yükseklik) ızgaraya çevrilir; kart kaybolmaz', () => {
+  const eski = {
+    surum: 1, esitYukseklik: true, kartlar: [
+      { id: 'baslarken', tur: 'baslarken', boyut: 'tam' }, { id: 'ozetKutulari', tur: 'ozetKutulari', boyut: 'tam' },
+      { id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }, { id: 'bakim', tur: 'bakim', boyut: 'kucuk', yukseklik: 8 }, { id: 'kapsam', tur: 'kapsam', boyut: 'kucuk' },
+      { id: 'k-raw', tur: 'metin', boyut: 'genis', ayar: { baslik: 'RAWLOG', not: 'x' } }, { id: 'k-not', tur: 'metin', boyut: 'kucuk', yukseklik: 3, ayar: { baslik: 'Not', not: 'y' } },
+      { id: 'k-tam', tur: 'metin', boyut: 'orta', ayar: { baslik: 'Tam', not: 'z' } }
+    ]
+  };
+  expect(eskiBicimMi(eski)).toBe(true);
+  const d = duzenTemizle(eski);
+  expect(eskiBicimMi(d)).toBe(false);
+  expect(d.kartlar.map((k) => k.id).sort()).toEqual(eski.kartlar.map((k) => k.id).sort());
+  // Sıra korunur: Başlarken, Özet kutuları, sonra üç küçük kart aynı satırda; 8 eski satır (8 × 102 px) → 13 yeni satır ve eşit yükseklik.
+  expect(konumlar(d)).toEqual([
+    'baslarken:0,0,12,6', 'ozetKutulari:0,6,12,5', 'dikkat:0,11,4,13', 'bakim:4,11,4,13', 'kapsam:8,11,4,13',
+    'k-raw:0,24,8,5', 'k-not:8,24,4,5', 'k-tam:0,29,6,3'
+  ]);
+  // Eşit yükseklik kapalıysa her kart kendi boyunda (satırın üstü ortak).
+  const e = duzenTemizle({ ...eski, esitYukseklik: false });
+  expect(konumlar(e).slice(2, 5)).toEqual(['dikkat:0,11,4,7', 'bakim:4,11,4,13', 'kapsam:8,11,4,7']);
+  for (const a of e.kartlar) for (const b of e.kartlar) if (a !== b) expect(cakisiyorMu(a, b)).toBe(false);
+  // Konumlu ve konumsuz karışık: konumsuz kart konumluların altına.
+  const karisik = duzenTemizle({ surum: 2, kartlar: [{ id: 'dikkat', tur: 'dikkat', x: 0, y: 0, w: 4, h: 5 }, { id: 'bakim', tur: 'bakim' }] });
+  expect(konumlar(karisik)).toEqual(['dikkat:0,0,4,5', 'bakim:0,5,4,7']);
+  // Hiç kaydedilmemiş düzen (varsayılan) zaten ızgarada.
+  expect(eskiBicimMi(varsayilanDuzen())).toBe(false);
 });
 
 test('biçim: yüzde (0,834 → %83,4; 83,4 → %83,4), binlik, ondalık, ön / son ek, tarih, değişim, pasta "Diğer"; yeni görünümler geçerli', () => {
@@ -257,12 +342,13 @@ test.describe('pano (kasa) ve SQL kartı', () => {
 
   test('düzen proje başına kaydedilir ve geri yüklenir; kasada şifreli; varsayılana dönüş; silinen proje temizlenir', () => {
     expect(panoGetir(vt, projeA)).toMatchObject({ varsayilan: true, kayitli: false, sqlSonuclari: {} });
-    const a = kartBoyutla(kartTasi(kartKaldir(varsayilanDuzen(), 'bakim'), 'kapsam', 0), 'dikkat', 'orta');
+    const a = kartYerlestir(kartYerlestir(kartKaldir(varsayilanDuzen(), 'bakim'), 'kapsam', { x: 8, y: 0 }), 'dikkat', { w: 6 });
     panoKaydet(vt, projeA, kartEkle(a, { id: 'k-not', tur: 'metin', ayar: { baslik: 'Ekip notu', not: 'Salı sürüm', baglantilar: [{ etiket: 'Planlı', adres: '#/planli-kosular' }] } }));
     const geri = panoGetir(vt, projeA);
     expect(geri.kayitli).toBe(true);
     expect(geri.varsayilan).toBe(false);
-    expect(geri.duzen.kartlar.map((k) => `${k.id}:${k.boyut}`)).toEqual(['kapsam:kucuk', 'baslarken:tam', 'ozetKutulari:tam', 'dikkat:orta', 'k-not:kucuk']);
+    expect(geri.goc).toBe(false);
+    expect(konumlar(geri.duzen)).toEqual(['kapsam:8,0,4,7', 'baslarken:0,7,12,6', 'ozetKutulari:0,13,12,5', 'dikkat:0,18,6,7', 'k-not:0,25,4,3']);
     // Proje B etkilenmez (proje başına tek pano).
     expect(panoGetir(vt, projeB).varsayilan).toBe(true);
     panoKaydet(vt, projeB, kartKaldir(varsayilanDuzen(), 'baslarken'));
@@ -274,6 +360,18 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     expect(panoGetir(vt, projeB).varsayilan).toBe(true);
     expect(() => panoKaydet(vt, 'olmayan-proje', varsayilanDuzen())).toThrow('Proje bulunamadı');
     expect(() => panoKaydet(vt, projeA, { kartlar: [{ id: 'x', tur: 'yok' }] })).toThrow('Bilinmeyen kart türü');
+    expect(() => panoKaydet(vt, projeA, { surum: 2, kartlar: [{ id: 'dikkat', tur: 'dikkat', x: 0, y: 0, w: 4, h: 4 }, { id: 'bakim', tur: 'bakim', x: 2, y: 2, w: 4, h: 4 }] }))
+      .toThrow('üst üste biniyor');
+    // Göç: kasada eski (sıralı) kayıt → ızgara konumlarıyla okunur, "goc" bildirilir; kaydedilince yeni biçimde.
+    ayarYaz(vt, PANO_AYAR_ANAHTARI, { ...(ayarGetir(vt, PANO_AYAR_ANAHTARI) as Record<string, unknown>), [projeB]: { surum: 1, esitYukseklik: true, kartlar: [
+      { id: 'kapsam', tur: 'kapsam', boyut: 'kucuk', yukseklik: 6 }, { id: 'dikkat', tur: 'dikkat', boyut: 'genis' },
+      { id: 'k-not', tur: 'metin', boyut: 'tam', ayar: { baslik: 'Not', not: 'x' } }] } });
+    const g = panoGetir(vt, projeB);
+    expect(g).toMatchObject({ kayitli: true, goc: true });
+    expect(konumlar(g.duzen)).toEqual(['kapsam:0,0,4,10', 'dikkat:4,0,8,10', 'k-not:0,10,12,3']);
+    panoKaydet(vt, projeB, g.duzen);
+    expect(panoGetir(vt, projeB)).toMatchObject({ kayitli: true, goc: false });
+    expect(konumlar(panoGetir(vt, projeB).duzen)).toEqual(konumlar(g.duzen));
   });
 
   test('SQL kartı: yalnız Yenile ile çalışır; maskeleme (gizli adlı sütun + T.C. / IBAN değerleri); Son veri ve önbellek', async () => {

@@ -1,7 +1,8 @@
 // UÇTAN UCA (yerel) — Sonuçlar > Genel > Özet panosu arayüzü (ozet-panosu.js). Geçici veritabanı + ayrı Nöbetçi (127.0.0.1); SQL
 // kartlarının bağlantısı bellek içi SAHTE veritabanıdır (TEST_SUNUCU_SAHTE_SQL_SURUCUSU = sahte-sql-surucusu.mjs; hiçbir adrese
-// bağlanılmaz). Denetlenenler: varsayılan pano bugünkü Özet; düzenleme kipi (kaldır, Kart ekle'den geri ekle, klavyeyle ve
-// sürükle-bırakla taşı, boyutlandır, Vazgeç, Bitti → proje başına kayıt, Varsayılana dön); SQL kartı (yalnız okuma uyarısı, yalnız
+// bağlanılmaz). Denetlenenler: varsayılan pano bugünkü Özet; düzenleme kipi (kaldır, Kart ekle'den geri ekle, klavyeyle taşı /
+// boyutlandır, sıra düğmeleri, Vazgeç, Bitti → proje başına kayıt, Varsayılana dön); serbest ızgara (boş yere sürükle, gölge, aşağı
+// itme, sağ kartı uzatınca soldakiler değişmez, 390 px tek sütun); eski sıralı düzenden göç; SQL kartı (yalnız okuma uyarısı, yalnız
 // "Yenile"de çalışır — sayfa açılınca sorgu YOK (sürücü günlüğü + ağ sayacı), "Son veri" saati, yükleniyor durumu, eşik rengi, tablo
 // maskelemesi, CANLI ortamda ilk Yenile'de onay); Nöbetçi verisi ve metin kartı; hızlı arama ve rehber; 1440 / 390 px yatay taşma yok;
 // erişilebilir adlar. İsteğe bağlı: PANO_EKRAN_GORUNTUSU=<klasör> verilirse 1440 px görüntüler (düzenleme kipi, SQL kartı) alınır.
@@ -11,7 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { ayarYaz, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { duzenTemizle } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
+import { PANO_AYAR_ANAHTARI } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { baglantiKaydet } from '../../scripts/platform/entegrasyonlar/depo.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
@@ -25,6 +28,14 @@ let gunluk = '';
 let projeId = '';
 let bTest = '';
 let bCanli = '';
+let projeGoc = '';
+/** Göç testi: eski (sıralı) biçimde kasaya yazılmış düzen (sıra, genişlik, yükseklik, eşit yükseklik). */
+const ESKI_DUZEN = { surum: 1, esitYukseklik: true, kartlar: [
+  { id: 'ozetKutulari', tur: 'ozetKutulari', boyut: 'tam' }, { id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' },
+  { id: 'bakim', tur: 'bakim', boyut: 'kucuk', yukseklik: 5 }, { id: 'kapsam', tur: 'kapsam', boyut: 'kucuk' },
+  { id: 'k-genis', tur: 'metin', boyut: 'genis', ayar: { baslik: 'Geniş not', not: 'Eski düzenden.', baglantilar: [] } },
+  { id: 'k-not', tur: 'metin', boyut: 'kucuk', yukseklik: 3, ayar: { baslik: 'Kısa not', not: 'Eski düzenden.', baglantilar: [] } }
+] };
 
 test.describe.configure({ mode: 'serial' });
 
@@ -45,6 +56,8 @@ test.beforeAll(async () => {
   }).id;
   bTest = pg('test-db', [TEST]);
   bCanli = pg('canli-db', [CANLI]);
+  projeGoc = projeKaydet(vt, { ad: 'Göç projesi' });
+  ayarYaz(vt, PANO_AYAR_ANAHTARI, { [projeGoc]: ESKI_DUZEN });
   vt.kapat();
   mkdirSync(join(klasor, 'yedekler'), { recursive: true });
   writeFileSync(join(klasor, 'yedekler', 'otomatik-20261001-000000-000.tayedek'), 'sahte');
@@ -81,6 +94,9 @@ async function git(page: Page, adres: string): Promise<void> {
   await page.waitForLoadState('networkidle');
   await expect(page.locator('main .iskelet, main [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
 }
+
+/** Kartın modeldeki ızgara konumu [x, y, w, h] (data-x … data-h). */
+const konum = (page: Page, id: string) => page.locator(`.pano-ogesi[data-kart-id="${id}"]`).evaluate((e) => ['x', 'y', 'w', 'h'].map((a) => Number((e as HTMLElement).dataset[a])));
 
 const kartBasliklari = (page: Page) => page.locator('.ozet-panosu .pano-ogesi').evaluateAll((l) => l.filter((e) => getComputedStyle(e).display !== 'none')
   .map((e) => e.getAttribute('data-kart-id')));
@@ -135,7 +151,7 @@ async function adlarUyumlu(page: Page): Promise<void> {
   expect(sorunlar).toEqual([]);
 }
 
-test('varsayılan pano bugünkü Özet; düzenle: kaldır, geri ekle, taşı (klavye + sürükle), boyutlandır, Vazgeç, Bitti, Varsayılana dön', async () => {
+test('varsayılan pano bugünkü Özet; düzenle: kaldır, geri ekle, klavyeyle taşı / boyutlandır, sıra düğmeleri, Vazgeç, Bitti, Varsayılana dön', async () => {
   test.setTimeout(120_000);
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/sonuclar/ozet');
@@ -144,13 +160,17 @@ test('varsayılan pano bugünkü Özet; düzenle: kaldır, geri ekle, taşı (kl
   expect(await page.locator('section.farkindalik-karti h3').allTextContents()).toEqual(['Dikkat', 'Bakım', 'Kapsam ve güvenlik']);
   await expect(page.locator('.ozet-kutulari a.ozet-kutusu')).toHaveCount(3);
   await expect(page.locator('.pano-arac-cubugu')).toHaveCount(0);
+  // "Aynı satırdaki kartlar aynı yükseklikte" seçeneği yok; genişlik / yükseklik açılır listeleri yok.
+  await expect(page.getByText('Aynı satırdaki kartlar aynı yükseklikte')).toHaveCount(0);
   const duzenle = page.getByRole('button', { name: 'Panoyu düzenle' });
   await duzenle.click();
   const cubuk = page.getByRole('region', { name: 'Pano düzenleme' });
   await expect(cubuk).toBeVisible();
   await expect(duzenle).toBeHidden();
   await expect(page.locator('.pano-arac-cubugu')).toHaveCount(5);
-  // Kaldır → Kart ekle'den geri ekle (sona).
+  await expect(page.locator('.ozet-panosu select')).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  // Kaldır → Kart ekle'den geri ekle (panonun altına; eski yeri boş kalır).
   await page.getByRole('button', { name: 'Kaldır: Bakım' }).click();
   expect(await kartBasliklari(page)).toEqual(['baslarken', 'ozetKutulari', 'dikkat', 'kapsam']);
   await cubuk.getByRole('button', { name: 'Kart ekle' }).click();
@@ -160,24 +180,28 @@ test('varsayılan pano bugünkü Özet; düzenle: kaldır, geri ekle, taşı (kl
   await pencere.getByRole('button', { name: 'Ekle: Bakım' }).click();
   await expect(pencere).toBeHidden();
   expect(await kartBasliklari(page)).toEqual(['baslarken', 'ozetKutulari', 'dikkat', 'kapsam', 'bakim']);
-  // Klavye: tutamak odaktayken ↑.
+  await expect.poll(() => konum(page, 'bakim')).toEqual([0, 18, 4, 7]);
+  // Klavye: tutamak odaktayken → dört kez, ↑ yedi kez: Bakım eski yerine döner (düzen yeniden varsayılan).
   await expect(page.getByRole('button', { exact: true, name: 'Taşı: Bakım' })).toBeFocused();
-  await page.keyboard.press('ArrowUp');
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+  for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { exact: true, name: 'Taşı: Bakım' })).toBeFocused();
+  await expect.poll(() => konum(page, 'bakim')).toEqual([4, 11, 4, 7]);
   expect(await kartBasliklari(page)).toEqual(['baslarken', 'ozetKutulari', 'dikkat', 'bakim', 'kapsam']);
-  await expect(page.getByRole('button', { exact: true, name: 'Taşı: Bakım' })).toBeFocused();
+  await expect(cubuk.getByRole('button', { name: 'Varsayılana dön' })).toBeDisabled();
+  // Shift + oklar: boyut (genişlik, yükseklik); en küçük boyuttan küçülmez.
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect.poll(() => konum(page, 'bakim')).toEqual([4, 11, 4, 8]);
+  for (let i = 0; i < 9; i++) await page.keyboard.press('Shift+ArrowUp');
+  await expect.poll(() => konum(page, 'bakim')).toEqual([4, 11, 4, 3]);
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Shift+ArrowDown');
+  await expect.poll(() => konum(page, 'bakim')).toEqual([4, 11, 4, 7]);
+  // Sıra düğmeleri (okuma sırası): Bakım bir öne → Dikkat ile yer değiştirir.
   await page.getByRole('button', { name: 'Yukarı taşı: Bakım' }).click();
   expect(await kartBasliklari(page)).toEqual(['baslarken', 'ozetKutulari', 'bakim', 'dikkat', 'kapsam']);
+  await expect.poll(() => konum(page, 'bakim')).toEqual([0, 11, 4, 7]);
   await expect(page.getByRole('button', { name: 'Yukarı taşı: Başlarken' })).toBeDisabled();
-  // Sürükle-bırak: Kapsam'ı tutamaktan Özet kutularının üstüne.
-  await page.getByRole('button', { exact: true, name: 'Taşı: Kapsam ve güvenlik' }).dragTo(page.locator('.pano-ogesi[data-kart-id="ozetKutulari"]'));
-  expect(await kartBasliklari(page)).toEqual(['baslarken', 'kapsam', 'ozetKutulari', 'bakim', 'dikkat']);
-  // Boyut.
-  await page.getByRole('combobox', { name: 'Boyut: Dikkat' }).selectOption('genis');
-  await expect(page.locator('.pano-ogesi[data-kart-id="dikkat"]')).toHaveClass(/boyut-genis/);
-  const genislik = await page.locator('.pano-ogesi[data-kart-id="dikkat"]').evaluate((e) => e.getBoundingClientRect().width);
-  const tam = await page.locator('.ozet-panosu').evaluate((e) => e.getBoundingClientRect().width);
-  expect(genislik / tam).toBeGreaterThan(0.6);
-  expect(genislik / tam).toBeLessThan(0.7);
+  await expect(page.getByRole('button', { name: 'Aşağı taşı: Kapsam ve güvenlik' })).toBeDisabled();
   await adlarUyumlu(page);
   // Vazgeç: kayıtlı (varsayılan) düzene döner; hiçbir şey kaydedilmez.
   await cubuk.getByRole('button', { name: 'Vazgeç' }).click();
@@ -186,14 +210,15 @@ test('varsayılan pano bugünkü Özet; düzenle: kaldır, geri ekle, taşı (kl
   // Bitti: kaydedilir; sayfa yenilenince düzen korunur.
   await duzenle.click();
   await page.getByRole('button', { name: 'Kaldır: Bakım' }).click();
-  await page.getByRole('combobox', { name: 'Boyut: Dikkat' }).selectOption('orta');
+  await page.getByRole('button', { exact: true, name: 'Taşı: Dikkat' }).focus();
+  await page.keyboard.press('Shift+ArrowRight');
   await page.getByRole('button', { name: 'Aşağı taşı: Başlarken' }).click();
   await cubuk.getByRole('button', { name: 'Bitti' }).click();
   await expect(cubuk).toBeHidden();
   await expect(page.locator('.bildirim').filter({ hasText: 'Pano kaydedildi.' })).toBeVisible();
   await git(page, '#/sonuclar/ozet');
   expect(await kartBasliklari(page)).toEqual(['ozetKutulari', 'baslarken', 'dikkat', 'kapsam']);
-  await expect(page.locator('.pano-ogesi[data-kart-id="dikkat"]')).toHaveClass(/boyut-orta/);
+  await expect.poll(() => konum(page, 'dikkat')).toEqual([0, 11, 5, 7]);
   // Varsayılana dön → Bitti.
   await duzenle.click();
   await cubuk.getByRole('button', { name: 'Varsayılana dön' }).click();
@@ -565,23 +590,25 @@ test('tablo: başlığı sürükle / menüyle taşı, gizle / göster, genişlik
   await kapat();
 });
 
-test('boyutlar: eşit yükseklik anahtarı, menüden yükseklik, köşeden sürükleyerek ve klavyeyle genişlik + yükseklik (ızgaraya oturur), kaydırma / ölçekleme, çakışma yok, kalıcılık', async () => {
+test('serbest ızgara: boş yere sürükle (üstü boş kalır, kaydedilir), gölge, çakışmada aşağı itme, sağ kartı uzatınca soldakiler değişmez, klavye, grafik ölçeklenir, 390 px tek sütun', async () => {
   test.setTimeout(150_000);
-  const SATIR = 88; const BOSLUK = 14;
+  const SATIR = 48; const BOSLUK = 14;
   const satirPx = (n: number) => n * SATIR + (n - 1) * BOSLUK;
-  // Varsayılan düzen + yüksek bir grafik kartı (önbellekte sonucu olsun diye bir kez yenilenir).
-  const kartlar = [...(await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
-    { id: 'baslarken', tur: 'baslarken', boyut: 'tam' }, { id: 'ozetKutulari', tur: 'ozetKutulari', boyut: 'tam' },
-    { id: 'dikkat', tur: 'dikkat', boyut: 'kucuk' }, { id: 'bakim', tur: 'bakim', boyut: 'kucuk' }, { id: 'kapsam', tur: 'kapsam', boyut: 'kucuk' },
-    { id: 'b-grafik', tur: 'sql', boyut: 'orta', yukseklik: 6, ayar: { baslik: 'Günlük grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } },
-    { id: 'b-alcak', tur: 'sql', boyut: 'tam', ayar: { baslik: 'Alçak grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } }
-  ] } }) as Record<string, any>).duzen.kartlar];
-  expect(kartlar).toHaveLength(7);
+  const metin = (id: string, baslik: string, x: number, y: number, w: number, h: number) => ({ id, tur: 'metin', x, y, w, h, ayar: { baslik, not: `${baslik} notu.`, baglantilar: [] } });
+  // Kullanıcının panosu: üç küçük kart, altında geniş "RAWLOG" ve iki grafik kartı (önbellekte sonucu olsun diye bir kez yenilenir).
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { surum: 2, kartlar: [
+    { id: 'ozetKutulari', tur: 'ozetKutulari', x: 0, y: 0, w: 12, h: 4 },
+    { id: 'dikkat', tur: 'dikkat', x: 0, y: 4, w: 4, h: 7 }, { id: 'bakim', tur: 'bakim', x: 4, y: 4, w: 4, h: 7 }, { id: 'kapsam', tur: 'kapsam', x: 8, y: 4, w: 4, h: 7 },
+    metin('k-raw', 'RAWLOG', 0, 11, 12, 3),
+    { id: 'b-grafik', tur: 'sql', x: 0, y: 14, w: 6, h: 8, ayar: { baslik: 'Günlük grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } },
+    { id: 'b-alcak', tur: 'sql', x: 0, y: 22, w: 12, h: 5, ayar: { baslik: 'Alçak grafik', hedef: { baglantiId: bTest }, sorgu: 'SELECT gun, adet FROM gunluk_sayim', gorunum: 'cubuk' } }
+  ] } }) as Record<string, any>;
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
   for (const kartId of ['b-grafik', 'b-alcak']) expect((await nobetciApi(nobetci, '/platform/pano/sql/yenile', { projeId, kartId })).basarili).not.toBe(false);
-  const { page, hatalar, kapat } = await sayfaAc();
+  const { page, hatalar, kapat } = await sayfaAc(1440, 2400);
   await git(page, '#/sonuclar/ozet');
   const sar = (id: string) => page.locator(`.pano-ogesi[data-kart-id="${id}"]`);
-  const yukseklik = async (id: string) => (await sar(id).boundingBox())!.height;
+  const kutu = async (id: string) => (await sar(id).boundingBox())!;
   const cakismaYok = async () => {
     const kutular = await page.locator('.ozet-panosu > .pano-ogesi:visible').evaluateAll((l) => l.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }));
     for (let i = 0; i < kutular.length; i++) for (let j = i + 1; j < kutular.length; j++) {
@@ -589,92 +616,188 @@ test('boyutlar: eşit yükseklik anahtarı, menüden yükseklik, köşeden sür�
       expect(a[0] < b[2] - 1 && b[0] < a[2] - 1 && a[1] < b[3] - 1 && b[1] < a[3] - 1, `kart ${i} ve ${j} üst üste`).toBe(false);
     }
   };
-  // Eşit yükseklik (varsayılan açık): Dikkat / Bakım / Kapsam aynı boyda (Kapsam'ın içeriği daha uzun).
-  await expect.poll(async () => new Set([await yukseklik('dikkat'), await yukseklik('bakim'), await yukseklik('kapsam')]).size).toBe(1);
-  // Sabit yükseklikte grafik kartın boyuna ölçeklenir (varsayılan 200 px'ten büyük).
-  await expect.poll(() => yukseklik('b-grafik')).toBeCloseTo(satirPx(6), 0);
+  // Kartın yüksekliği içerikten bağımsız: h satır; Kapsam'ın içeriği uzun olsa da üç kart aynı boyda (7 satır).
+  for (const id of ['dikkat', 'bakim', 'kapsam']) await expect.poll(async () => (await kutu(id)).height).toBeCloseTo(satirPx(7), 0);
+  await expect.poll(async () => (await kutu('b-grafik')).height).toBeCloseTo(satirPx(8), 0);
+  // Grafik kartı doldurur ve gerilmez: viewBox ekrandaki boyut; eksen yazısının en / boy oranı yüksek ve alçak kartta aynı.
   expect((await sar('b-grafik').locator('svg.pano-grafik').boundingBox())!.height).toBeGreaterThan(300);
-  // Grafik gerilmez, kartın boyutunda yeniden çizilir: eksen yazısının en / boy oranı yüksek ve alçak kartta aynı.
   const yazi = async (id: string) => { const k = (await sar(id).locator('text.eksen-yazi', { hasText: 'Pzt' }).boundingBox())!; return { oran: k.width / k.height, h: k.height }; };
   await expect.poll(async () => Math.abs((await yazi('b-grafik')).oran - (await yazi('b-alcak')).oran)).toBeLessThan(0.05);
   expect(Math.abs((await yazi('b-grafik')).h - (await yazi('b-alcak')).h)).toBeLessThan(1);
   expect(await sar('b-grafik').locator('svg.pano-grafik').evaluate((e) => { const r = e.getBoundingClientRect(); return e.getAttribute('viewBox') === `0 0 ${Math.round(r.width)} ${Math.round(r.height)}`; })).toBe(true);
   await cakismaYok();
-  // Düzenleme: eşit yükseklik kapalı → kartlar kendi boyunda.
+
   await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
   const cubuk = page.getByRole('region', { name: 'Pano düzenleme' });
-  const esit = cubuk.getByRole('checkbox', { name: 'Aynı satırdaki kartlar aynı yükseklikte' });
-  await expect(esit).toBeChecked();
-  await esit.uncheck();
-  await expect.poll(async () => (await yukseklik('kapsam')) - (await yukseklik('dikkat'))).toBeGreaterThan(40);
-  // Menüden yükseklik: Kapsam "Küçük" (3 satır) → içerik sığmaz, kartın içinde kaydırılır.
-  await page.getByRole('combobox', { name: 'Yükseklik: Kapsam ve güvenlik' }).selectOption('3');
-  await expect.poll(() => yukseklik('kapsam')).toBeCloseTo(satirPx(3), 0);
-  const kapsamKart = sar('kapsam').locator('section.farkindalik-karti');
-  expect(await kapsamKart.evaluate((e) => e.scrollHeight > e.clientHeight + 2)).toBe(true);
-  // Köşe tutamağı: Bakım'ı sağa ~2 sütun ve aşağı sürükle → Orta (1/2) genişlik, 4 satır.
-  const kose = page.getByRole('button', { name: 'Boyutlandır: Bakım' });
-  const r = (await sar('bakim').boundingBox())!;
-  const panoG = (await page.locator('.ozet-panosu').boundingBox())!.width;
-  const sutun = (panoG + BOSLUK) / 12;
-  const k = (await kose.boundingBox())!;
-  const x0 = k.x + k.width / 2; const y0 = k.y + k.height / 2;
-  await page.mouse.move(x0, y0);
+  const pano = (await page.locator('.ozet-panosu').boundingBox())!;
+  const sutun = (pano.width + BOSLUK) / 12;
+  const satir = SATIR + BOSLUK;
+  /** Kartı tutamağından tutup ızgaradaki (x, y) hücresine sürükler; bırakmadan önce gölgenin hücresi döner. */
+  const surukle = async (id: string, x: number, y: number) => {
+    const t = (await sar(id).getByRole('button', { exact: true, name: /^Taşı: / }).boundingBox())!;
+    const k = await kutu(id);
+    const p = (await page.locator('.ozet-panosu').boundingBox())!;
+    const ofX = t.x + t.width / 2 - k.x; const ofY = t.y + t.height / 2 - k.y;
+    await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(t.x + t.width / 2 + 10, t.y + t.height / 2 + 10, { steps: 2 });
+    await page.mouse.move(p.x + x * sutun + ofX, p.y + y * satir + ofY, { steps: 8 });
+    const golge = page.locator('.pano-golge');
+    await expect(golge).toBeVisible();
+    const gk = (await golge.boundingBox())!;
+    await page.mouse.up();
+    await expect(golge).toBeHidden();
+    return [Math.round((gk.x - p.x) / sutun), Math.round((gk.y - p.y) / satir)];
+  };
+
+  // 1) Kullanıcının isteği: Kapsam köşe tutamağıyla aşağı uzar (sağ sütun), soldaki kartların boyu DEĞİŞMEZ.
+  const dikkat0 = await kutu('dikkat'); const bakim0 = await kutu('bakim');
+  const kose = page.getByRole('button', { name: 'Boyutlandır: Kapsam ve güvenlik' });
+  const kk = (await kose.boundingBox())!;
+  await page.mouse.move(kk.x + kk.width / 2, kk.y + kk.height / 2);
   await page.mouse.down();
-  await page.mouse.move(x0 + sutun, y0 + 40, { steps: 3 });
-  await page.mouse.move(x0 + 2 * sutun + 10, y0 + (satirPx(4) - r.height) + 20, { steps: 5 });
+  await page.mouse.move(kk.x + kk.width / 2, kk.y + kk.height / 2 + 3 * satir, { steps: 4 });
+  await expect(page.locator('.pano-golge')).toBeVisible();
+  await page.mouse.move(kk.x + kk.width / 2, kk.y + kk.height / 2 + 7 * satir + 5, { steps: 4 });
   await page.mouse.up();
-  await expect(sar('bakim')).toHaveClass(/boyut-orta/);
-  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '4');
-  await expect.poll(() => yukseklik('bakim')).toBeCloseTo(satirPx(4), 0);
+  await expect.poll(() => konum(page, 'kapsam')).toEqual([8, 4, 4, 14]);
   await expect(kose).toBeFocused();
-  // Klavye: → genişlik bir adım (Geniş), ↓ bir satır, Delete otomatik.
-  await page.keyboard.press('ArrowRight');
-  await expect(sar('bakim')).toHaveClass(/boyut-genis/);
-  await page.keyboard.press('ArrowDown');
-  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '5');
+  expect((await kutu('dikkat')).height).toBeCloseTo(dikkat0.height, 0);
+  expect((await kutu('bakim')).height).toBeCloseTo(bakim0.height, 0);
+  expect((await kutu('dikkat')).y).toBeCloseTo(dikkat0.y, 0);
+  // Uzayan Kapsam RAWLOG'a değdi: RAWLOG (ve altındakiler) aşağı itildi, boyları aynı.
+  await expect.poll(() => konum(page, 'k-raw')).toEqual([0, 18, 12, 3]);
+  await cakismaYok();
+
+  // 2) RAWLOG'u köşeden daralt (8 sütun) ve sol iki sütunun altına sürükle: üstünde boşluk kalmaz ama yukarı kendiliğinden çıkmaz.
+  const rk = page.getByRole('button', { name: 'Boyutlandır: RAWLOG' });
+  await rk.focus();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => konum(page, 'k-raw')).toEqual([0, 18, 8, 3]);
+  expect(await surukle('k-raw', 0, 11)).toEqual([0, 11]);
+  await expect.poll(() => konum(page, 'k-raw')).toEqual([0, 11, 8, 3]);
+  await expect.poll(() => konum(page, 'kapsam')).toEqual([8, 4, 4, 14]);
+  await expect(page.getByRole('button', { exact: true, name: 'Taşı: RAWLOG' })).toBeFocused();
+
+  // 3) Boş bir yere sürükle: Dikkat sağda, Kapsam'ın altında boş hücreye (x 8, y 20) → eski yeri ve üstü boş kalır; kimse yukarı çıkmaz.
+  const once = Object.fromEntries(await Promise.all(['bakim', 'kapsam', 'b-grafik', 'b-alcak'].map(async (id) => [id, await konum(page, id)])));
+  expect(await surukle('dikkat', 8, 20)).toEqual([8, 20]);
+  await expect.poll(() => konum(page, 'dikkat')).toEqual([8, 20, 4, 7]);
+  for (const id of Object.keys(once)) expect(await konum(page, id), id).toEqual(once[id]);
+  // Dikkat'in üstünde (y 18–19) ve eski yerinde (x 0–3, y 4–10) kart yok.
+  const bosMu = async (x: number, y: number, w: number, h: number) => page.evaluate(([x0, y0, w0, h0]) => [...document.querySelectorAll<HTMLElement>('.ozet-panosu > .pano-ogesi')]
+    .every((e) => { const [x, y, w, h] = ['x', 'y', 'w', 'h'].map((a) => Number(e.dataset[a])); return x + w <= x0 || x0 + w0 <= x || y + h <= y0 || y0 + h0 <= y; }), [x, y, w, h]);
+  expect(await bosMu(0, 4, 4, 7)).toBe(true);
+  expect(await bosMu(8, 18, 4, 2)).toBe(true);
+
+  // 4) Çakışmada aşağı itme: Bakım, grafik kartının üstüne bırakılır → grafik ve altındaki kart aşağı iner, üst üste binme yok.
+  expect(await konum(page, 'b-grafik')).toEqual([0, 21, 6, 8]);
+  expect(await surukle('bakim', 0, 18)).toEqual([0, 18]);
+  await expect.poll(() => konum(page, 'bakim')).toEqual([0, 18, 4, 7]);
+  await expect.poll(() => konum(page, 'b-grafik')).toEqual([0, 25, 6, 8]);
+  await expect.poll(() => konum(page, 'b-alcak')).toEqual([0, 33, 12, 5]);
+  await cakismaYok();
+
+  // 5) Klavye: tutamakta oklar konum, Shift + oklar boyut; köşe tutamağında oklar boyut.
+  await page.getByRole('button', { exact: true, name: 'Taşı: Dikkat' }).focus();
+  await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowUp');
-  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '4');
-  await expect(page.getByRole('combobox', { name: 'Yükseklik: Bakım' })).toHaveValue('4');
+  await expect.poll(() => konum(page, 'dikkat')).toEqual([7, 19, 4, 7]);
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect.poll(() => konum(page, 'dikkat')).toEqual([7, 19, 5, 8]);
+  const dk = page.getByRole('button', { name: 'Boyutlandır: Dikkat' });
+  await dk.focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(() => konum(page, 'dikkat')).toEqual([7, 19, 4, 7]);
+  await expect(dk).toBeFocused();
   await cakismaYok();
   await adlarUyumlu(page);
   await tasmaYok(page);
-  await esit.check();
   if (process.env.PANO_EKRAN_GORUNTUSU) {
     mkdirSync(process.env.PANO_EKRAN_GORUNTUSU, { recursive: true });
-    await page.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-boyutlar-1440.png'), fullPage: true });
+    await page.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-izgara-duzenleme-1440.png'), fullPage: true });
   }
   await cubuk.getByRole('button', { name: 'Bitti' }).click();
   await expect(cubuk).toBeHidden();
-  // Kalıcı: yeniden yükleyince aynı genişlik / yükseklik; düzende yalnız sabit yükseklikler yazılı.
+  // Kalıcı: yeniden yükleyince aynı konumlar; düzende yalnız ızgara konumları (eski boyut / yükseklik / eşit yükseklik alanları yok).
+  const beklenen = Object.fromEntries(await Promise.all(['ozetKutulari', 'dikkat', 'bakim', 'kapsam', 'k-raw', 'b-grafik', 'b-alcak'].map(async (id) => [id, await konum(page, id)])));
   await page.reload();
   await page.waitForLoadState('networkidle');
-  await expect(sar('bakim')).toHaveAttribute('data-yukseklik', '4');
-  await expect(sar('bakim')).toHaveClass(/boyut-genis/);
-  await expect(sar('kapsam')).toHaveAttribute('data-yukseklik', '3');
+  for (const [id, k] of Object.entries(beklenen)) await expect.poll(() => konum(page, id), id).toEqual(k);
   const p = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`) as Record<string, any>;
-  expect(p.duzen.esitYukseklik).toBe(true);
-  expect(Object.fromEntries(p.duzen.kartlar.map((x: Record<string, unknown>) => [x.id, x.yukseklik ?? 'oto'])))
-    .toEqual({ baslarken: 'oto', ozetKutulari: 'oto', dikkat: 'oto', bakim: 4, kapsam: 3, 'b-grafik': 6, 'b-alcak': 'oto' });
+  expect(p.duzen.surum).toBe(2);
+  expect('esitYukseklik' in p.duzen).toBe(false);
+  expect(Object.fromEntries(p.duzen.kartlar.map((x: Record<string, any>) => [x.id, [x.x, x.y, x.w, x.h]]))).toEqual(beklenen);
+  expect(p.duzen.kartlar.some((x: Record<string, unknown>) => 'boyut' in x || 'yukseklik' in x)).toBe(false);
+  // Görünümde Dikkat'in üstü boş: üstündeki hücre bölgesinde hiçbir kartın kutusu yok.
   await cakismaYok();
-  // 390 px: tek sütun, sabit yükseklik korunur ama içerikten kısa olmaz (Kapsam kaydırmasız, tam görünür).
+  if (process.env.PANO_EKRAN_GORUNTUSU) await page.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-izgara-1440.png'), fullPage: true });
+  expect(hatalar).toEqual([]);
+
+  // 390 px: kartlar ızgaradaki sırasına göre (y, sonra x) tek sütunda; hepsi aynı genişlikte; yatay taşma yok.
   const dar = await sayfaAc(390, 900);
   await git(dar.page, '#/sonuclar/ozet');
-  const darKapsam = dar.page.locator('.pano-ogesi[data-kart-id="kapsam"]');
-  await expect.poll(async () => (await darKapsam.boundingBox())!.height).toBeGreaterThan(satirPx(3));
-  expect(await darKapsam.locator('section.farkindalik-karti').evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(true);
+  const sira = [...p.duzen.kartlar].sort((a: Record<string, number>, b: Record<string, number>) => a.y - b.y || a.x - b.x).map((x: Record<string, string>) => x.id);
+  expect(await kartBasliklari(dar.page)).toEqual(sira);
+  const darKutular = await dar.page.locator('.ozet-panosu > .pano-ogesi:visible').evaluateAll((l) => l.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.width), r.top, r.bottom]; }));
+  expect(new Set(darKutular.map((k) => `${k[0]}:${k[1]}`)).size).toBe(1);
+  for (let i = 1; i < darKutular.length; i++) expect(darKutular[i][2]).toBeGreaterThanOrEqual(darKutular[i - 1][3]);
+  // Dar ekranda kart içerikten kısa olmaz (Kapsam kaydırmasız, tam görünür).
+  expect(await dar.page.locator('.pano-ogesi[data-kart-id="kapsam"] section.farkindalik-karti').evaluate((e) => e.scrollHeight <= e.clientHeight + 2)).toBe(true);
   await tasmaYok(dar.page);
+  // Dar ekranda düzenleme: sıra (↑ ↓) ile; tutamağın ↑ okları da sırayı değiştirir.
+  await dar.page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  expect(sira.slice(0, 2)).toEqual(['ozetKutulari', 'kapsam']);
+  await dar.page.getByRole('button', { exact: true, name: 'Taşı: Kapsam ve güvenlik' }).focus();
+  await dar.page.keyboard.press('ArrowUp');
+  await expect.poll(async () => (await kartBasliklari(dar.page)).slice(0, 2)).toEqual(['kapsam', 'ozetKutulari']);
+  await expect(dar.page.getByRole('button', { exact: true, name: 'Taşı: Kapsam ve güvenlik' })).toBeFocused();
+  await tasmaYok(dar.page);
+  await adlarUyumlu(dar.page);
+  await dar.page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Vazgeç' }).click();
   expect(dar.hatalar).toEqual([]);
   await dar.kapat();
-  // Varsayılana dön: genişlik ve yükseklikler sıfırlanır.
+  // Varsayılana dön: ızgara varsayılana döner.
   await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
   await cubuk.getByRole('button', { name: 'Varsayılana dön' }).click();
   await cubuk.getByRole('button', { name: 'Bitti' }).click();
   const v = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`) as Record<string, any>;
   expect(v.varsayilan).toBe(true);
-  expect(v.duzen.kartlar.some((x: Record<string, unknown>) => 'yukseklik' in x)).toBe(false);
   expect(hatalar).toEqual([]);
   await kapat();
+});
+
+test('göç: eski sıralı düzen ilk açılışta ızgaraya çevrilip bir kez kaydedilir; hiçbir kart kaybolmaz', async () => {
+  test.setTimeout(90_000);
+  const v = await nobetciApi(nobetci, '/platform/proje/varsayilan', { id: projeGoc });
+  expect(v.basarili, v.mesaj).not.toBe(false);
+  try {
+    const once = await nobetciApi(nobetci, `/platform/pano?projeId=${projeGoc}`) as Record<string, any>;
+    expect(once).toMatchObject({ kayitli: true, goc: true });
+    expect(once.duzen.kartlar.map((k: Record<string, string>) => k.id).sort()).toEqual(ESKI_DUZEN.kartlar.map((k) => k.id).sort());
+    const { page, hatalar, kapat } = await sayfaAc();
+    await git(page, '#/sonuclar/ozet');
+    // Göç kaydedildi: artık eski biçim değil; konumlar saf modülün çevirisiyle aynı; ekranda bütün kartlar okuma sırasıyla.
+    await expect.poll(async () => (await nobetciApi(nobetci, `/platform/pano?projeId=${projeGoc}`) as Record<string, any>).goc).toBe(false);
+    const sonra = await nobetciApi(nobetci, `/platform/pano?projeId=${projeGoc}`) as Record<string, any>;
+    expect(sonra.kayitli).toBe(true);
+    const cevrilen = duzenTemizle(ESKI_DUZEN);
+    expect(sonra.duzen.kartlar.map((k: Record<string, unknown>) => [k.id, k.x, k.y, k.w, k.h])).toEqual(cevrilen.kartlar.map((k) => [k.id, k.x, k.y, k.w, k.h]));
+    expect(await kartBasliklari(page)).toEqual(cevrilen.kartlar.map((k) => k.id));
+    // Sıra ve genişlikler korunur: üç küçük kart yan yana (1/3), geniş not 2/3.
+    expect(await Promise.all(['dikkat', 'bakim', 'kapsam', 'k-genis', 'k-not'].map((id) => konum(page, id)))).toEqual([[0, 5, 4, 8], [4, 5, 4, 8], [8, 5, 4, 8], [0, 13, 8, 5], [8, 13, 4, 5]]);
+    // İkinci açılışta yeniden kaydedilmez (göç bir kez).
+    const kayitlar: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/platform/pano/kaydet')) kayitlar.push(r.url()); });
+    await git(page, '#/sonuclar/ozet');
+    expect(kayitlar).toEqual([]);
+    expect(hatalar).toEqual([]);
+    await kapat();
+  } finally {
+    await nobetciApi(nobetci, '/platform/proje/varsayilan', { id: projeId });
+  }
 });
 
 test('390 px: düzenleme kipi, Kart ekle penceresi ve SQL kartı yatay taşmaz; 1440 px düzenleme kipinde de taşma yok', async () => {

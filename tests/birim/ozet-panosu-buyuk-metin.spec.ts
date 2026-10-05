@@ -384,7 +384,7 @@ test.describe('büyük metin: özet panosu arayüzü', () => {
     }
   });
 
-  test('kaydırma: düzenleme kipinde köşe tutamağıyla kart büyütülüp küçültülürken scrollY değişmez', async () => {
+  test('kaydırma: düzenleme kipinde köşe tutamağıyla kart büyütülüp küçültülürken ve sürüklenirken scrollY değişmez', async () => {
     test.setTimeout(120_000);
     for (const genislik of [1440, 390]) {
       const { page, hatalar, kapat } = await sayfaAc(genislik, 800);
@@ -402,13 +402,29 @@ test.describe('büyük metin: özet panosu arayüzü', () => {
         await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2 + dy, { steps: 5 });
         await page.mouse.up();
       };
+      const h0 = Number(await kart.getAttribute('data-h'));
       await konumla();
       await konumKorunur(page, `${genislik} büyüt`, () => surukle(200));
-      await expect(kart).toHaveAttribute('data-yukseklik', /\d+/);
-      const buyuk = Number(await kart.getAttribute('data-yukseklik'));
+      await expect.poll(async () => Number(await kart.getAttribute('data-h'))).toBeGreaterThan(h0);
+      const buyuk = Number(await kart.getAttribute('data-h'));
       await konumla();
       await konumKorunur(page, `${genislik} küçült`, () => surukle(-120));
-      expect(Number(await kart.getAttribute('data-yukseklik'))).toBeLessThan(buyuk);
+      expect(Number(await kart.getAttribute('data-h'))).toBeLessThan(buyuk);
+      if (genislik === 1440) {
+        // Sürükle-bırak (sayfa aşağıdayken): kart tutamaktan iki satır aşağı taşınır; scrollY değişmez, altındakiler itilir.
+        const y0 = Number(await kart.getAttribute('data-y'));
+        const tutamak = kart.getByRole('button', { exact: true, name: /^Taşı: / });
+        await tutamak.evaluate((e) => window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 300));
+        await konumKorunur(page, `${genislik} sürükle`, async () => {
+          const r = (await tutamak.boundingBox())!;
+          await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+          await page.mouse.down();
+          await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2 + 60, { steps: 5 });
+          await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2 + 2 * 62 + 4, { steps: 5 });
+          await page.mouse.up();
+        });
+        await expect.poll(async () => Number(await kart.getAttribute('data-y'))).toBe(y0 + 2);
+      }
       await page.getByRole('button', { name: 'Vazgeç' }).click();
       await tasmaYok(page);
       expect(hatalar).toEqual([]);
