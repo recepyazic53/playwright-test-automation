@@ -1039,7 +1039,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Korunan parçalar (akış diyagramında düzenlenemeyen; akis-servisi.mjs): korunanAdim adımın tamamı aynen, korunan ('ek')
   // parçanın gösterilemeyen özellikleri aynen geri yazılır (kimliğiyle), aksiyonlarAynen koşu aksiyonlarının yerine geçer.
   // korunanKosul: parçanın korunan görünürlüğü (sonraki adımın göstergesi seçilirken atlanabilir adım sayılır).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; ekranGoruntusu?: boolean; once?: number; sonra?: number; gorunurse?: import('./paket-olusturucu.d.mts').KayitAdimi['gorunurseTiklar']; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; elleGosterge?: Record<string, unknown>; ekranGoruntusu?: boolean; once?: number; sonra?: number; gorunurse?: import('./paket-olusturucu.d.mts').KayitAdimi['gorunurseTiklar']; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
   /** Korunan parçanın görünürlüğü (karşılaştırma anahtarı) ya da null. @param {unknown} p */
   const korunanKosulu = (p) => {
     const g = nesneMi(p) && nesneMi(p.adimEk) ? p.adimEk.gorunurluk : undefined;
@@ -1127,7 +1127,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       const son = parcalar[parcalar.length - 1];
       // İlerleme, isteğe bağlı olmayan son parçaya eklenir; isteğe bağlıysa (atlanabilir) ayrı bir adım olur.
       // "Yalnız görünürse bas" düğmeleri ilerleme düğmesinin ardından (aynı parçada).
-      const sure = { ...(k.zamanAsimiSn ? { zamanAsimiSn: k.zamanAsimiSn } : {}), ...(k.gorunurseTiklar?.length ? { gorunurse: k.gorunurseTiklar } : {}) };
+      const sure = { ...(k.zamanAsimiSn ? { zamanAsimiSn: k.zamanAsimiSn } : {}), ...(k.gorunurseTiklar?.length ? { gorunurse: k.gorunurseTiklar } : {}), ...(k.elleGosterge ? { elleGosterge: k.elleGosterge } : {}) };
       if (!son.tikla && !son.kosul && (son.alanlar.length || parcalar.length === 1)) Object.assign(son, { tikla: k.ilerleme, gosterge: k.gosterge ?? null, once: k.onceBekle, sonra: k.sonraBekle, ...sure });
       else parcalar.push({ ad: `${ad}: ${temizMetin(k.ilerleme.metin, sayac, 80) || 'ilerle'}`, alanlar: [], tikla: k.ilerleme, kosul: null, gosterge: k.gosterge ?? null, once: k.onceBekle, sonra: k.sonraBekle, ...sure });
     } else if (k.onceBekle) {
@@ -1358,6 +1358,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     }
     const k = p.korunan;
     if (k?.kosuEk) Object.assign(kosu, kopya(k.kosuEk));
+    // "Sonra bekler > Değiştir" (akış tasarımı): kullanıcının seçtiği gösterge kendiliğinden kurulanın / mesajın yerine aynen yazılır.
+    if (p.elleGosterge) kosu.basariGostergesi = kopya(p.elleGosterge);
     /** @type {Record<string, any>} */
     const adim = {
       id, sira: i + 1, baslik: p.ad,
