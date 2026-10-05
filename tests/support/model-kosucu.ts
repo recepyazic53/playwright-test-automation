@@ -1307,7 +1307,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     } catch { /* profil yok: giriş adımı kendi hatasını verir */ }
   }
 
-  const atlanan: AtlananAlan[] = [];
+  // Zorunlu olmayan alanın tablo hücresi boş (veri-oku.mjs): alan doldurulmadı, koşu sürer; sonuçta atlanan alanlarda not.
+  const atlanan: AtlananAlan[] = [...(s.bosHucreNotlari ?? [])];
   /** Çalışan kurtarma kurallarının notları ("kurtarma" eki; raporlayıcı sonuca yazar). */
   const kurtarmaOlaylari: KurtarmaOlayi[] = [];
   let sira = 1;

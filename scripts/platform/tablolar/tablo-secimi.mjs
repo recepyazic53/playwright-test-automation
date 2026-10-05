@@ -205,7 +205,7 @@ export const sayfaDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.sayfa |
  * kuralı kullanır (servis-islemleri.mjs, ekran-basvurulari.mjs). Çözülemezse kullanıcıya dönük hata metni (tabloYok: tablo yok).
  * @param {Tablo[]} tablolar değerleri çözülmüş tablolar @param {Basvuru} b @param {Record<string, Record<string, string>> | undefined} tabloSecimleri
  * @param {string | null} [ortamId] @param {SatirSecimi} [satirSecimi] birden çok satır uyduğunda seçim (verilmezse ilk uyan)
- * @returns {{ tablo: Tablo; sutun: Sutun; satir: Satir; deger: string } | { hata: string; tabloYok?: boolean }}
+ * @returns {{ tablo: Tablo; sutun: Sutun; satir: Satir; deger: string } | { hata: string; tabloYok?: boolean; bos?: { tablo: string; sutun: string } }}
  */
 export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId, satirSecimi) {
   const t = tabloBul(tablolar, b.tablo);
@@ -232,7 +232,10 @@ export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId, satirSecimi) 
   if (!satir) return { hata: Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok` };
   if (satirSecimi?.kullanilan && !satirSecimi.kullanilan.has(gk)) satirSecimi.kullanilan.set(gk, satir);
   const d = satir.degerler[sutun.ad];
-  if (d === null || d === undefined || d === '') return { hata: `${grup} tablosunun seçilen satırında "${sutun.ad}" boş` };
+  // Seçilen satırda boş hücre: bos (tablo › sütun adı) da döner — zorunlu olmayan ekran alanı koşuyu durdurmaz (ekran-basvurulari.mjs).
+  if (d === null || d === undefined || d === '') {
+    return { hata: `${grup} tablosunun seçilen satırında "${sutun.ad}" boş`, bos: { tablo: `${t.ad}${b.etiket ? ` (${b.etiket})` : ''}`, sutun: sutun.ad } };
+  }
   return { tablo: t, sutun, satir, deger: String(d) };
 }
 

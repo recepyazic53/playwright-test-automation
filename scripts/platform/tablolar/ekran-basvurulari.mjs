@@ -24,6 +24,8 @@ import { baglariCoz, etiketMetni } from './secime-gore-bag.mjs';
 /** @typedef {Record<string, import('./secime-gore-bag.mjs').AlanBagi>} EkranBaglari alan kimliği → { tablo KİMLİĞİ, sütun, etiket?, secimeGore? } */
 
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
+/** Senaryo verisinde bilerek boş bırakılan alanların listesi (senaryo-dogrulayici.mjs > BILEREK_BOS_ANAHTARI ile aynı ad). */
+const BILEREK_BOS = 'bilerekBos';
 
 /**
  * Modelin senaryo alanları: alan kimliği → senaryo anahtarı (tek anahtarlı alanlar) ve anahtar → seçeneklerin senaryo değerleri.
@@ -40,12 +42,19 @@ export function modelAlanBilgisi(model) {
   const kabuller = {};
   /** @type {Record<string, AyarBilgisi>} senaryo anahtarı → senaryo ayarının etiketi ve seçenekleri (kod + metinler) */
   const ayarSecenekleri = {};
+  /** @type {Record<string, boolean>} senaryo anahtarı → modelde zorunlu mu (zorunlu: true) */
+  const zorunluAnahtarlar = {};
+  /** @type {Record<string, string>} senaryo anahtarı → alanın etiketi (koşu notları) */
+  const alanEtiketleri = {};
   const ayarlar = senaryoAyariAlanlari(model);
   for (const [id, a] of modelAlanlari(model)) {
     const s = nesneMi(a.eslesme) ? a.eslesme.senaryo : undefined;
     const anahtar = typeof s === 'string' ? s : Array.isArray(s) && s.length === 1 && typeof s[0] === 'string' ? s[0] : null;
     if (!anahtar) continue;
     alanAnahtarlari[id] = anahtar;
+    zorunluAnahtarlar[anahtar] = a.zorunlu === true;
+    const e = nesneMi(a.etiket) ? a.etiket : {};
+    alanEtiketleri[anahtar] = [e.ekran, e.form, nesneMi(a.form) ? a.form.etiket : null].find((x) => typeof x === 'string' && x.trim()) ?? id;
     if (typeof a.tip === 'string') alanTipleri[anahtar] = a.tip;
     if (typeof a.kabul === 'string' && a.kabul) kabuller[anahtar] = a.kabul;
     const havuz = [...(Array.isArray(a.secenekler) ? a.secenekler : []),
@@ -64,8 +73,14 @@ export function modelAlanBilgisi(model) {
       };
     }
   }
-  return { alanAnahtarlari, secenekDegerleri, alanTipleri, kabuller, ayarSecenekleri };
+  return { alanAnahtarlari, secenekDegerleri, alanTipleri, kabuller, ayarSecenekleri, zorunluAnahtarlar, alanEtiketleri };
 }
+
+/**
+ * Seçilen satırda boş hücreden gelen, ZORUNLU OLMAYAN alanın notu (koşu sonucunda "atlanan alanlar"; hazırlıkta uyarı):
+ * "‹Alan›: ‹Tablo› › ‹Sütun› boş, doldurulmadı". @param {string} etiket @param {{ tablo: string; sutun: string }} bos
+ */
+export const bosHucreNotu = (etiket, bos) => `${etiket}: ${bos.tablo} › ${bos.sutun} boş, doldurulmadı`;
 
 /** @typedef {{ etiket: string; secenekler: Array<{ kod: string; metinler: string[] }> }} AyarBilgisi */
 
@@ -139,7 +154,11 @@ export function ekrandakiDeger(c, s = {}) {
  *   alanTipleri?: Record<string, string>; kabuller?: Record<string, string>; ayarSecenekleri?: Record<string, AyarBilgisi>; dosyaDenetle?: (ad: string) => string | null;
  *   ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>>; satirSecimi?: import('./tablo-secimi.mjs').SatirSecimi }} s
  *   satirSecimi: birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş; verilmezse ilk uyan satır)
- * @returns {{ veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number }}
+ *   zorunluAnahtarlar (modelAlanBilgisi): verilirse seçilen satırda BOŞ hücre yalnız zorunlu alanda hatadır; zorunlu olmayan alana
+ *   dokunulmaz (veriden çıkar, bilerekBos'a eklenir: varsayılan da yazılmaz) ve bosBirakilanlar'a not düşülür. Verilmezse (model
+ *   bilgisi yok) boş hücre her alanda hatadır (eski davranış).
+ * @returns {{ veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number;
+ *   bosBirakilanlar: Array<{ alan: string; etiket: string; tablo: string; sutun: string; not: string }> }}
  */
 export function ekranBasvurulariniCoz(veri, s) {
   const sonuc = { ...veri };
@@ -147,13 +166,24 @@ export function ekranBasvurulariniCoz(veri, s) {
   const gizliDegerler = [];
   /** @type {Array<{ alan: string; mesaj: string }>} */
   const hatalar = [];
+  /** @type {Array<{ alan: string; etiket: string; tablo: string; sutun: string; not: string }>} */
+  const bosBirakilanlar = [];
   let cozulen = 0;
   const basvurulu = Object.entries(veri).filter(([, v]) => degerBasvurusu(v));
-  if (!basvurulu.length) return { veri: sonuc, gizliDegerler, hatalar, cozulen };
+  if (!basvurulu.length) return { veri: sonuc, gizliDegerler, hatalar, cozulen, bosBirakilanlar };
   const secimler = senaryoSecimleri(veri, s);
   for (const [anahtar, ham] of basvurulu) {
     const b = /** @type {import('./tablo-secimi.mjs').Basvuru} */ (degerBasvurusu(ham));
     const c = basvuruyuCoz(s.tablolar, b, secimler, s.ortamId, s.satirSecimi);
+    if (!('deger' in c) && c.bos && s.zorunluAnahtarlar && s.zorunluAnahtarlar[anahtar] !== true) {
+      // Zorunlu olmayan alan, seçilen satırda boş hücre: alana dokunulmaz (bilerek boş gibi), koşu durmaz; sonuçta not.
+      delete sonuc[anahtar];
+      const bilerekBos = Array.isArray(sonuc[BILEREK_BOS]) ? /** @type {unknown[]} */ (sonuc[BILEREK_BOS]) : [];
+      if (!bilerekBos.includes(anahtar)) sonuc[BILEREK_BOS] = [...bilerekBos, anahtar];
+      const etiket = s.alanEtiketleri?.[anahtar] || anahtar;
+      bosBirakilanlar.push({ alan: anahtar, etiket, tablo: c.bos.tablo, sutun: c.bos.sutun, not: bosHucreNotu(etiket, c.bos) });
+      continue;
+    }
     if (!('deger' in c)) {
       hatalar.push({ alan: anahtar, mesaj: `"${anahtar}" alanının değeri (${String(ham).trim()}) test verisinden alınamadı: ${c.hata}.` });
       continue;
@@ -183,7 +213,7 @@ export function ekranBasvurulariniCoz(veri, s) {
     cozulen++;
     if (c.sutun.gizli) gizliDegerler.push(...new Set([c.deger, ...(typeof e.deger === 'string' ? [e.deger] : [])]));
   }
-  return { veri: sonuc, gizliDegerler, hatalar, cozulen };
+  return { veri: sonuc, gizliDegerler, hatalar, cozulen, bosBirakilanlar };
 }
 
 /**
