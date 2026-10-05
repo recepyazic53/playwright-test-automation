@@ -47,6 +47,7 @@ import { sinirHatalari } from './ekran-modeli-dogrulayici.mjs';
 import { sayfadaSecDiyalogu } from './oge-secme.js';
 import { gezinmeOzetiKutusu } from './gezinme-ozeti.js';
 import { kosulAraclari } from './kosul-duzenleyici.js';
+import { ZAMAN_ASIMI_SINIRI, gostergeOkunusu, sayfadanGosterge, sonraBeklerMetni } from './akis-diyagrami.mjs';
 import { gorunurseVar } from './gorunurluk-kosulu.mjs';
 
 const TURLER = {
@@ -192,6 +193,8 @@ export async function akisTasarimi(icerik, s) {
   let kosulDuzenleme = null;
   /** Sınırları (değer kuralları; model alan.sinirlar) düzenlenen alan: { blok, alan } — yalnız ekranın akışını düzenlerken. */
   let sinirDuzenleme = null;
+  /** "Sonra bekler > Değiştir" düzenleyicisi açık aksiyon bloğu (sırası; yoksa -1). */
+  let beklemeDuzenleme = -1;
   /**
    * "Ekran açılır" düğümünün yeri (yalnız ekranın akışını düzenlerken; genel senaryoda null): üstündeki blok sayısı. Düğüm salt
    * görünümdür (blok değildir; taşınmaz, silinmez): üstündeki genel senaryo blokları girişten sonra açılan sayfada, ekran açılmadan
@@ -245,7 +248,7 @@ export async function akisTasarimi(icerik, s) {
       }
     }, 600);
   };
-  const degisti = () => { hatalar = new Map(); teknikAyrinti = []; ciz(); sakla(); };
+  const degisti = () => { hatalar = new Map(); teknikAyrinti = []; beklemeDuzenleme = -1; ciz(); sakla(); };
   /** Onay penceresinde genel senaryo bloklarının çalışma seçimi (ör. "Genel senaryo: “Çıkış”: isteğe bağlı, yeni senaryolarda dahil değil. "). */
   const ortakOzeti = () => { const l = ortakSecimSatirlari(bloklar); return l.length ? `Genel senaryo${l.length > 1 ? 'lar' : ''}: ${l.join('; ')}. ` : ''; };
 
@@ -608,6 +611,173 @@ export async function akisTasarimi(icerik, s) {
       kutu, ikon('yenile'), 'Tekrar denenebilir (kurtarma kuralı)');
   }
 
+  // ---- "Sonra bekler": ilerleme düğmesinden sonra ne beklenir (adımın başarı göstergesi + zaman aşımı) ----------------------
+  /** Aksiyonun hemen ardındaki başarı mesajı blokları (aradaki beklemeler atlanır; uyarılar sayılmaz): sıraları. */
+  function ardindakiMesajlar(i) {
+    const l = [];
+    for (let j = i + 1; j < bloklar.length && (bloklar[j].tur === 'bekle' || bloklar[j].tur === 'mesaj'); j++) if (bloklar[j].tur === 'mesaj' && !bloklar[j].uyari) l.push(j);
+    return l;
+  }
+  /** Aksiyondan sonra akışta başka bir ekran adımı (alan grubu / aksiyon / korunan) var mı? */
+  const sonrakiAdimVar = (i) => bloklar.slice(i + 1).some((x) => x.tur === 'alanlar' || (x.tur === 'aksiyon' && !x.gorunurse) || x.tur === 'korunan');
+  const dugmeMetni = (sira) => palet.dugmeler.find((d) => d.sira === sira)?.metin;
+  /** Aksiyon göstergesinin ("Değiştir" seçimi) okunuşu. */
+  function secimOkunusu(g) {
+    if (g.tur === 'alan') { const a = alanBilgisi.get(g.anahtar); return `${a ? a.etiket : 'Seçilen'} alanı görünür`; }
+    if (g.tur === 'dugme') return `“${dugmeMetni(g.sira) || 'seçilen'}” düğmesi görünür`;
+    if (g.tur === 'metin') return `“${g.deger}” yazısı görünür${g.secici ? ` (“${g.secici}” içinde)` : ''}`;
+    const m = sayfadanGosterge(g);
+    return m.tur === 'metin' ? `“${m.deger}” yazısı görünür (sayfada seçilen öğede)` : `sayfada seçilen öğe görünür (“${g.secici}”)`;
+  }
+  /** Mesaj bloğunun okunuşu (Sonra bekler satırında). */
+  function mesajOkunusu(m) {
+    const p = m.mesaj === null || m.mesaj === undefined ? null : palet.mesajlar.find((x) => x.sira === m.mesaj);
+    if (m.oge) return `${p ? `“${p.metin}”` : 'seçilen'} öğesi görünür`;
+    if (m.desen) return gostergeOkunusu({ tur: 'desen', deger: m.metin || '' }) || 'kalıba uyan yazı görünür';
+    return `“${m.metin || (p && p.oneri) || (p && p.metin) || '…'}” yazısı görünür`;
+  }
+  /** "Sonra bekler: …" satırının metni: seçim → ardındaki beklenen mesajlar → modeldeki gösterge → kaydedince kurulacak. */
+  function sonraBekler(b, i) {
+    let okunus;
+    // Modelden gelen seçim, düzenlenene kadar modeldeki adlarla okunur (sunucunun okunuşu); düzenlenince seçimden.
+    if (b.gosterge) okunus = typeof b.beklenenOkunus === 'string' ? b.beklenenOkunus : secimOkunusu(b.gosterge);
+    else {
+      const ms = ardindakiMesajlar(i);
+      if (ms.length) okunus = ms.map((j) => mesajOkunusu(bloklar[j])).join(' ya da ');
+      else if (Object.prototype.hasOwnProperty.call(b, 'beklenenOkunus')) okunus = b.beklenenOkunus;
+      else okunus = sonrakiAdimVar(i) ? 'kaydedince kendiliğinden — sonraki adımın ilk alanı ya da düğmesi görünür' : null;
+    }
+    return sonraBeklerMetni(okunus, b.zamanAsimiSn);
+  }
+  /**
+   * Göstergenin hangi dalda görüneceği (genel kural): alanın koşulu (diyagramdaki, kilitli ya da bölümünün), "her senaryoda basılmaz"
+   * düğmenin açtığı alan, düğmeden önce zaten görünen alan ve akışta olmayan alan için uyarı; yoksa null.
+   */
+  function alanGostergeUyarisi(anahtar, i) {
+    const gi = bloklar.findIndex((x) => x.tur === 'alanlar' && x.alanlar.includes(anahtar));
+    if (gi < 0) return 'Bu alan akışta doldurulmuyor: düğmeden sonra her dalda göründüğünden emin olun.';
+    if (gi < i) return 'Bu alan düğmeden önce zaten görünüyor: beklemek düğmenin sonucunu doğrulamaz. Düğmeden sonra açılan bir alan seçin.';
+    const g = bloklar[gi];
+    const kosul = g.kosullar && g.kosullar[anahtar] ? kosulMetni(g.kosullar[anahtar])
+      : g.korunanKosullar && g.korunanKosullar[anahtar] ? g.korunanKosullar[anahtar]
+        : g.bolumNotlari && g.bolumNotlari[anahtar] && g.bolumNotlari[anahtar].kosullu ? g.bolumNotlari[anahtar].ozet : null;
+    let j = gi - 1;
+    while (j >= 0 && bloklar[j].tur === 'bekle') j--;
+    const acan = bloklar[j] && bloklar[j].tur === 'aksiyon' && bloklar[j].istegeBagli ? dugmeMetni(bloklar[j].dugme) : null;
+    const dal = kosul ? `yalnız ${kosul} görünür` : acan ? `yalnız “${acan}” düğmesine basılan senaryolarda görünür` : null;
+    return dal ? `Bu alan koşullu: ${dal}. Diğer dallarda düğmeden sonra görünmez, adım zaman aşımına düşer.` : null;
+  }
+
+  /** "Değiştir": (a) ekrandaki bir alan / düğme, (b) bir yazı, (c) sayfada seç; (d) zaman aşımı. Kaydet diyagrama yazar. */
+  function beklemeDuzenleyici(b, i) {
+    const ad = `“${dugmeMetni(b.dugme) || 'Düğme'}” düğmesi`;
+    const ms = ardindakiMesajlar(i);
+    const no = yeniKimlik('bekleme');
+    let sayfadan = b.gosterge && b.gosterge.tur === 'oge' ? { ...b.gosterge } : null;
+    const ilkKip = b.gosterge ? (b.gosterge.tur === 'metin' ? 'metin' : b.gosterge.tur === 'oge' ? 'sayfa' : 'alan') : 'ayni';
+    const kipler = [['ayni', 'Şimdiki gibi kalsın', sonraBekler(b, i).replace(/^Sonra bekler: /, '').replace(/ · zaman aşımı.*$/, '')],
+      ['alan', 'Ekrandaki bir alan görünene kadar', null], ['metin', 'Bir yazı görünene kadar', null], ...(ekranKipi ? [['sayfa', 'Sayfada seç', null]] : [])];
+    const radyolar = kipler.map(([k, metin, aciklama]) => {
+      const r = h('input', { type: 'radio', name: `bekleme-kipi-${no}`, value: k, checked: k === ilkKip });
+      return { k, r, el: h('label', { class: 'bekleme-kipi' }, r, h('span', {}, h('b', {}, metin), aciklama ? h('small', { class: 'soluk' }, aciklama) : null)) };
+    });
+    const secilen = b.gosterge && b.gosterge.tur === 'alan' ? `alan:${b.gosterge.anahtar}` : b.gosterge && b.gosterge.tur === 'dugme' ? `dugme:${b.gosterge.sira}` : '';
+    const ogeSecimi = h('select', { 'aria-label': 'Görünmesi beklenen alan' }, h('option', { value: '' }, 'Alan ya da düğme seçin…'),
+      h('optgroup', { label: 'Alanlar' }, palet.alanlar.filter((a) => a.tur !== 'kimlik').map((a) => h('option', { value: `alan:${a.anahtar}`, selected: secilen === `alan:${a.anahtar}` }, a.etiket))),
+      palet.dugmeler.length ? h('optgroup', { label: 'Düğmeler' }, palet.dugmeler.map((d) => h('option', { value: `dugme:${d.sira}`, selected: secilen === `dugme:${d.sira}` }, `“${d.metin}” düğmesi`))) : null);
+    const uyari = h('p', { class: 'bekleme-uyarisi', role: 'note', 'aria-label': 'Gösterge uyarısı', hidden: true });
+    const uyariGuncelle = () => {
+      const m = ogeSecimi.value.startsWith('alan:') ? alanGostergeUyarisi(ogeSecimi.value.slice(5), i) : null;
+      uyari.hidden = !m;
+      yerlestir(uyari, ...(m ? [ikon('uyari'), m] : []));
+    };
+    ogeSecimi.addEventListener('change', uyariGuncelle);
+    const yazi = h('input', { type: 'text', maxlength: '200', value: b.gosterge && b.gosterge.tur === 'metin' ? b.gosterge.deger : ms.length && !bloklar[ms[0]].desen && !bloklar[ms[0]].oge ? bloklar[ms[0]].metin || '' : '', placeholder: 'ör. Kayıt bulundu', 'aria-label': 'Beklenen yazı' });
+    const kap = h('input', { type: 'text', maxlength: '300', spellcheck: 'false', class: 'mono', value: b.gosterge && b.gosterge.tur === 'metin' ? b.gosterge.secici || '' : '', placeholder: 'ör. #sonuc (boş: sayfanın tamamı)', 'aria-label': 'Kap seçicisi (isteğe bağlı)' });
+    const sayfaDurumu = h('p', { class: 'soluk kucuk', 'aria-live': 'polite' }, sayfadan ? `Seçilen: ${secimOkunusu(sayfadan)}` : 'Henüz öğe seçilmedi.');
+    const sayfaDugmesi = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('hedef'), 'Sayfada seç…');
+    sayfaDugmesi.addEventListener('click', () => {
+      void sayfadaSecDiyalogu({
+        proje: s.proje, ekranId: s.ekranId || '', turler: ['basari'], ekle: (ogeler) => {
+          const o = ogeler.find((x) => x.tur === 'basari') || ogeler[0];
+          if (!o) return 'Beklenecek öğeyi seçin.';
+          sayfadan = { tur: 'oge', secici: o.secici, ...(o.metin ? { metin: o.metin } : {}), ...(Array.isArray(o.cerceve) && o.cerceve.length ? { cerceve: o.cerceve } : {}) };
+          sayfaDurumu.textContent = `Seçilen: ${secimOkunusu(sayfadan)}`;
+          return null;
+        }
+      });
+    });
+    const sure = h('input', { type: 'number', min: String(ZAMAN_ASIMI_SINIRI.enAz), max: String(ZAMAN_ASIMI_SINIRI.enCok), step: '1', value: b.zamanAsimiSn ?? '', placeholder: 'Ayarlar’daki süre', 'aria-label': 'Zaman aşımı (sn)' });
+    const hata = h('p', { class: 'hata-metni kucuk', role: 'alert', hidden: true });
+    sure.addEventListener('input', () => { hata.hidden = true; });
+    const paneller = {
+      alan: h('div', { class: 'bekleme-paneli' }, h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Görünmesi beklenen'), ogeSecimi), uyari,
+        h('small', { class: 'soluk' }, 'Seçici modeldeki alandan alınır. Her dalda (her senaryoda) düğmeden sonra görünen bir alan seçin.')),
+      metin: h('div', { class: 'bekleme-paneli' }, h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Beklenen yazı'), yazi),
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Kap seçicisi (isteğe bağlı)'), kap),
+        h('small', { class: 'soluk' }, 'Numara, tarih gibi değişen kısmı yazmayın. Kap verilirse yazı yalnız o öğenin içinde aranır.')),
+      sayfa: h('div', { class: 'bekleme-paneli' }, sayfaDugmesi, sayfaDurumu, h('small', { class: 'soluk' }, 'Sayfa görünür bir tarayıcıda açılır; düğmeden sonra beklenen öğeye tıklayın (tıklama sayfaya gitmez).'))
+    };
+    const kipiGoster = () => {
+      const k = radyolar.find((x) => x.r.checked)?.k || 'ayni';
+      for (const [ad2, p] of Object.entries(paneller)) p.hidden = ad2 !== k;
+    };
+    for (const x of radyolar) x.r.addEventListener('change', kipiGoster);
+    kipiGoster();
+    uyariGuncelle();
+    const kapat = () => { beklemeDuzenleme = -1; ciz(); akis.querySelector(`[data-blok="${i}"] .sonra-bekler-degistir`)?.focus(); };
+    const kaydetBekleme = () => {
+      const goster = (m) => { hata.textContent = m; hata.hidden = false; };
+      const n = Number(sure.value);
+      if (sure.value !== '' && !(Number.isInteger(n) && n >= ZAMAN_ASIMI_SINIRI.enAz && n <= ZAMAN_ASIMI_SINIRI.enCok)) return goster(`Zaman aşımı ${ZAMAN_ASIMI_SINIRI.enAz}–${ZAMAN_ASIMI_SINIRI.enCok} sn arasında tam sayı olmalı (boş: Ayarlar’daki adım süresi).`);
+      const k = radyolar.find((x) => x.r.checked)?.k || 'ayni';
+      let g = null;
+      if (k === 'alan') {
+        if (!ogeSecimi.value) return goster('Görünmesi beklenen alanı ya da düğmeyi seçin.');
+        g = ogeSecimi.value.startsWith('alan:') ? { tur: 'alan', anahtar: ogeSecimi.value.slice(5) } : { tur: 'dugme', sira: Number(ogeSecimi.value.slice(6)) };
+      } else if (k === 'metin') {
+        const m = yazi.value.replace(/\s+/g, ' ').trim();
+        if (!m) return goster('Beklenen yazıyı girin.');
+        g = { tur: 'metin', deger: m, ...(kap.value.trim() ? { secici: kap.value.trim() } : {}) };
+      } else if (k === 'sayfa') {
+        if (!sayfadan) return goster('“Sayfada seç…” ile beklenecek öğeyi seçin.');
+        g = sayfadan;
+      }
+      if (sure.value === '') delete b.zamanAsimiSn; else b.zamanAsimiSn = n;
+      if (g) {
+        b.gosterge = g;
+        delete b.beklenenOkunus;
+        // Seçim, düğmeden sonraki beklenen mesajların yerine geçer (ikisi birlikte olamaz).
+        for (const j of [...ardindakiMesajlar(i)].reverse()) bloklar.splice(j, 1);
+      }
+      degisti();
+      akis.querySelector(`[data-blok="${i}"] .sonra-bekler-degistir`)?.focus();
+    };
+    return h('div', { class: 'kosul-duzenleyici bekleme-duzenleyici', role: 'group', 'aria-label': `${ad}: sonra ne beklenir` },
+      h('b', {}, `${ad}: sonra ne beklenir?`),
+      h('fieldset', { class: 'bekleme-kipleri' }, h('legend', {}, 'Düğmeden sonra şu görünene kadar beklenir'), radyolar.map((x) => x.el)),
+      paneller.alan, paneller.metin, paneller.sayfa,
+      h('label', { class: 'tasarim-etiketi bekleme-suresi' }, h('span', {}, `Zaman aşımı (sn, ${ZAMAN_ASIMI_SINIRI.enAz}–${ZAMAN_ASIMI_SINIRI.enCok})`), sure),
+      ms.length ? h('p', { class: 'soluk kucuk' }, `Yeni seçim, düğmeden sonraki ${ms.length} beklenen mesaj bloğunun yerine geçer (kaydedince bloklar kalkar).`) : null,
+      hata,
+      h('div', { class: 'dugmeler' },
+        h('button', { type: 'button', class: 'kucuk-dugme birincil', onclick: kaydetBekleme }, 'Kaydet'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: kapat }, 'Vazgeç')));
+  }
+  /** Aksiyon bloğunun "Sonra bekler: … · zaman aşımı N sn" satırı + "Değiştir" (ve açıksa düzenleyici). */
+  function sonraBeklerSatiri(b, i) {
+    const acik = beklemeDuzenleme === i;
+    return [
+      h('p', { class: 'sonra-bekler', 'data-sonra-bekler': '' }, ikon('saat'), h('span', { class: 'sonra-bekler-metni' }, sonraBekler(b, i)),
+        h('button', {
+          type: 'button', class: 'kucuk-dugme hayalet sonra-bekler-degistir', 'aria-expanded': acik ? 'true' : 'false',
+          'aria-label': `Değiştir — “${dugmeMetni(b.dugme) || 'Düğme'}” düğmesinden sonra ne beklenir`,
+          onclick: (o) => { o.stopPropagation(); beklemeDuzenleme = acik ? -1 : i; ciz(); }
+        }, 'Değiştir')),
+      acik ? beklemeDuzenleyici(b, i) : null
+    ];
+  }
+
   /**
    * Alanın sınırları (isteğe bağlı değer kuralları; model alan.sinirlar): sayıda en az / en çok / artış, metinde uzunluk + desen,
    * tarihte en erken / en geç (sabit tarih ya da bugün±N). Ekran modeli doğrulayıcısının kurallarıyla anında denetlenir.
@@ -754,7 +924,9 @@ export async function akisTasarimi(icerik, s) {
         b.gorunurse && !ilerlemedenSonra ? h('p', { class: 'gorunurse-ipucu uyari', role: 'note', 'aria-label': 'Yalnız görünürse bas kuralı' }, ikon('uyari'),
           'Bu blok şu an bir ilerleme düğmesinin ardından gelmiyor; kaydetmeden önce ↑/↓ ile her senaryoda basılan bir aksiyonun hemen altına taşıyın ya da işareti kaldırın.') : null,
         b.gorunurse ? h('p', { class: 'soluk kucuk' }, 'Önceki düğmeden sonra bazı ekranlarda açılan (bazılarında açılmayan) ara penceredeki düğme: kısa süre beklenir, görünürse basılır, görünmezse atlanır (raporda not). Adımın ilerleme düğmesinden sonra gelir.') : null,
-        b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, sureEtiketi), sure),
+        // Görünürse basılan düğme: kendi kısa bekleme süresi. İlerleme düğmesi: "Sonra bekler" satırı (gösterge + zaman aşımı; Değiştir).
+        b.gorunurse ? h('label', { class: 'tasarim-etiketi' }, h('span', {}, sureEtiketi), sure) : null,
+        b.istegeBagli || b.gorunurse || !(b.dugme >= 0) ? null : sonraBeklerSatiri(b, i),
         b.istegeBagli || b.gorunurse ? null : goruntuIsareti(b),
         b.istegeBagli || b.gorunurse ? null : tekrarIsareti(b),
         b.istegeBagli ? h('p', { class: 'soluk kucuk' }, 'Hemen ardından gelen alan grubu bu düğmeyle açılan alanlardır; senaryoda “dahil” işaretliyse doldurulur.') : null

@@ -213,6 +213,8 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
       a.yenidenGiris ? girisAyrintisi(bilgi) : null,
       alanListesi(a.alanlar),
       !a.alanlar.length && !a.altAkis && !a.sqlOzeti && !a.dosyaOzeti && !a.yenidenGiris ?h('p', { class: 'dugum-aciklamasi soluk' }, 'Bu adımda doldurulan alan yok.') : null,
+      // Düğmeden sonra ne beklenir (gösterge + zaman aşımı); akış tasarımında "Değiştir" ile düzeltilir.
+      a.sonraBekler ? h('p', { class: 'dugum-aciklamasi sonra-bekler' }, ikon('saat'), ' ', a.sonraBekler) : null,
       disarida ? null : hataSatiri(a.sonuc));
     kutuTiklamasi(li, dz, dugumId);
     ogeler.push({ el: li, dugum: dugumId });

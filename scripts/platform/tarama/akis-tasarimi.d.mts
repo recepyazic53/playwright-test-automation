@@ -65,7 +65,9 @@ export type AkisBlogu =
   | { tur: 'bekle'; saniye: number }
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
   /** gorunurse: "Yalnız görünürse bas" — ilerleme düğmesinden sonra, kısa sürede görünmezse atlanır (zamanAsimiSn: o kısa bekleme). */
-  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; gorunurse?: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; tekrarDenenebilir?: boolean; korunan?: string; korunanOzet?: string[] }
+  /** gosterge: düğmeden sonra beklenen ("Sonra bekler > Değiştir"; yalnız ilerleme düğmesinde) → adımın kosu.basariGostergesi. */
+  /** beklenenOkunus: modeldeki göstergenin okunuşu (yalnız gösterim; mesaj bloklarıyla gösterilmeyen gösterge için; null = gösterge yok). */
+  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; gorunurse?: boolean; zamanAsimiSn?: number; gosterge?: AksiyonGostergesi; beklenenOkunus?: string | null; ekranGoruntusu?: boolean; tekrarDenenebilir?: boolean; korunan?: string; korunanOzet?: string[] }
   /** uyari: kabul edilen iş kuralı uyarısı (başarı değil; senaryo "uyarı bekleniyor" derken seçer). */
   /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
   /** oge: "öğe görününce bitti" (metin aranmaz; seçilen mesaj öğesinin görünmesi yeter → modelde 'eleman' göstergesi). */
@@ -89,6 +91,12 @@ export type AkisBlogu =
  * tek düzey VE / VEYA; genel senaryo alanı dahil) — bkz. gorunurluk-kosulu.mjs.
  */
 export type AkisKosulu = { secim: string; degerler: string[] } | import('./gorunurluk-kosulu.mjs').YeniKosul;
+/** Aksiyonun "Sonra bekler" göstergesi: sağ listedeki alan / düğme (seçicisi envanterden), yazı (isteğe bağlı kap seçicisi) ya da sayfada seçilen öğe. */
+export type AksiyonGostergesi =
+  | { tur: 'alan'; anahtar: string }
+  | { tur: 'dugme'; sira: number }
+  | { tur: 'metin'; deger: string; secici?: string; cerceve?: string[] }
+  | { tur: 'oge'; secici: string; metin?: string; cerceve?: string[] };
 export type AkisHatasi = { blok: number | null; mesaj: string };
 export type AkisPaleti = {
   /** zorunlu: sayfanın zorunlu işaretlediği alan (gruba eklenince varsayılan "zorunlu"). */
@@ -106,7 +114,7 @@ export declare function akisTaslagi(env: AkisEnvanteri): AkisBlogu[];
 export declare function akisPaleti(env: AkisEnvanteri, bloklar: AkisBlogu[]): AkisPaleti;
 export declare function bloklariAyikla(ham: unknown): { bloklar: AkisBlogu[]; hatalar: AkisHatasi[] };
 export declare function secenekGozlemleriniAyikla(ham: unknown): SecenekGozlemi[];
-export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number; korunanlar?: Record<string, KorunanParca> }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };
+export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number; korunanlar?: Record<string, KorunanParca> }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[]; gostergesiDegisen?: string[] };
 /** Alanın değer kuralları (model alan.sinirlar; null = kaldır). */
 export type AkisSinirlari = { enAz?: number | string; enCok?: number | string; artis?: number; enAzUzunluk?: number; enCokUzunluk?: number; desen?: string };
 
