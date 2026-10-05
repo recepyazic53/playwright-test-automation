@@ -127,7 +127,31 @@ export class Veritabani {
     this.diskIzi = null;
     this.kapali = false;
     this.sayacAtla = false;
+    /** Nesil: satır değiştiren her işlemde (sayaçsız işlemler dahil) artar; okuma önbellekleri bununla geçersiz olur (nesil-onbellegi.mjs). */
+    this.nesil = 0;
+    /** Tablo nesilleri: tablonun en son değiştiği nesil (yalnız bu tablolara bağlı önbellekler için). @type {Map<string, number>} */
+    this.tabloNesilleri = new Map();
+    /** Tüm tabloları etkileyen son değişikliğin nesli (DELETE — yabancı anahtarla zincirleme silme / boşaltma —, tanınmayan komut). */
+    this.tumTablolarNesli = 0;
+    /** Açık işlemde yazılan tablolar ('*' = hepsi). @type {Set<string>} */
+    this.islemTablolari = new Set();
     this.pragmalariUygula();
+  }
+
+  /**
+   * Yazma komutunun hedef tablosunu işaretler. INSERT / REPLACE / UPDATE yalnız kendi tablosunu; DELETE (zincirleme silme / boş
+   * bırakma başka tabloları da değiştirebilir), birden çok komut ya da tanınmayan komut HEPSİNİ etkilenmiş sayar (temkinli).
+   * @param {string} sql
+   */
+  yazilanTabloyuIsaretle(sql) {
+    const m = /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+\w+)?)\s+["`[]?(\w+)/i.exec(sql);
+    const tekKomut = !/;\s*\S/.test(sql);
+    this.islemTablolari.add(m && tekKomut ? m[1].toLowerCase() : '*');
+  }
+
+  /** Tablonun en son değiştiği nesil (bilinmiyorsa tüm tabloları etkileyen son değişiklik). @param {string} tablo */
+  tabloNesli(tablo) {
+    return Math.max(this.tabloNesilleri.get(tablo) ?? 0, this.tumTablolarNesli);
   }
 
   pragmalariUygula() {
@@ -161,6 +185,7 @@ export class Veritabani {
       this.islem(() => this.calistir(sql, parametreler));
       return;
     }
+    this.yazilanTabloyuIsaretle(sql);
     this.db.run(sql, parametreleriHazirla(parametreler));
   }
 
@@ -211,14 +236,23 @@ export class Veritabani {
     }
     this.db.run('BEGIN IMMEDIATE');
     this.islemDerinligi = 1;
+    this.islemTablolari = new Set();
     let sonuc;
     try {
       const oncekiDegisiklik = this.toplamDegisiklik();
       sonuc = fn();
       // Satır değiştiren her işlem değişiklik sayacını artırır (sayacAtla: yalnızca işaret yazan işlemler).
-      if (!this.sayacAtla && this.toplamDegisiklik() !== oncekiDegisiklik) this.degisiklikSayaciniArtir();
+      const degisti = this.toplamDegisiklik() !== oncekiDegisiklik;
+      if (!this.sayacAtla && degisti) this.degisiklikSayaciniArtir();
       this.islemDerinligi = 0;
       this.db.run('COMMIT');
+      if (degisti) {
+        this.nesil++;
+        for (const t of this.islemTablolari) {
+          if (t === '*') this.tumTablolarNesli = this.nesil;
+          else this.tabloNesilleri.set(t, this.nesil);
+        }
+      }
     } catch (hata) {
       this.islemDerinligi = 0;
       try { this.db.run('ROLLBACK'); } catch { /* işlem zaten kapanmış olabilir */ }

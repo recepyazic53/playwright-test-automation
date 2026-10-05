@@ -18,8 +18,9 @@
 // - Gizli değerler (parola, anahtar, düz metin) hiçbir yerde loglanmaz; hata mesajları da
 //   gizli değer içermez.
 
-import { createCipheriv, createDecipheriv, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createSecretKey, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { SIFRELI_ALANLAR, TABLOLAR } from './veritabani/gocler.mjs';
+import { onbellegiBosalt, onbellekIzniniAyarla } from './veritabani/nesil-onbellegi.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ alg: 'scrypt'; N: number; r: number; p: number; tuz: string }} KdfParametreleri */
@@ -124,6 +125,8 @@ export class ParolaDenemeSiniri {
 const acikAnahtarlar = new WeakMap();
 /** Anahtarı bellekte olan ama ARAYÜZÜ kilitli veritabanları (arka plan kipi). @type {WeakSet<Veritabani>} */
 const arayuzKilitliler = new WeakSet();
+// Okuma önbellekleri (nesil-onbellegi.mjs) yalnız kasa arayüzde açıkken dolar: arka plan kipinde çözülmüş veri önbelleğe girmez.
+onbellekIzniniAyarla((vt) => !arayuzKilitliler.has(/** @type {Veritabani} */ (vt)));
 
 /** @param {unknown} parola */
 export function parolaKontrolEt(parola) {
@@ -156,7 +159,7 @@ export function anahtarTuret(parola, kdf, tuz) {
 /** @param {Buffer} b */
 const b64 = (b) => b.toString('base64url');
 
-/** @param {Buffer} anahtar @param {string} duzMetin */
+/** @param {Buffer | import('node:crypto').KeyObject} anahtar @param {string} duzMetin */
 export function zarfSifrele(anahtar, duzMetin) {
   const iv = randomBytes(12);
   const sifreleyici = createCipheriv('aes-256-gcm', anahtar, iv);
@@ -164,7 +167,7 @@ export function zarfSifrele(anahtar, duzMetin) {
   return `${ZARF_ON_EKI}${b64(iv)}:${b64(sifreleyici.getAuthTag())}:${b64(sifreli)}`;
 }
 
-/** @param {Buffer} anahtar @param {string} zarf */
+/** @param {Buffer | import('node:crypto').KeyObject} anahtar @param {string} zarf */
 export function zarfCoz(anahtar, zarf) {
   if (!zarfMi(zarf)) throw new KasaHatasi('ZARF_BOZUK', 'Şifreli değer biçimi tanınmadı.');
   const [ivMetni, etiketMetni, sifreliMetin] = zarf.slice(ZARF_ON_EKI.length).split(':');
@@ -237,6 +240,8 @@ export function arkaPlanKipindeMi(vt) {
 /** Anahtar bellekte kalır, arayüz kilitlenir (anahtar yoksa hiçbir şey yapmaz). @param {Veritabani} vt */
 export function arayuzuKilitle(vt) {
   if (acikAnahtarlar.has(vt)) arayuzKilitliler.add(vt);
+  // Arayüz kilitlenince çözülmüş okuma önbellekleri de bırakılır (nesil-onbellegi.mjs).
+  onbellegiBosalt(vt);
   return kasaDurumu(vt);
 }
 
@@ -308,6 +313,8 @@ export function anahtarDogrulayiciyaUyarMi(anahtar, dogrulayici) {
 function anahtariYerlestir(vt, anahtar) {
   const eski = acikAnahtarlar.get(vt);
   if (eski && eski !== anahtar) eski.fill(0);
+  // Anahtar değişince (yeniden açma, yedekten dönme, kasa benimseme) eski anahtarla çözülmüş önbellekler bırakılır.
+  if (eski !== anahtar) { onbellegiBosalt(vt); anahtarNesneleri.delete(vt); }
   acikAnahtarlar.set(vt, anahtar);
 }
 
@@ -327,7 +334,10 @@ export function kasaKilitle(vt) {
   const anahtar = acikAnahtarlar.get(vt);
   if (anahtar) anahtar.fill(0);
   acikAnahtarlar.delete(vt);
+  anahtarNesneleri.delete(vt);
   arayuzKilitliler.delete(vt);
+  // Güvenlik: çözülmüş okuma önbellekleri (model bağlamı, tablo hücreleri…) kilitle birlikte bırakılır (nesil-onbellegi.mjs).
+  onbellegiBosalt(vt);
   return kasaDurumu(vt);
 }
 
@@ -364,14 +374,30 @@ export function kasayiAnahtarlaAc(vt, anahtar) {
   medyaAnahtariniHazirlaSessiz(vt);
 }
 
+/**
+ * Açık anahtarın KeyObject'i (bağlantı başına bir kez): ham Buffer'la her şifreleme / çözmede anahtar yeniden hazırlanıyordu (binlerce
+ * hücre çözülürken baskın maliyet). Anahtar değişince (kimlik farkı) yenilenir; kasa kilitlenince / anahtar değişince bırakılır.
+ * @type {WeakMap<Veritabani, { anahtar: Buffer; nesne: import('node:crypto').KeyObject }>}
+ */
+const anahtarNesneleri = new WeakMap();
+/** @param {Veritabani} vt */
+function acikAnahtarNesnesi(vt) {
+  const anahtar = acikAnahtar(vt);
+  const k = anahtarNesneleri.get(vt);
+  if (k && k.anahtar === anahtar) return k.nesne;
+  const nesne = createSecretKey(anahtar);
+  anahtarNesneleri.set(vt, { anahtar, nesne });
+  return nesne;
+}
+
 /** @param {Veritabani} vt @param {string} duzMetin */
 export function sifrele(vt, duzMetin) {
-  return zarfSifrele(acikAnahtar(vt), duzMetin);
+  return zarfSifrele(acikAnahtarNesnesi(vt), duzMetin);
 }
 
 /** @param {Veritabani} vt @param {string} zarf */
 export function coz(vt, zarf) {
-  return zarfCoz(acikAnahtar(vt), zarf);
+  return zarfCoz(acikAnahtarNesnesi(vt), zarf);
 }
 
 /**

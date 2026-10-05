@@ -1,6 +1,8 @@
 // TEST VERİSİ TABLOLARI — HTTP uçları (sunucu-platform.mjs GET_UCLARI / POST_UCLARI'na eklenir). Belirteç, gövde ve kasa
 // kilidi sunucuda denetlenir. Gizli sütun değerleri hiçbir yanıtta dönmez.
 import { basename } from 'node:path';
+import { acikAnahtar } from '../kasa.mjs';
+import { onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 import { DepoHatasi, ekranModeliGetir } from '../veritabani/depo.mjs';
 import { tabloSil, tablolariListele } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, kullanilanOrtakAkislar, ortakAkisBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
@@ -92,7 +94,12 @@ export const TABLO_GET_UCLARI = [
     return { tablolar: tablolariListele(db, projeId, { baglamDahil }), ...(baglamDahil ? tabloEkranKullanimi(db, projeId) : {}) };
   }],
   // Test verisi ekranının üstündeki "Veri sağlığı" (benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular; değer dönmez).
-  ['/platform/tablolar/veri-sagligi', (db, q) => veriSagligi(db, kimlik(q.get('projeId'), 'projeId'))],
+  // Veri sağlığı özeti önbellekli (nesil-onbellegi.mjs): veritabanında herhangi bir değişiklik olunca yeniden hesaplanır; yanıt kopyadır.
+  ['/platform/tablolar/veri-sagligi', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    acikAnahtar(db);
+    return structuredClone(onbellekte(db, `veriSagligi\u0000${projeId}`, () => veriSagligi(db, projeId)));
+  }],
   // Birleştirme geçmişi (yeniden eskiye; değer ve ham kayıt içermez): durum, geri alınabilir mi / neden, kaynaklar silinebilir mi.
   ['/platform/tablo/birlestirme/gecmis', (db, q) => birlestirmeGecmisi(db, kimlik(q.get('projeId'), 'projeId'))],
   // Ekranın "Test verisi" sekmesi: input'lar (senaryo ayarları dahil), ekranın KENDİ tablo bağlantıları, kullandığı ortak akışlardan gelen (varsayılan)

@@ -158,7 +158,9 @@ test.describe('cURL yapıştır arayüzü', () => {
 
     // Servis ve uçlar; adresler adlandırılmış tabandan.
     const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
-    const s = servisler.find((x: Nesne) => x.anahtar === 'example');
+    expect(servisler.find((x: Nesne) => x.anahtar === 'example').ayarlar.ornekIstekler).toBeUndefined();
+    // Liste yalnız küçük ayarları taşır; örnek istekler tekil uçtan (GET /platform/servis).
+    const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisler.find((x: Nesne) => x.anahtar === 'example').id}`)).servis;
     expect(s).toMatchObject({ tur: 'rest', ad: 'Example' });
     expect(s.ayarlar.tabanGrubu).toBe('Ornek API');
     expect(s.ayarlar.tabanlar).toEqual({ [testOrtami]: 'https://example.com/api', [canli]: '' });
