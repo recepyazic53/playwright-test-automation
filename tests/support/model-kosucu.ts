@@ -24,7 +24,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
-import { DegerIzleyici, KILITLI_ALAN_NOTU, alanaYaz, alandanCik, oneridenYaz, takvimdenYaz, yazmaHatasi } from '../../scripts/platform/tarama/alan-cikisi';
+import { DegerIzleyici, KILITLI_ALAN_NOTU, alanZatenDolu, alanaYaz, alandanCik, oneridenYaz, takvimdenYaz, yazmaHatasi } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { gercekSecenekler, yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
@@ -599,8 +599,8 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       const etiket = await l.evaluate((e) => e.tagName);
       if (etiket === 'SELECT') {
         // Bağlı liste: seçenek gelene kadar beklenir; her turda değer YA DA metin aranır (tek döngü, ortak kural: secenek-secimi.ts) ve
-        // bulunan seçeneğin değeriyle seçilir. "Gerekirse seç": zaten seçiliyse dokunulmaz (yeniden seçmek bağımlı alanları sıfırlayabilir).
-        const r = await listedenSecenekSec(l, s, { sinirMs: listeBeklemesi(alan).sinirMs, etiket: alan.etiket, zatenSeciliyseAtla: alan.doldurucu === 'secimGerekirse' });
+        // bulunan seçeneğin değeriyle seçilir. Zaten seçiliyse dokunulmaz (yeniden seçmek bağımlı alanları sıfırlayabilir).
+        const r = await listedenSecenekSec(l, s, { sinirMs: listeBeklemesi(alan).sinirMs, etiket: alan.etiket });
         if ('hata' in r) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, r.hata));
         yavaslamaNotu(alan, r.bekleyisMs);
         return;
@@ -635,6 +635,8 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
         return;
       }
       if (alan.doldurucu === 'tarihJs') {
+        // Değer zaten aynıysa dokunulmaz (alanaYaz ile aynı kural).
+        if (await alanZatenDolu(l, String(deger))) return;
         await l.evaluate((e, v) => {
           (e as HTMLInputElement).value = v;
           e.dispatchEvent(new Event('input', { bubbles: true }));
@@ -654,7 +656,8 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       return;
     default: {
       const metin = String(deger);
-      if (alan.doldurucu === 'secimGerekirse' && (await l.inputValue().catch(() => null)) === metin) return;
+      // Değer zaten aynıysa (biçimden bağımsız) alana dokunulmaz — öneriden seçilen alan da (alanaYaz ile aynı kural).
+      if (await alanZatenDolu(l, metin)) return;
       // Hızlı testle AYNI yazma kuralı (alan-cikisi.ts > alanaYaz): kısa tek satırlı metin gerçek tuşlarla (maske / keyup sorgusu çalışır,
       // "yaz-sil-yaz" olmaz), uzun metin doğrudan; alandan çıkılır (change / blur ve bağlı sorgu), sayfa değeri silerse bir kez yeniden
       // tuşlanır. Doldurucu tuşlama istiyorsa (tuslayarakYaz / telefonTuslama) her zaman tuşlanır; maske parametresiyle biçimlenmiş değer
@@ -1426,14 +1429,15 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           if (alan.ustId && (await l.isDisabled().catch(() => false))) {
             for (const bitis = Date.now() + listeBeklemesi(alan).sinirMs; Date.now() < bitis && (await l.isDisabled().catch(() => false));) await new Promise((c) => setTimeout(c, 250));
           }
-          // Sayfanın doldurduğu (o an düzenlenemeyen) alana hiç dokunulmaz — senaryoda değeri olsa bile; hata değil, adım notu düşer
-          // (sayfanın doldurduğu değer boş da olabilir). Seçime göre kilitlenen alanda (kilit) her kilit, diğerlerinde yalnız açık kilitler
-          // (hızlı testle ORTAK kural: sayfa-envanteri.ts > alanKilidi okur, alan-kilitleri.mjs > kilitEngeller karar verir). Değeri
-          // betikle yazan doldurucuda (tarihJs, degerJs, takvimden seçim) tuş + değer engeli kilit değildir: engel yalnız tuşla yazmayı keser.
+          // ÖNCE DENE: alan yalnız kesin kanıtla önden atlanır — kapalı (disabled; aşağıda), salt okunur (readonly / aria-readonly;
+          // değeri betikle yazan doldurucu ve takvimden seçilen tarih hariç) ya da model alanı seçime göre kilitli diyor ve sayfa şu an
+          // kilit gösteriyor (hızlı testle ORTAK kural: sayfa-envanteri.ts > alanKilidi okur, alan-kilitleri.mjs > kilitEngeller). Sınıf /
+          // ARIA / olay işleyicisi sezgisi atlatmaz: alan yazılır; sayfa yazılanı kabul etmeyip eski değeri geri yazarsa (alanaYaz →
+          // 'kilitli') aynı not düşer. Hata değil, adım notu.
           if (!zorla && alan.tip !== 'radyo' && !alan.yalnizTus) {
             const kilit = await l.evaluate(alanKilidi).catch(() => null);
             const betikle = BETIKLE_YAZAN_DOLDURUCULAR.has(String(alan.doldurucu ?? '')) || alan.parametreler.takvim === true;
-            if (kilitEngeller(kilit, { betikle, seciminGore: alan.parametreler.kilit === true })) {
+            if ((kilit === 'salt-okunur' && !betikle) || kilitEngeller(kilit, { seciminGore: alan.parametreler.kilit === true })) {
               kilitNotlari.push(`“${alan.etiket}”: ${KILITLI_ALAN_NOTU}`);
               continue;
             }

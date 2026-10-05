@@ -1,5 +1,6 @@
 // Maskeli alan + sayfada sürekli duran takvim: alandan çıkış Escape basmaz (maske Escape'te değeri geri alır), değer tek seferde yazılır;
-// yeniden yazma temiz başlangıçtan (alan boş, imleç başta) yapılır. Gerçek açılır takvim yine kapanır.
+// yeniden yazma temiz başlangıçtan (alan boş, imleç başta) yapılır. Escape hiçbir alanda basılmaz (yalnız Escape'le kapanan takvim açık
+// kalır; değer korunur).
 // Güvenlik: yalnızca 127.0.0.1'deki sahte sayfa.
 import { expect, test, type Page } from '@playwright/test';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
@@ -139,16 +140,19 @@ test('sayfa değeri sildi: yeniden yazma temiz başlangıçtan (imleç başta), 
   } finally { await kapat(); }
 });
 
-test('gerçek açılır takvim (yalnız Escape ile kapanan) maskesiz tarih alanında yine kapanır', async () => {
+// Escape kuralı kaldırıldı (önce dene): Escape açık pencereyi (modal) kapatabilir ve maskeli değeri geri alabilir; yalnız Escape'le
+// kapanan takvim açık kalır, değer korunur ve sonraki alanın yazılmasını engellemez.
+test('yalnız Escape ile kapanan takvim: Escape basılmaz, değer korunur, sonraki alan yazılır', async () => {
   const { page, kapat } = await sayfaAc();
   try {
     const l = page.locator('#dt');
     await l.fill('13.04.1998');
     expect(await acikTakvimVar(page)).toBe(true);
     await alandanCik(l);
-    expect(await acikTakvimVar(page)).toBe(false);
     await expect(l).toHaveValue('13.04.1998');
-    expect((await sayac(page)).esc).toBe(1);
+    expect((await sayac(page)).esc).toBe(0);
+    expect(await alanaYaz(page.locator('#sonraki'), 'abc', { zamanAsimiMs: 5_000 })).toBe('tamam');
+    await expect(l).toHaveValue('13.04.1998');
   } finally { await kapat(); }
 });
 

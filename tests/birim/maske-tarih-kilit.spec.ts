@@ -1,7 +1,8 @@
 // KORUMA TESTLERİ — normal koşuda üç ortak kural birlikte (127.0.0.1'deki sahte sayfa; ayrı Nöbetçi, geçici veritabanı; dış istek yok):
 //  1) Maskeli telefon + sayfada sürekli duran gömülü takvim: numara BİR KEZ tuşlanır, Escape basılmaz (alan-cikisi.ts).
-//  2) Tuş + değer engelli (datepicker benzeri) tarih alanı: betikle yazan doldurucuda (tarihJs) kilit sayılmaz, değer yazılır; aynı
-//     engelli alanda tuşla yazan doldurucu ve kapalı takvim kilitli kalır (alan-kilitleri.mjs > kilitEngeller).
+//  2) ÖNCE DENE (alan-kilitleri.mjs > kilitEngeller): tuş + değer engelli tarih alanı, takvim "kapalı" sınıflı alan ve jQuery ile
+//     keypress / input / paste dinleyen maskeli telefon ("(___)___-____") önden atlanmaz, yazılır; sonraki alanın blur'undaki "telefon
+//     boşsa hata" çıkmaz. Yalnız kesin kanıt atlatır: kapalı (disabled) alan atlanır, salt okunur (readonly) alan "sayfa dolduruyor" notuyla.
 //  3) Zorunlu olmayan alanın tablo hücresi boş: alan doldurulmaz, koşu geçer, sonuçta not (ekran-basvurulari.mjs).
 // Değerler SAHTEDİR.
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -33,6 +34,10 @@ const SAYFA = String.raw`<!doctype html><meta charset="utf-8"><title>Sorgu</titl
 <p><label for="tuslu">Tuşlu tarih</label> <input id="tuslu" class="hasDatepicker" autocomplete="off" onkeypress="return false;" onchange="return false;"></p>
 <p><label for="kapali">Kapalı tarih</label> <input id="kapali" class="hasDatepicker ui-state-disabled" autocomplete="off"></p>
 <p><label for="not">Not</label> <input id="not" autocomplete="off"></p>
+<p><label for="ceptel">Cep telefonu</label> <input id="ceptel" placeholder="(___)___-____" autocomplete="off"></p>
+<p><label for="adres">Adres</label> <input id="adres" autocomplete="off"> <span id="telhata"></span></p>
+<p><label for="kapalialan">Kapalı alan</label> <input id="kapalialan" disabled></p>
+<p><label for="salt">Salt alan</label> <input id="salt" value="SAYFA" readonly></p>
 <div class="ui-datepicker ui-datepicker-inline" style="width:220px;height:120px;background:#eef">gömülü takvim</div>
 <p><button type="button" id="sorgula">Sorgula</button></p>
 <div id="hata" role="alert" hidden></div><div id="sonuc" role="status"></div>
@@ -63,10 +68,22 @@ const SAYFA = String.raw`<!doctype html><meta charset="utf-8"><title>Sorgu</titl
     d[k] = o.key; ciz(); imlec(k + 1);
   });
   el.addEventListener('blur', function () { oku(el.value); if (!d.some(Boolean)) { el.value = ''; d = []; } });
+  // jQuery benzeri maske: işleyiciler jQuery'nin olay kaydında (keypress / input / paste; preventDefault ile — eski sezgi bunu "kilit" sayardı).
+  window.jQuery = { _data: function (e, t) { return t === 'events' ? (e.__olaylar || null) : null; } };
+  function on(e, t, f) { e.__olaylar = e.__olaylar || {}; (e.__olaylar[t] = e.__olaylar[t] || []).push({ handler: f }); e.addEventListener(t, f); }
+  var CT = '(___)___-____', cep = $('ceptel'), cr = [];
+  function cepCiz() { var i = 0; cep.value = cr.length ? CT.replace(/_/g, function () { return cr[i++] || '_'; }) : ''; }
+  on(cep, 'keypress', function (o) { o.preventDefault(); if (/\d/.test(o.key) && cr.length < 10) { cr.push(o.key); cepCiz(); } });
+  on(cep, 'input', function () { cr = (cep.value.match(/\d/g) || []).slice(0, 10); cepCiz(); });
+  on(cep, 'paste', function (o) { o.preventDefault(); cr = ((o.clipboardData && o.clipboardData.getData('text')) || '').replace(/\D/g, '').slice(0, 10).split(''); cepCiz(); });
+  on(cep, 'keydown', function (o) { if (o.key === 'Backspace') { o.preventDefault(); cr.pop(); cepCiz(); } });
+  // Sonraki alanın blur'u: telefon boşsa hata verir ve adresi siler (gerçek ekranda görülen davranış).
+  $('adres').addEventListener('blur', function () { if (!cr.length) { $('telhata').textContent = 'Telefon numarası zorunludur'; $('adres').value = ''; } });
   $('sorgula').addEventListener('click', async function () {
     $('hata').hidden = true; $('sonuc').textContent = '';
     if (!$('dogum').value) { $('hata').textContent = 'Doğum tarihi zorunludur'; $('hata').hidden = false; return; }
-    var g = { tel: el.value, kimlik: $('kimlik').value, dogum: $('dogum').value, tuslu: $('tuslu').value, kapali: $('kapali').value, not: $('not').value, tus: window.__tus, esc: window.__esc };
+    var g = { tel: el.value, kimlik: $('kimlik').value, dogum: $('dogum').value, tuslu: $('tuslu').value, kapali: $('kapali').value, not: $('not').value, tus: window.__tus, esc: window.__esc,
+      ceptel: cep.value, adres: $('adres').value, telhata: $('telhata').textContent, salt: $('salt').value };
     await fetch('${YOL}sorgu', { method: 'POST', body: JSON.stringify(g) });
     $('sonuc').textContent = 'Sorgu tamam';
   });
@@ -90,6 +107,10 @@ function paket(): Nesne {
         alan('tuslu', 'metin', 'Tuşlu tarih'),
         alan('kapali', 'tarih', 'Kapalı tarih', { doldurucu: 'tarihJs', bicim: 'gg.aa.yyyy' }),
         alan('not', 'metin', 'Not'),
+        alan('ceptel', 'metin', 'Cep telefonu'),
+        alan('adres', 'metin', 'Adres'),
+        alan('kapalialan', 'metin', 'Kapalı alan'),
+        alan('salt', 'metin', 'Salt alan'),
         { id: 'sorgulaDugmesi', tip: 'buton', etiket: { ekran: 'Sorgula' }, yapilandirma: 'aksiyon', konum: { secici: '#sorgula', kirilganlik: 'orta' } },
         { id: 'sonucMetni', tip: 'cikti', etiket: { ekran: 'Sorgu tamam' }, yapilandirma: 'cikti', konum: { secici: '#sonuc', kirilganlik: 'orta' } }
       ] }],
@@ -112,23 +133,25 @@ function paket(): Nesne {
   };
 }
 
-test('kilit kararı: tuş + değer engeli betikle yazan doldurucuda kilit değil; tuşla yazanda ve kapalı takvimde kilit', async () => {
+test('kilit kararı: sezgiler (tuş engeli, takvim sınıfı, aria) önden atlatmaz; yalnız model seçime göre kilitli diyorsa', async () => {
   const s = await yerelSunucu(() => ({ tur: 'text/html; charset=utf-8', govde: SAYFA }));
   const t = await korumaliTarayici();
   try {
     const page = await (await t.newContext()).newPage();
     await page.goto(`${s.adres}${YOL}`);
     const kilit = (id: string) => page.locator(`#${id}`).evaluate(alanKilidi);
-    expect(await kilit('dogum')).toBe('tus-deger');
+    // Olay işleyicisinin kaynağına bakan sezgi kaldırıldı: tuş + değer engelli tarih ve jQuery maskeli telefon kilit okunmaz.
+    expect(await kilit('dogum')).toBeNull();
+    expect(await kilit('ceptel')).toBeNull();
     expect(await kilit('kapali')).toBe('takvim-kilidi');
     expect(await kilit('tel')).toBeNull();
+    expect(await kilit('kapalialan')).toBe('devre-disi');
+    expect(await kilit('salt')).toBe('salt-okunur');
     expect(BETIKLE_YAZAN_DOLDURUCULAR.has('tarihJs')).toBe(true);
-    expect(kilitEngeller('tus-deger', { betikle: true })).toBe(false);
-    expect(kilitEngeller('tus-deger', { betikle: true, seciminGore: true })).toBe(false);
-    expect(kilitEngeller('tus-deger', {})).toBe(true);
-    expect(kilitEngeller('takvim-kilidi', { betikle: true })).toBe(true);
-    expect(kilitEngeller('aria-devre-disi', { betikle: true })).toBe(true);
-    expect(kilitEngeller('salt-okunur', {})).toBe(false);
+    // Sezgisel kilit (takvim sınıfı, aria) seçime bağlı değilse atlatmaz; model seçime göre kilitli diyorsa atlatır.
+    expect(kilitEngeller('takvim-kilidi', {})).toBe(false);
+    expect(kilitEngeller('aria-devre-disi', {})).toBe(false);
+    expect(kilitEngeller('takvim-kilidi', { seciminGore: true })).toBe(true);
     expect(kilitEngeller('salt-okunur', { seciminGore: true })).toBe(true);
     expect(kilitEngeller(null, { seciminGore: true })).toBe(false);
   } finally { await t.close(); await s.kapat(); }
@@ -167,7 +190,7 @@ test.describe('uçtan uca normal koşu (127.0.0.1)', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('telefon bir kez yazılır (Escape yok), betikle doldurulan tarih yazılır, boş hücreli alan doldurulmaz; adım geçer', async () => {
+  test('telefon bir kez yazılır (Escape yok), sezgisel kilitli alanlar denenip yazılır, disabled / readonly atlanır, boş hücreli alan doldurulmaz; adım geçer', async () => {
     test.setTimeout(180_000);
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     const projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Sorgu Projesi' })).proje as Nesne).id);
@@ -178,7 +201,8 @@ test.describe('uçtan uca normal koşu (127.0.0.1)', () => {
     await basarili('/platform/tablo/kaydet', { projeId, ad: 'Ek', sutunlar: [{ ad: 'Ad' }, { ad: 'Not' }], satirlar: [{ degerler: { Ad: 'satır 1', Not: '' } }] });
     const s = await basarili('/platform/senaryo/kaydet', {
       projeId, ekranId, baslik: 'Uçtan uca sorgu', ortamIdleri: [ortamId],
-      veri: { baslik: 'Uçtan uca sorgu', tel: '5421245685', kimlik: '10000000146', dogum: '13.04.1998', tuslu: '01.01.2000', kapali: '02.02.2002', not: '${Ek.Not}' }
+      veri: { baslik: 'Uçtan uca sorgu', tel: '5421245685', kimlik: '10000000146', dogum: '13.04.1998', tuslu: '01.01.2000', kapali: '02.02.2002', not: '${Ek.Not}',
+        ceptel: '5421245685', adres: 'Deneme Sokak 1', kapalialan: 'X', salt: 'Y' }
     });
     const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: String(s.id), ortamId });
     expect(y.basarili, String(y.mesaj ?? '')).toBe(true);
@@ -187,11 +211,16 @@ test.describe('uçtan uca normal koşu (127.0.0.1)', () => {
     expect(sorgular).toHaveLength(1);
     // Telefon tek seferde (10 rakam tuşu), Escape hiç basılmadı; betikle doldurulan tarih yazıldı.
     expect(sorgular[0]).toMatchObject({ tel: '(542) 124 56 85', kimlik: '10000000146', dogum: '13.04.1998', tus: 10, esc: 0 });
-    // Tuşla yazan doldurucunun engelli alanı ve kapalı takvim yazılmadı (sayfa dolduruyor notu); boş hücreli Not doldurulmadı.
-    expect(sorgular[0]).toMatchObject({ tuslu: '', kapali: '', not: '' });
+    // Önce dene: tuş engelli alan (tuşlama tutmadı → doğrudan yazıldı), "kapalı" sınıflı takvim (betikle) ve jQuery maskeli telefon yazıldı;
+    // adresin blur'unda telefon dolu olduğundan hata çıkmadı, adres silinmedi. Boş hücreli Not doldurulmadı.
+    expect(sorgular[0]).toMatchObject({ tuslu: '01.01.2000', kapali: '02.02.2002', not: '', ceptel: '(542)124-5685', adres: 'Deneme Sokak 1', telhata: '' });
+    // Kesin kanıt: disabled alan atlandı; readonly alana yazılmadı (sayfa dolduruyor notu).
+    expect(sorgular[0]).toMatchObject({ salt: 'SAYFA' });
     const metin = JSON.stringify(d);
-    expect(metin).toContain('“Tuşlu tarih”: alan sayfa tarafından dolduruluyor');
-    expect(metin).toContain('“Kapalı tarih”: alan sayfa tarafından dolduruluyor');
+    expect(metin).not.toContain('“Tuşlu tarih”: alan sayfa tarafından dolduruluyor');
+    expect(metin).not.toContain('“Cep telefonu”: alan sayfa tarafından dolduruluyor');
+    expect(metin).toContain('“Salt alan”: alan sayfa tarafından dolduruluyor');
+    expect(d.atlananAlanlar).toContainEqual({ alan: 'Kapalı alan', neden: 'kapalı (disabled)' });
     expect(d.atlananAlanlar).toContainEqual({ alan: 'Not', neden: 'Ek › Not boş, doldurulmadı' });
   });
 });

@@ -31,6 +31,8 @@ test.describe('eşleştirme kuralı (saf)', () => {
     expect(secenekEslestir(kodlu, s('1', '1'))).toEqual(s('b', '1 - BİR'));
     expect(secenekEslestir(kodlu, s('iki', 'iki'))).toEqual(s('c', '2 - İKİ'));
     expect(secenekEslestir(kodlu, s('3', '3'))).toBeNull();
+    // Kısmi eşleşmede birden çok aday belirsizdir: tahmin edilmez (ilki seçilmez), "listede yok" iletisiyle düşer.
+    expect(secenekEslestir([s('a', '1 - ADANA MERKEZ'), s('b', '6 - ANKARA MERKEZ')], s('Merkez', 'Merkez'))).toBeNull();
     // Yer tutucu kısmi eşleşmede aday değildir.
     expect(secenekEslestir([s('', 'Seçiniz')], s('Seç', 'Seç'))).toBeNull();
   });
