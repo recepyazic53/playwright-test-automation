@@ -27,7 +27,7 @@ import { KESIF_TURLERI, adresOzeti, istekKarari, kesifGuvenligi, taramaAdresleri
 import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
 import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
-import { alanKilidi, dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
+import { alanKilidi, dugmeTiklamaKorumasi, formGonderimKorumasi, sayfadakiAlanlar, secimeTikla } from './sayfa-envanteri';
 import { eylemAdaylariniCikar } from './eylem-kesfi-motoru';
 import { zincirKesfet } from './zincir-motoru';
 import type { ZincirSonucu } from './zincir-kesfi.mjs';
@@ -421,18 +421,6 @@ function sayfaIciUyari(mod: 'isaretle' | 'kapat'): string | null {
     return metin;
   }
   return null;
-}
-
-/**
- * Sayfa içi: radyo / onay kutusuna TIKLAR (yalnız bu öğeye; öğe bir düğmenin / bağlantının içindeyse hiç dokunmaz). Tıklama
- * tarayıcının kendi olaylarını (click → input → change) üretir; çerçeveler arası diye sınıf yerine etiket adıyla denetlenir.
- */
-function secimeTikla(el: Element): boolean {
-  const t = el as HTMLInputElement;
-  if (el.tagName !== 'INPUT' || !['radio', 'checkbox'].includes(t.type) || t.disabled) return false;
-  if (el.closest('a[href], button, [role="button"], [role="link"]')) return false;
-  t.click();
-  return true;
 }
 
 /**
