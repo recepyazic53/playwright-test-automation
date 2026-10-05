@@ -400,6 +400,9 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  // Senaryo formunda dal düzeni (kontrol seçimi önde, kayıt grupları seçime göre): saf modül ve kendi stil dosyası.
+  ['/arayuz/senaryo-dallari.mjs', { dosya: 'senaryo-dallari.mjs', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-senaryo-dallari.css', { dosya: 'stil-senaryo-dallari.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/veri-kosusu-secimi.js', { dosya: 'veri-kosusu-secimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-diyagrami.js', { dosya: 'senaryo-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/kosu-paneli.js', { dosya: 'kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],

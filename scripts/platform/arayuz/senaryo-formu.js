@@ -35,6 +35,7 @@ import { tarihGirdisi } from './goreli-tarih-girdisi.js';
 import { talepAlani } from './talep-alani.js';
 import { veriBekliyorNotu } from './veri-bekliyor.js';
 import { HAZIRLIK_BASLIKLARI, alanMaddesi, eylemDenetimi, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
+import { bolumDuzeni, grupDali, grupGorunurlugu, kosulHaritasi } from './senaryo-dallari.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -141,6 +142,8 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
 
 function modelFormu(icerik, s, senaryo, baglam) {
   const sema = formSemasiOlustur(baglam.model, baglam.altModeller);
+  // Alanların görünürlük koşulları (dal düzeni: kontrol seçimi önde, kayıt grupları seçime göre; senaryo-dallari.mjs).
+  const kosullar = kosulHaritasi(baglam.model);
   // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
   const onceki = s.taslak?.veri || senaryo?.veri || undefined;
   // Yeni senaryo: isteğe bağlı genel senaryoların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
@@ -319,8 +322,110 @@ function modelFormu(icerik, s, senaryo, baglam) {
     return gruplar.map((g) => {
       const kap = h('div', { class: 'kayit-grubu', 'data-kayit-grubu': `${g.tablo}${g.etiket ? `[${g.etiket}]` : ''}` });
       g.kaplar.push(kap);
+      // Bu başlığın görünürlüğü bu listedeki üyelerden çıkar (grubun dalı: senaryo-dallari.mjs).
+      kapUyeleri.set(kap, alanListesi.filter((a) => alanGrubu.get(a.id) === g).map((a) => a.id));
+      g.dal ??= grupDali(g.uyeler.map((u) => u.alan.id), kosullar);
       return kap;
     });
+  }
+  // --- DAL DÜZENİ (senaryo-dallari.mjs) -------------------------------------------------------------
+  // Bölümdeki kontrol seçimi (başka alanların görünürlüğünü belirleyen alan) bölümün başında; kayıt grubu, alanlarının çoğu bir
+  // kontrolün belirli değer(ler)ine bağlıysa yalnız o dalda görünür ve başlığında dalı yazar. Seçilmeyen dalın değerleri formda
+  // kalır (gizlenir), kayda yazılmaz (senaryoNesnesiOlustur gizli alanı yazmaz). Kontrol tablodan geliyorsa dal seçilen satırın
+  // değerinden; bilinemiyorsa tüm dallar görünür ve "seçime göre değişir" notu düşülür.
+  /** kayıt grubu başlık kabı → bu kaptaki üye alan kimlikleri */
+  const kapUyeleri = new Map();
+  /** Alan şu an gizli mi (koşulu sağlanmıyor ya da adımı kapsam dışında). */
+  const alanGizliMi = (a, g = sonDurum.gorunurluk) => Boolean(g) && (g.alanlar[a.id] === false || Boolean(a.adimId && g.adimlar[a.adimId] === false));
+  const alanDurumu = (id, g) => {
+    const a = tumAlanlar.find((x) => x.id === id);
+    if (!g) return true;
+    if (a && alanGizliMi(a, g)) return false;
+    return g.alanlar[id] === undefined ? true : g.alanlar[id];
+  };
+  /** Kontrol değerinin görünen metni (seçenek metni; onay kutusunda işaretli / işaretsiz). */
+  function dalDegerMetni(kontrol, d) {
+    if (kontrol.tip === 'onayKutusu' || typeof d === 'boolean') return d === true ? 'işaretli' : d === false ? 'işaretsiz' : String(d);
+    const havuz = [...(kontrol.tip === 'secim' ? alanSecenekleri(kontrol) : []), ...(kontrol.secenekler || []), ...Object.values(kontrol.bagimlilik?.harita || {}).flat()];
+    const x = havuz.find((s) => s.deger === d) || havuz.find((s) => s.metin === d);
+    return x ? x.metin : String(d);
+  }
+  /** Grubun dal etiketi: "<kontrol>: <değer(ler)>" (değerler bilinmiyorsa null). */
+  function dalMetni(g) {
+    if (!g.dal) return null;
+    const kontrol = tumAlanlar.find((a) => a.id === g.dal.kontrolId);
+    if (!kontrol) return null;
+    let degerler = g.dal.pozitif;
+    if (!degerler.length && kontrol.tip === 'secim') degerler = alanSecenekleri(kontrol).map((x) => x.deger).filter((d) => !g.dal.negatif.includes(d));
+    if (!degerler.length) return null;
+    return `${kontrol.etiket}: ${[...new Set(degerler.map((d) => dalDegerMetni(kontrol, d)))].join(' / ')}`;
+  }
+  /** Başlık kabının görünürlüğü ve "seçime göre değişir" notu (üyelerin görünürlüğünden). */
+  function grupDaliniUygula(g, kap, gorunurluk = sonDurum.gorunurluk) {
+    if (!gorunurluk) return;
+    const durum = grupGorunurlugu((kapUyeleri.get(kap) || []).map((id) => alanDurumu(id, gorunurluk)));
+    kap.hidden = durum.gizli;
+    const not = kap.querySelector('[data-dal-belirsiz]');
+    if (not) not.hidden = !(durum.belirsiz && g.dal);
+  }
+  /** Grup kayıtta yok sayılır mı (üyelerinin çoğu gizli). */
+  const grupGizliMi = (g) => grupGorunurlugu(g.uyeler.map((u) => alanDurumu(u.alan.id, sonDurum.gorunurluk))).gizli;
+  /** Kontrol seçimi tablodan geliyorsa durum satırları (alan kimliği → { el, alan }). */
+  const dalDurumlari = new Map();
+  /** Bölümün başındaki kontrol seçimi kabı ("Önce bunu seçin"). */
+  function dalKontrolleri(kontroller, sinif = '') {
+    const durumlar = kontroller.map((a) => {
+      const el = h('p', { class: 'dal-kontrol-durumu', role: 'status', 'data-dal-durumu': a.id, hidden: true });
+      dalDurumlari.set(a.id, { el, alan: a });
+      return el;
+    });
+    const kap = h('div', { class: `dal-kontrolleri ${sinif}`.trim(), 'data-dal-kontrolleri': '' },
+      h('p', { class: 'dal-kontrol-notu' }, ikon('isaret'), h('span', {}, 'Önce bunu seçin: aşağıdaki alanlar bu seçime göre değişir.')),
+      h('div', { class: 'alan-izgarasi' }, kontroller.map(alanCiz)),
+      durumlar);
+    dalKutulari.push({ kap, idler: kontroller.map((a) => a.id) });
+    return kap;
+  }
+  /** Kontrol kutuları (kontrollerin hepsi gizliyse kutu da gizlenir). @type {Array<{ kap: HTMLElement; idler: string[] }>} */
+  const dalKutulari = [];
+  /** Değer değişince: kontrol kutuları, kayıt grubu başlıkları, tablodan kontrol durumu ve dal dışı değer notu. */
+  function dallariGuncelle(g) {
+    for (const k of dalKutulari) k.kap.hidden = k.idler.every((id) => alanDurumu(id, g) === false);
+    for (const grup of kayitGruplari.values()) for (const kap of grup.kaplar) grupDaliniUygula(grup, kap, g);
+    dalDurumlariniGuncelle();
+    dalDisiNotunuGuncelle(g);
+  }
+  // Açılışta seçili dalın dışında kalan dolu değerler (eski senaryo): formda korunur (gizli), kayıtta düşülür; küçük not.
+  const dalDisiNotu = h('div', { class: 'not-kutusu bilgi kucuk dal-disi-notu', role: 'note', 'data-dal-disi': '', hidden: true });
+  const eskiVeri = s.mod === 'duzenle' && !s.taslak && senaryo && senaryo.veri && typeof senaryo.veri === 'object' ? senaryo.veri : null;
+  const doluDeger = (v) => v !== undefined && v !== null && v !== '' && v !== false && !(Array.isArray(v) && !v.length);
+  /** Alanın eski senaryoda dolu değeri var mı (kimlik / alt model nesneleri dahil). */
+  const eskidenDolu = (a) => {
+    if (!eskiVeri) return false;
+    if (a.tip === 'kimlik') return Boolean((a.profilAnahtari && doluDeger(eskiVeri[a.profilAnahtari])) || a.kimlikAnahtarlari.some((k) => doluDeger(eskiVeri[k])));
+    return Boolean(a.anahtar) && doluDeger(eskiVeri[a.anahtar]);
+  };
+  function dalDisiNotunuGuncelle(g) {
+    if (!eskiVeri || !g) return;
+    const disarida = tumAlanlar.filter((a) => a.anahtar !== sema.baslik && alanGizliMi(a, g) && eskidenDolu(a));
+    dalDisiNotu.hidden = !disarida.length;
+    if (!disarida.length) { yerlestir(dalDisiNotu); return; }
+    yerlestir(dalDisiNotu, h('p', {},
+      h('b', {}, `Seçili dalın dışında ${disarida.length} alanın değeri var: `), disarida.map((a) => a.etiket).join(', '), '. ',
+      'Bu alanlar formda gizlendi (değerler kaybolmadı); kaydederseniz senaryoya yazılmaz.'));
+  }
+  /** Kontrol değeri tablodan (${Tablo.Sütun}): dal seçilen satırdan; bilinemiyorsa tüm dallar ("seçime göre değişir"). */
+  function dalDurumlariniGuncelle() {
+    for (const { el, alan } of dalDurumlari.values()) {
+      const b = tabloBasvurusuCoz(degerler[alan.anahtar]);
+      if (!b) { el.hidden = true; el.textContent = ''; continue; }
+      if (!tabloListesi) tablolariOku();
+      const c = tabloListesi ? basvurununTekDegeri(tabloListesi, b, { tabloSecimleri, veriKosulari, ortamIdler: [...ortamSecimi] }) : null;
+      el.hidden = false;
+      el.textContent = c && typeof c.deger === 'string'
+        ? `${alan.etiket} tablodan: seçilen satıra göre ${dalDegerMetni(alan, c.deger)}. Yalnız bu dalın alanları sorulur.`
+        : `${alan.etiket} tablodan geliyor ve seçime göre değişir: satır seçilince dal belli olur; şimdilik tüm dallar gösteriliyor.`;
+    }
   }
   /** Tüm kayıt grubu başlıklarını ve hazır moddaki alan özetlerini yeniden çizer. */
   function kayitGruplariniYenile() {
@@ -359,11 +464,16 @@ function modelFormu(icerik, s, senaryo, baglam) {
     const kipler = [['hazir', `Hazır ${tabloAdi.toLocaleLowerCase('tr')} (tablodan)`], ['yeni', 'Yeni (elle gir)']];
     const radyolar = kipler.map(([d]) => h('input', { type: 'radio', name: ad, value: d, checked: g.kip === d }));
     radyolar.forEach((r) => r.addEventListener('change', () => { if (r.checked) kayitKipiSec(g, /** @type {any} */ (r.value)); }));
+    const dal = dalMetni(g);
     const parcalar = [
       h('div', { class: 'kayit-grubu-ust' },
-        h('span', { class: 'kayit-grubu-adi' }, ikon('veri'), h('span', {}, grupAdi), h('small', { class: 'soluk' }, ` · ${g.uyeler.map((u) => u.alan.etiket).join(', ')}`)),
+        h('span', { class: 'kayit-grubu-adi' }, ikon('veri'),
+          h('span', {}, grupAdi, dal ? h('span', { class: 'kayit-grubu-dali', 'data-dal': '' }, ` — ${dal}`) : null),
+          h('small', { class: 'soluk' }, ` · ${g.uyeler.map((u) => u.alan.etiket).join(', ')}`)),
         h('div', { class: 'kayit-kipi', role: 'radiogroup', 'aria-label': `${grupAdi}: veri kaynağı` },
-          radyolar.map((r, i) => h('label', { title: kipler[i][1] }, r, h('span', {}, kipler[i][1])))))
+          radyolar.map((r, i) => h('label', { title: kipler[i][1] }, r, h('span', {}, kipler[i][1]))))),
+      dal ? h('p', { class: 'dal-belirsiz-notu', 'data-dal-belirsiz': '', hidden: true }, ikon('isaret'),
+        h('span', {}, `Seçime göre değişir: bu grup yalnız ${dal} olduğunda kullanılır (değer seçilen satıra / koşuya göre belli olur).`)) : null
     ];
     if (g.kip === 'karisik') {
       parcalar.push(h('p', { class: 'alan-uyarisi kayit-karisik', role: 'status' },
@@ -380,6 +490,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     }
     yerlestir(kap, ...parcalar);
     kap.dataset.kip = g.kip;
+    grupDaliniUygula(g, kap);
   }
   /** Gizli sütuna bağlı olmayan grup alanlarının ilk değerleri: satır adı önerisi (gizli değer öneriye girmez). */
   function satirAdiOnerisi(g) {
@@ -414,9 +525,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
   }
   /** Kaydedilecek tablo eklemeleri (Yeni + "tabloya da ekle" işaretli gruplar). */
   function kaydedilecekTabloSatirlari() {
-    return [...kayitGruplari.values()].filter((g) => g.kip === 'yeni' && g.tabloyaEkle).map((g) => ({
+    // Seçilmeyen dalın grubu (üyelerinin çoğu gizli) tabloya eklenmez; gizli üyeler de yazılmaz.
+    return [...kayitGruplari.values()].filter((g) => g.kip === 'yeni' && g.tabloyaEkle && !grupGizliMi(g)).map((g) => ({
       tablo: g.tablo, etiket: g.etiket, satirAdi: String(g.satirAdi || '').trim() || satirAdiOnerisi(g),
-      alanlar: g.uyeler.map((u) => ({ anahtar: u.alan.anahtar, sutun: u.sutun, ...(u.bicim ? { bicim: u.bicim } : {}) }))
+      alanlar: g.uyeler.filter((u) => !alanGizliMi(u.alan)).map((u) => ({ anahtar: u.alan.anahtar, sutun: u.sutun, ...(u.bicim ? { bicim: u.bicim } : {}) }))
     }));
   }
   /** Hazır: satır seçimi (tek test: koşullara uyan ilk satır / bir satır; ayrı test: listedeki her satır ya da koşullara uyan her satır). */
@@ -708,6 +820,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     if (grupOnizlemesiEski) { grupOnizlemesiEski = false; if (tabloListesi) for (const g of kayitGruplari.values()) if (g.kip === 'hazir') for (const kap of g.kaplar) kayitGrubuCiz(g, kap); }
     beklenenAdimSecenekleriniGuncelle(g);
     doldurlariGuncelle(g);
+    dallariGuncelle(g);
     if (!diyagramAlani.hidden) diyagramiCiz();
   }
 
@@ -1195,9 +1308,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const cip = bolum.gorunurlukVar ? h('span', { class: 'kosullu-cip', 'data-bolum-cipi': bolum.id, hidden: true }, ikon('isaret'), 'koşullu') : null;
       if (cip) bolumCipleri.set(bolum.id, cip);
       const baslikVar = adim.bolumler.filter((b) => b.alanlar.length).length > 1 || bolum.baslik !== adim.baslik;
+      // Dal düzeni: kontrol seçimi bölümün başında, kayıt gruplarından önce (bölümde başka alan yoksa olduğu gibi).
+      const duzen = bolumDuzeni(bolum.alanlar, kosullar);
+      const dallar = duzen.kontroller.length && duzen.digerleri.length ? dalKontrolleri(duzen.kontroller) : null;
       const grup = h('div', { class: 'bolum-grubu', 'data-bolum': bolum.id }, baslikVar ? h('h4', {}, bolum.baslik, cip ? ' ' : null, cip) : cip ? h('div', { class: 'bolum-kosulu' }, cip) : null,
+        dallar,
         kayitGrubuBasliklari(bolum.alanlar),
-        h('div', { class: 'alan-izgarasi' }, bolum.alanlar.map(alanCiz)));
+        h('div', { class: 'alan-izgarasi' }, (dallar ? duzen.digerleri : bolum.alanlar).map(alanCiz)));
       bolumKaplari.set(bolum.id, grup);
       govde.append(grup);
     }
@@ -1272,6 +1389,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     adimGoruntusuSecimi = adimGoruntusuGirdisi.value === 'ayar' ? null : adimGoruntusuGirdisi.value;
     degisti = true;
   });
+  const senaryoDuzeni = bolumDuzeni(sema.senaryoAlanlari, kosullar);
+  const senaryoDallari = senaryoDuzeni.kontroller.length && senaryoDuzeni.digerleri.length ? dalKontrolleri(senaryoDuzeni.kontroller, 'genis') : null;
   const senaryoKarti = h('section', { class: 'kart', 'aria-labelledby': 'senaryo-karti-baslik' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-karti-baslik' }, ikon('liste'), 'Senaryo'),
       h('span', { class: 'alt' }, 'Başlık, raporlarda görünen test adıdır; aynı ekranda tekil olmalıdır.')),
@@ -1283,8 +1402,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
         h('div', { class: 'alan-notu' }, 'Seçili adımlarda: ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar. Test sonu görüntüsü, video ve iz Ayarlar > Koşu > Kayıt\'tadır.')),
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
       talep.el,
+      // Dal düzeni senaryo düzeyi alanlarında da: kontrol seçimi kayıt gruplarından önce.
+      senaryoDallari,
       kayitGrubuBasliklari(sema.senaryoAlanlari).map((x) => h('div', { class: 'genis' }, x)),
-      sema.senaryoAlanlari.map(alanCiz)));
+      (senaryoDallari ? senaryoDuzeni.digerleri : sema.senaryoAlanlari).map(alanCiz)));
 
   // --- Satır seçimi (tablo başvuruları) --------------------------------------------------------
   // Formda ${Tablo.Sütun} kullanan her tablo + etiket grubu için koşuda kullanılacak satır: "Otomatik" (bağlı alanların düz
@@ -1300,7 +1421,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const kullanilanGruplar = () => {
     const gruplar = new Map();
     for (const alan of tumAlanlar) {
-      const b = alan.anahtar ? tabloBasvurusuCoz(degerler[alan.anahtar]) : null;
+      // Seçilmeyen daldaki (gizli) alanın başvurusu kayda yazılmaz: satır seçimi de sorulmaz / saklanmaz.
+      const b = alan.anahtar && !alanGizliMi(alan) ? tabloBasvurusuCoz(degerler[alan.anahtar]) : null;
       if (!b) continue;
       const k = `${b.tablo.toLocaleLowerCase('tr')}|${b.etiket}`;
       if (!gruplar.has(k)) gruplar.set(k, { tablo: b.tablo, etiket: b.etiket, alanlar: [] });
@@ -2164,6 +2286,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
           h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, deneGorunurSecimi, vazgecDugmesi)),
         denemeAlani)));
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
+  formAlani.prepend(dalDisiNotu);
   // "Veri bekliyor" (hızlı test önerisi): eksik hücrelere "Değerleri doldur"; dolunca tek tıkla "Koşuya dahil et" (veri-bekliyor.js).
   const vbNotu = s.mod === 'duzenle' ? veriBekliyorNotu({ senaryo, projeId: s.proje.id, kosuyaDahil, dahilEdildi: () => { kosuyaDahil = true; kosudaKutu.checked = true; } }) : null;
   if (vbNotu) icerik.querySelector('.form-duzeni')?.before(vbNotu);

@@ -1,0 +1,19 @@
+/* Senaryo formunda dal düzeni (senaryo-dallari.mjs, senaryo-formu.js): bölümün başındaki kontrol seçimi ("Önce bunu seçin"),
+   kayıt grubu başlığındaki dal etiketi, "seçime göre değişir" ve dal dışı değer notları. Renkler stil.css'teki tema değişkenlerinden. */
+.dal-kontrolleri {
+  display: grid; gap: 8px; min-width: 0; padding: 10px 12px;
+  border-radius: var(--yaricap-m); border: 1px dashed var(--cizgi-2); background: var(--vurgu-zemin);
+}
+.dal-kontrolleri[hidden] { display: none; }
+.dal-kontrol-notu { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--metin-2); overflow-wrap: anywhere; }
+.dal-kontrol-notu .ikon { flex: none; width: 13px; height: 13px; color: var(--vurgu); }
+.dal-kontrol-durumu { margin: 0; font-size: 12px; color: var(--metin-2); overflow-wrap: anywhere; }
+.dal-kontrol-durumu:empty, .dal-kontrol-durumu[hidden] { display: none; }
+.kayit-grubu[hidden] { display: none; }
+.kayit-grubu-dali { font-weight: 500; color: var(--metin-2); overflow-wrap: anywhere; }
+.dal-belirsiz-notu { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--durdu); overflow-wrap: anywhere; }
+.dal-belirsiz-notu[hidden] { display: none; }
+.dal-belirsiz-notu .ikon { flex: none; width: 13px; height: 13px; }
+.dal-disi-notu { margin-bottom: 12px; }
+.dal-disi-notu[hidden] { display: none; }
+.dal-disi-notu p { margin: 0; overflow-wrap: anywhere; }
