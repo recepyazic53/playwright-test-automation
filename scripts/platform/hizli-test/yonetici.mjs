@@ -17,8 +17,12 @@
 //    içerikte hizliTest: izin, bitiş, doğrulandı). Aynı ekran varsa yeni model sürümü; farklar önce onaya sunulur.
 //
 // Uçlar (oturum token'ı; kasa açık):
-//   GET  /platform/hizli-test/secenekler?projeId=&ekranId=   ortamlar (canlı mı, giriş tarifi), düzenlenecek ekran, süren oturum
-//   POST /platform/hizli-test/baslat { projeId, ortamId, hedef, ekranAdi | ekranId, cumle?, izin, girissiz?, canliOnay? } → { id }
+//   GET  /platform/hizli-test/secenekler?projeId=&ekranId=   ortamlar (canlı mı, giriş tarifi, tarifin bağlam türü), bağlam profilleri
+//                                                              (yalnız tür / ad / kapsam; alanlar dönmez), düzenlenecek ekran, süren oturum
+//   POST /platform/hizli-test/baslat { projeId, ortamId, hedef, ekranAdi | ekranId, cumle?, izin, girissiz?, canliOnay?,
+//        baglamProfilleri?: [{ tur, profilId }] } → { id }. Bağlam: tarifin bağlam türünde EN FAZLA bir profil; taramayla aynı yol (profil
+//        adıyla tarama/yonetici.mjs > baslat; motor giriş-motoru > baglamiDegistir). Tarayıcının yeniden açılması ve doğrulama koşusu aynı
+//        gövdeyle açılır (aynı bağlam). Kayıtta senaryonun bağlam profili alanına (profilHavuzu) seçilen profil yazılır.
 //   GET  /platform/hizli-test/durum?id=                       oturumun görünümü (soru, zincir, görülen metinler; değer maskesiz yalnız kullanıcının yazdığı)
 //   POST /platform/hizli-test/veri { id, degerler, zincir? }   veri durağı: { anahtar: { deger, kaynak: 'elle' | 'tablo', tabloSecimi? } };
 //        zincir: üst liste anahtarı → yalnız o seçim (ve sayfaya uygulanmamış üstleri) uygulanır, bağlı alt listeler gelince aynı durak
@@ -54,7 +58,7 @@
 // NOT: import.meta KULLANILMAZ. Tipler: yonetici.d.mts.
 import { randomBytes } from 'node:crypto';
 import {
-  DepoHatasi, ekranlariListele, ekranModeliGetir, ortamlariListele, projeGetir, senaryoGetir
+  DepoHatasi, baglamProfilleriniListele, ekranlariListele, ekranModeliGetir, ortamlariListele, projeGetir, senaryoGetir
 } from '../veritabani/depo.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
@@ -789,6 +793,12 @@ export function hizliTestYoneticisiOlustur(s) {
       askiyaAl(o, neden);
       return;
     }
+    // Keşif sonucu yalnız giriş ve bağlam değiştirme başarıyla bittikten sonra gelir (motor bağlamı sayfayı açmadan önce uygular; hata
+    // olursa iş bağlam hatasıyla biter): seçilen bağlam bu tarayıcıda uygulanmıştır.
+    if (e.olay === 'kesif' && o.baglamProfili && !o.baglamUygulandi) {
+      o.baglamUygulandi = true;
+      gunluk(o, `Bağlam: ${o.baglamProfili.tur} = ${o.baglamProfili.ad} uygulandı.`);
+    }
     if (e.olay === 'kesif' && o.yenidenAcma) {
       // Tarayıcı yeniden açıldı (keşif yapılmadı): zincir tekrar yürütülür ya da doğrulama koşusu başlar.
       const anlik = e.anlik;
@@ -1361,6 +1371,8 @@ export function hizliTestYoneticisiOlustur(s) {
     o.isId = isId;
     isiDinle(o, isId);
     o.tarayici = 'acik';
+    // Yeni tarayıcıda bağlam (aynı gövdeyle) yeniden uygulanır.
+    o.baglamUygulandi = false;
     o.isBitti = false;
     o.bekleyen = null;
     o.askida = null;
@@ -1583,6 +1595,8 @@ export function hizliTestYoneticisiOlustur(s) {
       // "Tarayıcıda şu an": sürekli akış var mı (iş tarayıcısı açık) ve tarayıcı görünür mü ("Tarayıcıyı göster" yalnız bunda).
       canliAkis: Boolean(o.tarayici !== 'kapali' && d && d.durum === 'suruyor' && d.canliDuyuruYolu), gorunur: Boolean(d && d.gorunur),
       uyari: o.sayfaUyarisi ?? null, id: o.id, durum: o.durum, izin: o.izin, izinAdi: IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (o.izin)], projeId: o.projeId, ortam: o.ortam, hedef: o.hedefYol,
+      // Seçilen bağlam (yalnız tür ve profil adı; değerleri gösterilmez).
+      baglam: o.baglamProfili ? { tur: o.baglamProfili.tur, ad: o.baglamProfili.ad, uygulandi: o.baglamUygulandi === true } : null,
       ekran: o.ekran, cumle: o.cumle, duzenleme: Boolean(o.ekran.id), durak: durakNo(o), calisiyor: o.calisiyor, sonHata: o.sonHata, hata: o.hata,
       kesif: o.kesifAnlik ? {
         alanSayisi: o.kesifAnlik.alanlar.length, dugmeAdaylari: o.kesifAnlik.dugmeler.map((/** @type {Nesne} */ x) => x.metin ?? x.secici).slice(0, 8),
@@ -1616,9 +1630,12 @@ export function hizliTestYoneticisiOlustur(s) {
   /** @param {Veritabani} vt @param {string} projeId @param {string | null} ekranId */
   function secenekler(vt, projeId, ekranId) {
     temizle();
-    const ortamlar = ortamlariListele(vt, projeId).map((x) => ({
-      id: x.id, ad: x.ad, varsayilan: x.varsayilan, canli: riskliOrtamMi(x), tarif: Boolean(etkinGirisTarifi(vt, projeId, x.id).tarif)
-    }));
+    const ortamlar = ortamlariListele(vt, projeId).map((x) => {
+      const t = etkinGirisTarifi(vt, projeId, x.id).tarif;
+      return { id: x.id, ad: x.ad, varsayilan: x.varsayilan, canli: riskliOrtamMi(x), tarif: Boolean(t), baglamTuru: t?.baglamDegistirme?.baglamTuru ?? null };
+    });
+    // Bağlam profilleri: yalnız kimlik / tür / ad / kapsam (değerleri — gizli olabilir — arayüze gitmez).
+    const baglamProfilleri = baglamProfilleriniListele(vt, projeId, undefined, { yalnizAd: true }).map((p) => ({ id: p.id, tur: p.tur, ad: p.ad, ortamId: p.ortamId }));
     /** @type {Nesne | null} */
     let ekran = null;
     if (ekranId) {
@@ -1629,7 +1646,7 @@ export function hizliTestYoneticisiOlustur(s) {
     }
     const suren = [...oturumlar.values()].find((x) => x.projeId === projeId && !['kaydedildi', 'iptal', 'hata'].includes(x.durum));
     return {
-      ortamlar, ekran, surenOturum: suren ? { id: suren.id, ekranAdi: suren.ekran.ad } : null,
+      ortamlar, baglamProfilleri, ekran, surenOturum: suren ? { id: suren.id, ekranAdi: suren.ekran.ad } : null,
       // CANLI ortamda bir kez sorulan onayın metni (izne göre; tek kaynak: akis.mjs).
       canliOnayMetinleri: Object.fromEntries(IZINLER.map((i) => [i, canliOnayMetni(i)]))
     };
@@ -1676,8 +1693,13 @@ export function hizliTestYoneticisiOlustur(s) {
       const ayni = ekranlariListele(vt, projeId).find((x) => x.anahtar === anahtar);
       ekran = ayni ? { id: ekranModeliGetir(vt, ayni.id) ? ayni.id : null, ad: ayni.ad, anahtar } : { id: null, ad, anahtar };
     }
+    // Bağlam profili (teste göre seçilir): tarayıcı açılmadan doğrulanır; taramaya profil ADIYLA verilir (aynı çözüm ve denetim yolu).
+    const baglamSecimi = baglamSeciminiDogrula(vt, projeId, ortam, g);
     // İzinler ve CANLI onayı: taramayla AYNI denetim (tarayıcı açılmadan). CANLI'da kilit yok; onay bir kez istenir.
-    const govde = { kip: 'hizliTest', projeId, ortamId, hedef: hedefKoken ? `${hedefKoken}${hedef}` : hedef, izin, onay: true, girissiz: g.girissiz === true, baglamProfilleri: [], ...(g.canliOnay === true ? { canliOnay: true } : {}) };
+    const govde = {
+      kip: 'hizliTest', projeId, ortamId, hedef: hedefKoken ? `${hedefKoken}${hedef}` : hedef, izin, onay: true, girissiz: g.girissiz === true,
+      baglamProfilleri: baglamSecimi ? [baglamSecimi.ad] : [], ...(g.canliOnay === true ? { canliOnay: true } : {})
+    };
     if (riskliOrtamMi(ortam) && g.canliOnay !== true) {
       throw new HizliTestHatasi('CANLI_ONAY_GEREKLI', canliOnayMetni(izin), 409, { ortamAdi: ortam.ad });
     }
@@ -1691,6 +1713,8 @@ export function hizliTestYoneticisiOlustur(s) {
       denetimGovdesi: govde, baslatGovdesi, tarayici: 'acik', askida: null, yenidenAcma: null,
       id, isId, projeId, projeAdi: proje.ad, ortam: { id: ortam.id, ad: ortam.ad, canli: riskliOrtamMi(ortam) }, hedefYol: hedef, ekran, izin,
       girissiz: g.girissiz === true, cumle: cumleyiOku(g.cumle), cumleMetni: metin(g.cumle, 1000),
+      // Seçilen bağlam profili ({ tur, id, ad } | null; değerleri oturumda tutulmaz) ve tarayıcıda uygulandı mı (her açılışta yeniden uygulanır).
+      baglamProfili: baglamSecimi, baglamUygulandi: false,
       durum: 'kesif', baslangic: simdi(), sonErisim: simdi(), komutNo: 0, bekleyen: null, calisiyor: 'Sayfa açılıyor ve keşfediliyor… (hiçbir düğmeye basılmaz)',
       adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
       // Bağlı listeler: alt → üst; tablolar için seçenek gözlemleri; zincir keşfinin bulguları (kullanıcıya gösterilen cümleler).
@@ -1709,7 +1733,41 @@ export function hizliTestYoneticisiOlustur(s) {
     oturumlar.set(id, o);
     isiDinle(o, isId);
     gunluk(o, `Başlatıldı: ${ortam.ad} ortamı, izin “${IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (izin)]}”${o.cumle.dugmeler.length || o.cumle.mesajlar.length ? `; cümleden: ${[...o.cumle.dugmeler.map((x) => `düğme “${x}”`), ...o.cumle.mesajlar.map((x) => `mesaj “${x}”`)].join(', ')}` : ''}.`);
+    if (baglamSecimi) gunluk(o, `Bağlam: ${baglamSecimi.tur} = ${baglamSecimi.ad} seçildi; girişten sonra uygulanacak.`);
     return { id };
+  }
+
+  /**
+   * Başlat gövdesindeki bağlam seçimi (baglamProfilleri: [{ tur, profilId }]) → { tur, id, ad } | null. Boş profilId "Bağlam yok"tur.
+   * Tarifle uyumsuzluk (tarif yok, bağlam adımı yok, başka tür, girişsiz) tarayıcı açılmadan açık hatayla reddedilir. Profilin tarifin
+   * kullandığı alanlarının dolu olduğu taramanın kendi denetimindedir (tarama/yonetici.mjs; aynı ileti).
+   * @param {Veritabani} vt @param {string} projeId @param {{ id: string; ad: string }} ortam @param {Nesne} g
+   * @returns {{ tur: string; id: string; ad: string } | null}
+   */
+  function baglamSeciminiDogrula(vt, projeId, ortam, g) {
+    if (g.baglamProfilleri === undefined || g.baglamProfilleri === null) return null;
+    if (!Array.isArray(g.baglamProfilleri) || g.baglamProfilleri.length > 12) throw new HizliTestHatasi('BAGLAM', 'Bağlam seçimi geçersiz (her bağlam türü için en fazla bir profil).');
+    /** @type {Array<{ tur: string; profilId: string }>} */
+    const secilen = [];
+    for (const x of g.baglamProfilleri) {
+      if (!nesneMi(x) || typeof x.tur !== 'string' || !x.tur.trim()) throw new HizliTestHatasi('BAGLAM', 'Bağlam seçimi geçersiz: her seçimde tür ve profil olmalı.');
+      if (x.profilId === undefined || x.profilId === null || x.profilId === '') continue;
+      const tur = x.tur.trim();
+      if (secilen.some((s2) => s2.tur === tur)) throw new HizliTestHatasi('BAGLAM', `“${tur}” bağlamı için birden çok profil seçildi; en fazla bir profil seçin.`);
+      secilen.push({ tur, profilId: kimlikAl(x.profilId, 'profilId') });
+    }
+    if (!secilen.length) return null;
+    const ilk = secilen[0];
+    if (g.girissiz === true) throw new HizliTestHatasi('BAGLAM', 'Giriş yapmadan açılan sayfada bağlam profili uygulanamaz; “Bağlam yok”u seçin ya da girişli açın.');
+    const tarif = etkinGirisTarifi(vt, projeId, ortam.id).tarif;
+    const tarifTuru = tarif?.baglamDegistirme?.baglamTuru ?? null;
+    if (!tarif) throw new HizliTestHatasi('BAGLAM', `“${ortam.ad}” ortamında giriş tarifi yok; “${ilk.tur}” bağlam profili uygulanamaz. “Bağlam yok”u seçin ya da giriş tarifi tanımlayın (Ayarlar > Giriş profilleri > Giriş tarifi).`);
+    if (!tarifTuru) throw new HizliTestHatasi('BAGLAM', `“${ortam.ad}” ortamının giriş tarifinde bağlam değiştirme adımı yok; “${ilk.tur}” bağlam profili uygulanamaz. “Bağlam yok”u seçin ya da tarife bağlam adımlarını ekleyin (Ayarlar > Giriş profilleri > Giriş tarifi).`);
+    const yanlis = secilen.find((s2) => s2.tur !== tarifTuru);
+    if (yanlis) throw new HizliTestHatasi('BAGLAM', `“${ortam.ad}” ortamının giriş tarifi yalnız “${tarifTuru}” bağlamını değiştiriyor; “${yanlis.tur}” bağlam profili uygulanamaz. Bu tür için “Bağlam yok”u seçin.`);
+    const p = baglamProfilleriniListele(vt, projeId, ilk.tur, { yalnizAd: true }).find((x) => x.id === ilk.profilId);
+    if (!p || (p.ortamId !== null && p.ortamId !== ortam.id)) throw new HizliTestHatasi('BAGLAM', `Seçilen “${ilk.tur}” bağlam profili “${ortam.ad}” ortamında tanımlı değil (silinmiş ya da başka ortama ait olabilir); yeniden seçin.`);
+    return { tur: p.tur, id: p.id, ad: p.ad };
   }
 
   /**
@@ -2289,7 +2347,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const ilk = o.kesifIlk?.[k];
       if (degerler[k] === undefined && ilk !== null && ilk !== undefined && ilk !== '') degerler[k] = ilk;
     }
-    const envanter = kayitEnvanteriKur({ adimlar: o.adimlar.map((/** @type {Nesne} */ x) => ({ ...x, alanlar: bagimliSirala(x.alanlar) })), degerler, yol: o.hedefYol.startsWith('/') ? o.hedefYol : `/${o.hedefYol}`, baslik: o.baslik, profil: null }, o.bitis);
+    const envanter = kayitEnvanteriKur({ adimlar: o.adimlar.map((/** @type {Nesne} */ x) => ({ ...x, alanlar: bagimliSirala(x.alanlar) })), degerler, yol: o.hedefYol.startsWith('/') ? o.hedefYol : `/${o.hedefYol}`, baslik: o.baslik, profil: baglamProfiliAdi(o, tarif) }, o.bitis);
     // Bağlı listeler: modelde bagimlilik + çok düzeyli test verisi tablosu (kökün seçenekleri + zincirin gözlemleri) + bulgular.
     const tumAlanlar = new Map(o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).map((/** @type {Nesne} */ a) => [a.anahtar, a]));
     // Kesinleşmeyen (belirsiz) bağ modele bağımlılık olarak yazılmaz: koşu, seçeneği hiç gelmeyebilecek listeyi beklemesin.
@@ -2313,7 +2371,22 @@ export function hizliTestYoneticisiOlustur(s) {
     const adimIdleri = (Array.isArray(model.adimlar) ? model.adimlar : []).map((/** @type {Nesne} */ a) => String(a.id));
     const olumsuz = o.bitis.olumsuz ? { mesaj: o.bitis.olumsuz.mesaj, adimId: adimIdleri[adimIdleri.length - 1] } : null;
     const veri = senaryoVerisiKur(model, anahtarlar, degerler, { olumsuz, alanTurleri: Object.fromEntries(alanlar.map((/** @type {Nesne} */ a) => [a.anahtar, String(a.tur)])) });
+    // Bağlam: normal koşunun modeliyle aynı yer — senaryonun bağlam profili alanı (senaryoDuzeyi, eslesme.profilHavuzu = tarifin bağlam
+    // türü; model-kosusu.mjs > baglamProfili). Yeni modelde alanın varsayılanı da bu profildir (akış kaydıyla aynı); senaryoya ayrıca
+    // açıkça yazılır (mevcut modelin varsayılanı başka profil olabilir).
+    const profil = baglamProfiliAdi(o, tarif);
+    if (profil && tarif?.baglamDegistirme) {
+      const sd = nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : [];
+      const pa = sd.find((/** @type {Nesne} */ a) => nesneMi(a) && nesneMi(a.eslesme) && a.eslesme.profilHavuzu === tarif.baglamDegistirme.baglamTuru && typeof a.eslesme.senaryo === 'string');
+      if (pa) veri[pa.eslesme.senaryo] = profil;
+    }
     return { paket, model, veri, mevcut: mevcut && nesneMi(mevcut.model) ? mevcut.model : null };
+  }
+
+  /** Kayda yazılacak bağlam profili adı: seçilen profil, yalnız tarif hâlâ o türün bağlamını değiştiriyorsa. @param {Nesne} o @param {Nesne | null} tarif */
+  function baglamProfiliAdi(o, tarif) {
+    const b = o.baglamProfili;
+    return b && !o.girissiz && tarif?.baglamDegistirme?.baglamTuru === b.tur ? String(b.ad) : null;
   }
 
   /**

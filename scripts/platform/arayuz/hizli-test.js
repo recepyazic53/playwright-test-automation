@@ -111,6 +111,62 @@ export function hizliTestEkrani(icerik, parcalar, baglam) {
   baslatEkrani(govde, proje, parcalar[0] === 'duzenle' ? parcalar[1] || null : null);
 }
 
+/**
+ * Başlat formunun bağlam bölümü: seçilen ortamda geçerli bağlam profilleri (tüm ortamlar + bu ortam; aynı adda ortama özgü olan) tür
+ * başına bir seçimle ("Şube: [profil]"); varsayılan "Bağlam yok (giriş kullanıcısıyla)". Profil yoksa seçim gizlenir, kısa bilgi ve
+ * tanımlama bağlantısı gösterilir; tarifte bağlam değiştirme adımı yoksa bilgide söylenir. Girişsiz açılışta ve tarifsiz ortamda bölüm
+ * gizlenir. Profil değerleri arayüze gelmez (yalnız tür / ad). Uyumsuz seçim (ör. tarifte o türün adımı yok) sunucuda başlatmadan reddedilir.
+ * @param {any} s seçenekler @param {() => any} secilenOrtam @param {() => boolean} girissizMi
+ * @returns {{ el: HTMLElement; ciz: () => void; secim: () => Array<{ tur: string; profilId: string }> }}
+ */
+function baglamBolumu(s, secilenOrtam, girissizMi) {
+  const el = h('div', { class: 'hizli-baglam', hidden: true });
+  /** Tür → seçili profil kimliği (ortam değişince aynı tür / kimlik korunur). @type {Map<string, string>} */
+  const onceki = new Map();
+  /** @type {Array<{ tur: string; secim: HTMLSelectElement }>} */
+  let secimler = [];
+  const ciz = () => {
+    for (const x of secimler) onceki.set(x.tur, x.secim.value);
+    secimler = [];
+    const o = secilenOrtam();
+    if (!o || !o.tarif || girissizMi()) { el.hidden = true; el.replaceChildren(); return; }
+    el.hidden = false;
+    /** @type {Map<string, any>} */
+    const gecerli = new Map();
+    for (const p of (s.baglamProfilleri || []).filter((p) => p.ortamId === null || p.ortamId === o.id)
+      .sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) gecerli.set(`${p.tur}\u0000${p.ad}`, p);
+    /** @type {Map<string, any[]>} */
+    const turler = new Map();
+    for (const p of gecerli.values()) { if (!turler.has(p.tur)) turler.set(p.tur, []); /** @type {any[]} */ (turler.get(p.tur)).push(p); }
+    const tanimla = h('a', { href: '#/veri' }, 'Test verisi’nde bağlam profili tanımla');
+    const tarifBaglantisi = h('a', { href: '#/ayarlar/giris' }, 'Ayarlar > Giriş profilleri > Giriş tarifi');
+    if (!turler.size) {
+      el.replaceChildren(h('div', { class: 'not-kutusu bilgi', role: 'note' },
+        o.baglamTuru ? `Bağlam: bu ortamda “${o.baglamTuru}” bağlam profili yok; test giriş kullanıcısıyla koşar. `
+          : 'Bağlam: bu ortamın giriş tarifinde bağlam değiştirme adımı yok; test giriş kullanıcısıyla koşar. ',
+        tanimla, o.baglamTuru ? null : h('span', {}, ' · Bağlam adımları: ', tarifBaglantisi)));
+      return;
+    }
+    const satirlar = [...turler.entries()].map(([tur, profiller], i) => {
+      const id = `hizli-baglam-${i}`;
+      const secim = /** @type {HTMLSelectElement} */ (h('select', { id, 'data-baglam-turu': tur },
+        h('option', { value: '' }, 'Bağlam yok (giriş kullanıcısıyla)'),
+        profiller.map((p) => h('option', { value: p.id, selected: onceki.get(tur) === p.id || null }, p.ad))));
+      secimler.push({ tur, secim });
+      const uyumsuz = tur !== o.baglamTuru;
+      return h('div', { class: 'alan' }, h('label', { for: id }, `${tur}:`), secim,
+        uyumsuz ? h('div', { class: 'yardim' }, o.baglamTuru
+          ? `Bu ortamın giriş tarifi yalnız “${o.baglamTuru}” bağlamını değiştiriyor; “${tur}” profili seçilirse test başlatılmaz.`
+          : `Bu ortamın giriş tarifinde bağlam değiştirme adımı yok; “${tur}” profili seçilirse test başlatılmaz.`) : null);
+    });
+    el.replaceChildren(h('fieldset', {}, h('legend', {}, 'Bağlam ', h('span', { class: 'soluk' }, '(isteğe bağlı)')),
+      h('p', { class: 'yardim' }, 'Test girişten sonra seçilen bağlamla (ör. başka kullanıcı / şube) koşar; kaydedilen senaryo da aynı bağlamla koşar.'),
+      satirlar,
+      o.baglamTuru ? null : h('p', { class: 'kucuk soluk' }, 'Bağlam adımları: ', tarifBaglantisi)));
+  };
+  return { el, ciz, secim: () => (el.hidden ? [] : secimler.filter((x) => x.secim.value).map((x) => ({ tur: x.tur, profilId: x.secim.value }))) };
+}
+
 /** 1. durak: Başlat. @param {HTMLElement} govde @param {{ id: string }} proje @param {string | null} ekranId */
 async function baslatEkrani(govde, proje, ekranId) {
   govde.replaceChildren(durakSeridi(1), h('p', { class: 'soluk' }, 'Yükleniyor…'));
@@ -131,8 +187,10 @@ async function baslatEkrani(govde, proje, ekranId) {
   const girissiz = h('input', { type: 'checkbox', id: 'hizli-girissiz' });
   const girissizSatiri = h('label', { class: 'onay-satiri', for: 'hizli-girissiz' }, girissiz, 'Giriş yapmadan aç (ortamın giriş tarifi kullanılmaz)');
   const secilenOrtam = () => (s.ortamlar || []).find((o) => o.id === ortam.value) || null;
-  const girisGuncelle = () => { const o = secilenOrtam(); girissizSatiri.hidden = !(o && o.tarif); if (girissizSatiri.hidden) girissiz.checked = false; };
+  const baglam = baglamBolumu(s, secilenOrtam, () => girissiz.checked);
+  const girisGuncelle = () => { const o = secilenOrtam(); girissizSatiri.hidden = !(o && o.tarif); if (girissizSatiri.hidden) girissiz.checked = false; baglam.ciz(); };
   ortam.addEventListener('change', girisGuncelle);
+  girissiz.addEventListener('change', () => baglam.ciz());
   girisGuncelle();
   const izinler = IZIN_SECENEKLERI.map((x) => {
     const r = h('input', { type: 'radio', name: 'hizli-izin', value: x.deger, id: `hizli-izin-${x.deger}` });
@@ -151,6 +209,7 @@ async function baslatEkrani(govde, proje, ekranId) {
       h('div', { class: 'yardim' }, 'Ortamın adresine göre yol (ör. /basvuru) ya da tam adres. Başka bir sitenin adresi kayıtlı değilse kaydetmeyi size sorarım.')),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-ortam' }, 'Ortam'), ortam),
     girissizSatiri,
+    baglam.el,
     h('div', { class: 'alan' }, h('label', { for: 'hizli-cumle' }, 'Ne yapılsın? ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), cumle,
       h('div', { class: 'yardim' }, 'Kalıp gerekmez, normal yazın. Örnekler: “Hesapla butonuna tıklayacağım”; “Başvurunuz alındı yazısını görünce bitir”; “Toplam tutarı yazısı gelmeli”. Anlaşılmayan kısım yok sayılır.')),
     h('fieldset', { class: 'hizli-izinler' }, h('legend', {}, 'Nöbetçi sayfadaki düğmelere basabilir mi?'), izinler.map((x) => x.el)),
@@ -177,7 +236,8 @@ async function baslatEkrani(govde, proje, ekranId) {
       const istek = () => api('/platform/hizli-test/baslat', {
         govde: {
           projeId: proje.id, ortamId: ortam.value, hedef: adres.value.trim(), ...(s.ekran ? { ekranId: s.ekran.id } : { ekranAdi: ad.value.trim() }),
-          cumle: cumle.value.trim() || undefined, izin, girissiz: girissiz.checked || undefined, ...(canliOnay ? { canliOnay: true } : {})
+          cumle: cumle.value.trim() || undefined, izin, girissiz: girissiz.checked || undefined, ...(canliOnay ? { canliOnay: true } : {}),
+          ...(baglam.secim().length ? { baglamProfilleri: baglam.secim() } : {})
         }
       });
       // Başka bir sitenin tam adresi kayıtlı değilse sorulur; onaylanmadan hiçbir istek atılmaz.
@@ -278,7 +338,7 @@ function oturumEkrani(govde, id) {
     }
     if (canliKutu && ['kaydedildi', 'iptal', 'hata'].includes(o.durum)) { canliKutu.durdur(); canliKutu = null; }
     if (canliKutu && o.goruntu) canliKutu.goruntuVer(o.goruntu);
-    const yeniYan = JSON.stringify([o.adimlar, o.gunluk.length, canliKutu ? 0 : (o.goruntu || '').length, o.bulgular, o.zincir, Boolean(canliKutu)]);
+    const yeniYan = JSON.stringify([o.adimlar, o.gunluk.length, canliKutu ? 0 : (o.goruntu || '').length, o.bulgular, o.zincir, Boolean(canliKutu), o.baglam]);
     if (yeniYan !== yanImza) { yanImza = yeniYan; yanCiz(yan, o, canliKutu ? canliKutu.el : null); }
     if (yeniImza === imza) return;
     // Seçim sayfaya uygulanırken kart yerinde kalır (kullanıcı yazmayı / seçmeyi sürdürür); yanıt gelince yeniden çizilir.
@@ -307,7 +367,9 @@ function yanCiz(yan, o, canli = null) {
       h('span', { class: 'sag' }, rozet(o.ortam.canli ? `${o.ortam.ad} · CANLI ortam` : o.ortam.ad, o.ortam.canli ? 'uyari' : ''), rozet(`İzin: ${o.izinAdi}`))),
       canli || (o.goruntu ? h('img', { class: 'hizli-goruntu', src: `data:image/jpeg;base64,${o.goruntu}`, alt: 'Hızlı test tarayıcısındaki sayfanın son görüntüsü' })
         : h('p', { class: 'soluk kucuk' }, 'Görüntü keşiften sonra gelir.')),
-      h('p', { class: 'soluk kucuk' }, `Sayfa: ${o.hedef}`)),
+      h('p', { class: 'soluk kucuk' }, `Sayfa: ${o.hedef}`),
+      // Seçilen bağlam (yalnız tür ve profil adı): girişten sonra uygulanır; her tarayıcı açılışında yeniden.
+      o.baglam ? h('p', { class: 'soluk kucuk hizli-baglam-durumu' }, `Bağlam: ${o.baglam.tur} = ${o.baglam.ad}${o.baglam.uygulandi ? ' (uygulandı)' : ' (girişten sonra uygulanacak)'}`) : null),
     zincir.length ? h('section', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Zincir')),
       h('ol', { class: 'hizli-zincir' }, zincir.map((a) => h('li', {},
         a.alanlar.length ? h('span', {}, `${a.alanlar.filter((x) => x.deger !== null).length} alan dolduruldu`) : null,
