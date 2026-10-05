@@ -75,7 +75,7 @@ export interface FormSemasi {
     basariMesajlari: string[];
   } | null;
   /** Koşullardaki model alan kimliği → senaryo anahtarı (+ varsayılan değer). */
-  alanAnahtarlari?: Record<string, { anahtar: string; varsayilan?: unknown }>;
+  alanAnahtarlari?: Record<string, { anahtar: string; varsayilan?: unknown; ortak?: true }>;
 }
 
 export type FormDegerleri = Record<string, unknown>;

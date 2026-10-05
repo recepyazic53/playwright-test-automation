@@ -479,14 +479,15 @@ export function formSemasiOlustur(model, altModeller = {}) {
   // Koşullardaki model alan kimliği → senaryo anahtarı (+ varsayılan değer): adım koşullarını senaryo verisiyle değerlendirmek için.
   /** @type {Record<string, { anahtar: string; varsayilan?: unknown }>} */
   const alanAnahtarlari = {};
-  const anahtarEkle = (/** @type {any} */ alan) => {
+  // ortak: genel senaryodan (açılmış ortak akış adımı) gelen alan — koşulda boşsa bilinmiyor sayılır.
+  const anahtarEkle = (/** @type {any} */ alan, /** @type {boolean} */ ortak = false) => {
     if (!nesneMi(alan) || typeof alan.id !== 'string') return;
     const anahtar = senaryoAnahtarlari(alan)[0];
     if (!anahtar || alanAnahtarlari[alan.id]) return;
     const v = nesneMi(alan.varsayilan) && alan.varsayilan.deger !== undefined && alan.varsayilan.deger !== null ? { varsayilan: kopya(alan.varsayilan.deger) } : {};
-    alanAnahtarlari[alan.id] = { anahtar, ...v };
+    alanAnahtarlari[alan.id] = { anahtar, ...v, ...(ortak ? { ortak: true } : {}) };
   };
-  for (const adim of adimlarSirali) for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) anahtarEkle(a);
+  for (const adim of adimlarSirali) for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) anahtarEkle(a, typeof adim.ortakAkisAdi === 'string');
   for (const a of senaryoDuzeyi) anahtarEkle(a);
 
   // Adımları seçen senaryo ayarı (ör. "Ödeme şekli: kart / açık hesap"): formun başı yerine, o ayara bağlı İLK adımdan hemen
@@ -575,7 +576,10 @@ function adimKosuluSaglaniyorMu(ifade, veri, alanAnahtarlari) {
   };
   if (typeof ifade.alan === 'string') {
     const d = deger(ifade.alan);
+    // Genel senaryo alanı boşsa bilinmiyor (senaryo-dogrulayici.mjs ile aynı kural).
+    if (bosMu(d) && alanAnahtarlari[ifade.alan] && alanAnahtarlari[ifade.alan].ortak) return null;
     if (typeof d === 'string' && /\$\{[^}]+\}/.test(d)) return null; // tablodan gelen değer: koşuda belli olur
+    if (typeof ifade.dolu === 'boolean') return ifade.dolu === !bosMu(d);
     if (Array.isArray(ifade.icinde)) return ifade.icinde.includes(d);
     return d === ifade.esit;
   }

@@ -24,6 +24,7 @@ import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/pa
 import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { yerTutucuSecenekMi } from './yer-tutucu-secenek.mjs';
 import { bulguMetni, olaganYuklenme, zincirBagimliliklari } from './zincir-kesfi.mjs';
+import { ifadeBirlestir, kosulOzeti, satirIfadesi, yeniBicimMi } from './gorunurluk-kosulu.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
@@ -1412,6 +1413,48 @@ export function kayitPaketiOlustur(meta, envanter) {
     alan.gorunurluk = { kosul: ad };
     return true;
   };
+  /** Genel senaryo alanlarına (ortak akış; bu modelde olmayan) başvuran yeni koşulların alan kimlikleri: çıkarılmaz. */
+  const ortakBasvurular = new Set();
+  /** JSON değerinin anahtar sırasından bağımsız yazımı (aynı ifade karşılaştırması). @param {unknown} d @returns {string} */
+  const kararli = (d) => (Array.isArray(d) ? `[${d.map(kararli).join(',')}]`
+    : nesneMi(d) ? `{${Object.keys(d).sort().map((x) => `${JSON.stringify(x)}:${kararli(/** @type {Record<string, unknown>} */ (d)[x])}`).join(',')}}` : JSON.stringify(d) ?? 'null');
+  /**
+   * Akış tasarımının yeni biçimli koşulu (gorunurluk-kosulu.mjs: =, ≠, dolu, boş; VE / VEYA; genel senaryo alanı) → adlandırılmış koşul.
+   * Ekranın alanı kayıt anahtarından model kimliğine çevrilir; genel senaryo alanı kendi kimliğiyle yazılır. Aynı ifadeli koşul varsa
+   * (bu kayıtta ya da mevcut modelde) o kullanılır. Alan bulunamazsa false.
+   * @param {Record<string, any>} alan @param {import('./gorunurluk-kosulu.d.mts').YeniKosul} k
+   */
+  const yeniKosulYaz = (alan, k) => {
+    /** @type {unknown[]} */
+    const ifadeler = [];
+    for (const s of k.satirlar) {
+      if (s.ortak) { ifadeler.push(satirIfadesi(s, s.alan, s.onay === true)); ortakBasvurular.add(s.alan); continue; }
+      const m = hamdanModel.get(s.alan);
+      if (!m) return false;
+      ifadeler.push(satirIfadesi(s, String(m.id), tumHamlar.get(s.alan)?.tur === 'checkbox'));
+    }
+    if (!ifadeler.length) return false;
+    const ifade = ifadeBirlestir(k.bag, ifadeler);
+    const imza = kararli(ifade);
+    const ayniMi = (/** @type {unknown} */ x) => nesneMi(x) && kararli(x.ifade) === imza;
+    const ayni = Object.keys(yeniKosullar).find((ad) => ayniMi(yeniKosullar[ad]))
+      ?? (mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar).find((ad) => ayniMi(mevcut.kosullar[ad])) : undefined);
+    if (ayni) {
+      if (!(ayni in yeniKosullar) && mevcut) yeniKosullar[ayni] = mevcut.kosullar[ayni];
+      alan.gorunurluk = { kosul: ayni };
+      return true;
+    }
+    const etiketBul = (/** @type {import('./gorunurluk-kosulu.d.mts').KosulSatiri} */ s) => (s.ortak ? s.etiket || s.alan : temizMetin(tumHamlar.get(s.alan)?.etiket, sayac, 120) || String(hamdanModel.get(s.alan)?.id ?? s.alan));
+    const degerMetni = (/** @type {import('./gorunurluk-kosulu.d.mts').KosulSatiri} */ s, /** @type {string} */ d) => {
+      const h = s.ortak ? undefined : tumHamlar.get(s.alan);
+      if (h?.tur === 'checkbox') return kesifDegerMetni(h, d);
+      return temizMetin([...(h?.secenekler ?? []), ...(h?.radyolar ?? [])].find((x) => x.deger === d)?.metin, sayac, 80) ?? d;
+    };
+    const ad = benzersiz(`${String(alan.id)}Gorunur`, kosulAdlari);
+    yeniKosullar[ad] = { aciklama: `${kosulOzeti(k, etiketBul, degerMetni)?.replace(/ ise$/, '') ?? ''} ise görünür (akış tasarımı).`, ifade };
+    alan.gorunurluk = { kosul: ad };
+    return true;
+  };
   const secimAdaylari = [...hamdanModel.keys()].filter((c) => ['select', 'radio'].includes(tumHamlar.get(c)?.tur ?? ''));
   for (const k of kayitlar) {
     const okumalar = k.okumalar ?? [];
@@ -1422,6 +1465,11 @@ export function kayitPaketiOlustur(meta, envanter) {
       // Akış tasarımında elle belirlenen koşul (null: koşulsuz — mevcut koşul da kaldırılır) otomatik çıkarımın yerine geçer.
       if (k.kosullar && Object.prototype.hasOwnProperty.call(k.kosullar, h.anahtar)) {
         const elle = k.kosullar[h.anahtar];
+        if (elle && yeniBicimMi(elle)) {
+          delete alan.gorunurluk;
+          if (!yeniKosulYaz(alan, elle)) bilinmeyenler.push(`"${etiket}" alanının koşulundaki alan akışta yok; koşul yazılmadı.`);
+          continue;
+        }
         // Modeldeki koşulla aynıysa korunur (her kayıtta yeni koşul adı birikmesin).
         if (elle && nesneMi(alan.gorunurluk) && typeof alan.gorunurluk.kosul === 'string' && mevcut && nesneMi(mevcut.kosullar)) {
           const ifade = mevcut.kosullar[alan.gorunurluk.kosul]?.ifade;
@@ -1469,6 +1517,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     // Artık var olmayan alan/adımlara başvuran koşullar, görünürlükler ve iş kuralları çıkarılır.
     const alanIdleri = new Set(adimlar.flatMap((a) => /** @type {Array<{ alanlar: Array<Record<string, unknown>> }>} */ (a.bolumler ?? []).flatMap((b) => b.alanlar.map((x) => String(x.id)))));
     for (const a of digerAlanlar) alanIdleri.add(String(a.id));
+    // Genel senaryo alanına başvuran koşullar (alan bu modelde değil, ortak akışta) çıkarılmaz.
+    for (const id of ortakBasvurular) alanIdleri.add(id);
     for (const a of nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : []) {
       if (nesneMi(a) && typeof a.id === 'string') alanIdleri.add(a.id);
     }

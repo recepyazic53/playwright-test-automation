@@ -418,6 +418,10 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/oge-secme.js', { dosya: 'oge-secme.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/eylem-adaylari.js', { dosya: 'eylem-adaylari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-tasarimi.js', { dosya: 'akis-tasarimi.js', tur: 'text/javascript; charset=utf-8' }],
+  // Akış tasarımında "ne zaman görünür?" düzenleyicisi, sunucuyla ORTAK koşul biçimi (saf modül) ve kendi stil dosyası.
+  ['/arayuz/kosul-duzenleyici.js', { dosya: 'kosul-duzenleyici.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/gorunurluk-kosulu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tarama', 'gorunurluk-kosulu.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/stil-kosul-duzenleyici.css', { dosya: 'stil-kosul-duzenleyici.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/tablo-siralama.js', { dosya: 'tablo-siralama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/aranabilir-secim.js', { dosya: 'aranabilir-secim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/playwright-disa-aktarma.js', { dosya: 'playwright-disa-aktarma.js', tur: 'text/javascript; charset=utf-8' }],

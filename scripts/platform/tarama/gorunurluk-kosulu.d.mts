@@ -1,0 +1,17 @@
+export type KosulIslemi = 'esit' | 'degil' | 'dolu' | 'bos';
+export type KosulSatiri = { alan: string; islem: KosulIslemi | string; degerler: string[]; ortak?: boolean; onay?: boolean; etiket?: string };
+export type EskiKosul = { secim: string; degerler: string[] };
+export type YeniKosul = { bag: 've' | 'veya'; satirlar: KosulSatiri[] };
+export type DiyagramKosulu = EskiKosul | YeniKosul;
+
+export declare const KOSUL_ISLEMLERI: readonly KosulIslemi[];
+export declare const KOSUL_SATIR_EN_COK: number;
+export declare const KOSUL_DEGER_EN_COK: number;
+export declare const ISLEM_ADLARI: Readonly<Record<KosulIslemi, string>>;
+export declare function yeniBicimMi(k: unknown): k is YeniKosul;
+export declare function kosulSatirlari(k: unknown): YeniKosul | null;
+export declare function kosulAyikla(ham: unknown): DiyagramKosulu | undefined;
+export declare function satirIfadesi(satir: { islem: string; degerler: string[] }, alanId: string, onay: boolean): Record<string, unknown>;
+export declare function ifadeBirlestir(bag: 've' | 'veya', ifadeler: unknown[]): unknown;
+export declare function ifadedenSatirlar(ifade: unknown): YeniKosul | null;
+export declare function kosulOzeti(k: unknown, etiketBul: (satir: KosulSatiri) => string, degerMetni?: (satir: KosulSatiri, deger: string) => string): string | null;

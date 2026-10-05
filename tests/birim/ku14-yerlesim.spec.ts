@@ -197,14 +197,15 @@ test('koşul penceresi onay kutusu alanını listeler; "Ek hizmet işaretliyken"
   const { page, konsol, disari } = await sayfa();
   await diyagramiAc(page);
   await page.getByRole('button', { name: 'Hizmet türü: koşul' }).click();
-  const secim = page.getByRole('combobox', { name: 'Koşulun seçim alanı' });
-  await expect(secim.locator('option')).toHaveText(['Koşulsuz (her zaman görünür)', 'Müşteri tipi', 'Ek hizmet']);
+  const secim = page.getByRole('group', { name: 'Koşul 1' }).getByRole('combobox', { name: 'Alan' });
+  await expect(secim.locator('option', { hasText: 'Ek hizmet' })).toHaveCount(1);
+  await expect(secim.locator('option', { hasText: 'Müşteri tipi' })).toHaveCount(1);
   await secim.selectOption({ label: 'Ek hizmet' });
-  const degerler = page.getByRole('group', { name: 'Görünür olduğu seçenekler' });
+  const degerler = page.getByRole('group', { name: 'Değerler' });
   await expect(degerler.getByRole('radio')).toHaveCount(2);
   await degerler.getByLabel('İşaretli').check();
   await page.getByRole('button', { name: 'Koşulu kaydet' }).click();
-  await expect(page.getByRole('button', { name: 'Hizmet türü: koşul' })).toHaveText('Ek hizmet = İşaretli ise');
+  await expect(page.locator('.tasarim-alani', { hasText: 'Hizmet türü' }).locator('.kosul-ozeti')).toHaveText('Ek hizmet = İşaretli ise görünür');
   await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
   await page.locator('dialog[open]').getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText(/Akış kaydedildi/)).toBeVisible();
@@ -213,7 +214,8 @@ test('koşul penceresi onay kutusu alanını listeler; "Ek hizmet işaretliyken"
   expect(m.kosullar[hizmet.gorunurluk.kosul].ifade).toEqual({ alan: 'ekHizmet', esit: true });
   // Yeniden açınca koşul kilitli (korunan) değil, düzenlenebilir.
   await diyagramiAc(page);
-  await expect(page.getByRole('button', { name: 'Hizmet türü: koşul' })).toHaveText('Ek hizmet = İşaretli ise');
+  await expect(page.getByRole('button', { name: 'Hizmet türü: koşul' })).toHaveText('Koşulu düzenle');
+  await expect(page.locator('.tasarim-alani', { hasText: 'Hizmet türü' }).locator('.kosul-ozeti')).toHaveText('Ek hizmet = İşaretli ise görünür');
   expect(konsol).toEqual([]);
   expect(disari).toEqual([]);
   await page.close();

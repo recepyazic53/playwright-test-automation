@@ -381,6 +381,12 @@ function ic(baglam, senaryo) {
   const alanlar = modelAlanlari(model);
   const idAnahtar = {};
   const idAlan = {};
+  // Genel senaryodan (ortak akış; açılmış modelde adımı ortakAkisAdi taşır) gelen alanlar: koşulda boşsa bilinmiyor sayılır.
+  const ortakIdler = new Set();
+  for (const adim of model.adimlar || []) {
+    if (!adim || typeof adim.ortakAkisAdi !== 'string') continue;
+    for (const bolum of adim.bolumler || []) for (const alan of bolum.alanlar || []) if (alan && typeof alan.id === 'string') ortakIdler.add(alan.id);
+  }
   for (const { alan } of alanlar) {
     idAlan[alan.id] = alan;
     const s = alan.eslesme && alan.eslesme.senaryo;
@@ -396,6 +402,7 @@ function ic(baglam, senaryo) {
     senaryo,
     alanlar,
     idAlan,
+    ortakIdler,
     alanDegeri: (id) => (idAnahtar[id] !== undefined ? senaryo[idAnahtar[id]] : undefined),
     // ${Tablo.Sütun} değerinin seçilen satırdan TEK değeri (verilmezse tablodan gelen değere bağlı koşul bilinmiyor).
     tabloDegeri: typeof baglam.tabloDegeri === 'function' ? baglam.tabloDegeri : null,
@@ -480,6 +487,9 @@ function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
   }
   if (typeof ifade.alan === 'string') {
     const deger = b.alanDegeri(ifade.alan);
+    // Genel senaryo alanı (ortak akış) senaryoda boşsa koşul bilinmiyor: blok dahil değil ya da değer sayfada / koşuda belli olur
+    // (koşucu alan görünürse doldurur; formda "koşullu · bilinmiyor"). Ekranın kendi alanı boşsa koşul olduğu gibi değerlendirilir.
+    if (bosMu(deger) && b.ortakIdler && b.ortakIdler.has(ifade.alan)) return null;
     /** Alanın değerinin eşdeğer yazımları (düz değer; tablodan gelen değerde tablodaki değer + sayfa karşılığı). */
     let adaylar = [deger];
     // Değeri tablodan (${Tablo.Sütun}) gelen alan: seçilen satırdan değer TEK ise (baglam.tabloDegeri) o değerle değerlendirilir;
@@ -490,6 +500,8 @@ function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
       if (!c || typeof c.deger !== 'string') { b.satiraGore = true; return null; }
       adaylar = [c.deger, ...(typeof c.sayfa === 'string' && c.sayfa !== c.deger ? [c.sayfa] : [])];
     }
+    // { alan, dolu }: alan dolu (true) / boş (false) iken.
+    if (typeof ifade.dolu === 'boolean') return ifade.dolu === !bosMu(adaylar[0]);
     const alan = b.idAlan[ifade.alan];
     const esit = (hedef) => adaylar.some((a) => ayniSecenekMi(alan, a, hedef));
     if (Array.isArray(ifade.icinde)) return ifade.icinde.some(esit);

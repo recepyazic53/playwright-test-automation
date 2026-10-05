@@ -45,6 +45,7 @@ import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
 import { sinirHatalari } from './ekran-modeli-dogrulayici.mjs';
 import { sayfadaSecDiyalogu } from './oge-secme.js';
 import { gezinmeOzetiKutusu } from './gezinme-ozeti.js';
+import { kosulAraclari } from './kosul-duzenleyici.js';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -206,6 +207,8 @@ export async function akisTasarimi(icerik, s) {
   let tumunuGoster = false;
   let acikMenu = -1;
   const alanBilgisi = new Map(palet.alanlar.map((a) => [a.anahtar, a]));
+  /** Koşul düzenleyicisi ve özetleri (alanların tablo değerleri ve genel senaryo alanları: sunucu kosulKaynaklari). */
+  const kosulAraci = kosulAraclari({ alanBilgisi, kaynaklar: veri.kosulKaynaklari, bloklar: () => bloklar });
   /**
    * Elle tanımlanan alan / düğmeler (yalnız ekranın ya da genel senaryonun akışını düzenlerken): kayıtta / modelde olmayan öğe
    * (ör. boş başlayan genel senaryoya sıfırdan adım). Sağ listeye eklenir; kaydederken sunucuya "elleOgeler" olarak gider
@@ -482,17 +485,24 @@ export async function akisTasarimi(icerik, s) {
       }, ikon('carpi')));
     const kosul = bloklar[i].kosullar ? bloklar[i].kosullar[anahtar] : undefined;
     const kosulYazisi = kosulMetni(kosul);
-    // Diyagramda gösterilemeyen koşul (ör. çok şartlı, çalışma anında): salt okunur, alanın tanımıyla aynen korunur.
+    // Alanın üstünde "ne zaman görünür?" satırı: koşul yoksa "Koşul ekle"; varsa özet + "Koşulu düzenle". Diyagramda gösterilemeyen
+    // koşul (ör. iç içe, çalışma anında): salt okunur, alanın tanımıyla aynen korunur.
     const korunanKosul = bloklar[i].korunanKosullar ? bloklar[i].korunanKosullar[anahtar] : null;
-    if (korunanKosul) cip.insertBefore(h('span', {
+    const kosulUst = h('div', { class: 'kosul-ust' });
+    if (korunanKosul) kosulUst.append(h('span', {
       class: 'kosul-dugmesi var kilitli', role: 'note', 'aria-label': `${etiket}: koşul (diyagramda düzenlenemez)`,
       title: `Görünür: ${korunanKosul}. Bu koşul diyagramda düzenlenemez; kaydederken modeldeki hâliyle aynen korunur.`
-    }, ikon('kilit'), korunanKosul), cip.querySelector('.zorunluluk'));
-    else cip.insertBefore(h('button', {
-      type: 'button', class: `kosul-dugmesi${kosulYazisi ? ' var' : ''}`, 'aria-label': `${etiket}: koşul`,
-      title: kosulYazisi ? `Görünür: ${kosulYazisi}. Değiştirmek için tıklayın.` : 'Her zaman görünür. Seçime bağlıysa koşul ekleyin.',
-      onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; ciz(); }
-    }, ikon('isaret'), kosulYazisi || 'Koşul'), cip.querySelector('.zorunluluk'));
+    }, ikon('kilit'), korunanKosul));
+    else {
+      if (kosulYazisi) kosulUst.append(h('span', { class: 'kosul-ozeti', 'data-kosul-ozeti': anahtar, title: `${kosulYazisi} görünür` }, ikon('isaret'), `${kosulYazisi} görünür`));
+      // Erişilebilir ad görünen metinle başlar (WCAG 2.5.3); "‹alan›: koşul" ile de bulunur.
+      kosulUst.append(h('button', {
+        type: 'button', class: `kosul-dugmesi${kosulYazisi ? ' var' : ''}`, 'aria-label': `${kosulYazisi ? 'Koşulu düzenle' : 'Koşul ekle'} — ${etiket}: koşul`, 'aria-expanded': kosulDuzenleme && kosulDuzenleme.blok === i && kosulDuzenleme.alan === anahtar ? 'true' : 'false',
+        title: kosulYazisi ? `Görünür: ${kosulYazisi}. Değiştirmek için tıklayın.` : 'Her zaman görünür. Başka bir alanın değerine bağlıysa koşul ekleyin.',
+        onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; sinirDuzenleme = null; ciz(); }
+      }, kosulYazisi ? null : ikon('isaret'), kosulYazisi ? 'Koşulu düzenle' : 'Koşul ekle'));
+    }
+    cip.insertBefore(kosulUst, cip.firstChild);
     // Alanın bölümünün diyagramda düzenlenmeyen özellikleri (ör. bölümün görünürlük koşulu): salt okunur; bölümle birlikte korunur.
     const bolumNotu = bloklar[i].bolumNotlari ? bloklar[i].bolumNotlari[anahtar] : null;
     if (bolumNotu) cip.insertBefore(h('span', {
@@ -540,55 +550,16 @@ export async function akisTasarimi(icerik, s) {
     return cip;
   }
 
-  /** "Müşteri tipi = Bireysel ya da Kurumsal ise" (koşul yoksa null). */
-  function kosulMetni(kosul) {
-    if (!kosul) return null;
-    const s = alanBilgisi.get(kosul.secim);
-    const metinler = kosul.degerler.map((d) => (s && s.secenekler ? (s.secenekler.find((o) => o.deger === d) || { metin: d }).metin : d));
-    return `${s ? s.etiket : kosul.secim} = ${metinler.join(' ya da ')} ise`;
-  }
+  /** "Tip = A ve Bayi = X ise" (koşul yoksa null). */
+  const kosulMetni = (kosul) => kosulAraci.metin(kosul);
 
-  /** Alanın koşul düzenleyicisi: seçim alanı (akıştaki açılır liste / radyo) + görünür olduğu seçenekler. */
+  /** Alanın koşul düzenleyicisi (kosul-duzenleyici.js): ekranın ve akıştaki genel senaryoların alanları; =, ≠, dolu, boş; VE / VEYA. */
   function kosulDuzenleyici(b, anahtar) {
-    const a = alanBilgisi.get(anahtar);
-    const mevcut = b.kosullar ? b.kosullar[anahtar] : undefined;
-    const adaylar = [...new Set(bloklar.flatMap((x) => (x.tur === 'alanlar' ? x.alanlar : [])))]
-      .filter((x) => x !== anahtar && alanBilgisi.get(x) && alanBilgisi.get(x).secenekler);
-    const secim = h('select', { 'aria-label': 'Koşulun seçim alanı' },
-      h('option', { value: '' }, 'Koşulsuz (her zaman görünür)'),
-      adaylar.map((x) => h('option', { value: x, selected: Boolean(mevcut && mevcut.secim === x) }, alanBilgisi.get(x).etiket)));
-    const degerler = h('div', { class: 'kosul-degerleri', role: 'group', 'aria-label': 'Görünür olduğu seçenekler' });
-    const hataEl = h('p', { class: 'tasarim-hatalari', role: 'alert' });
-    const secenekleriCiz = () => {
-      const s = alanBilgisi.get(secim.value);
-      hataEl.textContent = '';
-      // Onay kutusu: tek durum seçilir (işaretliyken / işaretsizken görünür); seçim alanında birden çok seçenek işaretlenebilir.
-      const onay = Boolean(s && s.tur === 'checkbox');
-      yerlestir(degerler, s ? s.secenekler.map((o) => h('label', { class: 'onay-satiri kucuk' },
-        h('input', { type: onay ? 'radio' : 'checkbox', name: onay ? 'kosul-onay-durumu' : null, value: o.deger, checked: Boolean(mevcut && mevcut.secim === secim.value && mevcut.degerler.includes(o.deger)) }), o.metin))
-        : h('p', { class: 'soluk kucuk' }, adaylar.length ? 'Alan her zaman görünür kabul edilir.' : 'Akışta seçim alanı (açılır liste / radyo) ya da onay kutusu yok; önce o alanı bir gruba ekleyin.'));
-    };
-    secim.addEventListener('change', secenekleriCiz);
-    degerler.addEventListener('change', () => { hataEl.textContent = ''; });
-    secenekleriCiz();
-    return h('div', { class: 'kosul-duzenleyici' },
-      h('b', {}, `“${a ? a.etiket : anahtar}” ne zaman görünür?`),
-      h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Seçim alanı'), secim),
-      degerler, hataEl,
-      h('div', { class: 'dugmeler' },
-        h('button', {
-          type: 'button', class: 'kucuk-dugme birincil', onclick: () => {
-            if (!secim.value) b.kosullar = { ...(b.kosullar || {}), [anahtar]: null };
-            else {
-              const d = [...degerler.querySelectorAll('input:checked')].map((x) => x.value);
-              if (!d.length) { hataEl.textContent = 'Alanın görünür olduğu en az bir seçeneği işaretleyin.'; return; }
-              b.kosullar = { ...(b.kosullar || {}), [anahtar]: { secim: secim.value, degerler: d } };
-            }
-            kosulDuzenleme = null;
-            degisti();
-          }
-        }, 'Koşulu kaydet'),
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { kosulDuzenleme = null; ciz(); } }, 'Vazgeç')));
+    const odak = () => akis.querySelector(`[data-alan="${CSS.escape(anahtar)}"] .kosul-dugmesi`)?.focus();
+    return kosulAraci.duzenleyici(b, anahtar, {
+      kaydet: (kosul) => { b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul }; kosulDuzenleme = null; degisti(); odak(); },
+      vazgec: () => { kosulDuzenleme = null; ciz(); odak(); }
+    });
   }
 
   /**

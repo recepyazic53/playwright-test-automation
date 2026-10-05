@@ -34,6 +34,9 @@ import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
 import { EKRAN_ANAHTARI_DESENI } from './sayfa-paketi.mjs';
 import { sinirHatalari } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
+import { ifadedenSatirlar } from '../tarama/gorunurluk-kosulu.mjs';
+import { etkinAlanBaglari, ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Nesne */
@@ -148,6 +151,27 @@ const gorunurlukIfadesi = (model, g) => (nesneMi(g) ? (typeof g.kosul === 'strin
 const secimKosulu = (ifade) => (nesneMi(ifade) && typeof ifade.alan === 'string' && (Array.isArray(ifade.icinde) || typeof ifade.esit === 'string' || typeof ifade.esit === 'boolean')
   ? { secim: ifade.alan, degerler: Array.isArray(ifade.icinde) ? ifade.icinde.map(String) : [String(ifade.esit)] } : null);
 
+/**
+ * Görünürlük ifadesinin diyagram koşulu (düzenleyicide açılır): seçim alanına bağlı basit koşul eski biçimde ({ secim, degerler };
+ * geri uyum), =, ≠, dolu, boş satırlarından oluşan tek düzey VE / VEYA yeni biçimde (gorunurluk-kosulu.mjs). Satırın alanı
+ * diyagramda gösterilen (korunmayan) bir alan ya da bu modelde olmayan — genel senaryodan gelen — alan olmalı (ortak: true).
+ * Gösterilemiyorsa null (koşul salt okunur, modeldeki hâliyle korunur).
+ * @param {unknown} ifade @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env @param {Set<string>} korunanAlanlar
+ * @param {Map<string, string>} modelAlanlari modelin (tüm akışlar + senaryo düzeyi) alan kimlikleri → etiket
+ * @returns {import('../tarama/akis-tasarimi.d.mts').AkisKosulu | null}
+ */
+function diyagramKosulu(ifade, env, korunanAlanlar, modelAlanlari) {
+  const eski = secimKosulu(ifade);
+  if (eski && !korunanAlanlar.has(eski.secim) && kosulTemsilEdilir(env, eski)) return eski;
+  const ks = ifadedenSatirlar(ifade);
+  if (!ks) return null;
+  for (const s of ks.satirlar) {
+    if (!modelAlanlari.has(s.alan)) { s.ortak = true; continue; }
+    if (korunanAlanlar.has(s.alan) || !env.alanlar.some((x) => x.alan.anahtar === s.alan)) return null;
+  }
+  return ks;
+}
+
 /** Modeldeki alanların kimlik → etiket haritası (tüm akışlar + senaryo düzeyi). @param {Nesne} model */
 function alanEtiketleri(model) {
   /** @type {Map<string, string>} */
@@ -163,6 +187,7 @@ function ifadeOzeti(ifade, etiketler) {
   const ad = (/** @type {string} */ id) => `“${etiketler.get(id) ?? id}”`;
   for (const bag of ['ve', 'veya']) if (Array.isArray(ifade[bag])) return ifade[bag].map((x) => ifadeOzeti(x, etiketler)).filter(Boolean).join(bag === 've' ? ' ve ' : ' veya ');
   if (nesneMi(ifade.degil)) return `değil (${ifadeOzeti(ifade.degil, etiketler)})`;
+  if (typeof ifade.alan === 'string' && typeof ifade.dolu === 'boolean') return `${ad(ifade.alan)} ${ifade.dolu ? 'dolu' : 'boş'}`;
   if (typeof ifade.alan === 'string') return `${ad(ifade.alan)} = ${Array.isArray(ifade.icinde) ? ifade.icinde.join(' / ') : String(ifade.esit)}`;
   if (typeof ifade.senaryoAyari === 'string') return `senaryo ayarı ${ad(ifade.senaryoAyari)} ${ifade.esit === false ? 'seçili değilse' : 'seçiliyse'}`;
   if (ifade.calismaZamani === 'gorunurse') return 'çalışma anında görünürse';
@@ -273,7 +298,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
   const aksiyonlar = Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar : [];
   if (!aksiyonlarTemsilEdilir(adim, aksiyonlar)) sonuc.aksiyonlar = kopya(aksiyonlar);
   const tikla = aksiyonlar.some((x) => nesneMi(x) && x.tur === 'tikla');
-  const kosulGosterilir = (/** @type {{ secim: string; degerler: string[] } | null} */ k) => Boolean(k) && !korunanAlanlar.has(/** @type {{ secim: string }} */ (k).secim) && kosulTemsilEdilir(env, /** @type {{ secim: string; degerler: string[] }} */ (k));
+  const kosulGosterilir = (/** @type {unknown} */ ifade) => diyagramKosulu(ifade, env, korunanAlanlar, etiketler) !== null;
   // Adım özellikleri: kod yöntemi vb. (diyagramın kurmadığı her adım anahtarı).
   for (const [k, v] of Object.entries(adim)) {
     if (!['id', 'sira', 'baslik', 'gorunurluk', 'bolumler', 'kosu'].includes(k)) { ek.adimEk[k] = kopya(v); sonuc.ozet.push(k === 'pomMetodu' ? `kod yöntemi (${String(v)})` : `adım özelliği “${k}”`); }
@@ -291,7 +316,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
         && nesneMi(onc.kosu) && Array.isArray(onc.kosu.aksiyonlar) && onc.kosu.aksiyonlar.some((x) => nesneMi(x) && x.tur === 'tikla');
       kurulur = !sonuc.aksiyonlar && !(alanli && (tikla || !oncekiAcici));
       istegeBagli = kurulur;
-    } else kurulur = !tikla && kosulGosterilir(secimKosulu(gorunurlukIfadesi(model, adim.gorunurluk)));
+    } else kurulur = !tikla && kosulGosterilir(gorunurlukIfadesi(model, adim.gorunurluk));
     if (!kurulur) {
       sonuc.gorunurlukKorunur = true;
       ek.adimEk.gorunurluk = kopya(adim.gorunurluk);
@@ -328,7 +353,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
       } else if (!['buton', 'cikti'].includes(a.tip)) {
         gosterilen++;
         if (bolumNotu) sonuc.bolumNotlari[envanterAnahtari(a)] = bolumNotu;
-        if (nesneMi(a.gorunurluk) && !kosulGosterilir(secimKosulu(gorunurlukIfadesi(model, a.gorunurluk)))) {
+        if (nesneMi(a.gorunurluk) && !kosulGosterilir(gorunurlukIfadesi(model, a.gorunurluk))) {
           sonuc.alanKosullari[envanterAnahtari(a)] = { id: String(a.id), gorunurluk: kopya(a.gorunurluk), aciklama: gorunurlukOzeti(model, a.gorunurluk, etiketler) };
         }
       }
@@ -372,16 +397,16 @@ function kosulTemsilEdilir(env, k) {
 /**
  * Adımın (isteğe bağlı adım ayarı olmayan) görünürlük koşulu → alanlara uygulanacak { secim, degerler }; koşul yoksa null,
  * diyagramda karşılanamıyorsa false (düğmeli adım ya da seçim alanına bağlı olmayan koşul).
- * @param {Nesne} adim @param {Nesne} model
+ * @param {Nesne} adim @param {Nesne} model @param {import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri} env
  */
-function adimKosulu(adim, model) {
+function adimKosulu(adim, model, env) {
   const g = adim.gorunurluk;
   if (!nesneMi(g)) return null;
   const aksiyonlu = nesneMi(adim.kosu) && Array.isArray(adim.kosu.aksiyonlar) && adim.kosu.aksiyonlar.some((/** @type {Nesne} */ a) => nesneMi(a) && a.tur === 'tikla');
   const ifade = gorunurlukIfadesi(model, g);
   if (nesneMi(ifade) && typeof ifade.senaryoAyari === 'string') return null; // isteğe bağlı adım (kapsam ayarı): ayrı işlenir
   if (aksiyonlu) return false;
-  return secimKosulu(ifade) ?? false;
+  return diyagramKosulu(ifade, env, new Set(), alanEtiketleri(model)) ?? false;
 }
 
 /** Akışın adımları sırayla. @param {Nesne[]} adimlar */
@@ -585,6 +610,8 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
   const sirali = siraliAdimlar(adimlar);
   const akis = akisId ?? (Array.isArray(model.akislar) ? model.akislar.find((/** @type {Nesne} */ a) => nesneMi(a) && a.adimlar === adimlar)?.id : undefined) ?? akisListesi(model)[0]?.id ?? ANA_AKIS_ID;
   const analizler = akisKorumasi(model, sirali, env);
+  /** Modelin alanları (bu modelde olmayan koşul alanı genel senaryodandır). */
+  const modelEtiketleri = alanEtiketleri(model);
   for (const [sira, adim] of sirali.entries()) {
     const an = analizler[sira];
     // Diyagramda düzenlenecek içeriği olmayan korunan adım: tek salt okunur blok (tamamı aynen).
@@ -621,7 +648,7 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
       continue;
     }
     // Adım düzeyindeki koşul (düğmesiz adım) alanlara taşınır: alanın kendi koşulu yoksa adımınki yazılır (korunan koşul taşınmaz).
-    const adimKosul = an.gorunurlukKorunur ? null : adimKosulu(adim, model);
+    const adimKosul = an.gorunurlukKorunur ? null : adimKosulu(adim, model, env);
     const alanlar = [];
     /** @type {string[]} */
     const zorunlu = [];
@@ -646,7 +673,7 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
         if (a.mutlakaGorunmeli === true) zorunlu.push(anahtar);
         const g = a.gorunurluk;
         if (an.alanKosullari[anahtar]) { korunanKosullar[anahtar] = an.alanKosullari[anahtar].aciklama; continue; }
-        const k = secimKosulu(gorunurlukIfadesi(model, g));
+        const k = diyagramKosulu(gorunurlukIfadesi(model, g), env, new Set(), modelEtiketleri);
         if (!g) kosullar[anahtar] = nesneMi(adimKosul) ? adimKosul : null;
         else if (k) kosullar[anahtar] = k;
         // Başka biçimdeki koşul (ör. çalışma anında görünürse): yazılmaz → modeldeki koşul korunur.
@@ -851,6 +878,89 @@ export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
   }));
 }
 
+/** Koşul düzenleyicisine gelen alan tipleri (model tipi → sayfa envanteri türü). */
+const KOSUL_ALAN_TIPLERI = ['secim', 'okluSecim', 'radyo', 'onayKutusu', 'metin', 'telefon', 'sayi', 'tarih'];
+/** Koşul düzenleyicisinde bir alanın en çok değer sayısı (seçenek / tablo değeri). */
+const KOSUL_DEGER_LISTESI_EN_COK = 200;
+
+/**
+ * Koşul düzenleyicisinin kaynakları (yalnız ekranın / genel senaryonun akışını düzenlerken):
+ *  - alanlar: ekranın alanı (diyagram anahtarı) → { tabloDegerleri?, kismi? }. Seçenekleri modelde tam olmayan (kısmi / bilinmiyor /
+ *    bağlı liste) ya da hiç olmayan alanın test verisi bağı (etkin bağ: ekranın ya da genel senaryonun) varsa tablo sütununun farklı
+ *    değerleri gelir; metinde sayfa karşılığı (karsiliklar.sayfa) gösterilir. Değerler kullanıcının tablosundandır; yalnız seçim için.
+ *  - ortak: projenin genel senaryoları / önce gidilebilen ekranları (dosya → ad + varsayılan akışının senaryo alanları: kimlik,
+ *    etiket, tür, seçenekler, tablo değerleri). Arayüz yalnız akışta bloğu olanları listeler.
+ * Kasa kapalıysa ya da tablo okunamazsa tablo değerleri gelmez (arayüz elle değer yazdırır).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {Nesne} model
+ * @param {Array<{ dosya: string; ad: string }>} ortakListesi
+ */
+function kosulKaynaklari(vt, projeId, ekranId, model, ortakListesi) {
+  /** @type {import('../tablolar/tablo-deposu.mjs').Tablo[] | null} */
+  let tablolar = null;
+  const tablolariAl = () => {
+    if (tablolar === null) { try { tablolar = tablolariListele(vt, projeId); } catch { tablolar = []; } }
+    return tablolar;
+  };
+  /** Bağın sütun değerleri (farklı, boş olmayan; gizli sütun yok). @param {{ tablo: string; sutun: string } | undefined} b */
+  const bagDegerleri = (b) => {
+    if (!b) return null;
+    const t = tablolariAl().find((x) => x.id === b.tablo);
+    const s = t ? t.sutunlar.find((x) => x.ad.toLocaleLowerCase('tr-TR') === String(b.sutun).toLocaleLowerCase('tr-TR')) : undefined;
+    if (!t || !s || s.gizli) return null;
+    /** @type {Array<{ deger: string; metin: string }>} */
+    const liste = [];
+    for (const r of t.satirlar) {
+      const v = r.degerler[s.ad];
+      if (v === null || v === undefined || v === '' || liste.some((x) => x.deger === v)) continue;
+      const sayfa = nesneMi(s.karsiliklar) && nesneMi(/** @type {Nesne} */ (s.karsiliklar)[v]) ? /** @type {Nesne} */ (s.karsiliklar)[v].sayfa : undefined;
+      liste.push({ deger: String(v), metin: typeof sayfa === 'string' && sayfa && sayfa !== v ? `${v} (sayfada: ${sayfa})` : String(v) });
+      if (liste.length >= KOSUL_DEGER_LISTESI_EN_COK) break;
+    }
+    return liste.length ? liste : null;
+  };
+  /** Seçenekleri modelde tam değil mi (kısmi, bilinmiyor, bağlı liste ya da hiç yok)? @param {Nesne} a */
+  const kismiMi = (a) => a.tip !== 'onayKutusu' && (!Array.isArray(a.secenekler) || !a.secenekler.length || ['kismi', 'bilinmiyor'].includes(a.seceneklerDurumu) || nesneMi(a.bagimlilik));
+  /** @param {Record<string, { tablo: string; sutun: string }>} baglar @param {Nesne} a */
+  const alanKaynagi = (baglar, a) => {
+    const kismi = kismiMi(a);
+    const tabloDegerleri = kismi ? bagDegerleri(baglar[String(a.id)]) : null;
+    return { ...(kismi ? { kismi: true } : {}), ...(tabloDegerleri ? { tabloDegerleri } : {}) };
+  };
+  /** @param {unknown} adimlar @returns {Nesne[]} */
+  const senaryoAlanlari = (adimlar) => (Array.isArray(adimlar) ? adimlar : []).flatMap((adim) => (nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []))
+    .flatMap((b) => (nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []))
+    .filter((a) => nesneMi(a) && a.yapilandirma === 'senaryo' && KOSUL_ALAN_TIPLERI.includes(a.tip) && typeof a.id === 'string');
+  /** @type {Record<string, { kismi?: true; tabloDegerleri?: Array<{ deger: string; metin: string }> }>} */
+  const alanlar = {};
+  let ekranBaglari = {};
+  try { ekranBaglari = etkinAlanBaglari(vt, ekranId); } catch { ekranBaglari = {}; }
+  for (const a of senaryoAlanlari(tumAdimlar(model))) {
+    const k = alanKaynagi(ekranBaglari, a);
+    if (Object.keys(k).length) alanlar[envanterAnahtari(a)] = k;
+  }
+  const ekranlar = ekranlariListele(vt, projeId);
+  /** @type {Array<{ dosya: string; ad: string; alanlar: Array<Nesne> }>} */
+  const ortak = [];
+  for (const o of ortakListesi) {
+    const e = ekranlar.find((x) => `${x.anahtar}.model.json` === o.dosya);
+    const k = e ? ekranModeliGetir(vt, e.id) : undefined;
+    if (!e || !k || !nesneMi(k.model) || !Array.isArray(k.model.adimlar)) continue;
+    let baglar = {};
+    try { baglar = ekranAlanBaglari(vt, e.id); } catch { baglar = {}; }
+    const om = /** @type {Nesne} */ (akisModeli(k.model, null));
+    ortak.push({
+      dosya: o.dosya, ad: o.ad,
+      alanlar: senaryoAlanlari(om.adimlar).map((a) => ({
+        id: String(a.id), etiket: String(etiketi(a)), tur: TURLER[/** @type {keyof typeof TURLER} */ (a.tip)] ?? 'text',
+        secenekler: a.tip === 'onayKutusu' ? null : Array.isArray(a.secenekler)
+          ? a.secenekler.filter(nesneMi).map((/** @type {Nesne} */ s) => ({ deger: String(s.senaryoDegeri ?? s.deger), metin: String(s.formMetni || s.metin || s.senaryoDegeri || s.deger) })) : null,
+        ...alanKaynagi(baglar, a)
+      }))
+    });
+  }
+  return { alanlar, ortak };
+}
+
 /**
  * Diyagram düzenleyicisinin verisi: bir akışın blokları (akisId), bir akışın kopyası (kopya) ya da boş diyagram.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {{ akisId?: string | null; kopya?: string | null }} s
@@ -868,11 +978,14 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
   if (kaynakId && !kaynak) throw new DepoHatasi('Akış bulunamadı.');
   const akm = kaynak ? /** @type {Nesne} */ (akisModeli(model, kaynak.id)) : null;
   const bloklar = akm && kaynak ? adimlardanBloklar(model, akm.adimlar, env, kaynak.id) : [{ tur: /** @type {const} */ ('bitir') }];
+  const ortakAkislar = ortakAkis ? [] : ortakAkislariListele(vt, projeId, ekranId);
   return {
+    // Koşul düzenleyicisinin kaynakları: alanların test verisi değerleri ve genel senaryoların alanları.
+    kosulKaynaklari: kosulKaynaklari(vt, projeId, ekranId, model, ortakAkislar),
     // "Ekran açılır" düğümünün yeri (salt görünüm): üstündeki bloklar (baştaki ortak akışlar) ekran açılmadan önce koşar. Her
     // ortak akış adımı tek bloktur; "sonra" ayarında düğüm girişin hemen altındadır. Ortak akışın kendi diyagramında yoktur.
     ekranAcilisSirasi: ortakAkis ? null : !akm || akm.bastakiOrtakAkislar === 'sonra' ? 0 : bastakiOrtakAdimSayisi(akm.adimlar),
-    ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkis ? [] : ortakAkislariListele(vt, projeId, ekranId), ortakAkis,
+    ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar, ortakAkis,
     ...(ortakAkis ? { kullananlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}),
     akis: s.akisId && kaynak ? { id: kaynak.id, ad: kaynak.ad, varsayilan: kaynak.varsayilan } : null,
     kopyaKaynagi: s.kopya && kaynak ? kaynak.ad : null,
@@ -1020,7 +1133,8 @@ function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan, oncekiAdimla
       for (const v of Object.values(x)) tara(v);
     };
     tara(d);
-    return [...idler].filter((id) => !alanIdleri.has(id)).map((id) => `“${etiketler.get(id) ?? id}”`);
+    // Modelde hiç olmayan alan genel senaryodandır (ortak akış alanı); akıştan çıkarılmış sayılmaz.
+    return [...idler].filter((id) => !alanIdleri.has(id) && etiketler.has(id)).map((id) => `“${etiketler.get(id) ?? id}”`);
   };
   const neden = (/** @type {unknown} */ d) => {
     const e = eksikDayanaklar(d);

@@ -50,6 +50,8 @@ export type Secenek = {
 export type KosulIfadesi =
   | { alan: string; esit: JsonDeger }
   | { alan: string; icinde: JsonDeger[] }
+  /** Alan dolu (true) / boş (false) iken. Genel senaryo alanı senaryoda boşsa koşul bilinmiyor sayılır (=, ≠ için de). */
+  | { alan: string; dolu: boolean }
   | { senaryoAyari: string; esit: JsonDeger }
   | { ve: KosulIfadesi[] }
   | { veya: KosulIfadesi[] }
