@@ -202,7 +202,7 @@ export type KayitAdimi = {
    */
   gorunurseTiklar?: Array<KayitOgesi & { zamanAsimiSn?: number; sonraBekle?: number }>;
   /** Akış tasarımında elle belirlenen görünürlük koşulları (alan anahtarı → seçim + değerler; null: koşulsuz). */
-  kosullar?: Record<string, { secim: string; degerler: string[] } | null>;
+  kosullar?: Record<string, { secim: string; degerler: string[] } | import('./gorunurluk-kosulu.mjs').YeniKosul | null>;
   /** Adımın ilerleme düğmesine basıldıktan sonra beklenen mesaj (akış tasarımı; yoksa sonraki adımın ilk alanı görünür). */
   gosterge?: KayitGostergesi | null;
   /** Adımda kabul edilen iş kuralı uyarıları (akış tasarımında "Uyarı" işaretli mesajlar). */

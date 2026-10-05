@@ -303,8 +303,9 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       ustId: alan.bagimlilik && typeof alan.bagimlilik.alan === 'string' ? alan.bagimlilik.alan : null,
       // Bu alan doldurulunca beliren / dolan alanlar (tetik): koşucu doldurduktan sonra bekler.
       ...(tetikHedefleri.has(String(alan.id)) ? { tetikler: tetikHedefleri.get(String(alan.id)) } : {}),
-      // Akışta "zorunlu" işaretli alan (model: mutlakaGorunmeli) ya da senaryonun "mutlaka görünmeli" kuralı.
-      mutlakaGorunmeli: mutlaka.has(id) || alan.mutlakaGorunmeli === true, atla
+      // Akışta "zorunlu" işaretli alan (model: mutlakaGorunmeli) ya da senaryonun "mutlaka görünmeli" kuralı. Modeldeki işaret,
+      // koşulu bilinmeyen (ör. genel senaryo alanı boş) koşullu alanda uygulanmaz: alan görünürse doldurulur, görünmezse atlanır.
+      mutlakaGorunmeli: mutlaka.has(id) || (alan.mutlakaGorunmeli === true && gorunurluk.alanlar[id] !== null), atla
     };
   };
   /** Kimlik alanı → alt alanları (değerli olanlar, sırayla). @param {any} alan */
@@ -413,7 +414,7 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
   for (const adim of sirali) {
     for (const bolum of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
       for (const alan of Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
-        if (nesneMi(alan) && alan.mutlakaGorunmeli === true && typeof alan.id === 'string' && gorunurluk.alanlar[alan.id] !== false) mutlaka.add(alan.id);
+        if (nesneMi(alan) && alan.mutlakaGorunmeli === true && typeof alan.id === 'string' && gorunurluk.alanlar[alan.id] !== false && gorunurluk.alanlar[alan.id] !== null) mutlaka.add(alan.id);
       }
     }
   }

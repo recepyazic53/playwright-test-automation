@@ -8,6 +8,8 @@
 //            kosullar: { [alan]: { secim, degerler } | null } — alanın görünürlük koşulu ("<seçim> şu değerlerdeyken görünür";
 //            null: koşulsuz). Taslakta kayıt okumalarından otomatik bulunur (secimKosuluCikar); kullanıcı düzeltir. Listede
 //            olmayan alan için koşul otomatik çıkarılır. Koşuldaki seçim alanı akışta (bir alan grubunda) olmalı.
+//            Yeni biçim { bag: 've' | 'veya', satirlar: [{ alan, islem: esit | degil | dolu | bos, degerler, ortak? }] }: birden çok
+//            satır, ekranın herhangi bir alanı ya da genel senaryo alanı (ortak) — bkz. gorunurluk-kosulu.mjs. Koşullar döngü kuramaz.
 //            sinirlar: { [alan]: { enAz?, enCok?, artis?, enAzUzunluk?, enCokUzunluk?, desen? } | null } — alanın değer kuralları
 //            (model alan.sinirlar; null: kaldır; verilmeyen alanın mevcut kuralı korunur). Ekranın akışını düzenlerken yazılır.
 //            tuslar: { [alan]: 'Tab' | 'Enter' | null } — "Doldurduktan sonra" basılacak tuş (model alan.doldurucuParametreleri.tus;
@@ -59,6 +61,7 @@ import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { gitYoluHatasi } from '../../dogrulama/gezinme-yolu.mjs';
 import { gezinmePlani } from './gezinme-plani.mjs';
+import { kosulAyikla, yeniBicimMi } from './gorunurluk-kosulu.mjs';
 
 export const BLOK_EN_COK = 200;
 export const BEKLEME_EN_COK_SN = 120;
@@ -346,15 +349,17 @@ export function bloklariAyikla(ham) {
     if (b.tur === 'alanlar') {
       const liste = Array.isArray(b.alanlar) ? b.alanlar.filter((x) => typeof x === 'string').slice(0, 500) : [];
       const zorunlu = Array.isArray(b.zorunlu) ? b.zorunlu.filter((x) => typeof x === 'string' && liste.includes(x)) : [];
-      /** @type {Record<string, { secim: string; degerler: string[] } | null>} */
+      // Koşul: eski biçim { secim, degerler } ya da yeni biçim { bag, satirlar } (gorunurluk-kosulu.mjs); null: koşulsuz.
+      /** @type {Record<string, import('./akis-tasarimi.d.mts').AkisKosulu | null>} */
       const kosullar = {};
       if (nesneMi(b.kosullar)) {
         for (const a of liste) {
           if (!Object.prototype.hasOwnProperty.call(b.kosullar, a)) continue;
           const k = b.kosullar[a];
           if (k === null) kosullar[a] = null;
-          else if (nesneMi(k) && typeof k.secim === 'string' && Array.isArray(k.degerler)) {
-            kosullar[a] = { secim: k.secim, degerler: [...new Set(k.degerler.filter((x) => typeof x === 'string'))].slice(0, 50) };
+          else {
+            const ayik = kosulAyikla(k);
+            if (ayik) kosullar[a] = ayik;
           }
         }
       }
@@ -413,6 +418,65 @@ export function bloklariAyikla(ham) {
 }
 
 /**
+ * Yeni biçimli koşulun (gorunurluk-kosulu.mjs) hataları: satır var, karşılaştırma bilinir; ekranın alanı akışta ve koşullanan alanın
+ * kendisi değil; = / ≠ için değer var (onay kutusunda tek değer: işaretli / işaretsiz). Seçim alanının değerleri seçeneklerinden olmak
+ * zorunda değildir (kısmi / dinamik seçenekli alanın değeri test verisi tablosundan gelebilir). Genel senaryo alanı (ortak) burada
+ * denetlenmez: kaydederken ekran modeli doğrulayıcısı genel senaryoda olduğunu denetler.
+ * @param {import('./gorunurluk-kosulu.d.mts').YeniKosul} kosul @param {string} alan @param {string} ad koşullanan alanın adı
+ * @param {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} alanlar @param {Map<string, number>} kullanilan
+ * @returns {string[]}
+ */
+function yeniKosulHatalari(kosul, alan, ad, alanlar, kullanilan) {
+  if (!kosul.satirlar.length) return [`“${ad}” alanının koşulunda en az bir satır olmalı (ya da koşulu kaldırın).`];
+  /** @type {string[]} */
+  const hatalar = [];
+  for (const s of kosul.satirlar) {
+    if (!s.islem) { hatalar.push(`“${ad}” alanının koşulunda karşılaştırma seçilmemiş.`); continue; }
+    if (!s.alan) { hatalar.push(`“${ad}” alanının koşulunda alan seçilmemiş.`); continue; }
+    const h = s.ortak ? null : alanlar.get(s.alan);
+    const kAd = s.ortak ? (s.etiket || s.alan) : h ? alanEtiketi(h) : s.alan;
+    if (!s.ortak) {
+      if (s.alan === alan) { hatalar.push(`“${ad}” alanının koşulu kendisine bağlanamaz.`); continue; }
+      if (!h || !kullanilan.has(s.alan)) { hatalar.push(`“${ad}” alanının koşulundaki “${kAd}” alanı akışta yok; alanı bir gruba ekleyin ya da koşul satırını kaldırın.`); continue; }
+    }
+    if (s.islem !== 'esit' && s.islem !== 'degil') continue;
+    const onay = s.ortak ? s.onay === true : h?.tur === 'checkbox';
+    if (onay ? s.degerler.length !== 1 || !['true', 'false'].includes(s.degerler[0]) : !s.degerler.some((d) => d.trim() !== '')) {
+      hatalar.push(onay ? `“${ad}” alanının koşulunda “${kAd}” için işaretli ya da işaretsiz durumlarından birini seçin.`
+        : `“${ad}” alanının koşulunda “${kAd}” için en az bir değer seçin ya da yazın.`);
+    }
+  }
+  return hatalar;
+}
+
+/**
+ * Elle koşulların döngüsü: alan A'nın koşulu B'ye, B'ninki (dolaylı) A'ya bağlıysa ilk döngüdeki alan (yoksa null).
+ * @param {Array<{ alan: string; kosul: import('./akis-tasarimi.d.mts').AkisKosulu | null }>} elleKosullar
+ */
+function kosulDongusu(elleKosullar) {
+  /** @type {Map<string, string[]>} */
+  const kenar = new Map();
+  for (const { alan, kosul } of elleKosullar) {
+    if (!kosul) continue;
+    // Kendine bağlanma ayrıca bildirilir (yeniKosulHatalari); döngü yalnız alanlar arasında aranır.
+    kenar.set(alan, (yeniBicimMi(kosul) ? kosul.satirlar.filter((s) => !s.ortak).map((s) => s.alan) : [kosul.secim]).filter((x) => x !== alan));
+  }
+  /** @type {Map<string, number>} 1: ziyarette, 2: bitti */
+  const durum = new Map();
+  /** @param {string} a @returns {boolean} */
+  const gez = (a) => {
+    if (durum.get(a) === 1) return true;
+    if (durum.get(a) === 2) return false;
+    durum.set(a, 1);
+    for (const b of kenar.get(a) ?? []) if (gez(b)) return true;
+    durum.set(a, 2);
+    return false;
+  };
+  for (const a of kenar.keys()) if (gez(a)) return a;
+  return null;
+}
+
+/**
  * Blokları doğrular ve kayıt envanterine (adım biçimi) çevirir. Hata varsa envanter null.
  * @param {import('./akis-tasarimi.d.mts').AkisEnvanteri} env @param {import('./akis-tasarimi.d.mts').AkisBlogu[]} bloklar
  * s.satirSiniri: SQL bloklarının beklenen satır sayısı için kullanıcının satır sınırı (Ayarlar > Koşu > Gelişmiş; verilmezse varsayılan).
@@ -463,7 +527,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   let sqlSonrasi = false;
   /** @type {Map<string, number>} */
   const kullanilan = new Map();
-  /** @type {Array<{ blok: number; alan: string; kosul: { secim: string; degerler: string[] } | null }>} */
+  /** @type {Array<{ blok: number; alan: string; kosul: import('./akis-tasarimi.d.mts').AkisKosulu | null }>} */
   const elleKosullar = [];
   const adlar = new Set();
   /** Açık "veya" grubunun ilk göstergesi (art arda gelen mesajlar ona eklenir). @type {import('./paket-olusturucu.d.mts').KayitGostergesi | null} */
@@ -772,8 +836,9 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   for (const { blok, alan, kosul } of elleKosullar) {
     if (!kosul) continue;
     const h = alanlar.get(alan);
-    const s = alanlar.get(kosul.secim);
     const ad = h ? alanEtiketi(h) : alan;
+    if (yeniBicimMi(kosul)) { for (const m of yeniKosulHatalari(kosul, alan, ad, alanlar, kullanilan)) hata(blok, m); continue; }
+    const s = alanlar.get(kosul.secim);
     if (!s || !kullanilan.has(kosul.secim)) hata(blok, `“${ad}” alanının koşulundaki seçim alanı akışta yok; seçim alanını bir gruba ekleyin ya da koşulu kaldırın.`);
     else if (!kosulAlaniMi(s) || kosul.secim === alan) hata(blok, `“${ad}” alanının koşulu bir seçim alanına (açılır liste / radyo) ya da onay kutusuna bağlanmalı.`);
     else if (s.tur === 'checkbox' ? kosul.degerler.length !== 1 || !['true', 'false'].includes(kosul.degerler[0])
@@ -781,6 +846,11 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       hata(blok, s.tur === 'checkbox' ? `“${ad}” alanının koşulunda “${alanEtiketi(s)}” için işaretli ya da işaretsiz durumlarından birini seçin.`
         : `“${ad}” alanının koşulunda “${alanEtiketi(s)}” için en az bir geçerli seçenek seçin.`);
     }
+  }
+  const dongu = kosulDongusu(elleKosullar);
+  if (dongu) {
+    const h = alanlar.get(dongu);
+    hata(kullanilan.get(dongu) ?? null, `“${h ? alanEtiketi(h) : dongu}” alanının koşulu döngü oluşturuyor (koşuldaki alanlar birbirine bağlı); koşullardan birini değiştirin.`);
   }
   if (hatalar.length) return { envanter: null, hatalar };
   // Koşullar, alanın düştüğü adıma (isteğe bağlı parça dahil) taşınır.

@@ -282,6 +282,12 @@ function kosulIfadesiDogrula(h, yer, ifade, basvurular) {
       else basvurular.alanlar.push([yer, ifade.alan]);
       if ('icinde' in ifade && !Array.isArray(ifade.icinde)) h.ekle(yer, '"icinde" dizi olmalı');
       return;
+    case 'alan,dolu':
+      // { alan, dolu: true } alan doluyken, { alan, dolu: false } boşken.
+      if (!metinMi(ifade.alan)) h.ekle(yer, '"alan" metin olmalı');
+      else basvurular.alanlar.push([yer, ifade.alan]);
+      if (typeof ifade.dolu !== 'boolean') h.ekle(yer, '"dolu" true ya da false olmalı');
+      return;
     case 'esit,senaryoAyari':
       if (!metinMi(ifade.senaryoAyari)) h.ekle(yer, '"senaryoAyari" metin olmalı');
       else basvurular.senaryoAyarlari.push([yer, ifade.senaryoAyari]);
@@ -877,7 +883,11 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   // Başvurular
   const alanKumesi = new Set(kimlikler.map(([, id]) => id));
   const adimKumesi = new Set(adimKimlikleri.map(([, id]) => id));
-  for (const [bYer, ad] of b.alanlar) if (!alanKumesi.has(ad)) h.ekle(bYer, `başvurulan alan "${ad}" modelde yok`);
+  // Koşul, ekranın akışlarındaki genel senaryoların (ortak akış / önce gidilen ekran) alanlarına da başvurabilir: açılmış modelde
+  // (model-formu.mjs > ortakAkislariAc) bu alanlar kimlikleriyle yer alır.
+  let ortakAlanlari = null;
+  const ortakAlaniMi = (ad) => (ortakAlanlari ??= ortakAkisAlanlari(ham[TUM_AKISLAR] ?? ham, altModelKaynagi)).has(ad);
+  for (const [bYer, ad] of b.alanlar) if (!alanKumesi.has(ad) && !ortakAlaniMi(ad)) h.ekle(bYer, `başvurulan alan "${ad}" modelde yok`);
   for (const [bYer, ad] of b.kosullar) if (!kosulAdlari.has(ad)) h.ekle(bYer, `başvurulan koşul "${ad}" kosullar içinde yok`);
   for (const [bYer, ad] of b.senaryoAyarlari) if (!senaryoAyarAdlari.has(ad)) h.ekle(bYer, `başvurulan senaryo ayarı "${ad}" senaryoDuzeyi içinde yok`);
 
@@ -962,6 +972,8 @@ export function bagsizKosulUyarilari(model) {
 function akisAltModeli(ham, akis) {
   const sonuc = { ...ham, adimlar: akis.adimlar };
   delete sonuc.akislar;
+  // Koşullar (tüm akışlarınki) genel senaryo alanlarına başvurabilir: alanları tüm akışların genel senaryolarından okunur.
+  Object.defineProperty(sonuc, TUM_AKISLAR, { value: ham[TUM_AKISLAR] ?? ham, enumerable: false });
   // Baştaki ortak akışların sırası akışındır (yoksa varsayılan: ekran açılmadan önce).
   delete sonuc.bastakiOrtakAkislar;
   if (akis.bastakiOrtakAkislar !== undefined) sonuc.bastakiOrtakAkislar = akis.bastakiOrtakAkislar;
@@ -1009,6 +1021,38 @@ function akisAltModeli(ham, akis) {
   return sonuc;
 }
 
+
+/** Akış alt modelinde (akisAltModeli) tam modelin saklandığı gizli (sayılmayan) özellik. */
+const TUM_AKISLAR = Symbol('tumAkislar');
+
+/**
+ * Modelin (tüm akışları) başvurduğu genel senaryoların — iç içe olanlar dahil — alan kimlikleri (adım alanları + senaryo düzeyi).
+ * Kaynak hata verirse o dosya yok sayılır (yükleme hatası başka yerde bildirilir).
+ */
+function ortakAkisAlanlari(ham, kaynak) {
+  const alanlar = new Set();
+  const ziyaret = new Set();
+  const dosyalar = (m) => {
+    const listeler = [m.adimlar, ...(Array.isArray(m.akislar) ? m.akislar.map((a) => (nesneMi(a) ? a.adimlar : null)) : [])];
+    const l = [];
+    for (const x of listeler) for (const a of Array.isArray(x) ? x : []) if (nesneMi(a) && nesneMi(a.ortakAkis) && typeof a.ortakAkis.dosya === 'string') l.push(a.ortakAkis.dosya);
+    return l;
+  };
+  const kuyruk = typeof kaynak === 'function' ? dosyalar(ham) : [];
+  for (let i = 0; i < kuyruk.length && i < 200; i++) {
+    const d = kuyruk[i];
+    if (ziyaret.has(d)) continue;
+    ziyaret.add(d);
+    let m;
+    try { m = kaynak(d); } catch { continue; }
+    if (!nesneMi(m)) continue;
+    const adimlar = [...(Array.isArray(m.adimlar) ? m.adimlar : []), ...(Array.isArray(m.akislar) ? m.akislar.flatMap((a) => (nesneMi(a) && Array.isArray(a.adimlar) ? a.adimlar : [])) : [])];
+    for (const adim of adimlar) for (const b of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) if (nesneMi(a) && metinMi(a.id)) alanlar.add(a.id);
+    for (const a of nesneMi(m.senaryoDuzeyi) && Array.isArray(m.senaryoDuzeyi.alanlar) ? m.senaryoDuzeyi.alanlar : []) if (nesneMi(a) && metinMi(a.id)) alanlar.add(a.id);
+    kuyruk.push(...dosyalar(m));
+  }
+  return alanlar;
+}
 
 /** dosya modelinden başlayan ortak akış / ekran başvuru zinciri hedef dosyaya varıyor mu (döngü koruması; kaynak hata verirse yok sayılır). */
 function ortakZincirindeMi(dosya, hedef, kaynak) {

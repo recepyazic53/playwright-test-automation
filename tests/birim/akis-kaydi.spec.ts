@@ -354,15 +354,17 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (CANLI ortam seçilebilir; ba
     await adSoyad.click();
     await expect(grup1.getByRole('button', { name: 'Ad Soyad: zorunlu' })).toHaveAttribute('aria-pressed', 'true');
     // Koşul: İndirim oranı yalnız Ödeme = Taksitli iken görünür (seçenek işaretlenmeden kaydedilmez).
+    await expect(grup1.getByRole('button', { name: 'İndirim oranı (%): koşul' })).toHaveText('Koşul ekle');
     await grup1.getByRole('button', { name: 'İndirim oranı (%): koşul' }).click();
     const duz = grup1.locator('.kosul-duzenleyici');
-    await duz.getByRole('combobox', { name: 'Koşulun seçim alanı' }).selectOption({ label: 'Ödeme' });
+    await duz.getByRole('group', { name: 'Koşul 1' }).getByRole('combobox', { name: 'Alan' }).selectOption({ label: 'Ödeme' });
     await duz.getByRole('button', { name: 'Koşulu kaydet' }).click();
-    await expect(duz.getByRole('alert')).toHaveText('Alanın görünür olduğu en az bir seçeneği işaretleyin.');
+    await expect(duz.getByRole('alert')).toHaveText('Koşul kaydedilemedi: “Ödeme” için en az bir değer işaretleyin ya da yazın.');
     await duz.getByLabel('Taksitli').check();
     await goruntu(page.locator('main'), '04d-kosul-duzenleyici.png');
     await duz.getByRole('button', { name: 'Koşulu kaydet' }).click();
-    await expect(grup1.getByRole('button', { name: 'İndirim oranı (%): koşul' })).toHaveText('Ödeme = Taksitli ise');
+    await expect(grup1.getByRole('button', { name: 'İndirim oranı (%): koşul' })).toHaveText('Koşulu düzenle');
+    await expect(grup1.locator('.tasarim-alani', { hasText: 'İndirim oranı' }).locator('.kosul-ozeti')).toHaveText('Ödeme = Taksitli ise görünür');
     await diyagram.getByRole('button', { name: 'Buraya blok ekle' }).nth(2).click();
     await diyagram.getByRole('button', { name: 'Bekleme süresi', exact: true }).click();
     const saniye = blok('3. blok: Bekleme süresi').getByRole('spinbutton', { name: 'Saniye' });
@@ -621,7 +623,8 @@ test('çoklu akış: Akışlar sekmesinde kopyadan yeni akış; senaryo akışı
     const grup1 = diyagram.getByRole('listitem', { name: '1. blok: Alan grubu (Müşteri bilgileri)', exact: true });
     await expect(grup1).toContainText('Vergi kimlik no');
     // Kopyadan gelen koşullar ve zorunluluk korunur.
-    await expect(grup1.getByRole('button', { name: 'Vergi kimlik no: koşul' })).toHaveText('Müşteri tipi = Kurumsal ise');
+    await expect(grup1.getByRole('button', { name: 'Vergi kimlik no: koşul' })).toHaveText('Koşulu düzenle');
+    await expect(grup1.locator('.tasarim-alani', { hasText: 'Vergi kimlik no' }).locator('.kosul-ozeti')).toHaveText('Müşteri tipi = Kurumsal ise görünür');
     await expect(grup1.getByRole('button', { name: 'Ad Soyad: zorunlu' })).toHaveText('Zorunlu');
     await grup1.getByRole('button', { name: 'TC kimlik no: gruptan çıkar' }).click();
     await expect(grup1).not.toContainText('TC kimlik no');
