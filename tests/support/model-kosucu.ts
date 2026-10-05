@@ -50,6 +50,7 @@ import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 import { alanKilidi, ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
+import { BETIKLE_YAZAN_DOLDURUCULAR, kilitEngeller } from '../../scripts/platform/tarama/alan-kilitleri.mjs';
 import { GORUNURSE_BEKLEME_SN } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 import { GUVENLI_EKRAN_EYLEMLERI, ekranKapsamindaMi, type EkranKurali, type KurtarmaOlayi } from '../../scripts/platform/ayarlar/kurtarma-kurallari.mjs';
 
@@ -355,8 +356,6 @@ async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string,
 const yavaslamaNotlari: string[] = [];
 /** Sayfanın doldurduğu (o an düzenlenemeyen) için yazılmayan alanların notları (hata değil; adım ayrıntısına yazılır). */
 const kilitNotlari: string[] = [];
-/** Seçime bağlı olmayan alanda da düzenlenemez sayılan kilitler (alanKilidi): aria-disabled, kapalı takvim, tuş + değer engeli. */
-const SERT_KILITLER = new Set(['aria-devre-disi', 'takvim-kilidi', 'tus-deger']);
 /** Yazılan değeri tutmayan, sayfanın ÖNCEKİ değerini geri yazdığı alanlar (bu adımda): izlenmez, yeniden yazılmaz. */
 const kilitliYazilanlar = new Set<PlanAlani>();
 /** Değer tutmadı ve sayfa önceki değeri geri yazdı: alan sayfa tarafından dolduruluyor (düzenlenemez kanıtı) — hata değil, not. */
@@ -1436,10 +1435,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           }
           // Sayfanın doldurduğu (o an düzenlenemeyen) alana hiç dokunulmaz — senaryoda değeri olsa bile; hata değil, adım notu düşer
           // (sayfanın doldurduğu değer boş da olabilir). Seçime göre kilitlenen alanda (kilit) her kilit, diğerlerinde yalnız açık kilitler
-          // (hızlı testle ORTAK kural: sayfa-envanteri.ts > alanKilidi; salt okuma).
+          // (hızlı testle ORTAK kural: sayfa-envanteri.ts > alanKilidi okur, alan-kilitleri.mjs > kilitEngeller karar verir). Değeri
+          // betikle yazan doldurucuda (tarihJs, degerJs, takvimden seçim) tuş + değer engeli kilit değildir: engel yalnız tuşla yazmayı keser.
           if (!zorla && alan.tip !== 'radyo' && !alan.yalnizTus) {
             const kilit = await l.evaluate(alanKilidi).catch(() => null);
-            if (kilit && (alan.parametreler.kilit === true || SERT_KILITLER.has(kilit))) {
+            const betikle = BETIKLE_YAZAN_DOLDURUCULAR.has(String(alan.doldurucu ?? '')) || alan.parametreler.takvim === true;
+            if (kilitEngeller(kilit, { betikle, seciminGore: alan.parametreler.kilit === true })) {
               kilitNotlari.push(`“${alan.etiket}”: ${KILITLI_ALAN_NOTU}`);
               continue;
             }
