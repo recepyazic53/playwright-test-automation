@@ -86,7 +86,8 @@ test.describe('servis alanları tablolardan', () => {
   let servisId = '';
   let girisId = '';
   let kisiId = '';
-  const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
+  let servisAyarId = '';
+  const api =(yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
   const basarili = async (yol: string, govde?: Nesne) => { const y = await api(yol, govde); expect(y.basarili, `${yol}: ${String(y.mesaj ?? '')}`).toBe(true); return y; };
   const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 
@@ -184,6 +185,22 @@ test.describe('servis alanları tablolardan', () => {
     expect(soap.istekler.at(-1)?.govde).toContain('<Phone>5550000002</Phone>');
   });
 
+  test('servis tablosu (tür "servis"): ${Tablo.Sütun} kayıt tablosu gibi seçilen satırdan gelir', async () => {
+    const y = await basarili('/platform/tablo/kaydet', { projeId, ad: 'Servis ayarları', tur: 'servis', sutunlar: [{ ad: 'BaskiTuru' }, { ad: 'Kanal kodu' }], satirlar: [
+      { degerler: { BaskiTuru: 'PDF', 'Kanal kodu': 'K1' } }, { degerler: { BaskiTuru: 'XML', 'Kanal kodu': 'K2' } }] });
+    servisAyarId = String(y.tablo.id);
+    expect(y.tablo.kaynak?.tabloTuru).toBe('servis');
+    const govde = zarf('<BaskiTuru>${Servis ayarları.BaskiTuru}</BaskiTuru><Channel>${Servis ayarları.Kanal kodu}</Channel>');
+    const dene = (tabloSecimleri?: Nesne) => basarili('/platform/servis/senaryo/dene', {
+      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Siparis', govde, kontroller: [], tabloSecimleri }
+    });
+    await dene();
+    expect(soap.istekler.at(-1)?.govde).toContain('<BaskiTuru>PDF</BaskiTuru><Channel>K1</Channel>');
+    // Satırın değerleri birlikte: BaskiTuru seçimi aynı satırın kanal kodunu getirir.
+    await dene({ [`${servisAyarId}|`]: { BaskiTuru: 'XML' } });
+    expect(soap.istekler.at(-1)?.govde).toContain('<BaskiTuru>XML</BaskiTuru><Channel>K2</Channel>');
+  });
+
   test('arayüz: Parametreler\'de tablo sütunu bağlanır; senaryoda bağlı alanlar "Tablodan", Kanal seçince Kullanıcı süzülür, parola satırdan', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
@@ -195,6 +212,8 @@ test.describe('servis alanları tablolardan', () => {
     await page.getByRole('button', { name: 'Siparis metodu' }).click();
     const bagSec = page.getByLabel('Siparis Input/Channel tablo sütunu');
     await expect(bagSec).toHaveValue(`${girisId}\u0001Kanal`);
+    // Servis tabloları (tür "servis") seçimde önce gelir.
+    await expect(bagSec.locator('optgroup').first()).toHaveAttribute('label', 'Servis ayarları');
     await expect(page.locator('.metot-cercevesi .alan-satiri').filter({ hasText: /^Channel/ })).toContainText('100');
     await page.getByLabel('Siparis Input/EndDate tablo sütunu').selectOption(`${kisiId}\u0001Telefon`);
     await expect(page.getByText('✓ Kaydedildi')).toBeVisible();

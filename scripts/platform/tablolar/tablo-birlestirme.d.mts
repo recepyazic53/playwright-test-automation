@@ -15,8 +15,8 @@ export declare function tabloKullanimlari(vt: Veritabani, projeId: string): { ku
 export interface VeriSagligi {
   /** Veri > "Birleştirme önerisi eşiği" (varsayılan 50): altındaki öneriler arayüzde varsayılan gizli. */
   benzerlikEsigi: number;
-  benzer: Array<{ tablolar: string[]; adlar: string[]; grup: 'birebir' | 'cogu' | 'veriFarkli'; puan: number; tur: 'liste' | 'kayit'; eslemeGerekli: boolean }>;
-  kullanilmayan: Array<{ id: string; ad: string; tur: 'liste' | 'kayit' }>;
+  benzer: Array<{ tablolar: string[]; adlar: string[]; grup: 'birebir' | 'cogu' | 'veriFarkli'; puan: number; tur: 'liste' | 'kayit' | 'servis'; eslemeGerekli: boolean }>;
+  kullanilmayan: Array<{ id: string; ad: string; tur: 'liste' | 'kayit' | 'servis' }>;
   bosSutunlar: Array<{ tabloId: string; tablo: string; sutun: string }>;
   kirikBasvurular: KirikBasvuru[];
   uyumsuzBaglar: Array<{ ekranId: string; ekran: string; alanId: string; alan: string; tablo: string; sutun: string; duzey: 'guclu' | 'zayif'; metin: string; git: string }>;

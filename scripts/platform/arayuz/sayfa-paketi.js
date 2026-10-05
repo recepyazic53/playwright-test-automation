@@ -261,7 +261,7 @@ function bosBaslaKutusu(s, kutu) {
 // ---------------------------------------------------------------------------------------
 
 const TV_KAYNAK = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı', hizli: 'Hızlı test' };
-const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
+const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi', servis: 'Servis verisi' };
 
 /**
  * Test verisine yazılacaklar bölümü (paket önizlemesi ve akış kaydının "akışa yaz" onayı ortak kullanır).
@@ -630,7 +630,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
     const satir = h('li', { class: 'tv-tablo' },
       h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
         x.zincir ? rozet('Zincir tablosu', 'vurgu', { title: 'Bağlı listeler (üst seçilince alt listesi dolan) tek tabloda: sütunlar zincirin halkaları, her satır birlikte geçerli (gözlenen) bir kombinasyon. Senaryoda üst seçildikçe alt listeler satırlardan süzülür.' })
-          : x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablo; Test verisi > Ekran listeleri grubunda görünür.' }) : null,
+          : x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : x.tur === 'servis' ? 'Servis verileri grubunda görünür: yalnız servis isteklerinde kullanılan değerler; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listesi: bir seçim alanının (açılır liste, radyo) seçeneklerini tutan tablo; Test verisi > Ekran listeleri grubunda görünür.' }) : null,
         h('span', { class: 'kucuk soluk' }, `${x.sutunlar.length} sütun · ${x.satirSayisi} satır${x.tekrarSayisi ? ` (${x.tekrarSayisi} tekrar atıldı)` : ''}`),
         gizliVar ? rozet('gizli sütun: değeri Nöbetçi\'de şifreli girilir', 'uyari') : null),
       x.zincir ? h('p', { class: 'kucuk' }, `Zincir: ${x.zincir.join(' → ')} — satırlar gözlenen geçerli kombinasyonlar`) : null,

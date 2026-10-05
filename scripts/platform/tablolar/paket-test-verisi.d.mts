@@ -5,7 +5,7 @@ export type PaketTestVerisiSecimi = { tablolar?: Record<string, { islem: TabloIs
 export type PaketTestVerisiOnizlemesi = {
   kaynak: 'paket' | 'tarama' | 'kayit';
   tablolar: Array<{
-    ad: string; tur: 'liste' | 'kayit' | null; aciklama: string | null; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
+    ad: string; tur: 'liste' | 'kayit' | 'servis' | null; aciklama: string | null; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
     ornek: Array<Array<string | null>>; bagliAlanlar: string[];
     mevcut: { id: string; ad: string; sutunSayisi: number; satirSayisi: number; yeniSutunlar: string[]; eklenecekSatir: number } | null;
   }>;

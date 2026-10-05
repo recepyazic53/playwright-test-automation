@@ -2,7 +2,7 @@
 
 export type Karsilik = { sayfa?: string; servis?: string };
 export type PaketSutunu = { ad: string; gizli: boolean; karsiliklar: Record<string, Karsilik> };
-export type PaketTablosu = { ad: string; tur: 'liste' | 'kayit' | null; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number };
+export type PaketTablosu = { ad: string; tur: 'liste' | 'kayit' | 'servis' | null; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number };
 export type PaketBaglantisi = { alanId: string; tablo: string; sutun: string; etiket?: string; secimeGore?: { alan: string; degerler: Record<string, { tablo: string; sutun: string; etiket?: string }> } };
 export type Secenek = { deger: string; metin: string };
 export type UretimAlani = { anahtar: string; id: string; etiket: string; secenekler: Secenek[] };
@@ -10,7 +10,7 @@ export type UretimAlani = { anahtar: string; id: string; etiket: string; secenek
 export type SecenekGozlemi = { anahtar: string; secimler: Record<string, string>; secenekler: Secenek[] };
 /** Paket biçimindeki testVerisi bölümü (tablolar satırları sütun sırasıyla dizi). */
 export type PaketTestVerisi = {
-  tablolar: Array<{ ad: string; tur?: 'liste' | 'kayit'; aciklama?: string; sutunlar: Array<{ ad: string; gizli?: boolean; karsiliklar?: Record<string, Karsilik> }>; satirlar: Array<Array<string | number | boolean | null>> }>;
+  tablolar: Array<{ ad: string; tur?: 'liste' | 'kayit' | 'servis'; aciklama?: string; sutunlar: Array<{ ad: string; gizli?: boolean; karsiliklar?: Record<string, Karsilik> }>; satirlar: Array<Array<string | number | boolean | null>> }>;
   baglantilar?: PaketBaglantisi[];
 };
 
@@ -18,7 +18,7 @@ export declare const PAKET_TABLO_EN_COK: number;
 export declare const PAKET_SATIR_EN_COK: number;
 export declare const PAKET_SUTUN_EN_COK: number;
 export declare const PAKET_HUCRE_EN_UZUN: number;
-export declare const TABLO_TURLERI: readonly ['liste', 'kayit'];
+export declare const TABLO_TURLERI: readonly ['liste', 'kayit', 'servis'];
 /** Ekran listesi tablosunun adı: "<Ekran adı> — <Alan>" (en çok 60 karakter). */
 export declare function ekranListesiTabloAdi(ekranAdi: string | null | undefined, alanEtiketleri: string[]): string;
 export declare function modelAlanlari(model: unknown): Map<string, Record<string, any>>;

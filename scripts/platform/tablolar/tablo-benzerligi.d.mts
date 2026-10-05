@@ -2,11 +2,11 @@
 export interface BSutun { ad: string; gizli?: boolean }
 export interface BTablo { id: string; ad: string; sutunlar: BSutun[]; baglam?: boolean; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null; satirImzalari?: string[]; satirlar?: Array<{ degerler: Record<string, unknown> }> }
 export type BenzerlikGrubu = 'birebir' | 'cogu' | 'veriFarkli';
-export interface BirlestirmeOnerisi { tablolar: string[]; grup: BenzerlikGrubu; puan: number; tur: 'liste' | 'kayit'; eslemeGerekli: boolean }
+export interface BirlestirmeOnerisi { tablolar: string[]; grup: BenzerlikGrubu; puan: number; tur: 'liste' | 'kayit' | 'servis'; eslemeGerekli: boolean }
 export declare function baslikNormal(ad: unknown): string;
 export declare function basliklarBenzer(a: string, b: string): boolean;
 export declare function sutunEslemesiOner(kaynak: BSutun[], hedef: BSutun[]): Array<{ kaynak: string; hedef: string | null; kesin: boolean }>;
-export declare function tabloTuru(t: BTablo, ek?: { ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }): 'liste' | 'kayit';
+export declare function tabloTuru(t: BTablo, ek?: { ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }): 'liste' | 'kayit' | 'servis';
 export declare function baslikBenzerligi(a: BSutun[], b: BSutun[]): number;
 export declare function satirOrtusmesi(a: string[], b: string[]): number;
 export declare function birlestirmeOnerileri(tablolar: BTablo[], ek?: { ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }): BirlestirmeOnerisi[];

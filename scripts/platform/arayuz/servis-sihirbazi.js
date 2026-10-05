@@ -19,7 +19,7 @@ import { canliOnayEki, canliOnayIste, onayIste, ortamRiskRozeti, ortamSecenekMet
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { benzerTabloNotu } from './veri-sagligi.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
-import { metotKutulari } from './servis-alanlari.js';
+import { metotKutulari, servisTablolariOnce } from './servis-alanlari.js';
 import { analizBagla, analizKaydi, analizTablosuGovdesi, ornekOlustur, tabloIslemSecimi, yeniOrnekDurumu } from './servis-analizi.js';
 
 const ADIMLAR = ['Adresler', 'Metotlar', 'Alanlar', 'Özet'];
@@ -91,7 +91,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar, baslangic = null)
     if (yer && d.curl && d.curl.gizliDegerler[yer.uc.kimlik] && yer.yol in d.curl.gizliDegerler[yer.uc.kimlik]) return null;
     const b = ogrenilen[kucuk(alanT.ad)];
     if (b) return { ...b };
-    for (const tb of tablolar) {
+    // Servis tabloları önce (yalnız servis isteklerinde kullanılan değerler).
+    for (const tb of servisTablolariOnce(tablolar)) {
       const c = tb.sutunlar.find((x) => kucuk(x.ad) === kucuk(alanT.ad));
       if (c) return { tablo: tb.id, sutun: c.ad };
     }
