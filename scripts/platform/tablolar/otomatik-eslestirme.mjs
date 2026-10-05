@@ -11,7 +11,7 @@
 import { DepoHatasi, gecmisYaz } from '../veritabani/depo.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { BAGLAM_ONEKI, tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari } from './ekran-baglari.mjs';
+import { baglamakGerekmez, ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari } from './ekran-baglari.mjs';
 import { baslikNormal, benzerTablolar } from './tablo-benzerligi.mjs';
 import { kisiKategorisi } from './kisi-baglama.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
@@ -115,7 +115,7 @@ export function otomatikEslestir(vt, projeId, girdi) {
   }
   const onizleme = {
     oneriler, birlestirilebilir,
-    ozet: { oneri: oneriler.length, yuksek: oneriler.filter((o) => o.guven === 'yuksek').length, zatenBagli: girdiler.filter((g) => baglar[g.id]).length, eslesmeyen: bagsiz.length - oneriler.length, tablo: tablolar.length }
+    ozet: { oneri: oneriler.length, yuksek: oneriler.filter((o) => o.guven === 'yuksek').length, zatenBagli: girdiler.filter((g) => baglar[g.id]).length, eslesmeyen: bagsiz.filter((g) => !oneriler.some((o) => o.alanId === g.id) && !baglamakGerekmez(g)).length, tablo: tablolar.length }
   };
   if (!girdi.onay) return { onizleme };
 

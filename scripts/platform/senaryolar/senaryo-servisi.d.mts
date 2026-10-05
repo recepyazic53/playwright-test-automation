@@ -74,9 +74,11 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   /** Talep numaraları (yoksa boş liste). */
   talepler: string[];
 };
-export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }>;
+export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean; modelSecenekleri?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }>;
   /** Senaryo ayarı (ekranda karşılığı olmayan, akışı dallandıran seçim): tablodaki değer seçenek koduna çevrilir. */
-  senaryoAyari?: true }> };
+  senaryoAyari?: true;
+  /** modelSecenekleri: true ile (yalnız seçim): tablo / değer listeleri uygulanmadan modelin kendi seçenekleri ve liste durumu. */
+  modelSecenekleri?: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }>; seceneklerDurumu?: string }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
   ekran: { id: string; anahtar: string; ad: string };
   ortamlar: Array<{ id: string; ad: string; varsayilan: boolean }>;
@@ -90,9 +92,13 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   degerListeleri?: Array<import('../servisler/parametre-tanimlari.mjs').ParametreTanimi & { senaryoAyari?: true }>;
   /** Gizli sütuna bağlı alanlar (değer yok): alan kimliği → tablo / sütun adı. */
   gizliBaglar?: Record<string, { tablo: string; sutun: string; etiket?: string }>;
+  /** Bağlı sütun değerleri sayfadaki seçeneklerde bulunamayan alanlar: alan kimliği → uyarı. */
+  tabloUyumsuzluklari?: Record<string, { duzey: 'guclu' | 'zayif'; metin: string }>;
   akislar: AkisOzeti[];
   akisId: string | null;
 };
+export declare function tabloBagUyumlari(vt: Veritabani, projeId: string, ekranId: string, baglar?: Record<string, { tablo: string; sutun: string }>,
+  tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[]): Record<string, import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { etiket: string; tablo: string; sutun: string }>;
 export declare function modelHassasAnahtarlari(model: unknown): string[];
 export declare function senaryoKaydet(
   vt: Veritabani,

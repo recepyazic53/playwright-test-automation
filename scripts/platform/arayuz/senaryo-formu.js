@@ -789,6 +789,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
     return sel;
   }
 
+  // Bağlı tablo sütununun değerleri sayfadaki seçeneklerde yoksa (sunucu: tablo-uyumu.mjs) alanın altında uyarı.
+  const tabloUyumNotu = (alan) => {
+    const u = (baglam.tabloUyumsuzluklari || {})[alan.id];
+    return u ? h('p', { class: `alan-uyarisi tablo-uyumu ${u.duzey}` }, ikon('uyari'), ` ${u.metin}. Ekranın Test verisi sekmesinden bağı düzeltin.`) : null;
+  };
+
   // --- Alan çizimleri ---------------------------------------------------------------------
   function alanCiz(alan) {
     const kap = h('div', { class: `model-alani ${['kimlik', 'altModel'].includes(alan.tip) ? 'genis' : ''}`.trim(), 'data-alan': alan.id });
@@ -976,7 +982,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       kayit.gorunurlukCipi = ust.cip;
       // Başlık (etiket + seçenekler şeridi) ve gövde (girdi + hata / uyarı) iki ayrı parça: aynı ızgara satırındaki alanların
       // girdileri, başlık yükseklikleri farklı olsa da aynı hizadan başlar (stil.css > .alan-izgarasi, subgrid).
-      yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, govde, hata, uyari));
+      yerlestir(kap, ust.el, h('div', { class: 'alan-govdesi' }, govde, hata, uyari, tabloUyumNotu(alan)));
       // Seçenekleri tek satıra sığmayacak kadar geniş radyo grubu: alan iki sütuna yayılır (yetmezse başlığıyla birlikte alt satıra geçer).
       if (govde && govde.classList && govde.classList.contains('radyo-grubu')) {
         const etiketler = [...govde.querySelectorAll('label')].map((l) => (l.textContent || '').trim().length);
