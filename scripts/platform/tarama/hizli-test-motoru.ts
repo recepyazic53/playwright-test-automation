@@ -449,7 +449,16 @@ export async function hizliTestiYurut(
           return null;
         }
         const l = k.locator(a.secici).first();
-        if (a.tur === 'checkbox') { await l.setChecked(dogruMu(deger), { timeout: bekleMs }); return null; }
+        if (a.tur === 'checkbox') {
+          // Gizli girdili özel çizimli kutu: girdi betikle tıklanır (sayfanın kendi işleyicileri çalışır; normal koşunun onayKutusuZorla'sı gibi).
+          if (a.gizliGirdi) {
+            const isaretli = dogruMu(deger);
+            if ((await l.isChecked({ timeout: bekleMs })) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
+            return (await l.isChecked({ timeout: 3_000 })) === isaretli ? null : `“${a.etiket ?? a.anahtar}” işaretlenemedi (betikle tıklandı, durum değişmedi).`;
+          }
+          await l.setChecked(dogruMu(deger), { timeout: bekleMs });
+          return null;
+        }
         if (a.tur === 'select' || a.tur === 'select-one' || a.tur === 'select-multiple' || a.ozelBilesen) {
           // Hedef: kaydedilen seçeneklerde değer ya da (harf duyarsız) metinle bulunan seçenek; yoksa verilen değer hem kod hem ad sayılır.
           const s = (a.secenekler ?? []).find((x) => x.deger === String(deger) || katla(x.metin) === katla(String(deger)));
