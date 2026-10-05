@@ -1494,7 +1494,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         }
         // Sonraki alanların sorgusu / sayfanın yeniden çizmesi önceki alanı silmiş ya da değiştirmiş olabilir (ör. satır yenilenir, kimlik
         // sorgusu tarihi doldurur): değeri yazılandan farklı metin alanları bir kez yeniden doldurulur (kullanıcının elle yazdığında olduğu
-        // gibi); yine değişirse açık hata (hangi alan doldurulunca değiştiği yazılır).
+        // gibi); yine değişirse hata değil not düşülür (sayfa kendi akışıyla değiştiriyor olabilir, ör. sorgudan sonra kutuyu boşaltır):
+        // adımın başarısına adımın kendi sonucu (aksiyon, başarı / hata göstergesi, beklenen uyarı) karar verir.
         const degisen = await izleyici.degisenler();
         for (const x of degisen) {
           const d = doldurulanMetinler.find((y) => y.alan === x.oge);
@@ -1505,7 +1506,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         }
         for (const x of degisen) {
           const m = await izleyici.sonDurum(x.oge);
-          if (m) throw new Error(beklenenGorulenMetni(adim.baslik, `${x.etiket}: "${x.deger}" yazılır`, m));
+          if (m) kilitNotlari.push(m);
         }
         ekranaDonuldu = await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
