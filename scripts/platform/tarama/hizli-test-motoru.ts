@@ -989,9 +989,51 @@ export async function hizliTestiYurut(
       const simdi = await envanterOku(islem);
       const alt = { ...simdi, alanlar: simdi.alanlar.filter((a) => yeniSecimler.some((y) => y.anahtar === a.anahtar)) };
       if (!alt.alanlar.length) return [];
-      const sonuc = await secimleriKesfet(islem, alt, [], async () => undefined, async (p, ms) => { await sakinles(p, ms); }, sinir, { derinlik: IC_ICE_DERINLIK });
-      return sonuc.filter((k) => k.degerler.length).map(sadeKesif);
+      // Sayfanın dolu değerleri (sayfanın doldurduğu bağlı listeler dahil) keşiften sonra geri yüklenir: üst liste ilk değerine dönünce
+      // sayfa alt listeyi boşaltıp yeniden yükleyebilir; alt listenin değeri ayrıca geri yazılmazsa kaybolur.
+      const korunan = await secimDegerleriniAl(simdi.alanlar);
+      try {
+        const sonuc = await secimleriKesfet(islem, alt, [], async () => undefined, async (p, ms) => { await sakinles(p, ms); }, sinir, { derinlik: IC_ICE_DERINLIK });
+        return sonuc.filter((k) => k.degerler.length).map(sadeKesif);
+      } finally {
+        await secimDegerleriniGeriYukle(korunan);
+      }
     }
+
+    /** Tekli açılır listelerin sayfadaki değerleri (keşiften önce; yalnız bellekte, geri yükleme için). */
+    async function secimDegerleriniAl(alanlar: HamAlan[]): Promise<Array<{ alan: HamAlan; deger: string }>> {
+      const l: Array<{ alan: HamAlan; deger: string }> = [];
+      for (const a of alanlar) {
+        if (a.tur !== 'select' || a.coklu) continue;
+        const v = await alanKapsami(islem, a.cerceve).locator(a.secici).first().inputValue({ timeout: 1_000 }).catch(() => null);
+        if (v !== null) l.push({ alan: a, deger: v });
+      }
+      return l;
+    }
+    /**
+     * Keşiften sonra listeler sayfa sırasıyla eski değerlerine döner (üst önce). Alt listenin seçenekleri üst geri alınınca yeniden gelebilir:
+     * seçenek gelene kadar beklenir (listedenSec). Değeri zaten aynı olan listeye dokunulmaz.
+     */
+    async function secimDegerleriniGeriYukle(l: Array<{ alan: HamAlan; deger: string }>): Promise<void> {
+      for (const { alan: a, deger } of l) {
+        if (kapandi) return;
+        const simdi = await alanKapsami(islem, a.cerceve).locator(a.secici).first().inputValue({ timeout: 1_000 }).catch(() => null);
+        if (simdi === null || simdi === deger) continue;
+        await listedenSec(islem, a, deger, 8_000).catch(() => undefined);
+        await sakinles(islem, 5_000);
+      }
+    }
+    /** Okumada tekli açılır listenin gerçek seçeneklerinin imzası (yer tutucu hariç). */
+    const secenekImzasi = (a: HamAlan | undefined): string => JSON.stringify(gercekSecenekler(a?.secenekler).map((s) => s.deger));
+    /**
+     * Basıştan / değer uygulamasından sonra zincir keşfinin adayları: yeni beliren tekli listeler ve önceden de sayfada olup seçenekleri
+     * yeni dolan / değişen listeler. Bağ ilişkisi bilinen listeler (üst seçilince altının seçenekleri değişir) yeniden denenmez.
+     */
+    const zincirAdaylari = (once: HamAlan[], sonra: HamAlan[], bilinen: ReadonlySet<string>): HamAlan[] => {
+      const onceki = new Map(once.map((a) => [a.anahtar, a]));
+      return sonra.filter((a) => a.tur === 'select' && !a.coklu && !bilinen.has(a.anahtar)
+        && (!onceki.has(a.anahtar) || (gercekSecenekler(a.secenekler).length > 0 && secenekImzasi(onceki.get(a.anahtar)) !== secenekImzasi(a))));
+    };
 
     /**
      * Sonradan (doldurunca / basınca) beliren açılır listeler arasında bağlı liste zinciri (ör. adres bölümü bir alan doldurulunca açılır:
@@ -999,21 +1041,13 @@ export async function hizliTestiYurut(
      * ilk değerlerine geri alınır (üst liste geri alınınca sayfa altlarını kendisi boşaltır). Hiçbir düğmeye basılmaz; sonunda listeler
      * ilk değerlerindedir. En az iki yeni liste yoksa yapılmaz.
      */
-    async function yerindeZincirKesfi(yeniler: HamAlan[]): Promise<ZincirSonucu | null> {
-      const listeler = yeniler.filter((a) => a.tur === 'select' && !a.coklu);
+    async function yerindeZincirKesfi(adaylar: HamAlan[]): Promise<ZincirSonucu | null> {
+      const listeler = adaylar.filter((a) => a.tur === 'select' && !a.coklu);
       if (listeler.length < 2 || kapandi) return null;
-      const yer = (a: HamAlan): Locator => alanKapsami(islem, a.cerceve).locator(a.secici).first();
-      const ilkDeger = new Map<string, string>();
-      for (const a of listeler) ilkDeger.set(a.anahtar, await yer(a).inputValue({ timeout: 1_000 }).catch(() => ''));
-      const geriAl = async (): Promise<void> => {
-        for (const a of listeler) {
-          const hedef = ilkDeger.get(a.anahtar) ?? '';
-          const simdi = await yer(a).inputValue({ timeout: 1_000 }).catch(() => null);
-          if (simdi === null || simdi === hedef) continue;
-          await yer(a).selectOption({ value: hedef }, { timeout: 3_000, force: true }).catch(() => undefined);
-          await sakinles(islem, 5_000);
-        }
-      };
+      // Sayfanın o anki değerleri (sayfanın doldurduğu üst / alt liste dahil): keşif boyunca "baştan aç" yerine bunlara dönülür, sonunda da
+      // aynı sırayla geri yüklenir (alt listenin seçenekleri gelene kadar beklenir).
+      const ilk = await secimDegerleriniAl(listeler);
+      const geriAl = async (): Promise<void> => { await secimDegerleriniGeriYukle(ilk); };
       const sakin = async (p: Page, ms: number): Promise<void> => { await sakinles(p, ms); };
       try {
         const simdi = await envanterOku(islem);
@@ -1023,9 +1057,19 @@ export async function hizliTestiYurut(
         const t = taramaTarayiciAyarlari(g);
         const z = await zincirKesfet({
           sayfa: islem, ac: geriAl, sakinles: async (p, ms) => { await sakinles(p, ms); }, oku: async () => (await envanterOku(islem)).alanlar, durdu: () => kapandi,
-          ilerleme: (m) => bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `${m} (yeni beliren listeler; hiçbir düğmeye basılmaz)` })
+          ilerleme: (m) => bildir({ tur: 'adim', adim: 'hizli', durum: 'suruyor', mesaj: `${m} (yeni beliren / dolan listeler; hiçbir düğmeye basılmaz)` })
         }, simdi.alanlar, birinci, { derinlik: t.zincirDerinligi, ornek: Math.min(2, t.zincirOrnek) });
         await geriAl();
+        // Keşiften önceki sayfa durumu da bir gözlemdir: üst listelerin sayfadaki değerinde alt listenin seçenekleri (sayfanın doldurduğu
+        // kombinasyon tabloya da girer; denenen örnek değerler arasında olmayabilir).
+        const ilkDeger = new Map(ilk.map((x) => [x.alan.anahtar, x.deger]));
+        const ustu = new Map(z.iliskiler.map((i) => [i.alt, i.ust]));
+        for (const i of z.iliskiler) {
+          const l = gercekSecenekler(simdi.alanlar.find((x) => x.anahtar === i.alt)?.secenekler);
+          const secimler: Record<string, string> = {};
+          for (let u: string | undefined = i.ust, n = 0; u && n < 10; u = ustu.get(u), n++) { const v = ilkDeger.get(u); if (v) secimler[u] = v; }
+          if (l.length && secimler[i.ust]) z.gozlemler.unshift({ anahtar: i.alt, secimler, secenekler: l });
+        }
         return z.iliskiler.length ? z : null;
       } catch {
         await geriAl().catch(() => undefined);
@@ -1114,6 +1158,7 @@ export async function hizliTestiYurut(
           beklemeler = {};
           kilitliYazilan.clear();
           const doldurOncesi = new Set(sonAnlik.alanlar.map((a) => a.anahtar));
+          const onceAlanlar = sonAnlik.alanlar;
           // Yazılan alanlar ve sayfaya aynı değerle önceden uygulanmış (yeniden yazılmayan) alanlar: tur sonunda yeniden okunur; boşalan /
           // başka alan yüzünden değişen alan bir kez yeniden yazılır, yine değişirse alan hatası (turuDoldur).
           const hatalar = await turuDoldur(islem, k.alanlar, k.kontrol ?? [], {
@@ -1133,9 +1178,11 @@ export async function hizliTestiYurut(
             ...sonAnlik.metinler.filter((m) => !once.has(m.metin)),
             ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
           ];
-          // Doldurunca beliren açılır listeler arasında bağlı liste zinciri (yerinde; listeler sonunda ilk değerlerine döner).
+          // Doldurunca (metin uygulanınca / seçim yapılınca) beliren ya da seçenekleri yeni dolan açılır listeler arasında bağlı liste
+          // zinciri (yerinde; ilk keşifle aynı zincir motoru; listeler sonunda sayfadaki değerlerine döner). Bağı bilinen listeler denenmez.
           const yeniListeler = sonAnlik.alanlar.filter((a) => !doldurOncesi.has(a.anahtar));
-          const zincirYeni = !k.bekle?.length && yeniListeler.length ? await yerindeZincirKesfi(yeniListeler).catch(() => null) : null;
+          const adaylar = zincirAdaylari(onceAlanlar, sonAnlik.alanlar, new Set(k.bilinenBagli ?? []));
+          const zincirYeni = !k.bekle?.length && adaylar.length ? await yerindeZincirKesfi(adaylar).catch(() => null) : null;
           // Yerinde keşif: doldurunca (ör. bir seçim uygulanınca) beliren, henüz keşfedilmemiş seçimler ilk keşfin kurallarıyla denenir
           // (keşifte kaçırılmış olsalar bile; iç içe dahil). Seçimler sonunda ilk değerlerine döner.
           const bilinen = new Set(k.kesfedilen ?? []);
@@ -1150,13 +1197,17 @@ export async function hizliTestiYurut(
           });
         } else if (k.tur === 'bas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
+          const onceAlanlar = sonAnlik.alanlar;
           const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no, k.cerceve ?? null);
           sonAnlik = fark.anlik;
           // Basıştan sonra beliren (henüz boş) seçim alanları da denenir: içlerinde koşullu alan var mı? (Sayfa yeniden açılmaz.)
           const yeniSecimler = fark.yeniAlanlar.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);
           const kesifler = yeniSecimler.length ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
-          // Basınca beliren açılır listeler arasında bağlı liste zinciri (yerinde).
-          const zincirYeni = fark.yeniAlanlar.length ? await yerindeZincirKesfi(fark.yeniAlanlar).catch(() => null) : null;
+          // Basınca beliren ya da seçenekleri yeni dolan açılır listeler arasında bağlı liste zinciri (yerinde; ilk keşifle aynı motor).
+          const adaylar = zincirAdaylari(onceAlanlar, fark.anlik.alanlar, new Set(k.bilinenBagli ?? []));
+          const zincirYeni = adaylar.length ? await yerindeZincirKesfi(adaylar).catch(() => null) : null;
+          // Keşif sayfanın değerlerini geri yükledi; son okuma (sayfanın doldurduğu değerlerle) tazelenir.
+          if (kesifler.length || zincirYeni) { sonAnlik = { ...(await anlikOku(islem, false)), goruntu: fark.anlik.goruntu }; fark.anlik = sonAnlik; }
           await gonder({ olay: 'basildi', no: k.no, fark, kesifler, ...(zincirYeni ? { zincir: zincirYeni } : {}) });
         } else if (k.tur === 'kesifBas') {
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: keşif hiçbir düğmeye basmaz.' }); continue; }

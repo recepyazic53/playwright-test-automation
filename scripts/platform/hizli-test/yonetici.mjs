@@ -28,6 +28,9 @@
 //        zincir: üst liste anahtarı → yalnız o seçim (ve sayfaya uygulanmamış üstleri) uygulanır, bağlı alt listeler gelince aynı durak
 //        yeniden sorulur (eksik denetlenmez, düğmeye basılmaz). Bağlı listeler ek zorunluluk taşımaz: boş bırakılan bağlı liste sayfaya
 //        yazılmaz; yalnız sayfanın kendisi zorunlu saydığı alanlar (required / aria-required) eksik denetlenir.
+//        kosulSecimi: seçim alanı anahtarı → yalnız o seçim uygulanır (anında uygulama). metinUygula: metin alanı anahtarı → yalnız o değer
+//        yazılıp alandan çıkılır (düğmeye basılmaz); sayfa yeniden okunur, fark (beliren / dolan / sayfanın doldurduğu) aynı durakta
+//        özetlenir ve metin girilince beliren / dolan alan "tetik" olarak kaydedilir.
 //        Dosya alanı: { deger: "nobetci-dosya://<kimlik>/<ad>", kaynak: 'dosya' } (şifreli depodaki dosya; tarayıcıya oturuma özel geçici kopya).
 //   POST /platform/hizli-test/dosya-yukle?id=&alan=           ham dosya gövdesi + X-Dosya-Adi → { dosya: { id, ad, boyut, referans } } (şifreli depoya)
 //   GET  /platform/hizli-test/dosyalar?id=                    projenin şifreli senaryo dosyaları ("Depodan seç"; içerik dönmez)
@@ -72,6 +75,7 @@ import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { EkranDogrulamaHatasi, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
+import { farkOzeti, sayfaFarki, tetikHedefleri } from './sayfa-farki.mjs';
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
 import { modelBaglami, senaryoKaydet } from '../senaryolar/senaryo-servisi.mjs';
 import { senaryoHazirligi } from '../senaryolar/hazirlik-servisi.mjs';
@@ -570,6 +574,26 @@ export function hizliTestYoneticisiOlustur(s) {
     if (iliskiler.length) gunluk(o, `Yeni beliren listelerde bağlı liste zinciri: ${zincirMetni(iliskiler, (k) => alanAdi(o, k)).join('; ')} (yerinde denendi; hiçbir düğmeye basılmadı).`);
     for (const n of (Array.isArray(z.notlar) ? z.notlar : []).slice(0, 4)) gunluk(o, `Bağlı liste notu: ${String(n)}`);
   };
+  /** Bağ ilişkisi bilinen listeler (üst ya da alt): motor bunları yeniden zincir keşfine sokmaz. @param {Nesne} o @returns {string[]} */
+  const bilinenBagliListeler = (o) => [...new Set([...o.bagliUst.keys(), ...o.bagliUst.values()])];
+  // ---- Tetik: metin alanına değer girilince beliren / dolan alan (sayfa-farki.mjs > tetikHedefleri) ----
+  /**
+   * Metin uygulamasının farkından tetik ilişkileri kaydedilir: hedef alan "kaynak girilince belirir / seçenekleri gelir" (veri durağında
+   * gösterilir; kayıtta modele tetik olarak yazılır, normal koşu kaynağı doldurduktan sonra hedefin dolmasını / belirmesini bekler).
+   * Bağlı liste zincirinin alt halkası (üstü de hedefse) tetik hedefi değildir. Döner: kaydedilen hedefler.
+   * @param {Nesne} o @param {string} kaynak @param {import('./sayfa-farki.d.mts').SayfaFarki} f @returns {Array<{ hedef: string; olay: 'belirdi' | 'doldu' }>}
+   */
+  const tetikleriKaydet = (o, kaynak, f) => {
+    const l = tetikHedefleri(f, kaynak, o.bagliUst).filter((t) => o.alanlar.has(t.hedef));
+    for (const t of l) {
+      const a = o.alanlar.get(t.hedef)?.alan;
+      if (!a || (a.tetik && a.tetik.kaynak !== kaynak)) continue;
+      a.tetik = { kaynak, olay: a.tetik?.olay === 'belirdi' ? 'belirdi' : t.olay };
+    }
+    return l;
+  };
+  /** Metin olarak yazılan (sayfaya tek başına uygulanabilen) alan mı: seçim / dosya değil. @param {Nesne} a */
+  const metinAlaniMi = (a) => !['radio', 'checkbox', 'select', 'select-one', 'select-multiple', 'file'].includes(String(a.tur)) && !Array.isArray(a.secenekler) && doldurulabilir(a);
   /** Koşullu alanın görünürlük zincirindeki üst seçimleri (iç içe: alt seçim → üst seçim → …). @param {Nesne} o @param {string} anahtar @returns {string[]} */
   const kosulUstleri = (o, anahtar) => {
     const l = [];
@@ -682,7 +706,8 @@ export function hizliTestYoneticisiOlustur(s) {
     o.basiliyor = d;
     o.durum = 'calisiyor';
     o.calisiyor = `“${d.metin ?? d.secici}” düğmesine basıldı; sayfa izleniyor…`;
-    gonder(o, { tur: 'bas', secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}) });
+    o.farkOncesi = Array.isArray(o.sonAnlik?.alanlar) ? o.sonAnlik.alanlar : [];
+    gonder(o, { tur: 'bas', secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), bilinenBagli: bilinenBagliListeler(o) });
   };
   /** Basıştan sonra (hata sorusu yanıtlandıysa): yeni alanlar → yeni adım + veri durağı; yoksa yeni (alansız) adım + karar. @param {Nesne} o */
   const basistanSonra = (o) => {
@@ -906,7 +931,7 @@ export function hizliTestYoneticisiOlustur(s) {
       o.sonHata = String(e.mesaj ?? '').slice(0, 500);
       gunluk(o, `Hata: ${o.sonHata}`);
       if (bekleyen.tur === 'yenidenKur') { yenidenKurulamadi(o, o.sonHata); return; }
-      if (bekleyen.tur === 'doldur') { o.zincirIstegi = null; o.kosulIstegi = null; o.sonGonderilen = {}; veriDuragi(o); }
+      if (bekleyen.tur === 'doldur') { o.zincirIstegi = null; o.kosulIstegi = null; o.metinIstegi = null; o.farkOncesi = null; o.sonGonderilen = {}; veriDuragi(o); }
       // Doğrulama bitti (kaydet aşaması tarayıcı gerektirmez): tarayıcı kapatılır.
       else if (bekleyen.tur === 'dogrula') { o.dogrulama = { durum: 'basarisiz', mesaj: o.sonHata, gorulen: [] }; dogrulamaAdimlariniKapat(o, false); o.durum = 'kaydet'; tarayiciyiKapat(o); }
       else if (bekleyen.tur === 'secimAc' && o.bitisSecimi) { o.bitisSecimi = null; o.durum = 'bitis'; }
@@ -928,6 +953,12 @@ export function hizliTestYoneticisiOlustur(s) {
       // Üst sayfada yeniden seçilince altları sayfada boşalır: bu doldurmada gönderilmeyen altların uygulanan değeri düşer.
       const gonderilen = o.sonGonderilen ?? {};
       o.sonGonderilen = {};
+      // Yeniden okuma farkı (uygulamadan önceki okumaya göre): beliren / kaybolan alanlar, dolan / değişen listeler, etkinleşen / kilitlenen
+      // alanlar, sayfanın doldurduğu değerler (Nöbetçi'nin yazdıkları hariç).
+      const sf = sayfaFarki(Array.isArray(o.farkOncesi) ? o.farkOncesi : [], e.anlik.alanlar ?? [], Object.keys(gonderilen));
+      o.farkOncesi = null;
+      const metinIstegi = zincirIstegi && o.metinIstegi?.anahtar === zincirIstegi ? o.metinIstegi : null;
+      o.metinIstegi = null;
       for (const [k, v] of Object.entries(gonderilen)) {
         if (o.alanHatalari[k]) { delete o.uygulanan[k]; continue; }
         o.uygulanan[k] = v;
@@ -1007,6 +1038,18 @@ export function hizliTestYoneticisiOlustur(s) {
       for (const m of e.yeniMetinler ?? []) gorulenEkle(o, m.metin, m.tur);
       // Doldururken sayfa hata gösterdiyse (ör. alandan çıkınca gelen doğrulama uyarısı) sessizce ilerlenmez: kullanıcıya sorulur.
       const sayfaHatalari = (e.yeniMetinler ?? []).filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
+      // Metin uygulaması (yazılıp alandan çıkıldı): aynı veri durağına dönülür; farkın özeti not olur ("“Kod” girilince “Marka” listesi
+      // doldu; …"). Metin girilince beliren / dolan alan tetik olarak kaydedilir (zincirin alt halkası hariç).
+      if (metinIstegi) {
+        const kaynakAdi = alanAdi(o, metinIstegi.anahtar);
+        const tetikler = tetikleriKaydet(o, metinIstegi.anahtar, sf);
+        const ozet = farkOzeti(sf, { neden: `“${kaynakAdi}” girilince`, ad: (k) => alanAdi(o, k) }) || `“${kaynakAdi}” sayfaya uygulandı; sayfada başka bir değişiklik olmadı.`;
+        const parcalar = [ozet, sayfaHatalari.length ? `Sayfa uyarı gösterdi: ${sayfaHatalari.slice(0, 3).join(' · ')}` : ''].filter(Boolean).join(' ');
+        gunluk(o, parcalar);
+        if (tetikler.length) gunluk(o, `Tetik: ${tetikler.map((t) => `“${alanAdi(o, t.hedef)}” ${t.olay === 'belirdi' ? 'belirir' : 'dolar'}`).join(', ')} — “${kaynakAdi}” girilince (normal koşu bunu bekler).`);
+        veriDuragi(o, parcalar);
+        return;
+      }
       // Yerinde zincir isteği: her durumda aynı veri durağına dönülür (düğmeye basılmaz, eksik sorulmaz); sayfa uyarısı not olur.
       if (zincirIstegi && kosulIstegi) {
         const k = o.alanlar.get(zincirIstegi)?.alan;
@@ -1059,6 +1102,7 @@ export function hizliTestYoneticisiOlustur(s) {
         veriDuragi(o, parcalar || null);
         return;
       }
+      { const oz = farkOzeti(sf, { neden: 'Doldurunca', ad: (k) => alanAdi(o, k) }); if (oz) gunluk(o, oz); }
       if (sayfaHatalari.length) { o.hataSorusu = { metinler: sayfaHatalari, kaynak: 'doldur' }; o.durum = 'hataSorusu'; return; }
       if (yeni) { veriDuragi(o, `${yeni} yeni alan belirdi; değerlerini girin.`); return; }
       if (yuklenen.length) {
@@ -1102,6 +1146,14 @@ export function hizliTestYoneticisiOlustur(s) {
       // Yeni beliren alanların etiketleri (ör. "D.TARİHİ") sonuç metni değildir: bitiş çiplerine girmez.
       for (const m of f.yeniMetinler ?? []) if (!alanEtiketiMi(o, m.metin, f.anlik?.alanlar)) gorulenEkle(o, m.metin, m.tur, m.sonuc === true);
       gunluk(o, `“${adim.bas.metin ?? adim.bas.secici}” basıldı (${Math.round(f.sureMs / 100) / 10} sn): ${f.yeniMetinler.length} yeni metin, ${f.yeniAlanlar.length} yeni alan${f.adres ? `, adres ${f.adres.sonra}` : ''}${f.tiklamaNotu ? ` (${f.tiklamaNotu})` : ''}.`);
+      // Yeniden okuma farkı (basıştan önceki okumaya göre): dolan / değişen listeler, sayfanın doldurduğu değerler…
+      {
+        const sf = sayfaFarki(Array.isArray(o.farkOncesi) ? o.farkOncesi : [], f.anlik?.alanlar ?? []);
+        o.farkOncesi = null;
+        const ad = (/** @type {string} */ k) => alanAdi(o, k) === k ? (f.anlik?.alanlar ?? []).find((/** @type {Nesne} */ x) => x.anahtar === k)?.etiket ?? k : alanAdi(o, k);
+        const oz = farkOzeti(sf, { neden: `“${adim.bas.metin ?? adim.bas.secici}” basılınca`, ad });
+        if (oz) gunluk(o, oz);
+      }
       const hatalar = f.yeniMetinler.filter((/** @type {Nesne} */ m) => m.tur === 'hata').map((/** @type {Nesne} */ m) => m.metin);
       if (hatalar.length) { o.hataSorusu = { metinler: hatalar, kaynak: 'bas' }; o.durum = 'hataSorusu'; return; }
       basistanSonra(o);
@@ -1489,6 +1541,8 @@ export function hizliTestYoneticisiOlustur(s) {
           belirsiz: o.belirsizBagli?.has(a.anahtar) === true,
           bos: bagliBekliyor(a, o) && Boolean(o.degerler[a.bagli.ust]) && o.uygulanan[a.bagli.ust] === o.degerler[a.bagli.ust]?.deger
         } : null,
+        // Tetik: bir metin alanına değer girilince bu alan beliriyor ya da seçenekleri geliyor (metin uygulamasının farkı).
+        tetik: a.tetik ? { kaynak: a.tetik.kaynak, kaynakEtiket: alanAdi(o, a.tetik.kaynak), olay: a.tetik.olay } : null,
         deger: v ? (gizliAlan(a) && v.kaynak === 'elle' ? '••••••' : v.deger) : null, kaynak: v?.kaynak ?? null, gizli: gizliAlan(a),
         // Dosya alanı: kabul edilen uzantılar (sayfanın accept'i; "Dosya seç" süzgeci).
         ...(a.tur === 'file' ? { kabul: typeof a.kabul === 'string' && a.kabul ? a.kabul : null } : {})
@@ -1843,8 +1897,9 @@ export function hizliTestYoneticisiOlustur(s) {
     o.sorulacakBagli = adim.alanlar.filter((/** @type {Nesne} */ a) => a.bagli && !o.degerler[a.anahtar]
       && (bagliBekliyor(a, o) || ustleri(o, a.anahtar).some((u) => ustDegisti.includes(u)))).map((/** @type {Nesne} */ a) => a.anahtar);
     // Yerinde zincir isteği: üst liste bu adımda olmalı, bağlı altı bulunmalı ve değeri girilmiş olmalı.
-    /** @type {{ anahtar: string; altlar: string[]; kosul?: boolean } | null} */
+    /** @type {{ anahtar: string; altlar: string[]; kosul?: boolean; metin?: boolean } | null} */
     let zincir = null;
+    o.metinIstegi = null;
     // "Önce bunu seçin": görünürlüğü belirleyen seçim (radyo / liste / onay kutusu) yalnız kendisi sayfaya uygulanır; sayfa sakinleşince o
     // seçimin alanları aynı veri durağında sorulur (yerinde zincir isteğiyle aynı yol: düğmeye basılmaz, eksik denetlenmez).
     if (typeof g.kosulSecimi === 'string' && g.kosulSecimi) {
@@ -1854,6 +1909,15 @@ export function hizliTestYoneticisiOlustur(s) {
       if (!o.degerler[k.anahtar] || degerBasvurusu(o.degerler[k.anahtar].deger)) throw new HizliTestHatasi('KOSUL', `Önce “${alanAdi(o, k.anahtar)}” için bir seçenek seçin.`);
       zincir = { anahtar: k.anahtar, altlar: [], kosul: true };
       o.kosulIstegi = { anahtar: k.anahtar, onceki: sayfadakiDeger(o, k.anahtar) };
+    } else if (typeof g.metinUygula === 'string' && g.metinUygula) {
+      // Metin alanı yazılıp alandan çıkılınca yalnız o değer sayfaya uygulanır (düğmeye basılmaz, eksik denetlenmez); sayfa sakinleşince
+      // yeniden okunur ve fark (beliren alan, dolan liste, sayfanın doldurduğu değer) aynı veri durağında gösterilir.
+      const k = adim.alanlar.find((/** @type {Nesne} */ a) => a.anahtar === g.metinUygula);
+      if (!k || !metinAlaniMi(k)) throw new HizliTestHatasi('METIN', 'Yalnız bir metin alanı sayfaya tek başına uygulanabilir.');
+      if (!o.degerler[k.anahtar]) throw new HizliTestHatasi('METIN', `Önce “${alanAdi(o, k.anahtar)}” için bir değer yazın.`);
+      if (duzenlenemez(o, k)) throw new HizliTestHatasi('METIN', `“${alanAdi(o, k.anahtar)}” bu seçimde sayfa tarafından dolduruluyor; değeri yazılmaz.`);
+      zincir = { anahtar: k.anahtar, altlar: [], metin: true };
+      o.metinIstegi = { anahtar: k.anahtar };
     } else if (typeof g.zincir === 'string' && g.zincir) {
       const ust = adim.alanlar.find((/** @type {Nesne} */ a) => a.anahtar === g.zincir);
       const altlar = [...o.bagliUst].filter(([alt, u]) => u === g.zincir && adim.alanlar.some((/** @type {Nesne} */ a) => a.anahtar === alt)).map(([alt]) => alt);
@@ -1907,7 +1971,8 @@ export function hizliTestYoneticisiOlustur(s) {
       o.zincirIstegi = zincir.anahtar;
       o.durum = 'zincir';
       o.calisiyor = zincir.kosul ? `“${alanAdi(o, zincir.anahtar)}” seçimi sayfaya uygulanıyor; bu seçimin alanları getiriliyor…`
-        : `${zincir.altlar.map((k) => `“${alanAdi(o, k)}”`).join(', ')} seçenekleri getiriliyor…`;
+        : zincir.metin ? `“${alanAdi(o, zincir.anahtar)}” sayfaya uygulanıyor; sayfa yeniden okunuyor (hiçbir düğmeye basılmaz)…`
+          : `${zincir.altlar.map((k) => `“${alanAdi(o, k)}”`).join(', ')} seçenekleri getiriliyor…`;
     } else {
       o.zincirIstegi = null;
       o.durum = 'calisiyor';
@@ -1917,7 +1982,9 @@ export function hizliTestYoneticisiOlustur(s) {
     const bekle = zincir?.altlar.length ? zincir.altlar : null;
     const bekleMs = bekle ? Math.max(ZINCIR_SECENEK_BEKLEME_MS, ...bekle.map((k) => yuklenmeBeklemesi(olaganYuklenme(o.yuklenme[k]), ZINCIR_SECENEK_BEKLEME_MS).sinirMs)) : null;
     // Yerinde keşif: doldurunca beliren seçimlerden zaten keşfedilenler yeniden denenmez.
-    gonder(o, { tur: 'doldur', alanlar, ...(kontrol.length ? { kontrol } : {}), ...(bekle ? { bekle, bekleMs } : {}), kesfedilen: Object.keys(o.kesifIlk ?? {}) });
+    // Sayfa farkı (değer uygulamasından sonra yeniden okuma): uygulamadan önceki okuma saklanır.
+    o.farkOncesi = Array.isArray(o.sonAnlik?.alanlar) ? o.sonAnlik.alanlar : [];
+    gonder(o, { tur: 'doldur', alanlar, ...(kontrol.length ? { kontrol } : {}), ...(bekle ? { bekle, bekleMs } : {}), kesfedilen: Object.keys(o.kesifIlk ?? {}), bilinenBagli: bilinenBagliListeler(o) });
     return { gonderildi: true };
   }
 
@@ -2362,6 +2429,9 @@ export function hizliTestYoneticisiOlustur(s) {
       ];
     }
     if (o.bulgular.length) /** @type {any} */ (envanter).zincirBulgulari = [...o.bulgular];
+    // Tetikler (metin alanı girilince beliren / dolan alan): modelde hedef alanın "tetik"i; normal koşu kaynağı doldurunca hedefi bekler.
+    const tetikler = tetikListesi(o).filter((t) => tumAlanlar.has(t.kaynak) && tumAlanlar.has(t.hedef));
+    if (tetikler.length) /** @type {any} */ (envanter).tetikler = tetikler;
     const { paket } = kayitPaketiOlustur(/** @type {any} */ (meta), /** @type {any} */ (envanter));
     const model = bitisiUygula(/** @type {Nesne} */ (paket).model, o.bitis);
     /** @type {Nesne} */ (paket).meta.olusturan = 'Nöbetçi hızlı test';
@@ -2397,8 +2467,14 @@ export function hizliTestYoneticisiOlustur(s) {
     // Bağlı liste zincirleri tek tabloda (satır = gözlenen geçerli kombinasyon): ilişkiler ve keşif / doldurma gözlemleri.
     return planKur({
       baslik, alanlar: planAlanlari(o), degerler: aktifDegerler(o), ekGizliAdlar: ekGizliAdlar(vt),
-      iliskiler: [...o.bagliUst].map(([alt, ust]) => ({ ust, alt })), gozlemler: o.gozlemler
+      iliskiler: [...o.bagliUst].map(([alt, ust]) => ({ ust, alt })), gozlemler: o.gozlemler, tetikler: tetikListesi(o)
     });
+  }
+
+  /** Oturumdaki tetik ilişkileri (kaynak metin alanı → hedef alan). @param {Nesne} o @returns {Array<{ kaynak: string; hedef: string; olay: 'belirdi' | 'doldu' }>} */
+  function tetikListesi(o) {
+    return o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar).filter((/** @type {Nesne} */ a) => a.tetik && typeof a.tetik.kaynak === 'string')
+      .map((/** @type {Nesne} */ a) => ({ kaynak: String(a.tetik.kaynak), hedef: String(a.anahtar), olay: a.tetik.olay === 'belirdi' ? 'belirdi' : 'doldu' }));
   }
 
   /**

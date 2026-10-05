@@ -27,7 +27,7 @@ import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/p
 import { DegerIzleyici, KILITLI_ALAN_NOTU, alanaYaz, alandanCik, oneridenYaz, takvimdenYaz, yazmaHatasi } from '../../scripts/platform/tarama/alan-cikisi';
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
-import { yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
+import { gercekSecenekler, yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
 import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
@@ -404,6 +404,30 @@ function yavaslamaNotu(alan: { id?: string; etiket: string; yuklenmeMs?: number 
   if (yavasMs === null || gecenMs <= yavasMs || !alan.yuklenmeMs) return;
   const sn = (ms: number): string => (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
   yavaslamaNotlari.push(`“${alan.etiket}” listesinin seçenekleri ${sn(gecenMs)} sn'de geldi (olağan ≈ ${sn(alan.yuklenmeMs)} sn): yavaşlama`);
+}
+
+/**
+ * Tetik beklemesi: kaynak alan (metin) doldurulduktan sonra bu alana bağlı hedefler (modelde hedefin tetik'i) beklenir — "doldu": açılır
+ * listede yer tutucu dışında seçenek gelir; "belirdi": alan görünür olur. Hedefin değeri senaryoda olmasa da (sayfanın doldurduğu liste)
+ * beklenir: sayfa hedefi doldurmadan sonraki adıma geçilmez. Sınır bağlı liste beklemesiyle aynı (Ayarlar > Alan işlemi); gelmezse not
+ * düşer (koşu başarısız sayılmaz; sonraki adım sonucu gösterir).
+ */
+async function tetikleriBekle(page: Page, alan: PlanAlani): Promise<void> {
+  for (const t of alan.tetikler ?? []) {
+    const l = kapsam(page, t.cerceve).locator(t.secici).first();
+    // "doldu": yer tutucu ("Seçiniz") dışında seçenek (hızlı testle ortak kural: zincir-kesfi.mjs > gercekSecenekler).
+    const tamam = async (): Promise<boolean> => (t.olay === 'belirdi' ? l.isVisible().catch(() => false)
+      : gercekSecenekler(await l.evaluate((e) => (e instanceof HTMLSelectElement ? [...e.options].map((o) => ({ deger: o.value, metin: o.text.trim() })) : [])).catch(() => [])).length > 0);
+    const bas = Date.now();
+    let oldu = await tamam();
+    for (const bitis = bas + listeBeklemesi({}).sinirMs; !oldu && Date.now() < bitis;) {
+      await new Promise((c) => setTimeout(c, 200));
+      oldu = await tamam();
+    }
+    if (!oldu) yavaslamaNotlari.push(`“${t.etiket}”: “${alan.etiket}” doldurulduktan sonra ${t.olay === 'belirdi' ? 'belirmedi' : 'seçenekleri gelmedi'} (${Math.round((Date.now() - bas) / 1000)} sn beklendi)`);
+    // Liste dolunca sayfa genellikle bir değer seçer ve bağlı alt listesini yükler: o istekler de bitsin.
+    else await arkaPlanIstekleriniBekle(page, bas);
+  }
 }
 
 /**
@@ -1446,6 +1470,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           if (altlar.length) await bagliListeyiOlc(alan, altlar, k, onceki);
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
+          // Bu alan doldurulunca beliren / dolan alanlar (tetik): sayfa onları doldurana kadar beklenir.
+          if (alan.tetikler?.length) await tetikleriBekle(page, alan);
           const metinAlani = !zorla && !['secim', 'okluSecim', 'radyo', 'onayKutusu', 'dosya'].includes(alan.tip);
           if (metinAlani) doldurulanMetinler.push({ alan, l, k });
           if (alan.tip === 'secim') doldurulanSecimler.push({ alan, l, k });

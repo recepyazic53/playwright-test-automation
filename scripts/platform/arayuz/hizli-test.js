@@ -689,12 +689,17 @@ const OTO_GECIKME_MS = 400;
  * @type {{ id: string | null; adim: number | null; zamanlayici: ReturnType<typeof setTimeout> | null; kuyruk: string[]; suruyor: string | null;
  *   taslak: Record<string, any>; uygulananlar: Set<string>; gonder: (() => void) | null; hata: { anahtar: string; mesaj: string } | null }}
  */
-const oto = { id: null, adim: null, zamanlayici: null, kuyruk: [], suruyor: null, taslak: {}, uygulananlar: new Set(), gonder: null, hata: null };
+const oto = { id: null, adim: null, zamanlayici: null, kuyruk: [], suruyor: null, taslak: {}, uygulananlar: new Set(), gonder: null, hata: null, metinUygulanan: /** @type {Record<string, any>} */ ({}) };
 /** Başka bir veri durağına geçildi: anında uygulama durumu sıfırlanır. @param {string | null} id @param {number | null} adim */
 function otoSifirla(id, adim) {
   if (oto.zamanlayici) clearTimeout(oto.zamanlayici);
-  Object.assign(oto, { id, adim, zamanlayici: null, kuyruk: [], suruyor: null, taslak: {}, uygulananlar: new Set(), gonder: null, hata: null });
+  Object.assign(oto, { id, adim, zamanlayici: null, kuyruk: [], suruyor: null, taslak: {}, uygulananlar: new Set(), gonder: null, hata: null, metinUygulanan: {} });
 }
+/**
+ * Metin olarak yazılan alan mı (yazılıp alandan çıkılınca sayfaya tek başına uygulanır): seçim / onay kutusu / dosya değil.
+ * @param {any} a
+ */
+const metinMi = (a) => !['checkbox', 'radio', 'select', 'select-one', 'select-multiple', 'file'].includes(String(a.tur)) && !Array.isArray(a.secenekler);
 /** Seçim sayfaya uygulanıyor ya da uygulanmayı bekliyor mu. @param {string} anahtar */
 const otoBekliyor = (anahtar) => oto.suruyor === anahtar || oto.kuyruk.includes(anahtar);
 /** Seçim uygulanırken kart yeniden çizilmez (form yerinde kalır; kullanıcı yazmayı sürdürebilir). @param {any} o */
@@ -1062,6 +1067,12 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       } else {
         girdi = h('input', { type: a.gizli ? 'password' : a.tur === 'date' ? 'date' : 'text', id, autocomplete: 'off', value: gosterilen === null || gosterilen === undefined ? '' : String(gosterilen) });
         girdi.addEventListener('input', () => { durum[a.anahtar] = girilen(a, /** @type {HTMLInputElement} */ (girdi).value); uzunlukCiz(); });
+        // Yazılıp alandan çıkılınca (değer değiştiyse) kısa gecikmeyle sayfaya uygulanır (düğmeye basılmaz): sayfa yeniden okunur, bu
+        // değerle beliren alanlar / dolan listeler aynı durakta gösterilir. Boş değer ve sayfadaki hazır değerin aynısı uygulanmaz.
+        girdi.addEventListener('change', () => {
+          const d = durum[a.anahtar];
+          if (d && d.kaynak === 'elle' && d.deger !== null && d.deger !== '' && oto.metinUygulanan[a.anahtar] !== d.deger) otoIste(a.anahtar);
+        });
         girdi.setAttribute('aria-describedby', `${id}-uzunluk`);
       }
       if (sd !== null) girdi.setAttribute('aria-describedby', [`${id}-hazir`, girdi.getAttribute('aria-describedby')].filter(Boolean).join(' '));
@@ -1078,10 +1089,12 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     uzunlukCiz();
     // Anında uygulama göstergesi (seçim alanları): "Sayfaya uygulanıyor…" / satırın hatası.
     const otoDurumu = h('div', { class: 'hizli-oto-durum kucuk', role: 'status' });
-    if (['checkbox', 'radio', 'select', 'select-one'].includes(String(a.tur)) || Array.isArray(a.secenekler)) {
+    if (['checkbox', 'radio', 'select', 'select-one'].includes(String(a.tur)) || Array.isArray(a.secenekler) || metinMi(a)) {
       otoCizenler.set(a.anahtar, () => {
         const hata = oto.hata && oto.hata.anahtar === a.anahtar ? oto.hata.mesaj : null;
-        const isliyor = otoBekliyor(a.anahtar);
+        // Metin alanında gösterge yalnız uygulama gerçekten sürerken: alandan çıkılırken (ör. "Devam et"e tıklarken) beliren satır düğmeyi
+        // kaydırıp tıklamayı boşa çıkarmasın (Devam bekleyen uygulamayı zaten bırakır ve tüm değerleri gönderir).
+        const isliyor = metinMi(a) ? oto.suruyor === a.anahtar : otoBekliyor(a.anahtar);
         // Bağlı listenin üstünde gösterge yerinde zincir düğmesinin yerindedir.
         yerlestir(otoDurumu, isliyor && !altlari(a.anahtar).length ? [h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), ' Sayfaya uygulanıyor…'] : hata ? h('span', { class: 'alan-hatasi' }, hata) : null);
         otoDurumu.hidden = !otoDurumu.childNodes.length;
@@ -1131,6 +1144,9 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, a.bagli.belirsiz
         ? `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelebilir (keşifte kesinleşmedi; “${a.bagli.ustEtiket}” seçip yanındaki “↓ … seçeneklerini getir” ile deneyin).`
         : `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,
+      // Tetik: bir metin alanına değer girilince bu alan belirdi / seçenekleri geldi (normal koşu o alan doldurulunca bunu bekler).
+      a.tetik ? h('div', { class: 'hizli-kosul hizli-tetik soluk kucuk' }, a.tetik.olay === 'belirdi'
+        ? `“${a.tetik.kaynakEtiket}” girilince belirir.` : `Seçenekleri “${a.tetik.kaynakEtiket}” girilince gelir.`) : null,
       kap, kilitNotu, otoDurumu, uzunlukIpucu, zincirKap, a.hata ? h('div', { class: 'alan-hatasi', role: 'alert' }, a.hata) : null);
     // Kilit durumu: not, rozet ve satırın görünümü; seçim değişip durum değişince girdi aynı yerde yeniden çizilir.
     let sonKilit = kilitliMi(a);
@@ -1454,7 +1470,7 @@ function veriDuragi(o, s, kart, m, gonder, y) {
     const uygulaniyor = Boolean(oto.suruyor);
     const bos = uygulaniyor ? [] : bosBagli();
     devam.disabled = Boolean(getiriliyor) || uygulaniyor;
-    devamIpucu.textContent = uygulaniyor ? 'Seçim sayfaya uygulanıyor; bitince devam edebilirsiniz.'
+    devamIpucu.textContent = uygulaniyor ? 'Değer sayfaya uygulanıyor; bitince devam edebilirsiniz.'
       : bos.length ? `${bos.map((a) => a.etiket).join(', ')} boş; sayfa ${bos.length > 1 ? 'bunları' : 'bunu'} zorunlu sayarsa düğmeye basınca hata gösterir.` : '';
     devamIpucu.hidden = !devamIpucu.textContent;
     if (devamIpucu.textContent) devam.setAttribute('aria-describedby', devamIpucu.id); else devam.removeAttribute('aria-describedby');
@@ -1548,10 +1564,14 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       oto.hata = null;
       oto.uygulananlar.add(anahtar);
       for (const u of ustler) oto.uygulananlar.add(u);
-      const govde = { id: o.id, degerler: degerleriTopla(), sira: siralama, ...(altlari(anahtar).some((x) => aktifMi(x)) ? { zincir: anahtar } : { kosulSecimi: anahtar }) };
+      // Metin alanı: yalnız o değer yazılır ve alandan çıkılır (metinUygula); seçim: bağlı altı varsa zincir isteği, yoksa seçim isteği.
+      const metin = metinMi(a);
+      if (metin) oto.metinUygulanan[anahtar] = d.deger;
+      const govde = { id: o.id, degerler: degerleriTopla(), sira: siralama, ...(metin ? { metinUygula: anahtar } : altlari(anahtar).some((x) => aktifMi(x)) ? { zincir: anahtar } : { kosulSecimi: anahtar }) };
       otoGostergeleriCiz();
       api('/platform/hizli-test/veri', { govde }).then(() => { degisiklikleriBirak(); y.hemen(); }).catch((e) => {
         oto.suruyor = null;
+        if (metin) delete oto.metinUygulanan[anahtar];
         if (!(e && e.durum === 423)) oto.hata = { anahtar, mesaj: hataMetni(e) };
         otoGostergeleriCiz();
       });

@@ -41,6 +41,8 @@ export function alanGrubu(a) {
   const baslik = alanBasligi(a);
   const n = baslikNormal(baslik);
   const temiz = adTemizle(baslik);
+  // Tetikle ilişkili alan (metin girilince seçenekleri gelen liste): kaynağının tablosunda, kendi sütunuyla (kayit-plani.mjs > planKur).
+  if (typeof a.tabloGrubu === 'string' && a.tabloGrubu) return { tablo: a.tabloGrubu, sutun: temiz || 'Alan' };
   if (KART_DESENI.test(n)) return { tablo: KART_TABLOSU, sutun: temiz || 'Alan' };
   const tip = a.tur === 'date' ? 'tarih' : a.tur === 'tel' ? 'telefon' : 'metin';
   const kisi = kisiKategorisi({ etiket: baslik, anahtar: a.ad ?? undefined, id: a.kimlik ?? undefined, tip });

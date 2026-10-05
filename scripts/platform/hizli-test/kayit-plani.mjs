@@ -289,15 +289,29 @@ function zincirTablolari(g, kullanilanAdlar) {
 
 /**
  * @param {{ baslik: string; alanlar: Nesne[]; degerler: Record<string, { deger: unknown; kaynak?: string }>; ekGizliAdlar?: ReadonlyArray<string>;
- *   iliskiler?: ReadonlyArray<{ ust: string; alt: string }>; gozlemler?: ReadonlyArray<{ anahtar: string; secimler?: Record<string, unknown>; secenekler?: ReadonlyArray<{ deger: unknown; metin?: unknown }> }> }} g0
+ *   iliskiler?: ReadonlyArray<{ ust: string; alt: string }>; gozlemler?: ReadonlyArray<{ anahtar: string; secimler?: Record<string, unknown>; secenekler?: ReadonlyArray<{ deger: unknown; metin?: unknown }> }>;
+ *   tetikler?: ReadonlyArray<{ kaynak: string; hedef: string; olay: 'belirdi' | 'doldu' }> }} g0
  * @returns {KayitPlani}
  */
 export function planKur(g0) {
   // Çok parçalı alanlar (aynı satırda "Ad" + "Ad (2)" kutuları) tek kayıt: aynı tabloya, ayrı sütunlar olarak girer (cokParcaliIsaretle).
-  const g = { ...g0, alanlar: cokParcaliIsaretle(g0.alanlar, g0.degerler) };
+  const g1 = { ...g0, alanlar: cokParcaliIsaretle(g0.alanlar, g0.degerler) };
   const kullanilanAdlar = new Set();
   // Önce zincirler (kendi tabloları); zincirdeki alanlar tek alan tablolarına girmez.
-  const zincir = zincirTablolari(g, new Set());
+  const zincir = zincirTablolari(g1, new Set());
+  // Tetik (metin alanı girilince liste doluyor / alan beliriyor): hedef zincirde değilse ve iki alanın da kullanıcının yazdığı değeri varsa
+  // hedef, kaynağın kayıt tablosuna aynı satırda girer (birlikte geçerli değerler ilişkili kalır). Diğer durumlarda hedefin tablosuna tetik
+  // notu düşer.
+  const tetikler = (g0.tetikler ?? []).filter((t) => t && t.kaynak !== t.hedef);
+  const birlikte = new Map(tetikler.filter((t) => !zincir.alanlar.has(t.hedef) && elleDeger(g1.degerler, t.hedef) !== null && elleDeger(g1.degerler, t.kaynak) !== null)
+    .map((t) => [t.hedef, t.kaynak]));
+  const g = birlikte.size ? {
+    ...g1, alanlar: g1.alanlar.map((a) => {
+      const k = birlikte.get(String(a.anahtar));
+      const kaynak = k ? g1.alanlar.find((x) => x.anahtar === k) : null;
+      return kaynak ? { ...a, tabloGrubu: alanGrubu(kaynak).tablo } : a;
+    })
+  } : g1;
   // Görünürlüğü belirleyen seçim (başka alanların kosul.secim'i) kullanıcı değiştirmediyse sayfadaki değeriyle senaryonun değeri olur:
   // senaryo dalı açıkça kaydedilir ve alan liste tablosuna o satırla bağlanır (değer üretilmez: sayfada seçili gelen seçenek).
   // (Alanın ETİKETİNİ belirleyen seçim de — etiketKosulu — böyledir: senaryonun dalı alanın anlamını belirler. Alanın düzenlenebilirliğini
@@ -360,6 +374,13 @@ export function planKur(g0) {
     kullanilanAdlar.add(kucuk(ad));
     ek++;
   }
+  // Tetik notları: hedef alanı taşıyan tabloya ("“Marka” seçenekleri “Kod” girilince gelir.").
+  for (const t of tetikler) {
+    const x = tablolar.find((y) => y.alanlar.some((a) => a.oturumAnahtar === t.hedef));
+    if (!x) continue;
+    const not = `“${etiketi(t.hedef)}” ${t.olay === 'belirdi' ? 'alanı' : 'seçenekleri'} “${etiketi(t.kaynak)}” girilince ${t.olay === 'belirdi' ? 'belirir' : 'gelir'}.`;
+    x.tetik = [...new Set([...(x.tetik ?? []), not])];
+  }
   // Satır adı bağlamı: kullanıcının seçtiği değerler (seçim alanları, sayfa sırasıyla) — mevcut tabloya yeni satır eklenirken satırların
   // adları bu değerlerin türündense (ör. il adları) seçilen değer satır adı olur.
   const baglam = g.alanlar.filter((a) => SECIM_TURLERI.includes(String(a.tur))).flatMap((a) => {
@@ -403,7 +424,7 @@ export function planOnizle(vt, projeId, plan, ekranId, anahtarlar) {
         if (e.length) eslemeOnerileri[x.id] = Object.fromEntries(e.map((y) => [y.plan, y.hedef]));
       }
       return {
-        ad: t.ad, tur: t.tur, aciklama: null, zincir: t.zincir ?? null, eslemeOnerileri,
+        ad: t.ad, tur: t.tur, aciklama: t.tetik?.length ? t.tetik.join(' ') : null, zincir: t.zincir ?? null, eslemeOnerileri,
         sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, karsilikSayisi: Object.keys(s.karsiliklar).length })),
         satirSayisi: t.satirlar.length, tekrarSayisi: 0,
         ornek: t.satirlar.slice(0, 5).map((d) => t.sutunlar.map((s) => (s.gizli ? null : d[s.ad] ?? null))),

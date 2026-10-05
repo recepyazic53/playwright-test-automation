@@ -261,6 +261,23 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
   }
 
   const sirali = (Array.isArray(model.adimlar) ? model.adimlar : []).slice().sort((a, b) => (a.sira || 0) - (b.sira || 0));
+  /**
+   * Tetikler: kaynak alan kimliği → bu alan doldurulunca beliren / seçenekleri dolan alanlar (modelde hedefin "tetik"i). Hedefin değeri
+   * olmasa da (ör. sayfanın doldurduğu liste) koşucu kaynağı doldurduktan sonra hedefi bekler.
+   * @type {Map<string, Array<{ id: string; etiket: string; secici: string; cerceve: string[] | null; olay: 'belirdi' | 'doldu' }>>}
+   */
+  const tetikHedefleri = new Map();
+  for (const adim of sirali) {
+    for (const bolum of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      for (const a of Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
+        if (!a || !nesneMi(a.tetik) || typeof a.tetik.alan !== 'string' || !nesneMi(a.konum) || typeof a.konum.secici !== 'string' || !a.konum.secici) continue;
+        const l = tetikHedefleri.get(a.tetik.alan) ?? [];
+        l.push({ id: String(a.id), etiket: etiketi(a), secici: a.konum.secici, cerceve: Array.isArray(a.konum.cerceve) && a.konum.cerceve.length ? a.konum.cerceve.map(String) : null,
+          olay: a.tetik.olay === 'belirdi' ? 'belirdi' : 'doldu' });
+        tetikHedefleri.set(a.tetik.alan, l);
+      }
+    }
+  }
   /** Kimlik çözümü için form değerleri (bağlı alanın değeri → kimlik türü / profil havuzu). */
   const formDegerleri = formDegerleriniKur(sema, veri);
   const formAlanlari = tumFormAlanlari(sema);
@@ -284,6 +301,8 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       // Bağlı liste: gözlenen olağan dolma süresi (koşucu bekleme sınırı ve yavaşlama notu; zincir-kesfi.mjs > yuklenmeBeklemesi).
       yuklenmeMs: alan.bagimlilik && Number.isFinite(alan.bagimlilik.yuklenmeMs) ? Number(alan.bagimlilik.yuklenmeMs) : null,
       ustId: alan.bagimlilik && typeof alan.bagimlilik.alan === 'string' ? alan.bagimlilik.alan : null,
+      // Bu alan doldurulunca beliren / dolan alanlar (tetik): koşucu doldurduktan sonra bekler.
+      ...(tetikHedefleri.has(String(alan.id)) ? { tetikler: tetikHedefleri.get(String(alan.id)) } : {}),
       // Akışta "zorunlu" işaretli alan (model: mutlakaGorunmeli) ya da senaryonun "mutlaka görünmeli" kuralı.
       mutlakaGorunmeli: mutlaka.has(id) || alan.mutlakaGorunmeli === true, atla
     };
