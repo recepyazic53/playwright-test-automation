@@ -492,6 +492,8 @@ const ARAYUZ_DOSYALARI = new Map([
   // Canlı görüntü (koşu / Deneme paneli ve hızlı test "Tarayıcıda şu an"): sürekli kare akışı bileşeni ve kendi stil dosyası.
   ['/arayuz/canli-akis.js', { dosya: 'canli-akis.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-canli-akis.css', { dosya: 'stil-canli-akis.css', tur: 'text/css; charset=utf-8' }],
+  // Ekran > Test verisi sekmesi (ekran-baglari.js): bağlamak gerekmeyen alanlar bölümü, kaynak rozeti.
+  ['/arayuz/stil-ekran-baglari.css', { dosya: 'stil-ekran-baglari.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.
   ['/arayuz/ekran-modeli-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'ekran-modeli-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],

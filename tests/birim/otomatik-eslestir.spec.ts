@@ -114,7 +114,8 @@ test.describe('otomatik eşleştir (127.0.0.1)', () => {
       page.on('pageerror', (e) => hatalar.push(String(e)));
       await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}/veri`);
       const kart = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
-      // Seçenekleri modelde tanımlı alan: "bağlı değil" uyarısı yok.
+      // Seçenekleri modelde tanımlı alan: "bağlı değil" uyarısı yok; en alttaki kapalı "Bağlamak gerekmeyen alanlar" bölümünde.
+      await kart.getByRole('button', { name: /^Bağlamak gerekmeyen alanlar, \d+ alan, kapalı$/ }).click();
       const sube = kart.getByRole('combobox', { name: 'Şubemiz tablo sütunu' });
       await expect(sube.locator('option:checked')).toHaveText('— seçenekler ekranda tanımlı (bağlamak gerekmez) —');
       await expect(kart.getByRole('combobox', { name: 'Cep telefonu tablo sütunu' }).locator('option:checked')).toHaveText('— bağlı değil —');

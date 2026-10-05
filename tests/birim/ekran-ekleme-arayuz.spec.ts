@@ -133,8 +133,10 @@ test('gezinme: önceki sayfanın modülü geç yüklenirse yeni sayfanın üstü
   await page.goto('/#/senaryolar');
   await page.goto('/#/ekranlar');
   await expect(page.getByRole('heading', { name: 'Ekranlar', level: 1 })).toBeAttached();
+  // Geciken modülün yanıtı beklenir (kaynak zamanlama kaydı 250 girdiyle sınırlı; sayfanın kaynak sayısına bağlı kalmasın).
+  const modulYaniti = page.waitForResponse(/\/senaryolar\.js(\?|$)/, { timeout: 10_000 });
   birak();
-  await expect.poll(() => page.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/senaryolar\.js(\?|$)/.test(e.name))), { timeout: 10_000 }).toBe(true);
+  await modulYaniti;
   await page.waitForTimeout(300);
   await expect(page).toHaveURL(/#\/ekranlar$/);
   await expect(page.getByRole('heading', { name: 'Ekranlar', level: 1 })).toBeAttached();

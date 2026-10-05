@@ -43,25 +43,47 @@ function ortakAkisDosyalari(model) {
  * @returns {Record<string, { tablo: string; sutun: string; etiket?: string; ortakAkis: { id: string; ad: string } }>}
  */
 export function ortakAkisBaglari(vt, ekranId) {
-  const kayit = ekranModeliGetir(vt, ekranId);
-  const model = kayit && nesneMi(kayit.model) ? /** @type {Record<string, any>} */ (kayit.model) : null;
-  if (!model || ['ortakAkis', 'altModel'].includes(String(model.tur))) return {};
-  const dosyalar = ortakAkisDosyalari(model);
-  if (!dosyalar.length) return {};
-  const e = vt.tek('SELECT proje_id FROM ekranlar WHERE id = ?', [ekranId]);
-  if (!e) return {};
   /** @type {Record<string, { tablo: string; sutun: string; etiket?: string; ortakAkis: { id: string; ad: string } }>} */
   const sonuc = {};
-  for (const dosya of dosyalar) {
-    const anahtar = dosya.replace(/\.model\.json$/, '');
-    const o = ekranlariListele(vt, String(e.proje_id)).find((x) => x.anahtar === anahtar);
-    if (!o) continue;
-    const om = ekranModeliGetir(vt, o.id);
-    if (!om || !nesneMi(om.model) || /** @type {Record<string, any>} */ (om.model).tur !== 'ortakAkis') continue;
-    for (const [alan, b] of Object.entries(ekranAlanBaglari(vt, o.id))) if (!(alan in sonuc)) sonuc[alan] = { ...b, ortakAkis: { id: o.id, ad: o.ad } };
+  for (const o of kullanilanOrtakAkislar(vt, ekranId)) {
+    for (const [alan, b] of Object.entries(ekranAlanBaglari(vt, o.id))) if (!(alan in sonuc)) sonuc[alan] = { ...b, ortakAkis: o };
   }
   return sonuc;
 }
+
+/**
+ * Ekranın (tüm akışlarında) kullandığı ORTAK AKIŞLAR, akıştaki sırayla: { id, ad }. Ortak akış / alt model ekranında ve modeli
+ * olmayan ekranda boş. Test verisi sekmesi alanın hangi genel senaryodan geldiğini bununla bulur (tablo-uclari.mjs).
+ * @param {Veritabani} vt @param {string} ekranId @returns {Array<{ id: string; ad: string }>}
+ */
+export function kullanilanOrtakAkislar(vt, ekranId) {
+  const kayit = ekranModeliGetir(vt, ekranId);
+  const model = kayit && nesneMi(kayit.model) ? /** @type {Record<string, any>} */ (kayit.model) : null;
+  if (!model || ['ortakAkis', 'altModel'].includes(String(model.tur))) return [];
+  const dosyalar = ortakAkisDosyalari(model);
+  if (!dosyalar.length) return [];
+  const e = vt.tek('SELECT proje_id FROM ekranlar WHERE id = ?', [ekranId]);
+  if (!e) return [];
+  const ekranlar = ekranlariListele(vt, String(e.proje_id));
+  /** @type {Array<{ id: string; ad: string }>} */
+  const sonuc = [];
+  for (const dosya of dosyalar) {
+    const anahtar = dosya.replace(/\.model\.json$/, '');
+    const o = ekranlar.find((x) => x.anahtar === anahtar);
+    if (!o) continue;
+    const om = ekranModeliGetir(vt, o.id);
+    if (!om || !nesneMi(om.model) || /** @type {Record<string, any>} */ (om.model).tur !== 'ortakAkis') continue;
+    sonuc.push({ id: o.id, ad: o.ad });
+  }
+  return sonuc;
+}
+
+/**
+ * Alanı tabloya bağlamak gerekmez mi: seçenekleri modelde tanımlı seçim ya da senaryo ayarı (ekranda alan değil; senaryoda seçilir).
+ * Bağlanmazsa modeldeki seçenekler kullanılır; bağlamak yine mümkündür. "Bağlı değil" sayaçları bunları eksik saymaz.
+ * @param {{ tip?: unknown; secenekler?: unknown; senaryoAyari?: unknown }} g
+ */
+export const baglamakGerekmez = (g) => Boolean(g.senaryoAyari) || (g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length > 0);
 
 /**
  * Ekranın ETKİN alan bağları: alanın ekrana özel bağı varsa o (ezme), yoksa alanın geldiği ortak akışın bağı. Senaryo formu

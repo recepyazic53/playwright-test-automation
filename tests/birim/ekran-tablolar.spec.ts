@@ -135,6 +135,8 @@ test.describe('ekran alanları tablolardan', () => {
     const bolum = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
     await expect(bolum).toBeVisible();
     const sec = (id: string) => bolum.getByLabel(`${girdi(id).etiket} tablo sütunu`);
+    // Seçenekleri modelde tanımlı, bağsız seçimler en alttaki kapalı "Bağlamak gerekmeyen alanlar" bölümünde: önce açılır.
+    await bolum.getByRole('button', { name: /^Bağlamak gerekmeyen alanlar, \d+ alan, kapalı$/ }).click();
     await sec('kapsam').selectOption(`${tabloId}\u0001Kapsam`);
     await sec('alternatif').selectOption(`${tabloId}\u0001Alternatif`);
     await sec('ulke').selectOption(`${tabloId}\u0001Ülke`);

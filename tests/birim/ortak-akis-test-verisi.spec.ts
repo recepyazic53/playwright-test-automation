@@ -186,7 +186,11 @@ test('arayüz: genel senaryoda Test verisi sekmesi (bağ kaydı, senaryo dönü�
   await expect(kart.getByRole('button', { name: 'Kişi alanlarını tabloya bağla…' })).toHaveCount(0);
   const ortakSecim = kart.getByRole('combobox', { name: 'Teslimat tablo sütunu' });
   await expect(ortakSecim.locator('option:checked')).toHaveText(`${TABLO} → Teslimat`);
+  // Bağı kaldırılan seçenekli alan en alttaki "Bağlamak gerekmeyen alanlar" bölümüne geçer; odaktaysa bölüm açılır.
+  await ortakSecim.focus();
   await ortakSecim.selectOption({ label: '— bağlı değil —' });
+  await expect(kart.getByRole('button', { name: 'Bağlamak gerekmeyen alanlar, 1 alan, açık', exact: true })).toBeVisible();
+  await expect(ortakSecim).toBeFocused();
   await expect(kart.getByText('✓ Kaydedildi')).toBeVisible();
   expect((await baglar(ortakId)).baglar).toEqual({});
   expect((await baglar(ekranId)).ortakBaglar).toEqual({});

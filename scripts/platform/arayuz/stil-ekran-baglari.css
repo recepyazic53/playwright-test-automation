@@ -1,0 +1,14 @@
+/* Ekran > Test verisi sekmesi (ekran-baglari.js): ana liste sayacı, genel senaryo kaynak rozeti ve en alttaki, varsayılan kapalı
+   "Bağlamak gerekmeyen alanlar" bölümü. Dar ekranda kaydırır, taşmaz. */
+.bag-sayaci { margin: 0; }
+.ekran-baglari .alan-adi { flex-wrap: wrap; row-gap: 3px; }
+.rozet.kaynak-rozeti { font: 500 11px/1.3 var(--yazi); max-width: 100%; }
+.gerekmez-kap { display: grid; min-width: 0; }
+.gerekmez-kap:empty { display: none; }
+.gerekmez-bolum { border: 1px dashed var(--cizgi); border-radius: 10px; padding: 4px 12px; background: var(--panel-2); min-width: 0; }
+.gerekmez-bolum > .acilir-baslik { flex-wrap: wrap; gap: 4px 10px; }
+.gerekmez-bolum > .acilir-baslik > h4 { flex: 1 1 220px; }
+.gerekmez-bolum > .acilir-govde { display: grid; gap: 6px; padding: 2px 0 8px; min-width: 0; }
+.gerekmez-bolum > .acilir-govde[hidden] { display: none; }
+.gerekmez-bolum > .acilir-govde > p { margin: 0; }
+.gerekmez-bolum .alan-formu { background: var(--panel); }
