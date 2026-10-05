@@ -84,8 +84,11 @@ export type AkisBlogu =
   /** Diyagramda düzenlenemeyen, modeldeki hâliyle aynen korunan parça (salt okunur): adımın tamamı ya da adımın koşu aksiyonları. ozet yalnız gösterim. */
   | { tur: 'korunan'; korunan: string; ad: string; kapsam: 'adim' | 'aksiyonlar'; ozet?: string[] }
   | { tur: 'bitir' };
-/** Alanın görünürlük koşulu: seçim alanı (anahtar) bu değerlerden birindeyken görünür. */
-export type AkisKosulu = { secim: string; degerler: string[] };
+/**
+ * Alanın görünürlük koşulu: eski biçim (seçim alanı bu değerlerden birindeyken görünür) ya da yeni biçim (satırlar: =, ≠, dolu, boş;
+ * tek düzey VE / VEYA; genel senaryo alanı dahil) — bkz. gorunurluk-kosulu.mjs.
+ */
+export type AkisKosulu = { secim: string; degerler: string[] } | import('./gorunurluk-kosulu.mjs').YeniKosul;
 export type AkisHatasi = { blok: number | null; mesaj: string };
 export type AkisPaleti = {
   /** zorunlu: sayfanın zorunlu işaretlediği alan (gruba eklenince varsayılan "zorunlu"). */

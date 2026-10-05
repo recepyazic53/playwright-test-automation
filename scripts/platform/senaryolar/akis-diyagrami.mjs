@@ -56,6 +56,7 @@ export function ifadeMetni(ifade, model, harita = alanHaritasi(model)) {
   if (typeof ifade.alan === 'string') {
     const alan = harita.get(ifade.alan);
     const ad = alan ? etiketi(alan) : ifade.alan;
+    if (typeof ifade.dolu === 'boolean') return `${ad} ${ifade.dolu ? 'dolu' : 'boş'}`;
     if (Array.isArray(ifade.icinde)) return `${ad} = ${ifade.icinde.map((d) => secenekMetni(alan, d)).join(' ya da ')}`;
     if (typeof ifade.esit === 'boolean' && alan && alan.tip === 'onayKutusu') return `${ad} ${ifade.esit ? 'işaretli' : 'işaretsiz'}`;
     return `${ad} = ${secenekMetni(alan, ifade.esit)}`;
