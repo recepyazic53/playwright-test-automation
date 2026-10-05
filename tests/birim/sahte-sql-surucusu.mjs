@@ -68,9 +68,15 @@ export function sahteLob(metin) {
   return { type: 2017, length: metin.length, getData: async () => metin, destroy() { /* sahte */ } };
 }
 
+/** Aynı süreçte açılan istemcilerin zaman aşımı seçenekleri (testler sürücüye iletilen süreyi doğrular). @type {Array<Record<string, unknown>>} */
+export const istemciZamanAsimlari = [];
+
 export class Client {
   /** @param {Record<string, any>} ayar */
-  constructor(ayar) { this.ayar = ayar; }
+  constructor(ayar) {
+    this.ayar = ayar;
+    istemciZamanAsimlari.push({ connectionTimeoutMillis: ayar.connectionTimeoutMillis, query_timeout: ayar.query_timeout, statement_timeout: ayar.statement_timeout });
+  }
   on() { return this; }
   async connect() {
     if (Number(this.ayar.port) === 9) throw Object.assign(new Error(`connect ECONNREFUSED ${this.ayar.host}:${this.ayar.port}`), { code: 'ECONNREFUSED' });

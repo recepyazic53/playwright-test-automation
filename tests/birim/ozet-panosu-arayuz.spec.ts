@@ -258,6 +258,10 @@ test('SQL kartı: yalnız okuma uyarısı; yalnız Yenile\'de çalışır (sayfa
   await pencere.getByLabel('Veritabanı bağlantısı').selectOption(`b:${bTest}`);
   await pencere.locator('textarea.pano-sorgu').fill('/* bekle:1200 */ SELECT id, durum, tc_kimlik_no, aciklama FROM kayitlar ORDER BY id');
   await pencere.getByLabel('Görünüm').selectOption('tablo');
+  // Kartın zaman aşımı (varsayılan 15 sn; yavaş sorgu için artırılır).
+  const zamanAsimi = pencere.getByRole('spinbutton', { name: 'Zaman aşımı (sn)' });
+  await expect(zamanAsimi).toHaveValue('15');
+  await zamanAsimi.fill('30');
   await pencere.getByRole('button', { name: 'Panoya ekle' }).click();
   await expect(pencere).toBeHidden();
   // Düzenlerken Yenile görünmez.
@@ -283,7 +287,7 @@ test('SQL kartı: yalnız okuma uyarısı; yalnız Yenile\'de çalışır (sayfa
   expect(sorgular()).toEqual(['SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY', "SELECT COUNT(*) AS hata_sayisi FROM kayitlar WHERE durum = 'hata'"]);
   // Yükleniyor durumu (yavaş sorgu), ardından maskeli tablo.
   await tabloKarti.getByRole('button', { name: 'Yenile: Son kayıtlar' }).click();
-  await expect(tabloKarti.getByRole('status')).toContainText('Sorgu çalışıyor…');
+  await expect(tabloKarti.getByRole('status')).toContainText('Sorgu çalışıyor… (en çok 30 sn)');
   await expect(tabloKarti.getByRole('button', { name: /^Yenile/ })).toBeDisabled();
   await expect(tabloKarti.locator('table tbody tr')).toHaveCount(12, { timeout: 15_000 });
   await expect(tabloKarti.getByRole('status')).toContainText('Güncellendi (12 satır).');
@@ -812,6 +816,15 @@ test('390 px: düzenleme kipi, Kart ekle penceresi ve SQL kartı yatay taşmaz; 
     const pencere = page.getByRole('dialog', { name: 'Kart ekle' });
     await pencere.getByRole('radio', { name: 'SQL sorgusu' }).check();
     await expect(pencere.getByLabel('Kart başlığı')).toBeVisible();
+    // Zaman aşımı alanı: 1–120 sn, varsayılan 15; yardım metni; pencereden taşmaz.
+    const zamanAsimi = pencere.getByRole('spinbutton', { name: 'Zaman aşımı (sn)' });
+    await zamanAsimi.scrollIntoViewIfNeeded();
+    await expect(zamanAsimi).toHaveValue('15');
+    await expect(zamanAsimi).toHaveAttribute('min', '1');
+    await expect(zamanAsimi).toHaveAttribute('max', '120');
+    await expect(pencere).toContainText('Sorgu bu süre içinde bitmezse kart hata gösterir; yavaş sorgularda artırın.');
+    const [kutu, alanKutusu] = await Promise.all([pencere.boundingBox(), zamanAsimi.boundingBox()]);
+    expect(alanKutusu && kutu && alanKutusu.x >= kutu.x && alanKutusu.x + alanKutusu.width <= kutu.x + kutu.width).toBe(true);
     await tasmaYok(page);
     await pencere.getByRole('button', { name: 'Vazgeç' }).click();
     await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Vazgeç' }).click();

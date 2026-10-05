@@ -139,6 +139,19 @@ export const EN_COK_SUTUN = 100;
 /** Tablo sütun genişliği sınırları (px; kenar tutamağıyla ayarlanır, kartın ayarında saklanır). */
 export const SUTUN_GENISLIGI = Object.freeze({ en: 40, enCok: 1200 });
 export const SQL_EN_UZUN = 20_000;
+/** SQL kartının zaman aşımı (sn): kartın "Zaman aşımı" ayarı; ayarı olmayan (eski) kartta varsayılan. */
+export const SQL_ZAMAN_ASIMI_SN = Object.freeze({ varsayilan: 15, en: 1, enCok: 120 });
+
+/**
+ * Kartın zaman aşımı ayarı (sn): boşsa undefined (varsayılan kullanılır); sayı değilse PanoHatasi; 1–120 aralığına sıkıştırılır.
+ * @param {unknown} v @returns {number | undefined}
+ */
+export function sqlZamanAsimiTemizle(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return undefined;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
+  if (!Number.isFinite(n)) throw new PanoHatasi('Zaman aşımı bir sayı olmalıdır.');
+  return Math.max(SQL_ZAMAN_ASIMI_SN.en, Math.min(SQL_ZAMAN_ASIMI_SN.enCok, Math.round(n)));
+}
 export const NOT_EN_UZUN = 1000;
 export const EN_COK_BAGLANTI = 8;
 
@@ -415,7 +428,8 @@ function sqlAyari(ham) {
     if (!Number.isFinite(n) || n < SUTUN_GENISLIGI.en || n > SUTUN_GENISLIGI.enCok) throw new PanoHatasi(`Sütun genişliği ${SUTUN_GENISLIGI.en}–${SUTUN_GENISLIGI.enCok} px olmalıdır.`);
     sutunGenislikleri[metin(ad, 'Sütun adı', 120)] = n;
   }
-  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim) };
+  const zamanAsimiSn = sqlZamanAsimiTemizle(ham.zamanAsimiSn);
+  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }) };
 }
 
 /**

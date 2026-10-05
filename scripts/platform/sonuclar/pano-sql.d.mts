@@ -3,6 +3,8 @@ import type { PanoSqlSonucu } from './ozet-panosu.mjs';
 type Veritabani = import('../veritabani/baglanti.mjs').Veritabani;
 export declare const PANO_SQL_UCU: '/platform/pano/sql/yenile';
 export declare const PANO_SQL_ZAMAN_ASIMI_MS: number;
+export declare const PANO_SQL_EN_COK_ZAMAN_ASIMI_MS: number;
+export declare function kartZamanAsimiMs(sn: unknown): number;
 export declare const PANO_SQL_SATIR_SINIRI: number;
 export declare const MASKE: string;
 export declare function gizliSutunMu(ad: string, ekler: ReadonlyArray<string>): boolean;
