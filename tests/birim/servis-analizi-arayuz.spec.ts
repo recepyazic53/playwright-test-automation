@@ -215,9 +215,9 @@ test.describe('servis analizi arayüzü', () => {
     await baglam.close();
 
     const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
-    const s = servisler.find((x: Nesne) => x.anahtar === 'analiz-servisi');
-    servisId = s.id;
-    const a = s.ayarlar;
+    servisId = servisler.find((x: Nesne) => x.anahtar === 'analiz-servisi').id;
+    // Liste yalnız küçük ayarları taşır; örnek istekler, analiz kararları vb. tekil uçtan (GET /platform/servis).
+    const a = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis.ayarlar;
     expect(a.ornekIstekler.Siparis.map((x: Nesne) => [x.ad, x.kaynak, x.durum ?? 'bilinmiyor'])).toEqual([['Bireysel', 'elle', 'basarili'], ['Kurumsal', 'elle', 'basarili'], ['Ucuncu', 'elle', 'bilinmiyor']]);
     expect(a.ornekIstekler.Siparis[0].govde).toContain('<Password>••••••</Password>');
     expect(a.alanBaglari.Siparis['Input/ClientType']).toEqual({ tablo: tipId, sutun: 'Kod' });

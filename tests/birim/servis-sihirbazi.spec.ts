@@ -140,7 +140,8 @@ test.describe('sihirbaz uçtan uca', () => {
     expect(hatalar).toEqual([]);
 
     const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
-    const s = servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz');
+    // Liste yalnız küçük ayarları taşır; alan zorunlulukları / varsayılanları tekil uçtan (GET /platform/servis).
+    const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz').id}`)).servis;
     expect(s.ayarlar).toMatchObject({
       yol: '/ornek.asmx', tabanlar: { [testOrtami]: `${soap.adres}/Servis`, [canli]: '' },
       yalnizTestOperasyonlari: ['Onayla'], tarihKurallari: { BEGIN_DATE: 'bugun', END_DATE: 'bugun+1y' }

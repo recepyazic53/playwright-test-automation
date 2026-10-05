@@ -21,7 +21,7 @@ export declare function uyanSatirlar<T extends Satir>(tablo: { sutunlar: Sutun[]
 export declare function sutunSecenekleri(tablo: Tablo, secim: Record<string, string>, sutun: string, ortamId?: string | null): string[];
 export declare function formSuzgecleri(tablo: { sutunlar: Sutun[]; satirlar: Satir[] }, secim: Record<string, string>, alanlar: Array<{ etiket: string; deger: string; metin?: string; sutun?: string | null }>): Array<{ etiket: string; sutun: string; formDegeri: string; tabloDegeri: string | null }>;
 export declare function satirUyumu(tablo: { sutunlar: Sutun[] }, satir: Satir, secim: Record<string, string>, suzgecler?: Array<{ etiket: string; sutun: string; formDegeri: string; tabloDegeri: string | null }>): { nedenler: string[]; celisenler: Array<{ etiket: string; sutun: string; formDegeri: string; satirDegeri: string }> };
-export declare function tabloDegerListeleri(baglar: Record<string, { tablo: string; sutun: string; etiket?: string }>, tablolar: Tablo[], ekranId: string, sira?: string[]): Array<{
+export declare function tabloDegerListeleri(baglar: Record<string, { tablo: string; sutun: string; etiket?: string }>, tablolar: Tablo[], ekranId: string, sira?: string[], secenekler?: { hedefler?: ReadonlySet<string>; atlananVar?: boolean }): Array<{
   id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; baglanti: { tablo: string; sutun: string; etiket?: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string; ekranDegeri?: string }>;
 }>;
 export declare function servisDegeri(sutun: Sutun, deger: string): string;

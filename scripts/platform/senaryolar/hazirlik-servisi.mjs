@@ -9,7 +9,7 @@
 // Değer GÖSTERİLMEZ: test verisi maddesinde yalnız tablo ve satır ADI.
 // NOT: import.meta KULLANILMAZ.
 import { DepoHatasi, ekranlariListele, ortamGetir, senaryoGetir } from '../veritabani/depo.mjs';
-import { modelBaglami, senaryoAkisi, senaryoOrtamVerisi } from './senaryo-servisi.mjs';
+import { modelBaglami, modelBaglamiOnbellekli, senaryoAkisi, senaryoOrtamVerisi } from './senaryo-servisi.mjs';
 import { modelKosuPlani, modelSenaryosuMu } from './model-kosusu.mjs';
 import { NEDENLER, eylemDenetimi, hazirlikOzeti, veriMaddesi } from './hazirlik.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
@@ -23,7 +23,8 @@ import { bekleyenAlanlar, veriBekliyorMesaji } from './veri-bekliyor.mjs';
 /** @typedef {import('./hazirlik.mjs').HazirlikMaddesi} HazirlikMaddesi */
 /**
  * @typedef {{ modeller?: Map<string, ReturnType<typeof modelBaglami>>; tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[];
- *   baglar?: Map<string, ReturnType<typeof etkinAlanBaglari>>; ekranlar?: Map<string, { ad: string; durum: string }>; ortamAdlari?: Map<string, string> }} Onbellek
+ *   baglar?: Map<string, ReturnType<typeof etkinAlanBaglari>>; ekranlar?: Map<string, { ad: string; durum: string }>; ortamAdlari?: Map<string, string>;
+ *   alanBilgileri?: Map<unknown, ReturnType<typeof modelAlanBilgisi>> }} Onbellek
  */
 
 /** @param {unknown} d @returns {d is Record<string, any>} */
@@ -56,7 +57,7 @@ export function senaryoHazirligi(vt, projeId, senaryoId, ortamId, onbellek = {})
   const akis = senaryoAkisi(icerik);
   onbellek.modeller ??= new Map();
   const anahtar = `${s.ekranId}\u0000${akis ?? ''}`;
-  if (!onbellek.modeller.has(anahtar)) onbellek.modeller.set(anahtar, modelBaglami(vt, s.ekranId, akis));
+  if (!onbellek.modeller.has(anahtar)) onbellek.modeller.set(anahtar, modelBaglamiOnbellekli(vt, s.ekranId, akis));
   const mb = onbellek.modeller.get(anahtar);
   if (!mb) return engelli(NEDENLER.modelYok);
   const veri = senaryoOrtamVerisi(vt, icerik, ortamId) ?? {};
@@ -70,6 +71,14 @@ export function senaryoHazirligi(vt, projeId, senaryoId, ortamId, onbellek = {})
   const veriM = testVerisiMaddesi(vt, projeId, s.ekranId, mb.model, veri, icerik, ortamId, onbellek);
   const maddeler = [veriM, eylem.gonderme, eylem.beklenen];
   return { ...hazirlikOzeti(maddeler, eylem.engeller), maddeler };
+}
+
+/** Modelin alan bilgisi (istek içinde model başına bir kez; liste her senaryo × ortam için soruyordu). @param {any} model @param {Onbellek} onbellek */
+function alanBilgisi(model, onbellek) {
+  onbellek.alanBilgileri ??= new Map();
+  let b = onbellek.alanBilgileri.get(model);
+  if (!b) { b = modelAlanBilgisi(model); onbellek.alanBilgileri.set(model, b); }
+  return b;
 }
 
 /**
@@ -87,7 +96,7 @@ function testVerisiMaddesi(vt, projeId, ekranId, model, veri, icerik, ortamId, o
   const tabloSecimleri = nesneMi(icerik.tabloSecimleri) ? /** @type {Record<string, Record<string, string>>} */ (icerik.tabloSecimleri) : undefined;
   const satirSecimi = { ...satirSecimiOlustur('ilk'), kullanilan: /** @type {Map<string, any>} */ (new Map()) };
   const r = ekranBasvurulariniCoz(veri, {
-    tablolar, baglar: onbellek.baglar.get(ekranId), ...modelAlanBilgisi(model), ortamId, satirSecimi, ...(tabloSecimleri ? { tabloSecimleri } : {})
+    tablolar, baglar: onbellek.baglar.get(ekranId), ...alanBilgisi(model, onbellek), ortamId, satirSecimi, ...(tabloSecimleri ? { tabloSecimleri } : {})
   });
   const vk = veriKosusuSayisi(/** @type {any} */ (icerik.veriKosulari), { tablolar, gruplar: basvuruGruplari(veri, tablolar), ortamId, kip: null, tabloSecimleri: tabloSecimleri ?? null });
   // "Veri bekliyor" (hızlı test önerisi): değeri girilmemiş hücreler adlarıyla — koşu da aynı açık hatayla durur (veri-oku.mjs).

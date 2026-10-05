@@ -35,8 +35,8 @@ export declare const HASSAS_SUTUNLAR: Readonly<Record<string, readonly string[]>
 
 export declare function parolaKontrolEt(parola: unknown): void;
 export declare function anahtarTuret(parola: string, kdf: ScryptMaliyeti, tuz: Buffer): Promise<Buffer>;
-export declare function zarfSifrele(anahtar: Buffer, duzMetin: string): string;
-export declare function zarfCoz(anahtar: Buffer, zarf: string): string;
+export declare function zarfSifrele(anahtar: Buffer | import('node:crypto').KeyObject, duzMetin: string): string;
+export declare function zarfCoz(anahtar: Buffer | import('node:crypto').KeyObject, zarf: string): string;
 export declare function zarfMi(deger: unknown): deger is string;
 export declare function metindekiZarflariDonustur(metin: string, donustur: (zarf: string) => string): string;
 export declare function kasaKdfOku(vt: Veritabani): KdfParametreleri | undefined;

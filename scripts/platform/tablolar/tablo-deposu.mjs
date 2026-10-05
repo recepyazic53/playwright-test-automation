@@ -15,9 +15,10 @@ import {
   DepoHatasi, baglamProfiliKaydet, baglamProfiliSil, baglamProfilleriniListele, testVerisiProfiliKaydet, testVerisiProfiliSil, testVerisiTuruKaydet,
   testVerisiTuruSil, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
-import { acikAnahtar, coz, sifrele, zarfCoz, zarfMi } from '../kasa.mjs';
+import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { kasaOnbellegi, onbellekte } from '../veritabani/nesil-onbellegi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
@@ -90,21 +91,18 @@ function karsiliklarDogrula(v, sutun) {
 /**
  * GİZLİ OLMAYAN hücrelerin çözülmüş değerleri (şifreli zarf → düz metin). Tablolar birçok uçta (senaryo listesi, senaryo formu, hazırlık,
  * Doldur) baştan okunur; büyük liste tablolarında (yüzlerce satır × onlarca tablo) her okumada her hücreyi yeniden çözmek senaryo
- * formunu saniyelerce bekletiyordu. Aynı zarf hep aynı metne çözülür (zarf değişirse yeni anahtar). Önbellek kasanın AÇIK ANAHTARINA
- * bağlıdır (WeakMap): kasa kilitlenince anahtarla birlikte bırakılır; kilitliyken acikAnahtar hata verir (önbellekten okunmaz).
- * Gizli sütunların değerleri önbelleğe GİRMEZ.
- * @type {WeakMap<object, Map<string, string>>}
+ * formunu saniyelerce bekletiyordu. Aynı zarf hep aynı metne çözülür (zarf değişirse yeni anahtar). Önbellek kasa açıkken yaşar
+ * (nesil-onbellegi.mjs > kasaOnbellegi): kasa kilitlenince ya da anahtar değişince bırakılır; kilitliyken acikAnahtar hata verir
+ * (önbellekten okunmaz). Gizli sütunların değerleri önbelleğe GİRMEZ.
  */
-const cozumOnbellegi = new WeakMap();
 const COZUM_ONBELLEGI_EN_COK = 200_000;
 /** @param {Veritabani} vt @param {string} zarf */
 function onbellekliCoz(vt, zarf) {
-  const anahtar = acikAnahtar(vt);
-  let m = cozumOnbellegi.get(anahtar);
-  if (!m) { m = new Map(); cozumOnbellegi.set(anahtar, m); }
+  acikAnahtar(vt);
+  const m = kasaOnbellegi(vt, 'tablo-hucreleri');
   const v = m.get(zarf);
   if (v !== undefined) return v;
-  const d = zarfCoz(anahtar, zarf);
+  const d = coz(vt, zarf);
   if (m.size >= COZUM_ONBELLEGI_EN_COK) m.clear();
   m.set(zarf, d);
   return d;
@@ -174,6 +172,19 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
   }
   const tablolar = turler.map((t) => ({ id: t.id, ad: t.ad, sutunlar: sutunlari.get(t.id) ?? [], satirlar: satirlar.get(t.id) ?? [], guncellenme: t.guncellenme, kaynak: t.kaynak ?? null }));
   return secenekler.baglamDahil && !secenekler.tabloId ? [...tablolar, ...baglamTablolari(vt, projeId)] : tablolar;
+}
+
+/** Tablo listesinin dayandığı veritabanı tabloları (ayarlar: ek gizli adlar → sütunun gizli sayılması). */
+const TABLO_LISTESI_TABLOLARI = Object.freeze(['test_verisi_turleri', 'test_verisi_profilleri', 'ayarlar']);
+
+/**
+ * Projenin tabloları (gizli değerler ÇÖZÜLMEDEN; tablolariListele(vt, projeId) ile aynı) — önbellekli (nesil-onbellegi.mjs): yalnız
+ * OKUYAN liste hesapları (seçim listeleri, veri bekliyor rozeti) içindir. Dönen dizi ve nesneler PAYLAŞILIR — değiştirilmemelidir.
+ * @param {Veritabani} vt @param {string} projeId @returns {Tablo[]}
+ */
+export function tablolariListeleOnbellekli(vt, projeId) {
+  acikAnahtar(vt);
+  return onbellekte(vt, `tablolar\u0000${projeId}`, () => tablolariListele(vt, projeId), { tablolar: TABLO_LISTESI_TABLOLARI });
 }
 
 /**

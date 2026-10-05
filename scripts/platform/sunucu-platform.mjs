@@ -182,6 +182,7 @@ import {
   kasaDurumu, kasaKilitle, kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
 } from './kasa.mjs';
 import { siraOlustur } from './kasa-sirasi.mjs';
+import { onbellekte } from './veritabani/nesil-onbellegi.mjs';
 import {
   eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
 } from './veritabani/sonuc-deposu.mjs';
@@ -1359,7 +1360,12 @@ const GET_UCLARI = new Map([
     kayitlar: senaryoGecmisi(db, kimlikAl(q.get('id'))),
     makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad]))
   })],
-  ['/platform/ekranlar', (db, q) => ekranListesi(db, kimlikAl(q.get('projeId'), 'projeId'))],
+  // Ekran listesi önbellekli (nesil-onbellegi.mjs): veritabanında herhangi bir değişiklik olunca yeniden hesaplanır; yanıt kopyadır.
+  ['/platform/ekranlar', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    acikAnahtar(db);
+    return structuredClone(onbellekte(db, `ekranListesi\u0000${projeId}`, () => ekranListesi(db, projeId)));
+  }],
   ['/platform/ekran', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     return ekranDetayi(db, projeId, kimlikAl(q.get('id')));
