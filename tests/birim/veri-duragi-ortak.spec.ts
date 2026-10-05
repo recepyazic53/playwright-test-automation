@@ -32,6 +32,13 @@ test.describe('motor (127.0.0.1)', () => {
     expect(degerTuttu('02.10.2026', '13.04.1998')).toBe(false);
     expect(degerTuttu('', '13.04.1998')).toBe(false);
     expect(degerTuttu(null, 'x')).toBe(false);
+    // Tutar: sayı değeri karşılaştırılır (eski değer kalıp yenisi eklenince "içeriyor" yanlış pozitif vermez).
+    expect(degerTuttu('5.000', '5000')).toBe(true);
+    expect(degerTuttu('1.000,00 TL', '1000')).toBe(true);
+    expect(degerTuttu('1.000.000', '1000000')).toBe(true);
+    expect(degerTuttu('5.000.000', '5000')).toBe(false);
+    expect(degerTuttu('000', '5000')).toBe(false);
+    expect(degerTuttu('12,5', '12.5')).toBe(true);
     expect(degerTuttu('ne olursa', '')).toBe(true);
   });
 

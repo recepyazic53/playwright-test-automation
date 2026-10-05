@@ -20,7 +20,7 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import type { Browser, BrowserContext, Dialog, Frame, Locator, Page, Request } from '@playwright/test';
-import { DegerIzleyici, alanaYaz, alandanCik, alanZatenDolu, oneridenYaz, takvimdenYaz, yazmaHatasi } from './alan-cikisi';
+import { DegerIzleyici, alanDegeriOku, alanaYaz, alandanCik, alanZatenDolu, degerTuttu, oneridenYaz, takvimdenYaz, yazmaHatasi } from './alan-cikisi';
 import { AgIzleyici, UZUN_ISTEK_MS } from './ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla, ortuyuKaldir, sakinlikBekle, sayfaParmakIzi } from './guvenli-tiklama';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
@@ -1200,7 +1200,20 @@ export async function hizliTestiYurut(
           const bilinen = new Set(k.kesfedilen ?? []);
           const yeniSecimler = k.kesfedilen ? yeniListeler.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur && !bilinen.has(a.anahtar)) : [];
           const kesifler = yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
-          if (zincirYeni || kesifler.length) sonAnlik = await anlikOku(islem, false);
+          // Yerinde keşif seçimleri denerken sayfanın kuralları yazılmış metin alanlarını değiştirmiş olabilir (ör. bağlı teminat kutusu
+          // bedeli sıfırlar): bu turda yazılan alanlar yeniden okunur, tutmayan bir kez yeniden yazılır, yine tutmazsa alan hatası.
+          if (zincirYeni || kesifler.length) {
+            for (const d of k.alanlar) {
+              if (!yaziAlaniMi(d) || hatalar.some((h) => h.anahtar === d.anahtar) || kilitliYazilan.has(d.anahtar)) continue;
+              const l = alanKapsami(islem, d.alan.cerceve).locator(d.alan.secici).first();
+              if (degerTuttu(await alanDegeriOku(l), String(d.deger))) continue;
+              const h = (await alaniDoldur(islem, d)) ?? (degerTuttu(await alanDegeriOku(l), String(d.deger)) ? null
+                : `${String(d.deger)} yazıldı ama alanda ${((await alanDegeriOku(l)) ?? '').trim() || '(boş)'} kaldı (yeniden yazıldı, yine tutmadı). Alanın biçimini (en çok karakter, maske) ya da değeri kontrol edin.`);
+              if (h) hatalar.push({ anahtar: d.anahtar, mesaj: h });
+              else notlar.push(`“${d.alan.etiket ?? d.anahtar}” yeni seçimler denenirken değişmişti; yeniden yazıldı.`);
+            }
+            sonAnlik = await anlikOku(islem, false);
+          }
           // (Yeniden yazılınca yine değişen alan hatadır: kilit kanıtı sayılmaz.)
           const kilitliler = [...kilitliYazilan].filter((x) => !hatalar.some((h) => h.anahtar === x));
           await gonder({
