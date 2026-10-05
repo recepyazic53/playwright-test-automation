@@ -8,6 +8,7 @@ import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { etkinAlanBaglari } from './ekran-baglari.mjs';
 import { tabloKaydet, tablolariListele } from './tablo-deposu.mjs';
 import { sutunBul } from './tablo-secimi.mjs';
+import { olasiBaglar } from './secime-gore-bag.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -25,7 +26,8 @@ export function karsiliklariEkrandanAl(vt, projeId, ekranId) {
   /** @type {Map<string, Map<string, Record<string, { sayfa?: string; servis?: string }>>>} tablo → sütun → yeni karşılıklar */
   const degisen = new Map();
   let eklenen = 0;
-  for (const [alan, b] of Object.entries(baglar)) {
+  // Seçime göre değişen bağda her olası bağın sütunu tamamlanır (secime-gore-bag.mjs).
+  for (const [alan, b] of Object.entries(baglar).flatMap(([a, bag]) => olasiBaglar(bag).map((x) => /** @type {const} */ ([a, x])))) {
     const g = girdiler.find((x) => x.id === alan);
     const t = tablolar.find((x) => x.id === b.tablo);
     const s = t ? sutunBul(t, b.sutun) : undefined;

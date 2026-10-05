@@ -28,6 +28,7 @@ import { formSemasiOlustur, tumFormAlanlari } from '../senaryolar/model-formu.mj
 import { senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { BAGLAM_ONEKI, tabloKaydet, tablolariListele } from './tablo-deposu.mjs';
 import { etkinAlanBaglari } from './ekran-baglari.mjs';
+import { bagTablolari, baglariCoz } from './secime-gore-bag.mjs';
 import { modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { degerBasvurusu, sutunBul } from './tablo-secimi.mjs';
 import { servisleriListele, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet } from '../servisler/servis-deposu.mjs';
@@ -237,7 +238,8 @@ export function etkiPlani(vt, projeId, c, secenekler = {}) {
 
   // --- Ekran senaryoları -------------------------------------------------------------------------------------------------
   for (const ekran of ekranlariListele(vt, projeId)) {
-    const baglar = Object.entries(etkinAlanBaglari(vt, ekran.id)).filter(([, b]) => b && b.tablo === yeni.id);
+    // Seçime göre değişen bağ: olası bağlardan biri bu tabloysa ilgili; senaryoda kontrolün değerine göre çözülür (aşağıda).
+    const baglar = Object.entries(etkinAlanBaglari(vt, ekran.id)).filter(([, b]) => b && bagTablolari(b).includes(yeni.id));
     const senaryolar = vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY baslik', [projeId, ekran.id]);
     /** @type {Map<string, { mb: NonNullable<ReturnType<typeof modelBaglami>>; bilgi: ReturnType<typeof modelAlanBilgisi>; alanlar: Map<string, any> } | null>} */
     const modeller = new Map();
@@ -268,7 +270,10 @@ export function etkiPlani(vt, projeId, c, secenekler = {}) {
       const ortamIdleri = Object.keys(ortamlar).filter((o) => nesneMi(ortamlar[o]) && nesneMi(ortamlar[o].veri));
       /** @type {Record<string, Nesne>} */
       const veriler = Object.fromEntries(ortamIdleri.map((o) => [o, /** @type {Nesne} */ (zarflariCoz(vt, ortamlar[o].veri))]));
-      const alanlar = baglar.map(([alanId, b]) => ({ anahtar: m.bilgi.alanAnahtarlari[alanId], sutun: sutunAdi(b.sutun), etiket: b.etiket || '' }))
+      // Seçime göre bağ senaryonun (ilk ortamının) kontrol değerine göre; bu tabloya düşmeyenler atlanır.
+      const ilkVeri = veriler[ortamIdleri[0]] ?? {};
+      const cozulmus = baglariCoz(Object.fromEntries(baglar), (k) => { const a = m.bilgi.alanAnahtarlari[k]; return a ? ilkVeri[a] : undefined; });
+      const alanlar = Object.entries(cozulmus).filter(([, b]) => b.tablo === yeni.id).map(([alanId, b]) => ({ anahtar: m.bilgi.alanAnahtarlari[alanId], sutun: sutunAdi(b.sutun), etiket: b.etiket || '' }))
         .filter((x) => x.anahtar && x.sutun);
       for (const a of alanlar) {
         const sutun = /** @type {string} */ (a.sutun);

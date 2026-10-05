@@ -377,6 +377,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/kosu-ogrenmesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'kosu-ogrenmesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/tablolar/doldur-onerisi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'doldur-onerisi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/tablolar/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // tablo-secimi.mjs'nin içe aktardığı (seçime göre değişen bağ; /tablolar/ yolundan yüklenince).
+  ['/tablolar/secime-gore-bag.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'secime-gore-bag.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/tablolar/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/ayarlar/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
@@ -439,6 +441,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Tablo bağı uyumu (seçenekli alanın bağlı sütun değerleri sayfadaki seçeneklerde var mı): sunucuyla ORTAK.
   ['/arayuz/tablo-uyumu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-uyumu.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/secime-gore-bag.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'secime-gore-bag.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veri-sagligi.js', { dosya: 'veri-sagligi.js', tur: 'text/javascript; charset=utf-8' }],

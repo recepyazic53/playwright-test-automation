@@ -3,7 +3,7 @@
 // (ekran-baglari.mjs: alanBaglari) paket biçimidir:
 //   testVerisi: {
 //     tablolar:    [{ ad, tur?: 'liste' | 'kayit', aciklama?, sutunlar: [{ ad, gizli?, karsiliklar?: { <hücre değeri>: { sayfa?, servis? } } }], satirlar: [[hücre, …]] }],
-//     baglantilar: [{ alanId, tablo, sutun, etiket? }]
+//     baglantilar: [{ alanId, tablo, sutun, etiket?, secimeGore?: { alan, degerler: { <değer>: { tablo, sutun, etiket? } } } }]
 //   }
 // Tablo türü (isteğe bağlı): 'liste' = ekran listesi (seçim alanının seçenekleri; adı "<Ekran adı> — <Alan>"), 'kayit' = kişi ve
 // kayıt verisi (satır = kayıt; senaryo ${Tablo.Sütun} ile başvurur). Tabloda kaynak.tabloTuru olarak saklanır; Test verisi
@@ -22,6 +22,7 @@
 
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { AD_KALIBI, tabloDegerListeleri } from './tablo-secimi.mjs';
+import { etiketMetni, olasiBaglar } from './secime-gore-bag.mjs';
 
 export const PAKET_TABLO_EN_COK = 50;
 export const PAKET_SATIR_EN_COK = 5000;
@@ -34,7 +35,7 @@ const TABLO_ANAHTARLARI = new Set(['ad', 'tur', 'aciklama', 'sutunlar', 'satirla
 /** Paket tablosunun türü: ekran listesi (seçenekler) ya da kişi / kayıt verisi. */
 export const TABLO_TURLERI = Object.freeze(['liste', 'kayit']);
 const SUTUN_ANAHTARLARI = new Set(['ad', 'gizli', 'karsiliklar']);
-const BAG_ANAHTARLARI = new Set(['alanId', 'tablo', 'sutun', 'etiket']);
+const BAG_ANAHTARLARI = new Set(['alanId', 'tablo', 'sutun', 'etiket', 'secimeGore']);
 /** Tabloya bağlanabilen alan tipleri (senaryoda değeri ayarlanan). */
 const BAGLANABILIR = new Set(['secim', 'okluSecim', 'radyo', 'metin', 'sayi', 'tarih', 'telefon']);
 const SECIM_TIPLERI = new Set(['secim', 'okluSecim', 'radyo']);
@@ -43,7 +44,7 @@ const SECIM_TIPLERI = new Set(['secim', 'okluSecim', 'radyo']);
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; karsiliklar: Record<string, Karsilik> }} PaketSutunu */
 /** @typedef {{ ad: string; tur: 'liste' | 'kayit' | null; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number }} PaketTablosu */
-/** @typedef {{ alanId: string; tablo: string; sutun: string; etiket?: string }} PaketBaglantisi */
+/** @typedef {{ alanId: string; tablo: string; sutun: string; etiket?: string; secimeGore?: { alan: string; degerler: Record<string, { tablo: string; sutun: string; etiket?: string }> } }} PaketBaglantisi */
 
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
@@ -71,8 +72,8 @@ export function modelAlanlari(model) {
   return sonuc;
 }
 
-/** Alanın ekrandaki / formdaki etiketi. @param {Nesne} a */
-export const alanEtiketi = (a) => String((nesneMi(a.etiket) && (a.etiket.ekran || a.etiket.form)) || a.id);
+/** Alanın ekrandaki / formdaki etiketi (ORTAK kural: ekran → form → not → kimlik; secime-gore-bag.mjs etiketMetni). @param {Nesne} a */
+export const alanEtiketi = (a) => etiketMetni(a.etiket, a.id) || String(a.id ?? '');
 
 /**
  * testVerisi bölümünü doğrular. yer öneki "testVerisi".
@@ -173,12 +174,26 @@ export function testVerisiniDogrula(tv, model) {
           if (gorulen.has(b.alanId)) hata(`${yer}.alanId`, `"${b.alanId}" alanı birden fazla kez bağlanmış.`);
           gorulen.add(b.alanId);
         }
-        const tb = typeof b.tablo === 'string' ? tablolar.get(kucuk(b.tablo)) : undefined;
-        if (!tb) { hata(`${yer}.tablo`, `pakette "${String(b.tablo)}" tablosu yok.`); return; }
-        const su = Array.isArray(tb.sutunlar) ? tb.sutunlar.find((/** @type {Nesne} */ s) => nesneMi(s) && kucuk(s.ad) === kucuk(b.sutun)) : undefined;
-        if (!su) hata(`${yer}.sutun`, `"${String(tb.ad)}" tablosunda "${String(b.sutun)}" sütunu yok.`);
-        else if (su.gizli === true) hata(`${yer}.sutun`, 'gizli sütuna alan bağlanmaz.');
-        if (b.etiket !== undefined && (typeof b.etiket !== 'string' || !ETIKET.test(b.etiket.trim()))) hata(`${yer}.etiket`, 'harf, rakam, boşluk, "_", "-" (en çok 40) olmalı.');
+        /** Tek bağ (varsayılan ya da seçime göre bağın bir seçeneği). @param {Nesne} x @param {string} y */
+        const tekDenetle = (x, y) => {
+          const tb = typeof x.tablo === 'string' ? tablolar.get(kucuk(x.tablo)) : undefined;
+          if (!tb) { hata(`${y}.tablo`, `pakette "${String(x.tablo)}" tablosu yok.`); return; }
+          const su = Array.isArray(tb.sutunlar) ? tb.sutunlar.find((/** @type {Nesne} */ s) => nesneMi(s) && kucuk(s.ad) === kucuk(x.sutun)) : undefined;
+          if (!su) hata(`${y}.sutun`, `"${String(tb.ad)}" tablosunda "${String(x.sutun)}" sütunu yok.`);
+          else if (su.gizli === true) hata(`${y}.sutun`, 'gizli sütuna alan bağlanmaz.');
+          if (x.etiket !== undefined && (typeof x.etiket !== 'string' || !ETIKET.test(x.etiket.trim()))) hata(`${y}.etiket`, 'harf, rakam, boşluk, "_", "-" (en çok 40) olmalı.');
+        };
+        tekDenetle(b, yer);
+        // Seçime göre değişen bağ (secime-gore-bag.mjs): { alan: kontrol alanı kimliği, degerler: { değer: { tablo, sutun, etiket? } } }.
+        if (b.secimeGore !== undefined) {
+          const sg = b.secimeGore;
+          if (!nesneMi(sg) || typeof sg.alan !== 'string' || !nesneMi(sg.degerler) || !Object.keys(sg.degerler).length) { hata(`${yer}.secimeGore`, '{ alan, degerler: { "<değer>": { tablo, sutun, etiket? } } } olmalı.'); return; }
+          if (!alanlar.has(sg.alan) || sg.alan === b.alanId) hata(`${yer}.secimeGore.alan`, `modelde "${String(sg.alan)}" kimlikli (başka) bir kontrol alanı yok.`);
+          for (const [d, x] of Object.entries(sg.degerler)) {
+            if (!nesneMi(x)) { hata(`${yer}.secimeGore.degerler.${d}`, '{ tablo, sutun, etiket? } olmalı.'); continue; }
+            tekDenetle(/** @type {Nesne} */ (x), `${yer}.secimeGore.degerler.${d}`);
+          }
+        }
       });
     }
   }
@@ -216,8 +231,11 @@ export function paketTablolari(tv, model) {
   const t = /** @type {Nesne} */ (tv);
   const alanlar = modelAlanlari(model);
   /** @type {PaketBaglantisi[]} */
+  const tek = (/** @type {Nesne} */ b) => ({ tablo: String(b.tablo).trim(), sutun: String(b.sutun).trim(), ...(typeof b.etiket === 'string' && b.etiket.trim() ? { etiket: b.etiket.trim() } : {}) });
   const baglantilar = (Array.isArray(t.baglantilar) ? t.baglantilar : []).filter(nesneMi).map((/** @type {Nesne} */ b) => ({
-    alanId: String(b.alanId), tablo: String(b.tablo).trim(), sutun: String(b.sutun).trim(), ...(typeof b.etiket === 'string' && b.etiket.trim() ? { etiket: b.etiket.trim() } : {})
+    alanId: String(b.alanId), ...tek(b),
+    ...(nesneMi(b.secimeGore) && typeof b.secimeGore.alan === 'string' && nesneMi(b.secimeGore.degerler)
+      ? { secimeGore: { alan: b.secimeGore.alan, degerler: Object.fromEntries(Object.entries(b.secimeGore.degerler).filter(([, x]) => nesneMi(x)).map(([d, x]) => [d, tek(x)])) } } : {})
   }));
   /** @type {PaketTablosu[]} */
   const tablolar = t.tablolar.filter(nesneMi).map((/** @type {Nesne} */ tb) => {
@@ -248,7 +266,7 @@ export function paketTablolari(tv, model) {
     return { ad: String(tb.ad).trim(), tur: TABLO_TURLERI.includes(tb.tur) ? tb.tur : null, aciklama: typeof tb.aciklama === 'string' && tb.aciklama.trim() ? tb.aciklama.trim().slice(0, 300) : null, sutunlar, satirlar, tekrarSayisi };
   });
   // Bağlı seçim alanı: tablodaki görünen metnin sayfa değeri modelden (yalnız eksik olanlar).
-  for (const b of baglantilar) {
+  for (const b of baglantilar.flatMap((x) => olasiBaglar(x).map((o) => ({ ...o, alanId: x.alanId })))) {
     const alan = alanlar.get(b.alanId);
     const tb = tablolar.find((x) => kucuk(x.ad) === kucuk(b.tablo));
     const su = tb?.sutunlar.find((s) => kucuk(s.ad) === kucuk(b.sutun));
@@ -272,11 +290,15 @@ export function paketListeleri(tv, model) {
   const { tablolar, baglantilar } = paketTablolari(tv, model);
   if (!baglantilar.length) return [];
   const tablo = (/** @type {string} */ ad) => tablolar.find((x) => kucuk(x.ad) === kucuk(ad));
-  /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+  /** @type {Record<string, import('./secime-gore-bag.mjs').AlanBagi>} */
   const baglar = {};
   for (const b of baglantilar) {
     const tb = tablo(b.tablo);
-    if (tb) baglar[b.alanId] = { tablo: tb.ad, sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}) };
+    if (!tb) continue;
+    /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+    const degerler = {};
+    for (const [d, x] of Object.entries(b.secimeGore?.degerler ?? {})) { const xt = tablo(x.tablo); if (xt) degerler[d] = { tablo: xt.ad, sutun: x.sutun, ...(x.etiket ? { etiket: x.etiket } : {}) }; }
+    baglar[b.alanId] = { tablo: tb.ad, sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}), ...(b.secimeGore && Object.keys(degerler).length ? { secimeGore: { alan: b.secimeGore.alan, degerler } } : {}) };
   }
   const sira = [...modelAlanlari(model).keys()];
   return tabloDegerListeleri(baglar, tablolar.map((tb) => ({

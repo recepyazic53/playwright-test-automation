@@ -34,8 +34,12 @@ function senaryoAnahtarlari(alan) {
   return Array.isArray(s) ? s : [s];
 }
 function etiketi(alan) {
+  // Formda form etiketi önce gelir; yalnız metin değerler kullanılır (nesne "[object Object]" olmaz). Etiketsiz alanda (ekran: null)
+  // not (ör. "Etiketsiz açılır liste"), o da yoksa kimlik. Metin etiket (eski biçim) olduğu gibi.
   const e = alan.etiket;
-  return (e && typeof e === 'object' && e.form) || (alan.form && alan.form.etiket) || (e && typeof e === 'object' && e.ekran) || alan.id;
+  const m = (x) => (typeof x === 'string' && x.trim() ? x.trim() : '');
+  const n = e && typeof e === 'object' ? e : {};
+  return m(n.form) || m(alan.form && alan.form.etiket) || m(n.ekran) || m(typeof e === 'string' ? e : '') || m(n.not) || String(alan.id ?? '');
 }
 /** Model seçeneği → form seçeneği (değer: senaryoya yazılan değer; metin: formda görünen). */
 function secenekCevir(s) {

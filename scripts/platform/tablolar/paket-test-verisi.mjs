@@ -77,7 +77,7 @@ export function paketTestVerisiOnizle(vt, projeId, paket, ekranId) {
         ad: t.ad, tur: t.tur, aciklama: t.aciklama, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, karsilikSayisi: Object.keys(s.karsiliklar).length })),
         satirSayisi: t.satirlar.length, tekrarSayisi: t.tekrarSayisi,
         ornek: t.satirlar.slice(0, 5).map((d) => t.sutunlar.map((s) => (s.gizli ? null : d[s.ad] ?? null))),
-        bagliAlanlar: baglantilar.filter((b) => kucuk(b.tablo) === kucuk(t.ad)).map((b) => { const a = alanlar.get(b.alanId); return a ? alanEtiketi(a) : b.alanId; }),
+        bagliAlanlar: baglantilar.filter((b) => [b.tablo, ...Object.values(b.secimeGore?.degerler ?? {}).map((x) => x.tablo)].some((x) => kucuk(x) === kucuk(t.ad))).map((b) => { const a = alanlar.get(b.alanId); return a ? alanEtiketi(a) : b.alanId; }),
         // Önleme: aynı adlı tablo yoksa başlıkları aynı (esnek) mevcut tablolar — "onu kullan / yine de yeni oluştur"
         // (tek sütunluda ayırt edici başlık + örtüşen satırlar gerekir; tablo-benzerligi.mjs).
         benzer: m ? [] : benzerTablolar(t.sutunlar, mevcutlar, { ad: t.ad, satirlar: t.satirlar }).slice(0, 3).map((b) => {
@@ -193,7 +193,17 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim, secenek
     const t = tablolar.find((x) => kucuk(x.ad) === kucuk(b.tablo));
     const su = t?.sutunlar.find((x) => kucuk(x.ad) === kucuk(b.sutun));
     if (!su || su.gizli) continue;
+    /** @type {import('./secime-gore-bag.mjs').AlanBagi} */
     const bag = { tablo: w.id, sutun: w.sutun(su.ad), ...(b.etiket ? { etiket: b.etiket } : {}) };
+    // Seçime göre değişen bağ: yalnız yazılan (atlanmayan) tablolardaki seçenek bağları taşınır.
+    /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+    const degerler = {};
+    for (const [d, x] of Object.entries(b.secimeGore?.degerler ?? {})) {
+      const xw = yazilan.get(kucuk(x.tablo));
+      const xs = tablolar.find((y) => kucuk(y.ad) === kucuk(x.tablo))?.sutunlar.find((y) => kucuk(y.ad) === kucuk(x.sutun));
+      if (xw && xs && !xs.gizli) degerler[d] = { tablo: xw.id, sutun: xw.sutun(xs.ad), ...(x.etiket ? { etiket: x.etiket } : {}) };
+    }
+    if (b.secimeGore && Object.keys(degerler).length) bag.secimeGore = { alan: b.secimeGore.alan, degerler };
     if (secenekler.ertele?.(b.alanId)) sonuc.ertelenen[b.alanId] = bag;
     else yeni[b.alanId] = bag;
   }

@@ -1,7 +1,7 @@
 // scripts/platform/tablolar/ekran-basvurulari.mjs için tip bildirimi (ekran senaryosunda ${Tablo.Sütun} başvuruları).
 import type { Sutun, Tablo } from './tablo-secimi.mjs';
 
-export type EkranBaglari = Record<string, { tablo: string; sutun: string; etiket?: string }>;
+export type EkranBaglari = Record<string, import('./secime-gore-bag.mjs').AlanBagi>;
 export declare function modelAlanBilgisi(model: unknown): {
   alanAnahtarlari: Record<string, string>; secenekDegerleri: Record<string, string[]>;
   /** Senaryo anahtarı → modeldeki alan tipi. */

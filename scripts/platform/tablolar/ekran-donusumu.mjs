@@ -20,6 +20,7 @@ import { formSemasiOlustur, tumFormAlanlari } from '../senaryolar/model-formu.mj
 import { senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { tablolariListele } from './tablo-deposu.mjs';
 import { etkinAlanBaglari } from './ekran-baglari.mjs';
+import { secimeGoreCoz, secimeGoreVar } from './secime-gore-bag.mjs';
 import { ekranBasvurulariniCoz, ekrandakiDeger, modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { degerBasvurusu, degerBasvurusuYaz, grupAnahtari, sutunBul } from './tablo-secimi.mjs';
 
@@ -161,6 +162,20 @@ function senaryoPlani(c) {
   const ortamIdleri = Object.keys(ortamlar).filter((o) => nesneMi(ortamlar[o]) && nesneMi(ortamlar[o].veri));
   /** @type {Record<string, Nesne>} */
   const veriler = Object.fromEntries(ortamIdleri.map((o) => [o, /** @type {Nesne} */ (zarflariCoz(c.vt, ortamlar[o].veri))]));
+  // Seçime göre değişen bağ (secime-gore-bag.mjs): kontrolün bu senaryodaki düz değerine göre çözülür; ortamlarda farklıysa ya da
+  // tablodan geliyorsa (hangi tabloya çevrileceği belli değil) alan atlanır.
+  /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+  const baglar = {};
+  for (const [alanId, b] of Object.entries(c.baglar)) {
+    if (!secimeGoreVar(b)) { baglar[alanId] = b; continue; }
+    const k = bilgi.alanAnahtarlari[/** @type {any} */ (b).secimeGore.alan];
+    const degerler = new Set(ortamIdleri.map((o) => (k ? veriler[o][k] : undefined)));
+    if (degerler.size !== 1) continue;
+    const d = [...degerler][0];
+    if (typeof d === 'string' && degerBasvurusu(d)) continue;
+    baglar[alanId] = secimeGoreCoz(b, d);
+  }
+  c = { ...c, baglar };
   const mevcutSecimler = /** @type {Secimler} */ (nesneMi(icerik.tabloSecimleri) ? icerik.tabloSecimleri : {});
   /** @type {PlanSatiri[]} */
   const satirlar = [];

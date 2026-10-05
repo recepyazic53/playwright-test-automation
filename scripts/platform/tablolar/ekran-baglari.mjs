@@ -3,10 +3,13 @@
 // (bkz. tablo-secimi.mjs tabloDegerListeleri; senaryo-servisi.mjs ekranListeleri).
 // ORTAK AKIŞ: bağ ortak akışın kendi ayarlarında bir kez kurulur ve onu kullanan tüm ekranlara VARSAYILAN olarak geçer; ekran
 // aynı alan için kendi bağını yazarsa o geçerlidir (ezme), silerse ortak akışınkine döner (etkinAlanBaglari).
+// SEÇİME GÖRE: bağ isteğe bağlı secimeGore taşır (kontrol alanının değerine göre başka tablo; secime-gore-bag.mjs). Okuyanlar ya
+// değere göre çözer ya da her olası bağı sayar.
 import { DepoHatasi, ekranAyarlariniGetir, ekranKaydet, ekranModeliGetir, ekranlariListele } from '../veritabani/depo.mjs';
+import { bagTablolari } from './secime-gore-bag.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
-/** @typedef {Record<string, { tablo: string; sutun: string; etiket?: string }>} EkranBaglari */
+/** @typedef {Record<string, import('./secime-gore-bag.mjs').AlanBagi>} EkranBaglari */
 
 const nesneMi = (/** @type {unknown} */ d) => d !== null && typeof d === 'object' && !Array.isArray(d);
 
@@ -96,7 +99,7 @@ export function etkinAlanBaglari(vt, ekranId) {
   if (!Object.keys(ortak).length) return kendi;
   /** @type {EkranBaglari} */
   const sonuc = {};
-  for (const [alan, b] of Object.entries(ortak)) sonuc[alan] = { tablo: b.tablo, sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}) };
+  for (const [alan, b] of Object.entries(ortak)) { const { ortakAkis: _o, ...bag } = b; sonuc[alan] = bag; }
   return { ...sonuc, ...kendi };
 }
 
@@ -110,8 +113,9 @@ export function tabloEkranKullanimi(vt, projeId) {
   const ekranKullanimi = {};
   const ekranlar = ekranlariListele(vt, projeId);
   for (const e of ekranlar) {
-    for (const b of Object.values(etkinAlanBaglari(vt, e.id))) {
-      const liste = (ekranKullanimi[b.tablo] ??= []);
+    // Seçime göre değişen bağda her olası tablo sayılır (secime-gore-bag.mjs).
+    for (const tabloId of Object.values(etkinAlanBaglari(vt, e.id)).flatMap(bagTablolari)) {
+      const liste = (ekranKullanimi[tabloId] ??= []);
       if (!liste.includes(e.ad)) liste.push(e.ad);
     }
   }
@@ -128,15 +132,38 @@ export function ekranAlanBaglariniKaydet(vt, projeId, ekranId, baglar) {
   if (!e) throw new DepoHatasi('Ekran bulunamadı.');
   /** @type {EkranBaglari} */
   const temiz = {};
-  for (const [alan, b] of Object.entries(/** @type {Record<string, any>} */ (baglar))) {
-    if (!alan || alan.length > 200 || /[\u0000-\u001f]/.test(alan)) throw new DepoHatasi(`Geçersiz alan: "${alan}".`);
-    if (!b) continue;
-    if (!nesneMi(b) || typeof b.tablo !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(b.tablo) || typeof b.sutun !== 'string' || !b.sutun.trim() || b.sutun.length > 60) {
-      throw new DepoHatasi(`"${alan}" için geçersiz tablo bağlantısı.`);
+  const alanGecersiz = (/** @type {string} */ x) => !x || x.length > 200 || /[\u0000-\u001f]/.test(x);
+  /** Tek bağ (varsayılan ya da bir seçeneğin bağı). @param {unknown} b @param {string} yer */
+  const tek = (b, yer) => {
+    const x = /** @type {Record<string, any>} */ (b);
+    if (!nesneMi(b) || typeof x.tablo !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(x.tablo) || typeof x.sutun !== 'string' || !x.sutun.trim() || x.sutun.length > 60) {
+      throw new DepoHatasi(`${yer} için geçersiz tablo bağlantısı.`);
     }
-    const etiket = typeof b.etiket === 'string' ? b.etiket.trim() : '';
-    if (etiket && !/^[\p{L}\p{N} _-]{1,40}$/u.test(etiket)) throw new DepoHatasi(`"${alan}" etiketi geçersiz (harf, rakam, boşluk, "_", "-").`);
-    temiz[alan] = { tablo: b.tablo, sutun: b.sutun.trim(), ...(etiket ? { etiket } : {}) };
+    const etiket = typeof x.etiket === 'string' ? x.etiket.trim() : '';
+    if (etiket && !/^[\p{L}\p{N} _-]{1,40}$/u.test(etiket)) throw new DepoHatasi(`${yer} etiketi geçersiz (harf, rakam, boşluk, "_", "-").`);
+    return { tablo: x.tablo, sutun: x.sutun.trim(), ...(etiket ? { etiket } : {}) };
+  };
+  for (const [alan, b] of Object.entries(/** @type {Record<string, any>} */ (baglar))) {
+    if (alanGecersiz(alan)) throw new DepoHatasi(`Geçersiz alan: "${alan}".`);
+    if (!b) continue;
+    /** @type {import('./secime-gore-bag.mjs').AlanBagi} */
+    const bag = tek(b, `"${alan}"`);
+    // Seçime göre değişen bağ (secime-gore-bag.mjs): kontrol alanı + seçenek değeri başına bağ; üstteki bağ varsayılandır.
+    if (b.secimeGore !== undefined && b.secimeGore !== null) {
+      const sg = b.secimeGore;
+      if (!nesneMi(sg) || typeof sg.alan !== 'string' || alanGecersiz(sg.alan) || !nesneMi(sg.degerler)) throw new DepoHatasi(`"${alan}" için seçime göre bağ geçersiz ({ alan, degerler } olmalı).`);
+      if (sg.alan === alan) throw new DepoHatasi(`"${alan}" kendi seçimine göre bağlanamaz; başka bir kontrol alanı seçin.`);
+      const girdiler = Object.entries(/** @type {Record<string, unknown>} */ (sg.degerler));
+      if (girdiler.length > 50) throw new DepoHatasi(`"${alan}" için en çok 50 seçenek bağı olabilir.`);
+      /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+      const degerler = {};
+      for (const [d, v] of girdiler) {
+        if (alanGecersiz(d)) throw new DepoHatasi(`"${alan}" için geçersiz seçenek değeri.`);
+        degerler[d] = tek(v, `"${alan}" (${sg.alan} = ${d})`);
+      }
+      if (Object.keys(degerler).length) bag.secimeGore = { alan: sg.alan, degerler };
+    }
+    temiz[alan] = bag;
   }
   const ayarlar = ekranAyarlariniGetir(vt, e.id) ?? {};
   ekranKaydet(vt, { id: e.id, projeId, anahtar: e.anahtar, ad: e.ad, aciklama: e.aciklama, ayarlar: { ...ayarlar, alanBaglari: temiz } });

@@ -18,9 +18,10 @@
 import { SATIR_KIMLIGI, basvuruCoz, basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { modelAlanlari } from './paket-tablolari.mjs';
 import { senaryoAyariAlanlari } from '../senaryolar/deger-listesi-modeli.mjs';
+import { baglariCoz, etiketMetni } from './secime-gore-bag.mjs';
 
 /** @typedef {import('./tablo-secimi.mjs').Tablo} Tablo */
-/** @typedef {Record<string, { tablo: string; sutun: string; etiket?: string }>} EkranBaglari alan kimliği → { tablo KİMLİĞİ, sütun, etiket? } */
+/** @typedef {Record<string, import('./secime-gore-bag.mjs').AlanBagi>} EkranBaglari alan kimliği → { tablo KİMLİĞİ, sütun, etiket?, secimeGore? } */
 
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 
@@ -52,7 +53,7 @@ export function modelAlanBilgisi(model) {
     const degerler = havuz.filter(nesneMi).map((x) => String(x.senaryoDegeri !== undefined ? x.senaryoDegeri : x.deger));
     if (degerler.length) secenekDegerleri[anahtar] = [...new Set(degerler)];
     if (ayarlar.has(id)) {
-      const etiket = nesneMi(a.etiket) ? String(a.etiket.form || a.etiket.ekran || '') : '';
+      const etiket = nesneMi(a.etiket) ? (typeof a.etiket.form === 'string' && a.etiket.form.trim()) || etiketMetni(a.etiket) : '';
       ayarSecenekleri[anahtar] = {
         etiket: etiket || (nesneMi(a.form) && typeof a.form.etiket === 'string' ? a.form.etiket : '') || id,
         secenekler: /** @type {Record<string, unknown>[]} */ (a.secenekler).filter(nesneMi).map((x) => {
@@ -255,7 +256,9 @@ function senaryoSecimleri(veri, s) {
   for (const [k, v] of Object.entries(nesneMi(s.tabloSecimleri) ? /** @type {Record<string, Record<string, string>>} */ (s.tabloSecimleri) : {})) {
     if (nesneMi(v)) secimler[k] = { ...v };
   }
-  for (const [alanId, b] of Object.entries(s.baglar ?? {})) {
+  // Seçime göre değişen bağ senaryodaki kontrol değerine göre çözülür (secime-gore-bag.mjs).
+  const cozulmus = baglariCoz(s.baglar ?? {}, (kontrolId) => { const k = s.alanAnahtarlari?.[kontrolId]; return k ? veri[k] : undefined; });
+  for (const [alanId, b] of Object.entries(cozulmus)) {
     const anahtar = s.alanAnahtarlari?.[alanId];
     const v = anahtar ? veri[anahtar] : undefined;
     if (typeof v !== 'string' || !v.trim() || degerBasvurusu(v)) continue;

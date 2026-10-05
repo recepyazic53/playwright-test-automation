@@ -25,7 +25,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { DepoHatasi, ayarGetir, ayarYaz, ekranlariListele, gecmisYaz, ortamGetir, ortamlariListele } from '../veritabani/depo.mjs';
 import { acikAnahtar, zarflariCoz } from '../kasa.mjs';
-import { modelBaglami, senaryoAkisi, senaryoOrtamVerileriniYaz, tabloBagUyumlari, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
+import { modelBaglami, senaryoAkisi, senaryoOrtamVerileriniYaz, tabloBagUyumListesi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import {
   servisAkislariniListele, servisAkisiKaydet, servisKaydet, servisleriListele, servisSenaryolariniListele, servisSenaryosuKaydet
@@ -34,6 +34,7 @@ import { servisIstegiKuruCoz } from '../servisler/servis-islemleri.mjs';
 import { BAGLAM_ONEKI, EN_COK_SATIR, EN_COK_SUTUN, TABLO_ADI, tabloKaydet, tabloSil, tablolariListele } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi } from './ekran-basvurulari.mjs';
+import { bagTablolari, bagiDonustur, baglariCoz, olasiBaglar } from './secime-gore-bag.mjs';
 import { SATIR_KIMLIGI, basvuru, basvuruCoz, degerBasvurusu, grupAnahtari, secilenSatir, sutunBul } from './tablo-secimi.mjs';
 import { baslikNormal, birlestirmeOnerileri, sutunEslemesiOner, tabloTuru } from './tablo-benzerligi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
@@ -182,11 +183,15 @@ export function tabloKullanimlari(vt, projeId) {
   };
   for (const ekran of ekranlariListele(vt, projeId)) {
     const git = `#/ekranlar/e/${q(ekran.id)}`;
-    for (const [alan, b] of Object.entries(ekranAlanBaglari(vt, ekran.id))) {
-      const t = idle.get(b.tablo);
-      if (!t) { kirik.push({ tur: 'ekran-bagi', yer: `Ekran: ${ekran.ad}`, basvuru: alan, neden: 'bağlı tablo silinmiş', git }); continue; }
-      say(t.id, 'ekranBaglari');
-      if (!sutunBul(t, b.sutun)) kirik.push({ tur: 'ekran-bagi', yer: `Ekran: ${ekran.ad}`, basvuru: `${alan} → ${t.ad}.${b.sutun}`, neden: `"${t.ad}" tablosunda "${b.sutun}" sütunu yok`, git });
+    // Seçime göre değişen bağda her olası bağ ayrı sayılır / denetlenir (secime-gore-bag.mjs).
+    for (const [alanId, bag] of Object.entries(ekranAlanBaglari(vt, ekran.id))) {
+      for (const b of olasiBaglar(bag)) {
+        const alan = b.deger === null ? alanId : `${alanId} (${String(bag.secimeGore?.alan)} = ${b.deger})`;
+        const t = idle.get(b.tablo);
+        if (!t) { kirik.push({ tur: 'ekran-bagi', yer: `Ekran: ${ekran.ad}`, basvuru: alan, neden: 'bağlı tablo silinmiş', git }); continue; }
+        say(t.id, 'ekranBaglari');
+        if (!sutunBul(t, b.sutun)) kirik.push({ tur: 'ekran-bagi', yer: `Ekran: ${ekran.ad}`, basvuru: `${alan} → ${t.ad}.${b.sutun}`, neden: `"${t.ad}" tablosunda "${b.sutun}" sütunu yok`, git });
+      }
     }
   }
   for (const s of vt.tumu('SELECT id, ekran_id, baslik, icerik_json FROM senaryolar WHERE proje_id = ?', [projeId])) {
@@ -268,10 +273,12 @@ function uyumsuzBaglar(vt, projeId, tablolar) {
   for (const e of ekranlariListele(vt, projeId)) {
     const baglar = ekranAlanBaglari(vt, e.id);
     if (!Object.keys(baglar).length) continue;
-    let u = {};
-    try { u = tabloBagUyumlari(vt, projeId, e.id, baglar, tablolar); } catch { continue; }
-    for (const [alanId, x] of Object.entries(u)) {
-      sonuc.push({ ekranId: e.id, ekran: e.ad, alanId, alan: x.etiket, tablo: x.tablo, sutun: x.sutun, duzey: x.duzey, metin: x.metin, git: `#/ekranlar/e/${encodeURIComponent(e.id)}/veri` });
+    // Seçime göre değişen bağda her olası bağ ayrı denetlenir (alan adında "<kontrol> = <değer>").
+    /** @type {ReturnType<typeof tabloBagUyumListesi>} */
+    let u = [];
+    try { u = tabloBagUyumListesi(vt, projeId, e.id, baglar, tablolar); } catch { continue; }
+    for (const x of u) {
+      sonuc.push({ ekranId: e.id, ekran: e.ad, alanId: x.alanId, alan: x.kontrol ? `${x.etiket} (${x.kontrol}: ${x.deger ?? 'diğer'})` : x.etiket, tablo: x.tablo, sutun: x.sutun, duzey: x.duzey, metin: x.metin, git: `#/ekranlar/e/${encodeURIComponent(e.id)}/veri` });
     }
   }
   // Güçlü uyarılar önce.
@@ -573,11 +580,12 @@ function yenidenEslemePlani(vt, projeId, p) {
   const engeller = [];
   const baglariEsle = (/** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */ baglar) => {
     let n = 0;
+    // Seçime göre değişen bağın her olası hâli (varsayılan + seçenekler) eşlenir (secime-gore-bag.mjs).
     const yeni = Object.fromEntries(Object.entries(baglar).map(([alan, b]) => {
-      const e = p.idEslem.get(b.tablo);
-      if (!e) return [alan, b];
+      const r = bagiDonustur(b, (x) => { const e = p.idEslem.get(x.tablo); return e ? { ...x, tablo: e.hedefId, sutun: e.sutunlar.get(kucuk(x.sutun)) ?? x.sutun } : null; });
+      if (!r.degisti) return [alan, b];
       n++;
-      return [alan, { ...b, tablo: e.hedefId, sutun: e.sutunlar.get(kucuk(b.sutun)) ?? b.sutun }];
+      return [alan, r.bag];
     }));
     return { yeni, n };
   };
@@ -593,7 +601,7 @@ function yenidenEslemePlani(vt, projeId, p) {
     const baglarOnce = ekranAlanBaglari(vt, ekran.id);
     const { yeni: baglarSonra, n } = baglariEsle(baglarOnce);
     if (n) { ekranYazimlari.push({ ekranId: ekran.id, ad: ekran.ad, baglar: baglarSonra }); ozetSayilari.ekranBaglari += n; }
-    const ekranIlgili = Object.values(etkinAlanBaglari(vt, ekran.id)).some((b) => ilgiliIdler.has(b.tablo));
+    const ekranIlgili = Object.values(etkinAlanBaglari(vt, ekran.id)).flatMap(bagTablolari).some((id) => ilgiliIdler.has(id));
     /** @type {Map<string, ReturnType<typeof modelAlanBilgisi> | null>} */
     const bilgiler = new Map();
     for (const s of vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ?', [projeId, ekran.id])) {
@@ -636,10 +644,13 @@ function yenidenEslemePlani(vt, projeId, p) {
       const bagli = (baglar, sutunAdi, veri) => /** @param {string} tabloId @param {string} etiket @param {string | null} o */ (tabloId, etiket, o) => {
         /** @type {Record<string, string>} */
         const secim = {};
-        for (const [alanId, b] of Object.entries(baglar)) {
+        const vo = veri(String(o));
+        // Seçime göre değişen bağ senaryodaki kontrol değerine göre (çözümleyiciyle aynı kural).
+        const cozulmus = baglariCoz(baglar, (k) => { const a = bilgi.alanAnahtarlari[k]; return a ? vo[a] : undefined; });
+        for (const [alanId, b] of Object.entries(cozulmus)) {
           if (b.tablo !== tabloId || (b.etiket || '') !== etiket) continue;
           const anahtar = bilgi.alanAnahtarlari[alanId];
-          const v = anahtar ? veri(String(o))[anahtar] : undefined;
+          const v = anahtar ? vo[anahtar] : undefined;
           const ad = sutunAdi(b);
           if (typeof v === 'string' && v.trim() && !degerBasvurusu(v) && ad) secim[ad] = v;
         }
