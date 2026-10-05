@@ -78,7 +78,7 @@ export const TABLO_GET_UCLARI = [
   ['/platform/ekran/alan-baglari', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const ekranId = kimlik(q.get('ekranId'), 'ekranId');
-    const { girdiler } = ekranGirdileri(db, projeId, ekranId, { tumTipler: true });
+    const { girdiler } = ekranGirdileri(db, projeId, ekranId, { tumTipler: true, modelSecenekleri: true });
     const model = ekranModeliGetir(db, ekranId);
     // kaynak: alan ekranın kullandığı bir genel senaryodan (ortak akış) geliyorsa o genel senaryo { id, ad }; ortak akışın alan
     // kimlikleri ekrana açılınca değişmez. Aynı alan iki genel senaryoda varsa akıştaki ilki. Genel senaryonun kendi sayfasında yok.
@@ -94,6 +94,9 @@ export const TABLO_GET_UCLARI = [
       girdiler: girdiler.map((g) => ({
         id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}),
         ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { modeldeSecenek: true } : {}),
+        // modelSecenekleri + seceneklerDurumu (tablo listesi uygulanmamış, sayfadaki seçenekler): bağ seçilirken sütun değerleri bunlarla
+        // anında karşılaştırılır (tablo-uyumu.mjs; sunucuyla aynı kural).
+        ...(g.modelSecenekleri && g.modelSecenekleri.length ? { modelSecenekleri: g.modelSecenekleri, ...(g.seceneklerDurumu ? { seceneklerDurumu: g.seceneklerDurumu } : {}) } : {}),
         ...(kaynaklar.has(String(g.id)) ? { kaynak: kaynaklar.get(String(g.id)) } : {})
       })), tablolar: tablolariListele(db, projeId)
     };

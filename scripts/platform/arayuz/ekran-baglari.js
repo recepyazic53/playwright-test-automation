@@ -9,6 +9,7 @@
 import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { degerCipleri } from './parametre-tanimi-formu.js';
 import { onayIste } from './kosu-paneli.js';
+import { tabloSecenekUyumu } from './tablo-uyumu.mjs';
 
 const q = encodeURIComponent;
 const TIP = { secim: 'seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', telefon: 'telefon', onayKutusu: 'onay kutusu', dosya: 'dosya' };
@@ -173,9 +174,15 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       const kaynakRozeti = g.kaynak && !ortakAkis
         ? rozet(`${g.kaynak.ad}${cikmaEki(g.kaynak.ad)}`, 'kaynak-rozeti', { kisalt: true, title: `Bu alan "${g.kaynak.ad}" genel senaryosundan gelir.` })
         : null;
-      const satir = h('div', { class: `alan-satiri ${b || gerekmez ? '' : 'gonderilmez'}`, 'data-alan': g.id },
+      // Seçenekleri modelde tanımlı alan: bağlı sütunun değerleri sayfadaki seçeneklerde yoksa uyarı (sunucuyla ortak kural; seçim anında).
+      const uyum = sutun && tablo ? tabloSecenekUyumu({ etiket: g.etiket, secenekler: g.modelSecenekleri, seceneklerDurumu: g.seceneklerDurumu },
+        sutun, tablo.satirlar.map((r) => r.degerler[sutun.ad])) : null;
+      const uyumNotu = uyum ? h('p', { class: `tablo-uyumu ${uyum.duzey}`, id: yeniKimlik('tablo-uyumu') }, ikon('uyari'),
+        ` ${uyum.metin}. ${uyum.duzey === 'guclu' ? 'Bu sütun bu alana uymuyor; başka bir sütun seçin.' : 'Eşleşmeyen satırlar koşuda seçilemez.'}`) : null;
+      if (uyumNotu) sec.setAttribute('aria-describedby', uyumNotu.id);
+      const satir = h('div', { class: `alan-satiri ${b || gerekmez ? '' : 'gonderilmez'} ${uyum ? 'uyumsuz' : ''}`.trim(), 'data-alan': g.id },
         h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip), kaynakRozeti),
-        h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
+        h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt, uyumNotu));
       if (gerekmez) { gerekmezSatirlari.push(satir); return; }
       if (!miras) { kendiSatirlari.push(satir); if (!b) bagsizSayisi += 1; return; }
       const grup = gruplar.get(miras.ortakAkis.id) || { o: miras.ortakAkis, satirlar: [], ozel: 0 };

@@ -19,6 +19,7 @@ export interface VeriSagligi {
   kullanilmayan: Array<{ id: string; ad: string; tur: 'liste' | 'kayit' }>;
   bosSutunlar: Array<{ tabloId: string; tablo: string; sutun: string }>;
   kirikBasvurular: KirikBasvuru[];
+  uyumsuzBaglar: Array<{ ekranId: string; ekran: string; alanId: string; alan: string; tablo: string; sutun: string; duzey: 'guclu' | 'zayif'; metin: string; git: string }>;
   kullanim: Record<string, Kullanim>;
   /** Birleştirme geçmişi sayıları (liste: birlestirmeGecmisi). */
   birlestirmeGecmisi: { toplam: number; etkin: number };

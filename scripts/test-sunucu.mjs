@@ -434,6 +434,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/yanit-kontrolleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'yanit-kontrolleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/yanit-kontrol-paneli.js', { dosya: 'yanit-kontrol-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Tablo bağı uyumu (seçenekli alanın bağlı sütun değerleri sayfadaki seçeneklerde var mı): sunucuyla ORTAK.
+  ['/arayuz/tablo-uyumu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-uyumu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veri-sagligi.js', { dosya: 'veri-sagligi.js', tur: 'text/javascript; charset=utf-8' }],

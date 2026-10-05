@@ -25,7 +25,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { DepoHatasi, ayarGetir, ayarYaz, ekranlariListele, gecmisYaz, ortamGetir, ortamlariListele } from '../veritabani/depo.mjs';
 import { acikAnahtar, zarflariCoz } from '../kasa.mjs';
-import { modelBaglami, senaryoAkisi, senaryoOrtamVerileriniYaz, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
+import { modelBaglami, senaryoAkisi, senaryoOrtamVerileriniYaz, tabloBagUyumlari, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import {
   servisAkislariniListele, servisAkisiKaydet, servisKaydet, servisleriListele, servisSenaryolariniListele, servisSenaryosuKaydet
@@ -256,6 +256,28 @@ export function tabloKullanimlari(vt, projeId) {
   return { kullanim, kirik };
 }
 
+/**
+ * "Uyumsuz tablo bağı": seçenekleri modelde tanımlı alanın bağlı sütunundaki değerler sayfadaki seçeneklerde bulunamıyor
+ * (tablo-uyumu.mjs). Her ekranın yalnız KENDİ bağları denetlenir (genel senaryodan gelen bağ genel senaryonun satırında bir kez).
+ * Yalnız ekran / alan / tablo / sütun adı ve uyarı metni döner (metin okunur sütun değerlerini içerir; gizli sütun denetlenmez).
+ * @param {Veritabani} vt @param {string} projeId @param {import('./tablo-deposu.mjs').Tablo[]} tablolar
+ */
+function uyumsuzBaglar(vt, projeId, tablolar) {
+  /** @type {Array<{ ekranId: string; ekran: string; alanId: string; alan: string; tablo: string; sutun: string; duzey: 'guclu' | 'zayif'; metin: string; git: string }>} */
+  const sonuc = [];
+  for (const e of ekranlariListele(vt, projeId)) {
+    const baglar = ekranAlanBaglari(vt, e.id);
+    if (!Object.keys(baglar).length) continue;
+    let u = {};
+    try { u = tabloBagUyumlari(vt, projeId, e.id, baglar, tablolar); } catch { continue; }
+    for (const [alanId, x] of Object.entries(u)) {
+      sonuc.push({ ekranId: e.id, ekran: e.ad, alanId, alan: x.etiket, tablo: x.tablo, sutun: x.sutun, duzey: x.duzey, metin: x.metin, git: `#/ekranlar/e/${encodeURIComponent(e.id)}/veri` });
+    }
+  }
+  // Güçlü uyarılar önce.
+  return sonuc.sort((a, b) => Number(a.duzey !== 'guclu') - Number(b.duzey !== 'guclu'));
+}
+
 /** Satır imzası (sütun normal adıyla, sıradan bağımsız; ortam dahil; gizli değerler dahil — yalnız özet, değer dönmez). */
 const satirImzasi = (/** @type {{ ortamId: string | null; degerler: Record<string, string | null> }} */ r, /** @type {Array<{ ad: string }>} */ sutunlar) =>
   ozet([r.ortamId ?? '', sutunlar.map((s) => [baslikNormal(s.ad), String(r.degerler[s.ad] ?? '')]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))]);
@@ -283,6 +305,7 @@ export function veriSagligi(vt, projeId) {
     bosSutunlar: tablolar.filter((t) => t.satirlar.length).flatMap((t) => t.sutunlar.filter((s) => t.satirlar.every((r) => !dolu(r.degerler[s.ad])))
       .map((s) => ({ tabloId: t.id, tablo: t.ad, sutun: s.ad }))),
     kirikBasvurular: kirik,
+    uyumsuzBaglar: uyumsuzBaglar(vt, projeId, tablolar),
     kullanim,
     birlestirmeGecmisi: { toplam: gecmis.length, etkin: gecmis.filter((k) => k.durum !== 'geriAlindi').length }
   };

@@ -12,3 +12,10 @@
 .gerekmez-bolum > .acilir-govde[hidden] { display: none; }
 .gerekmez-bolum > .acilir-govde > p { margin: 0; }
 .gerekmez-bolum .alan-formu { background: var(--panel); }
+/* Tablo bağı uyumu (tablo-uyumu.mjs): bağlı sütunun değerleri sayfadaki seçeneklerde yok. Güçlü: hiçbiri; zayıf: bir kısmı. */
+.tablo-uyumu { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.4; min-width: 0; overflow-wrap: anywhere; color: var(--atlanan); }
+.tablo-uyumu.guclu { color: var(--hata); font-weight: 600; }
+.tablo-uyumu > svg, .tablo-uyumu > .ikon { flex: none; margin-top: 2px; }
+.ekran-baglari .alan-satiri.uyumsuz { box-shadow: inset 3px 0 0 var(--atlanan); }
+.ekran-baglari .alan-satiri.uyumsuz:has(.tablo-uyumu.guclu) { box-shadow: inset 3px 0 0 var(--hata); }
+.veri-sagligi .uyumsuz-bag { overflow-wrap: anywhere; }

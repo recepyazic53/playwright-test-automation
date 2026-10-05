@@ -29,6 +29,7 @@ import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { ayarBasvurulariniDenetle, modelAlanBilgisi, tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { basvuruGruplari, veriKosulariniAc, veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
+import { tabloSecenekUyumu } from '../tablolar/tablo-uyumu.mjs';
 import { icerikTalepleri, talepleriAyikla } from './talepler.mjs';
 import { bekleyenAlanlar, veriBekliyorAyikla } from './veri-bekliyor.mjs';
 
@@ -523,7 +524,9 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
     // Gizli sütuna (ör. CVV, parola) bağlı alanlar: değer listesine girmez; formun "Tablodan" başvurusu için yalnız tablo ve sütun ADI.
     // Kayıt tablosuna (tür 'kayit') bağlı alanlar ve kayıt tablolarının adları: form aynı tablo + etiketteki alanları tek KAYIT GRUBU
     // ("Hazır kayıt / Yeni") olarak gösterir (değer yok; satırlar formda /platform/tablolar'dan okunur).
-    ...tabloBaglariOzeti(vt, projeId, ekranId)
+    ...tabloBaglariOzeti(vt, projeId, ekranId),
+    // Seçenekleri modelde tanımlı, bağlı sütununun değerleri sayfada bulunamayan alanlar: alan → { duzey, metin } (alanın yanında uyarı).
+    tabloUyumsuzluklari: Object.fromEntries(Object.entries(tabloBagUyumlari(vt, projeId, ekranId)).map(([k, u]) => [k, { duzey: u.duzey, metin: u.metin }]))
   };
 }
 
@@ -552,6 +555,32 @@ function tabloBaglariOzeti(vt, projeId, ekranId) {
 }
 
 /**
+ * Seçenekleri modelde tanımlı alanların tablo bağı uyumu (tablolar/tablo-uyumu.mjs; arayüzle ORTAK kural): bağlı sütundaki değerler
+ * sayfadaki seçeneklerde bulunamıyorsa alan → uyarı. baglar verilmezse ekranın ETKİN bağları (senaryo formu); Veri sağlığı ekranın
+ * yalnız KENDİ bağlarını verir (genel senaryodan gelen bağ genel senaryonun kendi satırında bir kez sayılır).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
+ * @param {Record<string, { tablo: string; sutun: string }>} [baglar] @param {import('../tablolar/tablo-deposu.mjs').Tablo[]} [tablolar]
+ * @returns {Record<string, import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { etiket: string; tablo: string; sutun: string }>}
+ */
+export function tabloBagUyumlari(vt, projeId, ekranId, baglar, tablolar) {
+  const b = baglar ?? etkinAlanBaglari(vt, ekranId);
+  if (!Object.keys(b).length) return {};
+  const { girdiler } = ekranGirdileri(vt, projeId, ekranId, { modelSecenekleri: true });
+  const tl = tablolar ?? tablolariListele(vt, projeId);
+  /** @type {Record<string, import('../tablolar/tablo-uyumu.mjs').TabloUyumu & { etiket: string; tablo: string; sutun: string }>} */
+  const sonuc = {};
+  for (const [alan, bag] of Object.entries(b)) {
+    const g = girdiler.find((x) => x.id === alan);
+    const t = tl.find((x) => x.id === bag.tablo);
+    const s = t ? t.sutunlar.find((c) => c.ad === bag.sutun) : undefined;
+    if (!g || g.tip !== 'secim' || !t || !s) continue;
+    const u = tabloSecenekUyumu({ etiket: g.etiket, secenekler: g.modelSecenekleri, seceneklerDurumu: g.seceneklerDurumu }, s, t.satirlar.map((r) => r.degerler[s.ad]));
+    if (u) sonuc[alan] = { ...u, etiket: g.etiket, tablo: t.ad, sutun: s.ad };
+  }
+  return sonuc;
+}
+
+/**
  * Değer listesi formu için ekranın inputları: kimlik, etiket, tip ve seçenekler (bağımlı alanlarda tüm seçeneklerin birleşimi).
  * Modeli olmayan ekranda boş liste.
  * tumTipler: onay kutusu ve dosya alanları da (ekranın "Test verisi" sekmesi: bu alanlar da tablo sütununa bağlanabilir).
@@ -569,6 +598,15 @@ export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
   // Seçenekler sayfa değeri / metniyle (liste kaydında korunur; model seçeneği kaldırılsa da koşu doğru seçer).
   const hamSecenekler = new Map(modelSecimAlanlari(mb.model).map((a) => [a.id, [...(Array.isArray(a.secenekler) ? a.secenekler : []),
     ...Object.values(a.bagimlilik?.secenekHaritasi || {}).flat()].filter((s) => s && typeof s === 'object').map(listeDegeri)]));
+  // modelSecenekleri: tablo / değer listeleri UYGULANMADAN modelin kendi seçenekleri ve listesinin durumu (tam / kismi / bilinmiyor /
+  // dinamik). Tablo bağı uyum denetimi (tablo-uyumu.mjs) sütun değerlerini SAYFADAKİ seçeneklerle karşılaştırır; uygulanmış liste
+  // bağlı tablonun kendi değerlerini içerdiği için kullanılmaz.
+  const hamMb = secenekler.modelSecenekleri && !ortak ? modelBaglami(vt, ekranId, null, { listesiz: true }) : mb;
+  const hamAlanlar = hamMb ? modelSecimAlanlari(hamMb.model) : [];
+  const modelSecenekleri = new Map(hamAlanlar.map((a) => [a.id, [...(Array.isArray(a.secenekler) ? a.secenekler : []),
+    ...Object.values(a.bagimlilik?.secenekHaritasi || {}).flat()].filter((x) => x && typeof x === 'object').map(listeDegeri)
+    .map((x) => ({ deger: x.deger, metin: x.aciklama || x.deger, ...(x.ekranDegeri ? { ekranDegeri: x.ekranDegeri } : {}), ...(x.ekranMetni ? { ekranMetni: x.ekranMetni } : {}) }))]));
+  const durumlar = new Map(hamAlanlar.filter((a) => typeof a.seceneklerDurumu === 'string').map((a) => [a.id, String(a.seceneklerDurumu)]));
   const tipler = ['secim', 'metin', 'sayi', 'tarih', 'telefon', ...(secenekler.tumTipler ? ['onayKutusu', 'dosya'] : [])];
   // Senaryo ayarı (ekranda karşılığı olmayan, akışı dallandıran seçim; ör. ekrandaAlanDegil): senaryoAyari işaretiyle (Test verisi
   // sekmesinde rozet; karşılıklar seçenek metni → kod olarak dolar, tablolar/karsiliklar.mjs).
@@ -578,7 +616,8 @@ export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
     const s = new Map();
     for (const x of hamSecenekler.get(a.id) || []) if (!s.has(x.deger)) s.set(x.deger, { deger: x.deger, metin: x.aciklama || x.deger, ...(x.ekranDegeri ? { ekranDegeri: x.ekranDegeri } : {}), ...(x.ekranMetni ? { ekranMetni: x.ekranMetni } : {}) });
     for (const x of [...(a.secenekler || []), ...Object.values(a.bagimlilik?.harita || {}).flat()]) if (!s.has(x.deger)) s.set(x.deger, { deger: x.deger, metin: x.metin });
-    return { id: a.id, etiket: a.etiket, tip: a.tip, secenekler: [...s.values()], ...(ayarlar.has(String(a.id)) ? { senaryoAyari: true } : {}) };
+    return { id: a.id, etiket: a.etiket, tip: a.tip, secenekler: [...s.values()], ...(ayarlar.has(String(a.id)) ? { senaryoAyari: true } : {}),
+      ...(secenekler.modelSecenekleri && a.tip === 'secim' ? { modelSecenekleri: modelSecenekleri.get(a.id) ?? [], ...(durumlar.has(a.id) ? { seceneklerDurumu: durumlar.get(a.id) } : {}) } : {}) };
   });
   return { girdiler };
 }
