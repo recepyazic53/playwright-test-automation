@@ -1,9 +1,14 @@
-// ÖZET PANOSU (Sonuçlar > Genel > Özet). Kartlar 12 sütunlu ızgarada durur; düzen PROJE BAŞINA kasada saklanır (GET /platform/pano,
-// POST /platform/pano/kaydet; sonuclar/ozet-panosu.mjs). Varsayılan düzen bugünkü Özet'tir. Düzen kuralları (boyutlar, kart türleri,
-// doğrulama, kaldır / ekle / taşı / boyutlandır) sunucuyla ORTAK saf modüldedir (pano-duzeni.mjs).
-//   "Panoyu düzenle" → düzenleme kipi: her kartın üstünde tutamak (sürükle-bırak; odaktayken ↑ ↓ tuşları), ↑ / ↓ düğmeleri, boyut
-//   seçimi, Düzenle (kullanıcı kartı) ve Kaldır (×). Üstte "Kart ekle", "Varsayılana dön", "Vazgeç", "Bitti". Değişiklikler "Bitti"ye
-//   basınca kaydedilir; "Vazgeç" kayıtlı düzene döner. Düzenleme kipinde değilken pano yalnız kartları gösterir.
+// ÖZET PANOSU (Sonuçlar > Genel > Özet). SERBEST IZGARA: her kartın 12 sütunlu ızgarada konumu ve boyutu vardır ({ x, y, w, h };
+// satır birimi SATIR_BIRIMI px). Düzen PROJE BAŞINA kasada saklanır (GET /platform/pano, POST /platform/pano/kaydet;
+// sonuclar/ozet-panosu.mjs). Varsayılan düzen bugünkü Özet'tir. Düzen kuralları (konum, en küçük boyut, çakışmasızlık, aşağı itme,
+// göç, kart türleri) sunucuyla ORTAK saf modüldedir (pano-duzeni.mjs); bu dosya yalnız çizer ve kullanıcı etkileşimini modele çevirir.
+//   "Panoyu düzenle" → düzenleme kipi: her kartın üstünde tutamak (⠿; sürükle-bırak — bırakılacak hücre gölgeyle gösterilir, kart
+//   istenen boş yere bırakılabilir, üstünde / yanında boşluk kalabilir; değdiği kartlar aşağı itilir), sağ alt köşede boyut tutamağı
+//   (genişlik + yükseklik birim birim; komşu kartların boyu değişmez), ↑ / ↓ düğmeleri (okuma sırasında bir öne / sonraya), Düzenle
+//   (kullanıcı kartı) ve Kaldır (×). Klavye: tutamak odaktayken oklar konumu, Shift + oklar boyutu değiştirir; köşe tutamağında oklar
+//   boyutu. Dar ekranda (≤ 860 px) kartlar okuma sırasıyla (y, sonra x) tek sütunda dizilir; düzenleme sıra (↑ ↓) ve yükseklikle sınırlı.
+//   Üstte "Kart ekle", "Varsayılana dön", "Vazgeç", "Bitti". Değişiklikler "Bitti"ye basınca kaydedilir; "Vazgeç" kayıtlı düzene döner.
+//   Eski (sıralı) düzen ilk açılışta ızgaraya çevrilip bir kez kaydedilir (sunucu "goc" bildirir).
 //   Kart türleri: yerleşik (sonuc-ozeti.js üretir), SQL sorgusu, Nöbetçi verisi (hazır şablonlar), metin ve bağlantılar.
 // SQL KARTI: sorgu YALNIZ "Yenile"ye basınca çalışır (sayfa açılınca ya da aralıklı çalışmaz); kartın üstünde "Son veri: gg.aa.yyyy
 //   ss:dd" (hiç alınmadıysa "Henüz yenilenmedi"). Son (maskeli) sonuç sunucuda önbellektedir. CANLI ortama ait bağlantıda ilk "Yenile"
@@ -14,9 +19,10 @@
 // DOM'a yalnız metin yazılır (h(); innerHTML yok); bağlantılar yalnız Nöbetçi içi adreslere (#/…) gider.
 import { api, bildir, degisiklikleriBirak, alan, h, ikon, kayitIzi, mesgulIken, rozet, s, yatayKaydirmaIpucu, yeniKimlik, yerlestir } from './ortak.js';
 import {
-  BOYUTLAR, ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
-  ORAN_SECENEKLERI, OZEL_KART_TURLERI, SATIR_YUKSEKLIGI, SQL_GORUNUMLERI, YUKSEKLIKLER, YUKSEKLIK_SINIRI, kartYukseklikle, yukseklikAdi, TARIH_BICIMLERI, VERI_SABLONLARI,
-  bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartBoyutla, kartEkle, kartKaldir, kartTasi, kartTemizle,
+  ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
+  ORAN_SECENEKLERI, OZEL_KART_TURLERI, SQL_GORUNUMLERI, TARIH_BICIMLERI, VERI_SABLONLARI, IZGARA_BOSLUK, IZGARA_SUTUN, SATIR_BIRIMI,
+  gorunurYerlesim, kartSiraTasi, kartYerlestir, okumaSirasinaDiz, satirPikseli,
+  bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartEkle, kartKaldir, kartTemizle,
   SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
   donemMetni, donemTemizle, kartDonemle, kartDonemliMi
 } from './pano-duzeni.mjs';
@@ -25,11 +31,9 @@ import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBic
 import { oranSaglikSinifi } from './sonuclar.js';
 
 const SQL_UCU = '/platform/pano/sql/yenile';
-/** Izgaranın ince satır birimi ve kartlar arası boşluk (px; stil-ozet-panosu.css ile aynı). */
-const IZGARA_BIRIMI = 2;
-const PANO_BOSLUK = 14;
-/** N satırlık kartın yüksekliği (px). @param {number} n */
-const satirPx = (n) => n * SATIR_YUKSEKLIGI + (n - 1) * PANO_BOSLUK;
+/** Dar ekran (tek sütun; stil-ozet-panosu.css ile aynı eşik). */
+const DAR_EKRAN = '(max-width: 860px)';
+const darEkran = () => window.matchMedia(DAR_EKRAN).matches;
 /** Liste kartında görünen en çok madde. */
 const LISTE_ILK = 10;
 /** CANLI onayı verilmiş SQL kartları (bu sayfa oturumunda; kart hedefi / sorgusu değişince yeniden sorulur). @type {Set<string>} */
@@ -141,17 +145,9 @@ export function ozetPanosu(kap, s0) {
   const varsayilanDugmesi = h('button', { type: 'button', class: 'hayalet pano-varsayilan' }, ikon('geri'), 'Varsayılana dön');
   const vazgecDugmesi = h('button', { type: 'button', class: 'hayalet pano-vazgec' }, 'Vazgeç');
   const bittiDugmesi = h('button', { type: 'button', class: 'birincil pano-bitti' }, ikon('onay'), 'Bitti');
-  const esitKutusu = h('input', { type: 'checkbox', class: 'pano-esit-kutusu' });
-  esitKutusu.addEventListener('change', () => {
-    calisan = { ...calisan, esitYukseklik: esitKutusu.checked };
-    degisti();
-    ciz();
-    duyur(esitKutusu.checked ? 'Aynı satırdaki kartlar aynı yükseklikte.' : 'Kartlar kendi yüksekliğinde.');
-  });
   cubuk.append(
     h('div', { class: 'pano-duzen-metni' }, h('strong', {}, 'Pano düzenleniyor'),
-      h('span', { id: yardimId, class: 'soluk kucuk' }, 'Kartı tutamaktan (⠿) sürükleyin ya da tutamak seçiliyken ↑ ↓ tuşlarıyla taşıyın. Sağ alt köşedeki tutamakla genişlik ve yükseklik birlikte değişir (odaktayken ← → genişlik, ↑ ↓ yükseklik). Değişiklikler "Bitti"ye basınca kaydedilir.'),
-      h('label', { class: 'pano-esit-secimi' }, esitKutusu, 'Aynı satırdaki kartlar aynı yükseklikte')),
+      h('span', { id: yardimId, class: 'soluk kucuk' }, 'Kartı tutamaktan (⠿) sürükleyip istediğiniz boş yere bırakın; üstünde boşluk kalabilir, değdiği kartlar aşağı iner. Tutamak seçiliyken oklar kartı bir hücre taşır, Shift + oklar boyutunu değiştirir. Sağ alt köşedeki tutamakla genişlik ve yükseklik birim birim değişir (odaktayken oklar). Değişiklikler "Bitti"ye basınca kaydedilir.')),
     h('div', { class: 'dugmeler' }, kartEkleDugmesi, varsayilanDugmesi, vazgecDugmesi, bittiDugmesi));
   kartEkleDugmesi.addEventListener('click', () => kartEklePenceresi());
   varsayilanDugmesi.addEventListener('click', () => {
@@ -192,19 +188,22 @@ export function ozetPanosu(kap, s0) {
   }
 
   // ---- Çizim ------------------------------------------------------------------------------------------------------------
+  // Bırakılacak hücrenin gölgesi (sürükleme / boyutlandırma sırasında; ekran okuyucudan gizli).
+  const golge = h('div', { class: 'pano-golge', 'aria-hidden': 'true', hidden: true });
+
   /** @param {{ id: string; rol: string } | null} [odak] */
   function ciz(odak = null) { kaydirmayiKoru(cizIc); odakVer(odak); }
   function cizIc() {
     const duzen = etkinDuzen();
     const geriYukle = icKaydirmalar(pano);
     pano.classList.toggle('duzenleniyor', duzenleniyor);
-    pano.classList.toggle('esit-yukseklik', duzen.esitYukseklik !== false);
-    esitKutusu.checked = duzen.esitYukseklik !== false;
     cubuk.hidden = !duzenleniyor;
     duzenleDugmesi.hidden = duzenleniyor;
-    const n = duzen.kartlar.length;
+    // DOM sırası = okuma sırası (y, sonra x): ekran okuyucu ve dar ekrandaki tek sütun bu sırayı izler.
+    const sirali = okumaSirasinaDiz(duzen.kartlar);
+    const n = sirali.length;
     // Kartlar yerinde güncellenir: değişmeyen kart DOM'da kalır (kaydırma konumu, odak ve tablo durumu korunur).
-    cocuklariEsitle(pano, duzen.kartlar.map((k, i) => ogeHazirla(k, i, n)));
+    cocuklariEsitle(pano, [...sirali.map((k, i) => ogeHazirla(k, i, n)), golge]);
     bosNot.hidden = n > 0;
     yerlestir(bosNot, ...(n ? [] : [h('p', { class: 'soluk' }, ikon('izgara'), duzenleniyor
       ? 'Panoda kart yok. "Kart ekle" ile kart ekleyin ya da "Varsayılana dön"e basın.'
@@ -231,148 +230,147 @@ export function ozetPanosu(kap, s0) {
       const icerik = h('div', { class: 'pano-icerik' }, ...kartIcerigi(k));
       o = { sar: h('div', { class: 'pano-ogesi', role: 'listitem', 'data-kart-id': k.id, 'data-kart-tur': k.tur }, icerik), icerik, imza };
       ogeler.set(k.id, o);
-      suruklemeBagla(o.sar, k.id);
     }
-    o.sar.className = `pano-ogesi boyut-${k.boyut}${k.yukseklik ? ' yukseklik-sabit' : ''}`;
-    if (k.yukseklik) o.sar.dataset.yukseklik = String(k.yukseklik); else delete o.sar.dataset.yukseklik;
+    // Modeldeki konum (testler ve hata ayıklama için; çizim CSS değişkenleriyle yerlesimiGuncelle'de).
+    for (const a of /** @type {const} */ (['x', 'y', 'w', 'h'])) if (o.sar.dataset[a] !== String(k[a])) o.sar.dataset[a] = String(k[a]);
     o.sar.querySelector(':scope > .pano-arac-cubugu')?.remove();
     o.sar.querySelector(':scope > .pano-kose-tutamagi')?.remove();
     if (duzenleniyor) { o.sar.prepend(aracCubugu(k, i, n)); o.sar.append(koseTutamagi(k)); }
     return o.sar;
   }
 
-  // ---- Yerleşim: satır birimli ızgara ------------------------------------------------------------------------------------
-  // Izgara 12 sütun; satırlar ince birimlidir (IZGARA_BIRIMI = 2 px; 88 + 14 = 102 px tam bölünür; satır boşluğu
-  // 0, kartlar arası dikey boşluk kartın alt payı).
-  // Her kartın kapladığı satır sayısı CSS değişkeniyle (--pano-span; CSSOM, satır içi stil özniteliği yazılmaz) verilir:
-  //   Otomatik: içeriğin doğal yüksekliği (ölçüm geçişi: .olculuyor sınıfıyla kartlar bir anlığına doğal boyda ölçülür).
-  //   Sabit: N satır = N × SATIR_YUKSEKLIGI + (N − 1) × boşluk; içerik sığmazsa kartın içinde kaydırılır, grafik ölçeklenir.
-  //   Tek sütunda (≤ 860 px) sabit yükseklik korunur ama içerikten kısa olmaz.
-  //   "Aynı satırdaki kartlar aynı yükseklikte" açıkken görsel satırdaki (12 sütunu dolduran ardışık kartlar) en uzun karta eşitlenir.
-  // Izgara kartları yerleştirdiği için kartlar hiçbir durumda üst üste binmez.
-  let yerlesimBekliyor = 0;
-  function yerlesimiPlanla() {
-    cancelAnimationFrame(yerlesimBekliyor);
-    yerlesimBekliyor = requestAnimationFrame(yerlesimiGuncelle);
-  }
+  // ---- Yerleşim: serbest ızgara ------------------------------------------------------------------------------------------
+  // Her kart ızgarada kendi hücresindedir: CSS değişkenleri (CSSOM; satır içi stil özniteliği yazılmaz) --pano-kolon "x+1 / span w",
+  // --pano-satir "y+1 / span h" ve --pano-yukseklik (h satırın pikseli; dar ekranda en küçük yükseklik). Yükseklik içerikten bağımsızdır:
+  // ölçüm yoktur, sığmayan içerik kartın içinde kaydırılır, grafik / tablo kartın boyutunda yeniden çizilir. Izgara kartları
+  // yerleştirdiği ve model çakışmasız olduğu için kartlar üst üste binmez. Düzenleme dışında gizlenen kart (tamamlanan Başlarken) ekranda
+  // yer kaplamaz: yalnız onun kullandığı satırlar daralır (gorunurYerlesim; kullanıcının bıraktığı boşluklar korunur).
   function yerlesimiGuncelle() { kaydirmayiKoru(yerlesimiGuncelleIc); }
-  // KÖK NEDEN (sayfa yukarı atıyordu): ölçüm geçişinde (.olculuyor) kartlar ızgara satırından çıkar ve pano bir an birkaç piksele
-  // iner; senkron ölçüm bu kısa belgeyle yerleşim yaptırınca tarayıcı sayfanın kaydırma konumunu yukarı çekiyordu (ve sabit
-  // yükseklikli kartların iç kaydırması sıfırlanıyordu). Ölçüm her içerik değişiminde (tablo yatay kaydırılınca güncellenen
-  // "N sütundan M tanesi görünüyor" notu dahil), köşe tutamağıyla boyutlandırmada ve sütun ayarlarında çalışır. Artık ölçüm boyunca
-  // pano yüksekliği sabitlenir (CSS değişkeni → min-height), ardından sayfa ve iç kaydırma konumları geri yüklenir.
-  function yerlesimiGuncelleIc() {
-    if (!pano.isConnected) return;
-    const kartlar = /** @type {HTMLElement[]} */ ([...pano.querySelectorAll(':scope > .pano-ogesi')]).filter((e) => getComputedStyle(e).display !== 'none');
-    if (!kartlar.length) return;
-    const geriYukle = icKaydirmalar(pano);
-    pano.style.setProperty('--pano-olcu-yukseklik', `${Math.ceil(pano.getBoundingClientRect().height)}px`);
-    pano.classList.add('olculuyor');
-    const dogal = kartlar.map((e) => e.getBoundingClientRect().height);
-    pano.classList.remove('olculuyor');
-    pano.style.removeProperty('--pano-olcu-yukseklik');
-    geriYukle();
-    const tekSutun = window.matchMedia('(max-width: 860px)').matches;
-    const panoGenislik = pano.getBoundingClientRect().width;
-    const sutunBirimi = (panoGenislik + PANO_BOSLUK) / 12;
-    const span = (/** @type {number} */ px) => Math.max(1, Math.ceil((px + PANO_BOSLUK) / IZGARA_BIRIMI));
-    const spanlar = kartlar.map((e, i) => {
-      const y = Number(e.dataset.yukseklik) || 0;
-      if (!y) return span(dogal[i]);
-      const sabit = span(satirPx(y));
-      return tekSutun ? Math.max(sabit, span(dogal[i])) : sabit;
-    });
-    if (pano.classList.contains('esit-yukseklik')) {
-      // Görsel satırlar: sırayla 12 sütunu dolduran kartlar (genişlik ızgaradaki gerçek sütun sayısından).
-      let bas = 0; let dolu = 0;
-      const kapat = (son) => { const m = Math.max(...spanlar.slice(bas, son)); for (let j = bas; j < son; j++) spanlar[j] = m; };
-      kartlar.forEach((e, i) => {
-        const sutun = Math.max(1, Math.min(12, Math.round((e.getBoundingClientRect().width + PANO_BOSLUK) / sutunBirimi)));
-        if (dolu + sutun > 12) { kapat(i); bas = i; dolu = 0; }
-        dolu += sutun;
-      });
-      kapat(kartlar.length);
+  /** @param {Array<{ id: string; x: number; y: number; w: number; h: number }>} [kartlar] önizleme (sürükleme / boyutlandırma) */
+  function yerlesimiGuncelleIc(kartlar) {
+    const duzen = kartlar ?? etkinDuzen().kartlar;
+    /** @type {Set<string>} */
+    const gizli = new Set();
+    if (!duzenleniyor) {
+      for (const k of duzen) {
+        const sar = ogeler.get(k.id)?.sar;
+        if (k.tur === 'baslarken' && sar && !sar.querySelector('.baslarken-kap:not([hidden])')) gizli.add(k.id);
+      }
     }
-    kartlar.forEach((e, i) => { if (e.style.getPropertyValue('--pano-span') !== String(spanlar[i])) e.style.setProperty('--pano-span', String(spanlar[i])); });
+    for (const k of gorunurYerlesim(duzen, gizli)) {
+      const sar = ogeler.get(k.id)?.sar;
+      if (sar) hucreyeKoy(sar, k);
+    }
   }
-  // İçerik değişince (veri geldi, liste açıldı, pencere boyu) yeniden ölçülür; yalnız değişen değer yazılır (döngü olmaz).
-  if (typeof ResizeObserver === 'function') {
-    const izleyici = new ResizeObserver(() => yerlesimiPlanla());
-    izleyici.observe(pano);
-    new MutationObserver((kayitlar) => {
-      // Yatay kaydırma notu ("N sütundan M tanesi tam görünüyor") her kaydırmada güncellenir: ölçüm gerektirmez (boyutu değişirse
-      // ResizeObserver yakalar). Yalnız bu nottaki değişimlerse yeniden ölçülmez.
-      const ilgili = kayitlar.some((k) => {
-        const el = k.target instanceof Element ? k.target : k.target.parentElement;
-        return !el?.closest('.kaydirma-bilgisi');
-      });
-      if (ilgili) yerlesimiPlanla();
-      for (const kayit of kayitlar) for (const d of kayit.addedNodes) if (d instanceof HTMLElement && d.classList.contains('pano-icerik')) izleyici.observe(d);
-    }).observe(pano, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'open', 'aria-expanded'] });
+  /** @param {HTMLElement} el @param {{ x: number; y: number; w: number; h: number }} k */
+  function hucreyeKoy(el, k) {
+    const deger = (/** @type {string} */ ad, /** @type {string} */ v) => { if (el.style.getPropertyValue(ad) !== v) el.style.setProperty(ad, v); };
+    deger('--pano-kolon', `${k.x + 1} / span ${k.w}`);
+    deger('--pano-satir', `${k.y + 1} / span ${k.h}`);
+    deger('--pano-yukseklik', `${satirPikseli(k.h)}px`);
   }
-  window.addEventListener('resize', yerlesimiPlanla);
+  // Başlarken tamamlanınca / gizlenince ya da görünür olunca yer yeniden hesaplanır (yalnız "hidden" değişimleri).
+  new MutationObserver((kayitlar) => {
+    if (kayitlar.some((k) => k.target instanceof Element && k.target.classList.contains('baslarken-kap'))) yerlesimiGuncelle();
+  }).observe(pano, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
 
-  /** Sağ alt köşe tutamağı (düzenleme kipi): sürükle → genişlik ve yükseklik ızgaraya oturur; klavye: ← → genişlik, ↑ ↓ yükseklik, Delete: otomatik yükseklik. */
+  /** Izgara ölçüsü (px): sütun adımı (sütun + boşluk) ve satır adımı (satır + boşluk). */
+  function izgara() {
+    const r = pano.getBoundingClientRect();
+    return { r, sutun: (r.width + IZGARA_BOSLUK) / IZGARA_SUTUN, satir: SATIR_BIRIMI + IZGARA_BOSLUK };
+  }
+
+  /**
+   * Sürükleme / boyutlandırma oturumu: pano yüksekliği sabitlenir (sayfa kısalıp kaydırma yukarı çekilmez; kaydırma çapası kapalı),
+   * önizleme modele göre çizilir, gölge bırakılacak hücreyi gösterir. Bırakınca önizleme çalışan düzene yazılır.
+   * @param {string} id taşınan / boyutlanan kart
+   */
+  function etkilesim(id) {
+    const bas = calisan;
+    let onizleme = bas;
+    const sar = /** @type {HTMLElement} */ (ogeler.get(id)?.sar);
+    pano.style.setProperty('--pano-olcu-yukseklik', `${Math.ceil(pano.getBoundingClientRect().height)}px`);
+    pano.classList.add('etkilesimde');
+    golge.hidden = false;
+    return {
+      bas,
+      /** @param {any} d */
+      goster(d) {
+        onizleme = d;
+        kaydirmayiKoru(() => {
+          yerlesimiGuncelleIc(d.kartlar);
+          const k = d.kartlar.find((x) => x.id === id);
+          if (k) hucreyeKoy(golge, k);
+        });
+        return d.kartlar.find((x) => x.id === id);
+      },
+      /** @param {boolean} uygula */
+      bitir(uygula) {
+        golge.hidden = true;
+        sar.style.removeProperty('transform');
+        sar.classList.remove('surukleniyor', 'boyutlaniyor');
+        pano.classList.remove('etkilesimde');
+        pano.style.removeProperty('--pano-olcu-yukseklik');
+        const degisti_ = uygula && onizleme !== bas;
+        if (degisti_) { calisan = onizleme; degisti(); }
+        return degisti_;
+      }
+    };
+  }
+
+  /** Konum / boyut duyurusu. @param {any} k */
+  const konumMetni = (k) => `${kartAdi(k)}: sütun ${k.x + 1}, satır ${k.y + 1}; ${k.w} sütun × ${k.h} satır.`;
+
+  /** Kartı model işlemiyle değiştirir, yeniden çizer ve duyurur. @param {string} id @param {any} yeni @param {string} rol */
+  function uygula(id, yeni, rol) {
+    if (yeni === calisan) return;
+    calisan = yeni;
+    degisti();
+    ciz({ id, rol });
+    const k = calisan.kartlar.find((x) => x.id === id);
+    if (k) duyur(konumMetni(k));
+  }
+
+  /** Sağ alt köşe tutamağı (düzenleme kipi): sürükle → genişlik ve yükseklik birim birim; klavye: ← → genişlik, ↑ ↓ yükseklik. */
   function koseTutamagi(k) {
     const ad = kartAdi(k);
     const dugme = h('button', { type: 'button', class: 'pano-kose-tutamagi', 'data-rol': 'kose', 'aria-label': `Boyutlandır: ${ad}`, 'aria-describedby': yardimId,
-      title: `Sürükleyin: genişlik ve yükseklik birlikte (${BOYUTLAR.find((b) => b.anahtar === k.boyut)?.ad ?? ''}, ${yukseklikAdi(k.yukseklik ?? 'oto')})` },
+      title: `Sürükleyin: genişlik ve yükseklik (${k.w} sütun × ${k.h} satır)` },
     h('span', { 'aria-hidden': 'true' }, '◢'));
-    const genislikSirasi = BOYUTLAR.map((b) => b.anahtar);
-    const anlikSatir = () => {
-      const sar = ogeler.get(k.id)?.sar;
-      return sar ? Math.round((sar.getBoundingClientRect().height + PANO_BOSLUK) / (SATIR_YUKSEKLIGI + PANO_BOSLUK)) : 4;
-    };
-    const uygula = (/** @type {string} */ boyut, /** @type {'oto' | number} */ yukseklik) => {
-      calisan = kartYukseklikle(kartBoyutla(calisan, k.id, boyut), k.id, yukseklik);
-      degisti();
-      ciz({ id: k.id, rol: 'kose' });
-      duyur(`${ad}: ${BOYUTLAR.find((b) => b.anahtar === boyut)?.ad ?? boyut}, yükseklik ${yukseklikAdi(yukseklik)}.`);
-    };
-    const sinirSatir = (/** @type {number} */ n) => Math.max(YUKSEKLIK_SINIRI.en, Math.min(YUKSEKLIK_SINIRI.enCok, Math.round(n)));
     dugme.addEventListener('keydown', (o) => {
-      const mevcut = calisan.kartlar.find((x) => x.id === k.id) || k;
-      const gi = genislikSirasi.indexOf(mevcut.boyut);
-      if (o.key === 'ArrowRight' || o.key === 'ArrowLeft') {
-        o.preventDefault();
-        const yeniG = genislikSirasi[Math.max(0, Math.min(genislikSirasi.length - 1, gi + (o.key === 'ArrowRight' ? 1 : -1)))];
-        if (yeniG !== mevcut.boyut) uygula(yeniG, mevcut.yukseklik ?? 'oto');
-      } else if (o.key === 'ArrowUp' || o.key === 'ArrowDown') {
-        o.preventDefault();
-        const bas = mevcut.yukseklik ?? anlikSatir();
-        const yeniY = sinirSatir(bas + (o.key === 'ArrowDown' ? 1 : -1));
-        if (yeniY !== mevcut.yukseklik) uygula(mevcut.boyut, yeniY);
-      } else if (o.key === 'Delete' || o.key === 'Backspace') {
-        o.preventDefault();
-        if (mevcut.yukseklik) uygula(mevcut.boyut, 'oto');
-      }
+      const m = calisan.kartlar.find((x) => x.id === k.id);
+      if (!m) return;
+      const adim = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[o.key];
+      if (!adim) return;
+      o.preventDefault();
+      if (darEkran() && adim[0]) return;
+      uygula(k.id, kartYerlestir(calisan, k.id, { w: m.w + adim[0], h: m.h + adim[1] }), 'kose');
     });
-    // Fare / dokunma: sürüklerken canlı önizleme (sınıf + veri özniteliği), bırakınca kaydedilir. Genişlik en yakın hazır boyuta
-    // (1/3, 1/2, 2/3, tam), yükseklik satıra (2–12) oturur.
+    // Fare / dokunma: sürüklerken canlı önizleme (komşular yalnız çakışırsa aşağı iner), bırakınca çalışan düzene yazılır.
     dugme.addEventListener('pointerdown', (o) => {
+      if (o.button !== 0) return;
       o.preventDefault();
       o.stopPropagation();
       const sar = ogeler.get(k.id)?.sar;
-      if (!sar) return;
-      const r = sar.getBoundingClientRect();
-      const sutunBirimi = (pano.getBoundingClientRect().width + PANO_BOSLUK) / 12;
+      const m = calisan.kartlar.find((x) => x.id === k.id);
+      if (!sar || !m) return;
+      dugme.focus({ preventScroll: true });
+      const { sutun, satir } = izgara();
+      const dar = darEkran();
       const basX = o.clientX; const basY = o.clientY;
-      let boyut = k.boyut; let yukseklik = /** @type {'oto' | number} */ (k.yukseklik ?? 'oto');
+      const e0 = etkilesim(k.id);
+      sar.classList.add('boyutlaniyor');
       dugme.setPointerCapture?.(o.pointerId);
       const hareket = (/** @type {PointerEvent} */ e) => {
-        const sutun = (r.width + e.clientX - basX + PANO_BOSLUK) / sutunBirimi;
-        boyut = BOYUTLAR.reduce((en, b) => (Math.abs(b.sutun - sutun) < Math.abs(en.sutun - sutun) ? b : en)).anahtar;
-        if (Math.abs(e.clientY - basY) >= 6) yukseklik = sinirSatir((r.height + e.clientY - basY + PANO_BOSLUK) / (SATIR_YUKSEKLIGI + PANO_BOSLUK));
-        sar.className = `pano-ogesi boyut-${boyut}${yukseklik !== 'oto' ? ' yukseklik-sabit' : ''} boyutlaniyor`;
-        if (yukseklik !== 'oto') sar.dataset.yukseklik = String(yukseklik);
-        yerlesimiGuncelle();
+        e0.goster(kartYerlestir(e0.bas, k.id, { w: dar ? m.w : m.w + Math.round((e.clientX - basX) / sutun), h: m.h + Math.round((e.clientY - basY) / satir) }));
       };
-      const birak = () => {
+      const birak = (/** @type {PointerEvent} */ e) => {
         dugme.removeEventListener('pointermove', hareket);
         dugme.removeEventListener('pointerup', birak);
         dugme.removeEventListener('pointercancel', birak);
-        if (boyut !== k.boyut || yukseklik !== (k.yukseklik ?? 'oto')) uygula(boyut, yukseklik);
-        else ciz({ id: k.id, rol: 'kose' });
+        const oldu = e0.bitir(e.type === 'pointerup');
+        ciz({ id: k.id, rol: 'kose' });
+        if (oldu) { const y = calisan.kartlar.find((x) => x.id === k.id); if (y) duyur(konumMetni(y)); }
       };
       dugme.addEventListener('pointermove', hareket);
       dugme.addEventListener('pointerup', birak);
@@ -437,45 +435,39 @@ export function ozetPanosu(kap, s0) {
     }
   }
 
-  /** Düzenleme kipinde kartın üstündeki araçlar. */
+  /** Düzenleme kipinde kartın üstündeki araçlar. i / n: okuma sırasındaki yeri. */
   function aracCubugu(k, i, n) {
     const ad = kartAdi(k);
     const tutamak = h('button', { type: 'button', class: 'pano-tutamak hayalet kucuk-dugme', 'data-rol': 'tutamak', 'aria-label': `Taşı: ${ad}`,
-      'aria-describedby': yardimId, title: 'Sürükleyin ya da ↑ ↓ tuşlarıyla taşıyın' }, h('span', { 'aria-hidden': 'true' }, '⠿'));
+      'aria-describedby': yardimId, title: 'Sürükleyin ya da oklarla taşıyın (Shift + oklar: boyut)' }, h('span', { 'aria-hidden': 'true' }, '⠿'));
     tutamak.addEventListener('keydown', (o) => {
-      if (o.key === 'ArrowUp' || o.key === 'ArrowDown') { o.preventDefault(); tasi(k.id, o.key === 'ArrowUp' ? 'yukari' : 'asagi', 'tutamak'); }
+      const adim = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[o.key];
+      const m = calisan.kartlar.find((x) => x.id === k.id);
+      if (!adim || !m) return;
+      o.preventDefault();
+      if (o.shiftKey) {
+        if (darEkran() && adim[0]) return;
+        uygula(k.id, kartYerlestir(calisan, k.id, { w: m.w + adim[0], h: m.h + adim[1] }), 'tutamak');
+      } else if (darEkran()) {
+        // Dar ekranda tek sütun: ↑ ↓ okuma sırasını değiştirir.
+        if (adim[1]) tasi(k.id, adim[1] < 0 ? 'yukari' : 'asagi', 'tutamak');
+      } else {
+        uygula(k.id, kartYerlestir(calisan, k.id, { x: m.x + adim[0], y: m.y + adim[1] }), 'tutamak');
+      }
     });
-    tutamak.addEventListener('pointerdown', () => { const sar = ogeler.get(k.id)?.sar; if (sar) sar.draggable = true; });
-    const yukari = h('button', { type: 'button', class: 'hayalet kucuk-dugme', 'data-rol': 'yukari', 'aria-label': `Yukarı taşı: ${ad}`, disabled: i === 0 },
+    tutamak.addEventListener('pointerdown', (o) => suruklemeBaslat(o, k.id, tutamak));
+    const yukari = h('button', { type: 'button', class: 'hayalet kucuk-dugme', 'data-rol': 'yukari', 'aria-label': `Yukarı taşı: ${ad}`, title: 'Sırada bir öne al', disabled: i === 0 },
       h('span', { 'aria-hidden': 'true' }, '↑'));
-    const asagi = h('button', { type: 'button', class: 'hayalet kucuk-dugme', 'data-rol': 'asagi', 'aria-label': `Aşağı taşı: ${ad}`, disabled: i === n - 1 },
+    const asagi = h('button', { type: 'button', class: 'hayalet kucuk-dugme', 'data-rol': 'asagi', 'aria-label': `Aşağı taşı: ${ad}`, title: 'Sırada bir sonraya al', disabled: i === n - 1 },
       h('span', { 'aria-hidden': 'true' }, '↓'));
     yukari.addEventListener('click', () => tasi(k.id, 'yukari', 'yukari'));
     asagi.addEventListener('click', () => tasi(k.id, 'asagi', 'asagi'));
-    const boyut = h('select', { class: 'pano-boyut', 'aria-label': `Boyut: ${ad}`, 'data-rol': 'boyut' },
-      BOYUTLAR.map((b) => h('option', { value: b.anahtar, selected: b.anahtar === k.boyut }, b.ad)));
-    boyut.addEventListener('change', () => {
-      calisan = kartBoyutla(calisan, k.id, boyut.value);
-      degisti();
-      ciz({ id: k.id, rol: 'boyut' });
-      duyur(`${ad}: boyut ${BOYUTLAR.find((b) => b.anahtar === boyut.value)?.ad ?? ''}.`);
-    });
-    const yMevcut = k.yukseklik ?? 'oto';
-    const yukseklik = h('select', { class: 'pano-yukseklik', 'aria-label': `Yükseklik: ${ad}`, 'data-rol': 'yukseklik' },
-      YUKSEKLIKLER.map((y) => h('option', { value: String(y.anahtar), selected: y.anahtar === yMevcut }, y.ad)),
-      YUKSEKLIKLER.some((y) => y.anahtar === yMevcut) ? null : h('option', { value: String(yMevcut), selected: true }, yukseklikAdi(yMevcut)));
-    yukseklik.addEventListener('change', () => {
-      calisan = kartYukseklikle(calisan, k.id, yukseklik.value);
-      degisti();
-      ciz({ id: k.id, rol: 'yukseklik' });
-      duyur(`${ad}: yükseklik ${yukseklikAdi(yukseklik.value === 'oto' ? 'oto' : Number(yukseklik.value))}.`);
-    });
     const kaldir = h('button', { type: 'button', class: 'hayalet kucuk-dugme pano-kaldir', 'data-rol': 'kaldir', 'aria-label': `Kaldır: ${ad}`, title: 'Panodan kaldır ("Kart ekle"den geri eklenebilir)' },
       ikon('carpi'));
     kaldir.addEventListener('click', () => {
       calisan = kartKaldir(calisan, k.id);
       degisti();
-      const sonraki = calisan.kartlar[Math.min(i, calisan.kartlar.length - 1)];
+      const sonraki = okumaSirasinaDiz(calisan.kartlar)[Math.min(i, calisan.kartlar.length - 1)];
       ciz(sonraki ? { id: sonraki.id, rol: 'kaldir' } : null);
       if (!sonraki) kartEkleDugmesi.focus();
       duyur(`${ad} panodan kaldırıldı. "Kart ekle"den geri ekleyebilirsiniz.`);
@@ -484,52 +476,74 @@ export function ozetPanosu(kap, s0) {
       ikon('duzenle'), 'Düzenle');
     duzenle?.addEventListener('click', () => kartPenceresi(k));
     return h('div', { class: 'pano-arac-cubugu' }, tutamak, h('span', { class: 'pano-kart-adi', title: ad }, ad),
-      h('span', { class: 'pano-araclar' }, yukari, asagi, boyut, yukseklik, duzenle, kaldir));
+      h('span', { class: 'pano-boyut-bilgisi soluk', 'aria-hidden': 'true', title: 'Genişlik × yükseklik (sütun × satır)' }, `${k.w}×${k.h}`),
+      h('span', { class: 'pano-araclar' }, yukari, asagi, duzenle, kaldir));
   }
 
-  /** @param {string} id @param {number | 'yukari' | 'asagi'} hedef @param {string} rol */
-  function tasi(id, hedef, rol) {
-    const once = calisan.kartlar.findIndex((k) => k.id === id);
-    calisan = kartTasi(calisan, id, hedef);
-    const sonra = calisan.kartlar.findIndex((k) => k.id === id);
-    if (once === sonra) return;
+  /** Okuma sırasında bir öne / sonraya (↑ ↓ düğmeleri; dar ekranda tutamağın okları). @param {string} id @param {'yukari' | 'asagi'} yon @param {string} rol */
+  function tasi(id, yon, rol) {
+    const yeni = kartSiraTasi(calisan, id, yon);
+    if (yeni === calisan) return;
+    calisan = yeni;
     degisti();
     ciz({ id, rol });
-    const k = calisan.kartlar[sonra];
-    duyur(`${kartAdi(k)} ${sonra + 1}. sıraya taşındı (${calisan.kartlar.length} kart).`);
+    const sirali = okumaSirasinaDiz(calisan.kartlar);
+    const j = sirali.findIndex((k) => k.id === id);
+    duyur(`${kartAdi(sirali[j])} ${j + 1}. sıraya taşındı (${sirali.length} kart).`);
   }
 
-  /** Sürükle-bırak (yalnız düzenleme kipinde; sürükleme tutamaktan başlar). */
-  function suruklemeBagla(sar, id) {
-    sar.addEventListener('dragstart', (o) => {
-      if (!duzenleniyor) { o.preventDefault(); return; }
-      o.dataTransfer?.setData('text/plain', id);
-      if (o.dataTransfer) o.dataTransfer.effectAllowed = 'move';
-      sar.classList.add('surukleniyor');
-    });
-    sar.addEventListener('dragend', () => {
-      sar.draggable = false;
-      sar.classList.remove('surukleniyor');
-      for (const x of pano.querySelectorAll('.birakma-hedefi')) x.classList.remove('birakma-hedefi');
-    });
+  /**
+   * Sürükle-bırak (yalnız düzenleme kipinde, geniş ekranda; tutamaktan başlar). Kart imleci izler; bırakılacak hücre gölgeyle,
+   * itilecek kartlar yeni yerleriyle canlı gösterilir. Sürüklerken sayfa (tekerlekle) kaydırılırsa hedef yeniden hesaplanır.
+   * @param {PointerEvent} o @param {string} id @param {HTMLElement} tutamak
+   */
+  function suruklemeBaslat(o, id, tutamak) {
+    if (!duzenleniyor || o.button !== 0 || darEkran()) return;
+    const sar = ogeler.get(id)?.sar;
+    const m = calisan.kartlar.find((x) => x.id === id);
+    if (!sar || !m) return;
+    o.preventDefault();
+    tutamak.focus({ preventScroll: true });
+    const s0 = sar.getBoundingClientRect();
+    const ofX = o.clientX - s0.left; const ofY = o.clientY - s0.top;
+    let sonX = o.clientX; let sonY = o.clientY;
+    let basladi = false;
+    /** @type {ReturnType<typeof etkilesim> | null} */
+    let e0 = null;
+    const guncelle = () => {
+      if (!e0) return;
+      const { r, sutun, satir } = izgara();
+      const k = e0.goster(kartYerlestir(e0.bas, id, { x: Math.round((sonX - ofX - r.left) / sutun), y: Math.round((sonY - ofY - r.top) / satir) }));
+      // Kart imleci izler (önizleme hücresine göre kaydırma; CSSOM).
+      if (k) sar.style.setProperty('transform', `translate(${Math.round(sonX - ofX - (r.left + k.x * sutun))}px, ${Math.round(sonY - ofY - (r.top + k.y * satir))}px)`);
+    };
+    const hareket = (/** @type {PointerEvent} */ e) => {
+      sonX = e.clientX; sonY = e.clientY;
+      if (!basladi) {
+        if (Math.abs(sonX - o.clientX) < 4 && Math.abs(sonY - o.clientY) < 4) return;
+        basladi = true;
+        e0 = etkilesim(id);
+        sar.classList.add('surukleniyor');
+      }
+      guncelle();
+    };
+    const kaydirma = () => guncelle();
+    const birak = (/** @type {PointerEvent} */ e) => {
+      tutamak.removeEventListener('pointermove', hareket);
+      tutamak.removeEventListener('pointerup', birak);
+      tutamak.removeEventListener('pointercancel', birak);
+      window.removeEventListener('scroll', kaydirma);
+      if (!e0) return;
+      const oldu = e0.bitir(e.type === 'pointerup');
+      ciz({ id, rol: 'tutamak' });
+      if (oldu) { const y = calisan.kartlar.find((x) => x.id === id); if (y) duyur(konumMetni(y)); }
+    };
+    tutamak.setPointerCapture?.(o.pointerId);
+    tutamak.addEventListener('pointermove', hareket);
+    tutamak.addEventListener('pointerup', birak);
+    tutamak.addEventListener('pointercancel', birak);
+    window.addEventListener('scroll', kaydirma, { passive: true });
   }
-  pano.addEventListener('dragover', (o) => {
-    if (!duzenleniyor) return;
-    const hedef = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (o.target).closest?.('.pano-ogesi'));
-    if (!hedef) return;
-    o.preventDefault();
-    for (const x of pano.querySelectorAll('.birakma-hedefi')) if (x !== hedef) x.classList.remove('birakma-hedefi');
-    hedef.classList.add('birakma-hedefi');
-  });
-  pano.addEventListener('drop', (o) => {
-    if (!duzenleniyor) return;
-    const hedef = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (o.target).closest?.('.pano-ogesi'));
-    const id = o.dataTransfer?.getData('text/plain') || pano.querySelector('.surukleniyor')?.getAttribute('data-kart-id') || '';
-    if (!hedef || !id) return;
-    o.preventDefault();
-    const j = calisan.kartlar.findIndex((k) => k.id === hedef.dataset.kartId);
-    if (j >= 0) tasi(id, j, 'tutamak');
-  });
 
   // ---- Kart ekle / düzenle penceresi -----------------------------------------------------------------------------------
   function kartEklePenceresi() { kartPenceresi(null); }
@@ -577,7 +591,7 @@ export function ozetPanosu(kap, s0) {
         yerlestir(alanKap, eksik.length
           ? h('ul', { class: 'pano-yerlesik-listesi' }, eksik.map((y) => {
             const ekle = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Ekle: ${y.ad}` }, ikon('arti'), 'Ekle');
-            ekle.addEventListener('click', () => ekleVeKapat({ tur: y.tur, boyut: y.boyut }));
+            ekle.addEventListener('click', () => ekleVeKapat({ tur: y.tur }));
             return h('li', {}, h('div', {}, h('strong', {}, y.ad), h('p', { class: 'soluk kucuk' }, y.aciklama)), ekle);
           }))
           : h('p', { class: 'soluk' }, 'Bütün yerleşik kartlar panoda. Kaldırdığınız kartlar burada listelenir.'));
@@ -601,8 +615,8 @@ export function ozetPanosu(kap, s0) {
       try {
         const ayar = await mesgulIken(tamam, 'Denetleniyor…', () => topla());
         if (!ayar) return;
-        const kart = kartTemizle({ id: mevcut ? mevcut.id : `k-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, tur,
-          boyut: mevcut ? mevcut.boyut : OZEL_KART_TURLERI.find((t) => t.tur === tur)?.boyut, ayar });
+        // Konum düzenden gelir: yeni kart panonun altına türün boyutuyla eklenir; düzenlenen kart yerinde kalır.
+        const kart = kartTemizle({ id: mevcut ? mevcut.id : `k-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`, tur, ayar });
         ekleVeKapat(kart);
       } catch (e) {
         if (e && e.durum === 423) { diyalog.close(); return; }
@@ -943,11 +957,19 @@ export function ozetPanosu(kap, s0) {
     kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || {} };
     // Göç: dönem seçimi olmayan döneme bağlı kartlar eski genel seçimi (yoksa "Tümü") alır ve kayıtlı düzene bir kez yazılır.
     // Hiç kaydedilmemiş (varsayılan) düzen açılışta kaydedilmez: değer yalnız ekranda kullanılır; kullanıcı dönemi seçince yazılır.
+    // Izgara göçü: eski (sıralı) düzen sunucuda ızgara konumlarına çevrilmiş gelir ("goc"); bir kez kaydedilir (dönem göçüyle birlikte).
     const eksik = kayitli.duzen.kartlar.filter((k) => kartDonemliMi(k) && !k.donem);
-    if (!eksik.length) return;
+    if (!eksik.length && !y.goc) return;
     const donem = gocDonemi();
     for (const k of eksik) kayitli = { ...kayitli, duzen: kartDonemle(kayitli.duzen, k.id, donem) };
     if (!y.kayitli) return;
+    if (y.goc) {
+      try {
+        const g = await api('/platform/pano/kaydet', { govde: { projeId: proje.id, duzen: kayitli.duzen } });
+        kayitli = { duzen: g.duzen, sqlSonuclari: g.sqlSonuclari || kayitli.sqlSonuclari };
+      } catch { /* yazılamadıysa bu oturumda çevrilmiş düzen kullanılır; sonraki açılışta yeniden denenir */ }
+      return;
+    }
     try {
       const g = await api('/platform/pano/donem', { govde: { projeId: proje.id, donemler: Object.fromEntries(eksik.map((k) => [k.id, donem])) } });
       kayitli = { duzen: g.duzen, sqlSonuclari: g.sqlSonuclari || kayitli.sqlSonuclari };
