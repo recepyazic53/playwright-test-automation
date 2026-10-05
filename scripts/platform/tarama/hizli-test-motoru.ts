@@ -44,6 +44,7 @@ import { adaySirasi } from './oge-secme-motoru';
 import { beklemeDurumu, hizliMetinleriTopla, hizliPencereleri, hizliSecimSeridiKur } from './hizli-test-sayfasi';
 import { dugmeTiklamaKorumasi, formGonderimKorumasi } from './sayfa-envanteri';
 import { listedenSec, zincirKesfet } from './zincir-motoru';
+import { listedeYokMetni, secenekBekle } from './secenek-secimi';
 import { ZINCIR_SECENEK_BEKLEME_MS, gercekSecenekler, type ZincirSonucu } from './zincir-kesfi.mjs';
 import { ENVANTER_BETIGI, TaramaHatasi, alanKapsami, envanterOku, hataBilgisi, hedefSayfayiAc, secimleriKesfet, type OlayGonderici } from './tarama-motoru';
 
@@ -448,33 +449,33 @@ export async function hizliTestiYurut(
         const l = k.locator(a.secici).first();
         if (a.tur === 'checkbox') { await l.setChecked(dogruMu(deger), { timeout: bekleMs }); return null; }
         if (a.tur === 'select' || a.tur === 'select-one' || a.tur === 'select-multiple' || a.ozelBilesen) {
+          // Hedef: kaydedilen seçeneklerde değer ya da (harf duyarsız) metinle bulunan seçenek; yoksa verilen değer hem kod hem ad sayılır.
           const s = (a.secenekler ?? []).find((x) => x.deger === String(deger) || katla(x.metin) === katla(String(deger)));
-          const hedef = s ? s.deger : String(deger);
+          const aranan = { deger: s ? s.deger : String(deger), metin: s?.metin ?? String(deger) };
+          // Bağlı liste: seçenek üst alan seçildikten sonra gelir. Normal koşuyla ORTAK kural (secenek-secimi.ts): tek döngüde her turda
+          // değer YA DA metin aranır; liste dolu ve sabitse hedef yoksa erken, açık iletiyle biter.
+          const bas = Date.now();
+          const r = await secenekBekle(l, aranan, { sinirMs: bekleMs });
+          if (!r.secenek) return `${listedeYokMetni(a.etiket ?? d.anahtar, String(deger), r)}.`;
+          const hedef = r.secenek.deger;
           // Zaten bu değerdeyse yeniden seçilmez: yeniden seçmek sayfada bağlı alt listeleri boşaltıp yeniden yükletir.
           if ((await l.inputValue({ timeout: 2_000 }).catch(() => null)) === hedef) return null;
           if (a.ozelBilesen) {
-            // Bağlı liste: seçenek üst alan seçildikten sonra gelir; gelene kadar (en çok alan işlem süresi) beklenir.
-            const yaz = (): Promise<boolean> => l.evaluate((el, v) => {
+            // Özel bileşenin gizli listesi: değer + input / change olayları.
+            const yazildi = await l.evaluate((el, v) => {
               const sec = el as HTMLSelectElement;
               if (![...sec.options].some((o) => o.value === v)) return false;
               sec.value = v;
               sec.dispatchEvent(new Event('input', { bubbles: true }));
               sec.dispatchEvent(new Event('change', { bubbles: true }));
               return true;
-            }, hedef);
-            const bas = Date.now();
-            for (const bitis = bas + bekleMs; ;) {
-              if (await yaz()) { if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas; return null; }
-              if (Date.now() >= bitis) return `“${String(deger)}” seçeneği bu listede yok (${Math.round(bekleMs / 1000)} sn beklendi).`;
-              await page.waitForTimeout(250);
-            }
+            }, hedef).catch(() => false);
+            if (!yazildi) return `“${String(deger)}” seçeneği seçilemedi (liste değişti).`;
+          } else {
+            // Seçilemezse (liste kilitli / gizli bir bileşenle sarılı): zincir keşfinin sağlam yolu (etkinleşme beklenir, olmazsa değer +
+            // input / change olayları — normal koşunun özel bileşen yolu).
+            await l.selectOption({ value: hedef }, { timeout: 5_000 }).catch(async () => { await listedenSec(page, a, hedef, Math.min(bekleMs, 15_000)); });
           }
-          const bas = Date.now();
-          // Seçilemezse (liste seçenekler gelirken kilitli / gizli bir bileşenle sarılı): metinle, sonra zincir keşfinin sağlam yoluyla
-          // (etkinleşme beklenir, olmazsa değer + input / change olayları — normal koşunun özel bileşen yolu).
-          await l.selectOption({ value: hedef }, { timeout: Math.min(bekleMs, 10_000) }).catch(async () => {
-            await l.selectOption({ label: String(deger) }, { timeout: 2_000 }).catch(async () => { await listedenSec(page, a, hedef, Math.min(bekleMs, 15_000)); });
-          });
           if (Date.now() - bas > 300) beklemeler[d.anahtar] = Date.now() - bas;
           return null;
         }

@@ -39,7 +39,7 @@ import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
 import { etkinAlanBaglari } from './tablolar/ekran-baglari.mjs';
-import { ekranBasvurulariniCoz, metinBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
+import { bagliDuzDegerVarMi, ekranBasvurulariniCoz, metinBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
 import { tanimMetinleri } from './dosyalar/dosya-icerigi.mjs';
 import { satirSecimiOlustur } from './tablolar/tablo-secimi.mjs';
 import {
@@ -271,9 +271,11 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     // aynı sabit satırlarla) çözülür.
     const dosyaMetinleri = mb ? dosyaBeklentiMetinleri(mb.model) : [];
     const dosyadaBasvuru = dosyaMetinleri.some((m) => /\$\{\s*(?!akis:)[^{}]*\.[^{}]*\}/.test(m));
-    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], bosHucreNotlari: [], dosyaBasvurulari: {}, satirlar: [] };
-    tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
+    // Tabloya bağlı alanın düz değeri de çözümden geçer: sütunun sayfa karşılığı ekrana gider (ekran-basvurulari.mjs).
     if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, etkinAlanBaglari(vt, ekranId));
+    const bagliDuz = mb ? bagliDuzDegerVarMi(veri, baglarOnbellegi.get(ekranId), modelAlanBilgisi(mb.model).alanAnahtarlari) : false;
+    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru && !bagliDuz) return { veri, tabloGizliDegerleri: [], veriHatalari: [], bosHucreNotlari: [], dosyaBasvurulari: {}, satirlar: [] };
+    tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
     const satirSecimi = { ...satirSecimiOlustur(satirSecimKipi), ...sabit, kullanilan: new Map() };
     const s = {
       tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId, dosyaDenetle: tablodanDosyaDenetle,

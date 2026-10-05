@@ -29,6 +29,7 @@ import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { gercekSecenekler, yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
 import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
+import { listeDurumu, listedenSecenekSec, listedeYokMetni, secenekBekle, secenekEslestir, type ListeSecenegi, type SecenekBekleSonucu } from '../../scripts/platform/tarama/secenek-secimi';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
@@ -290,12 +291,18 @@ async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
  */
 async function degerJsIleYaz(alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
   const s = alan.tip === 'secim' || alan.tip === 'okluSecim' ? secenekBul(alan.secenekler, alan.deger) : null;
-  // Açılır listede seçenek gelene kadar beklenir (bağlı liste: üst alan seçildikten sonra dolar).
-  if (s && (await l.evaluate((e) => e instanceof HTMLSelectElement).catch(() => false))) await hedefSecenekBekle(l, s, alan);
+  let yazilacak = s ? s.deger : String(alan.deger);
+  // Açılır listede seçenek gelene kadar beklenir (bağlı liste: üst alan seçildikten sonra dolar); seçenek ortak kuralla (değer, metin,
+  // harf duyarsız, "kod - ad") bulunur (secenek-secimi.ts).
+  if (s && (await l.evaluate((e) => e instanceof HTMLSelectElement).catch(() => false))) {
+    const r = await hedefSecenekBekle(l, s, alan);
+    if (!r.secenek) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, listedeYokMetni(alan.etiket, s.metin, r)));
+    yazilacak = r.secenek.deger;
+  }
   const sonuc = await l.evaluate((e, a) => {
     const el = e as HTMLInputElement | HTMLSelectElement;
     if (el instanceof HTMLSelectElement) {
-      const o = [...el.options].find((x) => x.value === a.deger) ?? [...el.options].find((x) => x.text.trim() === a.metin);
+      const o = [...el.options].find((x) => x.value === a.deger);
       if (!o) return false;
       el.value = o.value;
     } else {
@@ -304,7 +311,7 @@ async function degerJsIleYaz(alan: PlanAlani, l: Locator, adimBasligi: string): 
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
-  }, { deger: s ? s.deger : String(alan.deger), metin: s ? s.metin : String(alan.deger) });
+  }, { deger: yazilacak });
   if (!sonuc) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s ? s.metin : String(alan.deger)}" seçilir`, 'listede böyle bir seçenek yok'));
 }
 
@@ -431,30 +438,20 @@ async function tetikleriBekle(page: Page, alan: PlanAlani): Promise<void> {
 
 /**
  * Seçenek listede belirene kadar bekler: bağlı listenin seçenekleri üst alan seçildikten sonra sayfanın isteğiyle gelir (il → ilçe); hemen
- * bakılırsa liste henüz boştur. Ekran izlenir: seçenek belirdiği anda döner. Sınır modeldeki olağan süreden (yoksa "Alan işlemi").
- * Bulunamazsa null.
+ * bakılırsa liste henüz boştur. Tek döngüde her turda hedef DEĞER ya da METİN olarak aranır (ortak kural: secenek-secimi.ts); belirdiği
+ * anda döner (liste kilitliyse etkinleşmesi beklenir). Liste dolu ve seçenekler bir süre değişmiyorsa hedef yoksa erken biter. Sınır
+ * modeldeki olağan süreden (yoksa "Alan işlemi").
  */
-async function hedefSecenekBekle(l: Locator, s: { deger: string; metin: string }, alan: { id?: string; etiket: string; yuklenmeMs?: number | null; ustId?: string | null } = { etiket: '' }): Promise<{ deger: string; metin: string } | null> {
-  const bas = Date.now();
-  for (const bitis = bas + listeBeklemesi(alan).sinirMs; ;) {
-    const o = await hedefSecenek(l, s);
-    // Seçenek geldi ama liste hâlâ kilitli (seçenekler gelirken kısa süre devre dışı kalan liste): kilitliyken yazılan değerin olayı sayfaya
-    // ulaşmayabilir; etkinleşene kadar (süre sınırında) beklenir, kilitli kalırsa yine denenir.
-    const kilitli = o ? await l.evaluate((e) => (e as HTMLSelectElement).disabled === true).catch(() => false) : false;
-    if (o && (!kilitli || Date.now() >= bitis)) { yavaslamaNotu(alan, Date.now() - bas); return o; }
-    if (Date.now() >= bitis) return null;
-    await new Promise((c) => setTimeout(c, 250));
-  }
+async function hedefSecenekBekle(l: Locator, s: ListeSecenegi, alan: { id?: string; etiket: string; yuklenmeMs?: number | null; ustId?: string | null } = { etiket: '' }): Promise<SecenekBekleSonucu> {
+  const r = await secenekBekle(l, s, { sinirMs: listeBeklemesi(alan).sinirMs });
+  if (r.secenek) yavaslamaNotu(alan, r.bekleyisMs);
+  return r;
 }
 
-async function hedefSecenek(l: Locator, s: { deger: string; metin: string }): Promise<{ deger: string; metin: string } | null> {
-  return l.evaluate((e, a) => {
-    const n = (t: string): string => t.replace(/\s+/g, ' ').trim();
-    const o = [...(e as HTMLSelectElement).options].map((x) => ({ deger: x.value, metin: n(x.text) }));
-    const k = n(a.metin).toLocaleLowerCase('tr-TR');
-    const kucuk = (x: { metin: string }): string => x.metin.toLocaleLowerCase('tr-TR');
-    return o.find((x) => x.deger === a.deger) ?? o.find((x) => x.metin === n(a.metin)) ?? (k ? o.find((x) => kucuk(x).startsWith(k)) ?? o.find((x) => kucuk(x).includes(k)) : undefined) ?? null;
-  }, s).catch(() => null);
+/** Gizli <select>'te hedef seçenek (güncel öğede; liste yeniden kurulmuş olabilir; ortak kural: secenek-secimi.ts). Yoksa null. */
+async function hedefSecenek(l: Locator, s: ListeSecenegi): Promise<ListeSecenegi | null> {
+  const d = await listeDurumu(l);
+  return d ? secenekEslestir(d.secenekler, s) : null;
 }
 
 /**
@@ -521,8 +518,9 @@ async function ozelSec(k: Kapsam, alan: PlanAlani, l: Locator, adimBasligi: stri
   const s = secenekBul(alan.secenekler, alan.deger);
   // Hedef: gizli listedeki seçenek (değer, metin tam, sonra "kod - ad" metni kodla başlar / içerir).
   // Bağlı liste: seçenekler üst alan seçildikten sonra gelir; liste dolana kadar beklenir.
-  const ilk = await hedefSecenekBekle(l, s, alan);
-  if (ilk === null) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, `listede böyle bir seçenek yok (${Math.round(listeBeklemesi(alan).sinirMs / 1000)} sn beklendi)`));
+  const bekleme = await hedefSecenekBekle(l, s, alan);
+  const ilk = bekleme.secenek;
+  if (ilk === null) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, listedeYokMetni(alan.etiket, s.metin, bekleme)));
   const hedef = ilk.deger;
   const deger = async (): Promise<string | null> => l.inputValue({ timeout: 2_000 }).catch(() => null);
   if ((await deger()) === hedef) return;
@@ -600,16 +598,11 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       const s = secenekBul(alan.secenekler, deger);
       const etiket = await l.evaluate((e) => e.tagName);
       if (etiket === 'SELECT') {
-        // "Gerekirse seç": değer zaten seçiliyse dokunulmaz (yeniden seçmek sayfada bağımlı alanları sıfırlayabilir).
-        if (alan.doldurucu === 'secimGerekirse' && (await l.inputValue()) === s.deger) return;
-        // Bağlı liste: seçenek gelene kadar beklenir (selectOption seçeneğin listede belirmesini bekler; "Alan işlemi" süresi).
-        const bas = Date.now();
-        try {
-          await l.selectOption({ value: s.deger }, { timeout: listeBeklemesi(alan).sinirMs });
-          yavaslamaNotu(alan, Date.now() - bas);
-        } catch {
-          await l.selectOption({ label: s.metin }, { timeout: 5_000 });
-        }
+        // Bağlı liste: seçenek gelene kadar beklenir; her turda değer YA DA metin aranır (tek döngü, ortak kural: secenek-secimi.ts) ve
+        // bulunan seçeneğin değeriyle seçilir. "Gerekirse seç": zaten seçiliyse dokunulmaz (yeniden seçmek bağımlı alanları sıfırlayabilir).
+        const r = await listedenSecenekSec(l, s, { sinirMs: listeBeklemesi(alan).sinirMs, etiket: alan.etiket, zatenSeciliyseAtla: alan.doldurucu === 'secimGerekirse' });
+        if ('hata' in r) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, r.hata));
+        yavaslamaNotu(alan, r.bekleyisMs);
         return;
       }
       // Özel açılır liste: aç, seçeneği görünen metniyle seç.
@@ -1485,9 +1478,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         // Sonraki bir alanın sorgusu / yeniden çizimi açılır listeyi ilk seçeneğine ("SEÇİNİZ") döndürmüş olabilir: değeri artık
         // seçilen değer olmayan listeler bir kez yeniden seçilir (metin alanlarındaki yeniden doldurmanın açılır liste karşılığı).
         for (const d of doldurulanSecimler) {
+          // Ortak kural (secenek-secimi.ts): seçilecek seçenek hâlâ seçili mi; liste hedefi artık içermiyorsa senaryo değeriyle karşılaştırılır.
           const s = secenekBul(d.alan.secenekler, d.alan.deger);
-          const simdi = await d.l.evaluate((e) => (e instanceof HTMLSelectElement ? { deger: e.value, metin: (e.selectedOptions[0]?.text ?? '').trim() } : null)).catch(() => null);
-          if (!simdi || simdi.deger === s.deger || simdi.metin === s.metin) continue;
+          const simdi = await listeDurumu(d.l);
+          if (!simdi) continue;
+          const beklenen = secenekEslestir(simdi.secenekler, s);
+          if (simdi.secili === (beklenen ? beklenen.deger : s.deger)) continue;
           const yenidenBaslangic = Date.now();
           await alaniDoldur(page, d.alan, d.l, adim.baslik, d.k);
           await arkaPlanIstekleriniBekle(page, yenidenBaslangic);

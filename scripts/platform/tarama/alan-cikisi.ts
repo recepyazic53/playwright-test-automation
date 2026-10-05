@@ -240,11 +240,12 @@ export async function yazmaKipiSec(alan: Locator, deger: string, istek: 'otomati
  * Alanı gerçek tuşlarla yazar. Alanda değer varsa önce klavyeyle (tümünü seç + sil) temizlenir — tuş dinleyen maske de boşaldığını
  * görür; klavye temizleyemezse fill('') yedeği. Sonra değer tuşlanır (her karakter için keydown / keypress / input / keyup).
  */
-async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number, yeniden = false): Promise<void> {
-  const temizlendi = await alanTemizle(alan);
-  // Maskeli alanda temiz başlangıç (yeniden yazmada ya da alan temizlendiyse): imleç başa alınır. Tıklama imleci tıklanan yere koyar;
-  // maske ortadaki boş yuvadan yazmaya başlarsa ilk hane düşer, sona fazladan hane eklenir ("maske imleci kaydırdı").
-  if ((yeniden || temizlendi) && (await maskeIpucuVar(alan))) await imleciBasaAl(alan);
+async function tuslayarakYaz(alan: Locator, deger: string, aralikMs: number, zamanAsimiMs: number): Promise<void> {
+  await alanTemizle(alan);
+  // Maskeli alanda İLK yazışta da (yeniden yazmada ve temizlemeden sonra olduğu gibi) imleç başa alınır. Tıklama / odak imleci ortaya
+  // koyabilir (ör. alan bir seçimden sonra beliriyor); maske ortadaki boş yuvadan yazmaya başlarsa ilk hane düşer, sona fazladan hane
+  // eklenir ("maske imleci kaydırdı") ve değer ancak yeniden yazmada düzelir (kullanıcı numarayı iki kez yazılırken görür).
+  if (await maskeIpucuVar(alan)) await imleciBasaAl(alan);
   await alan.pressSequentially(deger, { delay: aralikMs, timeout: zamanAsimiMs });
 }
 
@@ -293,7 +294,7 @@ export async function alanaYaz(
   const bos = async (): Promise<boolean> => bosSayilir((await alan.inputValue({ timeout: 1_000 }).catch(() => 'x')).trim());
   const tuttu = async (): Promise<boolean> => { const m = await alanDegeriOku(alan); return m === null || degerTuttu(m, deger); };
   const aralik = secenek.aralikMs ?? TUSLAMA_ARALIGI_MS;
-  const tusla = (yeniden = false): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs, yeniden);
+  const tusla = (): Promise<void> => tuslayarakYaz(alan, deger, aralik, secenek.zamanAsimiMs);
   // Alan henüz çizilmediyse (önceki basışın sonucu gecikmeli) görünmesi beklenir: kip, alanın kendisine bakılarak seçilir.
   await alan.waitFor({ state: 'visible', timeout: secenek.zamanAsimiMs });
   // Yazmadan önceki değer (yalnız okunur): değer tutmazsa sayfanın bu değeri geri yazıp yazmadığına bakılır (düzenlenemez kanıtı).
@@ -313,7 +314,7 @@ export async function alanaYaz(
   // (ör. her tuşta öneki yeniden ekleyen maske) değer doğrudan (tek input olayıyla) yazılır.
   await takvimleriKaydet(alan);
   await alan.click({ timeout: 3_000 }).catch(() => undefined);
-  await tusla(true).catch(() => undefined);
+  await tusla().catch(() => undefined);
   if (!(await tuttu())) await alan.fill(deger, { timeout: secenek.zamanAsimiMs }).catch(() => undefined);
   await alandanCik(alan, { yalnizYeni: true });
   await secenek.sonra?.();

@@ -101,6 +101,20 @@ test('maskeli alan + sürekli görünen takvim: tek seferde doğru yazılır, Es
   } finally { await kapat(); }
 });
 
+test('imleç ortadayken İLK yazış: imleç önce başa alınır, tek turda doğru (yeniden yazma yok)', async () => {
+  const { page, kapat } = await sayfaAc();
+  try {
+    const l = page.locator('#tel');
+    // Alan bir seçimden sonra belirip tıklanmış gibi: tıklama imleci ortadaki yuvaya koyar (sahte maske).
+    await l.click();
+    await expect.poll(() => l.evaluate((e) => (e as HTMLInputElement).selectionStart)).toBe(8);
+    expect(await alanaYaz(l, '5442312456', { zamanAsimiMs: 5_000 })).toBe('tamam');
+    await expect(l).toHaveValue('(544) 231 24 56');
+    // Tek tur (10 tuş): ilk yazış doğru çıktı, yeniden yazılmadı.
+    expect(await sayac(page)).toEqual({ tus: 10, esc: 0 });
+  } finally { await kapat(); }
+});
+
 test('odaktan önce zaten açık takvim bu alanın sayılmaz; Escape basılmaz', async () => {
   const { page, kapat } = await sayfaAc('?onceden=1');
   try {
