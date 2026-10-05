@@ -342,7 +342,7 @@ test.describe('uçtan uca', () => {
       await expect(kart('İl').getByRole('radio', { name: /^Yeni adla yaz/ })).toBeVisible();
       await expect(kart('İl').getByRole('checkbox', { name: /tablosunu yaz/ })).toHaveCount(0);
       // "Kanal" (yeni liste) şu an yeni tablo; özet açıkken aynı adlı tablo oluşur (başka bir kayıt gibi).
-      await expect(kart('Kanal').getByRole('checkbox', { name: 'Kanal tablosunu yaz' })).toBeChecked();
+      await expect(kart('Kanal').getByRole('radio', { name: 'Yeni tablo olarak yaz' })).toBeChecked();
       await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
       await expect(ozet.locator('[role=status]').last()).not.toContainText('karar bekleniyor');
       await basarili('/platform/tablo/kaydet', { projeId, ad: 'Kanal', tur: 'liste', sutunlar: [{ ad: 'Kanal' }], satirlar: [{ ad: 'Web', degerler: { Kanal: 'Web' } }] });

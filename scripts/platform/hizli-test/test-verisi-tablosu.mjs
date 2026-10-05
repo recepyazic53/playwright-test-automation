@@ -33,6 +33,11 @@ const alanBasligi = (a) => String(a.etiket ?? a.ad ?? a.kimlik ?? a.anahtar ?? '
  * @param {Record<string, any>} a @returns {{ tablo: string; sutun: string }}
  */
 export function alanGrubu(a) {
+  // Çok parçalı alanın parçası: tablo, temel adın (parçasız etiket) tablosu; sütun "<temel sütun> (<parça adı>)".
+  if (a.parca && typeof a.parca === 'object') {
+    const g = alanGrubu({ ...a, etiket: a.parca.temel, parca: undefined });
+    return { tablo: g.tablo, sutun: adTemizle(`${adTemizle(g.sutun, EN_COK_AD - 20)} (${a.parca.ad})`) || g.sutun };
+  }
   const baslik = alanBasligi(a);
   const n = baslikNormal(baslik);
   const temiz = adTemizle(baslik);
@@ -41,6 +46,101 @@ export function alanGrubu(a) {
   const kisi = kisiKategorisi({ etiket: baslik, anahtar: a.ad ?? undefined, id: a.kimlik ?? undefined, tip });
   if (kisi) return { tablo: KISI_TABLOSU, sutun: kisi.ad };
   return { tablo: temiz || 'Alan', sutun: temiz || 'Alan' };
+}
+
+// ---------------------------------------------------------------------------------------
+// Çok parçalı alan (tablo planı için): aynı satırda yan yana duran, aynı adı paylaşan kutular (alan kodu + numara gibi). Sayfa okuyucusu
+// (sayfa-envanteri) satırın adını yalnız ilk kutuya verir; aynı satırdaki sonraki metin kutularına sıra eki ekler ("Ad (2)", "Ad (3)").
+// Bu ek yalnız bu durumda üretildiği için kural: etiketi "<temel> (n)" olan alanlar, kendinden önce gelen "<temel>" etiketli alanla
+// (n = 2, 3 … sırayla, aynı bölümde) TEK alanın parçalarıdır. Kayıt planında aynı tabloya, tek satırda, ayrı sütunlar olarak girerler.
+// Koşu (alanların ayrı ayrı doldurulması) değişmez.
+// ---------------------------------------------------------------------------------------
+
+const PARCA_EKI = /^(.*\S)\s*\((\d{1,2})\)$/u;
+/** Parçaya girmeyen türler (seçenek / dosya / parola). */
+const PARCA_DISI = new Set(['radio', 'checkbox', 'file', 'password', 'button', 'submit']);
+/** Teknik ad (id / name) ipuçları → parça adı (sıra önemli: "alan kodu" "kod"dan önce). */
+const PARCA_IPUCLARI = /** @type {const} */ ([
+  [/\b(alan ?kod\w*|area ?code|prefix|onek\w*)\b/, 'alan kodu'],
+  [/\b(city|sehir\w*|il|ilkod\w*)\b/, 'il kodu'],
+  [/\b(kod\w*|code)\b/, 'kod'],
+  [/\b(no|nr|num|numara\w*|number)\b/, 'numara'],
+  [/\b(seri\w*|series)\b/, 'seri'],
+  [/\b(harf\w*|letters?)\b/, 'harf']
+]);
+
+/** Teknik adın sözcükleri (camelCase / alt çizgi / tire ayrılır; Türkçe karakter sadeleşir). @param {unknown} s */
+const teknikSozcukler = (s) => String(s ?? '').replace(/([a-zçğıöşü0-9])([A-ZÇĞİÖŞÜ])/g, '$1 $2').toLocaleLowerCase('tr')
+  .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Parça adları: önce teknik ad ipucu (id / name: "...City" → il kodu, "...No" → numara, "...Kodu" → kod), yoksa değer biçimi ve en çok
+ * karakter (rakamlı parçalarda kısa olan baştaki "kod", en uzun sondaki "numara"; yalnız harf "harf"); bulunamayan ya da tekrar eden
+ * adlarda tüm parçalar "n. kısım".
+ * @param {Array<Record<string, any>>} parcalar @param {Record<string, { deger: unknown }>} degerler @returns {string[]}
+ */
+function parcaAdlari(parcalar, degerler) {
+  const ipucu = (/** @type {Record<string, any>} */ a) => {
+    for (const ham of [a.kimlik, a.ad]) {
+      const s = teknikSozcukler(ham);
+      if (!s) continue;
+      // Ortak ön ek (iki parçanın aynı başlayan adı) ipucu değildir: son iki sözcüğe, sondan başa bakılır ("alan kodu" iki sözcüklü).
+      const w = s.split(' ');
+      if (PARCA_IPUCLARI[0][0].test(w.slice(-2).join(' '))) return PARCA_IPUCLARI[0][1];
+      for (let i = w.length - 1; i >= Math.max(0, w.length - 2); i--) for (const [desen, ad] of PARCA_IPUCLARI) if (desen.test(w[i])) return ad;
+    }
+    return null;
+  };
+  let adlar = parcalar.map(ipucu);
+  if (adlar.some((x) => !x)) {
+    const deger = (/** @type {Record<string, any>} */ a) => { const v = degerler[a.anahtar]?.deger; return typeof v === 'string' ? v.trim() : ''; };
+    const uzunluk = (/** @type {Record<string, any>} */ a) => (Number.isInteger(a.enCok) && a.enCok > 0 ? a.enCok : deger(a).length);
+    const rakam = parcalar.map((a) => /^\d+$/.test(deger(a)));
+    const harf = parcalar.map((a) => /^\p{L}+$/u.test(deger(a)));
+    const n = parcalar.length;
+    adlar = adlar.map((x, i) => {
+      if (x) return x;
+      if (harf[i]) return 'harf';
+      if (!rakam[i]) return null;
+      const u = uzunluk(parcalar[i]);
+      if (i === n - 1 && parcalar.every((a, j) => j === i || uzunluk(a) <= u)) return 'numara';
+      if (i === 0 && u > 0 && u <= 4 && uzunluk(parcalar[n - 1]) > u) return 'kod';
+      return null;
+    });
+  }
+  if (adlar.some((x) => !x) || new Set(adlar).size !== adlar.length) return parcalar.map((_, i) => `${i + 1}. kısım`);
+  return /** @type {string[]} */ (adlar);
+}
+
+/**
+ * Çok parçalı alanları işaretler (kopya): her parçaya parca = { temel, ad, sira, sayi } eklenir; diğer alanlar olduğu gibi döner.
+ * @param {ReadonlyArray<Record<string, any>>} alanlar sayfa sırasıyla @param {Record<string, { deger: unknown }>} [degerler]
+ * @returns {Array<Record<string, any>>}
+ */
+export function cokParcaliIsaretle(alanlar, degerler = {}) {
+  const sonuc = [...alanlar];
+  /** Alanın bölümü (sayfa okuyucusunda { anahtar, baslik } ya da metin; yoksa ''). @param {Record<string, any>} a */
+  const bolumAnahtari = (a) => (a.bolum && typeof a.bolum === 'object' ? String(a.bolum.anahtar ?? a.bolum.baslik ?? '') : String(a.bolum ?? ''));
+  const kucukAd = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
+  for (let i = 0; i < alanlar.length; i++) {
+    const a = alanlar[i];
+    const temel = typeof a.etiket === 'string' ? a.etiket.trim() : '';
+    if (!temel || PARCA_EKI.test(temel) || PARCA_DISI.has(String(a.tur)) || a.parca) continue;
+    /** @type {number[]} */
+    const grup = [i];
+    for (let j = i + 1; j < alanlar.length && grup.length < 6; j++) {
+      const m = PARCA_EKI.exec(String(alanlar[j].etiket ?? '').trim());
+      if (!m || kucukAd(m[1]) !== kucukAd(temel)) continue;
+      if (Number(m[2]) !== grup.length + 1 || PARCA_DISI.has(String(alanlar[j].tur))) break;
+      if (bolumAnahtari(a) !== bolumAnahtari(alanlar[j])) break;
+      grup.push(j);
+    }
+    if (grup.length < 2) continue;
+    const parcalar = grup.map((k) => alanlar[k]);
+    const adlar = parcaAdlari(parcalar, degerler);
+    grup.forEach((k, n) => { sonuc[k] = { ...alanlar[k], parca: { temel, ad: adlar[n], sira: n + 1, sayi: grup.length } }; });
+  }
+  return sonuc;
 }
 
 /** Değeri her zaman GİZLİ sütunda (şifreli, ekranda maskeli) tutulan alanlar: kart numarası, CVV / CVC / güvenlik kodu, kart sahibi,

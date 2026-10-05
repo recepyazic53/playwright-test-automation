@@ -274,18 +274,81 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
   if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, bekleyenler: () => [], govde: () => undefined };
   /** Tablo adı → satırı ve odaklanacak ilk denetim (kararsız tabloya "Bölüme git" için). @type {Map<string, { satir: HTMLElement; odak: () => HTMLElement | null }>} */
   const satirlar = new Map();
-  /** @type {Map<string, { islem: string | null; yeniAd: string; hedefId?: string }>} */
+  /** Bölüm kuruldu mu (ilk çizimde degisti() çağrılmaz: çağıran henüz dönüş değerini almadı). */
+  let kuruldu = false;
+  // Hızlı test özeti (önizlemede mevcutTablolar var): her tablo kartında HER ZAMAN dört seçenek — mevcut tabloya bağla (tablo + her plan
+  // sütunu için hedef sütun), mevcut tabloya yeni sütun olarak ekle (zincirde yok: sütun eşleme yeterli), yeni tablo olarak yaz (aynı adlı
+  // tablo varsa Birleştir / Yeni adla yaz), atla.
+  const dortlu = Array.isArray(t.mevcutTablolar);
+  const mevcutTablolar = dortlu ? t.mevcutTablolar : [];
+  const tabloBul = (id) => mevcutTablolar.find((m) => m.id === id) || null;
+  const kucukAd = (s) => String(s ?? '').trim().toLocaleLowerCase('tr');
+  /** Plan sütunu → önerilen hedef sütun (otomatik aday ya da ad eşleşmesi; yoksa '' = yeni sütun). */
+  const onerilenEslesme = (x, id) => {
+    const aday = (x.bagla || []).find((a) => a.id === id);
+    const e = aday ? Object.fromEntries(aday.eslesme.map((y) => [y.plan, y.hedef])) : (x.eslemeOnerileri || {})[id] || {};
+    return Object.fromEntries(x.sutunlar.map((s) => [s.ad, e[s.ad] || '']));
+  };
+  /** @type {Map<string, { islem: string | null; yeniAd: string; hedefId?: string; ekHedefId?: string; eslesme?: Record<string, string>; sutunAdlari?: Record<string, string>; yeniSutunAdlari?: Record<string, string>; altYaz?: string }>} */
   // Varsayılan karar: aynı adlı tabloda (her türde: kayıt, liste, zincir) varsayilanBirlestir ise "Birleştir"; sütunu birebir eşleşen mevcut
   // tablo varsa (bagla[0].kesin) "Mevcut tabloya bağla"; yoksa yeni tablo.
-  const ilkKarar = (x) => (x.mevcut ? { islem: ayar.varsayilanBirlestir ? 'birlestir' : null, hedefId: '' }
-    : x.bagla && x.bagla[0] && x.bagla[0].kesin ? { islem: 'bagla', hedefId: x.bagla[0].id } : { islem: 'yeni', hedefId: '' });
-  const durum = new Map(t.tablolar.map((x) => [x.ad, { ...ilkKarar(x), yeniAd: `${x.ad} 2`.slice(0, 60) }]));
+  const ilkKarar = (x) => {
+    if (dortlu) {
+      const aday = x.bagla && x.bagla[0];
+      const ek = { yeniAd: x.mevcut ? `${x.ad} 2`.slice(0, 60) : x.ad, ekHedefId: '', sutunAdlari: {}, yeniSutunAdlari: {}, altYaz: 'birlestir' };
+      if (x.mevcut) return { ...ek, islem: ayar.varsayilanBirlestir ? 'birlestir' : null, hedefId: '', eslesme: {} };
+      if (aday) return { ...ek, islem: aday.kesin ? 'bagla' : 'yeni', hedefId: aday.id, eslesme: onerilenEslesme(x, aday.id) };
+      return { ...ek, islem: 'yeni', hedefId: '', eslesme: {} };
+    }
+    return x.mevcut ? { islem: ayar.varsayilanBirlestir ? 'birlestir' : null, hedefId: '' }
+      : x.bagla && x.bagla[0] && x.bagla[0].kesin ? { islem: 'bagla', hedefId: x.bagla[0].id } : { islem: 'yeni', hedefId: '' };
+  };
+  const durum = new Map(t.tablolar.map((x) => [x.ad, { yeniAd: `${x.ad} 2`.slice(0, 60), ...ilkKarar(x) }]));
   const baglar = new Set(t.baglantilar.map((b) => b.alanId));
   const yazilir = (ad) => { const d = durum.get(ad); return Boolean(d && d.islem && d.islem !== 'atla'); };
+  /** Dört seçenekli kartta plan sütununun yazılacağı sütun adı (seçime göre). */
+  const hedefSutun = (x, d, sutun) => {
+    if (d.islem === 'bagla') return (d.eslesme || {})[sutun] || sutun;
+    if (d.islem === 'sutunEkle') return ((d.sutunAdlari || {})[sutun] ?? sutun).trim() || sutun;
+    if (d.islem === 'yeni' || d.islem === 'yeniAd') return ((d.yeniSutunAdlari || {})[sutun] ?? sutun).trim() || sutun;
+    return sutun;
+  };
+  /** Dört seçenekli kartta yazılacak tablonun adı (seçime göre). */
+  const hedefTablo = (x, d) => (d.islem === 'bagla' ? tabloBul(d.hedefId)?.ad : d.islem === 'sutunEkle' ? tabloBul(d.ekHedefId)?.ad
+    : d.islem === 'yeniAd' ? d.yeniAd.trim() : x.ad) || x.ad;
+  /**
+   * Dört seçenekli kartta kararın eksikleri (boşsa yazılabilir): tablo seçilmedi, bir sütun iki alana seçildi, yeni sütun adı boş / tekrar /
+   * tabloda zaten var, yeni tablo adı boş / başka tablonun adı.
+   */
+  const kararSorunlari = (x, d) => {
+    if (!d.islem || d.islem === 'atla' || d.islem === 'birlestir') return [];
+    const adSorunu = (adlar, m) => {
+      const l = x.sutunlar.map((s) => ((adlar || {})[s.ad] ?? s.ad).trim());
+      if (l.some((a) => !a)) return [`“${x.ad}”: sütun adı boş`];
+      const k = l.map(kucukAd);
+      if (new Set(k).size !== k.length) return [`“${x.ad}”: aynı sütun adı iki kez yazıldı`];
+      const c = m ? l.find((a) => m.sutunlar.some((s) => kucukAd(s.ad) === kucukAd(a))) : null;
+      return c ? [`“${x.ad}”: “${c}” sütunu “${m.ad}” tablosunda zaten var (Mevcut tabloya bağla'yı seçin ya da başka ad yazın)`] : [];
+    };
+    if (d.islem === 'bagla') {
+      if (!tabloBul(d.hedefId)) return [`“${x.ad}”: bağlanacak tabloyu seçin`];
+      const h2 = Object.values(d.eslesme || {}).filter(Boolean);
+      return new Set(h2).size !== h2.length ? [`“${x.ad}”: bir sütun iki alana seçildi`] : [];
+    }
+    if (d.islem === 'sutunEkle') {
+      const m = tabloBul(d.ekHedefId);
+      return m ? adSorunu(d.sutunAdlari, m) : [`“${x.ad}”: sütun eklenecek tabloyu seçin`];
+    }
+    const ad = d.islem === 'yeniAd' ? d.yeniAd.trim() : x.ad;
+    if (!ad) return [`“${x.ad}”: yeni tablo adı boş`];
+    if (d.islem === 'yeniAd' && mevcutTablolar.some((m) => kucukAd(m.ad) === kucukAd(ad))) return [`“${x.ad}”: “${ad}” adında tablo zaten var`];
+    return adSorunu(d.yeniSutunAdlari, null);
+  };
   /** Bağlantının yazılacağı tablo / sütun (mevcut tabloya bağlanınca o tablonun eşleşen sütunu). */
   const hedefi = (b) => {
     const d = durum.get(b.tablo);
     const x = t.tablolar.find((y) => y.ad === b.tablo);
+    if (dortlu && d && x) return { tablo: hedefTablo(x, d), sutun: hedefSutun(x, d, b.sutun) };
     const a = d && d.islem === 'bagla' && x && x.bagla ? x.bagla.find((y) => y.id === d.hedefId) : null;
     if (!a) return { tablo: b.tablo, sutun: b.sutun };
     const e = a.eslesme.find((y) => y.plan === b.sutun);
@@ -303,11 +366,211 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       degisir ? rozet(`şu an: ${b.mevcut.tablo} → ${b.mevcut.sutun} (değişir)`, 'uyari') : null,
       b.modeldeVar ? null : rozet('bulgu kabul edilince bağlanır', '', { title: 'Bulgu, yeni paketle mevcut model arasındaki bir farktır (ör. eklenen alan). Alan henüz modelde değil: bağlantı, alanın bulgusu kabul edilince yazılır; reddedilirse yazılmaz.' })));
   }));
+  /**
+   * Hızlı test kartının dört seçeneği (radyo). Seçeneğin denetimine dokunmak (tablo seçmek, ad yazmak) o seçeneği seçer. Seçimler kartın
+   * örnek tablosunun başlıklarına (yazılacak sütun adları) ve alan bağlantılarına yansır.
+   * @param {object} x önizleme tablosu @param {object} d karar @param {HTMLElement[]} basliklar örnek tablonun sütun başlıkları
+   */
+  const hizliSecim = (x, d, basliklar) => {
+    const ad = `tv-${Math.random().toString(36).slice(2, 9)}`;
+    const zincir = Boolean(x.zincir);
+    const adaylar = new Set((x.bagla || []).map((a) => a.id));
+    const benzerler = new Set((x.benzer || []).map((b) => b.id));
+    // Tablo listesi: otomatik adaylar, benzer tablolar, sütun adı eşleşenler, sonra diğerleri.
+    const sira = (m) => (adaylar.has(m.id) ? 0 : benzerler.has(m.id) ? 1 : (x.eslemeOnerileri || {})[m.id] ? 2 : 3);
+    const tablolar = [...mevcutTablolar].sort((a, b) => sira(a) - sira(b));
+    const tabloSecici = (aria, secili, degisince) => {
+      const s = h('select', { 'aria-label': aria },
+        h('option', { value: '' }, 'Tablo seçin…'),
+        ...tablolar.map((m) => h('option', { value: m.id, selected: m.id === secili },
+          `${m.ad} (${m.sutunlar.length} sütun, ${m.satirSayisi} satır)${adaylar.has(m.id) ? ' — önerilen' : benzerler.has(m.id) ? ' — benzer' : ''}`)));
+      s.addEventListener('change', () => degisince(s.value));
+      return s;
+    };
+    const radyo = (deger) => {
+      const r = h('input', { type: 'radio', name: ad, value: deger, disabled: (deger === 'bagla' || deger === 'sutunEkle') && !mevcutTablolar.length });
+      r.addEventListener('change', () => { if (r.checked) sec(deger); });
+      return r;
+    };
+    const secenekAdi = () => (d.islem === 'bagla' || d.islem === 'sutunEkle' || d.islem === 'atla' ? d.islem : d.islem ? 'yaz' : null);
+    const sec = (deger) => {
+      if (deger === 'yaz') d.islem = x.mevcut ? d.altYaz || 'birlestir' : kucukAd(d.yeniAd) === kucukAd(x.ad) || !d.yeniAd.trim() ? 'yeni' : 'yeniAd';
+      else d.islem = deger;
+      if (deger === 'yaz' && !x.mevcut && !d.yeniAd.trim()) d.yeniAd = x.ad;
+      yenile();
+    };
+
+    // (1) Mevcut tabloya bağla: tablo + her plan sütunu için hedef sütun.
+    const r1 = radyo('bagla');
+    const e1 = h('span', {});
+    const benzerRozeti = h('span', {});
+    const esleme = h('div', { class: 'tv-esleme' });
+    const s1 = tabloSecici(`${x.ad}: bağlanacak tablo`, d.hedefId, (id) => { d.hedefId = id; d.eslesme = id ? onerilenEslesme(x, id) : {}; eslemeCiz(); sec('bagla'); });
+    const eslemeCiz = () => {
+      const m = tabloBul(d.hedefId);
+      yerlestir(esleme, m ? x.sutunlar.map((s) => {
+        const sel = h('select', { 'aria-label': `${s.ad} → hedef sütun` },
+          h('option', { value: '' }, '(yeni sütun olarak ekle)'),
+          ...m.sutunlar.map((c) => h('option', { value: c.ad, selected: (d.eslesme || {})[s.ad] === c.ad, disabled: (s.gizli && !c.gizli) || (x.tur === 'liste' && c.gizli) },
+            c.gizli ? `${c.ad} (gizli)` : c.ad)));
+        sel.addEventListener('change', () => { d.eslesme = { ...(d.eslesme || {}), [s.ad]: sel.value }; sec('bagla'); });
+        return h('label', { class: 'tv-esleme-satiri' }, h('span', {}, s.gizli ? ikon('kilit') : null, `${s.ad} →`), sel);
+      }) : []);
+    };
+    eslemeCiz();
+    // (2) Mevcut tabloya yeni sütun olarak ekle (zincirde yok).
+    const r2 = zincir ? null : radyo('sutunEkle');
+    const e2 = h('span', {});
+    const adlar = h('div', { class: 'tv-esleme' });
+    const s2 = zincir ? null : tabloSecici(`${x.ad}: sütun eklenecek tablo`, d.ekHedefId, (id) => { d.ekHedefId = id; adlarCiz(); sec('sutunEkle'); });
+    /** @type {Array<() => void>} */
+    let adUyarilari = [];
+    const adlarCiz = () => {
+      const m = tabloBul(d.ekHedefId);
+      adUyarilari = [];
+      yerlestir(adlar, m ? x.sutunlar.map((s) => {
+        const girdi = h('input', { type: 'text', maxlength: '60', value: (d.sutunAdlari || {})[s.ad] ?? s.ad, 'aria-label': `${s.ad}: yeni sütun adı` });
+        const uyari = h('span', { class: 'tv-uyari kucuk' });
+        const baglaDugmesi = h('button', { type: 'button', class: 'baglanti-dugmesi', hidden: true }, 'Bu sütuna bağla');
+        const ayni = () => m.sutunlar.find((c) => kucukAd(c.ad) === kucukAd(girdi.value));
+        const uyariYenile = () => {
+          const c = ayni();
+          uyari.textContent = c ? `“${c.ad}” sütunu “${m.ad}” tablosunda zaten var: bu sütuna bağlayın ya da başka ad yazın.` : '';
+          baglaDugmesi.hidden = !c;
+        };
+        adUyarilari.push(uyariYenile);
+        girdi.addEventListener('input', () => { d.sutunAdlari = { ...(d.sutunAdlari || {}), [s.ad]: girdi.value }; uyariYenile(); if (d.islem !== 'sutunEkle') sec('sutunEkle'); else hafifYenile(); });
+        // Aynı adlı sütun: "Mevcut tabloya bağla"ya geçer; bu plan sütunu o sütuna eşlenir (diğerleri önerilen eşlemeyle).
+        baglaDugmesi.addEventListener('click', () => {
+          const c = ayni();
+          if (!c) return;
+          const e = { ...onerilenEslesme(x, m.id) };
+          for (const k of Object.keys(e)) if (e[k] === c.ad) e[k] = '';
+          e[s.ad] = c.ad;
+          d.hedefId = m.id;
+          d.eslesme = e;
+          s1.value = m.id;
+          eslemeCiz();
+          sec('bagla');
+          s1.focus();
+        });
+        uyariYenile();
+        return h('div', { class: 'tv-esleme-satiri' }, h('label', {}, h('span', {}, s.gizli ? ikon('kilit') : null, `${s.ad} →`), girdi), uyari, baglaDugmesi);
+      }) : []);
+    };
+    adlarCiz();
+    // (3) Yeni tablo olarak yaz: ad düzenlenebilir; aynı adlı tablo varsa Birleştir / Yeni adla yaz.
+    const r3 = radyo('yaz');
+    const adUyarisi = h('span', { class: 'tv-uyari kucuk' });
+    let panel3;
+    if (x.mevcut) {
+      const altAd = `${ad}-alt`;
+      const m = x.mevcut;
+      const adGirdisi = h('input', { type: 'text', value: d.yeniAd, maxlength: '60', 'aria-label': `${x.ad} için yeni tablo adı` });
+      const alt = (deger, etiket, ek = null) => {
+        const r = h('input', { type: 'radio', name: altAd, value: deger, checked: d.altYaz === deger });
+        r.addEventListener('change', () => { if (r.checked) { d.altYaz = deger; sec('yaz'); } });
+        return h('label', {}, r, h('span', {}, etiket), ek);
+      };
+      adGirdisi.addEventListener('input', () => { d.yeniAd = adGirdisi.value; if (d.islem !== 'yeniAd') { d.altYaz = 'yeniAd'; sec('yaz'); } else hafifYenile(); });
+      panel3 = [
+        h('div', { class: 'not-kutusu uyari kucuk' }, `“${m.ad}” adında bir tablo zaten var (${m.sutunSayisi} sütun, ${m.satirSayisi} satır). ${ayar.varsayilanBirlestir ? 'Varsayılan: yeni satır olarak birleştir (senaryo kendi satırını kullanır); değiştirebilirsiniz.' : 'Seçmeden kabul edilemez.'}`),
+        h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': `${x.ad}: aynı adlı tablo` },
+          alt('birlestir', `Birleştir — ${x.tur === 'liste' && !x.zincir ? `${m.eklenecekSatir} eksik seçenek eklenir` : `${m.eklenecekSatir} yeni satır`}${m.yeniSutunlar.length ? `, ${m.yeniSutunlar.length} yeni sütun (${m.yeniSutunlar.join(', ')})` : ''}; mevcut satırlar değişmez`),
+          alt('yeniAd', 'Yeni adla yaz:', adGirdisi)),
+        adUyarisi
+      ];
+    } else {
+      const adGirdisi = h('input', { type: 'text', value: d.yeniAd, maxlength: '60', 'aria-label': `${x.ad}: yeni tablo adı` });
+      adGirdisi.addEventListener('input', () => {
+        d.yeniAd = adGirdisi.value;
+        const islem = kucukAd(d.yeniAd) === kucukAd(x.ad) ? 'yeni' : 'yeniAd';
+        if (d.islem !== islem) sec('yaz'); else hafifYenile();
+      });
+      panel3 = [h('label', { class: 'tv-esleme-satiri' }, h('span', {}, 'Tablo adı'), adGirdisi), adUyarisi];
+    }
+    // Yeni tabloda sütun adları (çok parçalı alanın önerilen adları gibi) düzenlenebilir.
+    const sutunAdlari = h('details', { class: 'tv-katlanir tv-sutun-adlari' }, h('summary', {}, 'Sütun adlarını düzenle'),
+      h('div', { class: 'tv-esleme' }, x.sutunlar.map((s) => {
+        const girdi = h('input', { type: 'text', maxlength: '60', value: (d.yeniSutunAdlari || {})[s.ad] ?? s.ad, 'aria-label': `${s.ad}: sütun adı` });
+        girdi.addEventListener('input', () => { d.yeniSutunAdlari = { ...(d.yeniSutunAdlari || {}), [s.ad]: girdi.value }; if (d.islem !== 'yeni' && d.islem !== 'yeniAd') sec('yaz'); else hafifYenile(); });
+        return h('label', { class: 'tv-esleme-satiri' }, h('span', {}, s.gizli ? ikon('kilit') : null, `${s.ad} →`), girdi);
+      })));
+    // (4) Atla.
+    const r4 = radyo('atla');
+    const atlaNotu = h('p', { class: 'kucuk soluk' }, 'Tablo yazılmaz; alan senaryoda düz değer olarak kalır.');
+
+    const kutu = (r, baslik, ...panel) => h('div', { class: 'tv-secenek' }, h('label', {}, r, baslik), panel.length ? h('div', { class: 'tv-secenek-paneli' }, ...panel) : null);
+    const k1 = kutu(r1, h('span', {}, e1, benzerRozeti), s1, esleme);
+    const k2 = zincir ? null : kutu(/** @type {HTMLInputElement} */ (r2), e2, s2, adlar);
+    const k3 = kutu(r3, h('span', {}, 'Yeni tablo olarak yaz'), ...panel3, sutunAdlari);
+    const k4 = kutu(r4, h('span', {}, 'Atla (yazma)'), atlaNotu);
+    const aday0 = x.bagla && x.bagla[0];
+    const bilgi = !x.mevcut && aday0 ? h('div', { class: 'not-kutusu bilgi kucuk' }, aday0.kesin
+      ? 'Bu alan mevcut bir tablonun sütununda zaten var: aynı veriyi iki tabloda tutmamak için ona bağlanır (varsayılan; mevcut satırlar değişmez). İsterseniz başka bir seçenek seçebilirsiniz.'
+      : 'Adı benzeyen mevcut sütun var: kontrol edip uygunsa ona bağlayın. Varsayılan: yeni tablo.')
+      : !x.mevcut && x.benzer && x.benzer.length ? h('div', { class: 'not-kutusu bilgi kucuk' }, `Benzer tablo var: ${x.benzer.map((b) => `“${b.ad}”`).join(', ')} (sütun başlıkları aynı). Aynı veriyi iki tabloda tutmamak için “Mevcut tabloya bağla”dan onu seçebilirsiniz.`) : null;
+    const zincirNotu = zincir ? h('p', { class: 'kucuk soluk' }, 'Zincir tablosunda her satır birlikte geçerli bir kombinasyondur: mevcut tabloya yalnız sütun eşlemeyle (Mevcut tabloya bağla) yazılır; eşlenmeyen halka yeni sütun olur.') : null;
+
+    /** Etiketler, uyarılar, örnek tablo başlıkları (odak kaybetmeden; yazarken). */
+    const hafifYenile = () => {
+      const m1 = tabloBul(d.hedefId);
+      const aday = m1 ? (x.bagla || []).find((a) => a.id === m1.id) : null;
+      const esl = d.eslesme || {};
+      const ayniAday = aday && aday.eslesme.length === Object.values(esl).filter(Boolean).length && aday.eslesme.every((e) => esl[e.plan] === e.hedef);
+      if (!m1) e1.textContent = 'Mevcut tabloya bağla';
+      else if (ayniAday) {
+        e1.textContent = `Mevcut tabloya bağla: ${aday.ad} › ${aday.eslesme.map((e) => e.hedef).join(', ')} (${aday.satirSayisi} satır) — ${aday.mevcutSatir
+          ? `değer “${aday.mevcutSatir.ad}” satırında var, senaryo o satırı kullanır` : `${aday.eklenecekSatir} yeni satır eklenir`}${aday.yeniSutunlar.length ? `; yeni sütun: ${aday.yeniSutunlar.join(', ')}` : ''}`;
+      } else {
+        const eslenen = x.sutunlar.map((s) => esl[s.ad]).filter(Boolean);
+        const yeni = x.sutunlar.filter((s) => !esl[s.ad]).map((s) => s.ad);
+        e1.textContent = `Mevcut tabloya bağla: ${m1.ad} › ${eslenen.join(', ') || '—'} (${m1.satirSayisi} satır) — ${x.tur === 'liste'
+          ? 'tabloda olmayan satırlar eklenir' : 'aynı değerli satır varsa senaryo onu kullanır, yoksa yeni satır eklenir'}${yeni.length ? `; yeni sütun: ${yeni.join(', ')}` : ''}`;
+      }
+      yerlestir(benzerRozeti, ayniAday && !aday.kesin ? rozet('adı benzeyen sütun — kontrol edin', 'uyari') : null);
+      const m2 = tabloBul(d.ekHedefId);
+      e2.textContent = m2 ? `Mevcut tabloya yeni sütun olarak ekle: ${m2.ad} + ${x.sutunlar.map((s) => ((d.sutunAdlari || {})[s.ad] ?? s.ad).trim() || '?').join(', ')} — mevcut satırlar korunur, ${x.tur === 'liste'
+        ? 'seçenekler yeni satır olarak eklenir' : 'kaydın değerleri yeni satıra yazılır'}` : 'Mevcut tabloya yeni sütun olarak ekle';
+      for (const f of adUyarilari) f();
+      const yeniAdCakisir = d.yeniAd.trim() && kucukAd(d.yeniAd) !== kucukAd(x.ad) && mevcutTablolar.some((m) => kucukAd(m.ad) === kucukAd(d.yeniAd));
+      adUyarisi.textContent = (x.mevcut ? d.altYaz === 'yeniAd' : true) && yeniAdCakisir ? `“${d.yeniAd.trim()}” adında tablo zaten var: başka ad yazın ya da “Mevcut tabloya bağla”yı seçin.` : '';
+      basliklar.forEach((th, i) => {
+        const s = x.sutunlar[i];
+        const hd = hedefSutun(x, d, s.ad);
+        th.title = hd !== s.ad ? `Plan sütunu: ${s.ad}` : '';
+        yerlestir(th, s.gizli ? ikon('kilit') : null, hd);
+      });
+      bagCiz();
+      // Bölüm kurulurken (ilk çizim) bildirilmez.
+      if (kuruldu) degisti();
+    };
+    /** Seçim değişti: radyolar, açık paneller, etiketler. */
+    const yenile = () => {
+      const s = secenekAdi();
+      r1.checked = s === 'bagla';
+      if (r2) r2.checked = s === 'sutunEkle';
+      r3.checked = s === 'yaz';
+      r4.checked = s === 'atla';
+      for (const [k, deger] of [[k1, 'bagla'], [k2, 'sutunEkle'], [k3, 'yaz'], [k4, 'atla']]) if (k) k.classList.toggle('secili', s === deger);
+      esleme.hidden = s !== 'bagla';
+      adlar.hidden = s !== 'sutunEkle';
+      atlaNotu.hidden = s !== 'atla';
+      sutunAdlari.hidden = !(d.islem === 'yeni' || d.islem === 'yeniAd');
+      hafifYenile();
+    };
+    const kap = h('div', { class: 'tv-cakisma tv-secenekler' }, bilgi, zincirNotu,
+      h('div', { class: 'tv-secenek-listesi', role: 'radiogroup', 'aria-label': `${x.ad}: nereye yazılsın` }, k1, k2, k3, k4));
+    yenile();
+    return kap;
+  };
   const tabloSatiri = (x) => {
     const d = durum.get(x.ad);
     const gizliVar = x.sutunlar.some((s) => s.gizli);
+    const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
     let secim;
-    if (!x.mevcut && x.bagla && x.bagla.length) {
+    if (dortlu) secim = hizliSecim(x, d, sutunlar);
+    else if (!x.mevcut && x.bagla && x.bagla.length) {
       // Alan(lar) mevcut bir tablonun SÜTUNUNDA zaten var: "Mevcut tabloya bağla" (birebir eşleşmede varsayılan), yeni tablo ya da atla.
       const ad = `tv-${Math.random().toString(36).slice(2, 9)}`;
       const secenek = (deger, hedefId, etiket, ek = null) => {
@@ -360,7 +623,6 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
           secenek('yeniAd', 'Yeni adla yaz:', adGirdisi),
           secenek('atla', 'Atla (yazma)')));
     }
-    const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
     const ornekTablo = h('div', { class: 'tv-ornek-kap' },
       h('div', { class: 'tablo-kaydirma tv-ornek' }, h('table', { class: 'veri-tablosu' }, h('thead', {}, h('tr', {}, sutunlar)),
         h('tbody', {}, x.ornek.map((r) => h('tr', {}, r.map((v, i) => h('td', {}, x.sutunlar[i].gizli ? '—' : v ?? ''))))))),
@@ -376,8 +638,13 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       x.bagliAlanlar.length ? h('p', { class: 'kucuk' }, 'Bağlanacak alanlar: ', x.bagliAlanlar.join(', ')) : null,
       ayar.kompakt ? h('details', { class: 'tv-katlanir' }, h('summary', {}, `Örnek satırlar (${x.ornek.length}/${x.satirSayisi})`), ornekTablo) : ornekTablo,
       secim);
-    // Karar bekleyen tabloda ilk seçenek; yeni ad boşsa ad girdisi odaklanır.
-    satirlar.set(x.ad, { satir, odak: () => (d.islem === 'yeniAd' ? satir.querySelector('.tv-cakisma input[type="text"]') : satir.querySelector('.tv-cakisma input[type="radio"]')) });
+    // Karar bekleyen tabloda ilk seçenek; yeni ad boşsa ad girdisi odaklanır (dört seçenekli kartta seçili seçeneğin ilk denetimi).
+    satirlar.set(x.ad, {
+      satir,
+      odak: () => (dortlu
+        ? satir.querySelector('.tv-secenek.secili select, .tv-secenek.secili input[type="text"]') || satir.querySelector('.tv-cakisma input[type="radio"]')
+        : d.islem === 'yeniAd' ? satir.querySelector('.tv-cakisma input[type="text"]') : satir.querySelector('.tv-cakisma input[type="radio"]'))
+    });
     return satir;
   };
   const bolum = h('section', { class: 'kart test-verisi-onizleme', 'aria-label': 'Test verisine yazılacaklar' },
@@ -390,27 +657,62 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
       h('p', { class: 'bolum-aciklamasi' }, 'Alan bağlantısı, ekrandaki bir alanın değerini hangi tablo sütunundan alacağını söyler; işaretli olanlar kabul edince kurulur.'),
       bagListesi] : null);
   bagCiz();
+  kuruldu = true;
+  /** Dört seçenekli kartta tablo başına karar özeti ("Yazılacak: …" satırı için). */
+  const kararMetni = (x, d) => {
+    if (d.islem === 'bagla') return `${x.ad} → “${hedefTablo(x, d)}” tablosuna bağlanır`;
+    if (d.islem === 'sutunEkle') return `${x.ad} → “${hedefTablo(x, d)}” tablosuna ${x.sutunlar.length} yeni sütun`;
+    if (d.islem === 'birlestir') return `${x.ad} → aynı adlı tabloyla birleşir`;
+    if (d.islem === 'yeniAd') return `${x.ad} → yeni tablo “${d.yeniAd.trim()}”`;
+    return `${x.ad} → yeni tablo`;
+  };
   return {
     bolum,
-    hazir: () => [...durum.values()].every((d) => d.islem && (d.islem !== 'yeniAd' || d.yeniAd.trim())),
+    hazir: () => [...durum.values()].every((d) => d.islem && (d.islem !== 'yeniAd' || d.yeniAd.trim()))
+      && (!dortlu || t.tablolar.every((x) => !kararSorunlari(x, durum.get(x.ad)).length)),
     // Kabulü kapatan test verisi nedenleri (hazir() false iken boş olmaz): metin + ilk ilgili tablonun satırı/denetimi.
     bekleyenler: () => {
       const kararsiz = t.tablolar.filter((x) => !durum.get(x.ad).islem);
       const adsiz = t.tablolar.filter((x) => { const d = durum.get(x.ad); return d.islem === 'yeniAd' && !d.yeniAd.trim(); });
       const neden = (liste, metin) => (liste.length ? [{ metin, ...satirlar.get(liste[0].ad) }] : []);
+      const sorunlu = dortlu ? t.tablolar.filter((x) => !adsiz.includes(x) && kararSorunlari(x, durum.get(x.ad)).length) : [];
       return [
         ...neden(kararsiz, `Test verisi: ${kararsiz.length} tablo için karar bekleniyor (Birleştir / Yeni adla yaz / Atla)`),
-        ...neden(adsiz, `Test verisi: ${adsiz.length} tablo için yeni ad boş`)
+        ...neden(adsiz, `Test verisi: ${adsiz.length} tablo için yeni ad boş`),
+        ...neden(sorunlu, sorunlu.length ? `Test verisi: ${kararSorunlari(sorunlu[0], durum.get(sorunlu[0].ad))[0]}${sorunlu.length > 1 ? ` (+${sorunlu.length - 1} tablo)` : ''}` : '')
       ];
     },
     ozet: () => {
       const n = t.tablolar.filter((x) => yazilir(x.ad)).length;
       const b = t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).length;
       const bekleyen = [...durum.values()].some((d) => !d.islem);
+      if (dortlu) {
+        const yazilan = t.tablolar.filter((x) => yazilir(x.ad));
+        const atlanan = t.tablolar.length - yazilan.length - t.tablolar.filter((x) => !durum.get(x.ad).islem).length;
+        return `${n ? `${n} tablo yazılır (${yazilan.map((x) => kararMetni(x, durum.get(x.ad))).join('; ')})${b ? `, ${b} alan bağlanır` : ''}` : 'tablo yazılmaz'}${atlanan ? `; ${atlanan} tablo atlanır` : ''}${bekleyen ? ' — aynı adlı tablo için seçim bekleniyor' : ''}`;
+      }
       return `${n ? `${n} tablo yazılır${b ? `, ${b} alan bağlanır` : ''}` : 'yazılmaz'}${bekleyen ? ' — aynı adlı tablo için seçim bekleniyor' : ''}`;
     },
     govde: () => ({
-      tablolar: Object.fromEntries([...durum].map(([ad, d]) => [ad, { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}), ...((d.islem === 'birlestir' || d.islem === 'bagla') && d.hedefId ? { hedefId: d.hedefId } : {}) }])),
+      tablolar: Object.fromEntries([...durum].map(([ad, d]) => {
+        const x = t.tablolar.find((y) => y.ad === ad);
+        /** @type {Record<string, unknown>} */
+        const g = { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}), ...((d.islem === 'birlestir' || d.islem === 'bagla') && d.hedefId ? { hedefId: d.hedefId } : {}) };
+        if (dortlu && x) {
+          // Elle eşleme: otomatik adayın eşlemesinden farklıysa (ya da tablo aday değilse) eşleme gönderilir.
+          if (d.islem === 'bagla') {
+            const aday = (x.bagla || []).find((a) => a.id === d.hedefId);
+            const esl = d.eslesme || {};
+            const ayni = aday && aday.eslesme.length === Object.values(esl).filter(Boolean).length && aday.eslesme.every((e) => esl[e.plan] === e.hedef);
+            if (!ayni) g.eslesme = Object.fromEntries(x.sutunlar.map((s) => [s.ad, esl[s.ad] || '']));
+          }
+          if (d.islem === 'sutunEkle') Object.assign(g, { hedefId: d.ekHedefId, sutunAdlari: Object.fromEntries(x.sutunlar.map((s) => [s.ad, ((d.sutunAdlari || {})[s.ad] ?? s.ad).trim()])) });
+          if ((d.islem === 'yeni' || d.islem === 'yeniAd') && x.sutunlar.some((s) => ((d.yeniSutunAdlari || {})[s.ad] ?? s.ad).trim() !== s.ad)) {
+            g.sutunAdlari = Object.fromEntries(x.sutunlar.map((s) => [s.ad, ((d.yeniSutunAdlari || {})[s.ad] ?? s.ad).trim()]));
+          }
+        }
+        return [ad, g];
+      })),
       baglantilar: t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).map((x) => x.alanId)
     })
   };
@@ -422,7 +724,7 @@ export function testVerisiSecimi(t, degisti, ayar = {}) {
  */
 export function testVerisiBildir(r) {
   if (!r || !r.tablolar.length) return;
-  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' || x.islem === 'bagla' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}${r.bekleyenBaglanti ? `; ${r.bekleyenBaglanti} bağlantı bulgu kabul edilince yazılır` : ''}.`);
+  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' || x.islem === 'bagla' || x.islem === 'sutunEkle' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}${r.bekleyenBaglanti ? `; ${r.bekleyenBaglanti} bağlantı bulgu kabul edilince yazılır` : ''}.`);
 }
 
 function hataListesi(baslik, hatalar, dosyaAdi) {
