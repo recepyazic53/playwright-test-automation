@@ -36,6 +36,7 @@ import {
   yedekIceAktar,
   yedekOlustur
 } from '../../scripts/platform/yedek.mjs';
+import { tabloKaydet, tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import { HIZLI_KDF, geciciKlasor, loglariYakala, type LogYakalayici } from './platform-ortak';
 
 test('yedek dosya adı: çalışma alanı adı (ASCII) + yerel tarih; bilgisayar adı yok; ad yoksa varsayılan', () => {
@@ -53,6 +54,7 @@ const GIRIS_PAROLASI = 'YedekGirisParolasi#5521';
 const TOTP_GIZLI = 'KRSXG5CTMVRXEZLUGIZLI';
 const HASSAS_VERI = 'TR330006100519786457841326';
 const GIZLILER = [PAROLA, BASKA_PAROLA, GIRIS_PAROLASI, TOTP_GIZLI, HASSAS_VERI];
+const GRUP_ADI = 'Yedek grubu Çağrı';
 
 let log: LogYakalayici;
 test.beforeEach(() => {
@@ -77,6 +79,8 @@ async function ornekVeritabani(yol: string | null, parola = PAROLA): Promise<{ v
   baglamProfiliKaydet(vt, { projeId: proje, tur: 'sube', ad: 'Merkez', alanlar: { kod: 'M1' } });
   const tur = testVerisiTuruKaydet(vt, { projeId: proje, ad: 'Hesap', alanlar: [{ ad: 'iban', hassas: true }, { ad: 'ad' }] });
   const veriProfili = testVerisiProfiliKaydet(vt, { projeId: proje, turId: tur, ad: 'Hesap 1', degerler: { iban: HASSAS_VERI, ad: 'Deneme' } });
+  // Gruplu tablo (kaynak.grup): yedekten dönüşte grup korunmalı.
+  tabloKaydet(vt, { projeId: proje, ad: 'Gruplu tablo', tur: 'liste', grup: GRUP_ADI, sutunlar: [{ ad: 'Kod' }], satirlar: [{ degerler: { Kod: 'K1' } }] });
   const ekran = ekranKaydet(vt, { projeId: proje, anahtar: 'form', ad: 'Form' });
   ekranModeliEkle(vt, { ekranId: ekran, model: { alanlar: ['a'] } });
   const senaryo = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Senaryo 1', icerik: { adim: 1 } });
@@ -107,7 +111,7 @@ test.describe('Platform yedeği', () => {
       expect(asamalar.at(-1)).toEqual(['tamamlandı', 100]);
       expect(manifest.sayimlar.senaryolar).toBe(1);
       expect(veri.subarray(0, 7).toString('latin1')).toBe('TAYEDEK');
-      for (const gizli of [...GIZLILER, 'Örnek Proje', 'Senaryo 1']) {
+      for (const gizli of [...GIZLILER, 'Örnek Proje', 'Senaryo 1', GRUP_ADI]) {
         expect(veri.includes(Buffer.from(gizli, 'utf8')), 'yedek dosyasında düz metin olmamalı').toBe(false);
       }
 
@@ -133,6 +137,8 @@ test.describe('Platform yedeği', () => {
       expect(kasaDurumu(hedef)).toMatchObject({ olusturuldu: true, acik: true });
       expect(girisProfiliGetir(hedef, ids.profil, { coz: true })).toMatchObject({ parola: GIRIS_PAROLASI, totpGizli: TOTP_GIZLI });
       expect(testVerisiProfiliGetir(hedef, ids.veriProfili, { coz: true })?.degerler.iban).toBe(HASSAS_VERI);
+      // Tablo grubu (kaynak.grup) ve türü yedekten dönüşte korunur.
+      expect(tablolariListele(hedef, ids.proje).find((t) => t.ad === 'Gruplu tablo')?.kaynak).toEqual({ tabloTuru: 'liste', grup: GRUP_ADI });
 
       // Diskten yeniden açınca da aynı.
       hedef.kapat();

@@ -1051,8 +1051,10 @@ export function tablolariBirlestir(vt, projeId, girdi, secenekler = {}) {
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }} s */
 function yaz(vt, projeId, p, r, s) {
   const kalanAdlari = new Set(p.kalan.sutunlar.map((x) => x.ad));
+  // Grup (kaynak.grup): kalan tablonunki korunur; kalanın grubu yoksa grubu olan ilk kaynak tablonunki alınır.
+  const kaynakGrubu = p.kalan.kaynak?.grup ? null : p.kaynaklar.map((k) => k.kaynak?.grup).find(Boolean) ?? null;
   tabloKaydet(vt, {
-    projeId, id: p.kalan.id, ad: p.yeniAd,
+    projeId, id: p.kalan.id, ad: p.yeniAd, ...(kaynakGrubu ? { grup: kaynakGrubu } : {}),
     sutunlar: p.birlesik.sutunlar.map((x) => ({ ad: x.ad, ...(kalanAdlari.has(x.ad) ? { eskiAd: x.ad } : {}), gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar ?? {} }) })),
     satirlar: [
       ...[...p.guncellenecek.values()].map((g) => ({ id: g.id, degerler: g.degerler })),

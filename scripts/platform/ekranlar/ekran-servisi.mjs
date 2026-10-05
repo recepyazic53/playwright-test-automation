@@ -1142,7 +1142,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
         ...(b.secimeGore && secimeGoreVar(b) ? { secimeGore: { alan: b.secimeGore.alan, degerler: Object.fromEntries(Object.entries(b.secimeGore.degerler).map(([d, x]) => [d, { ...x, tablo: tabloAdi(x.tablo) }])) } } : {}) };
     }),
     tablolar: bagliTablolar.map((t) => ({
-      ad: t.ad, ...(t.kaynak?.tabloTuru ? { tur: t.kaynak.tabloTuru } : {}),
+      ad: t.ad, ...(t.kaynak?.tabloTuru ? { tur: t.kaynak.tabloTuru } : {}), ...(t.kaynak?.grup ? { grup: t.kaynak.grup } : {}),
       sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, ...(s.gizli ? { gizli: true } : {}) })), satirSayisi: t.satirlar.length
     }))
   };

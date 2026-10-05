@@ -193,6 +193,22 @@ test.describe('birleştirme geçmişi: her birleştirme kayıt; bağımsızlar s
     expect(birlestirmeGecmisi(vt, projeId).kayitlar.every((k) => k.durum === 'geriAlindi')).toBe(true);
   });
 
+  test('grup (kaynak.grup): kalanın grubu korunur; kalanın grubu yoksa kaynağınki alınır; geri al önceki grubu getirir', () => {
+    const grubu = (id: string) => tablolariListele(vt, projeId).find((t) => t.id === id)?.kaynak?.grup;
+    const [a, b] = [tablo('Kargo', ['k1']), tablo('Kargo eski', ['k2'])];
+    tabloKaydet(vt, { projeId, id: a, ad: 'Kargo', sutunlar: [{ ad: 'Kod', eskiAd: 'Kod' }, { ad: 'Ad', eskiAd: 'Ad' }], grup: 'Teslimat' });
+    tabloKaydet(vt, { projeId, id: b, ad: 'Kargo eski', sutunlar: [{ ad: 'Kod', eskiAd: 'Kod' }, { ad: 'Ad', eskiAd: 'Ad' }], grup: 'Arşiv' });
+    birlestir(a, [b], 9);
+    expect(grubu(a)).toBe('Teslimat');
+    const [c, d, e] = [tablo('Ödeme', ['o1']), tablo('Ödeme eski', ['o2']), tablo('Ödeme arşiv', ['o3'])];
+    tabloKaydet(vt, { projeId, id: e, ad: 'Ödeme arşiv', sutunlar: [{ ad: 'Kod', eskiAd: 'Kod' }, { ad: 'Ad', eskiAd: 'Ad' }], grup: 'Ödeme bilgileri' });
+    const ikinci = birlestir(c, [d, e], 10);
+    expect(grubu(c)).toBe('Ödeme bilgileri');
+    expect(tablolariListele(vt, projeId).find((t) => t.id === c)?.kaynak).toEqual({ grup: 'Ödeme bilgileri' });
+    birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ikinci, onay: true });
+    expect(grubu(c)).toBeUndefined();
+  });
+
   test('aynı tabloyu etkileyen iki birleştirme: eskinin geri alması reddedilir; yenisi geri alınınca eskisi alınır', () => {
     const [a, b, c] = [tablo('Müşteriler', ['m1']), tablo('Müşteriler eski', ['m2']), tablo('Müşteriler arşiv', ['m3'])];
     const ilk = birlestir(a, [b], 9);
@@ -513,7 +529,7 @@ test.describe('önleme: ekran paketinde "benzer tablo var — onu kullan"', () =
         sutunlar: [{ ad: 'KAPSAM', karsiliklar: { EKSPRES: { sayfa: 'E-ESKI' } } }],
         satirlar: [{ degerler: { KAPSAM: 'EKSPRES' } }, { degerler: { KAPSAM: 'STANDART' } }] });
       const genel = tabloKaydet(vt, { projeId, ad: 'Başka ekran — Durum', sutunlar: [{ ad: 'Değer' }], satirlar: [{ degerler: { Değer: 'EKSPRES' } }] });
-      const tablo = (ad: string, sutun: string) => ({ ad, tur: 'liste', sutunlar: [{ ad: sutun, karsiliklar: { EKSPRES: { sayfa: 'E-YENI' }, KURYE: { sayfa: 'K-1' } } }],
+      const tablo = (ad: string, sutun: string) => ({ ad, tur: 'liste', grup: 'Teslimat', sutunlar: [{ ad: sutun, karsiliklar: { EKSPRES: { sayfa: 'E-YENI' }, KURYE: { sayfa: 'K-1' } } }],
         satirlar: [['EKSPRES'], ['STANDART'], ['KURYE']] });
       const paket = { ...V1, testVerisi: { tablolar: [tablo('Örnek Rota — Kapsam', 'Kapsam'), tablo('Örnek Rota — Genel', 'Değer')],
         baglantilar: [{ alanId: 'kapsam', tablo: 'Örnek Rota — Kapsam', sutun: 'Kapsam' }] } };
@@ -533,7 +549,8 @@ test.describe('önleme: ekran paketinde "benzer tablo var — onu kullan"', () =
       expect(h.sutunlar.map((s: Nesne) => s.ad)).toEqual(['KAPSAM']);
       // Mevcut karşılık korunur, eksik olan eklenir.
       expect(h.sutunlar[0].karsiliklar).toMatchObject({ EKSPRES: { sayfa: 'E-ESKI' }, KURYE: { sayfa: 'K-1' } });
-      expect(h.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'liste' });
+      // Kaynak korunur; mevcut tablonun grubu yoktu: paketin grubu alınır.
+      expect(h.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'liste', grup: 'Teslimat' });
       expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({ kapsam: { tablo: hedef, sutun: 'KAPSAM' } });
     } finally { vt.kapat(); rmSync(klasor, { recursive: true, force: true }); }
   });

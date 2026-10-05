@@ -312,6 +312,7 @@ test.describe('Onaylanan test verisinin yazılması', () => {
     const p = paketTV();
     p.testVerisi.tablolar[0].tur = 'liste';
     p.testVerisi.tablolar[2].tur = 'kayit';
+    p.testVerisi.tablolar[0].grup = 'Kapsam bilgileri';
     const o = paketOnizle(vt, projeId, p);
     expect(((o.onizleme as Nesne).testVerisi as Nesne).tablolar.map((t: Nesne) => t.tur)).toEqual(['liste', null, 'kayit']);
     await sayfaEkle(vt, projeId, p, {
@@ -321,12 +322,16 @@ test.describe('Onaylanan test verisinin yazılması', () => {
     const t = (ad: string) => tablolariListele(vt, projeId).find((x) => x.ad === ad);
     expect(t('Taksit')?.kaynak).toBeNull();
     expect(t('Taksit')?.satirlar).toHaveLength(3);
-    expect(t('Kapsam - Alternatif')?.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'liste' });
+    // Paketin grubu (isteğe bağlı) yeni tablonun kaynağına yazılır.
+    expect(t('Kapsam - Alternatif')?.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'liste', grup: 'Kapsam bilgileri' });
     expect(t('Servis girişi')?.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'kayit' });
-    // Geçersiz tür reddedilir.
+    expect(t('Servis girişi')?.kaynak?.grup).toBeUndefined();
+    // Geçersiz tür / grup (41 karakter ya da metin değil) reddedilir.
     const q = paketTV();
     q.testVerisi.tablolar[0].tur = 'tablo';
-    expect(sayfaPaketiniDogrula(q).hatalar.map((h) => h.yer)).toContain('testVerisi.tablolar[0].tur');
+    q.testVerisi.tablolar[1].grup = 'x'.repeat(41);
+    q.testVerisi.tablolar[2].grup = 5;
+    expect(sayfaPaketiniDogrula(q).hatalar.map((h) => h.yer)).toEqual(expect.arrayContaining(['testVerisi.tablolar[0].tur', 'testVerisi.tablolar[1].grup', 'testVerisi.tablolar[2].grup']));
   });
 
   test('tekrar analiz: tablolar hemen, bağlantılar bulgu kararına göre (kabul → yazılır, red → yazılmaz; bulgusuz alan hemen)', async () => {
