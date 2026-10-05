@@ -5,7 +5,7 @@
 //  - Uçtan uca: geçici veritabanıyla ayrı Nöbetçi + 127.0.0.1'deki sahte "Adres formu"; projede "Adres" kayıt tablosu (sütun "Adres kodu",
 //    satırlar il adları) varken hızlı test → özet "Mevcut tabloya bağla: Adres › Adres kodu" (varsayılan seçili), kaydedince "Adres Kodu"
 //    tablosu OLUŞMAZ, senaryo satıra bağlanır, normal koşu o değeri gönderir. Arayüz (1440 px): aynı adlı "İl" ekran listesinde Birleştir
-//    seçenekleri görünür ve varsayılan; özet açıkken aynı adlı tablo oluşursa onay özeti yeniler (seçenekler görünür), ikinci onay kaydeder.
+//    seçenekleri görünür ve varsayılan; değer yazılmayan radyo tablo olarak önerilmez.
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez (yalnız 127.0.0.1); veri/ klasörüne ve 5566 portuna dokunulmaz; değerler uydurmadır.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -318,7 +318,7 @@ test.describe('uçtan uca', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('arayüz (1440 px): özette "Mevcut tabloya bağla: Adres › Adres kodu" ve aynı adlı "İl" listesinde Birleştir varsayılan; özet açıkken aynı adlı tablo oluşursa onay özeti yeniler, ikinci onay kaydeder', async () => {
+  test('arayüz (1440 px): özette "Mevcut tabloya bağla: Adres › Adres kodu" ve aynı adlı "İl" listesinde Birleştir varsayılan; değer yazılmayan radyo tablo önerilmez', async () => {
     test.setTimeout(300_000);
     const id = await hizliTest('Adres formu (arayüz)', '06', '06100');
     const tarayici = await korumaliTarayici();
@@ -341,15 +341,10 @@ test.describe('uçtan uca', () => {
       await expect(kart('İl').getByRole('radio', { name: /^Birleştir — \d+ eksik seçenek eklenir/ })).toBeChecked();
       await expect(kart('İl').getByRole('radio', { name: /^Yeni adla yaz/ })).toBeVisible();
       await expect(kart('İl').getByRole('checkbox', { name: /tablosunu yaz/ })).toHaveCount(0);
-      // "Kanal" (yeni liste) şu an yeni tablo; özet açıkken aynı adlı tablo oluşur (başka bir kayıt gibi).
-      await expect(kart('Kanal').getByRole('radio', { name: 'Yeni tablo olarak yaz' })).toBeChecked();
+      // Değer yazılmayan seçim ("Kanal" radyosu) tablo olarak önerilmez (yalnız senaryo önerileri için tutulur).
+      await expect(kart('Kanal')).toHaveCount(0);
       await expect(ozet.getByRole('button', { name: 'Onayla ve kaydet' })).toBeEnabled();
       await expect(ozet.locator('[role=status]').last()).not.toContainText('karar bekleniyor');
-      await basarili('/platform/tablo/kaydet', { projeId, ad: 'Kanal', tur: 'liste', sutunlar: [{ ad: 'Kanal' }], satirlar: [{ ad: 'Web', degerler: { Kanal: 'Web' } }] });
-      await ozet.getByRole('button', { name: 'Onayla ve kaydet' }).click();
-      // Onay hata vermeden durmaz: özet yenilenir, "Kanal" kartında Birleştir seçenekleri (varsayılan) görünür.
-      await expect(ozet.locator('.not-kutusu.uyari[role=alert]')).toContainText('Özet yenilendi', { timeout: 30_000 });
-      await expect(kart('Kanal').getByRole('radio', { name: /^Birleştir/ })).toBeChecked();
       await expect(kart('Adres Kodu').getByRole('radio', { name: /^Mevcut tabloya bağla/ })).toBeChecked();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       await ozet.getByRole('button', { name: 'Onayla ve kaydet' }).click();
@@ -357,10 +352,9 @@ test.describe('uçtan uca', () => {
       expect(hatalar).toEqual([]);
     } finally { await tarayici.close(); }
     const t = await tablolar();
-    expect(t.map((x) => x.ad).sort()).toEqual(['Adres', 'Kanal', 'İl'].sort());
+    expect(t.map((x) => x.ad).sort()).toEqual(['Adres', 'İl'].sort());
     // Liste birleşti: mevcut satırlar korunur, eksik seçenekler eklendi.
     expect((t.find((x) => x.ad === 'İl') as Nesne).satirlar.map((r: Nesne) => r.degerler['İl'])).toEqual(['Ankara', 'İzmir', 'Bursa', 'Adana', 'Konya']);
-    expect((t.find((x) => x.ad === 'Kanal') as Nesne).satirlar.map((r: Nesne) => r.degerler.Kanal)).toEqual(['Web', 'Mobil']);
     expect((t.find((x) => x.ad === 'Adres') as Nesne).satirlar).toHaveLength(4);
   });
 

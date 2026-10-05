@@ -2686,7 +2686,7 @@ export function hizliTestYoneticisiOlustur(s) {
           tablo: y.ad, tabloId: y.id, sutunSayisi: y.plan.sutunlar.length, yeni: y.islem === 'yeni' || y.islem === 'yeniAd', islem: y.islem, eklenenSatir: y.eklenenSatir, eklenenSutun: y.eklenenSutun,
           secenekSayisi: y.tur === 'liste' ? y.plan.satirlar.length : 0
         })),
-        atlanan: uygulanan.plan.tablolar.map((/** @type {Nesne} */ t) => t.ad).filter((/** @type {string} */ ad) => !uygulanan?.yazilan.some((/** @type {Nesne} */ y) => y.planAdi === ad))
+        atlanan: uygulanan.plan.tablolar.filter((/** @type {Nesne} */ t) => !t.yalnizOneri).map((/** @type {Nesne} */ t) => t.ad).filter((/** @type {string} */ ad) => !uygulanan?.yazilan.some((/** @type {Nesne} */ y) => y.planAdi === ad))
       };
     }
     const hizli = {
@@ -2726,7 +2726,15 @@ export function hizliTestYoneticisiOlustur(s) {
         const yeniPin = new Set();
         for (const d of oneri.alt.degisiklikler) {
           const y = uygulanan.yazilan.find((/** @type {Nesne} */ k) => k.planAdi === d.planAdi);
-          if (!y) { tamam = false; break; }
+          if (!y) {
+            // Yalnız öneri için tutulan seçim (radyo / onay kutusu / değer yazılmayan seçim; tabloya yazılmaz): değer senaryoya düz yazılır
+            // (seçeneğin sayfa değeri).
+            const pt = uygulanan.plan.tablolar.find((/** @type {Nesne} */ t) => t.ad === d.planAdi);
+            const an = anahtarlar[d.oturumAnahtar];
+            if (!pt?.yalnizOneri || !an) { tamam = false; break; }
+            veri2[an] = pt.sutunlar.find((/** @type {Nesne} */ s) => s.ad === d.sutun)?.karsiliklar?.[d.deger]?.sayfa ?? d.deger;
+            continue;
+          }
           const pa = pinAnahtari(y.id);
           if (!yeniPin.has(pa)) { pinler[pa] = {}; yeniPin.add(pa); }
           pinler[pa][y.hedef(d.sutun)] = d.deger.slice(0, 200);

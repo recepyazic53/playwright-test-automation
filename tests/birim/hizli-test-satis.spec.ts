@@ -299,7 +299,7 @@ test('hızlı test: çok adımlı satış formu baştan sona (1.12, 1.11, 1.14, 
   o = await bekle(id, ['kaydet'], 180);
   expect(o.soru.dogrulama, JSON.stringify(o.soru.dogrulama)).toMatchObject({ durum: 'basarili' });
   expect(uygulama.tutarlar.slice(tutarOnce)).toEqual(['LR']);
-  // Özet: hassas sütunlar gizli (1.17); ay / yıl ve sayfada hazır gelen ALTERNATİF listesi alanlara bağlanır (1.18).
+  // Özet: hassas sütunlar gizli (1.17); ay / yıl alanlara bağlanır (1.18); sayfada hazır gelen ALTERNATİF tabloya alınmaz.
   const oz = (await basarili('/platform/hizli-test/ozet', { id, baslik: 'Satış bir' })).ozet as Nesne;
   const tablo = (ad: string): Nesne => (oz.onizleme.tablolar as Nesne[]).find((t) => t.ad === ad) as Nesne;
   expect(Object.fromEntries(tablo('Kart bilgileri').sutunlar.map((s: Nesne) => [s.ad, s.gizli]))).toEqual({
@@ -310,7 +310,9 @@ test('hızlı test: çok adımlı satış formu baştan sona (1.12, 1.11, 1.14, 
   expect(tablo('GİDİLECEK ÜLKE').ornek[0]).toEqual(['A.B.D']);
   expect(tablo('GİDİLECEK ÜLKE').satirSayisi).toBe(299);
   const bagli = (oz.onizleme.baglantilar as Nesne[]).map((x) => `${x.alanEtiketi}→${x.tablo}.${x.sutun}`);
-  expect(bagli).toEqual(expect.arrayContaining(['Son kullanma ay→Kart bilgileri.Son kullanma ay', 'Son kullanma yıl→Kart bilgileri.Son kullanma yıl', 'ALTERNATİF→ALTERNATİF.ALTERNATİF', 'GİDİLECEK ÜLKE→GİDİLECEK ÜLKE.GİDİLECEK ÜLKE']));
+  expect(bagli).toEqual(expect.arrayContaining(['Son kullanma ay→Kart bilgileri.Son kullanma ay', 'Son kullanma yıl→Kart bilgileri.Son kullanma yıl', 'GİDİLECEK ÜLKE→GİDİLECEK ÜLKE.GİDİLECEK ÜLKE']));
+  // Sayfada hazır gelen (değer yazılmayan) ALTERNATİF listesi tabloya bağlanmaz (senaryoda seçilir).
+  expect(bagli.some((x) => x.startsWith('ALTERNATİF→'))).toBe(false);
   const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Satış bir', secim: oz.secim });
   expect(k).toMatchObject({ kaydedildi: true, dogrulandi: true });
   kayitli = { ekranId: String(k.ekranId), senaryoId: String(k.senaryoId) };

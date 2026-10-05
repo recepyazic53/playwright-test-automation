@@ -183,7 +183,9 @@ export function beklemeDurumu(ayar: { kaliplar: Record<string, string> }): { bek
     if (e.closest('[id^="nobetci"], script, style, noscript, template')) continue;
     const rol = (e.getAttribute('role') ?? '').toLowerCase();
     const cls = [...e.classList].map((c) => c.toLowerCase());
-    const gosterge = rol === 'progressbar' || e.getAttribute('aria-busy') === 'true' || cls.some((c) => k('beklemeSinifi').test(c));
+    const gosterge = rol === 'progressbar' || e.getAttribute('aria-busy') === 'true' || cls.some((c) => k('beklemeSinifi').test(c))
+      // Yalnız görselle gösterilen yükleme (sınıfsız loader.gif, ajax-loader.gif…): görselin dosya adı bekleme göstergesi bildiriyor.
+      || (e.tagName === 'IMG' && /(^|[-_./])(loader|loading|spinner|preloader|ajax-loader|busy)([-_.]|$)/i.test((e.getAttribute('src') ?? '').split(/[?#]/)[0].split('/').pop() ?? ''));
     const kendi = bosluk([...e.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' '));
     const metinli = Boolean(kendi) && k('beklemeMetni').test(katla(kendi));
     if (!gosterge && !metinli) continue;

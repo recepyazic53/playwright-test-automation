@@ -2,7 +2,9 @@
 // tablolarına dönüşür; tek büyük tablo DEĞİL, anlamlı gruplar halinde:
 //   · kişi alanları (kimlik no, doğum tarihi, telefon, ad, soyad…)  → "Kişi bilgileri" (sütun adı: kişi alanı türü, ör. "Doğum tarihi"),
 //   · kart alanları (kart no, güvenlik kodu, kart üzerindeki isim…)  → "Kart bilgileri" (sütun adı: ekrandaki alan başlığı),
-//   · diğer her alan                                                → KENDİ tablosu; tablo ve sütun adı ekrandaki alan başlığı (ör. "GİDİLECEK ÜLKE").
+//   · diğer alanlar                                                 → ekrandaki BÖLÜMÜNÜN tablosu (bölüm başlığı; sütun: alan başlığı),
+//                                                                     bölüm yoksa KENDİ tablosu (ör. "GİDİLECEK ÜLKE"),
+//   · radyo / onay kutusu                                           → tabloya girmez (değeri senaryoda seçilir).
 // Tablolar ekranlar arasında ortaktır: aynı adlı tablo varsa sütunlar birleşir, satır (senaryo adıyla) eklenir / güncellenir.
 // Değer ÜRETİLMEZ: yalnız kullanıcının yazdığı değerler taşınır; parola / dosya alanları ve boş değerler girmez; seçim alanında
 // tabloya seçeneğin görünen metni yazılır. Gizli adlı sütunlar (kart no, güvenlik kodu…) gizli olur.
@@ -47,6 +49,10 @@ export function alanGrubu(a) {
   const tip = a.tur === 'date' ? 'tarih' : a.tur === 'tel' ? 'telefon' : 'metin';
   const kisi = kisiKategorisi({ etiket: baslik, anahtar: a.ad ?? undefined, id: a.kimlik ?? undefined, tip });
   if (kisi) return { tablo: KISI_TABLOSU, sutun: kisi.ad };
+  // Diğer alanlar ekrandaki bölümüne göre tek tabloda (ör. "Ana Teminat Bilgileri": bedel alanları sütun); bölüm yoksa kendi tablosu.
+  const b = a.bolum && typeof a.bolum === 'object' && typeof a.bolum.baslik === 'string' && a.bolum.anahtar !== 'genel' && !String(a.bolum.anahtar ?? '').startsWith('h1:')
+    ? adTemizle(a.bolum.baslik) : '';
+  if (b) return { tablo: b, sutun: temiz || 'Alan' };
   return { tablo: temiz || 'Alan', sutun: temiz || 'Alan' };
 }
 
@@ -207,7 +213,8 @@ export function tabloTaslagiKur(g) {
   for (const a of g.alanlar) {
     const v = g.degerler[a.anahtar];
     if (!v || v.kaynak === 'tablo' || typeof v.deger !== 'string' || !v.deger.trim()) continue;
-    if (['password', 'file'].includes(String(a.tur))) continue;
+    // Radyo / onay kutusu tabloya önerilmez: değeri senaryoda seçilir (seçenekler ekran modelinde).
+    if (['password', 'file', 'radio', 'checkbox'].includes(String(a.tur))) continue;
     const { tablo, sutun } = alanGrubu(a);
     // Sayı / tarih / saat alanı (kişi ya da kart bilgisi değilse; ör. "Adet", "Teslimat tarihi") kendi tek sütunlu tablosunu açmaz:
     // değeri senaryoda düz değer olarak kalır (tabloya taşımak veri tekrarını azaltmaz, yalnız tablo kalabalığı yapar).

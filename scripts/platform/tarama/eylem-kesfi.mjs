@@ -43,7 +43,7 @@ export const KALIPLAR = Object.freeze({
   /** Bilinen alan hatası kapları (güçlü). */
   alanHataSinifi: '^(invalid-feedback|invalid-tooltip|field-validation-error|parsley-errors-list|error-message|field-error|form-error|validation-message|help-block)$',
   /** Bekleme göstergesi sınıf parçası. */
-  beklemeSinifi: '(^|[-_])(spinner|spin|loading|loader|preloader|yukleniyor|busy|progress)([-_]|$)'
+  beklemeSinifi: '(^|[-_])(spinner|spin|loading|loader|preloader|yukleniyor|busy|progress|blockui|blockoverlay|blockmsg)([-_]|$)'
 });
 
 /** Metni kalıp aramasına hazırlar (küçük harf, Türkçe harfler katlanır, boşluklar tek). @param {unknown} m */
