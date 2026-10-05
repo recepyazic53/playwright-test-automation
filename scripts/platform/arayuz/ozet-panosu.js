@@ -798,7 +798,7 @@ export function ozetPanosu(kap, s0) {
     const sonucCiz = (sonuc) => {
       if (!sonuc) {
         yerlestir(sonVeri, ikon('saat'), 'Henüz yenilenmedi');
-        yerlestir(govde, h('p', { class: 'soluk kucuk pano-bos-sonuc' }, 'Sorgu yalnız "Yenile"ye basınca çalışır; son sonuç burada saklanır.'));
+        yerlestir(govde, h('p', { class: 'soluk kucuk pano-bos-sonuc' }, 'Henüz veri yok — Yenile\'ye basın.'));
         return;
       }
       // Dönemli sonuç: hangi dönemle alındığı; kartın dönemi sonradan değiştiyse Yenile gerektiği söylenir (sorgu kendiliğinden çalışmaz).

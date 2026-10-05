@@ -1,5 +1,6 @@
 // ÖZET PANOSU — DEPO (sunucu). Sonuçlar > Genel > Özet panosunun düzeni PROJE BAŞINA tek kayıttır ve kasada şifreli durur
 // (ayarlar tablosu, anahtar "ozetPanosu": { [projeId]: { surum, kartlar, guncellenme } }); yedeğe ayarlar tablosuyla birlikte girer.
+// SQL kartı sonuçları ("ozetPanosuSonuclari") yedeğe GİRMEZ (yedek.mjs > YEDEK_DISI_AYARLAR); yedekten yüklenen panoda boş gelir.
 // Kayıt yoksa varsayılan düzen (bugünkü Özet) kullanılır. Biçim ve doğrulama: pano-duzeni.mjs (saf, arayüzle ORTAK).
 // SQL kartlarının son sonucu ayrı anahtarda önbellektir ("ozetPanosuSonuclari": { [projeId]: { [kartId]: sonuç } }); yalnız
 // MASKELİ sonuç yazılır (pano-sql.mjs). Sonuç, kartın hedefi ve sorgusunun imzasıyla saklanır: kart değişince eski sonuç gösterilmez.
@@ -91,6 +92,14 @@ export function panoKaydet(vt, projeId, ham) {
     ayarYaz(vt, PANO_SONUC_ANAHTARI, sonuclar);
   }
   return duzen;
+}
+
+/**
+ * SQL kartı sonuç önbelleğini bütünüyle siler (yedekten pano düzeni alınınca; kartlar boş gelir, "Yenile" ile dolar).
+ * @param {Veritabani} vt
+ */
+export function panoSonuclariniTemizle(vt) {
+  vt.calistir('DELETE FROM ayarlar WHERE anahtar = ?', [PANO_SONUC_ANAHTARI]);
 }
 
 /**

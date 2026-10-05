@@ -4,7 +4,9 @@
 // da salt okunur oturum, zaman aşımı ve satır sınırı, gizli adlı sütun + T.C. / IBAN maskelemesi, "Son veri" saati ve önbellek (kart
 // değişince geçersiz), anlaşılır hata (adres / parola yok), izin (Veritabanı okuma) ve CANLI onayı gereksinimi. Nöbetçi verisi
 // şablonları. Gerçek veritabanı YOK: sürücü bellek içi sahte SQLite'tır (sahte-sql-surucusu.mjs); adreslere bağlanılmaz.
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
@@ -26,9 +28,63 @@ import { PANO_POST_UCLARI } from '../../scripts/platform/sonuclar/pano-uclari.mj
 import { sablonSonucu } from '../../scripts/platform/sonuclar/pano-sablonlari.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
 import { servisKaydet, servisKosusuKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
-import { yedekIceAktar, yedekOlustur } from '../../scripts/platform/yedek.mjs';
+import { YEDEK_DISI_AYARLAR, yedekIceAktar, yedekOlustur } from '../../scripts/platform/yedek.mjs';
+import { iceAktarmaHazirla, iceAktarmaUygula } from '../../scripts/platform/ice-aktarma.mjs';
+import { anahtarTuret, kasaKdfOku } from '../../scripts/platform/kasa.mjs';
+import { TABLOLAR, mevcutSemaSurumu } from '../../scripts/platform/veritabani/gocler.mjs';
 import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 import { SAHTE_IBAN, SAHTE_TC, yukleyici } from './sahte-sql-surucusu.mjs';
+
+type YedekIcerigi = { tablolar: Record<string, Record<string, unknown>[]> };
+
+/** Biçim 2 yedeğin (tek parça, < 1 MiB) ham JSON içeriği: yedekAc'ın süzgecinden GEÇMEDEN ne yazıldığını gösterir. */
+async function yedekIcerigi(veri: Buffer, parola: string): Promise<YedekIcerigi> {
+  const baslik = veri.subarray(0, 56);
+  expect(baslik.readUInt8(8)).toBe(2);
+  const kasaAnahtari = await anahtarTuret(parola, { N: 2 ** baslik.readUInt8(9), r: baslik.readUInt8(10), p: baslik.readUInt8(11) }, Buffer.from(baslik.subarray(12, 28)));
+  const anahtar = Buffer.from(hkdfSync('sha256', kasaAnahtari, baslik.subarray(28, 44), Buffer.from('platform-yedek-v2', 'utf8'), 32));
+  const govde = veri.subarray(56);
+  expect(govde.length).toBeLessThanOrEqual(1024 * 1024 + 16);
+  const iv = Buffer.alloc(12);
+  baslik.copy(iv, 0, 44, 52);
+  const aad = Buffer.alloc(61);
+  baslik.copy(aad, 0, 0, 56);
+  aad[60] = 1;
+  const c = createDecipheriv('aes-256-gcm', anahtar, iv);
+  c.setAAD(aad);
+  c.setAuthTag(govde.subarray(govde.length - 16));
+  const duz = Buffer.concat([c.update(govde.subarray(0, govde.length - 16)), c.final()]);
+  return JSON.parse(gunzipSync(duz.subarray(9, 9 + Number(duz.readBigUInt64BE(1)))).toString('utf8')) as YedekIcerigi;
+}
+
+/** Eski biçimli (1) yedek: ayarlar tablosu OLDUĞU GİBİ (SQL kartı sonuç önbelleği dahil) girer. */
+async function eskiBicimYedek(vt: Veritabani, parola: string): Promise<Buffer> {
+  const kdf = kasaKdfOku(vt);
+  if (!kdf) throw new Error('kasa yok');
+  const tablolar = Object.fromEntries(TABLOLAR.map((t) => [t.ad, vt.tumu(`SELECT * FROM ${t.ad} ORDER BY rowid`)]));
+  expect(tablolar.ayarlar.map((s) => s.anahtar)).toContain(PANO_SONUC_ANAHTARI);
+  const icerik = {
+    manifest: { bicimSurumu: 1, semaSurumu: mevcutSemaSurumu(vt), olusturulma: new Date().toISOString(), makine: { id: 'eski', ad: 'Eski' }, sayimlar: {} },
+    kasa: { kdf, dogrulayici: vt.metaOku('kasa_dogrulayici') },
+    tablolar
+  };
+  const kasaTuzu = Buffer.from(kdf.tuz, 'base64url');
+  const baslik = Buffer.alloc(56);
+  Buffer.from('TAYEDEK\0', 'latin1').copy(baslik, 0);
+  baslik.writeUInt8(1, 8);
+  baslik.writeUInt8(Math.log2(kdf.N), 9);
+  baslik.writeUInt8(kdf.r, 10);
+  baslik.writeUInt8(kdf.p, 11);
+  kasaTuzu.copy(baslik, 12);
+  randomBytes(16).copy(baslik, 28);
+  randomBytes(12).copy(baslik, 44);
+  const kasaAnahtari = await anahtarTuret(parola, kdf, kasaTuzu);
+  const anahtar = Buffer.from(hkdfSync('sha256', kasaAnahtari, baslik.subarray(28, 44), Buffer.from('platform-yedek-v1', 'utf8'), 32));
+  const s = createCipheriv('aes-256-gcm', anahtar, baslik.subarray(44, 56));
+  s.setAAD(baslik);
+  const sifreli = Buffer.concat([s.update(gzipSync(Buffer.from(JSON.stringify(icerik), 'utf8'))), s.final()]);
+  return Buffer.concat([baslik, s.getAuthTag(), sifreli]);
+}
 
 const PAROLA = 'Gecici-Pano-Kasa-1';
 const BAGLANTI_PAROLASI = 'pano-parola-gizli-7f2a';
@@ -354,7 +410,7 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     expect(() => sablonSonucu(vt, projeA, 'yok', {})).toThrow('şablonu geçersiz');
   });
 
-  test('yedekte pano: tam yüklemede düzen ve SQL sonuç önbelleği geri gelir', async () => {
+  test('yedekte pano: düzen geri gelir; SQL kartı sonuçları yedeğe girmez (kart boş gelir, Yenile ile dolar)', async () => {
     const duzen = kartEkle(kartKaldir(varsayilanDuzen(), 'kapsam'), sqlKarti('k-yedek', 'SELECT COUNT(*) AS n FROM kayitlar', { gorunum: 'sayi', esikler: [{ islec: '>', deger: 0, renk: 'kirmizi' }] }));
     kaydetUcu(vt, { projeId: projeA, duzen });
     const ilkSonuc = await panoSqlYenile(vt, projeA, 'k-yedek');
@@ -367,14 +423,52 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     expect(sorgular()).toEqual([]);
     expect(() => tabloUcu(vt, { projeId: projeA, kartId: 'baslarken', sutunlar: [] })).toThrow('SQL kartı bulunamadı');
     const once = panoGetir(vt, projeA);
+    expect(once.sqlSonuclari['k-yedek']).toBeTruthy();
     const { veri } = yedekOlustur(vt);
+    // Yedek içeriği: pano düzeni var, SQL kartı sonuçları YOK (kaynakta önbellek dolu olsa da).
+    expect(vt.tek('SELECT 1 AS var FROM ayarlar WHERE anahtar = ?', [PANO_SONUC_ANAHTARI])).toBeTruthy();
+    const anahtarlar = (await yedekIcerigi(veri, PAROLA)).tablolar.ayarlar.map((s) => String(s.anahtar));
+    expect(anahtarlar).toContain(PANO_AYAR_ANAHTARI);
+    expect(anahtarlar).not.toContain(PANO_SONUC_ANAHTARI);
+    expect(YEDEK_DISI_AYARLAR).toEqual([PANO_SONUC_ANAHTARI]);
     const hedef = await veritabaniniHazirla(null);
     try {
       await yedekIceAktar(hedef, veri, PAROLA, { mod: 'tamYukle' });
       const sonra = panoGetir(hedef, projeA);
       expect(sonra.duzen).toEqual(once.duzen);
-      expect(sonra.sqlSonuclari['k-yedek']).toEqual(once.sqlSonuclari['k-yedek']);
       expect(sonra.duzen.kartlar.map((k) => k.id)).toEqual(['baslarken', 'ozetKutulari', 'dikkat', 'bakim', 'k-yedek']);
+      // Geri yüklenen panoda SQL kartı boş; "Yenile" ile dolar.
+      expect(sonra.sqlSonuclari).toEqual({});
+      writeFileSync(gunluk, '');
+      const yeni = await panoSqlYenile(hedef, projeA, 'k-yedek');
+      expect(sorgular()).toContain('SELECT COUNT(*) AS n FROM kayitlar');
+      expect(panoGetir(hedef, projeA).sqlSonuclari['k-yedek']).toEqual(yeni);
+      // Seçmeli içe aktarmada pano düzeni alınırsa hedefin sonuç önbelleği temizlenir.
+      const hazirlik = await iceAktarmaHazirla(hedef, veri, PAROLA);
+      iceAktarmaUygula(hedef, hazirlik, { secimler: { ayarlar: [PANO_AYAR_ANAHTARI] } }, { yapan: 'birim-test' });
+      expect(panoGetir(hedef, projeA).sqlSonuclari).toEqual({});
+      await panoSqlYenile(hedef, projeA, 'k-yedek');
+      // Dolu hedefe yeniden tam yükleme: hedefteki önbellek temizlenir (yedekte olmayan sonuçlar gösterilmez).
+      await yedekIceAktar(hedef, veri, PAROLA, { mod: 'tamYukle', onay: true, guvenlikYedegiKlasoru: join(klasor.yol, 'guvenlik') });
+      expect(panoGetir(hedef, projeA).sqlSonuclari).toEqual({});
+      expect(hedef.tek('SELECT 1 AS var FROM ayarlar WHERE anahtar = ?', [PANO_SONUC_ANAHTARI])).toBeFalsy();
+    } finally {
+      hedef.kapat();
+    }
+  });
+
+  test('eski biçimli yedek (SQL kartı sonuçlarıyla) sorunsuz yüklenir; sonuçlar yok sayılır', async () => {
+    expect(Object.keys(panoGetir(vt, projeA).sqlSonuclari)).toContain('k-yedek');
+    const eski = await eskiBicimYedek(vt, PAROLA);
+    const hedef = await veritabaniniHazirla(null);
+    try {
+      const s = await yedekIceAktar(hedef, eski, PAROLA, { mod: 'tamYukle' });
+      expect(s.manifest.bicimSurumu).toBe(1);
+      expect(panoGetir(hedef, projeA).duzen).toEqual(panoGetir(vt, projeA).duzen);
+      expect(panoGetir(hedef, projeA).sqlSonuclari).toEqual({});
+      expect(hedef.tek('SELECT 1 AS var FROM ayarlar WHERE anahtar = ?', [PANO_SONUC_ANAHTARI])).toBeFalsy();
+      await panoSqlYenile(hedef, projeA, 'k-yedek');
+      expect(Object.keys(panoGetir(hedef, projeA).sqlSonuclari)).toEqual(['k-yedek']);
     } finally {
       hedef.kapat();
     }

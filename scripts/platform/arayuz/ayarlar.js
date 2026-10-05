@@ -665,7 +665,7 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
     h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), ilerlemeMetni, ilerlemeYuzdesi), ilerlemeCubugu);
   const baslik = ayar.baslik === null ? null : h('h3', {}, ikon('indir'), ayar.baslik || 'Dışa aktar');
   const aciklama = ayar.aciklama === null ? null
-    : h('p', { class: 'soluk' }, ayar.aciklama || 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz.');
+    : h('p', { class: 'soluk' }, ayar.aciklama || 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz. SQL kartı sonuçları yedeğe girmez.');
   const form = h('form', { class: ayar.kart === false ? 'disa-aktarma-formu' : 'kart', novalidate: true }, baslik, aciklama,
     disaMesaj.kutu,
     h('fieldset', { class: 'medya-secimi' }, h('legend', {}, 'Yedeğe eklenecek medya dosyaları'), kutular.map((k) => k.oge), toplamSatiri),
