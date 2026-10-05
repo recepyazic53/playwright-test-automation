@@ -76,7 +76,8 @@ export function veriSagligiKarti(proje, c) {
       }
       return kap;
     };
-    const toplam = yuksek.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length;
+    const uyumsuz = s.uyumsuzBaglar || [];
+    const toplam = yuksek.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length + uyumsuz.length;
     yerlestir(kok,
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon(toplam ? 'uyari' : 'onay'), 'Veri sağlığı'),
         h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok', gecmisDugmesi, ayarDugmesi)),
@@ -88,7 +89,11 @@ export function veriSagligiKarti(proje, c) {
         bolum('Boş sütunlar', s.bosSutunlar.length, liste(s.bosSutunlar.map((b) => h('li', {}, tabloDugmesi(b.tabloId, `${b.tablo} · ${b.sutun}`),
           h('span', { class: 'soluk kucuk' }, 'hiçbir satırda değer yok'))))),
         bolum('Kırık başvurular', s.kirikBasvurular.length, liste(s.kirikBasvurular.map((k) => h('li', {},
-          h('a', { href: k.git }, k.yer), h('code', { class: 'duz' }, k.basvuru), h('span', { class: 'soluk kucuk' }, k.neden)))), true)));
+          h('a', { href: k.git }, k.yer), h('code', { class: 'duz' }, k.basvuru), h('span', { class: 'soluk kucuk' }, k.neden)))), true),
+        // Seçenekli alanın bağlı sütunundaki değerler sayfadaki seçeneklerde yok (tablo-uyumu.mjs): koşuda seçilemez.
+        bolum('Uyumsuz tablo bağları', uyumsuz.length, liste(uyumsuz.map((u) => h('li', { class: `uyumsuz-bag ${u.duzey}` },
+          h('a', { href: u.git }, `Uyumsuz tablo bağı: ${u.ekran} · ${u.alan}`), rozet(u.duzey === 'guclu' ? 'hiçbir değer eşleşmiyor' : 'bazı değerler eşleşmiyor', u.duzey === 'guclu' ? 'hata' : 'uyari'),
+          h('span', { class: 'soluk kucuk' }, `Tablo: ${u.tablo} › ${u.sutun}. ${u.metin}.`)))), true)));
   };
   ciz(c.veri);
   return kok;

@@ -437,6 +437,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/yanit-kontrolleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'yanit-kontrolleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/yanit-kontrol-paneli.js', { dosya: 'yanit-kontrol-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Tablo bağı uyumu (seçenekli alanın bağlı sütun değerleri sayfadaki seçeneklerde var mı): sunucuyla ORTAK.
+  ['/arayuz/tablo-uyumu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-uyumu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veri-sagligi.js', { dosya: 'veri-sagligi.js', tur: 'text/javascript; charset=utf-8' }],
@@ -495,6 +497,8 @@ const ARAYUZ_DOSYALARI = new Map([
   // Canlı görüntü (koşu / Deneme paneli ve hızlı test "Tarayıcıda şu an"): sürekli kare akışı bileşeni ve kendi stil dosyası.
   ['/arayuz/canli-akis.js', { dosya: 'canli-akis.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/stil-canli-akis.css', { dosya: 'stil-canli-akis.css', tur: 'text/css; charset=utf-8' }],
+  // Ekran > Test verisi sekmesi (ekran-baglari.js): bağlamak gerekmeyen alanlar bölümü, kaynak rozeti.
+  ['/arayuz/stil-ekran-baglari.css', { dosya: 'stil-ekran-baglari.css', tur: 'text/css; charset=utf-8' }],
   // Test verisi tablo düzenleyicisi: sütun sırası denetimleri (tablolar.js).
   ['/arayuz/stil-tablo-duzenleyici.css', { dosya: 'stil-tablo-duzenleyici.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],

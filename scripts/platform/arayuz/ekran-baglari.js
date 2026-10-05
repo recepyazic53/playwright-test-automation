@@ -4,9 +4,12 @@
 // Genel senaryonun sayfasında da vardır: bağ orada bir kez kurulur, onu kullanan ekranlarda ekranın kendi alanlarının altında, ortak
 // akış başına ayrı bir "Genel senaryodan: <ad>" bölümünde görünür (varsayılan kapalı; ekrana özel bağ varsa açık). Ekranda
 // değiştirilirse ekrana özel olur (ezme), "Genel senaryoya dön" ekranın bağını siler. Yalnız görünüm: etkin bağ sunucuda çözülür.
+// Bağlamak gerekmeyen alanlar (tabloya bağlı olmayan, seçenekleri modelde tanımlı seçimler ve senaryo ayarları) en altta, varsayılan
+// kapalı ayrı bölümdedir; bağlanınca ana listeye geçer. Sayaç yalnız ana listeyi sayar. Genel senaryodan gelen alanda kaynak rozeti.
 import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { degerCipleri } from './parametre-tanimi-formu.js';
 import { onayIste } from './kosu-paneli.js';
+import { tabloSecenekUyumu } from './tablo-uyumu.mjs';
 
 const q = encodeURIComponent;
 const TIP = { secim: 'seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', telefon: 'telefon', onayKutusu: 'onay kutusu', dosya: 'dosya' };
@@ -20,6 +23,18 @@ const SECIM_TIPLERI = ['secim', 'okluSecim', 'radyo'];
 const ayarRozeti = () => h('span', {
   class: 'rozet vurgu ayar-rozeti', title: 'Ekranda karşılığı yok; akışın hangi dala gideceğini seçer. Tablodaki değer (ör. seçeneğin adı) koşuda seçeneğin koduna çevrilir (sütunun karşılıkları: sayfa değeri = kod).'
 }, 'Ekranda alan değil · senaryo ayarı');
+
+/**
+ * Adın ayrılma (-den) eki, kesme işaretiyle: ünlü uyumu son ünlüden, ünsüz benzeşmesi son harften (ör. "Ödeme" → "'den",
+ * "Teslimat" → "'tan"). Harf yoksa "'den". @param {string} ad
+ */
+export function cikmaEki(ad) {
+  const harfler = kucuk(ad).replace(/[^a-zçğıöşüâîû]/g, '');
+  const unlu = [...harfler].reverse().find((c) => 'aeıioöuüâîû'.includes(c));
+  const kalin = unlu ? 'aıouâû'.includes(unlu) : false;
+  const sert = 'fstkçşhp'.includes(harfler.slice(-1)) && harfler.length > 0;
+  return `'${sert ? 't' : 'd'}${kalin ? 'a' : 'e'}n`;
+}
 
 /** @param {HTMLElement} kap @param {{ proje: { id: string } }} s @param {{ id: string; ad: string }} ekran */
 export async function ekranBaglariSekmesi(kap, s, ekran) {
@@ -75,9 +90,37 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/ekranlar/e/${q(o.id)}/veri` }, 'Genel senaryo sayfasında düzenle →')),
       govde);
   };
+  // "Bağlamak gerekmeyen alanlar" bölümü (listenin en altında, varsayılan kapalı; açık / kapalı yeniden çizimde korunur).
+  const gerekmezKap = h('div', { class: 'gerekmez-kap' });
+  let gerekmezAcik = false;
+  /** @param {HTMLElement[]} satirlar */
+  const gerekmezBolumu = (satirlar) => {
+    const ad = () => `Bağlamak gerekmeyen alanlar, ${satirlar.length} alan, ${gerekmezAcik ? 'açık' : 'kapalı'}`;
+    const govde = h('div', { class: 'acilir-govde', id: yeniKimlik('gerekmez-bolum'), hidden: !gerekmezAcik },
+      h('p', { class: 'soluk kucuk' }, 'Seçenekleri modelde tanımlı ya da senaryoda seçilen ayarlar; isterseniz yine bir tablo sütununa bağlayabilirsiniz.'),
+      h('div', { class: 'alan-formu ekran-baglari' }, basliklar(), ...satirlar));
+    const dugme = h('button', { type: 'button', class: 'acilir-dugme', 'aria-expanded': String(gerekmezAcik), 'aria-controls': govde.id, 'aria-label': ad() },
+      h('span', { class: 'acilir-ok', 'aria-hidden': 'true' }), 'Bağlamak gerekmeyen alanlar ', h('span', { class: 'acilir-sayi', 'aria-hidden': 'true' }, `(${satirlar.length})`));
+    // Görünen sayı ad içinde söylenir ("…, 2 alan, kapalı"); ad görünen metinle başlar (ortak.js > adiGorunenMetinleUyumla).
+    dugme.addEventListener('click', () => {
+      gerekmezAcik = !gerekmezAcik;
+      dugme.setAttribute('aria-expanded', String(gerekmezAcik));
+      dugme.setAttribute('aria-label', ad());
+      govde.hidden = !gerekmezAcik;
+    });
+    return h('section', { class: 'gerekmez-bolum', 'aria-label': 'Bağlamak gerekmeyen alanlar' },
+      h('div', { class: 'acilir-baslik' }, h('h4', {}, dugme)), govde);
+  };
+  const sayac = h('p', { class: 'bag-sayaci soluk kucuk', 'aria-live': 'polite' });
   const ciz = () => {
     /** @type {HTMLElement[]} */
     const kendiSatirlari = [];
+    /** @type {HTMLElement[]} */
+    const gerekmezSatirlari = [];
+    let bagsizSayisi = 0;
+    // Seçim değişince alan bölüm değiştirebilir (bağlanınca ana listeye geçer): odak yeniden çizimden sonra aynı alanın seçimine döner.
+    const odakAlani = document.activeElement instanceof HTMLSelectElement && kap.contains(document.activeElement)
+      ? document.activeElement.dataset.alan : undefined;
     /** @type {Map<string, { o: { id: string; ad: string }; satirlar: HTMLElement[]; ozel: number }>} */
     const gruplar = new Map();
     girdiler.forEach((g) => {
@@ -92,7 +135,9 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       const gizliOlur = !SECIM_TIPLERI.includes(g.tip);
       // Seçenekleri ekran modelinde zaten tanımlı seçim alanı bağlanmadan da çalışır: "bağlı değil" uyarısı verilmez.
       const modelde = Boolean(g.modeldeSecenek) && !b;
-      const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu` }, h('option', { value: '' }, modelde ? '— seçenekler ekranda tanımlı (bağlamak gerekmez) —' : '— bağlı değil —'),
+      // Bağlamak gerekmez: tabloya bağlı değil ve seçenekleri modelde tanımlı ya da senaryo ayarı. Bağlanınca ana listeye geçer.
+      const gerekmez = !b && (Boolean(g.modeldeSecenek) || Boolean(g.senaryoAyari));
+      const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu`, 'data-alan': g.id }, h('option', { value: '' }, modelde ? '— seçenekler ekranda tanımlı (bağlamak gerekmez) —' : '— bağlı değil —'),
         tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
           value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
         }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
@@ -125,18 +170,38 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
         alt = [alt, degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok')];
       }
-      const satir = h('div', { class: `alan-satiri ${b || modelde ? '' : 'gonderilmez'}` },
-        h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),
-        h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
-      if (!miras) { kendiSatirlari.push(satir); return; }
+      // Genel senaryodan gelen alanın kaynağı (genel senaryonun kendi sayfasında sunucu kaynak vermez).
+      const kaynakRozeti = g.kaynak && !ortakAkis
+        ? rozet(`${g.kaynak.ad}${cikmaEki(g.kaynak.ad)}`, 'kaynak-rozeti', { kisalt: true, title: `Bu alan "${g.kaynak.ad}" genel senaryosundan gelir.` })
+        : null;
+      // Seçenekleri modelde tanımlı alan: bağlı sütunun değerleri sayfadaki seçeneklerde yoksa uyarı (sunucuyla ortak kural; seçim anında).
+      const uyum = sutun && tablo ? tabloSecenekUyumu({ etiket: g.etiket, secenekler: g.modelSecenekleri, seceneklerDurumu: g.seceneklerDurumu },
+        sutun, tablo.satirlar.map((r) => r.degerler[sutun.ad])) : null;
+      const uyumNotu = uyum ? h('p', { class: `tablo-uyumu ${uyum.duzey}`, id: yeniKimlik('tablo-uyumu') }, ikon('uyari'),
+        ` ${uyum.metin}. ${uyum.duzey === 'guclu' ? 'Bu sütun bu alana uymuyor; başka bir sütun seçin.' : 'Eşleşmeyen satırlar koşuda seçilemez.'}`) : null;
+      if (uyumNotu) sec.setAttribute('aria-describedby', uyumNotu.id);
+      const satir = h('div', { class: `alan-satiri ${b || gerekmez ? '' : 'gonderilmez'} ${uyum ? 'uyumsuz' : ''}`.trim(), 'data-alan': g.id },
+        h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip), kaynakRozeti),
+        h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt, uyumNotu));
+      if (gerekmez) { gerekmezSatirlari.push(satir); return; }
+      if (!miras) { kendiSatirlari.push(satir); if (!b) bagsizSayisi += 1; return; }
       const grup = gruplar.get(miras.ortakAkis.id) || { o: miras.ortakAkis, satirlar: [], ozel: 0 };
       grup.satirlar.push(satir);
       if (kendi) grup.ozel += 1;
       gruplar.set(miras.ortakAkis.id, grup);
     });
     yerlestir(liste, basliklar(), ...kendiSatirlari,
-      kendiSatirlari.length ? null : h('p', { class: 'soluk kucuk' }, 'Bu ekranın kendi alanı yok; alanları aşağıdaki genel senaryolardan gelir.'));
+      kendiSatirlari.length ? null : h('p', { class: 'soluk kucuk' }, gruplar.size
+        ? 'Bu ekranın bağlanacak kendi alanı yok; diğer alanlar aşağıdaki genel senaryolardan gelir.'
+        : 'Bağlanması gereken alan yok; alanlar aşağıdaki “Bağlamak gerekmeyen alanlar” bölümündedir.'));
     yerlestir(ortakKap, [...gruplar.values()].map((x) => ortakBolumu(x.o, x.satirlar, x.ozel)));
+    // Kullanıcının bağını kaldırdığı alan kapalı bölüme düşerse bölüm açılır (alan gözden ve odaktan kaybolmasın).
+    if (odakAlani && gerekmezSatirlari.some((x) => x.dataset.alan === odakAlani)) gerekmezAcik = true;
+    yerlestir(gerekmezKap, gerekmezSatirlari.length ? gerekmezBolumu(gerekmezSatirlari) : null);
+    // Sayaç yalnız ana listeyi sayar: bağlamak gerekmeyen alanlar "bağlı değil" sayılmaz.
+    sayac.textContent = `${kendiSatirlari.length} alan · ${bagsizSayisi ? `${bagsizSayisi} bağlı değil` : 'hepsi bağlı'}`;
+    sayac.hidden = !kendiSatirlari.length;
+    if (odakAlani) /** @type {HTMLElement | null} */ (kap.querySelector(`select[data-alan="${CSS.escape(odakAlani)}"]`))?.focus();
   };
   // "Otomatik eşleştir…": bağlantısız alanlar için tablo sütunu önerisi (önizleme → tek onay → geri al); senaryo değerlerini tabloya çevirme
   // adımları (değerler / kişi satırları) aynı pencerede sonraki adım olarak durur.
@@ -150,9 +215,9 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     ortakAkis ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Bu genel senaryonun alanlarını burada bir kez bağlayın: bağlar onu kullanan tüm ekranlara varsayılan olarak geçer. Bir ekran aynı alanı kendi Test verisi sekmesinde başka sütuna bağlarsa o ekranda onunki geçerli olur.')
       : Object.keys(ortakBaglar).length ? h('div', { class: 'not-kutusu bilgi kucuk ortak-bag-notu' }, 'Üstteki tablo bu ekranın kendi alanlarıdır. Genel senaryolardan gelen alanlar altta, genel senaryo başına ayrı “Genel senaryodan” bölümündedir; bağları genel senaryonun sayfasında kurulur. Değiştirirseniz yalnız bu ekran için geçerli olur (ekrana özel); “Genel senaryoya dön” ekranın bağını siler.') : null,
-    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Seçenekleri ekranda zaten tanımlı olan seçim alanlarını bağlamak gerekmez; bağlanmazsa o seçenekler kullanılır. Değişiklikler anında kaydedilir. Alanları sizin yerinize eşleştirmek için "Otomatik eşleştir…" (önce öneriler gösterilir, tek onayla uygulanır, geri alınabilir).'),
+    h('p', { class: 'soluk kucuk' }, 'Her alanı bir test verisi tablosunun sütununa bağlayın. Senaryo formunda bağlı seçim alanlarının seçenekleri tablodan gelir; aynı tabloya bağlı alanlar seçtikçe birbirini süzer (ör. Kapsam → Alternatif → Ülke). Seçenekleri ekranda zaten tanımlı olan seçim alanlarını ve senaryo ayarlarını bağlamak gerekmez (bağlanmazsa o seçenekler kullanılır); bunlar en alttaki “Bağlamak gerekmeyen alanlar” bölümündedir. Değişiklikler anında kaydedilir. Alanları sizin yerinize eşleştirmek için "Otomatik eşleştir…" (önce öneriler gösterilir, tek onayla uygulanır, geri alınabilir).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Test verisi > Tablolar'), ' bölümünden ekleyin.'),
-    liste, ortakKap));
+    sayac, liste, ortakKap, gerekmezKap));
   ciz();
 }
 

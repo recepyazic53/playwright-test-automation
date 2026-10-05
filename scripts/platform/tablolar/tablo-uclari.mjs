@@ -3,7 +3,7 @@
 import { basename } from 'node:path';
 import { DepoHatasi, ekranModeliGetir } from '../veritabani/depo.mjs';
 import { tabloSil, tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet, ortakAkisBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, kullanilanOrtakAkislar, ortakAkisBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
 import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
@@ -78,15 +78,26 @@ export const TABLO_GET_UCLARI = [
   ['/platform/ekran/alan-baglari', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const ekranId = kimlik(q.get('ekranId'), 'ekranId');
-    const { girdiler } = ekranGirdileri(db, projeId, ekranId, { tumTipler: true });
+    const { girdiler } = ekranGirdileri(db, projeId, ekranId, { tumTipler: true, modelSecenekleri: true });
     const model = ekranModeliGetir(db, ekranId);
+    // kaynak: alan ekranın kullandığı bir genel senaryodan (ortak akış) geliyorsa o genel senaryo { id, ad }; ortak akışın alan
+    // kimlikleri ekrana açılınca değişmez. Aynı alan iki genel senaryoda varsa akıştaki ilki. Genel senaryonun kendi sayfasında yok.
+    /** @type {Map<string, { id: string; ad: string }>} */
+    const kaynaklar = new Map();
+    for (const o of kullanilanOrtakAkislar(db, ekranId)) {
+      for (const og of ekranGirdileri(db, projeId, o.id, { tumTipler: true }).girdiler) if (!kaynaklar.has(String(og.id))) kaynaklar.set(String(og.id), o);
+    }
     return {
       baglar: ekranAlanBaglari(db, ekranId), ortakBaglar: ortakAkisBaglari(db, ekranId), ortakAkis: Boolean(model && model.model && model.model.tur === 'ortakAkis'),
       // senaryoAyari: ekranda karşılığı olmayan, akışı dallandıran seçim (rozetle gösterilir; tablodaki değer koda çevrilir).
       // modeldeSecenek: seçim alanının seçenekleri ekran modelinde zaten tanımlı (tabloya bağlamak gerekmez; "bağlı değil" uyarısı verilmez).
       girdiler: girdiler.map((g) => ({
         id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}),
-        ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { modeldeSecenek: true } : {})
+        ...(g.tip === 'secim' && Array.isArray(g.secenekler) && g.secenekler.length ? { modeldeSecenek: true } : {}),
+        // modelSecenekleri + seceneklerDurumu (tablo listesi uygulanmamış, sayfadaki seçenekler): bağ seçilirken sütun değerleri bunlarla
+        // anında karşılaştırılır (tablo-uyumu.mjs; sunucuyla aynı kural).
+        ...(g.modelSecenekleri && g.modelSecenekleri.length ? { modelSecenekleri: g.modelSecenekleri, ...(g.seceneklerDurumu ? { seceneklerDurumu: g.seceneklerDurumu } : {}) } : {}),
+        ...(kaynaklar.has(String(g.id)) ? { kaynak: kaynaklar.get(String(g.id)) } : {})
       })), tablolar: tablolariListele(db, projeId)
     };
   }]
