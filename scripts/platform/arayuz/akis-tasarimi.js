@@ -25,7 +25,8 @@
 // Genel senaryonun kaydında (başlangıç ekranından) hedef seçimi yoktur: başlangıç ekranına ait bloklar silinir, "Genel senaryoyu güncelle"
 // genel senaryoyu kullanan ekranları gösterip onayla genel senaryonun tek akışına yazar (ekran paketi yok).
 // Ekranın akışında diyagramın gösteremediği parçalar (alt model adımı, görünürlük koşulu, kod yöntemi…) salt okunur "Korunan
-// adım / Korunan aksiyonlar" blokları, alan grubunda / aksiyonda kilitli not ve alanın yanında kilitli koşul olarak görünür;
+// adım / Korunan aksiyonlar" blokları, alan grubunda / aksiyonda kilitli not ve alanın yanında kilitli koşul ("Koşulu değiştir" ile
+// yerine yenisi yazılır ya da kaldırılır) olarak görünür;
 // kaydederken sunucu bunları modeldeki hâliyle aynen yazar. Korunan parçalı blok silinirken ve kaydetme onayında (artık
 // diyagramda olmayan korunan parçalar) ne kaybolacağı gösterilir.
 // Ekranın / genel senaryonun akışını düzenlerken sağ listede "Sayfada seç" (oge-secme.js: görünür tarayıcıda tıklayarak; seçiciyi Nöbetçi
@@ -46,6 +47,7 @@ import { sinirHatalari } from './ekran-modeli-dogrulayici.mjs';
 import { sayfadaSecDiyalogu } from './oge-secme.js';
 import { gezinmeOzetiKutusu } from './gezinme-ozeti.js';
 import { kosulAraclari } from './kosul-duzenleyici.js';
+import { gorunurseVar } from './gorunurluk-kosulu.mjs';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -486,18 +488,27 @@ export async function akisTasarimi(icerik, s) {
     const kosul = bloklar[i].kosullar ? bloklar[i].kosullar[anahtar] : undefined;
     const kosulYazisi = kosulMetni(kosul);
     // Alanın üstünde "ne zaman görünür?" satırı: koşul yoksa "Koşul ekle"; varsa özet + "Koşulu düzenle". Diyagramda gösterilemeyen
-    // koşul (ör. iç içe, çalışma anında): salt okunur, alanın tanımıyla aynen korunur.
+    // koşul (ör. iç içe ve / veya, bağlam): kilitli; değiştirilmezse alanın tanımıyla aynen korunur, "Koşulu değiştir" ile yerine yenisi
+    // yazılır ya da kaldırılır.
     const korunanKosul = bloklar[i].korunanKosullar ? bloklar[i].korunanKosullar[anahtar] : null;
     const kosulUst = h('div', { class: 'kosul-ust' });
-    if (korunanKosul) kosulUst.append(h('span', {
-      class: 'kosul-dugmesi var kilitli', role: 'note', 'aria-label': `${etiket}: koşul (diyagramda düzenlenemez)`,
-      title: `Görünür: ${korunanKosul}. Bu koşul diyagramda düzenlenemez; kaydederken modeldeki hâliyle aynen korunur.`
-    }, ikon('kilit'), korunanKosul));
-    else {
-      if (kosulYazisi) kosulUst.append(h('span', { class: 'kosul-ozeti', 'data-kosul-ozeti': anahtar, title: `${kosulYazisi} görünür` }, ikon('isaret'), `${kosulYazisi} görünür`));
+    const duzenleniyor = Boolean(kosulDuzenleme && kosulDuzenleme.blok === i && kosulDuzenleme.alan === anahtar);
+    if (korunanKosul) {
+      kosulUst.append(h('span', {
+        class: 'kosul-dugmesi var kilitli', role: 'note', 'aria-label': `${etiket}: koşul (diyagramda düzenlenemez)`,
+        title: `Görünür: ${korunanKosul}. Bu koşul diyagramda gösterilemez; değiştirmezseniz kaydederken modeldeki hâliyle aynen korunur.`
+      }, ikon('kilit'), korunanKosul));
+      kosulUst.append(h('button', {
+        type: 'button', class: 'kosul-dugmesi var', 'aria-label': `Koşulu değiştir — ${etiket}: koşul`, 'aria-expanded': duzenleniyor ? 'true' : 'false',
+        title: 'Yeni bir koşul yazın; kaydedince şu anki koşulun yerini alır.',
+        onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; sinirDuzenleme = null; ciz(); }
+      }, 'Koşulu değiştir'));
+    } else {
+      const ek = kosulYazisi && gorunurseVar(kosul) ? 'doldurulur' : 'görünür';
+      if (kosulYazisi) kosulUst.append(h('span', { class: 'kosul-ozeti', 'data-kosul-ozeti': anahtar, title: `${kosulYazisi} ${ek}` }, ikon('isaret'), `${kosulYazisi} ${ek}`));
       // Erişilebilir ad görünen metinle başlar (WCAG 2.5.3); "‹alan›: koşul" ile de bulunur.
       kosulUst.append(h('button', {
-        type: 'button', class: `kosul-dugmesi${kosulYazisi ? ' var' : ''}`, 'aria-label': `${kosulYazisi ? 'Koşulu düzenle' : 'Koşul ekle'} — ${etiket}: koşul`, 'aria-expanded': kosulDuzenleme && kosulDuzenleme.blok === i && kosulDuzenleme.alan === anahtar ? 'true' : 'false',
+        type: 'button', class: `kosul-dugmesi${kosulYazisi ? ' var' : ''}`, 'aria-label': `${kosulYazisi ? 'Koşulu düzenle' : 'Koşul ekle'} — ${etiket}: koşul`, 'aria-expanded': duzenleniyor ? 'true' : 'false',
         title: kosulYazisi ? `Görünür: ${kosulYazisi}. Değiştirmek için tıklayın.` : 'Her zaman görünür. Başka bir alanın değerine bağlıysa koşul ekleyin.',
         onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; sinirDuzenleme = null; ciz(); }
       }, kosulYazisi ? null : ikon('isaret'), kosulYazisi ? 'Koşulu düzenle' : 'Koşul ekle'));
@@ -555,9 +566,22 @@ export async function akisTasarimi(icerik, s) {
 
   /** Alanın koşul düzenleyicisi (kosul-duzenleyici.js): ekranın ve akıştaki genel senaryoların alanları; =, ≠, dolu, boş; VE / VEYA. */
   function kosulDuzenleyici(b, anahtar) {
-    const odak = () => akis.querySelector(`[data-alan="${CSS.escape(anahtar)}"] .kosul-dugmesi`)?.focus();
+    const odak = () => akis.querySelector(`[data-alan="${CSS.escape(anahtar)}"] button.kosul-dugmesi`)?.focus();
+    // Kilitli (diyagramda gösterilemeyen) koşul: düzenleyici boş açılır; kaydedilen koşul (ya da kaldırma) onun yerini alır —
+    // sunucu elle koşulu olan alanın korunan koşulunu yazmaz (paket-olusturucu.mjs: elle koşul modeldekinin yerine geçer).
+    const kilitli = b.korunanKosullar ? b.korunanKosullar[anahtar] : null;
     return kosulAraci.duzenleyici(b, anahtar, {
-      kaydet: (kosul) => { b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul }; kosulDuzenleme = null; degisti(); odak(); },
+      kilitli,
+      kaydet: (kosul) => {
+        b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul };
+        if (b.korunanKosullar && anahtar in b.korunanKosullar) {
+          const { [anahtar]: _eski, ...kalan } = b.korunanKosullar;
+          if (Object.keys(kalan).length) b.korunanKosullar = kalan; else delete b.korunanKosullar;
+        }
+        kosulDuzenleme = null;
+        degisti();
+        odak();
+      },
       vazgec: () => { kosulDuzenleme = null; ciz(); odak(); }
     });
   }

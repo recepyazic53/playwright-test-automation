@@ -135,10 +135,10 @@ test.describe('saf işlevler', () => {
     expect(ifadedenSatirlar(ifade)).toEqual({ bag: 'veya', satirlar: [
       { alan: 'tip', islem: 'degil', degerler: ['A', 'B'] }, { alan: 'plan', islem: 'bos', degerler: [] }, { alan: 'onay', islem: 'esit', degerler: ['true'], onay: true }
     ] });
-    // İç içe / karışık / senaryo ayarı / çalışma anında: düzenleyicide gösterilmez (salt okunur, aynen korunur).
+    // İç içe / karışık / senaryo ayarı: düzenleyicide gösterilmez (kilitli, aynen korunur). "Ekranda görünürse" bir satırdır.
     expect(ifadedenSatirlar({ ve: [{ alan: 'a', esit: '1' }, { veya: [{ alan: 'b', esit: '2' }] }] })).toBeNull();
     expect(ifadedenSatirlar({ senaryoAyari: 'x', esit: true })).toBeNull();
-    expect(ifadedenSatirlar({ calismaZamani: 'gorunurse' })).toBeNull();
+    expect(ifadedenSatirlar({ calismaZamani: 'gorunurse' })).toEqual({ bag: 've', satirlar: [{ alan: '', islem: 'gorunurse', degerler: [] }] });
     // Eski tek koşul aynen bir "=" satırıdır; özet.
     expect(kosulSatirlari({ secim: 'tip', degerler: ['A'] })).toEqual({ bag: 've', satirlar: [{ alan: 'tip', islem: 'esit', degerler: ['A'] }] });
     const ad = (s: { alan: string; ortak?: boolean }) => (s.ortak ? BAYI : s.alan === 'tip' ? 'Tip' : s.alan);
@@ -360,7 +360,7 @@ test.describe('sunucu, arayüz ve koşu (sahte sayfa)', () => {
     const alanSecimi = satir1.getByRole('combobox', { name: 'Alan' });
     // Ekranın alanları (kendisi yok) + genel senaryonun alanı "‹genel senaryo› › ‹alan›".
     expect(await alanSecimi.locator('option').allTextContents()).toEqual(['Alan seçin…', 'Tip', 'Plan', 'Açıklama', BAYI]);
-    expect(await satir1.getByRole('combobox', { name: 'Karşılaştırma' }).locator('option').allTextContents()).toEqual(['= (şunlardan biri)', '≠ (hiçbiri)', 'dolu', 'boş']);
+    expect(await satir1.getByRole('combobox', { name: 'Karşılaştırma' }).locator('option').allTextContents()).toEqual(['= (şunlardan biri)', '≠ (hiçbiri)', 'dolu', 'boş', 'ekranda görünürse (koşuda belli olur)']);
     await alanSecimi.selectOption({ label: BAYI });
     // Seçeneği olmayan genel senaryo alanı: bağlı tablonun değerleri (sayfa karşılığı metinde); elle kutusu yok.
     const degerler = satir1.getByRole('group', { name: 'Değerler' });
