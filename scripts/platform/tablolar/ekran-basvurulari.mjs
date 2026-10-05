@@ -26,6 +26,8 @@ import { baglariCoz, etiketMetni } from './secime-gore-bag.mjs';
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 /** Senaryo verisinde bilerek boş bırakılan alanların listesi (senaryo-dogrulayici.mjs > BILEREK_BOS_ANAHTARI ile aynı ad). */
 const BILEREK_BOS = 'bilerekBos';
+/** Seçim alanı tipleri: tabloya bağlı DÜZ değerin sayfa karşılığına çevrildiği alanlar (bagliDuzKarsiliklar). */
+const SECIM_TIPLERI = ['secim', 'okluSecim', 'radyo'];
 
 /**
  * Modelin senaryo alanları: alan kimliği → senaryo anahtarı (tek anahtarlı alanlar) ve anahtar → seçeneklerin senaryo değerleri.
@@ -282,7 +284,7 @@ export function metinBasvurulariniCoz(metinler, veri, s) {
 
 /**
  * Tabloya bağlı alanların düz değerlerinden sayfa karşılığı olanlar: [senaryo anahtarı, sayfa değeri]. Atlananlar: başvuru, senaryo ayarı
- * (koduna ayrıca çevrilir), onay kutusu / dosya, gizli sütun, seçeneklerin senaryo değeri olarak tanıdığı değer, karşılığı olmayan değer.
+ * (koduna ayrıca çevrilir), seçim dışı alan (metin, sayı, onay kutusu, dosya…), gizli sütun, seçeneklerin senaryo değeri olarak tanıdığı değer, karşılığı olmayan değer.
  * @param {Record<string, unknown>} veri @param {Parameters<typeof ekranBasvurulariniCoz>[1]} s @returns {Array<[string, string]>}
  */
 function bagliDuzKarsiliklar(veri, s) {
@@ -294,8 +296,11 @@ function bagliDuzKarsiliklar(veri, s) {
     const anahtar = s.alanAnahtarlari[alanId];
     const v = anahtar ? veri[anahtar] : undefined;
     if (!anahtar || typeof v !== 'string' || !v.trim() || degerBasvurusu(v) || s.ayarSecenekleri?.[anahtar]) continue;
+    // Yalnız seçim alanları (açılır liste, oklu seçim, radyo): karşılık, seçeneğin senaryodaki adını sayfadaki koduna çevirir. Elle
+    // yazılan alanda (metin, sayı, tarih…) düz değer kullanıcının yazdığıdır, aynen yazılır (bağ yalnız satır seçimine yarar); başvuru
+    // (${Tablo.Sütun}) ise tablodan geldiği için sayfa karşılığıyla çözülmeye devam eder. Tip bilinmiyorsa (model bilgisi yok) uygulanır.
     const tip = s.alanTipleri?.[anahtar];
-    if (tip === 'onayKutusu' || tip === 'dosya' || s.secenekDegerleri?.[anahtar]?.includes(v)) continue;
+    if ((tip !== undefined && !SECIM_TIPLERI.includes(tip)) || s.secenekDegerleri?.[anahtar]?.includes(v)) continue;
     const t = s.tablolar.find((x) => x.id === b.tablo);
     const sutun = t ? sutunBul(t, b.sutun) : undefined;
     if (!sutun || sutun.gizli) continue;

@@ -167,6 +167,9 @@ test.describe('sayfa karşılığı ve plan seçenekleri (yan bulgu)', () => {
     expect(ekranBasvurulariniCoz({ tur: 'Kutu' }, { ...ortak, secenekDegerleri: { tur: ['Kutu', 'Raf'] } }).veri).toEqual({ tur: 'Kutu' });
     expect(ekranBasvurulariniCoz({ tur: 'Raf' }, ortak).veri).toEqual({ tur: 'Raf' });
     expect(ekranBasvurulariniCoz({ tur: 'Kutu' }, { ...ortak, alanTipleri: { tur: 'onayKutusu' } }).veri).toEqual({ tur: 'Kutu' });
+    // Elle yazılan alan (metin): düz değer kullanıcının yazdığıdır, aynen kalır; seçim alanında (secim / radyo) karşılık gider.
+    expect(ekranBasvurulariniCoz({ tur: 'Kutu' }, { ...ortak, alanTipleri: { tur: 'metin' } }).veri).toEqual({ tur: 'Kutu' });
+    expect(ekranBasvurulariniCoz({ tur: 'Kutu' }, { ...ortak, alanTipleri: { tur: 'radyo' } }).veri).toEqual({ tur: 'K1' });
     // Koşu, tabloları yalnız bağlı alanın düz değeri ya da başvuru varsa okur.
     expect(bagliDuzDegerVarMi({ tur: 'Kutu' }, ortak.baglar, ortak.alanAnahtarlari)).toBe(true);
     expect(bagliDuzDegerVarMi({ tur: '', baska: 'x' }, ortak.baglar, ortak.alanAnahtarlari)).toBe(false);
