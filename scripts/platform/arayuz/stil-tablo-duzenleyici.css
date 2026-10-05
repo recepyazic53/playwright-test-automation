@@ -1,0 +1,25 @@
+/* Test verisi tablo düzenleyicisi (tablolar.js): sütun sırası denetimleri — başlığın üstünde sürükleme tutamağı ve ← / →
+   düğmeleri; sürüklerken bırakma yeri sütun kenarında dikey çizgiyle gösterilir. Renkler stil.css'teki tema değişkenlerinden. */
+.sutun-tasima { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; }
+.sutun-tasima-dugmeleri { display: inline-flex; gap: 2px; flex: none; }
+.veri-tablosu .sutun-tasi-dugmesi { min-width: 28px; min-height: 24px; border-radius: 6px; }
+.veri-tablosu .sutun-tasi-dugmesi .ikon { width: 14px; height: 14px; }
+.veri-tablosu .sutun-tasi-dugmesi:disabled { opacity: .35; cursor: default; }
+.sutun-tutamagi {
+  display: inline-flex; align-items: center; justify-content: center; flex: 1 1 auto; min-width: 24px; min-height: 24px;
+  border-radius: 6px; color: var(--metin-3); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+}
+.sutun-tutamagi:hover { color: var(--metin); background: var(--vurgu-zemin); }
+.sutun-tutamagi:active { cursor: grabbing; }
+.sutun-tutamagi-isareti { font-size: 14px; line-height: 1; letter-spacing: 0; }
+.veri-tablosu thead th.veri-sutunu.surukleniyor { opacity: .55; }
+/* Bırakma yeri: başlığın sol (önüne) ya da sağ (arkasına) kenarında vurgu renginde çizgi. th zaten sticky (konumlu). */
+.veri-tablosu thead th.veri-sutunu.birak-once::before,
+.veri-tablosu thead th.veri-sutunu.birak-sonra::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--vurgu); pointer-events: none; z-index: 2;
+}
+.veri-tablosu thead th.veri-sutunu.birak-once::before { left: -1px; }
+.veri-tablosu thead th.veri-sutunu.birak-sonra::after { right: -1px; }
+@media (prefers-reduced-motion: no-preference) {
+  .veri-tablosu thead th.veri-sutunu { transition: opacity .12s ease; }
+}

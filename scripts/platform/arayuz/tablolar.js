@@ -2,7 +2,7 @@
 // birlikte geçerli bir değer kombinasyonu (ör. Servis girişi: Kanal | Kullanıcı | Parola). Ekran input'ları ve servis
 // parametreleri bir sütuna bağlanır; senaryoda seçtikçe aynı tablodaki listeler satırlardan süzülür (koşul tanımı yok).
 //   · Sol: tablolar (sütun / satır sayısı) + "Yeni tablo".
-//   · Sağ: düzenlenebilir ızgara — sütun adı / gizli / sil, satır hücreleri, Ortam (Tümü / ortam), satır sil; arama;
+//   · Sağ: düzenlenebilir ızgara — sütun adı / gizli / sil / sırası (← / →, sürükle-bırak, Alt + ← / →), satır hücreleri, Ortam (Tümü / ortam), satır sil; arama;
 //     Excel / CSV yükle ve yapıştır (ilk satır sütun adlarıyla eşleşirse başlık sayılır, yeni başlıklar sütun olur).
 //   · Gizli sütun (parola vb.) değerleri sunucudan hiç gelmez; boş bırakılan gizli hücre kayıtlı değeri korur.
 //   · Sütun başlığındaki "Karşılıklar": sütundaki her değerin sayfadaki (seçenek değeri) ve servisteki karşılığı. Ekran koşusu
@@ -772,16 +772,111 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
 
     const tablo = h('table', { class: 'veri-tablosu' });
     const altBilgi = h('div', { class: 'kucuk soluk tablo-alt-bilgi' });
+
+    // --- Sütun sırası: ← / → düğmeleri, tutamaktan sürükle-bırak, başlıkta Alt + ← / → ------------------------------------
+    // Sıra tablonun sıralı sutunlar dizisidir (yeni alan yok); diğer düzenlemeler gibi Kaydet'le yazılır, "Değişiklikleri geri al"
+    // ile döner. Satır değerleri sütun ADIYLA tutulduğundan değerler, gizli işareti ve karşılıklar sütun nesnesiyle birlikte gider;
+    // ${Tablo.Sütun} başvuruları, ekran / servis bağları ve süzme sırası (formdaki alan sırası) sütun sırasından etkilenmez.
+    // Bağlam tablosunda sıra profillerin alanlarından türer (saklanan sıra yok): orada taşıma denetimi gösterilmez.
+    const sutunDuyurusu = h('span', { class: 'gorunmez', role: 'status', 'aria-live': 'polite' });
+    const sutunEtiketi = (s) => (s.ad.trim() ? `“${s.ad.trim()}”` : `${is.sutunlar.indexOf(s) + 1}.`);
+    /** Sürüklenen sütun (yalnız bu düzenleyicideki sürükleme; dışarıdan bırakılan öğe yok sayılır). */
+    let suruklenen = null;
+    /**
+     * Sütunu kaynak sıradan hedef sıraya taşır, ızgarayı yeniden çizer; odak aynı sütunun aynı denetimine döner (o denetim artık
+     * devre dışıysa öbür ok düğmesine, o da yoksa sütun adına). @param {number} kaynak @param {number} hedef @param {string | null} rol
+     */
+    function sutunuTasi(kaynak, hedef, rol) {
+      const n = is.sutunlar.length;
+      if (kaynak === hedef || kaynak < 0 || hedef < 0 || kaynak >= n || hedef >= n) return;
+      const [s] = is.sutunlar.splice(kaynak, 1);
+      is.sutunlar.splice(hedef, 0, s);
+      is.degisti = true;
+      govdeCiz(); durumCiz();
+      sutunDuyurusu.textContent = `${sutunEtiketi(s)} sütunu ${hedef + 1}. sıraya taşındı (${n} sütun).`;
+      if (!rol) return;
+      const th = tablo.querySelectorAll('thead th.veri-sutunu')[hedef];
+      const adaylar = [rol, rol === 'sol' ? 'sag' : rol === 'sag' ? 'sol' : '', 'ad'].filter(Boolean);
+      for (const r of adaylar) {
+        const el = th?.querySelector(`[data-rol="${r}"]`);
+        if (el instanceof HTMLElement && !(/** @type {HTMLButtonElement} */ (el).disabled)) { el.focus(); return; }
+      }
+    }
+    const birakmaIzleriniTemizle = () => { for (const x of tablo.querySelectorAll('.birak-once, .birak-sonra, .surukleniyor')) x.classList.remove('birak-once', 'birak-sonra', 'surukleniyor'); };
+    /**
+     * Sütun başlığındaki taşıma denetimleri (iki ya da daha çok sütunda; bağlam tablosunda yok). cubuk: başlığa eklenir;
+     * bagla(th): sürükle-bırak ve klavye olaylarını başlığa bağlar; adYenile(): ad yazıldıkça düğme adlarını günceller.
+     * @param {{ ad: string }} s @param {number} i
+     */
+    function sutunTasimaDenetimleri(s, i) {
+      if (is.baglam || is.sutunlar.length < 2) return null;
+      const sol = h('button', { type: 'button', class: 'ikon-dugme hayalet sutun-tasi-dugmesi', 'data-rol': 'sol', disabled: i === 0, title: 'Sola al (Alt + ←)', onclick: () => sutunuTasi(is.sutunlar.indexOf(s), is.sutunlar.indexOf(s) - 1, 'sol') }, ikon('geri'));
+      const sag = h('button', { type: 'button', class: 'ikon-dugme hayalet sutun-tasi-dugmesi', 'data-rol': 'sag', disabled: i === is.sutunlar.length - 1, title: 'Sağa al (Alt + →)', onclick: () => sutunuTasi(is.sutunlar.indexOf(s), is.sutunlar.indexOf(s) + 1, 'sag') }, ikon('ok'));
+      const tutamak = h('span', { class: 'sutun-tutamagi', draggable: 'true', 'aria-hidden': 'true', title: 'Sürükleyip başka bir sütun başlığının yanına bırakın (klavyeyle: Alt + ← / →)' },
+        h('span', { class: 'sutun-tutamagi-isareti' }, '⠿'));
+      const adYenile = () => {
+        sol.setAttribute('aria-label', `${sutunEtiketi(s)} sütununu sola al`);
+        sag.setAttribute('aria-label', `${sutunEtiketi(s)} sütununu sağa al`);
+      };
+      adYenile();
+      /** @param {HTMLElement} th */
+      const bagla = (th) => {
+        th.addEventListener('keydown', (o) => {
+          if (!o.altKey || o.ctrlKey || o.metaKey || o.shiftKey || (o.key !== 'ArrowLeft' && o.key !== 'ArrowRight')) return;
+          o.preventDefault();
+          const k = is.sutunlar.indexOf(s);
+          const rol = o.target instanceof HTMLElement ? o.target.getAttribute('data-rol') || 'ad' : 'ad';
+          sutunuTasi(k, o.key === 'ArrowLeft' ? k - 1 : k + 1, rol);
+        });
+        tutamak.addEventListener('dragstart', (o) => {
+          suruklenen = s;
+          if (o.dataTransfer) {
+            o.dataTransfer.effectAllowed = 'move';
+            o.dataTransfer.setData('text/plain', `tablo-sutunu:${s.ad}`);
+            try { o.dataTransfer.setDragImage(th, 16, 16); } catch { /* sürükleme görüntüsü isteğe bağlı */ }
+          }
+          th.classList.add('surukleniyor');
+        });
+        tutamak.addEventListener('dragend', () => { suruklenen = null; birakmaIzleriniTemizle(); });
+        /** Bırakma yeri: başlığın sol yarısı → önüne, sağ yarısı → arkasına. @param {DragEvent} o */
+        const yan = (o) => { const r = th.getBoundingClientRect(); return o.clientX < r.left + r.width / 2 ? 'once' : 'sonra'; };
+        th.addEventListener('dragover', (o) => {
+          if (!suruklenen) return;
+          o.preventDefault();
+          if (o.dataTransfer) o.dataTransfer.dropEffect = 'move';
+          const y = yan(o);
+          if (th.classList.contains(`birak-${y}`)) return;
+          for (const x of tablo.querySelectorAll('.birak-once, .birak-sonra')) x.classList.remove('birak-once', 'birak-sonra');
+          th.classList.add(`birak-${y}`);
+        });
+        th.addEventListener('dragleave', (o) => { if (!(o.relatedTarget instanceof Node && th.contains(o.relatedTarget))) th.classList.remove('birak-once', 'birak-sonra'); });
+        th.addEventListener('drop', (o) => {
+          if (!suruklenen) return;
+          o.preventDefault();
+          const k = is.sutunlar.indexOf(suruklenen);
+          const t = is.sutunlar.indexOf(s);
+          let hedef = yan(o) === 'once' ? t : t + 1;
+          if (k < hedef) hedef--;
+          suruklenen = null;
+          birakmaIzleriniTemizle();
+          sutunuTasi(k, hedef, null);
+        });
+      };
+      return { cubuk: h('div', { class: 'sutun-tasima' }, tutamak, h('span', { class: 'sutun-tasima-dugmeleri' }, sol, sag)), bagla, adYenile };
+    }
+
     function basCiz() {
       return h('thead', {}, h('tr', {},
         h('th', { class: 'sira', scope: 'col' }, '#'),
         h('th', { scope: 'col', class: 'satir-adi-sutunu', title: is.baglam ? 'Senaryoda bu adla seçilir (zorunlu)' : 'Senaryoda satırı adıyla seçmek için (ör. tc1); boşsa değerlerden üretilir' }, is.baglam ? 'Satır adı *' : 'Satır adı'),
         is.sutunlar.map((s, i) => {
-          const g = h('input', { type: 'text', value: s.ad, maxlength: '60', 'aria-label': `${i + 1}. sütunun adı` });
-          g.addEventListener('input', () => { s.ad = g.value; is.degisti = true; durumCiz(); });
-          const gizli = h('input', { type: 'checkbox', checked: s.gizli, 'aria-label': `${i + 1}. sütun gizli` });
+          const g = h('input', { type: 'text', value: s.ad, maxlength: '60', 'aria-label': `${i + 1}. sütunun adı`, 'data-rol': 'ad' });
+          const gizli = h('input', { type: 'checkbox', checked: s.gizli, 'aria-label': `${i + 1}. sütun gizli`, 'data-rol': 'gizli' });
           gizli.addEventListener('change', () => { s.gizli = gizli.checked; is.degisti = true; ciz(); });
-          return h('th', { scope: 'col', class: 'veri-sutunu' }, h('div', { class: 'sutun-basligi' },
+          const tasima = sutunTasimaDenetimleri(s, i);
+          g.addEventListener('input', () => { s.ad = g.value; is.degisti = true; durumCiz(); tasima?.adYenile(); });
+          const th = h('th', { scope: 'col', class: 'veri-sutunu' }, h('div', { class: 'sutun-basligi' },
+            tasima ? tasima.cubuk : null,
             h('div', { class: 'sutun-basligi-ust' }, g,
               is.sutunlar.length > 1 ? h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${i + 1}. sütunu sil`, title: 'Sütunu sil', onclick: () => {
                 is.sutunlar.splice(i, 1); is.degisti = true; ciz();
@@ -789,6 +884,8 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
             is.baglam ? null : h('div', { class: 'sutun-basligi-alt' },
               h('label', { class: 'gizli-secimi', title: 'Gizli: değer ekranda hiç gösterilmez (parola vb.); koşuda satırdan gelir.' }, gizli, ikon('kilit'), h('span', {}, 'Gizli')),
               s.gizli ? null : karsilikDugmesi(s, i))));
+          if (tasima) tasima.bagla(th);
+          return th;
         }),
         h('th', { scope: 'col', class: 'ortam-sutunu', title: 'Satırın geçerli olduğu ortam (Tümü: her ortamda)' }, h('span', { class: 'ortam-sutunu-baslik' }, 'Geçerli ortam')),
         h('th', { scope: 'col', class: 'eylem ekle-sutunu' }, h('div', { class: 'ekle-dugmeleri' },
@@ -816,7 +913,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
     function karsilikDugmesi(s, i) {
       const n = Object.keys(s.karsiliklar || {}).length;
       return h('button', {
-        type: 'button', class: `kucuk-dugme hayalet karsilik-dugmesi${n ? ' dolu' : ''}`, 'aria-label': `${i + 1}. sütunun karşılıkları${n ? ` (${n})` : ''}`,
+        type: 'button', class: `kucuk-dugme hayalet karsilik-dugmesi${n ? ' dolu' : ''}`, 'data-rol': 'karsilik', 'aria-label': `${i + 1}. sütunun karşılıkları${n ? ` (${n})` : ''}`,
         title: n ? `Karşılıklar: ${n} değerin sayfa / servis değeri tanımlı` : 'Karşılıklar: değerin sayfada ve serviste farklı karşılığı (ör. EKSPRES → 1)',
         onclick: async () => {
           const yeni = await karsilikPenceresi(s, sutunDegerleri(s));
@@ -897,7 +994,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           is.satirlar = []; ciz();
         } }, 'Tüm satırları kaldır') : null),
       yapistirKutusu,
-      yatayKaydirmaIpucu(h('div', { class: 'tablo-kaydirma veri-tablosu-kap', tabindex: '0', 'aria-label': 'Tablo (yana kaydırılabilir)' }, tablo), { sutunSecici: 'thead th.veri-sutunu' }), altBilgi,
+      yatayKaydirmaIpucu(h('div', { class: 'tablo-kaydirma veri-tablosu-kap', tabindex: '0', 'aria-label': 'Tablo (yana kaydırılabilir)' }, tablo), { sutunSecici: 'thead th.veri-sutunu' }), altBilgi, sutunDuyurusu,
       h('div', { class: 'dugmeler' }, geriAl, kaydetD)));
     govdeCiz();
     durumCiz();
