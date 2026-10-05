@@ -181,5 +181,10 @@ function ciz() {
     satir.yanit ? kutu(`${satir.senaryoId}:yanit`, `Yanıt${satir.sonuc && satir.sonuc.durumKodu ? ` (HTTP ${satir.sonuc.durumKodu})` : ''}`, satir.yanit) : null,
     satir.sonuc && satir.sonuc.kosuId ? h('div', { class: 'panel-eylemleri' },
       h('a', { class: 'dugme kucuk-dugme', href: `#/servisler/s/${encodeURIComponent(is.servisId)}/raporlar/${encodeURIComponent(satir.sonuc.kosuId)}` }, 'Rapor', ikon('ok'))) : null);
+  // Koşu sürerken panel her sorguda yeniden çizilir: listenin ve izleme alanının kaydırma konumu korunur (kullanıcı kaydırabilsin).
+  const listeKaydirma = panelEl.querySelector('.kosu-listesi')?.scrollTop ?? 0;
+  const izlemeKaydirma = panelEl.querySelector('.kosu-izleme')?.scrollTop ?? 0;
   yerlestir(panelEl, baslik, liste, izleme);
+  liste.scrollTop = listeKaydirma;
+  izleme.scrollTop = izlemeKaydirma;
 }
