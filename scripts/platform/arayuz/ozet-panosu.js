@@ -36,6 +36,8 @@ const DAR_EKRAN = '(max-width: 860px)';
 const darEkran = () => window.matchMedia(DAR_EKRAN).matches;
 /** Liste kartında görünen en çok madde. */
 const LISTE_ILK = 10;
+/** Tablo uzun metin hücresinin önizlemesinde en çok karakter (sütun genişliğinde "…" ile kesilir; tamamı "Görüntüle"de). */
+const ONIZLEME_EN_COK = 1000;
 /** CANLI onayı verilmiş SQL kartları (bu sayfa oturumunda; kart hedefi / sorgusu değişince yeniden sorulur). @type {Set<string>} */
 const canliOnaylari = new Set();
 
@@ -1256,23 +1258,32 @@ function tabloGorunumu(a, sonuc, t) {
     eylem: () => kaydet(sutunGorunurlugu(gorunen, tum, ad, !gorunen.includes(ad)), { ad: '', rol: 'sutunlar' })
   }))));
 
-  const tablo = h('table', { class: 'ozet-tablosu pano-tablo-tablosu' },
+  // Sabit genişlik: görünen tüm sütunların genişliği verilmişse tablo bu genişliklerin toplamı kadardır (kartı doldurmaz; sütunlar
+  // birbirinin yanında durur, biri daralınca sağdakiler sola kayar). Biri "sığdır"la kaldırılınca tablo yine kartı doldurur.
+  const sabit = gorunen.every((ad) => genislikler[ad]);
+  const tablo = h('table', { class: `ozet-tablosu pano-tablo-tablosu${sabit ? ' sabit-genislik' : ''}` },
     h('colgroup', {}, gorunen.map((ad) => h('col', { width: genislikler[ad] ? String(genislikler[ad]) : null, 'data-sutun': ad }))),
     h('thead', {}, h('tr', {}, gorunen.map((ad, j) => basHucresi(ad, j)))),
     h('tbody', {}, sirali.map((r, satirI) => h('tr', {}, gorunen.map((ad) => {
       const v = r[tum.indexOf(ad)];
       const metin = hucreBicimle(v, b);
       if (!uzunMetinMi(metin)) return h('td', { class: typeof v === 'number' ? 'sayi' : null }, metin);
-      // Uzun metin (ör. CLOB'daki servis isteği): tek satır önizleme + "Görüntüle" (hücreye tıklamak da açar).
+      // Uzun metin (ör. CLOB'daki servis isteği): sütun genişliğinde tek satır önizleme; "Görüntüle" yalnız metin kesildiğinde ya da
+      // birden çok satırlıysa görünür (kesikleriIsaretle). Hücreye tıklamak her zaman tam metni açar.
       const ac = () => t.goster({ sutun: ad, satirNo: satirI + 1, metin, sutunlar: tum, satir: r, donus: dugme });
       const dugme = h('button', { type: 'button', class: 'kucuk-dugme hayalet pano-hucre-goruntule', 'aria-label': `Görüntüle: ${ad}, ${satirI + 1}. satır`,
-        title: 'Metnin tamamını aç' }, 'Görüntüle');
+        title: 'Metnin tamamını aç', hidden: true }, 'Görüntüle');
       dugme.addEventListener('click', (o) => { o.stopPropagation(); ac(); });
-      const td = h('td', { class: 'pano-uzun-hucre', title: 'Tamamını görmek için tıklayın' },
-        h('span', { class: 'pano-hucre-ic' }, h('span', { class: 'pano-hucre-onizleme' }, metinKisalt(metin)), dugme));
+      const onizleme = metinKisalt(metin, ONIZLEME_EN_COK);
+      // Tek satırlı ve önizlemeye tamamı sığan metin: "Görüntüle" yalnız sütuna sığmazsa görünür.
+      const tam = !/\n/.test(metin.trim()) && metin.replace(/\s+/g, ' ').trim().length <= ONIZLEME_EN_COK;
+      const td = h('td', { class: 'pano-uzun-hucre', title: 'Tamamını görmek için tıklayın', 'data-tam': tam ? '1' : null },
+        h('span', { class: 'pano-hucre-ic' }, h('span', { class: 'pano-hucre-onizleme' }, onizleme), dugme));
       td.addEventListener('click', (o) => { if (!(/** @type {HTMLElement} */ (o.target).closest('button')) && !String(getSelection()?.toString() ?? '')) ac(); });
       return td;
     })))));
+
+  if (sabit) tablo.style.width = `${gorunen.reduce((t, ad) => t + genislikler[ad], 0)}px`;
 
   /** Başlık hücresi: sıralama düğmesi, sütun menüsü (⋯), genişlik tutamağı; başlık sürüklenerek taşınır. @param {string} ad @param {number} j */
   function basHucresi(ad, j) {
@@ -1297,7 +1308,16 @@ function tabloGorunumu(a, sonuc, t) {
     const th = h('th', { scope: 'col', class: sayiSutunlari.has(ad) ? 'sayi' : null, 'data-sutun': ad, 'aria-sort': yon ? ARIA_SORT[yon] : null, draggable: 'true' }, h('div', { class: 'pano-th' }, sirala, menu), tutamak);
     const sinirla = (/** @type {number} */ n) => Math.max(SUTUN_GENISLIGI.en, Math.min(SUTUN_GENISLIGI.enCok, Math.round(n)));
     const genislikKaydet = (/** @type {number | null} */ n) => {
-      if (n === null) delete genislikler[ad]; else genislikler[ad] = sinirla(n);
+      if (n === null) delete genislikler[ad];
+      else {
+        // İlk elle genişlikte diğer sütunlar o anki genişliklerinde sabitlenir (tablo sabit genişliğe geçer).
+        for (const x of gorunen) {
+          if (x === ad || genislikler[x]) continue;
+          const b = tablo.querySelector(`th[data-sutun="${CSS.escape(x)}"]`);
+          if (b) genislikler[x] = sinirla(b.getBoundingClientRect().width);
+        }
+        genislikler[ad] = sinirla(n);
+      }
       t.kaydet(gorunen, genislikler, { ad, rol: 'genislik' });
     };
     // Fare / dokunma: kenar tutamağından sürükle (canlı önizleme: <col width>), bırakınca kaydet. Çift tıkla: sığdır (genişlik kaldırılır).
@@ -1319,7 +1339,16 @@ function tabloGorunumu(a, sonuc, t) {
         c.setAttribute('width', String(Math.round(baslik ? baslik.getBoundingClientRect().width : 100)));
         gecici.push(c);
       }
-      const hareket = (/** @type {PointerEvent} */ e) => { son = sinirla(ilk + e.clientX - bas); col?.setAttribute('width', String(son)); };
+      const oncekiSinif = tablo.classList.contains('sabit-genislik');
+      const oncekiGenislik = tablo.style.width;
+      const tabloGenisligi = () => { tablo.style.width = `${[...tablo.querySelectorAll('col')].reduce((t, c) => t + Number(c.getAttribute('width') || 0), 0)}px`; };
+      const hareket = (/** @type {PointerEvent} */ e) => {
+        son = sinirla(ilk + e.clientX - bas);
+        col?.setAttribute('width', String(son));
+        // Canlı önizleme: kaydedilince olacağı gibi sabit genişlik (sağdaki sütunlar kayar).
+        tablo.classList.add('sabit-genislik');
+        tabloGenisligi();
+      };
       const birak = () => {
         tutamak.removeEventListener('pointermove', hareket);
         tutamak.removeEventListener('pointerup', birak);
@@ -1328,6 +1357,8 @@ function tabloGorunumu(a, sonuc, t) {
         if (Math.abs(son - ilk) >= 2) { genislikKaydet(son); return; }
         // Hareket yoksa (tıklama / çift tıklamanın ilki) geçici genişlikler geri alınır; hiçbir şey kaydedilmez.
         for (const c of gecici) c.removeAttribute('width');
+        tablo.classList.toggle('sabit-genislik', oncekiSinif);
+        tablo.style.width = oncekiGenislik;
       };
       tutamak.addEventListener('pointermove', hareket);
       tutamak.addEventListener('pointerup', birak);
@@ -1362,6 +1393,20 @@ function tabloGorunumu(a, sonuc, t) {
   }
 
   const kaydirma = h('div', { class: 'tablo-kaydirma pano-tablo', tabindex: '0', role: 'region', 'aria-label': `${a.baslik} sonucu` }, tablo);
+  // "Görüntüle": önizleme sütuna sığmıyorsa (ya da metin çok satırlı / önizlemeden uzunsa) görünür; kart ya da sütun genişliği
+  // değişince yeniden değerlendirilir.
+  const kesikleriIsaretle = () => {
+    for (const td of tablo.querySelectorAll('td.pano-uzun-hucre')) {
+      const o = /** @type {HTMLElement} */ (td.querySelector('.pano-hucre-onizleme'));
+      const d = /** @type {HTMLElement} */ (td.querySelector('.pano-hucre-goruntule'));
+      const kesik = /** @type {HTMLElement} */ (td).dataset.tam !== '1' || o.scrollWidth > o.clientWidth + 1;
+      if (d.hidden === kesik) d.hidden = !kesik;
+    }
+  };
+  if (typeof ResizeObserver === 'function') {
+    let bekleyen = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(bekleyen); bekleyen = requestAnimationFrame(kesikleriIsaretle); }).observe(kaydirma);
+  } else requestAnimationFrame(kesikleriIsaretle);
   // Home / End: tablo dikeyde kaymıyorsa tarayıcı bu tuşları sayfaya geçirir (sayfa başa / sona atlar). Tablo odaktayken yatayda
   // başa / sona gider; sayfanın dikey konumu değişmez.
   kaydirma.addEventListener('keydown', (o) => {
