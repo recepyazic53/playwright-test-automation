@@ -1206,6 +1206,12 @@ function tabloGorunumu(a, sonuc, t) {
   const sirali = t.siralama.ad && gorunen.includes(t.siralama.ad) && t.siralama.yon
     ? satirlariSirala(sonuc.satirlar, tum.indexOf(t.siralama.ad), /** @type {any} */ (t.siralama.yon)) : sonuc.satirlar;
   const kaydet = (/** @type {string[]} */ sutunlar, odak) => t.kaydet(sutunlar, genislikler, odak);
+  // Sayı sütunu (boş olmayan tüm değerleri sayı): başlık da değerler gibi sağa yaslanır.
+  const sayiSutunlari = new Set(gorunen.filter((ad) => {
+    const i = tum.indexOf(ad);
+    const dolu = sonuc.satirlar.map((r) => r[i]).filter((v) => v !== null && v !== undefined && v !== '');
+    return dolu.length > 0 && dolu.every((v) => typeof v === 'number');
+  }));
 
   // Sütun menüsü / Sütunlar menüsü: tablonun üstündeki satırda açılır (konumlama için satır içi stil gerekmez).
   const menuYeri = h('div', { class: 'pano-menu-yeri' });
@@ -1288,7 +1294,7 @@ function tabloGorunumu(a, sonuc, t) {
       'aria-valuemin': String(SUTUN_GENISLIGI.en), 'aria-valuemax': String(SUTUN_GENISLIGI.enCok), 'aria-valuenow': genislik ? String(genislik) : null,
       'aria-valuetext': genislik ? `${genislik} piksel` : 'otomatik', title: 'Sürükleyerek genişliği ayarlayın; çift tıklayınca içeriğe sığdırılır'
     });
-    const th = h('th', { scope: 'col', 'data-sutun': ad, 'aria-sort': yon ? ARIA_SORT[yon] : null, draggable: 'true' }, h('div', { class: 'pano-th' }, sirala, menu), tutamak);
+    const th = h('th', { scope: 'col', class: sayiSutunlari.has(ad) ? 'sayi' : null, 'data-sutun': ad, 'aria-sort': yon ? ARIA_SORT[yon] : null, draggable: 'true' }, h('div', { class: 'pano-th' }, sirala, menu), tutamak);
     const sinirla = (/** @type {number} */ n) => Math.max(SUTUN_GENISLIGI.en, Math.min(SUTUN_GENISLIGI.enCok, Math.round(n)));
     const genislikKaydet = (/** @type {number | null} */ n) => {
       if (n === null) delete genislikler[ad]; else genislikler[ad] = sinirla(n);

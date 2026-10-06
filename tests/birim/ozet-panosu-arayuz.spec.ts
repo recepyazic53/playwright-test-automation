@@ -501,6 +501,10 @@ test('tablo: başlığı sürükle / menüyle taşı, gizle / göster, genişlik
   const th = (ad: string) => kart.locator(`thead th[data-sutun="${ad}"]`);
   const ilkSutun = (i: number) => kart.locator('tbody tr').evaluateAll((l, j) => l.map((r) => r.querySelectorAll('td')[j]?.textContent ?? ''), i);
   expect(await basliklar()).toEqual(['id', 'durum', 'tc_kimlik_no', 'tutar', 'gun']);
+  // Sayı sütununun başlığı da değerler gibi sağa yaslı (genişlik değişince değerler başlığın altında kalır).
+  await expect(th('id')).toHaveClass(/\bsayi\b/);
+  await expect(th('durum')).not.toHaveClass(/\bsayi\b/);
+  expect(await th('id').locator('.pano-th').evaluate((e) => getComputedStyle(e).justifyContent)).toBe('flex-end');
   // Sürükle-bırak: "gun" başlığını "id"nin üstüne.
   await th('gun').dragTo(th('id'));
   await expect.poll(basliklar).toEqual(['gun', 'id', 'durum', 'tc_kimlik_no', 'tutar']);
