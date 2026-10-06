@@ -31,7 +31,7 @@ import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { adMaskeleyici, bilinenGizliDegerler } from './html-rapor.mjs';
 import { tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { panoGetir, sqlSonucuYaz } from './ozet-panosu.mjs';
-import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, kartParametreleri, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
+import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, etkinHedef, kartParametreleri, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean; gizliSutunlar: string[]; satirSiniri: number; parametreler?: Record<string, string> }} PanoSqlSonucu */
@@ -115,8 +115,11 @@ const guvenli = (fn) => { try { return fn(); } catch { return undefined; } };
  * Kaydedilmiş SQL kartı (yoksa DepoHatasi). @param {Veritabani} vt @param {string} projeId @param {string} kartId
  */
 export function sqlKarti(vt, projeId, kartId) {
-  const k = panoGetir(vt, projeId).duzen.kartlar.find((x) => x.id === kartId && x.tur === 'sql');
-  if (!k || !k.ayar) throw new DepoHatasi('SQL kartı bulunamadı. Panoyu kaydettikten sonra "Yenile"ye basın.');
+  const duzen = panoGetir(vt, projeId).duzen;
+  const bulunan = duzen.kartlar.find((x) => x.id === kartId && x.tur === 'sql');
+  if (!bulunan || !bulunan.ayar) throw new DepoHatasi('SQL kartı bulunamadı. Panoyu kaydettikten sonra "Yenile"ye basın.');
+  // Panonun ortamı seçiliyse mantıksal veritabanına bağlı kart o ortamla sorgulanır (uç denetimi de aynı hedefe bakar: CANLI onayı).
+  const k = { ...bulunan, ayar: { ...bulunan.ayar, hedef: etkinHedef(bulunan, duzen) } };
   return /** @type {{ id: string; donem?: unknown; ayar: { baslik: string; hedef: { veritabaniId?: string; ortamId?: string; baglantiId?: string }; sorgu: string; zamanAsimiSn?: unknown } }} */ (k);
 }
 
@@ -210,6 +213,7 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   /** @type {PanoSqlSonucu} */
   const sonuc = { zaman: simdi.toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri, onceki,
     ...(Object.keys(kartParam).length ? { parametreler: kartParam } : {}),
+    ...(h.veritabaniId && h.ortamId ? { ortamId: h.ortamId } : {}),
     ...(aralik ? { donem: { secim: donemTemizle(kart.donem) ?? { ...VARSAYILAN_DONEM }, baslangic: aralik.baslangic.toISOString(), bitis: aralik.bitis.toISOString() } } : {}) };
   sqlSonucuYaz(vt, projeId, kartId, sonuc);
   return sonuc;

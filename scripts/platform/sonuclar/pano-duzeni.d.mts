@@ -16,7 +16,7 @@ export declare function kartParametreleri(kart: { ayar?: any; parametreDegerleri
 export declare function kartParametrele<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, ad: string, deger: unknown): D;
 export declare function kartDonemliMi(kart: { tur: string; ayar?: any }): boolean;
 export declare function kartDonemle<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, donem: unknown): D;
-export type PanoDuzeni = { surum: number; kartlar: PanoKarti[] };
+export type PanoDuzeni = { surum: number; kartlar: PanoKarti[]; baslik?: string; aciklama?: string; ortamId?: string; otomatikYenileDk?: number };
 export declare const IZGARA_SUTUN: number;
 export declare const SATIR_BIRIMI: number;
 export declare const IZGARA_BOSLUK: number;
@@ -105,3 +105,6 @@ export declare function hucreSunumu(bicim: SutunBicimi | null | undefined, v: un
 export declare const KART_SIMGELERI: ReadonlyArray<{ anahtar: string; ad: string }>;
 export declare function ikinciDeger(ikinci: { tur: string; artisIyi?: boolean } | null | undefined, deger: number | null, diger: number | null):
   null | { tur: 'toplam'; oran: number } | { tur: 'karsilastir'; yuzde: number | null; fark: number; ok: '▲' | '▼' | '='; renk: string };
+export declare const OTOMATIK_YENILEME_DK: ReadonlyArray<number>;
+export declare function panoAyarla<D extends { kartlar: PanoKarti[] }>(duzen: D, ayar: { baslik?: unknown; aciklama?: unknown; ortamId?: unknown; otomatikYenileDk?: unknown }): D;
+export declare function etkinHedef(kart: { ayar?: any }, duzen: { ortamId?: string }): { veritabaniId?: string; ortamId?: string; baglantiId?: string };

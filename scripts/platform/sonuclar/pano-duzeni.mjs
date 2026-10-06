@@ -642,7 +642,42 @@ export function duzenTemizle(ham) {
     const b = sinirla(guncel, {});
     kartlar = cakismalariCoz([{ ...guncel, ...b }], kartlar.filter((x) => x.id !== k.id));
   }
-  return { surum: PANO_SURUMU, kartlar: okumaSirasinaDiz(kartlar) };
+  return { surum: PANO_SURUMU, kartlar: okumaSirasinaDiz(kartlar), ...panoAyarlariTemizle(ham) };
+}
+
+// Pano üst şeridi (düzende; tüm kartlar için): başlık ve açıklama, ortam (mantıksal veritabanına bağlı SQL kartları bu ortamın
+// eşlemesiyle sorgulanır; doğrudan bağlantılı kartlar etkilenmez) ve otomatik yenileme aralığı (dakika; 0 = kapalı).
+/** Otomatik yenileme seçenekleri (dakika). */
+export const OTOMATIK_YENILEME_DK = Object.freeze([0, 1, 5, 15, 30]);
+
+/** @param {Record<string, unknown>} ham @returns {{ baslik?: string; aciklama?: string; ortamId?: string; otomatikYenileDk?: number }} */
+function panoAyarlariTemizle(ham) {
+  const baslik = ham.baslik === undefined || ham.baslik === '' ? '' : metin(ham.baslik, 'Pano başlığı', 80, { bos: true });
+  const aciklama = ham.aciklama === undefined || ham.aciklama === '' ? '' : metin(ham.aciklama, 'Pano açıklaması', 200, { bos: true });
+  const ortamId = typeof ham.ortamId === 'string' && ham.ortamId ? disKimlik(ham.ortamId, 'Pano ortamı') : '';
+  const dk = Number(ham.otomatikYenileDk);
+  return { ...(baslik ? { baslik } : {}), ...(aciklama ? { aciklama } : {}), ...(ortamId ? { ortamId } : {}),
+    ...(OTOMATIK_YENILEME_DK.includes(dk) && dk > 0 ? { otomatikYenileDk: dk } : {}) };
+}
+
+/**
+ * Pano üst şeridinin ayarlarını değiştirir (verilenler; boş / 0 kaldırır).
+ * @template {{ kartlar: any[] }} D @param {D} duzen @param {{ baslik?: unknown; aciklama?: unknown; ortamId?: unknown; otomatikYenileDk?: unknown }} ayar @returns {D}
+ */
+export function panoAyarla(duzen, ayar) {
+  const { baslik, aciklama, ortamId, otomatikYenileDk, ...kalan } = /** @type {any} */ (duzen);
+  const birlesik = { baslik, aciklama, ortamId, otomatikYenileDk, ...Object.fromEntries(Object.entries(ayar).filter(([, v]) => v !== undefined)) };
+  if (birlesik.otomatikYenileDk !== undefined && !OTOMATIK_YENILEME_DK.includes(Number(birlesik.otomatikYenileDk))) throw new PanoHatasi('Otomatik yenileme aralığı geçersiz.');
+  return /** @type {D} */ ({ ...kalan, ...panoAyarlariTemizle(birlesik) });
+}
+
+/**
+ * Kartın etkin hedefi: panoda ortam seçiliyse mantıksal veritabanına bağlı kart o ortamla sorgulanır (doğrudan bağlantı değişmez).
+ * @param {{ ayar?: any }} kart @param {{ ortamId?: string }} duzen
+ */
+export function etkinHedef(kart, duzen) {
+  const h = kart.ayar?.hedef || {};
+  return h.veritabaniId && duzen.ortamId ? { ...h, ortamId: duzen.ortamId } : h;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
