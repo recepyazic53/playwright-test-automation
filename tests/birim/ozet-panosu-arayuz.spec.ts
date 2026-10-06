@@ -487,6 +487,62 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('sütun biçimleri: değere göre rozet, eşik rengi, değişim oku, sayaç rozeti, alt satır (alt sütun ayrıca görünmez); formdan düzenlenir', async () => {
+  test.setTimeout(90_000);
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 'b-tablo', tur: 'sql', x: 0, y: 0, w: 12, h: 10, ayar: { baslik: 'Biçimli tablo', hedef: { baglantiId: bTest }, gorunum: 'tablo',
+      sorgu: 'SELECT id, durum, aciklama, tutar, id - 6 AS fark, id % 3 AS sorun FROM kayitlar WHERE id <= 6 ORDER BY id',
+      sutunBicimleri: [
+        { sutun: 'durum', tur: 'rozet', kurallar: [{ deger: 'HATA', renk: 'kirmizi' }, { deger: 'onaylandi', renk: 'yesil' }] },
+        { sutun: 'tutar', tur: 'renk', esikler: [{ islec: '>', deger: 40, renk: 'kirmizi' }] },
+        { sutun: 'fark', tur: 'degisim' },
+        { sutun: 'sorun', tur: 'sayac' },
+        { sutun: 'id', tur: 'altSatir', altSutun: 'aciklama' }] } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: 'Biçimli tablo' }) });
+  await kart.getByRole('button', { name: 'Yenile: Biçimli tablo' }).click();
+  await expect(kart.locator('tbody tr')).toHaveCount(6);
+  // "aciklama" id'nin altında: ayrı sütun olarak görünmez.
+  expect(await kart.locator('thead th').evaluateAll((l) => l.map((e) => e.getAttribute('data-sutun')))).toEqual(['id', 'durum', 'tutar', 'fark', 'sorun']);
+  const hucre = (satir: number, sutun: number) => kart.locator('tbody tr').nth(satir).locator('td').nth(sutun);
+  await expect(hucre(1, 0).locator('.pano-hucre-ana')).toHaveText('2');
+  await expect(hucre(1, 0).locator('.pano-hucre-alt')).toHaveText('Kayıt 2');
+  // Rozet: büyük / küçük harf yok sayılır; kuralı olmayan değer düz metin.
+  await expect(hucre(1, 1).locator('.pano-rozet')).toHaveClass(/renk-kirmizi/);
+  await expect(hucre(1, 1)).toHaveText('hata');
+  await expect(hucre(2, 1).locator('.pano-rozet')).toHaveClass(/renk-yesil/);
+  await expect(hucre(0, 1).locator('.pano-rozet')).toHaveCount(0);
+  // Eşik rengi: tutar > 40 kırmızı (id 4 → 42).
+  await expect(hucre(3, 2)).toHaveClass(/renk-kirmizi/);
+  await expect(hucre(2, 2)).not.toHaveClass(/renk-/);
+  // Değişim: id - 6 → negatif ▼ yeşil, sıfır =; sayaç: 0 soluk, 0 dışı kırmızı rozet.
+  await expect(hucre(0, 3).locator('.pano-rozet')).toHaveClass(/renk-yesil/);
+  await expect(hucre(0, 3)).toContainText('▼');
+  await expect(hucre(5, 3)).toContainText('=');
+  await expect(hucre(0, 4).locator('.pano-rozet')).toHaveClass(/renk-kirmizi/);
+  await expect(hucre(2, 4)).toHaveClass(/soluk/);
+  // Form: kurallar metin olarak gelir; değiştirilip kaydedilince tablo yeni kurala göre çizilir; hatalı satır uyarı verir.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Biçimli tablo' }).click();
+  const pencere = page.getByRole('dialog', { name: /^Kartı düzenle/ });
+  const kurallar = pencere.getByRole('textbox', { name: 'Kurallar (her satırda bir kural)' });
+  await expect(kurallar.first()).toHaveValue('HATA = kırmızı\nonaylandi = yeşil');
+  await kurallar.first().fill('hata = kırmızı\nbekliyor = sarı\nbozuk satır');
+  await pencere.getByRole('button', { name: 'Uygula' }).click();
+  await expect(pencere).toContainText('durum: 3. satır');
+  await kurallar.first().fill('hata = kırmızı\nbekliyor = sarı');
+  await pencere.getByRole('button', { name: 'Uygula' }).click();
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Bitti' }).click();
+  await expect(hucre(0, 1).locator('.pano-rozet')).toHaveClass(/renk-sari/);
+  await expect(hucre(2, 1).locator('.pano-rozet')).toHaveCount(0);
+  await expect(hucre(2, 1)).toHaveText('onaylandi');
+  await expect(hucre(1, 1).locator('.pano-rozet')).toHaveClass(/renk-kirmizi/);
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('kart parametresi: başlıktaki seçim değeri parametre olarak bağlar ve kartı yeniler; özet kutucuğuna tıklayınca detay kartın parametresi seçilir; kalıcı', async () => {
   test.setTimeout(90_000);
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [

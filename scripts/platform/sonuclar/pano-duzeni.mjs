@@ -460,13 +460,7 @@ function sqlAyari(ham) {
   const gorunum = SQL_GORUNUMLERI.some((g) => g.anahtar === ham.gorunum) ? /** @type {string} */ (ham.gorunum) : 'sayi';
   const esikHam = ham.esikler === undefined ? [] : ham.esikler;
   if (!Array.isArray(esikHam) || esikHam.length > EN_COK_ESIK) throw new PanoHatasi(`En çok ${EN_COK_ESIK} renk eşiği olabilir.`);
-  const esikler = esikHam.map((e) => {
-    if (!nesneMi(e) || !ESIK_ISLECLERI.includes(/** @type {string} */ (e.islec))) throw new PanoHatasi('Eşiğin işleci geçersiz.');
-    const deger = typeof e.deger === 'number' ? e.deger : Number(String(e.deger ?? '').replace(',', '.'));
-    if (!Number.isFinite(deger) || String(e.deger ?? '').trim() === '') throw new PanoHatasi('Eşik değeri bir sayı olmalıdır.');
-    if (!ESIK_RENKLERI.some((r) => r.anahtar === e.renk)) throw new PanoHatasi('Eşiğin rengi geçersiz.');
-    return { islec: /** @type {string} */ (e.islec), deger, renk: /** @type {string} */ (e.renk) };
-  });
+  const esikler = esikTemizle(esikHam);
   const sutunHam = ham.sutunlar === undefined ? [] : ham.sutunlar;
   if (!Array.isArray(sutunHam) || sutunHam.length > EN_COK_SUTUN) throw new PanoHatasi(`En çok ${EN_COK_SUTUN} sütun seçilebilir.`);
   const sutunlar = [...new Set(sutunHam.map((s) => metin(s, 'Sütun adı', 120)))];
@@ -497,6 +491,7 @@ function sqlAyari(ham) {
     return { ad, etiket, secenekler };
   });
   if (new Set(parametreler.map((p) => p.ad)).size !== parametreler.length) throw new PanoHatasi('Aynı parametre adı birden çok kez yazılmış.');
+  const sutunBicimleri = sutunBicimleriTemizle(ham.sutunBicimleri);
   // Kutucuğa tıklayınca: başka bir SQL kartının parametresine kutucuğun etiketi seçilir ve o kart yenilenir.
   let tiklama;
   if (nesneMi(ham.tiklama) && ham.tiklama.kartId) {
@@ -506,7 +501,7 @@ function sqlAyari(ham) {
     tiklama = { kartId, parametre };
   }
   return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }),
-    ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}) };
+    ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}) };
 }
 
 /**
@@ -753,6 +748,147 @@ export function esikRengi(deger, esikler) {
     if (tutar) return e.renk;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Sütun biçimleri (tablo görünümü): ayar.sutunBicimleri = [{ sutun, tur, … }] — hücre değerine göre rozet, renk, değişim oku,
+// sayaç rozeti ya da başka bir sütunun değerini alt satırda gösterme. Sütun başına bir biçim (sonraki aynı sütunu ezer).
+//   rozet   : kurallar [{ deger, renk }] — hücre metni (büyük / küçük harf ve baştaki / sondaki boşluk yok sayılarak) eşitse rozet
+//   renk    : esikler [{ islec, deger, renk }] — sayı ilk tutan eşiğin renginde
+//   degisim : sayının işaretine göre ▲ / ▼ rozeti; artisIyi değilse artış kırmızı, azalış yeşil
+//   sayac   : sayı > 0 ise kırmızı rozet, değilse soluk
+//   altSatir: altSutun'un değeri hücrenin altında küçük yazıyla (alt sütun tabloda ayrıca görünmez)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const SUTUN_BICIM_TURLERI = Object.freeze([
+  Object.freeze({ anahtar: 'rozet', ad: 'Değere göre rozet' }), Object.freeze({ anahtar: 'renk', ad: 'Eşiğe göre renk' }),
+  Object.freeze({ anahtar: 'degisim', ad: 'Değişim oku (▲ / ▼)' }), Object.freeze({ anahtar: 'sayac', ad: 'Sayaç rozeti (0 dışı kırmızı)' }),
+  Object.freeze({ anahtar: 'altSatir', ad: 'Altına başka sütun' })
+]);
+/** Rozet renkleri (eşik renkleri + mavi, gri). */
+export const ROZET_RENKLERI = Object.freeze([...ESIK_RENKLERI, Object.freeze({ anahtar: 'mavi', ad: 'Mavi' }), Object.freeze({ anahtar: 'gri', ad: 'Gri' })]);
+export const EN_COK_SUTUN_BICIMI = 20;
+export const EN_COK_ROZET_KURALI = 12;
+const RENK_ADLARI = new Map([['kirmizi', 'kirmizi'], ['kırmızı', 'kirmizi'], ['sari', 'sari'], ['sarı', 'sari'], ['yesil', 'yesil'], ['yeşil', 'yesil'], ['mavi', 'mavi'], ['gri', 'gri']]);
+const kucuk = (/** @type {unknown} */ v) => String(v ?? '').trim().toLocaleLowerCase('tr-TR');
+
+/** Renk adı (Türkçe karakterli ya da karaktersiz) → anahtar; bilinmiyorsa null. @param {unknown} v */
+export function renkAnahtari(v) {
+  return RENK_ADLARI.get(kucuk(v)) ?? null;
+}
+
+/**
+ * Rozet kuralları metni ("Kritik = kırmızı", her satırda bir kural) → kurallar ve satır hataları (arayüz formu).
+ * @param {string} metin @returns {{ kurallar: Array<{ deger: string; renk: string }>; hatalar: string[] }}
+ */
+export function rozetKurallariniOku(metin) {
+  /** @type {Array<{ deger: string; renk: string }>} */
+  const kurallar = [];
+  /** @type {string[]} */
+  const hatalar = [];
+  for (const [i, satir] of String(metin ?? '').split('\n').entries()) {
+    if (!satir.trim()) continue;
+    const m = /^(.*\S)\s*=\s*(\S+)\s*$/.exec(satir.trim());
+    const renk = m ? renkAnahtari(m[2]) : null;
+    if (!m || !renk) { hatalar.push(`${i + 1}. satır: "değer = renk" yazın (renk: kırmızı, sarı, yeşil, mavi, gri).`); continue; }
+    kurallar.push({ deger: m[1].trim(), renk });
+  }
+  return { kurallar, hatalar };
+}
+
+/**
+ * Eşik metni ("> 3 = kırmızı", her satırda bir eşik) → eşikler ve satır hataları (arayüz formu).
+ * @param {string} metin @returns {{ esikler: Array<{ islec: string; deger: number; renk: string }>; hatalar: string[] }}
+ */
+export function esikleriOku(metin) {
+  /** @type {Array<{ islec: string; deger: number; renk: string }>} */
+  const esikler = [];
+  /** @type {string[]} */
+  const hatalar = [];
+  for (const [i, satir] of String(metin ?? '').split('\n').entries()) {
+    if (!satir.trim()) continue;
+    const m = /^(>=|<=|!=|>|<|=)\s*(-?[\d.,]+)\s*=\s*(\S+)\s*$/.exec(satir.trim());
+    const renk = m ? renkAnahtari(m[3]) : null;
+    const deger = m ? Number(m[2].replace(/\./g, '').replace(',', '.')) : NaN;
+    if (!m || !renk || renk === 'mavi' || renk === 'gri' || !Number.isFinite(deger)) {
+      hatalar.push(`${i + 1}. satır: "> 3 = kırmızı" biçiminde yazın (işleç: > >= < <= = !=; renk: kırmızı, sarı, yeşil).`);
+      continue;
+    }
+    esikler.push({ islec: m[1], deger, renk });
+  }
+  return { esikler, hatalar };
+}
+
+/**
+ * Hücrenin sunumu (arayüz çizer): metin olduğu gibi (null) ya da rozet / renkli metin / alt satır.
+ * @param {any} bicim sütunun biçimi (yoksa null) @param {unknown} v hücre değeri @param {unknown} [sayiBicimi] kartın biçimi
+ * @param {unknown} [altDeger] altSatir biçiminde alt sütunun değeri
+ * @returns {null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string }}
+ */
+export function hucreSunumu(bicim, v, sayiBicimi, altDeger) {
+  if (!bicim || v === null || v === undefined || v === '') return null;
+  const metin = hucreBicimle(v, sayiBicimi);
+  if (bicim.tur === 'rozet') {
+    const k = (bicim.kurallar || []).find((/** @type {{ deger: string }} */ x) => kucuk(x.deger) === kucuk(v));
+    return k ? { tur: 'rozet', metin, renk: k.renk } : null;
+  }
+  if (bicim.tur === 'altSatir') return { tur: 'altSatir', metin, alt: altDeger === null || altDeger === undefined ? '' : hucreBicimle(altDeger, sayiBicimi) };
+  const n = sayiyaCevir(v);
+  if (n === null) return null;
+  if (bicim.tur === 'renk') { const r = esikRengi(n, bicim.esikler || []); return r ? { tur: 'renk', metin, renk: r } : null; }
+  if (bicim.tur === 'sayac') return n > 0 ? { tur: 'rozet', metin, renk: 'kirmizi' } : { tur: 'soluk', metin };
+  if (bicim.tur === 'degisim') {
+    const iyi = bicim.artisIyi === true;
+    const renk = n === 0 ? 'gri' : (n > 0) === iyi ? 'yesil' : 'kirmizi';
+    return { tur: 'rozet', metin: n > 0 ? `+${metin}` : metin, renk, ok: n > 0 ? '▲' : n < 0 ? '▼' : '=' };
+  }
+  return null;
+}
+
+/** Sütun biçimlerinin doğrulaması (SQL kartı ayarı). @param {unknown} ham */
+function sutunBicimleriTemizle(ham) {
+  if (ham === undefined || ham === null) return [];
+  if (!Array.isArray(ham) || ham.length > EN_COK_SUTUN_BICIMI) throw new PanoHatasi(`En çok ${EN_COK_SUTUN_BICIMI} sütun biçimi olabilir.`);
+  /** @type {Map<string, any>} */
+  const sonuc = new Map();
+  for (const b of ham) {
+    if (!nesneMi(b)) throw new PanoHatasi('Sütun biçimi geçersiz.');
+    const sutun = metin(b.sutun, 'Biçimlenen sütun', 120);
+    const tur = SUTUN_BICIM_TURLERI.some((t) => t.anahtar === b.tur) ? /** @type {string} */ (b.tur) : '';
+    if (!tur) throw new PanoHatasi(`"${sutun}" için biçim türü geçersiz.`);
+    /** @type {Record<string, unknown>} */
+    const yeni = { sutun, tur };
+    if (tur === 'rozet') {
+      const k = Array.isArray(b.kurallar) ? b.kurallar : [];
+      if (!k.length || k.length > EN_COK_ROZET_KURALI) throw new PanoHatasi(`"${sutun}" rozeti için 1–${EN_COK_ROZET_KURALI} kural yazın.`);
+      yeni.kurallar = k.map((x) => {
+        if (!nesneMi(x) || !ROZET_RENKLERI.some((r) => r.anahtar === x.renk)) throw new PanoHatasi(`"${sutun}" rozet kuralının rengi geçersiz.`);
+        return { deger: metin(x.deger, 'Rozet değeri', 120), renk: /** @type {string} */ (x.renk) };
+      });
+    } else if (tur === 'renk') {
+      const e = Array.isArray(b.esikler) ? b.esikler : [];
+      if (!e.length || e.length > EN_COK_ESIK) throw new PanoHatasi(`"${sutun}" için 1–${EN_COK_ESIK} eşik yazın.`);
+      yeni.esikler = esikTemizle(e);
+    } else if (tur === 'degisim') {
+      if (b.artisIyi === true) yeni.artisIyi = true;
+    } else if (tur === 'altSatir') {
+      yeni.altSutun = metin(b.altSutun, 'Alttaki sütun', 120);
+      if (yeni.altSutun === sutun) throw new PanoHatasi(`"${sutun}" kendisinin altına yazılamaz.`);
+    }
+    sonuc.set(sutun, yeni);
+  }
+  return [...sonuc.values()];
+}
+
+/** Eşik listesinin doğrulaması (kart eşikleri ve sütun biçimi). @param {unknown[]} esikHam */
+function esikTemizle(esikHam) {
+  return esikHam.map((e) => {
+    if (!nesneMi(e) || !ESIK_ISLECLERI.includes(/** @type {string} */ (e.islec))) throw new PanoHatasi('Eşiğin işleci geçersiz.');
+    const deger = typeof e.deger === 'number' ? e.deger : Number(String(e.deger ?? '').replace(',', '.'));
+    if (!Number.isFinite(deger) || String(e.deger ?? '').trim() === '') throw new PanoHatasi('Eşik değeri bir sayı olmalıdır.');
+    if (!ESIK_RENKLERI.some((r) => r.anahtar === e.renk)) throw new PanoHatasi('Eşiğin rengi geçersiz.');
+    return { islec: /** @type {string} */ (e.islec), deger, renk: /** @type {string} */ (e.renk) };
+  });
 }
 
 /** Hücre değerinden sayı (metin "1.234,5" / "12,5" de). Sayı değilse null. @param {unknown} v */
