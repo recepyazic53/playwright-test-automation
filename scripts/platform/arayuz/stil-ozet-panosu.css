@@ -403,3 +403,38 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-satir-listesi dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .pano-satir-onizleme { font-family: var(--yazi-mono); font-size: 12px; }
 @media (max-width: 600px) { .pano-satir-listesi { grid-template-columns: minmax(0, 1fr); } .pano-satir-listesi dd { margin-bottom: 6px; } }
+/* Sütun biçimi: etiket (her değer rozet) ve pay çubuğu (0–100). */
+.pano-rozet.renk-etiket { color: var(--vurgu-2); background: color-mix(in srgb, var(--vurgu-2) 14%, transparent); border-color: color-mix(in srgb, var(--vurgu-2) 35%, transparent); font-family: var(--yazi-mono); font-weight: 600; }
+.pano-pay { display: flex; align-items: center; gap: 8px; min-width: 7rem; }
+.pano-pay-iz { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; box-shadow: inset 0 0 0 1px var(--cizgi); }
+.pano-pay-dolu { display: block; height: 100%; border-radius: 3px; background: var(--vurgu); }
+.pano-pay-metin { font-size: 12px; color: var(--metin-2); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+/* Zengin kutucuk: simge, sağlık noktası, düne göre fark, mini trend (eşik renginde). */
+.pano-kutucuklar.zengin { grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); }
+.pano-kutucuk .pano-kutucuk-etiket { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pano-kutucuk-ad { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pano-kutucuk-simge { width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  background: var(--vurgu-zemin); color: var(--vurgu); }
+.pano-kutucuk-simge svg { width: 13px; height: 13px; }
+.pano-kutucuk-simge.esik-kirmizi { background: var(--hata-zemin); color: var(--hata); }
+.pano-kutucuk-simge.esik-sari { background: var(--atlanan-zemin); color: var(--atlanan); }
+.pano-kutucuk-simge.esik-yesil { background: var(--basari-zemin); color: var(--basari); }
+.pano-kutucuk-nokta { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--metin-3); }
+.pano-kutucuk-nokta.esik-kirmizi { background: var(--hata); box-shadow: 0 0 0 3px var(--hata-zemin); }
+.pano-kutucuk-nokta.esik-sari { background: var(--atlanan); box-shadow: 0 0 0 3px var(--atlanan-zemin); }
+.pano-kutucuk-nokta.esik-yesil { background: var(--basari); box-shadow: 0 0 0 3px var(--basari-zemin); }
+.pano-kutucuk-satir { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.pano-kutucuk-fark { font-size: 11px; font-weight: 600; white-space: nowrap; }
+.pano-kutucuk-fark.renk-kirmizi { color: var(--hata); } .pano-kutucuk-fark.renk-yesil { color: var(--basari); } .pano-kutucuk-fark.renk-gri { color: var(--metin-3); }
+.pano-kutucuk-trend { display: block; width: 100%; height: 26px; margin-top: 4px; color: var(--vurgu); }
+.pano-kutucuk-trend.esik-kirmizi { color: var(--hata); } .pano-kutucuk-trend.esik-sari { color: var(--atlanan); } .pano-kutucuk-trend.esik-yesil { color: var(--basari); }
+.pano-kutucuk-trend .alan { fill: currentColor; fill-opacity: .16; }
+.pano-kutucuk-trend .cizgi { fill: none; stroke: currentColor; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+/* Çizgi grafik: dolgulu alan, ikinci seri (kesikli; ör. dün), vurgulu son nokta ve küçük açıklama. */
+.pano-grafik .alan { fill: var(--vurgu); fill-opacity: .14; stroke: none; }
+.pano-grafik .cizgi-ikinci { stroke: var(--metin-3); stroke-width: 1.6; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.pano-grafik .nokta.son { stroke: var(--panel-kati); stroke-width: 2; }
+.pano-grafik-aciklama { display: flex; gap: 14px; justify-content: flex-end; font-size: 11px; color: var(--metin-2); margin-bottom: 4px; }
+.pano-grafik-aciklama .seri::before { content: ""; display: inline-block; width: 16px; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--vurgu); }
+.pano-grafik-aciklama .seri.ikinci::before { border-top: 2px dashed var(--metin-3); }
+@media (forced-colors: active) { .pano-grafik .cizgi-ikinci { stroke: GrayText; } .pano-grafik .alan { fill: transparent; } }

@@ -23,7 +23,7 @@ import {
   duzenTemizle, eksikYerlesikler, enKucukBoyut, esikRengi, eskiBicimMi, gorunurYerlesim, hucreBicimle, kartAyarla, kartEkle, kartKaldir, kartSiraTasi,
   kartYerlestir, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
   yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, sqlZamanAsimiTemizle, type PanoDuzeni,
-  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku, ikinciDeger, panoAyarla, etkinHedef
+  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku, ikinciDeger, panoAyarla, etkinHedef, parametreyleDegisenler
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -306,6 +306,11 @@ test('kart parametresi: tanım doğrulaması (sorguda :ad, ayrılmış ad, seçe
   expect(d1.kartlar[0].parametreDegerleri).toEqual({ servis: 'B' });
   expect(() => kartParametrele(d0, 'k-1', 'servis', 'Z')).toThrow('seçeneklerinde yok');
   expect(() => kartParametrele(d0, 'k-1', 'yok', 'A')).toThrow('böyle bir parametresi yok');
+  // Bağlı kartlar: aynı adlı parametresi bu değeri içeren kart da geçer; içermeyen ya da başka adlı kart geçmez.
+  const bag = (id: string, ad: string, secenekler: string[]) => ({ id, tur: 'sql', x: 0, y: 0, w: 6, h: 4, ayar: { parametreler: [{ ad, etiket: ad, secenekler }] } });
+  const d2 = { surum: 2, kartlar: [{ ...k2, x: 0, y: 0, w: 6, h: 4 }, bag('k-2', 'servis', ['A', 'B']), bag('k-3', 'servis', ['A']), bag('k-4', 'baska', ['B'])] } as unknown as PanoDuzeni;
+  expect(parametreyleDegisenler(d2, 'k-1', 'servis', 'B')).toEqual(['k-1', 'k-2']);
+  expect(kartParametrele(d2, 'k-1', 'servis', 'B').kartlar.map((x) => x.parametreDegerleri ?? null)).toEqual([{ servis: 'B' }, { servis: 'B' }, null, null]);
   const ayar = d1.kartlar[0].ayar as Record<string, unknown>;
   expect(kartAyarla(d1, 'k-1', { ...ayar, baslik: 'T' }).kartlar[0].parametreDegerleri).toEqual({ servis: 'B' });
   expect(kartAyarla(d1, 'k-1', { ...ayar, parametreler: [{ ad: 'servis', etiket: 'Servis', secenekler: ['A'] }] }).kartlar[0].parametreDegerleri).toBeUndefined();

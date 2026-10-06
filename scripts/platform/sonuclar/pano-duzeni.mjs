@@ -152,7 +152,20 @@ export function kartParametrele(duzen, id, ad, deger) {
   const p = (k?.ayar?.parametreler || []).find((/** @type {{ ad: string }} */ x) => x.ad === ad);
   if (!k || !p) throw new PanoHatasi('Kartın böyle bir parametresi yok.');
   if (typeof deger !== 'string' || !p.secenekler.includes(deger)) throw new PanoHatasi(`"${String(deger).slice(0, 80)}", ${p.etiket} seçeneklerinde yok.`);
-  return yeni(duzen, duzen.kartlar.map((x) => (x.id === id ? { ...x, parametreDegerleri: { ...(x.parametreDegerleri || {}), [ad]: deger } } : x)));
+  // Bağlı kartlar: aynı adlı parametresi olan ve bu değeri seçeneklerinde bulunduran diğer kartlar da aynı değere geçer.
+  return yeni(duzen, duzen.kartlar.map((x) => (bagliKartMi(x, id, ad, deger) ? { ...x, parametreDegerleri: { ...(x.parametreDegerleri || {}), [ad]: deger } } : x)));
+}
+
+/** @param {any} x @param {string} id @param {string} ad @param {string} deger */
+const bagliKartMi = (x, id, ad, deger) => x.id === id
+  || (x.tur === 'sql' && (x.ayar?.parametreler || []).some((/** @type {{ ad: string; secenekler: string[] }} */ q) => q.ad === ad && q.secenekler.includes(deger)));
+
+/**
+ * Parametre seçimiyle değişen kartlar (seçilen kart + aynı adlı parametresi bu değeri içeren kartlar; arayüz bunları yeniler).
+ * @param {{ kartlar: any[] }} duzen @param {string} id @param {string} ad @param {string} deger @returns {string[]}
+ */
+export function parametreyleDegisenler(duzen, id, ad, deger) {
+  return duzen.kartlar.filter((x) => bagliKartMi(x, id, ad, deger)).map((x) => x.id);
 }
 
 /** Kart döneme bağlı mı (dönem seçimi gösterilir ve saklanır)? @param {{ tur: string; ayar?: any }} kart */
@@ -513,7 +526,8 @@ function sqlAyari(ham) {
   return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }),
     ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}),
     ...(simge ? { simge } : {}), ...(altMetin ? { altMetin } : {}), ...(ikinci ? { ikinci } : {}), ...(ham.kartTonu === true ? { kartTonu: true } : {}),
-    ...(ham.satirIncele === true ? { satirIncele: true } : {}) };
+    ...(ham.satirIncele === true ? { satirIncele: true } : {}),
+    ...(typeof ham.seriSutunu === 'string' && ham.seriSutunu.trim() ? { seriSutunu: metin(ham.seriSutunu, 'Mini trend sütunu', 120) } : {}) };
 }
 
 /**
@@ -830,7 +844,8 @@ export function ikinciDeger(ikinci, deger, diger) {
 export const SUTUN_BICIM_TURLERI = Object.freeze([
   Object.freeze({ anahtar: 'rozet', ad: 'Değere göre rozet' }), Object.freeze({ anahtar: 'renk', ad: 'Eşiğe göre renk' }),
   Object.freeze({ anahtar: 'degisim', ad: 'Değişim oku (▲ / ▼)' }), Object.freeze({ anahtar: 'sayac', ad: 'Sayaç rozeti (0 dışı kırmızı)' }),
-  Object.freeze({ anahtar: 'altSatir', ad: 'Altına başka sütun' })
+  Object.freeze({ anahtar: 'altSatir', ad: 'Altına başka sütun' }), Object.freeze({ anahtar: 'cubuk', ad: 'Pay çubuğu (0–100)' }),
+  Object.freeze({ anahtar: 'etiket', ad: 'Etiket (her değer rozet)' })
 ]);
 /** Rozet renkleri (eşik renkleri + mavi, gri). */
 export const ROZET_RENKLERI = Object.freeze([...ESIK_RENKLERI, Object.freeze({ anahtar: 'mavi', ad: 'Mavi' }), Object.freeze({ anahtar: 'gri', ad: 'Gri' })]);
@@ -890,7 +905,7 @@ export function esikleriOku(metin) {
  * Hücrenin sunumu (arayüz çizer): metin olduğu gibi (null) ya da rozet / renkli metin / alt satır.
  * @param {any} bicim sütunun biçimi (yoksa null) @param {unknown} v hücre değeri @param {unknown} [sayiBicimi] kartın biçimi
  * @param {unknown} [altDeger] altSatir biçiminde alt sütunun değeri
- * @returns {null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string }}
+ * @returns {null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk' | 'cubuk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string; oran?: number }}
  */
 export function hucreSunumu(bicim, v, sayiBicimi, altDeger) {
   if (!bicim || v === null || v === undefined || v === '') return null;
@@ -899,10 +914,12 @@ export function hucreSunumu(bicim, v, sayiBicimi, altDeger) {
     const k = (bicim.kurallar || []).find((/** @type {{ deger: string }} */ x) => kucuk(x.deger) === kucuk(v));
     return k ? { tur: 'rozet', metin, renk: k.renk } : null;
   }
+  if (bicim.tur === 'etiket') return { tur: 'rozet', metin, renk: 'etiket' };
   if (bicim.tur === 'altSatir') return { tur: 'altSatir', metin, alt: altDeger === null || altDeger === undefined ? '' : hucreBicimle(altDeger, sayiBicimi) };
   const n = sayiyaCevir(v);
   if (n === null) return null;
   if (bicim.tur === 'renk') { const r = esikRengi(n, bicim.esikler || []); return r ? { tur: 'renk', metin, renk: r } : null; }
+  if (bicim.tur === 'cubuk') return { tur: 'cubuk', metin, oran: Math.max(0, Math.min(100, n)) / 100 };
   if (bicim.tur === 'sayac') return n > 0 ? { tur: 'rozet', metin, renk: 'kirmizi' } : { tur: 'soluk', metin };
   if (bicim.tur === 'degisim') {
     const iyi = bicim.artisIyi === true;

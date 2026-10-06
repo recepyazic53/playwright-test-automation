@@ -495,6 +495,55 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('servis izleme tasarımı: zengin kutucuk (simge, nokta, fark, mini trend); kutucuğa tıklayınca aynı adlı parametreli kartlar birlikte geçer; çizgide dün serisi; pay çubuğu ve etiket', async () => {
+  test.setTimeout(120_000);
+  const DURUMLAR = ['onaylandi', 'bekliyor', 'hata'];
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 'z-serit', tur: 'sql', x: 0, y: 0, w: 12, h: 5, ayar: { baslik: 'Durum şeridi', hedef: { baglantiId: bTest }, gorunum: 'kutucuk', simge: 'kalkan',
+      sorgu: "SELECT durum, COUNT(*) AS adet, 2 AS dun, '1,3,2,' || COUNT(*) AS seri FROM kayitlar GROUP BY durum ORDER BY durum",
+      sutunlar: ['durum', 'adet'], ikinci: { tur: 'karsilastir', sutun: 'dun' }, seriSutunu: 'seri', esikler: [{ islec: '>=', deger: 4, renk: 'kirmizi' }],
+      tiklama: { kartId: 'z-trend', parametre: 'durum' } } },
+    { id: 'z-trend', tur: 'sql', x: 0, y: 5, w: 6, h: 6, ayar: { baslik: 'Trend', hedef: { baglantiId: bTest }, gorunum: 'cizgi',
+      sorgu: 'SELECT gun, adet, adet - 1 AS dun FROM gunluk_sayim WHERE :durum IS NOT NULL', ikinci: { tur: 'karsilastir', sutun: 'dun' },
+      parametreler: [{ ad: 'durum', etiket: 'Durum', secenekler: DURUMLAR }] } },
+    { id: 'z-dagilim', tur: 'sql', x: 6, y: 5, w: 6, h: 6, ayar: { baslik: 'Dağılım', hedef: { baglantiId: bTest }, gorunum: 'tablo',
+      sorgu: "SELECT 'Sorgula' AS metot, durum, ROUND(100.0 * COUNT(*) / 12) AS pay FROM kayitlar WHERE durum = :durum GROUP BY durum",
+      parametreler: [{ ad: 'durum', etiket: 'Durum', secenekler: DURUMLAR }],
+      sutunBicimleri: [{ sutun: 'metot', tur: 'etiket' }, { sutun: 'pay', tur: 'cubuk' }] } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = (ad: string) => page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: ad }) });
+  await page.getByRole('region', { name: 'Pano denetimleri' }).getByRole('button', { name: 'Tümünü yenile' }).click();
+  for (const ad of ['Durum şeridi', 'Trend', 'Dağılım']) await expect(kart(ad).locator('.pano-son-veri')).toHaveText(/^Son veri:/);
+  // Zengin kutucuk: simge, sağlık noktası (eşik), fark (6 - 2 = ▲ +4 kırmızı; artış kötü), mini trend.
+  const hataKutusu = kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'hata' });
+  await expect(hataKutusu.locator('.pano-kutucuk-simge')).toBeVisible();
+  await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-nokta')).toHaveClass(/esik-kirmizi/);
+  await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-fark')).toContainText('▲ +4');
+  await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'bekliyor' }).locator('.pano-kutucuk-fark')).toContainText('=');
+  await expect(hataKutusu.locator('svg.pano-kutucuk-trend polyline')).toHaveCount(1);
+  // Çizgi: dolgulu alan + kesikli dün serisi + açıklama.
+  await expect(kart('Trend').locator('svg.pano-grafik .alan')).toHaveCount(1);
+  await expect(kart('Trend').locator('svg.pano-grafik .cizgi-ikinci')).toHaveCount(1);
+  await expect(kart('Trend').locator('.pano-grafik-aciklama')).toContainText('dun');
+  // Tablo: etiket rozeti ve pay çubuğu.
+  await expect(kart('Dağılım').locator('.pano-rozet.renk-etiket')).toHaveText('Sorgula');
+  await expect(kart('Dağılım').locator('.pano-pay-metin')).toHaveText('%50');
+  // Kutucuğa tıklama: hedef kart ve aynı adlı parametreli kart birlikte "hata"ya geçer ve yenilenir.
+  await kart('Durum şeridi').getByRole('button', { name: /hata/ }).click();
+  await expect(kart('Trend').getByRole('combobox', { name: 'Durum: Trend' })).toHaveValue('hata');
+  await expect(kart('Dağılım').getByRole('combobox', { name: 'Durum: Dağılım' })).toHaveValue('hata');
+  await expect(kart('Dağılım').locator('tbody td').nth(1)).toHaveText('hata');
+  await expect(kart('Dağılım').locator('.pano-pay-metin')).toHaveText('%33');
+  // Başlıktaki seçim de bağlı kartı değiştirir.
+  await kart('Dağılım').getByRole('combobox', { name: 'Durum: Dağılım' }).selectOption('bekliyor');
+  await expect(kart('Trend').getByRole('combobox', { name: 'Durum: Trend' })).toHaveValue('bekliyor');
+  await expect(kart('Dağılım').locator('tbody td').nth(1)).toHaveText('bekliyor');
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('tablo satır eylemleri: "İncele" satırın tüm sütunlarını açar; satıra tıklayınca detay kartın parametresi seçilir (seçili satır işaretli)', async () => {
   test.setTimeout(90_000);
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
@@ -559,8 +608,8 @@ test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı;
   await expect(serit).toContainText('Son güncelleme:');
   // Ortam: CANLI seçilince tek CANLI onayı; mantıksal kart CANLI eşlemesiyle sorgulanır, doğrudan bağlantılı kart değişmez.
   const ortam = serit.getByRole('combobox', { name: 'Pano ortamı' });
-  await expect(ortam.locator('option')).toHaveText(['Ortam: kartların kendi seçimi', 'Ortam: TEST', 'Ortam: CANLI (CANLI)']);
-  await ortam.selectOption({ label: 'Ortam: CANLI (CANLI)' });
+  await expect(ortam.locator('option')).toHaveText(['Ortam: kartların kendi seçimi', 'Ortam: TEST', 'Ortam: CANLI (CANLI ortam)']);
+  await ortam.selectOption({ label: 'Ortam: CANLI (CANLI ortam)' });
   const onay = page.locator('dialog.canli-onay-penceresi');
   await expect(onay).toBeVisible();
   await onay.getByRole('button', { name: 'Evet, devam et' }).click();

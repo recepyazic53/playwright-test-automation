@@ -91,7 +91,7 @@ export declare function tarihBicimle(v: unknown, tarih: string): string | null;
 export declare function hucreBicimle(v: unknown, bicim?: unknown): string;
 export declare function degisimHesapla(simdi: number, onceki: number | null | undefined): { fark: number; yuzde: number | null; yon: 'artis' | 'azalis' | 'ayni' } | null;
 export declare function pastaDilimleri(noktalar: ReadonlyArray<{ etiket: string; deger: number }>, enCok?: number): Array<{ etiket: string; deger: number; yuzde: number; diger: boolean }>;
-export type SutunBicimi = { sutun: string; tur: 'rozet' | 'renk' | 'degisim' | 'sayac' | 'altSatir'; kurallar?: Array<{ deger: string; renk: string }>;
+export type SutunBicimi = { sutun: string; tur: 'rozet' | 'renk' | 'degisim' | 'sayac' | 'altSatir' | 'cubuk' | 'etiket'; kurallar?: Array<{ deger: string; renk: string }>;
   esikler?: Array<{ islec: string; deger: number; renk: string }>; artisIyi?: boolean; altSutun?: string };
 export declare const SUTUN_BICIM_TURLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
 export declare const ROZET_RENKLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
@@ -101,10 +101,11 @@ export declare function renkAnahtari(v: unknown): string | null;
 export declare function rozetKurallariniOku(metin: string): { kurallar: Array<{ deger: string; renk: string }>; hatalar: string[] };
 export declare function esikleriOku(metin: string): { esikler: Array<{ islec: string; deger: number; renk: string }>; hatalar: string[] };
 export declare function hucreSunumu(bicim: SutunBicimi | null | undefined, v: unknown, sayiBicimi?: unknown, altDeger?: unknown):
-  null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string };
+  null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk' | 'cubuk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string; oran?: number };
 export declare const KART_SIMGELERI: ReadonlyArray<{ anahtar: string; ad: string }>;
 export declare function ikinciDeger(ikinci: { tur: string; artisIyi?: boolean } | null | undefined, deger: number | null, diger: number | null):
   null | { tur: 'toplam'; oran: number } | { tur: 'karsilastir'; yuzde: number | null; fark: number; ok: '▲' | '▼' | '='; renk: string };
 export declare const OTOMATIK_YENILEME_DK: ReadonlyArray<number>;
 export declare function panoAyarla<D extends { kartlar: PanoKarti[] }>(duzen: D, ayar: { baslik?: unknown; aciklama?: unknown; ortamId?: unknown; otomatikYenileDk?: unknown }): D;
 export declare function etkinHedef(kart: { ayar?: any }, duzen: { ortamId?: string }): { veritabaniId?: string; ortamId?: string; baglantiId?: string };
+export declare function parametreyleDegisenler(duzen: { kartlar: any[] }, id: string, ad: string, deger: string): string[];
