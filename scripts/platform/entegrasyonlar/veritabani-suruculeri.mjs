@@ -1,6 +1,9 @@
 // VERİTABANI SÜRÜCÜLERİ — "Veritabanı bağlantısı" entegrasyonunun sürücü katmanı. Ücretsiz, açık kaynak npm paketleri
 // kullanılır ve YALNIZ gerektiğinde (ilk sorguda) yüklenir; paket kurulu değilse anlaşılır bir hata verilir:
 //   Microsoft SQL Server → mssql · Oracle → oracledb (THIN mod; Instant Client gerekmez) · PostgreSQL → pg · MySQL/MariaDB → mysql2
+// Oracle THICK mod (isteğe bağlı): Ayarlar > Koşu > Gelişmiş > "Oracle Instant Client klasörü" doluysa oracledb ilk bağlantıdan önce
+// bu klasördeki Instant Client ile başlatılır (Thin modun desteklemediği eski 10G parola biçimi vb.). Koşu sürecinde klasör ortam
+// değişkeniyle (NOBETCI_ORACLE_ISTEMCI_KLASORU), sunucuda oracleIstemciKaynagiAyarla ile verilir. Kip süreçte bir kez seçilir.
 // Sorgu parametreleri SQL içinde ":ad" biçiminde yazılır ve sürücünün kendi bağlama biçimine çevrilir (değerler SQL'e
 // metin olarak EKLENMEZ). "Yalnız okuma" açıkken (varsayılan) yalnız SELECT / WITH ile başlayan TEK ifade çalışır; destekleyen
 // sürücülerde oturum da salt okunur açılır. Hata mesajlarına parola yazılmaz (maskelenir).
@@ -33,6 +36,44 @@ let yukleyici = (paket) => import(paket);
 /** Testler için: sürücü paketlerini yükleyen fonksiyonu değiştirir (null: gerçek import). @param {((paket: string) => Promise<any>) | null} fn */
 export function surucuYukleyiciAyarla(fn) {
   yukleyici = fn ?? ((paket) => import(paket));
+}
+
+/** Sunucuda Instant Client klasörünü veren fonksiyon (kasa açıkken ayarlardan). @type {() => string} */
+let oracleIstemciKaynagi = () => '';
+
+/** Sunucu için: Oracle Instant Client klasörünü veren fonksiyon (null: yok). @param {(() => string) | null} fn */
+export function oracleIstemciKaynagiAyarla(fn) {
+  oracleIstemciKaynagi = fn ?? (() => '');
+}
+
+/** Etkin Instant Client klasörü: koşu sürecinde ortam değişkeni, sunucuda ayar ('' = Thin mod). */
+export function oracleIstemciKlasoru() {
+  const env = String(process.env.NOBETCI_ORACLE_ISTEMCI_KLASORU ?? '').trim();
+  if (env) return env;
+  try { return String(oracleIstemciKaynagi() ?? '').trim(); } catch { return ''; }
+}
+
+/** Bu süreçte Thick modun başlatıldığı klasör (null: başlatılmadı). @type {string | null} */
+let thickKlasoru = null;
+
+/**
+ * Klasör doluysa oracledb'yi (süreçte bir kez) Thick modda başlatır; boşsa Thin kalır. Klasör sonradan değişirse ya da süreçte
+ * önce Thin bağlantı yapıldıysa sürücü kip değiştiremez: yeniden başlatma iletisi verilir.
+ * @param {any} mod
+ */
+function oracleKipiHazirla(mod) {
+  const klasor = oracleIstemciKlasoru();
+  if (!klasor) return;
+  if (thickKlasoru === klasor) return;
+  if (thickKlasoru !== null) throw new EntegrasyonHatasi('Oracle Instant Client klasörü değişti: yeni klasörün kullanılması için Nöbetçi\'yi yeniden başlatın.');
+  if (typeof mod.initOracleClient !== 'function') throw new EntegrasyonHatasi('Oracle sürücüsü Thick modu desteklemiyor (oracledb sürümünü güncelleyin).');
+  try {
+    mod.initOracleClient({ libDir: klasor });
+    thickKlasoru = klasor;
+  } catch (hata) {
+    const ilk = String(/** @type {{ message?: string }} */ (hata ?? {}).message ?? '').split('\n')[0].slice(0, 200);
+    throw new EntegrasyonHatasi(`Oracle Instant Client yüklenemedi (${klasor}): ${ilk} — Klasörde oci.dll olmalı (Instant Client Basic, 64 bit); Microsoft Visual C++ Redistributable (x64) kurulu olmalı. Bu süreçte daha önce Thin modla bağlanıldıysa Nöbetçi'yi yeniden başlatın.`);
+  }
 }
 
 /** @param {SurucuAdi} surucu */
@@ -251,7 +292,8 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
     } finally { await havuz.close().catch(() => {}); }
   }
 
-  // oracle (oracledb THIN mod)
+  // oracle (oracledb THIN mod; Instant Client klasörü verildiyse THICK)
+  oracleKipiHazirla(mod);
   const protokol = tls ? 'tcps' : 'tcp';
   const c = await mod.getConnection({
     user: a.kullanici || undefined, password: a.parola || undefined,
@@ -301,6 +343,10 @@ export async function veritabaniSorgusu(ayar, sql, parametreler, secenekler = {}
     if (hata instanceof EntegrasyonHatasi) throw hata;
     const h = /** @type {{ message?: string; code?: string | number }} */ (hata ?? {});
     const ham = `${h.code ? `${h.code}: ` : ''}${String(h.message ?? 'bilinmeyen hata')}`.replace(/\s+/g, ' ').slice(0, 300);
-    throw new EntegrasyonHatasi(`Veritabanı hatası (${SURUCULER[ayar.surucu].etiket}, ${ayar.sunucu}): ${gizlileriMaskele(ham, [ayar.parola])}`);
+    // Thin modun desteklemediği eski parola biçimi (NJS-116): Thick mod ayarı önerilir.
+    const ipucu = ayar.surucu === 'oracle' && /NJS-116/.test(ham)
+      ? ' — Bu kullanıcının parolası eski (10G) biçimde; Thin mod desteklemiyor. Oracle Instant Client\'ı indirip Ayarlar > Koşu > Gelişmiş > "Oracle Instant Client klasörü"ne klasörünü yazın ve Nöbetçi\'yi yeniden başlatın.'
+      : '';
+    throw new EntegrasyonHatasi(`Veritabanı hatası (${SURUCULER[ayar.surucu].etiket}, ${ayar.sunucu}): ${gizlileriMaskele(ham, [ayar.parola])}${ipucu}`);
   }
 }

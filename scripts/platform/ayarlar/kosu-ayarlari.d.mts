@@ -5,7 +5,7 @@ export interface KosuAyarTanimi {
   anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis';
   /** Ayarlar > Koşu sayfasında profillerin yanında görünür (bölümün diğer ayarları "Gelişmiş" altında). */ ana?: boolean;
   /** Tarama / akış kaydı ayarının koşudaki eşi ("Tarama ve akış kaydında koşu ayarlarını kullan" açıkken eşi kullanılır). */ esi?: string;
-  grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; varsayilan: string | number | boolean;
+  grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; bicim?: 'klasor'; varsayilan: string | number | boolean;
   secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
   /** Ayar yalnız başka bir ayar bu değerdeyken (deger) ya da bu değerlerden birindeyken (degerler) kullanılır (arayüzde aksi hâlde pasif + açıklama). */
   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string };
@@ -16,7 +16,7 @@ export interface KosuAyarlari {
   taramaSayfaAcilmaSn: number; hizliAlanIslemSn: number; kesifSecenekSiniri: number; /** Bağlı liste keşfi: en çok kat / her katta denenecek değer. */ zincirDerinligi: number; zincirOrnek: number; /** Hızlı test kaydında önerilen alternatif senaryo sayısı. */ hizliOneriSayisi: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string;
   taramaGirisKipi: 'bastan' | 'saklananOturum'; taramaOturumKontrolSn: number; taramaGirisAlanBeklemeSn: number;
   gorunmeyenAlanBeklemeSn: number; gorunmeyenAlan: 'atla' | 'kaldir'; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number;
-  onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number;
+  onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number; oracleIstemciKlasoru: string;
   kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string;
   /** Ekran senaryoları: aynı anda en çok N (1 = sırayla; eski "Eşzamanlı senaryo: sırayla" 1 sayılır) ve senaryolar arası bekleme (ms). */
   ekranEszamanli: number; ekranBeklemeMs: number;
