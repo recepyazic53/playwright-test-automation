@@ -111,7 +111,8 @@ export function kosulAraclari(s) {
    * Alanın koşul düzenleyicisi.
    * @param {Record<string, any>} b alan grubu @param {string} anahtar koşullanan alan
    * kilitli: düzenleyicinin gösteremediği şu anki koşulun okunur metni (varsa düzenleyici boş başlar; kaydedilen yenisi onun yerini alır).
-   * @param {{ kaydet: (kosul: Record<string, any> | null) => void; vazgec: () => void; kilitli?: string | null }} geri
+   * @param {{ kaydet: (kosul: Record<string, any> | null) => void; vazgec: () => void; kilitli?: string | null; soru?: string }} geri
+   * (soru: başlık yerine — ör. adımın koşulu "“SQL sorgusu” ne zaman çalışsın?")
    */
   function duzenleyici(b, anahtar, geri) {
     const no = ++duzenleyiciSayaci;
@@ -265,8 +266,9 @@ export function kosulAraclari(s) {
         }
       };
     };
-    return h('div', { class: `kosul-duzenleyici genel-kosul${kilitli ? ' gk-degistir' : ''}`, role: 'group', 'aria-label': `${etiket}: ne zaman görünür` },
-      h('b', {}, `“${etiket}” ne zaman görünür?`),
+    const soru = typeof geri.soru === 'string' && geri.soru ? geri.soru : `“${etiket}” ne zaman görünür?`;
+    return h('div', { class: `kosul-duzenleyici genel-kosul${kilitli ? ' gk-degistir' : ''}`, role: 'group', 'aria-label': typeof geri.soru === 'string' && geri.soru ? geri.soru : `${etiket}: ne zaman görünür` },
+      h('b', {}, soru),
       // Kilitli koşulu değiştirme: şu anki koşul salt okunur; altındaki boş düzenleyici kaydedilince onun yerini alır.
       kilitli ? h('p', { class: 'gk-mevcut', 'data-kosul-mevcut': '' }, ikon('kilit'), h('span', {}, `Şu anki: ${kilitli}`)) : null,
       kilitli ? h('p', { class: 'gk-uyari', role: 'note', 'aria-label': 'Uyarı' }, 'Kaydedince şu anki koşulun yerini alır. Vazgeçerseniz şu anki koşul aynen kalır.') : null,

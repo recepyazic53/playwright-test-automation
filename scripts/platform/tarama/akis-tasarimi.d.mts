@@ -76,7 +76,8 @@ export type AkisBlogu =
   /** dahilVarsayilan (yalnız istegeBagli iken): yeni senaryolarda "“ad” dahil" işaretli başlar (ayar alanının varsayilan.deger). */
   | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean; dahilVarsayilan?: boolean }
   /** SQL sorgusu adımı (sql/sql-adimi.mjs SqlTanimi; kaydederken doğrulanır). */
-  | { tur: 'sql'; ad: string; sql: Record<string, unknown> }
+  | { tur: 'sql'; ad: string; sql: Record<string, unknown>; kosul?: Record<string, any> }
+  | { tur: 'servis'; ad: string; servis: Record<string, unknown>; kosul?: Record<string, any> }
   /** İndirilen dosyayı doğrula: dugme (sağ listedeki düğmenin sırası) indirmeyi başlatır; dosya: DosyaTanimi (kaydederken doğrulanır). */
   | { tur: 'dosya'; ad: string; dugme: number; dosya: Record<string, unknown> }
   /** Şu adrese git: ortamın adresine göre yol (ör. /liste); modelde adımın kosu.aksiyonlar'ında { tur: 'git', yol } olur. */

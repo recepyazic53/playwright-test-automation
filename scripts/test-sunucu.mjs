@@ -475,6 +475,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/govde-sekmeleri.js', { dosya: 'govde-sekmeleri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-adimi-formu.js', { dosya: 'servis-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/dosya-kontrolu-formu.js', { dosya: 'dosya-kontrolu-formu.js', tur: 'text/javascript; charset=utf-8' }],
   // Uçtan uca akış: ekran adımının saf kuralları (sunucuyla ORTAK) ve akış ekranı.
   ['/arayuz/ekran-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'akislar', 'ekran-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],

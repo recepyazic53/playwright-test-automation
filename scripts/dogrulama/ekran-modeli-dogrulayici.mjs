@@ -173,7 +173,7 @@ function sinirlarDogrula(h, yer, alan) {
 const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
-const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'dosyaKontrolu', 'yenidenGiris', 'kosu']);
+const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'servisKontrolu', 'dosyaKontrolu', 'yenidenGiris', 'kosu']);
 /** Dosya adımının beklenti türleri (platform/dosyalar/dosya-icerigi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'icerir', 'icermez', 'sutunVar', 'satirSayisi', 'hucre']);
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
@@ -750,10 +750,11 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
       const altModelVar = adim.altModel !== undefined;
       const ortakVar = adim.ortakAkis !== undefined;
       const sqlVar = adim.sqlKontrolu !== undefined;
+      const servisVar = adim.servisKontrolu !== undefined;
       const girisVar = adim.yenidenGiris !== undefined;
       const dosyaVar = adim.dosyaKontrolu !== undefined;
-      if ([bolumVar, altModelVar, ortakVar, sqlVar, girisVar, dosyaVar].filter(Boolean).length !== 1) {
-        h.ekle(adYer, ortakVar || sqlVar || girisVar || dosyaVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu", "dosyaKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
+      if ([bolumVar, altModelVar, ortakVar, sqlVar, servisVar, girisVar, dosyaVar].filter(Boolean).length !== 1) {
+        h.ekle(adYer, ortakVar || sqlVar || servisVar || girisVar || dosyaVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu", "servisKontrolu", "dosyaKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
       }
       // YENİDEN GİRİŞ ADIMI: { profil? } — koşuda oturum kapatılır (çerezler temizlenir) ve ortamın giriş tarifiyle yeniden
       // girilir; profil = giriş profilinin adı (yoksa ortamın varsayılan profili). Girişsiz modelde olmaz.
@@ -786,6 +787,20 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
           if (q.okumalar !== undefined && !Array.isArray(q.okumalar)) h.ekle(qYer, '"okumalar" dizi olmalı');
         }
         if (adim.kosu !== undefined) h.ekle(adYer, 'SQL adımının koşu tanımı ("kosu") olmaz');
+      }
+      // SERVİS İSTEĞİ ADIMI: { servisId, senaryoId, atamalar?, okumalar? } — koşuda servisin kayıtlı senaryosu şablon olarak çalışır
+      // (ayrıntılı kurallar platform/servisler/servis-adimi.mjs; burada yapı).
+      if (servisVar) {
+        const q = adim.servisKontrolu;
+        const qYer = `${adYer}.servisKontrolu`;
+        if (!nesneMi(q)) h.ekle(qYer, '"servisKontrolu" bir nesne olmalı');
+        else {
+          if (!metinMi(q.servisId)) h.ekle(qYer, '"servisId" zorunlu');
+          if (!metinMi(q.senaryoId)) h.ekle(qYer, '"senaryoId" (şablon senaryo) zorunlu');
+          if (q.atamalar !== undefined && (!Array.isArray(q.atamalar) || !q.atamalar.every((x) => nesneMi(x) && metinMi(x.bul) && typeof x.deger === 'string'))) h.ekle(qYer, '"atamalar" [{ bul, deger }] olmalı');
+          if (q.okumalar !== undefined && (!Array.isArray(q.okumalar) || !q.okumalar.every((x) => nesneMi(x) && metinMi(x.ad) && metinMi(x.yol)))) h.ekle(qYer, '"okumalar" [{ ad, yol }] olmalı');
+        }
+        if (adim.kosu !== undefined) h.ekle(adYer, 'servis isteği adımının koşu tanımı ("kosu") olmaz');
       }
       // DOSYA ADIMI: { tetikleyici: { secici, metin? }, bicim?, beklentiler: [{ tur, … }], … } — koşuda düğmeye basılır, indirilen
       // dosya beklentilerle doğrulanır (ayrıntılı kurallar platform/dosyalar/dosya-icerigi.mjs; burada yapı).
@@ -1145,7 +1160,7 @@ const ANAHTAR_ADLARI = Object.freeze({
   tip: 'tip', tur: 'tür', ad: 'ad', aciklama: 'açıklama', deger: 'değer', metin: 'metin', altModel: 'alt model', ortakAkis: 'genel senaryo',
   akislar: 'akışlar', varsayilan: 'varsayılan', senaryoDuzeyi: 'senaryo ayarları', yapilandirma: 'yapılandırma', doldurucu: 'doldurucu',
   ekranUrl: 'ekran adresi', girisGerekmez: 'girişsiz', bastakiOrtakAkislar: 'baştaki genel senaryolar', sinirlar: 'sınırlar', cerceve: 'çerçeve',
-  uyarilar: 'uyarılar', bitisKosulu: 'bitiş koşulu', devam: 'devam metinleri', durum: 'durum', not: 'not', sqlKontrolu: 'SQL kontrolü', dosyaKontrolu: 'dosya kontrolü', yenidenGiris: 'yeniden giriş'
+  uyarilar: 'uyarılar', bitisKosulu: 'bitiş koşulu', devam: 'devam metinleri', durum: 'durum', not: 'not', sqlKontrolu: 'SQL kontrolü', servisKontrolu: 'servis isteği', dosyaKontrolu: 'dosya kontrolü', yenidenGiris: 'yeniden giriş'
 });
 
 /**

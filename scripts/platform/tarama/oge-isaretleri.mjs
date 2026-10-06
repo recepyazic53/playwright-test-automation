@@ -187,7 +187,7 @@ export function taramaIsaretleriniUygula(paket, g) {
   const ogeler = g.ogeler;
   if (ogeler.length) {
     if (!Array.isArray(model.adimlar)) model.adimlar = [];
-    let adim = [...model.adimlar].reverse().find((a) => nesneMi(a) && Array.isArray(a.bolumler) && !a.altModel && !a.ortakAkis && !a.sqlKontrolu && !a.dosyaKontrolu && !a.yenidenGiris);
+    let adim = [...model.adimlar].reverse().find((a) => nesneMi(a) && Array.isArray(a.bolumler) && !a.altModel && !a.ortakAkis && !a.sqlKontrolu && !a.servisKontrolu && !a.dosyaKontrolu && !a.yenidenGiris);
     if (!adim) {
       adim = { id: 'form', sira: model.adimlar.length + 1, baslik: `${String(model.ad || 'Ekran')} formu doldurulur`, bolumler: [] };
       model.adimlar.push(adim);

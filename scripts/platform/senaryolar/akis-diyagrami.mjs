@@ -181,6 +181,8 @@ export function akisDiyagrami(model, s = {}) {
       altAkis: nesneMi(adim.altModel) ? String(adim.altModel.bolum || adim.altModel.dosya || '') || null : null,
       // SQL sorgusu adımı: veritabanı sorgusu beklenenle karşılaştırılır (alan yok).
       sqlOzeti: nesneMi(adim.sqlKontrolu) ? `SQL sorgusu: ${SQL_BEKLENEN_METNI[adim.sqlKontrolu.beklenen?.tur] ?? 'sonuç beklenenle karşılaştırılır'}` : null,
+      // Servis isteği adımı: servisin şablon senaryosu çalışır, kontroller tutmalı (alan yok).
+      servisOzeti: nesneMi(adim.servisKontrolu) ? `Servis isteği: şablon senaryo çalıştırılır${Array.isArray(adim.servisKontrolu.atamalar) && adim.servisKontrolu.atamalar.length ? ` (${adim.servisKontrolu.atamalar.length} atama)` : ''}; kontroller tutmalı` : null,
       // İndirilen dosyayı doğrulama adımı: düğmeye basılır, dosya beklentilerle doğrulanır (alan yok).
       dosyaOzeti: nesneMi(adim.dosyaKontrolu)
         ? `İndirilen dosya doğrulanır: ${Array.isArray(adim.dosyaKontrolu.beklentiler) ? adim.dosyaKontrolu.beklentiler.length : 0} beklenti${nesneMi(adim.dosyaKontrolu.tetikleyici) && typeof adim.dosyaKontrolu.tetikleyici.aciklama === 'string' ? ` (“${adim.dosyaKontrolu.tetikleyici.aciklama}” düğmesiyle)` : ''}`

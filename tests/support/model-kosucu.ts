@@ -49,6 +49,7 @@ import { adimGoruntusuAlinsinMi } from '../../scripts/platform/ayarlar/kayit-kur
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
+import { atamalariCoz, type ServisTanimi } from '../../scripts/platform/servisler/servis-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 import { alanKilidi, ozelBilesenIsaretle, secimeTikla } from '../../scripts/platform/tarama/sayfa-envanteri';
 import { BETIKLE_YAZAN_DOLDURUCULAR, kilitEngeller } from '../../scripts/platform/tarama/alan-kilitleri.mjs';
@@ -1125,6 +1126,42 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
 }
 
 /**
+ * Servis isteği adımı (servisler/servis-adimi.mjs): atamalardaki ${alan} (senaryo değeri) ve ${akis:Ad} (önceki SQL / servis okumaları)
+ * çözülür, istek Nöbetçi sunucusuna iletilir (POST /platform/sonuc/servis-istegi; koşuyu başlatan sunucunun raporlayıcı token'ı). Sunucu
+ * servisin şablon senaryosunu servis motoruyla çalıştırır; kontrollerden biri tutmazsa adım kalır. Okunan değerler sonraki adımlara
+ * ${akis:Ad} olarak geçer (açık değerler yalnız bellekte; gizliler maskelenir).
+ */
+async function servisAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: ServisTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
+  const adres = process.env.PLATFORM_SONUC_ADRESI;
+  const token = process.env.PLATFORM_SONUC_TOKENI;
+  const projeId = process.env.NOBETCI_PROJE_ID;
+  if (!adres || !token || !projeId) throw new Error(`${adimBasligi}: servis isteği adımı yalnız Nöbetçi'den başlatılan koşuda çalışır (sunucu bağlantısı yok).`);
+  const c = atamalariCoz(tanim.atamalar ?? [], (ifade) => {
+    if (ifade.startsWith('akis:')) return d.degerler[ifade.slice(5).trim()];
+    const v = s.veri[ifade];
+    return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : undefined;
+  });
+  if (c.eksik.length) throw new Error(`${adimBasligi}: servis isteğindeki değerler çözülemedi: ${c.eksik.join(', ')} (senaryoda değer yok ya da önceki adımda okunmadı).`);
+  const yanit = await fetch(`${adres}/platform/sonuc/servis-istegi`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-test-sunucu-token': token },
+    body: JSON.stringify({ projeId, ortamId: ortam.veri.ortamId, servisId: tanim.servisId, senaryoId: tanim.senaryoId, atamalar: c.atamalar, okumalar: tanim.okumalar ?? [], akisDegerleri: d.degerler, gizliler: d.gizliler, baslik: adimBasligi })
+  });
+  const r = await yanit.json() as {
+    basarili: boolean; mesaj?: string | null; durum?: string; okunan?: Record<string, string>; gizliler?: string[]; bulunamayan?: string[]; kosuId?: string | null;
+    durumKodu?: number | null; sureMs?: number | null; kontroller?: Array<{ ad: string; gecti: boolean; aciklama: string }>; ozet?: string;
+  };
+  const maskele = (m: string): string => d.gizliler.reduce((x, g) => (g ? x.split(g).join('•••') : x), m);
+  for (const g of r.gizliler ?? []) if (g && !d.gizliler.includes(g)) d.gizliler.push(g);
+  await testInfo.attach(`Servis isteği - ${adimBasligi}`, {
+    contentType: 'application/json',
+    body: maskele(JSON.stringify({ durum: r.durum ?? null, durumKodu: r.durumKodu ?? null, sureMs: r.sureMs ?? null, kontroller: r.kontroller ?? [], bulunamayanAtamalar: r.bulunamayan ?? [], servisKosusu: r.kosuId ?? null, ozet: r.ozet ?? '' }, null, 2))
+  });
+  if (!r.basarili) throw new Error(`${adimBasligi}: servis isteği çalıştırılamadı: ${maskele(String(r.mesaj ?? ''))}`);
+  if (r.durum !== 'basarili') throw new Error(`${adimBasligi}: servis isteği başarısız${r.durumKodu ? ` (HTTP ${r.durumKodu})` : ''}: ${maskele(String(r.mesaj ?? 'kontroller tutmadı'))}`);
+  Object.assign(d.degerler, r.okunan ?? {});
+}
+
+/**
  * İndirilen dosyayı doğrulama adımı: tetikleyici düğmeye basılır, indirme (Playwright download olayı) beklenir; dosya koşunun geçici
  * klasörüne (NOBETCI_DOSYA_KLASORU; yoksa işletim sisteminin geçici klasörü) yazılır, okunup doğrulanır ve HEMEN silinir.
  * Beklentilerdeki başvurular: ${akis:Ad} → önceki SQL okumaları, ${Tablo.Sütun} → veri okuyucunun çözdüğü değerler, ${alan} → senaryo
@@ -1404,6 +1441,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         ekranaDonuldu = false;
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
         if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
+        // Servis isteği adımı: sayfaya dokunmaz; servisin şablon senaryosu sunucuda çalışır.
+        if (adim.servis) { await servisAdiminiUygula(testInfo, adim.baslik, adim.servis, s, ortam, sqlDegerleri); return; }
         // İndirilen dosyayı doğrulama adımı: düğmeye basılır, indirilen dosya beklentilerle doğrulanır.
         if (adim.dosya) {
           adimMesajlariniTemizle(page);
@@ -1581,7 +1620,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
      * ya da tutmazsa hata olduğu gibi iletilir.
      */
     const kurtarmayla = async (adim: PlanAdimi): Promise<void> => {
-      if (!kurallar.length || adim.sql || adim.yenidenGiris) { await adimGovdesi(adim); return; }
+      if (!kurallar.length || adim.sql || adim.servis || adim.yenidenGiris) { await adimGovdesi(adim); return; }
       let surdur: { kural: EkranKurali; neden: string; deneme: number; eylemMetni: string } | null = null;
       for (;;) {
         try {

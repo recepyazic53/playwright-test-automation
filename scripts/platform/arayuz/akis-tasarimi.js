@@ -40,6 +40,7 @@
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { sqlAdimiFormu, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { servisAdimiFormu, servisRozeti, yeniServisTanimi } from './servis-adimi-formu.js';
 import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { girisAyrintisi } from './senaryo-diyagrami.js';
 import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
@@ -57,6 +58,7 @@ const TURLER = {
   bekle: { etiket: 'Bekleme süresi', ikonAd: 'saat' },
   ortak: { etiket: 'Önce şu ekrana git', ikonAd: 'pusula' },
   sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
+  servis: { etiket: 'Servis isteği', ikonAd: 'simsek' },
   dosya: { etiket: 'İndirilen dosyayı doğrula', ikonAd: 'indir' },
   git: { etiket: 'Şu adrese git', ikonAd: 'pusula' },
   giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
@@ -191,6 +193,8 @@ export async function akisTasarimi(icerik, s) {
   let bloklar = veri.bloklar.map((b) => ({ ...b, ...(b.tur === 'alanlar' ? { alanlar: [...b.alanlar], zorunlu: [...(b.zorunlu || [])], kosullar: { ...(b.kosullar || {}) }, sinirlar: { ...(b.sinirlar || {}) }, tuslar: { ...(b.tuslar || {}) } } : {}) }));
   /** Koşulu düzenlenen alan: { blok, alan } */
   let kosulDuzenleme = null;
+  /** Koşulu düzenlenen adım bloğu (SQL; "ne zaman çalışsın"): blok sırası ya da null. @type {number | null} */
+  let blokKosulDuzenleme = null;
   /** Sınırları (değer kuralları; model alan.sinirlar) düzenlenen alan: { blok, alan } — yalnız ekranın akışını düzenlerken. */
   let sinirDuzenleme = null;
   /** "Sonra bekler > Değiştir" düzenleyicisi açık aksiyon bloğu (sırası; yoksa -1). */
@@ -473,6 +477,7 @@ export async function akisTasarimi(icerik, s) {
           type: 'button', onclick: () => blokEkle(konum, { tur: 'ortak', dosya: ortakAkislar[0].dosya, ad: ortakAkislar[0].ad, istegeBagli: false })
         }, ikon('pusula'), 'Önce şu ekrana git') : null,
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'servis', ad: '', servis: yeniServisTanimi() }) }, ikon('simsek'), 'Servis isteği'),
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'dosya', ad: '', dugme: -1, dosya: yeniDosyaTanimi() }) }, ikon('indir'), 'İndirilen dosyayı doğrula'),
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'git', yol: '/' }) }, ikon('pusula'), 'Şu adrese git'),
         girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
@@ -612,6 +617,26 @@ export async function akisTasarimi(icerik, s) {
       },
       vazgec: () => { kosulDuzenleme = null; ciz(); odak(); }
     });
+  }
+
+  /**
+   * Adım bloğunun koşulu ("ne zaman çalışsın"; SQL): koşulsuz her koşuda çalışır; koşul ekranın / genel senaryoların alanlarına bağlanır
+   * (alan koşullarıyla aynı düzenleyici). Modelde adımın görünürlüğü olur; koşul tutmazsa adım atlanır. b.kosul: yeni biçimli koşul ya da yok.
+   */
+  function blokKosulu(b, i) {
+    const ad = b.ad || 'Bu adım';
+    if (blokKosulDuzenleme === i) {
+      const sarmal = { kosullar: { '@blok': b.kosul } };
+      return kosulAraci.duzenleyici(sarmal, '@blok', {
+        soru: `“${ad}” ne zaman çalışsın?`,
+        kaydet: (kosul) => { if (kosul) b.kosul = kosul; else delete b.kosul; blokKosulDuzenleme = null; degisti(); },
+        vazgec: () => { blokKosulDuzenleme = null; ciz(); }
+      });
+    }
+    const ozet = b.kosul ? kosulMetni(b.kosul) : null;
+    return h('div', { class: 'tasarim-etiketi blok-kosulu' }, h('span', {}, 'Ne zaman çalışsın?'),
+      h('span', { class: ozet ? '' : 'soluk' }, ozet || 'Her koşuda'),
+      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { blokKosulDuzenleme = i; kosulDuzenleme = null; ciz(); } }, ozet ? 'Koşulu değiştir' : 'Koşul ekle'));
   }
 
   /**
@@ -1060,6 +1085,18 @@ export async function akisTasarimi(icerik, s) {
         girisAyrintisi({ projeId: s.proje.id })
       ];
     }
+    if (b.tur === 'servis') {
+      // Servis isteği: adıma gelindiğinde servisin şablon senaryosu (atamalarla ekranın değerleri yazılarak) çalışır; kontroller tutmazsa adım kalır.
+      const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Kayıt serviste görünüyor', 'aria-label': 'Servis isteği adımının adı' });
+      ad.addEventListener('input', () => { b.ad = ad.value; sakla(); });
+      ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
+      return [
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        servisAdimiFormu(b.servis, { projeId: s.proje.id, degisti: sakla }),
+        blokKosulu(b, i),
+        h('p', { class: 'soluk kucuk' }, 'Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar. Servisin kendi geçmişine de "Dene" olarak yazılır.')
+      ];
+    }
     if (b.tur === 'sql') {
       // SQL sorgusu: adıma gelindiğinde veritabanında sorgu çalışır; sonuç beklenene uymazsa adım kalır.
       const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Kayıt veritabanına yazıldı', 'aria-label': 'SQL adımının adı' });
@@ -1068,6 +1105,7 @@ export async function akisTasarimi(icerik, s) {
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
         sqlAdimiFormu(b.sql, { ...sqlKaynaklari, degisti: sakla, yerTutucuOrnegi: '${alanAnahtari}' }),
+        blokKosulu(b, i),
         h('p', { class: 'soluk kucuk' }, 'SQL’de senaryonun değerleri ${alanAnahtari}, önceki SQL adımlarında okunan değerler ${akis:Ad} ile yazılır. Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar.')
       ];
     }
@@ -1112,6 +1150,8 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'git' ? rozet(b.yol || '(yol yok)', 'vurgu', { kisalt: true, title: tamAdresMetni(b.yol) }) : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
+      b.tur === 'servis' ? rozet(servisRozeti(b.servis), 'vurgu') : null,
+      (b.tur === 'sql' || b.tur === 'servis') && b.kosul ? rozet('koşullu', 'uyari', { title: kosulMetni(b.kosul) || null }) : null,
       b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,
       b.tur === 'ortak' ? rozet(b.istegeBagli ? 'isteğe bağlı' : 'her zaman', b.istegeBagli ? 'uyari' : 'basari', { title: ortakSecimMetni(b), 'data-ortak-durumu': b.istegeBagli ? 'istege-bagli' : 'her-zaman' }) : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.tur === 'ekran' ? rozet('ekran', 'durdu') : null,

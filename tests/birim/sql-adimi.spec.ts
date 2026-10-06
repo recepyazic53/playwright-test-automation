@@ -126,3 +126,31 @@ test('tanım: mantıksal veritabanı (veritabaniId) ya da doğrudan bağlantı (
   // Servis akışı adımı da kabul eder.
   expect(akisIceriginiDogrula({ adimlar: [{ ad: 'K', tur: 'sql', sql: { veritabaniId: 'vt-1', ...temel } }] }, 'akis').adimlar[0]).toMatchObject({ sql: { veritabaniId: 'vt-1' } });
 });
+
+test('SQL adımının koşulu ("ne zaman çalışsın"): modelde adımın görünürlüğü; koşul tutmazsa planda atlanır; diyagrama geri döner; akışta olmayan alan hata', () => {
+  const temel = { veritabaniId: 'vt-1', sql: 'SELECT 1', beklenen: { tur: 'bosDegil' } };
+  const kosul = { bag: 've' as const, satirlar: [{ alan: '#no', islem: 'dolu', degerler: [] }] };
+  const { envanter: k, hatalar } = akistanKayitEnvanteri(ENV, [
+    { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] },
+    { tur: 'aksiyon', dugme: 0, istegeBagli: false },
+    { tur: 'sql', ad: 'Yazıldı mı', sql: temel, kosul },
+    { tur: 'bitir' }
+  ]);
+  expect(hatalar).toEqual([]);
+  const paket = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket;
+  expect(sayfaPaketiniDogrula(paket, {})).toMatchObject({ gecerli: true, hatalar: [] });
+  const m = paket.model as Nesne;
+  const g = m.adimlar[1].gorunurluk;
+  expect(g, JSON.stringify(m.adimlar[1])).toMatchObject({ kosul: expect.any(String) });
+  expect(m.kosullar[g.kosul].ifade).toEqual({ alan: 'no', dolu: true });
+  expect(modelKosuPlani(m, { no: '5' }).adimlar[1]).toMatchObject({ sql: { veritabaniId: 'vt-1' }, dahil: true });
+  expect(modelKosuPlani(m, {}).adimlar[1]).toMatchObject({ dahil: false });
+  const bloklar = adimlardanBloklar(m, m.adimlar, modeldenAkisEnvanteri(m)) as Nesne[];
+  expect(bloklar.find((b) => b.tur === 'sql')?.kosul).toMatchObject({ satirlar: [expect.objectContaining({ alan: 'no', islem: 'dolu' })] });
+  // Koşuldaki alan akışta yoksa hata.
+  const h2 = akistanKayitEnvanteri(ENV, [
+    { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'aksiyon', dugme: 0, istegeBagli: false },
+    { tur: 'sql', ad: 'Yazıldı mı', sql: temel, kosul: { bag: 've', satirlar: [{ alan: '#yok', islem: 'dolu', degerler: [] }] } }, { tur: 'bitir' }
+  ]).hatalar;
+  expect(h2.map((x) => x.mesaj).join(' ')).toContain('adımının koşul');
+});

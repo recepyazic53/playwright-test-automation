@@ -221,6 +221,10 @@ export type KayitAdimi = {
   ortakAkis?: { dosya: string; istegeBagli: boolean; dahilVarsayilan?: boolean };
   /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */
   sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** Servis isteği adımı (akış tasarımında "+ > Servis isteği"): alanı yoktur; modelde adımın servisKontrolu olur. */
+  servisKontrolu?: import('../servisler/servis-adimi.mjs').ServisTanimi;
+  /** Adım bloğunun koşulu ("ne zaman çalışsın"; yeni biçim, gorunurluk-kosulu.mjs): modelde adımın görünürlüğü. */
+  blokKosulu?: import('./gorunurluk-kosulu.d.mts').YeniKosul;
   /** İndirilen dosyayı doğrulama adımı (akış tasarımında "+ > Dosya doğrula"): alanı yoktur; modelde adımın dosyaKontrolu olur. */
   dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
   /** Yeniden giriş adımı (akış tasarımında "+ > Yeniden giriş"): alanı yoktur; modelde adımın yenidenGiris'i olur. */

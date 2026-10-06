@@ -21,6 +21,7 @@ export interface DiyagramAdimi {
   altAkis: string | null;
   /** SQL sorgusu adımının kısa açıklaması (yoksa null). */
   sqlOzeti: string | null;
+  servisOzeti: string | null;
   /** İndirilen dosyayı doğrulama adımının özeti (yoksa null). */
   dosyaOzeti: string | null;
   /** Yeniden giriş adımı (profil: giriş profilinin adı; null = ortamın varsayılanı); değilse null. */

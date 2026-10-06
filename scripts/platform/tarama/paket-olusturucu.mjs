@@ -1030,7 +1030,7 @@ export function kayitPaketiOlustur(meta, envanter) {
 
   // Adımlar. Hiçbir şey kaydedilmemiş adım (alan, ilerleme/alan açan düğme, son adımda gösterge yok) atlanır.
   const kayitlar = envanter.adimlar.filter((k, i, tum) => {
-    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.dosyaKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi))
+    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.servisKontrolu) || Boolean(k.dosyaKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi))
       || Boolean(k.korunanAdim) || Boolean(k.korunanlar?.some(Boolean)) || Boolean(k.aksiyonlarAynen);
     if (!dolu) bilinmeyenler.push(`"${temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`}" adımında alan, ilerleme düğmesi ya da gösterge kaydedilmediği için modele eklenmedi.`);
     return dolu;
@@ -1042,7 +1042,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Korunan parçalar (akış diyagramında düzenlenemeyen; akis-servisi.mjs): korunanAdim adımın tamamı aynen, korunan ('ek')
   // parçanın gösterilemeyen özellikleri aynen geri yazılır (kimliğiyle), aksiyonlarAynen koşu aksiyonlarının yerine geçer.
   // korunanKosul: parçanın korunan görünürlüğü (sonraki adımın göstergesi seçilirken atlanabilir adım sayılır).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; elleGosterge?: Record<string, unknown>; ekranGoruntusu?: boolean; once?: number; sonra?: number; gorunurse?: import('./paket-olusturucu.d.mts').KayitAdimi['gorunurseTiklar']; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; elleGosterge?: Record<string, unknown>; ekranGoruntusu?: boolean; once?: number; sonra?: number; gorunurse?: import('./paket-olusturucu.d.mts').KayitAdimi['gorunurseTiklar']; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; servisKontrolu?: import('../servisler/servis-adimi.mjs').ServisTanimi; blokKosulu?: import('./gorunurluk-kosulu.d.mts').YeniKosul; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
   /** Korunan parçanın görünürlüğü (karşılaştırma anahtarı) ya da null. @param {unknown} p */
   const korunanKosulu = (p) => {
     const g = nesneMi(p) && nesneMi(p.adimEk) ? p.adimEk.gorunurluk : undefined;
@@ -1091,9 +1091,14 @@ export function kayitPaketiOlustur(meta, envanter) {
       altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: k.ortakAkis.istegeBagli ? dahilKosulu(ad, 'ortakAkis', k.ortakAkis.dahilVarsayilan === true) : null, ortakAkis: k.ortakAkis.dosya });
       continue;
     }
+    if (k.servisKontrolu) {
+      // Servis isteği adımı: alanı / düğmesi yok; koşuda servisin şablon senaryosu çalışır (servisler/servis-adimi.mjs).
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, servisKontrolu: k.servisKontrolu, ...(k.blokKosulu ? { blokKosulu: k.blokKosulu } : {}) });
+      continue;
+    }
     if (k.sqlKontrolu) {
       // SQL sorgusu adımı: alanı / düğmesi yok; koşuda veritabanı sorgusu beklenenle karşılaştırılır.
-      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, sqlKontrolu: k.sqlKontrolu });
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, sqlKontrolu: k.sqlKontrolu, ...(k.blokKosulu ? { blokKosulu: k.blokKosulu } : {}) });
       continue;
     }
     if (k.dosyaKontrolu) {
@@ -1230,6 +1235,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}), ortakAkis: { dosya: p.ortakAkis } };
     }
     if (p.sqlKontrolu) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, sqlKontrolu: p.sqlKontrolu };
+    if (p.servisKontrolu) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, servisKontrolu: p.servisKontrolu };
     if (p.dosyaKontrolu) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, dosyaKontrolu: p.dosyaKontrolu };
     if (p.yenidenGiris) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, yenidenGiris: p.yenidenGiris };
     /** @type {Map<string, { baslik: string; alanlar: Array<Record<string, unknown>> }>} */
@@ -1245,7 +1251,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       b?.alanlar.push(modelAlani(h));
     }
     // Son EKRAN adımı (ardından yalnız SQL adımları gelebilir): başarı göstergesi onda.
-    const sonAdimMi = i === altAdimlar.length - 1 || altAdimlar.slice(i + 1).every((x) => x.sqlKontrolu || x.dosyaKontrolu);
+    const sonAdimMi = i === altAdimlar.length - 1 || altAdimlar.slice(i + 1).every((x) => x.sqlKontrolu || x.servisKontrolu || x.dosyaKontrolu);
     // "İşlemler" bölümü: adımın düğmesi (buton/aksiyon) ve son adımda sonucu gösteren öğe (cikti) — model koşucusu bunları
     // doldurmaz (koşu tanımı ayrıca aşağıda); modelde adımın ne yaptığı görünür, alansız adım geçerli olur.
     /** @type {Array<Record<string, unknown>>} */
@@ -1292,7 +1298,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       /** @type {AltAdim[]} */
       const olasi = [];
       for (const x of altAdimlar.slice(i + 1)) {
-        if (x.sqlKontrolu) continue;
+        if (x.sqlKontrolu || x.servisKontrolu) continue;
         if (ayniKosulda(x, p)) { olasi.push(x); break; }
         if (x.korunanKosul && (x.kosul === null || x.kosul === p.kosul) && !olasi.some((y) => y.korunanKosul === x.korunanKosul)) olasi.push(x);
       }
@@ -1496,6 +1502,11 @@ export function kayitPaketiOlustur(meta, envanter) {
       else if (bulunan) kosulYaz(alan, bulunan.secim, bulunan.degerler, 'akış kaydı');
     }
   }
+  // Adım bloklarının koşulu ("ne zaman çalışsın"; SQL): adımın görünürlüğü olur (koşul tutmazsa koşuda adım atlanır).
+  altAdimlar.forEach((p, i) => {
+    if (!p.blokKosulu || !adimlar[i]) return;
+    if (!yeniKosulYaz(adimlar[i], p.blokKosulu, undefined)) bilinmeyenler.push(`"${p.ad}" adımının koşulundaki alan akışta yok; koşul yazılmadı.`);
+  });
 
   if (!envanter.basariGostergesi) bilinmeyenler.push('Başarı göstergesi seçilmedi: son adımın sonucu doğrulanmaz (modelde son adıma "kosu.basariGostergesi" ekleyin).');
   bilinmeyenler.push('Hata göstergesi (iş kuralı uyarılarının çıktığı öğe) kayıtta seçilmez; iş kuralı hatası beklenen senaryolarda sayfanın metni aranır.');

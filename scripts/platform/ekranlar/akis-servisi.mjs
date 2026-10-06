@@ -107,7 +107,7 @@ export function akisDuzenlenebilirMi(model) {
 }
 
 /** Diyagramın kendi bloğuyla kurduğu özel adım (ortak akış / SQL / dosya / yeniden giriş). @param {Nesne} adim */
-const ozelAdimMi = (adim) => (nesneMi(adim.ortakAkis) && typeof adim.ortakAkis.dosya === 'string') || nesneMi(adim.sqlKontrolu) || nesneMi(adim.dosyaKontrolu) || nesneMi(adim.yenidenGiris);
+const ozelAdimMi = (adim) => (nesneMi(adim.ortakAkis) && typeof adim.ortakAkis.dosya === 'string') || nesneMi(adim.sqlKontrolu) || nesneMi(adim.servisKontrolu) || nesneMi(adim.dosyaKontrolu) || nesneMi(adim.yenidenGiris);
 const TIKLA_ANAHTARLARI = ['tur', 'secici', 'aciklama', 'cerceve'];
 /** Aksiyon diyagramın aksiyon / bekleme bloğuyla gösterilebilir mi (seçicili düz tıklama, süreli bekleme)? @param {unknown} a */
 const aksiyonTemsilEdilir = (a) => nesneMi(a) && (
@@ -331,7 +331,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
     }
   }
   // Başarı göstergesi: adres (url), son adımda öğe ya da bilinmeyen gösterge aynen korunur (mesaj blokları gösterilmez).
-  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu));
+  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.servisKontrolu) || nesneMi(x.dosyaKontrolu));
   if (!gostergeTemsilEdilir(kosu.basariGostergesi, sonAdim)) {
     sonuc.gostergeKorunur = true;
     ek.kosuEk.basariGostergesi = kopya(kosu.basariGostergesi);
@@ -499,7 +499,7 @@ export function modeldenAkisEnvanteri(model) {
   const sonOgeler = new Map();
   for (const l of [model.adimlar, ...(Array.isArray(model.akislar) ? model.akislar.map((/** @type {Nesne} */ a) => a.adimlar) : [])]) {
     const s = siraliAdimlar(Array.isArray(l) ? l : []);
-    const son = [...s].reverse().find((x) => !nesneMi(x.ortakAkis) && !nesneMi(x.sqlKontrolu) && !nesneMi(x.dosyaKontrolu));
+    const son = [...s].reverse().find((x) => !nesneMi(x.ortakAkis) && !nesneMi(x.sqlKontrolu) && !nesneMi(x.servisKontrolu) && !nesneMi(x.dosyaKontrolu));
     if (son && nesneMi(son.kosu)) sonOgeler.set(son.id, new Set(ogeGostergeleri(son.kosu.basariGostergesi).map((g) => g.deger)));
   }
   for (const adim of tumAdimlar(model)) {
@@ -609,7 +609,7 @@ function kapsamAyari(model, adim) {
  * @param {Nesne[]} sonrakiler
  */
 function kendiliginden(sonrakiler) {
-  const x = sonrakiler.find((a) => !nesneMi(a.sqlKontrolu));
+  const x = sonrakiler.find((a) => !nesneMi(a.sqlKontrolu) && !nesneMi(a.servisKontrolu));
   if (!x || nesneMi(x.ortakAkis)) return null;
   for (const b of Array.isArray(x.bolumler) ? x.bolumler : []) {
     for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) {
@@ -632,7 +632,7 @@ function kendiliginden(sonrakiler) {
 function aksiyonBeklemesi(g, korunur, sira, sirali, env, adlar) {
   if (!nesneMi(g)) return { beklenenOkunus: null };
   const sonrakiler = sirali.slice(sira + 1);
-  const sonAdim = sonrakiler.every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu));
+  const sonAdim = sonrakiler.every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.servisKontrolu) || nesneMi(x.dosyaKontrolu));
   const liste = g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
   if (!korunur && (sonAdim || liste.some((s) => nesneMi(s) && (s.tur === 'metin' || s.tur === 'desen')))) return {};
   const okunus = { beklenenOkunus: gostergeOkunusu(g, adlar) };
@@ -681,9 +681,17 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
       bloklar.push({ tur: 'ortak', dosya: adim.ortakAkis.dosya, ad: String(adim.baslik || adim.id), istegeBagli, ...(dahil ? { dahilVarsayilan: true } : {}) });
       continue;
     }
+    // Servis isteği adımı: tek blok (tanım aynen; koşul diyagramda gösterilebiliyorsa).
+    if (nesneMi(adim.servisKontrolu)) {
+      const k = nesneMi(adim.gorunurluk) ? diyagramKosulu(gorunurlukIfadesi(model, adim.gorunurluk), env, new Set(), modelEtiketleri) : null;
+      bloklar.push({ tur: 'servis', ad: String(adim.baslik || adim.id), servis: kopya(adim.servisKontrolu), ...(k ? { kosul: k } : {}) });
+      continue;
+    }
     // SQL sorgusu adımı: tek blok (tanım aynen).
     if (nesneMi(adim.sqlKontrolu)) {
-      bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql: kopya(adim.sqlKontrolu) });
+      // Adımın koşulu ("ne zaman çalışsın"): diyagramda gösterilebiliyorsa bloğa.
+      const k = nesneMi(adim.gorunurluk) ? diyagramKosulu(gorunurlukIfadesi(model, adim.gorunurluk), env, new Set(), modelEtiketleri) : null;
+      bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql: kopya(adim.sqlKontrolu), ...(k ? { kosul: k } : {}) });
       continue;
     }
     // Dosya doğrulama adımı: tek blok (tetikleyici düğme sağ listedeki sırasıyla; tanım aynen).
@@ -783,7 +791,7 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
       }
       // Son adımın öğe göstergesi ("öğe görününce bitti"): "öğe" işaretli mesaj bloğu (metin aranmaz). Ara adımlarınki sonraki adımın ilk
       // öğesinden kendiliğinden kurulur (gösterilmez).
-      if (sira === sirali.length - 1 || sirali.slice(sira + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu))) {
+      if (sira === sirali.length - 1 || sirali.slice(sira + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.servisKontrolu) || nesneMi(x.dosyaKontrolu))) {
         for (const g of ogeGostergeleri(kosu.basariGostergesi)) {
           const m = env.mesajlar.findIndex((o) => o.secici === g.deger && o.metin === ogeAdi(adim, g.deger));
           bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: null, oge: true });

@@ -998,6 +998,16 @@ export function playwrightKoduUret(g) {
       if (adim.sonAdim) break;
       continue;
     }
+    if (adim.servis) {
+      // Servis isteği adımı (Nöbetçi'ye özgü; servisler/servis-adimi.mjs): servis motoru Nöbetçi'de; yalnız açıklama yazılır.
+      const sv = adim.servis;
+      govde.push(`${ic}// Nöbetçi'de koşar: servis isteği — servisin kayıtlı senaryosu şablon olarak çalıştırılır, kontrolleri tutmalı.`);
+      for (const a of sv.atamalar ?? []) govde.push(`${ic}//   Atama: ${yorum(a.bul)} → ${yorum(a.deger)}`);
+      if (sv.okumalar?.length) govde.push(`${ic}//   Okunan değerler: ${yorum(sv.okumalar.map((o) => o.ad).join(', '))}`);
+      govde.push(`${ic}// TODO: bu istek Nöbetçi dışında yok; gerekiyorsa kendi HTTP istemcinizle (request fixture) ekleyin.`, '  });');
+      if (adim.sonAdim) break;
+      continue;
+    }
     if (adim.dosya) {
       // İndirilen dosyayı doğrulama (Nöbetçi'ye özgü; dosyalar/dosya-icerigi.mjs): indirme Playwright'la yapılır, içerik beklentileri
       // (CSV / XLSX / PDF / metin ayrıştırma) Nöbetçi dışında yok → yorum + TODO. Gizli tablo değeri taşıyan beklenti maskelenir.
