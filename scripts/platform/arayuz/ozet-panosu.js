@@ -1307,7 +1307,8 @@ function tabloGorunumu(a, sonuc, t) {
     });
     const th = h('th', { scope: 'col', class: sayiSutunlari.has(ad) ? 'sayi' : null, 'data-sutun': ad, 'aria-sort': yon ? ARIA_SORT[yon] : null, draggable: 'true' }, h('div', { class: 'pano-th' }, sirala, menu), tutamak);
     const sinirla = (/** @type {number} */ n) => Math.max(SUTUN_GENISLIGI.en, Math.min(SUTUN_GENISLIGI.enCok, Math.round(n)));
-    const genislikKaydet = (/** @type {number | null} */ n) => {
+    // odakla: klavyeyle değişince odak tutamağa döner; fareyle sürükleyip / çift tıklayınca dönmez (odak çerçevesi kalmasın).
+    const genislikKaydet = (/** @type {number | null} */ n, odakla = true) => {
       if (n === null) delete genislikler[ad];
       else {
         // İlk elle genişlikte diğer sütunlar o anki genişliklerinde sabitlenir (tablo sabit genişliğe geçer).
@@ -1318,7 +1319,7 @@ function tabloGorunumu(a, sonuc, t) {
         }
         genislikler[ad] = sinirla(n);
       }
-      t.kaydet(gorunen, genislikler, { ad, rol: 'genislik' });
+      t.kaydet(gorunen, genislikler, odakla ? { ad, rol: 'genislik' } : null);
     };
     // Fare / dokunma: kenar tutamağından sürükle (canlı önizleme: <col width>), bırakınca kaydet. Çift tıkla: sığdır (genişlik kaldırılır).
     tutamak.addEventListener('pointerdown', (o) => {
@@ -1354,7 +1355,7 @@ function tabloGorunumu(a, sonuc, t) {
         tutamak.removeEventListener('pointerup', birak);
         tutamak.removeEventListener('pointercancel', birak);
         th.draggable = true;
-        if (Math.abs(son - ilk) >= 2) { genislikKaydet(son); return; }
+        if (Math.abs(son - ilk) >= 2) { genislikKaydet(son, false); return; }
         // Hareket yoksa (tıklama / çift tıklamanın ilki) geçici genişlikler geri alınır; hiçbir şey kaydedilmez.
         for (const c of gecici) c.removeAttribute('width');
         tablo.classList.toggle('sabit-genislik', oncekiSinif);
@@ -1364,7 +1365,7 @@ function tabloGorunumu(a, sonuc, t) {
       tutamak.addEventListener('pointerup', birak);
       tutamak.addEventListener('pointercancel', birak);
     });
-    tutamak.addEventListener('dblclick', () => genislikKaydet(null));
+    tutamak.addEventListener('dblclick', () => genislikKaydet(null, false));
     tutamak.addEventListener('keydown', (o) => {
       if (o.key === 'ArrowLeft' || o.key === 'ArrowRight') {
         o.preventDefault();

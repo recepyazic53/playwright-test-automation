@@ -137,7 +137,7 @@ export const ESIK_RENKLERI = Object.freeze([
 export const EN_COK_ESIK = 5;
 export const EN_COK_SUTUN = 100;
 /** Tablo sütun genişliği sınırları (px; kenar tutamağıyla ayarlanır, kartın ayarında saklanır). */
-export const SUTUN_GENISLIGI = Object.freeze({ en: 40, enCok: 1200 });
+export const SUTUN_GENISLIGI = Object.freeze({ en: 40, enCok: 4000 });
 export const SQL_EN_UZUN = 20_000;
 /** SQL kartının zaman aşımı (sn): kartın "Zaman aşımı" ayarı; ayarı olmayan (eski) kartta varsayılan. */
 export const SQL_ZAMAN_ASIMI_SN = Object.freeze({ varsayilan: 15, en: 1, enCok: 120 });
