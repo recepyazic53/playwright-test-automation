@@ -5,6 +5,7 @@ export type BenzerlikGrubu = 'birebir' | 'cogu' | 'veriFarkli';
 export interface BirlestirmeOnerisi { tablolar: string[]; grup: BenzerlikGrubu; puan: number; tur: 'liste' | 'kayit' | 'servis'; eslemeGerekli: boolean }
 export declare function baslikNormal(ad: unknown): string;
 export declare function basliklarBenzer(a: string, b: string): boolean;
+export declare function uzaklik(a: string, b: string): number;
 export declare function sutunEslemesiOner(kaynak: BSutun[], hedef: BSutun[]): Array<{ kaynak: string; hedef: string | null; kesin: boolean }>;
 export declare function tabloTuru(t: BTablo, ek?: { ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }): 'liste' | 'kayit' | 'servis';
 export declare function baslikBenzerligi(a: BSutun[], b: BSutun[]): number;
