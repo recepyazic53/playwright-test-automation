@@ -71,3 +71,20 @@ test('sayı / tarih alanı (kişi / kart dışı) tek sütunlu tablo açmaz; do�
   expect(t?.tablolar[0].satir).toEqual({ 'Doğum tarihi': '1990-01-01' });
   expect(tabloTaslagiKur({ baslik: 'C', alanlar: [{ anahtar: 'a', tur: 'number', etiket: 'Adet' }], degerler: { a: { deger: '3', kaynak: 'elle' } } })).toBeNull();
 });
+
+test('metin kutusuna yazılan tutar / sayı / yıl / tarih tabloya önerilmez; uzun kod ve düz metin kalır', () => {
+  const bolum = { anahtar: 'b1', baslik: 'Ana Teminat Bilgileri' };
+  const t = tabloTaslagiKur({
+    baslik: 'D',
+    alanlar: [
+      { anahtar: 'a', tur: 'text', etiket: 'Bina (Yangın)', bolum }, { anahtar: 'b', tur: 'text', etiket: 'Cam Kırılması', bolum },
+      { anahtar: 'c', tur: 'text', etiket: 'Başlangıç Tarihi', bolum }, { anahtar: 'y', tur: 'text', etiket: 'İnşa Yılı', bolum },
+      { anahtar: 'k', tur: 'text', etiket: 'Adres kodu', bolum }, { anahtar: 'm', tur: 'text', etiket: 'Açıklama', bolum }
+    ],
+    degerler: {
+      a: { deger: '1.000.000', kaynak: 'elle' }, b: { deger: '7500', kaynak: 'elle' }, c: { deger: '06.10.2026', kaynak: 'elle' },
+      y: { deger: '2026', kaynak: 'elle' }, k: { deger: '1234567890', kaynak: 'elle' }, m: { deger: 'Depo', kaynak: 'elle' }
+    }
+  });
+  expect(t?.tablolar.map((x) => [x.tabloAdi, x.sutunlar.map((s) => s.ad)])).toEqual([['Ana Teminat Bilgileri', ['Adres kodu', 'Açıklama']]]);
+});

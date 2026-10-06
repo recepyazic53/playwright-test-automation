@@ -32,7 +32,7 @@ test.describe('kural (saf)', () => {
     { anahtar: 'dogum2', etiket: 'Doğum tarihi (2)', tur: 'text', secici: '#dogum2', kosul: { secim: 'tip2', degerler: ['O'] }, dalDisi: true }
   ];
 
-  test('dalda olmayan iç içe seçim senaryoya bağlanmaz; seçenekleri adla tabloda, kod karşılıkta; üst kontrol adla', () => {
+  test('dalda olmayan iç içe seçim senaryoya bağlanmaz; radyo seçenekleri yalnız öneri listesinde (adla + kod karşılığı), tabloya yazılmaz', () => {
     const plan = planKur({ baslik: 'Başvuru', alanlar, degerler: {} });
     const tip = plan.tablolar.find((t) => t.alanlar.some((a) => a.oturumAnahtar === 'tip2'));
     expect(tip, JSON.stringify(plan.tablolar)).toBeTruthy();
@@ -40,10 +40,11 @@ test.describe('kural (saf)', () => {
     const sutun = tip?.alanlar.find((a) => a.oturumAnahtar === 'tip2')?.sutun as string;
     expect(tip?.satirlar.map((r) => r[sutun])).toEqual(['Özel', 'Tüzel']);
     expect(tip?.sutunlar.find((s) => s.ad === sutun)?.karsiliklar).toEqual({ Özel: { sayfa: 'O' }, Tüzel: { sayfa: 'T' } });
-    // Üst kontrol (yolda; kullanıcı değiştirmedi): senaryoya sayfadaki değeriyle, tabloda adla bağlanır.
+    // Radyo tabloya yazılmaz: seçenek listeleri yalnız öneriler için tutulur (üst kontrol de); senaryoda değeri seçilir.
+    expect(tip?.yalnizOneri).toBe(true);
     const farkli = plan.tablolar.find((t) => t.alanlar.some((a) => a.oturumAnahtar === 'farkli'));
-    expect(farkli?.alanlar.find((a) => a.oturumAnahtar === 'farkli')?.degerli).toBe(true);
-    expect(Object.values(farkli?.secilen ?? {})).toEqual(['Hayır']);
+    expect(farkli?.yalnizOneri).toBe(true);
+    expect(farkli?.secilen ?? null).toBeNull();
     // Evet dalı önerisi iç içe seçimi açıkça (adla) yazar: kaydedilen senaryoda değeri yoktur.
     const oneriler = senaryoOnerileri(plan, 'Başvuru', { alanlar });
     const tuzel = oneriler.find((x) => x.baslik.includes('Kişi tipi (2): Tüzel'));
@@ -122,7 +123,7 @@ test.describe('hızlı test kaydı ve normal koşu (127.0.0.1)', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('üst seçim Hayır: kayıt hatasız; iç içe seçimin seçenekleri tabloda adla + kod karşılığı; senaryoda yok; normal koşu kodu seçer; Evet · Tüzel önerisi adla kaydedilir ve doğru seçilir', async () => {
+  test('üst seçim Hayır: kayıt hatasız; radyo tabloya yazılmaz; iç içe seçim senaryoda yok; normal koşu kodu seçer; Evet · Tüzel önerisi kodla kaydedilir ve doğru seçilir', async () => {
     test.setTimeout(600_000);
     const id = String((await basarili('/platform/hizli-test/baslat', {
       projeId, ortamId, hedef: '/ic-ice/', ekranAdi: 'Karşılık', izin: 'evet', cumle: 'Kaydet düğmesine bas, "Kayıt alındı" görünce bitir'
@@ -152,37 +153,27 @@ test.describe('hızlı test kaydı ve normal koşu (127.0.0.1)', () => {
     const k = await basarili('/platform/hizli-test/kaydet', { id, baslik, senaryoIndeksleri: [oneri?.indeks] });
     expect(k.kaydedildi).toBe(true);
 
-    // Tablo: iç içe seçimin seçenekleri görünen adla, iç kod karşılıkta.
+    // Radyo seçenekleri tabloya yazılmaz (yalnız öneri listesi).
     const tablolar = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
-    const tipTablosu = tablolar.find((t) => (t.satirlar as Nesne[]).some((r) => Object.values(r.degerler).includes('Tüzel'))) as Nesne;
-    expect(tipTablosu, JSON.stringify(tablolar.map((t) => t.ad))).toBeTruthy();
-    const tipSutunu = (tipTablosu.sutunlar as Nesne[]).find((s) => (tipTablosu.satirlar as Nesne[]).some((r) => r.degerler[s.ad] === 'Tüzel')) as Nesne;
-    expect((tipTablosu.satirlar as Nesne[]).map((r) => r.degerler[tipSutunu.ad])).toEqual(['Özel', 'Tüzel']);
-    expect(tipSutunu.karsiliklar).toMatchObject({ Özel: { sayfa: 'O' }, Tüzel: { sayfa: 'T' } });
+    expect(tablolar.some((t) => (t.satirlar as Nesne[]).some((r) => Object.values(r.degerler).includes('Tüzel'))), JSON.stringify(tablolar.map((t) => t.ad))).toBe(false);
 
-    // Kaydedilen senaryo: iç içe alan yok, iç kod yok.
+    // Kaydedilen senaryo: iç içe alan yok.
     const senaryolar = (await basarili(`/platform/senaryolar?projeId=${projeId}`)).senaryolar as Nesne[];
     const ana = senaryolar.find((x) => x.baslik === baslik) as Nesne;
     const anaDetay = (await basarili(`/platform/senaryo?id=${String(ana.id)}&ortamId=${ortamId}`)).senaryo as Nesne;
-    const anaVeri = JSON.stringify(anaDetay.veri);
-    expect(anaVeri).not.toContain(`\${${String(tipTablosu.ad)}`);
-    expect(anaDetay.veri.tip2, anaVeri).toBeUndefined();
-    expect(String(anaDetay.veri.farkli), anaVeri).toMatch(/^\$\{/);
-    for (const kod of ['O', 'T', 'H', 'E']) expect(Object.values(anaDetay.veri), anaVeri).not.toContain(kod);
+    expect(anaDetay.veri.tip2, JSON.stringify(anaDetay.veri)).toBeUndefined();
+    expect(anaDetay.veri.farkli).toBe('H');
 
     // Normal koşu: Hayır dalı (sayfaya kod gider).
     const once = u.icIceKayitlar.length;
     await kos(String(ana.id));
     expect(u.icIceKayitlar.slice(once)).toEqual([{ ad: 'Deneme Hayır', farkli: 'H' }]);
 
-    // Evet · Tüzel önerisi: iç içe seçim tablo başvurusuyla, satır seçimi adla ("Tüzel"); alanları "veri bekliyor" — doldurulup koşulur.
+    // Evet · Tüzel önerisi: seçimler senaryoda seçenek koduyla; alanları "veri bekliyor" — doldurulup koşulur.
     const dal = senaryolar.find((x) => x.baslik === oneri?.baslik) as Nesne;
     expect(dal, JSON.stringify(senaryolar.map((x) => x.baslik))).toBeTruthy();
     const dalDetay = (await basarili(`/platform/senaryo?id=${String(dal.id)}&ortamId=${ortamId}`)).senaryo as Nesne;
-    expect(JSON.stringify(dalDetay.veri)).toContain(`\${${String(tipTablosu.ad)}.${String(tipSutunu.ad)}}`);
-    const secimler = Object.entries(dalDetay.tabloSecimleri as Record<string, Nesne>).filter(([a]) => a.startsWith(String(tipTablosu.id)));
-    expect(secimler.map(([, v]) => v), JSON.stringify(dalDetay.tabloSecimleri)).toEqual([{ [String(tipSutunu.ad)]: 'Tüzel' }]);
-    for (const kod of ['O', 'T', 'H', 'E']) expect(Object.values(dalDetay.veri)).not.toContain(kod);
+    expect(dalDetay.veri).toMatchObject({ farkli: 'E', tip2: 'T' });
     const bekleyen = (dalDetay.veriBekliyor?.bekleyen ?? []) as Nesne[];
     expect(bekleyen.map((x) => x.etiket)).toEqual(expect.arrayContaining(['Vergi no (2)', 'İş telefonu (2)']));
     const kayitTablosu = tablolar.find((t) => t.id === bekleyen[0].tabloId) as Nesne;
