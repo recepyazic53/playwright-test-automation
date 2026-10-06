@@ -292,6 +292,9 @@ async function ekranAyrintisi(icerik, s) {
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
       { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
+      // Hızlı testin düzenleme kipi: mevcut modelle başlar; başka bir dalda (ör. önceki sayfadaki seçime göre) beliren alanlar eklenir.
+      modelVar && !altModel && !ortakAkis ? { ikon: 'simsek', metin: 'Hızlı testle güncelle', aciklama: 'Başka bir seçimle açılan alanlar modelde yoksa: akışı o seçimle yürütürsünüz, yeni alanlar eklenir.',
+        fn: () => { location.hash = `#/hizli-test/duzenle/${encodeURIComponent(e.id)}`; } } : null,
       altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
       altModel ? null : {
         ikon: 'video', metin: 'Akışı kaydet',

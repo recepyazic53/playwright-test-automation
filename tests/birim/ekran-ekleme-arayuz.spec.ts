@@ -355,11 +355,11 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await menuDugmesi.click();
   await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
   const secenekler = page.getByRole('menuitem');
-  await expect(secenekler).toHaveText([/^Paket yükle/, /^Ekranı tara/, /^Akışı kaydet/, /^Tekrar analiz et/, /^Yapay zekâ ile yorumla/]);
+  await expect(secenekler).toHaveText([/^Paket yükle/, /^Hızlı testle güncelle/, /^Ekranı tara/, /^Akışı kaydet/, /^Tekrar analiz et/, /^Yapay zekâ ile yorumla/]);
   await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveAccessibleDescription(/Sayfa değiştiyse/);
   await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'Hızlı testle güncelle' })).toBeFocused();
   await page.keyboard.press('End');
   await expect(page.getByRole('menuitem', { name: 'Yapay zekâ ile yorumla' })).toBeFocused();
   await page.keyboard.press('Escape');
