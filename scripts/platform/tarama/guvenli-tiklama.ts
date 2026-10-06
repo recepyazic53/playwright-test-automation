@@ -211,7 +211,7 @@ export async function ortuBul(hedef: Locator): Promise<string | null> {
     const ad = kap.getAttribute('role') ?? kap.tagName.toLowerCase();
     const yazi = ((ust as HTMLElement).innerText || ust.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     return `${ad}${yazi ? `: “${yazi}”` : ''}`;
-  }).catch(() => null);
+  }, undefined, { timeout: 1_000 }).catch(() => null);
 }
 
 /** Yüklenme perdesinin kalkması için varsayılan üst sınır (ms; çağıran ayarlı süreyi verebilir). */
@@ -259,7 +259,8 @@ export async function perdeKalksin(page: Page, hedef: Locator, s: { ad: string; 
   for (;;) {
     if (ilk) await hedef.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => undefined);
     ilk = false;
-    const d = await hedef.evaluate(ortuDurumu).catch(() => null);
+    // Öğe sayfada yoksa evaluate süresiz beklemesin: kısa sınır; öğe yoksa örtü de yok (tıklama kendi süresiyle düşer).
+    const d = await hedef.evaluate(ortuDurumu, undefined, { timeout: 1_000 }).catch(() => null);
     if (!d) return 'yok';
     const agMesgul = Boolean(s.ag) && !s.ag?.sakinMi(0, { sessizlikMs: AG_SESSIZLIK_MS });
     if (!d.aday || (!d.genis && !agMesgul)) return 'pencere';
