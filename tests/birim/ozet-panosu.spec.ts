@@ -22,7 +22,8 @@ import {
   EN_COK_DILIM, EN_COK_KART, EN_COK_YUKSEKLIK, IZGARA_SUTUN, LISTE_EN_COK, SATIR_BIRIMI, VARSAYILAN_BICIM, bicimTemizle, cakisiyorMu, degisimHesapla,
   duzenTemizle, eksikYerlesikler, enKucukBoyut, esikRengi, eskiBicimMi, gorunurYerlesim, hucreBicimle, kartAyarla, kartEkle, kartKaldir, kartSiraTasi,
   kartYerlestir, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
-  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, sqlZamanAsimiTemizle, type PanoDuzeni
+  yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, sqlZamanAsimiTemizle, type PanoDuzeni,
+  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -273,6 +274,41 @@ test('biçim: yüzde (0,834 → %83,4; 83,4 → %83,4), binlik, ondalık, ön / 
     expect(k.ayar).toMatchObject({ gorunum, bicim: { ondalik: 1, sonEk: ' sn', hedef: 95 } });
   }
   expect(duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1' } }] }).kartlar[0].ayar?.bicim).toEqual(VARSAYILAN_BICIM);
+});
+
+test('kart parametresi: tanım doğrulaması (sorguda :ad, ayrılmış ad, seçenekler), seçili değer, kutucuk tıklama hedefi', () => {
+  const sql = (ayar: Record<string, unknown>, ek: Record<string, unknown> = {}) => kartTemizle({ id: 'k-1', tur: 'sql', ...ek,
+    ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, gorunum: 'tablo', sorgu: "SELECT * FROM t WHERE s = :servis AND x = ':yok' -- :yorum", ...ayar } });
+  expect(sorgudaParametreVar("SELECT 1 WHERE a = :servis", 'servis')).toBe(true);
+  expect(sorgudaParametreVar("SELECT ':servis' -- :servis", 'servis')).toBe(false);
+  expect(sorgudaParametreVar('SELECT a::servis', 'servis')).toBe(false);
+  const k = sql({ parametreler: [{ ad: ':servis', etiket: '', secenekler: ['A', ' B ', 'A', ''] }] }, { parametreDegerleri: { servis: 'B', yok: 'x' } });
+  expect(k.ayar?.parametreler).toEqual([{ ad: 'servis', etiket: 'servis', secenekler: ['A', 'B'] }]);
+  expect(k.parametreDegerleri).toEqual({ servis: 'B' });
+  // Seçeneklerde olmayan seçili değer düşer; etkin değer ilk seçenek.
+  const k2 = sql({ parametreler: [{ ad: 'servis', etiket: 'Servis', secenekler: ['A', 'B'] }] }, { parametreDegerleri: { servis: 'Z' } });
+  expect(k2.parametreDegerleri).toBeUndefined();
+  expect(kartParametreDegeri(k2, 'servis')).toBe('A');
+  expect(kartParametreleri(k2)).toEqual({ servis: 'A' });
+  expect(() => sql({ parametreler: [{ ad: 'yok', secenekler: ['A'] }] })).toThrow('Sorguda :yok geçmiyor');
+  expect(() => sql({ parametreler: [{ ad: 'yorum', secenekler: ['A'] }] })).toThrow('Sorguda :yorum geçmiyor');
+  expect(() => sql({ sorgu: 'SELECT :baslangic', parametreler: [{ ad: 'baslangic', secenekler: ['A'] }] })).toThrow('dönem için ayrılmış');
+  expect(() => sql({ parametreler: [{ ad: 'servis', etiket: 'S', secenekler: [] }] })).toThrow('en az bir seçenek');
+  expect(() => sql({ parametreler: [{ ad: '1x', secenekler: ['A'] }] })).toThrow('Parametre adı geçersiz');
+  expect(() => sql({ parametreler: [1, 2, 3, 4] })).toThrow('en çok 3 parametre');
+  expect(() => sql({ parametreler: [{ ad: 'servis', secenekler: ['A'] }, { ad: 'servis', secenekler: ['B'] }] })).toThrow('birden çok kez');
+  // Kutucuk tıklama hedefi: biçim denetlenir.
+  expect(sql({ tiklama: { kartId: 'k-2', parametre: 'servis' } }).ayar?.tiklama).toEqual({ kartId: 'k-2', parametre: 'servis' });
+  expect(() => sql({ tiklama: { kartId: 'k-2', parametre: '1' } })).toThrow('tıklama hedefi geçersiz');
+  // kartParametrele: değer seçeneklerden biri olmalı; kartAyarla geçerli seçimi korur, geçersizi düşürür.
+  const d0 = { surum: 2, kartlar: [{ ...k2, x: 0, y: 0, w: 6, h: 4 }] } as unknown as PanoDuzeni;
+  const d1 = kartParametrele(d0, 'k-1', 'servis', 'B');
+  expect(d1.kartlar[0].parametreDegerleri).toEqual({ servis: 'B' });
+  expect(() => kartParametrele(d0, 'k-1', 'servis', 'Z')).toThrow('seçeneklerinde yok');
+  expect(() => kartParametrele(d0, 'k-1', 'yok', 'A')).toThrow('böyle bir parametresi yok');
+  const ayar = d1.kartlar[0].ayar as Record<string, unknown>;
+  expect(kartAyarla(d1, 'k-1', { ...ayar, baslik: 'T' }).kartlar[0].parametreDegerleri).toEqual({ servis: 'B' });
+  expect(kartAyarla(d1, 'k-1', { ...ayar, parametreler: [{ ad: 'servis', etiket: 'Servis', secenekler: ['A'] }] }).kartlar[0].parametreDegerleri).toBeUndefined();
 });
 
 test('tablo: görünen sütunlar, taşı, gizle / göster, sıralama türleri (sayı, tarih, metin tr-TR; boşlar sonda), genişlik doğrulaması', () => {

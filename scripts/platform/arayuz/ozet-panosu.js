@@ -24,7 +24,8 @@ import {
   gorunurYerlesim, kartSiraTasi, kartYerlestir, okumaSirasinaDiz, satirPikseli,
   bicimTemizle, degisimHesapla, eksikYerlesikler, esikRengi, hucreBicimle, kartAdi, kartAyarla, kartEkle, kartKaldir, kartTemizle,
   SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
-  donemMetni, donemTemizle, kartDonemle, kartDonemliMi, SQL_ZAMAN_ASIMI_SN, sqlZamanAsimiTemizle
+  donemMetni, donemTemizle, kartDonemle, kartDonemliMi, SQL_ZAMAN_ASIMI_SN, sqlZamanAsimiTemizle,
+  EN_COK_KART_PARAMETRESI, kartParametreDegeri, kartParametrele, kartParametreleri
 } from './pano-duzeni.mjs';
 import { SONUC_ARALIGI, tarihAraligiSecici } from './tarih-araligi.js';
 import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBicimle, metotOner, satirZamani, uzunMetinMi } from './buyuk-metin.mjs';
@@ -64,8 +65,16 @@ function odakla(el) {
   if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
 
-/** Kart öğesinin imzası: tür, ayar ve dönem (değişince kart yeniden kurulur). @param {{ tur: string; ayar?: unknown; donem?: unknown }} k */
-const kartImzasi = (k) => `${k.tur}:${JSON.stringify(k.ayar ?? null)}:${JSON.stringify(k.donem ?? null)}`;
+/**
+ * Kart öğesinin imzası: tür, ayar, dönem ve seçili parametreler; tıklaması başka karta bağlı kutucuk kartında hedefin seçili değeri
+ * (seçili kutucuk işareti). Değişince kart yeniden kurulur. @param {any} k @param {{ kartlar: any[] } | null} [duzen]
+ */
+const kartImzasi = (k, duzen = null) => {
+  const t = k.ayar?.tiklama;
+  const hedef = t && duzen ? duzen.kartlar.find((x) => x.id === t.kartId) : null;
+  return `${k.tur}:${JSON.stringify(k.ayar ?? null)}:${JSON.stringify(k.donem ?? null)}:${JSON.stringify(k.parametreDegerleri ?? null)}`
+    + (hedef ? `:${kartParametreDegeri(hedef, t.parametre) ?? ''}` : '');
+};
 
 /**
  * Eski düzenden göç: dönem seçimi olmayan döneme bağlı kartın başlangıç dönemi, eski GENEL seçimdir (oturumda seçilmişse); seçilmemişse
@@ -226,7 +235,7 @@ export function ozetPanosu(kap, s0) {
 
   /** Kartın sarmalayıcısı (içerik ve dönem değişmediyse önceki öğe yeniden kullanılır; veri yeniden istenmez). */
   function ogeHazirla(k, i, n) {
-    const imza = kartImzasi(k);
+    const imza = kartImzasi(k, etkinDuzen());
     let o = ogeler.get(k.id);
     if (!o || o.imza !== imza) {
       const icerik = h('div', { class: 'pano-icerik' }, ...kartIcerigi(k));
@@ -435,6 +444,33 @@ export function ozetPanosu(kap, s0) {
       ciz();
       if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata');
     }
+  }
+
+  /**
+   * Kart parametresinin seçimi (SQL kartının başlığındaki seçim ya da başka bir kartın kutucuğuna tıklama). Hemen kaydedilir
+   * (POST /platform/pano/parametre) ve kart yenilenir (sorgu çalışır; CANLI ortamda ilk seferde onay). Düzenleme kipinde yalnız
+   * çalışan düzene yazılır (kaydedilince saklanır; sorgu çalışmaz). kaydir: kart görünür alana getirilir.
+   * @param {string} id @param {string} ad @param {string} deger @param {{ kaydir?: boolean }} [s]
+   */
+  async function parametreSec(id, ad, deger, s = {}) {
+    if (duzenleniyor && calisan) {
+      calisan = kartParametrele(calisan, id, ad, deger);
+      ciz();
+      return;
+    }
+    try {
+      const y = await api('/platform/pano/parametre', { govde: { projeId: proje.id, kartId: id, ad, deger } });
+      kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || kayitli.sqlSonuclari };
+    } catch (e) {
+      if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata');
+      return;
+    }
+    ciz();
+    const kartEl = /** @type {HTMLElement | null} */ (pano.querySelector(`[data-kart-id="${CSS.escape(id)}"]`));
+    const k = etkinDuzen().kartlar.find((x) => x.id === id);
+    if (k) duyur(`${kartAdi(k)}: ${deger} seçildi.`);
+    if (kartEl && s.kaydir) kartEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    /** @type {HTMLButtonElement | null} */ (kartEl?.querySelector('.pano-yenile') ?? null)?.click();
   }
 
   /** Düzenleme kipinde kartın üstündeki araçlar. i / n: okuma sırasındaki yeri. */
@@ -687,7 +723,7 @@ export function ozetPanosu(kap, s0) {
     const YARDIM = {
       sayi: 'Değerin sütunu (boşsa ilk sütun).', yuzde: 'Değerin sütunu (boşsa ilk sütun).', degisim: 'Değerin sütunu (boşsa ilk sütun); önceki yenilemedeki değerle karşılaştırılır.',
       tablo: 'Gösterilecek sütunlar, virgülle (boşsa tümü).', liste: 'Listelenecek sütun (boşsa ilk sütun); en çok 50 madde.',
-      kutucuk: 'Önce etiket, sonra değer sütunu, virgülle (boşsa ilk sütun ve ilk sayısal sütun).', pasta: 'Önce etiket, sonra değer sütunu, virgülle; en çok 8 dilim, kalanı "Diğer".'
+      kutucuk: 'Önce etiket, sonra değer sütunu, virgülle (boşsa ilk sütun ve ilk sayısal sütun).', pasta: 'Önce etiket, sonra değer sütunu, virgülle; her satır bir dilim.'
     };
     const sutunYardimi = () => YARDIM[gorunum.value] || 'Önce etiket, sonra değer sütunu, virgülle (boşsa ilk iki sütun).';
     const sutunAlani = alan('Sütunlar', sutunlar, { yardim: `${sutunYardimi()}${bilinen && bilinen.length ? ` Son sonuçtaki sütunlar: ${bilinen.join(', ')}.` : ''}` });
@@ -697,6 +733,38 @@ export function ozetPanosu(kap, s0) {
       esikAlani.hidden = !ESIKLI.includes(gorunum.value);
       yuzdeAlanlari.hidden = gorunum.value !== 'yuzde';
     };
+    // Kart parametreleri: sorgudaki :ad için kart başlığında seçim kutusu (seçenekler her satırda bir değer).
+    const parametreListesi = h('div', { class: 'pano-parametre-listesi' });
+    const parametreEkle = h('button', { type: 'button', class: 'kucuk-dugme hayalet' }, ikon('arti'), 'Parametre ekle');
+    const parametreSatiri = (p = { ad: '', etiket: '', secenekler: [] }) => {
+      const ad = h('input', { type: 'text', value: p.ad ? `:${p.ad}` : '', placeholder: ':servis', autocomplete: 'off', spellcheck: 'false', class: 'mono', 'aria-label': 'Parametre adı (sorguda)' });
+      const etiket = h('input', { type: 'text', maxlength: 40, value: p.etiket || '', placeholder: 'Servis', autocomplete: 'off', 'aria-label': 'Parametre etiketi (kartta)' });
+      const secenekler = h('textarea', { rows: 2, spellcheck: 'false', 'aria-label': 'Parametre seçenekleri (her satırda bir değer)', placeholder: 'Her satırda bir değer' });
+      secenekler.value = (p.secenekler || []).join('\n');
+      const sil = h('button', { type: 'button', class: 'hayalet kucuk-dugme', 'aria-label': 'Parametreyi kaldır' }, ikon('carpi'));
+      const satir = h('div', { class: 'pano-parametre-satiri' }, ad, etiket, secenekler, sil);
+      sil.addEventListener('click', () => { satir.remove(); parametreEkle.disabled = parametreListesi.children.length >= EN_COK_KART_PARAMETRESI; });
+      parametreListesi.append(satir);
+      parametreEkle.disabled = parametreListesi.children.length >= EN_COK_KART_PARAMETRESI;
+    };
+    for (const p of a.parametreler || []) parametreSatiri(p);
+    parametreEkle.addEventListener('click', () => parametreSatiri());
+    const parametreAlani = h('fieldset', { class: 'pano-parametre-alani' }, h('legend', {}, 'Kart parametreleri'),
+      h('p', { class: 'soluk kucuk' }, 'Sorguda :ad yazın (ör. WHERE SERVICENAME = :servis). Kartın başlığında seçim kutusu olur; seçilen değer parametre olarak bağlanır ve kart yenilenir.'),
+      parametreListesi, parametreEkle);
+    // Kutucuğa tıklayınca: başka bir SQL kartının parametresi (yalnız "Durum kutucukları").
+    const hedefler = etkinDuzen().kartlar.filter((x) => x.tur === 'sql' && (!mevcut || x.id !== mevcut.id))
+      .flatMap((x) => (x.ayar.parametreler || []).map((/** @type {{ ad: string; etiket: string }} */ p) => ({ deger: `${x.id}|${p.ad}`, ad: `${x.ayar.baslik} › ${p.etiket}` })));
+    const tiklamaDegeri = a.tiklama ? `${a.tiklama.kartId}|${a.tiklama.parametre}` : '';
+    const tiklama = h('select', {}, h('option', { value: '' }, 'Hiçbir şey yapma'),
+      hedefler.map((x) => h('option', { value: x.deger, selected: x.deger === tiklamaDegeri }, `${x.ad} seçilsin`)),
+      tiklamaDegeri && !hedefler.some((x) => x.deger === tiklamaDegeri) ? h('option', { value: tiklamaDegeri, selected: true }, 'Kaldırılmış kart') : null);
+    const tiklamaAlani = alan('Kutucuğa tıklayınca', tiklama, { yardim: hedefler.length
+      ? 'Kutucuğun etiketi (ör. servis adı) seçilen kartın parametresine yazılır ve o kart yenilenir. Etiket o parametrenin seçeneklerinde olmalı.'
+      : 'Parametreli başka bir SQL kartı yok: önce bir karta "Kart parametreleri" ekleyin.' });
+    const tiklamaGoster = () => { tiklamaAlani.hidden = gorunum.value !== 'kutucuk'; };
+    gorunum.addEventListener('change', tiklamaGoster);
+    tiklamaGoster();
     gorunum.addEventListener('change', yardimYaz);
     const bos = !se.veritabanlari.length && !se.baglantilar.length;
     yerlestir(kapsayici, 
@@ -709,8 +777,10 @@ export function ozetPanosu(kap, s0) {
       alan('Zaman aşımı (sn)', zamanAsimi, { yardim: 'Sorgu bu süre içinde bitmezse kart hata gösterir; yavaş sorgularda artırın.' }),
       alan('Görünüm', gorunum),
       sutunAlani,
+      tiklamaAlani,
       bicimAlani,
-      esikAlani);
+      esikAlani,
+      parametreAlani);
     yardimYaz();
     return async () => {
       const [t, x, y] = hedef.value.split(':');
@@ -726,7 +796,13 @@ export function ozetPanosu(kap, s0) {
           return { islec, deger: /** @type {HTMLInputElement} */ (satir.querySelector('input')).value.trim(), renk };
         }) : [],
         bicim: bicimTemizle({ ondalik: ondalik.value, onEk: onEk.value, sonEk: sonEk.value, tarih: tarih.value, oran: oran.value,
-          hedef: gorunum.value === 'yuzde' ? hedefDeger.value : '', gosterge: gosterge.value })
+          hedef: gorunum.value === 'yuzde' ? hedefDeger.value : '', gosterge: gosterge.value }),
+        parametreler: [...parametreListesi.children].map((satir) => {
+          const [ad, etiket] = [...satir.querySelectorAll('input')].map((x2) => /** @type {HTMLInputElement} */ (x2).value.trim());
+          const secenekler = /** @type {HTMLTextAreaElement} */ (satir.querySelector('textarea')).value.split('\n').map((m) => m.trim()).filter(Boolean);
+          return { ad: ad.replace(/^:/, ''), etiket, secenekler };
+        }).filter((p) => p.ad || p.etiket || p.secenekler.length),
+        ...(gorunum.value === 'kutucuk' && tiklama.value ? { tiklama: { kartId: tiklama.value.split('|')[0], parametre: tiklama.value.split('|')[1] } } : {})
       };
       if (!ayarYeni.baslik) throw new Error('Kart başlığı boş olamaz.');
       if (!ayarYeni.hedef) throw new Error('SQL kartı için bir veritabanı bağlantısı seçin.');
@@ -806,6 +882,36 @@ export function ozetPanosu(kap, s0) {
 
   // ---- Kullanıcı kartları -----------------------------------------------------------------------------------------------
   /** SQL kartı: yalnız "Yenile"ye basınca çalışır; son sonuç ve alındığı saat üstte. */
+  /** SQL kartının başlığındaki parametre seçimleri (ayar.parametreler; seçim hemen kaydedilir ve kart yenilenir). @param {any} k */
+  function parametreSecimleri(k) {
+    return (k.ayar.parametreler || []).map((/** @type {{ ad: string; etiket: string; secenekler: string[] }} */ p) => {
+      const deger = kartParametreDegeri(k, p.ad);
+      const sec = h('select', { class: 'pano-parametre-secimi', 'aria-label': `${p.etiket}: ${k.ayar.baslik}` },
+        p.secenekler.map((x) => h('option', { value: x, selected: x === deger }, x)));
+      sec.addEventListener('change', () => parametreSec(k.id, p.ad, sec.value));
+      return h('label', { class: 'pano-parametre' }, h('span', { class: 'soluk kucuk' }, p.etiket), sec);
+    });
+  }
+
+  /**
+   * Kutucuk görünümünde tıklama: kartın ayarındaki hedef (tiklama: { kartId, parametre }) panoda varsa, kutucuğun etiketi o kartın
+   * parametresine seçilir. Hedefin seçili değeri kutucukta işaretlenir. @param {any} a
+   */
+  function kutucukTiklamasi(a) {
+    const t = a.tiklama;
+    const hedef = t && etkinDuzen().kartlar.find((x) => x.id === t.kartId && x.tur === 'sql');
+    const p = hedef && (hedef.ayar.parametreler || []).find((/** @type {{ ad: string }} */ x) => x.ad === t.parametre);
+    if (!hedef || !p) return {};
+    return {
+      secili: kartParametreDegeri(hedef, p.ad),
+      hedefAdi: `${hedef.ayar.baslik} › ${p.etiket}`,
+      tikla: (/** @type {string} */ etiket) => {
+        if (!p.secenekler.includes(etiket)) { bildir(`"${etiket}", ${hedef.ayar.baslik} kartının ${p.etiket} seçeneklerinde yok (kartın ayarından ekleyin).`, 'hata'); return; }
+        parametreSec(hedef.id, p.ad, etiket, { kaydir: true });
+      }
+    };
+  }
+
   function sqlKarti(k) {
     let a = k.ayar;
     const basId = yeniKimlik('pano-sql');
@@ -829,7 +935,11 @@ export function ozetPanosu(kap, s0) {
       yerlestir(sonVeri, ikon('saat'), `Son veri: ${sonVeriMetni(sonuc.zaman)}`,
         sonuc.donem ? h('span', { class: 'pano-sonuc-donemi' }, ` · ${donemMetni(sonuc.donem.secim)}`) : null,
         sonuc.kesildi ? h('span', { class: 'pano-kesildi' }, ` · ilk ${Number(sonuc.satirSiniri || sonuc.satirlar.length).toLocaleString('tr-TR')} satır`) : null,
-        farkli ? h('span', { class: 'pano-donem-farki' }, ` · Seçili dönem (${donemMetni(k.donem || gocDonemi())}) için Yenile'ye basın.`) : null);
+        farkli ? h('span', { class: 'pano-donem-farki' }, ` · Seçili dönem (${donemMetni(k.donem || gocDonemi())}) için Yenile'ye basın.`) : null,
+        // Kart parametresi: sonuç hangi değerle alındı; seçim sonradan değiştiyse (ör. yenileme başarısız) Yenile gerektiği söylenir.
+        sonuc.parametreler ? h('span', { class: 'pano-sonuc-parametresi' }, ` · ${Object.values(sonuc.parametreler).join(' · ')}`) : null,
+        sonuc.parametreler && JSON.stringify(sonuc.parametreler) !== JSON.stringify(kartParametreleri(k))
+          ? h('span', { class: 'pano-donem-farki' }, ` · Seçili ${Object.values(kartParametreleri(k)).join(' · ')} için Yenile'ye basın.`) : null);
       // Sayı / yüzde / değişim: sabit ya da eşitlenmiş yükseklikte dikeyde ortalanır.
       govde.classList.toggle('dikey-orta', ['sayi', 'yuzde', 'degisim'].includes(a.gorunum));
       // Tablo yeniden kurulurken (sıralama, sütun taşıma / gizleme / genişlik) eski tablonun yüksekliği bir anlık sabitlenir ve
@@ -840,7 +950,7 @@ export function ozetPanosu(kap, s0) {
         if (eski) govde.style.setProperty('--pano-govde-yukseklik', `${Math.ceil(govde.getBoundingClientRect().height)}px`);
         yerlestir(govde, a.gorunum === 'tablo'
           ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet, goster: (g) => metinPenceresi({ ...g, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }) })
-          : sonucGorunumu(a, sonuc));
+          : sonucGorunumu(a, sonuc, kutucukTiklamasi(a)));
         const yeni = /** @type {HTMLElement | null} */ (govde.querySelector('.pano-tablo'));
         if (yeni && konum) { yeni.scrollLeft = konum[0]; yeni.scrollTop = konum[1]; }
         govde.style.removeProperty('--pano-govde-yukseklik');
@@ -873,7 +983,7 @@ export function ozetPanosu(kap, s0) {
         }
         // Kart yeniden kurulmasın (odak ve sıralama korunur): öğenin imzası güncel ayarla eşitlenir.
         const guncel = etkinDuzen().kartlar.find((x) => x.id === k.id);
-        if (guncel) { a = guncel.ayar; const o = ogeler.get(k.id); if (o) o.imza = kartImzasi(guncel); }
+        if (guncel) { a = guncel.ayar; const o = ogeler.get(k.id); if (o) o.imza = kartImzasi(guncel, etkinDuzen()); }
       } catch (e) {
         a = onceki;
         sonucCiz(kayitli.sqlSonuclari[k.id]);
@@ -918,7 +1028,8 @@ export function ozetPanosu(kap, s0) {
       }
     });
     return h('section', { class: 'kart pano-karti pano-sql-karti', 'aria-labelledby': basId },
-      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik), h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, donemli ? donemSecici(k) : null, yenile)),
+      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik),
+        h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, parametreSecimleri(k), donemli ? donemSecici(k) : null, yenile)),
       sonVeri, durum, hata, govde);
   }
 
@@ -1024,8 +1135,9 @@ function etiketDeger(secili, sutunlar, satirlar) {
  * SQL sonucunun görünümü. Biçim (ondalık, ön / son ek, tarih) sayı içeren her görünümde uygulanır; renk eşikleri biçimden önceki ham
  * değere (yüzde görünümünde yüzde değerine) bakar (pano-duzeni.mjs > Biçim).
  * @param {any} a kart ayarı @param {any} sonuc
+ * @param {{ tikla?: (etiket: string) => void; secili?: string | null; hedefAdi?: string }} [t] kutucuğa tıklama (kutucuk görünümü)
  */
-function sonucGorunumu(a, sonuc) {
+function sonucGorunumu(a, sonuc, t = {}) {
   const { sutunlar, satirlar } = sonuc;
   const b = bicimTemizle(a.bicim);
   const gizli = new Set(sonuc.gizliSutunlar || []);
@@ -1058,9 +1170,16 @@ function sonucGorunumu(a, sonuc) {
     return h('ul', { class: 'pano-kutucuklar', 'aria-label': `${a.baslik}: ${sutunlar[degerI]}` }, satirlar.slice(0, 60).map((r) => {
       const n = gizli.has(sutunlar[degerI]) ? null : sayiyaCevir(r[degerI]);
       const renk = n === null ? null : esikRengi(n, a.esikler || []);
-      return h('li', { class: `pano-kutucuk${renk ? ` esik-${renk}` : ''}` },
-        h('span', { class: 'pano-kutucuk-etiket' }, kisaBicim(r[etiketI], b)),
-        h('strong', { class: 'pano-kutucuk-deger' }, n !== null ? sayiBicimle(n, b) : kisaBicim(r[degerI], b)), esikNotu(renk));
+      const icerik = [h('span', { class: 'pano-kutucuk-etiket' }, kisaBicim(r[etiketI], b)),
+        h('strong', { class: 'pano-kutucuk-deger' }, n !== null ? sayiBicimle(n, b) : kisaBicim(r[degerI], b)), esikNotu(renk)];
+      const sinif = `pano-kutucuk${renk ? ` esik-${renk}` : ''}`;
+      if (!t.tikla) return h('li', { class: sinif }, ...icerik);
+      // Tıklanabilir kutucuk: hedef kartın parametresine bu kutucuğun etiketi seçilir; seçili olan işaretlenir.
+      const etiket = String(r[etiketI] ?? '');
+      const dugme = h('button', { type: 'button', class: `${sinif} pano-kutucuk-dugme`, 'aria-pressed': String(etiket === t.secili),
+        title: `${t.hedefAdi}: ${etiket}` }, ...icerik);
+      dugme.addEventListener('click', () => t.tikla?.(etiket));
+      return h('li', { class: 'pano-kutucuk-oge' }, dugme);
     }));
   }
   const noktalar = satirlar.slice(0, a.gorunum === 'pasta' ? 500 : 60).map((r) => ({ etiket: kisaBicim(r[etiketI], b), deger: sayiyaCevir(r[degerI]) ?? 0 }));

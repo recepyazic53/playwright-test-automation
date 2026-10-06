@@ -44,7 +44,7 @@ function veritabani() {
         i === 1 ? `Kayıt ${SAHTE_TC} kimlik ve ${SAHTE_IBAN} hesap` : `Kayıt ${i}`, i * 10.5, `2026-09-${String(10 + i).padStart(2, '0')}`]);
     }
     for (const [gun, adet] of [['Pzt', 4], ['Sal', 7], ['Çar', 3], ['Per', 9], ['Cum', 5]]) db.run('INSERT INTO gunluk_sayim VALUES (?, ?)', [gun, adet]);
-    // Pasta testi: 11 kategori (en çok 8 dilim → 7 + "Diğer"); "Sayı + değişim": sayac her "/* artan */" sorgusunda 1 artar.
+    // Pasta testi: 11 kategori (her biri bir dilim); "Sayı + değişim": sayac her "/* artan */" sorgusunda 1 artar.
     db.run('CREATE TABLE kategoriler (ad TEXT, adet INTEGER); CREATE TABLE sayac (n INTEGER); INSERT INTO sayac VALUES (10);');
     for (let i = 1; i <= 11; i++) db.run('INSERT INTO kategoriler VALUES (?, ?)', [`Kategori ${i}`, i * 3]);
     // Büyük metin testi: servis istek / yanıt günlüğü (Oracle CLOB benzeri). "/* lob */" ile sorgulanınca *CONTENT sütunları Lob

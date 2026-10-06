@@ -16,7 +16,7 @@ import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { panoGetir, panoKaydet } from './ozet-panosu.mjs';
 import { PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, PANO_SQL_SATIR_SINIRI, PANO_SQL_UCU, PANO_SQL_ZAMAN_ASIMI_MS, panoSorgusuDenetle, panoSqlYenile } from './pano-sql.mjs';
 import { sablonSecenekleri, sablonSonucu } from './pano-sablonlari.mjs';
-import { kartDonemle, kartDonemliMi } from './pano-duzeni.mjs';
+import { kartDonemle, kartDonemliMi, kartParametrele } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -97,6 +97,16 @@ export const PANO_POST_UCLARI = [
       if (!k || !kartDonemliMi(k)) throw new DepoHatasi('Döneme bağlı kart bulunamadı.');
       try { duzen = kartDonemle(duzen, kartId, donem); } catch (e) { throw new DepoHatasi(/** @type {Error} */ (e).message); }
     }
+    panoKaydet(db, projeId, duzen);
+    return panoGetir(db, projeId);
+  }],
+  // Kart parametresi (SQL kartının başlığındaki seçim; düzenleme kipi gerekmez): { kartId, ad, deger }. Değer seçeneklerden biri olmalı.
+  // SQL sorgusu çalışmaz (arayüz ardından Yenile'yi çağırır).
+  ['/platform/pano/parametre', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const kartId = kimlik(g.kartId, 'kartId');
+    let duzen = panoGetir(db, projeId).duzen;
+    try { duzen = kartParametrele(duzen, kartId, String(g.ad ?? ''), g.deger); } catch (e) { throw new DepoHatasi(/** @type {Error} */ (e).message); }
     panoKaydet(db, projeId, duzen);
     return panoGetir(db, projeId);
   }],

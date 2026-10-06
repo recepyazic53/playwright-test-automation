@@ -99,9 +99,60 @@ export function donemMetni(donem) {
  * @param {unknown} sorgu @returns {{ baslangic: boolean; bitis: boolean }}
  */
 export function sqlDonemParametreleri(sorgu) {
+  return { baslangic: sorgudaParametreVar(sorgu, 'baslangic'), bitis: sorgudaParametreVar(sorgu, 'bitis') };
+}
+
+/** SQL'in kodunda (dizgi / yorum dışında) ":ad" geçiyor mu. "::" (tür dönüşümü) sayılmaz. @param {unknown} sorgu @param {string} ad */
+export function sorgudaParametreVar(sorgu, ad) {
   const kod = String(sorgu ?? '').replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, ' ');
-  const var_ = (/** @type {string} */ ad) => new RegExp(`(^|[^:\\w]):${ad}(?![\\w])`).test(kod);
-  return { baslangic: var_('baslangic'), bitis: var_('bitis') };
+  return new RegExp(`(^|[^:\\w]):${ad}(?![\\w])`).test(kod);
+}
+
+// Kart parametresi (SQL kartı): sorgudaki ":ad" için kart başlığında seçim kutusu. Tanım ayarda (ayar.parametreler: [{ ad, etiket,
+// secenekler }]); seçili değer kartta (kart.parametreDegerleri: { ad: değer }; düzenleme kipi gerekmez). Değer sürücü parametresi
+// olarak bağlanır (SQL metnine eklenmez). Seçili değer yoksa ya da artık seçeneklerde değilse ilk seçenek kullanılır.
+/** Kartta en çok parametre. */
+export const EN_COK_KART_PARAMETRESI = 3;
+/** Parametre başına en çok seçenek. */
+export const EN_COK_PARAMETRE_SECENEGI = 200;
+const PARAMETRE_ADI = /^[A-Za-z_][A-Za-z0-9_]{0,29}$/;
+const AYRILMIS_PARAMETRELER = new Set(['baslangic', 'bitis']);
+
+/** Kartın parametresinin etkin değeri (seçili; yoksa ilk seçenek). @param {{ ayar?: any; parametreDegerleri?: Record<string, string> }} kart @param {string} ad @returns {string | null} */
+export function kartParametreDegeri(kart, ad) {
+  const p = (kart.ayar?.parametreler || []).find((/** @type {{ ad: string }} */ x) => x.ad === ad);
+  if (!p) return null;
+  const v = kart.parametreDegerleri?.[ad];
+  return typeof v === 'string' && p.secenekler.includes(v) ? v : p.secenekler[0] ?? null;
+}
+
+/** Kartın tüm parametrelerinin etkin değerleri. @param {{ ayar?: any; parametreDegerleri?: Record<string, string> }} kart @returns {Record<string, string>} */
+export function kartParametreleri(kart) {
+  /** @type {Record<string, string>} */
+  const d = {};
+  for (const p of kart.ayar?.parametreler || []) { const v = kartParametreDegeri(kart, p.ad); if (v !== null) d[p.ad] = v; }
+  return d;
+}
+
+/** Seçili değerlerden yalnız tanımlı parametrelerin seçeneklerinde olanlar (geçersizler düşer). @param {unknown} ham @param {any} ayar */
+function parametreDegerleriTemizle(ham, ayar) {
+  if (!nesneMi(ham)) return undefined;
+  /** @type {Record<string, string>} */
+  const d = {};
+  for (const p of ayar?.parametreler || []) { const v = ham[p.ad]; if (typeof v === 'string' && p.secenekler.includes(v)) d[p.ad] = v; }
+  return Object.keys(d).length ? d : undefined;
+}
+
+/**
+ * Kartın parametresinin seçili değerini değiştirir (değer seçeneklerden biri olmalı).
+ * @template {{ kartlar: any[] }} D @param {D} duzen @param {string} id @param {string} ad @param {unknown} deger @returns {D}
+ */
+export function kartParametrele(duzen, id, ad, deger) {
+  const k = duzen.kartlar.find((x) => x.id === id);
+  const p = (k?.ayar?.parametreler || []).find((/** @type {{ ad: string }} */ x) => x.ad === ad);
+  if (!k || !p) throw new PanoHatasi('Kartın böyle bir parametresi yok.');
+  if (typeof deger !== 'string' || !p.secenekler.includes(deger)) throw new PanoHatasi(`"${String(deger).slice(0, 80)}", ${p.etiket} seçeneklerinde yok.`);
+  return yeni(duzen, duzen.kartlar.map((x) => (x.id === id ? { ...x, parametreDegerleri: { ...(x.parametreDegerleri || {}), [ad]: deger } } : x)));
 }
 
 /** Kart döneme bağlı mı (dönem seçimi gösterilir ve saklanır)? @param {{ tur: string; ayar?: any }} kart */
@@ -305,7 +356,7 @@ export function varsayilanMi(duzen) {
 }
 
 /**
- * @typedef {{ id: string; tur: string; x: number; y: number; w: number; h: number; ayar?: Record<string, any>; donem?: object }} PanoKartiT
+ * @typedef {{ id: string; tur: string; x: number; y: number; w: number; h: number; ayar?: Record<string, any>; donem?: object; parametreDegerleri?: Record<string, string> }} PanoKartiT
  * @typedef {{ surum: number; kartlar: PanoKartiT[] }} PanoDuzeniT
  */
 
@@ -429,7 +480,33 @@ function sqlAyari(ham) {
     sutunGenislikleri[metin(ad, 'Sütun adı', 120)] = n;
   }
   const zamanAsimiSn = sqlZamanAsimiTemizle(ham.zamanAsimiSn);
-  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }) };
+  // Kart parametreleri: sorguda ":ad" geçmeli; seçenekler her satırda bir değer (tekrarlar ve boşlar düşer).
+  const pHam = ham.parametreler === undefined || ham.parametreler === null ? [] : ham.parametreler;
+  if (!Array.isArray(pHam) || pHam.length > EN_COK_KART_PARAMETRESI) throw new PanoHatasi(`Kartta en çok ${EN_COK_KART_PARAMETRESI} parametre olabilir.`);
+  const parametreler = pHam.map((p) => {
+    if (!nesneMi(p)) throw new PanoHatasi('Kart parametresi geçersiz.');
+    const ad = typeof p.ad === 'string' ? p.ad.trim().replace(/^:/, '') : '';
+    if (!PARAMETRE_ADI.test(ad)) throw new PanoHatasi(`Parametre adı geçersiz: "${ad.slice(0, 40)}" (harfle başlamalı; harf, rakam, _).`);
+    if (AYRILMIS_PARAMETRELER.has(ad)) throw new PanoHatasi(`:${ad} dönem için ayrılmış; başka bir ad seçin.`);
+    if (!sorgudaParametreVar(sorgu, ad)) throw new PanoHatasi(`Sorguda :${ad} geçmiyor (ör. WHERE alan = :${ad}).`);
+    const etiket = metin(p.etiket === undefined || p.etiket === '' ? ad : p.etiket, 'Parametre etiketi', 40);
+    const sHam = Array.isArray(p.secenekler) ? p.secenekler : [];
+    const secenekler = [...new Set(sHam.map((x) => metin(x, 'Parametre seçeneği', 200, { bos: true })).filter(Boolean))];
+    if (!secenekler.length) throw new PanoHatasi(`"${etiket}" için en az bir seçenek yazın.`);
+    if (secenekler.length > EN_COK_PARAMETRE_SECENEGI) throw new PanoHatasi(`"${etiket}" en çok ${EN_COK_PARAMETRE_SECENEGI} seçenek alabilir.`);
+    return { ad, etiket, secenekler };
+  });
+  if (new Set(parametreler.map((p) => p.ad)).size !== parametreler.length) throw new PanoHatasi('Aynı parametre adı birden çok kez yazılmış.');
+  // Kutucuğa tıklayınca: başka bir SQL kartının parametresine kutucuğun etiketi seçilir ve o kart yenilenir.
+  let tiklama;
+  if (nesneMi(ham.tiklama) && ham.tiklama.kartId) {
+    const kartId = typeof ham.tiklama.kartId === 'string' && KIMLIK_DESENI.test(ham.tiklama.kartId) ? ham.tiklama.kartId : '';
+    const parametre = typeof ham.tiklama.parametre === 'string' && PARAMETRE_ADI.test(ham.tiklama.parametre) ? ham.tiklama.parametre : '';
+    if (!kartId || !parametre) throw new PanoHatasi('Kutucuğa tıklama hedefi geçersiz.');
+    tiklama = { kartId, parametre };
+  }
+  return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }),
+    ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}) };
 }
 
 /**
@@ -524,7 +601,8 @@ export function kartTemizle(ham) {
   const id = typeof ham.id === 'string' && KIMLIK_DESENI.test(ham.id) && !YERLESIK.has(ham.id) ? ham.id : '';
   if (!id) throw new PanoHatasi('Kart kimliği geçersiz.');
   const ayar = tur === 'sql' ? sqlAyari(ham.ayar) : tur === 'veri' ? veriAyari(ham.ayar) : metinAyari(ham.ayar);
-  return { id, tur, ...yk, ayar, ...donemi({ tur, ayar }) };
+  const parametreDegerleri = tur === 'sql' ? parametreDegerleriTemizle(ham.parametreDegerleri, ayar) : undefined;
+  return { id, tur, ...yk, ayar, ...donemi({ tur, ayar }), ...(parametreDegerleri ? { parametreDegerleri } : {}) };
 }
 
 /**
@@ -603,7 +681,10 @@ export function kartEkle(duzen, kart, konum) {
 export function kartAyarla(duzen, id, ayar) {
   const d = yeni(duzen, duzen.kartlar.map((k) => {
     if (k.id !== id) return k;
-    const { donem, ...kalan } = /** @type {any} */ ({ ...k, ayar });
+    const { donem, parametreDegerleri: pd, ...kalan } = /** @type {any} */ ({ ...k, ayar });
+    // Seçili parametre değerlerinden hâlâ geçerli olanlar kalır.
+    const pdYeni = parametreDegerleriTemizle(pd, ayar);
+    if (pdYeni) kalan.parametreDegerleri = pdYeni;
     // Sorgu döneme bağlı hâle geldiyse varsayılan dönem; döneme bağlı değilse dönem kaldırılır.
     return kartDonemliMi(kalan) ? { ...kalan, donem: donemTemizle(donem) ?? { ...VARSAYILAN_DONEM } } : kalan;
   }));

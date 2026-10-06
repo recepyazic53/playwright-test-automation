@@ -487,6 +487,70 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('kart parametresi: başlıktaki seçim değeri parametre olarak bağlar ve kartı yeniler; özet kutucuğuna tıklayınca detay kartın parametresi seçilir; kalıcı', async () => {
+  test.setTimeout(90_000);
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 'p-ozet', tur: 'sql', x: 0, y: 0, w: 12, h: 4, ayar: { baslik: 'Durum özeti', hedef: { baglantiId: bTest }, gorunum: 'kutucuk',
+      sorgu: 'SELECT durum, COUNT(*) AS adet FROM kayitlar GROUP BY durum ORDER BY durum', tiklama: { kartId: 'p-detay', parametre: 'durum' } } },
+    { id: 'p-detay', tur: 'sql', x: 0, y: 4, w: 12, h: 8, ayar: { baslik: 'Durum ayrıntısı', hedef: { baglantiId: bTest }, gorunum: 'tablo',
+      sorgu: 'SELECT id, durum FROM kayitlar WHERE durum = :durum ORDER BY id',
+      parametreler: [{ ad: 'durum', etiket: 'Durum', secenekler: ['onaylandi', 'bekliyor', 'hata'] }] } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  // Sorguda geçmeyen parametre kaydedilmez.
+  const yanlis = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 'p-yanlis', tur: 'sql', x: 0, y: 0, w: 6, h: 4, ayar: { baslik: 'Yanlış', hedef: { baglantiId: bTest }, gorunum: 'tablo', sorgu: 'SELECT 1',
+      parametreler: [{ ad: 'servis', etiket: 'Servis', secenekler: ['A'] }] } }] } });
+  expect(yanlis.basarili).toBe(false);
+  expect(String(yanlis.mesaj)).toContain('Sorguda :servis geçmiyor');
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = (ad: string) => page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: ad }) });
+  const ozet = kart('Durum özeti');
+  const detay = kart('Durum ayrıntısı');
+  const secim = detay.getByRole('combobox', { name: 'Durum: Durum ayrıntısı' });
+  await expect(secim).toHaveValue('onaylandi');
+  const durumlar = () => detay.locator('tbody tr td:nth-child(2)').allTextContents();
+  // Başlıktaki seçim: kaydedilir ve kart yenilenir (değer sürücü parametresi; SQL metninde değer yok).
+  const once = sorgular().length;
+  await secim.selectOption('bekliyor');
+  await expect.poll(durumlar).toEqual(['bekliyor', 'bekliyor']);
+  await expect(detay.locator('.pano-son-veri')).toContainText('bekliyor');
+  const yeniSorgular = sorgular().slice(once).filter((q) => q.includes('FROM kayitlar WHERE'));
+  expect(yeniSorgular.at(-1)).toContain('durum = $1');
+  expect(yeniSorgular.join(' ')).not.toContain("'bekliyor'");
+  // Özet kutucuğu: tıklayınca detay kartın parametresi seçilir ve yenilenir; seçili kutucuk işaretli.
+  await ozet.getByRole('button', { name: 'Yenile: Durum özeti' }).click();
+  const hataKutusu = ozet.getByRole('button', { name: /hata/ });
+  await expect(hataKutusu).toHaveAttribute('aria-pressed', 'false');
+  await hataKutusu.click();
+  await expect(detay.getByRole('combobox', { name: 'Durum: Durum ayrıntısı' })).toHaveValue('hata');
+  await expect.poll(durumlar).toEqual(['hata', 'hata', 'hata', 'hata']);
+  await expect(ozet.getByRole('button', { name: /hata/ })).toHaveAttribute('aria-pressed', 'true');
+  // Kalıcı: yeniden açınca seçim ve son sonuç yerinde (sorgu çalışmaz).
+  const sonra = sorgular().length;
+  await page.reload();
+  await expect(kart('Durum ayrıntısı').getByRole('combobox', { name: 'Durum: Durum ayrıntısı' })).toHaveValue('hata');
+  await expect.poll(durumlar).toEqual(['hata', 'hata', 'hata', 'hata']);
+  expect(sorgular().length).toBe(sonra);
+  const pano = await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`);
+  expect(((pano.duzen as { kartlar: Array<{ id: string; parametreDegerleri?: unknown }> }).kartlar.find((x) => x.id === 'p-detay'))?.parametreDegerleri).toEqual({ durum: 'hata' });
+  // Kart formu: parametre satırı ve "Kutucuğa tıklayınca" hedefi; formdan yeni seçenek eklenince başlıkta görünür.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Durum özeti' }).click();
+  const pencere = page.getByRole('dialog', { name: /^Kartı düzenle/ });
+  await expect(pencere.getByLabel('Kutucuğa tıklayınca')).toHaveValue('p-detay|durum');
+  await pencere.getByRole('button', { name: 'Uygula' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Durum ayrıntısı' }).click();
+  await expect(pencere.getByRole('textbox', { name: 'Parametre adı (sorguda)' })).toHaveValue(':durum');
+  await pencere.getByRole('textbox', { name: 'Parametre seçenekleri (her satırda bir değer)' }).fill('onaylandi\nbekliyor\nhata\niptal');
+  await pencere.getByRole('button', { name: 'Uygula' }).click();
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Bitti' }).click();
+  await expect(kart('Durum ayrıntısı').getByRole('combobox', { name: 'Durum: Durum ayrıntısı' }).locator('option')).toHaveText(['onaylandi', 'bekliyor', 'hata', 'iptal']);
+  await expect(kart('Durum ayrıntısı').getByRole('combobox', { name: 'Durum: Durum ayrıntısı' })).toHaveValue('hata');
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('tablo kartın yüksekliğini doldurur: uzun kartta 22rem sınırı yok, kısa kartta tablo kendi içinde kaydırılır', async () => {
   test.setTimeout(90_000);
   const sorgu = 'SELECT id, durum, tc_kimlik_no, tutar, gun FROM kayitlar ORDER BY id';

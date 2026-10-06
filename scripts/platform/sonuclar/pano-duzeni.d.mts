@@ -1,13 +1,19 @@
 // scripts/platform/sonuclar/pano-duzeni.mjs için tip bildirimi.
 export type KartDonemi = { hizli: string } | { baslangic: string; bitis: string };
 export type IzgaraKonumu = { x: number; y: number; w: number; h: number };
-export type PanoKarti = { id: string; tur: string; ayar?: Record<string, any>; donem?: KartDonemi } & IzgaraKonumu;
+export type PanoKarti = { id: string; tur: string; ayar?: Record<string, any>; donem?: KartDonemi; parametreDegerleri?: Record<string, string> } & IzgaraKonumu;
 export declare const DONEM_SECIMLERI: ReadonlyArray<readonly [string, string]>;
 export declare const VARSAYILAN_DONEM: Readonly<{ hizli: string }>;
 export declare function donemTemizle(v: unknown): KartDonemi | null;
 export declare function donemAraligi(donem: unknown, simdi?: Date): { baslangic: Date; bitis: Date };
 export declare function donemMetni(donem: unknown): string;
 export declare function sqlDonemParametreleri(sorgu: unknown): { baslangic: boolean; bitis: boolean };
+export declare function sorgudaParametreVar(sorgu: unknown, ad: string): boolean;
+export declare const EN_COK_KART_PARAMETRESI: number;
+export declare const EN_COK_PARAMETRE_SECENEGI: number;
+export declare function kartParametreDegeri(kart: { ayar?: any; parametreDegerleri?: Record<string, string> }, ad: string): string | null;
+export declare function kartParametreleri(kart: { ayar?: any; parametreDegerleri?: Record<string, string> }): Record<string, string>;
+export declare function kartParametrele<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, ad: string, deger: unknown): D;
 export declare function kartDonemliMi(kart: { tur: string; ayar?: any }): boolean;
 export declare function kartDonemle<D extends { kartlar: PanoKarti[] }>(duzen: D, id: string, donem: unknown): D;
 export type PanoDuzeni = { surum: number; kartlar: PanoKarti[] };

@@ -31,10 +31,10 @@ import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { adMaskeleyici, bilinenGizliDegerler } from './html-rapor.mjs';
 import { tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { panoGetir, sqlSonucuYaz } from './ozet-panosu.mjs';
-import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
+import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, kartParametreleri, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
-/** @typedef {{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean; gizliSutunlar: string[]; satirSiniri: number }} PanoSqlSonucu */
+/** @typedef {{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean; gizliSutunlar: string[]; satirSiniri: number; parametreler?: Record<string, string> }} PanoSqlSonucu */
 
 export const PANO_SQL_UCU = '/platform/pano/sql/yenile';
 export const PANO_SQL_ZAMAN_ASIMI_MS = SQL_ZAMAN_ASIMI_SN.varsayilan * 1000;
@@ -179,8 +179,11 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   const p = sqlDonemParametreleri(kart.ayar.sorgu);
   const simdi = s.simdi ? s.simdi() : new Date();
   const aralik = p.baslangic || p.bitis ? donemAraligi(kart.donem, simdi) : null;
-  /** @type {Record<string, Date>} */
+  /** @type {Record<string, Date | string>} */
   const parametreler = {};
+  // Kart parametreleri (sorgudaki :ad; başlıktaki seçim): seçili değer (yoksa ilk seçenek) sürücü parametresi olarak bağlanır.
+  const kartParam = kartParametreleri(kart);
+  Object.assign(parametreler, kartParam);
   if (aralik && p.baslangic) parametreler.baslangic = aralik.baslangic;
   if (aralik && p.bitis) parametreler.bitis = aralik.bitis;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -206,6 +209,7 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   const onceki = eski ? { zaman: eski.zaman, sutunlar: eski.sutunlar, ilkSatir: eski.satirlar[0] ?? null } : null;
   /** @type {PanoSqlSonucu} */
   const sonuc = { zaman: simdi.toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri, onceki,
+    ...(Object.keys(kartParam).length ? { parametreler: kartParam } : {}),
     ...(aralik ? { donem: { secim: donemTemizle(kart.donem) ?? { ...VARSAYILAN_DONEM }, baslangic: aralik.baslangic.toISOString(), bitis: aralik.bitis.toISOString() } } : {}) };
   sqlSonucuYaz(vt, projeId, kartId, sonuc);
   return sonuc;
