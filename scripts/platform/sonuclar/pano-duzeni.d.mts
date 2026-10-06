@@ -91,3 +91,14 @@ export declare function tarihBicimle(v: unknown, tarih: string): string | null;
 export declare function hucreBicimle(v: unknown, bicim?: unknown): string;
 export declare function degisimHesapla(simdi: number, onceki: number | null | undefined): { fark: number; yuzde: number | null; yon: 'artis' | 'azalis' | 'ayni' } | null;
 export declare function pastaDilimleri(noktalar: ReadonlyArray<{ etiket: string; deger: number }>, enCok?: number): Array<{ etiket: string; deger: number; yuzde: number; diger: boolean }>;
+export type SutunBicimi = { sutun: string; tur: 'rozet' | 'renk' | 'degisim' | 'sayac' | 'altSatir'; kurallar?: Array<{ deger: string; renk: string }>;
+  esikler?: Array<{ islec: string; deger: number; renk: string }>; artisIyi?: boolean; altSutun?: string };
+export declare const SUTUN_BICIM_TURLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
+export declare const ROZET_RENKLERI: ReadonlyArray<{ anahtar: string; ad: string }>;
+export declare const EN_COK_SUTUN_BICIMI: number;
+export declare const EN_COK_ROZET_KURALI: number;
+export declare function renkAnahtari(v: unknown): string | null;
+export declare function rozetKurallariniOku(metin: string): { kurallar: Array<{ deger: string; renk: string }>; hatalar: string[] };
+export declare function esikleriOku(metin: string): { esikler: Array<{ islec: string; deger: number; renk: string }>; hatalar: string[] };
+export declare function hucreSunumu(bicim: SutunBicimi | null | undefined, v: unknown, sayiBicimi?: unknown, altDeger?: unknown):
+  null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string };

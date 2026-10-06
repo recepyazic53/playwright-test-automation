@@ -338,3 +338,21 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-parametre-satiri { display: grid; grid-template-columns: minmax(6rem, 10rem) minmax(6rem, 10rem) minmax(0, 1fr) auto; gap: 6px 8px; align-items: start; margin-bottom: 6px; }
 .pano-parametre-satiri textarea { min-height: 2.4rem; }
 @media (max-width: 600px) { .pano-parametre-satiri { grid-template-columns: minmax(0, 1fr); } }
+/* Sütun biçimleri (tablo): değere göre rozet, eşik rengi, değişim oku, sayaç, alt satır. */
+.pano-rozet { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  font-family: inherit; color: var(--metin-2); background: var(--panel-2); border: 1px solid var(--cizgi); }
+.pano-rozet-nokta { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.pano-rozet-ok { font-size: 11px; line-height: 1; }
+.pano-rozet.renk-kirmizi { color: var(--hata); background: var(--hata-zemin); border-color: color-mix(in srgb, var(--hata) 40%, transparent); }
+.pano-rozet.renk-sari { color: var(--atlanan); background: var(--atlanan-zemin); border-color: color-mix(in srgb, var(--atlanan) 40%, transparent); }
+.pano-rozet.renk-yesil { color: var(--basari); background: var(--basari-zemin); border-color: color-mix(in srgb, var(--basari) 40%, transparent); }
+.pano-rozet.renk-mavi { color: var(--vurgu); background: var(--vurgu-zemin); border-color: color-mix(in srgb, var(--vurgu) 40%, transparent); }
+.pano-rozet.renk-gri { color: var(--metin-3); }
+.pano-renkli { font-weight: 600; }
+.pano-renkli.renk-kirmizi { color: var(--hata); } .pano-renkli.renk-sari { color: var(--atlanan); } .pano-renkli.renk-yesil { color: var(--basari); }
+.pano-alt-satirli { line-height: 1.3; }
+.pano-hucre-ana { display: block; font-weight: 600; }
+.pano-hucre-alt { display: block; font-size: 12px; color: var(--metin-2); }
+.pano-sutun-bicimi { display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(9rem, 13rem) minmax(0, 1fr) auto; gap: 6px 8px; align-items: start; margin-bottom: 6px; }
+.pano-sutun-bicimi textarea { min-height: 2.4rem; }
+@media (max-width: 600px) { .pano-sutun-bicimi { grid-template-columns: minmax(0, 1fr); } }
