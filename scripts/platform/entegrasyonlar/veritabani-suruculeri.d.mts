@@ -8,6 +8,8 @@ export interface VeritabaniAyari {
 }
 export interface SorguSonucu { sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean }
 export declare const SURUCULER: Readonly<Record<SurucuAdi, { etiket: string; paket: string; modul?: string; port: number; deneme: string }>>;
+export declare function oracleIstemciKaynagiAyarla(fn: (() => string) | null): void;
+export declare function oracleIstemciKlasoru(): string;
 export declare function surucuYukleyiciAyarla(fn: ((paket: string) => Promise<any>) | null): void;
 export declare function yalnizOkumaDenetle(sql: string): void;
 export declare function yazmaSorgusuMu(sql: string): boolean;

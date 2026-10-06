@@ -226,7 +226,7 @@ const VERITABANI = {
   alanlar: [
     { ad: 'surucu', etiket: 'Veritabanı türü', tur: 'secim', zorunlu: true, varsayilan: 'postgres',
       secenekler: /** @type {Array<[string, string]>} */ (Object.entries(SURUCULER).map(([d, s]) => [d, s.etiket])),
-      yardim: 'Sürücüler ücretsiz açık kaynak paketlerdir (mssql, oracledb — THIN mod, Instant Client gerekmez —, pg, mysql2).' },
+      yardim: 'Sürücüler ücretsiz açık kaynak paketlerdir (mssql, oracledb — THIN mod, Instant Client gerekmez —, pg, mysql2). Eski parola biçimli Oracle kullanıcısı ("NJS-116") için Ayarlar > Koşu > Gelişmiş > "Oracle Instant Client klasörü".' },
     { ad: 'sunucu', etiket: 'Sunucu', tur: 'metin', zorunlu: true, yerTutucu: 'db.ornek.local' },
     { ad: 'port', etiket: 'Port', tur: 'sayi', enAz: 1, enCok: 65535, yardim: 'Boşsa türün varsayılan portu (SQL Server 1433, Oracle 1521, PostgreSQL 5432, MySQL 3306).' },
     { ad: 'veritabani', etiket: 'Veritabanı / servis adı', tur: 'metin', yardim: 'Oracle için servis adı.' },

@@ -252,6 +252,7 @@ import { TALEP_GET_UCLARI, TALEP_POST_UCLARI } from './senaryolar/talep-servisi.
 import { KAPSAM_MATRISI_GET_UCLARI, KAPSAM_MATRISI_POST_UCLARI, kapsamMatrisiPdf } from './sonuclar/kapsam-matrisi.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
 import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
+import { oracleIstemciKaynagiAyarla } from './entegrasyonlar/veritabani-suruculeri.mjs';
 import { servisSenaryosuCalistir } from './servisler/servis-islemleri.mjs';
 import { servisSenaryosuGetir } from './servisler/servis-deposu.mjs';
 import { atamalariUygula, servisTanimiDogrula } from './servisler/servis-adimi.mjs';
@@ -401,6 +402,8 @@ const analizKlasoruYolu = () => join(dirname(acikVeritabaniYolu()), 'analiz');
 let vt = null;
 /** @type {Promise<import('./veritabani/baglanti.mjs').Veritabani> | null} */
 let vtSozu = null;
+// Sunucudaki Oracle bağlantıları (SQL adımı denemesi, pano, entegrasyon): Instant Client klasörü kasa açıkken ayarlardan.
+oracleIstemciKaynagiAyarla(() => (vt && kasaAcikMi(vt) ? kosuAyarlariniOku(vt).oracleIstemciKlasoru : ''));
 
 /**
  * Açık çalışma alanının veritabanını (tek örnek) döner. Çalışma alanı açık değilse null; dosya yoksa ve olustur=false

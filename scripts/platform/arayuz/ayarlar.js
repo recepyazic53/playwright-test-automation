@@ -1093,9 +1093,9 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       }
       if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
       else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
-      else girdi = h('input', { type: 'text', value: String(ayarlar[t.anahtar]), spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi' });
+      else girdi = h('input', { type: 'text', value: String(ayarlar[t.anahtar]), spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi', placeholder: t.bicim === 'klasor' ? 'ör. C:\\oracle\\instantclient_23_9' : null });
       girdiler.set(t.anahtar, girdi);
-      const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
+      const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : t.varsayilan === '' ? 'boş' : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
       const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
       // Uzun açıklama: 1–2 cümle görünür, ayrıntı "?" ipucunda; sınırlar ve varsayılan her zaman görünür.
       // İlişkili ayarın yeri (tanımdaki "baglanti"; ör. Oturum kontrolü → giriş tarifindeki Oturum kontrol adresi): her zaman görünür.

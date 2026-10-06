@@ -35,7 +35,8 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * baglanti: ilişkili ayarın yeri (arayüzde alanın altında her zaman görünen bağlantı; ör. Oturum kontrolü → giriş tarifindeki adres).
  * esi: tarama / akış kaydı ayarının koşudaki eşi — "Tarama ve akış kaydında koşu ayarlarını kullan" (taramaKosuAyarlariniKullan)
  *   açıkken tarama ve akış kaydı bu ayar yerine eşini kullanır (taramaEtkinAyarlari); kapalıyken kendi değerini (kayıtlı değer korunur).
- * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; ana?: boolean; esi?: string; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
+ * bicim 'klasor' (metin): boş ya da tam klasör yolu.
+ * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; ana?: boolean; esi?: string; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; bicim?: 'klasor';
  *   varsayilan: string | number | boolean; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
  *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string }; baglanti?: { metin: string; etiket: string; adres: string } }>}
  */
@@ -178,6 +179,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'sqlSatirSiniri', altBolum: 'gelismis', grup: 'Test verisi', etiket: 'SQL sorgusunda okunan en çok satır',
     aciklama: 'SQL adımında sorgudan okunan en çok satır (satır sayısı ve tablo eşitliği kontrolleri bunun içinde yapılır; fazlası okunmaz). SQL adımındaki beklenen satır sayısı (ve beklenen tablo satırları) bu sınırı aşamaz: adım kaydedilirken uyarı verilir. Sınırı düşürürseniz, sınırı aşan beklenen sayıya sahip kayıtlı adımlar koşuda sorgu çalıştırılmadan anlaşılır bir hatayla kalır ve yeniden kaydedilirken uyarı verir.',
     tur: 'sayi', varsayilan: 1000, enAz: 1, enCok: 100_000, birim: 'satır', env: 'NOBETCI_SQL_SATIR_SINIRI' },
+  { anahtar: 'oracleIstemciKlasoru', altBolum: 'gelismis', grup: 'Test verisi', etiket: 'Oracle Instant Client klasörü',
+    aciklama: 'Boş: Oracle\'a ek kurulum olmadan bağlanılır (Thin mod). Bazı kullanıcılar (eski 10G parola biçimi; "NJS-116" hatası) yalnız Oracle Instant Client ile bağlanabilir: Oracle\'ın sitesinden "Instant Client Basic" (Windows x64) zip\'ini indirip açın ve içinde oci.dll bulunan klasörün tam yolunu yazın. Değişiklik Nöbetçi yeniden başlatılınca geçerli olur; koşuyu yapan her bilgisayarda aynı klasör bulunmalıdır.',
+    tur: 'metin', bicim: 'klasor', varsayilan: '', env: 'NOBETCI_ORACLE_ISTEMCI_KLASORU' },
   { anahtar: 'kosuEkranGenisligi', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Koşu ekran genişliği', aciklama: 'Koşudaki tarayıcı penceresinin genişliği.',
     tur: 'sayi', varsayilan: 1280, enAz: 320, enCok: 3840, birim: 'px', env: 'NOBETCI_EKRAN_GENISLIGI' },
   { anahtar: 'kosuEkranYuksekligi', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Koşu ekran yüksekliği', aciklama: 'Koşudaki tarayıcı penceresinin yüksekliği.',
@@ -276,6 +280,12 @@ function degerDogrula(t, v) {
     return n;
   }
   const m = typeof v === 'string' ? v.trim() : '';
+  if (t.bicim === 'klasor') {
+    if (m.length > 400 || /[\u0000-\u001f"<>|?*]/.test(m) || (m && !/^(?:[A-Za-z]:[\\/]|\/|\\\\)/.test(m))) {
+      throw new DepoHatasi(`"${t.etiket}" boş ya da tam bir klasör yolu olmalıdır (ör. C:\\oracle\\instantclient_23_9).`);
+    }
+    return m;
+  }
   if (!m || m.length > 60 || /[{}$\u0000-\u001f]/.test(m) || !/yyyy|MM|dd|HH|mm|ss/.test(m)) throw new DepoHatasi(`"${t.etiket}" geçersiz (ör. yyyy-MM-dd'T'HH:mm:ss).`);
   return m;
 }
