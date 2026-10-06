@@ -28,6 +28,9 @@
 //   sql      { ad, sql: SqlTanimi }                 SQL sorgusu adımı (sql/sql-adimi.mjs): kendi adımıdır; koşuda seçilen
 //            veritabanı bağlantısında sorgu çalışır, sonuç beklenenle karşılaştırılır. Bir aksiyondan (ya da ortak akıştan)
 //            sonra ya da akışın başında gelir; ardındaki beklenen mesaj / bekleme önceki ekran adımına aittir.
+//   servis   { ad, servis: ServisTanimi, kosul? }    Servis isteği adımı (servisler/servis-adimi.mjs): kendi adımıdır; koşuda servisin
+//            kayıtlı senaryosu şablon olarak (atamalarla ekranın değerleri yazılarak) çalışır; SQL adımıyla aynı yerde durur.
+//            sql ve servis bloklarının kosul'u ("ne zaman çalışsın") modelde adımın görünürlüğü olur.
 //   dosya    { ad, dugme: sıra, dosya: DosyaTanimi }  İndirilen dosyayı doğrula (dosyalar/dosya-icerigi.mjs): kendi adımıdır; koşuda
 //            düğmeye basılır, indirilen dosya (CSV / XLSX / PDF / metin) beklentilerle doğrulanır. SQL adımıyla aynı yerde durur.
 //   giris    { ad, profil }                         Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle
@@ -61,6 +64,7 @@
 import { UYARI_EN_COK, VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { sabitGostergeMetni, secimKosuluCikar } from './paket-olusturucu.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
+import { servisTanimiDogrula } from '../servisler/servis-adimi.mjs';
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { gitYoluHatasi } from '../../dogrulama/gezinme-yolu.mjs';
 import { gezinmePlani } from './gezinme-plani.mjs';
@@ -461,7 +465,15 @@ export function bloklariAyikla(ham) {
     }
     else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}), ...(b.oge === true ? { oge: true } : {}) });
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
-    else if (b.tur === 'sql') bloklar.push({ tur: 'sql', ad: metin(b.ad, AD_EN_COK), sql: nesneMi(b.sql) ? b.sql : {} });
+    else if (b.tur === 'servis') {
+      const kosul = b.kosul ? kosulAyikla(b.kosul) : undefined;
+      bloklar.push({ tur: 'servis', ad: metin(b.ad, AD_EN_COK), servis: nesneMi(b.servis) ? b.servis : {}, ...(kosul && yeniBicimMi(kosul) ? { kosul } : {}) });
+    }
+    else if (b.tur === 'sql') {
+      // Adımın koşulu ("ne zaman çalışsın"; yeni biçim): yoksa her koşuda.
+      const kosul = b.kosul ? kosulAyikla(b.kosul) : undefined;
+      bloklar.push({ tur: 'sql', ad: metin(b.ad, AD_EN_COK), sql: nesneMi(b.sql) ? b.sql : {}, ...(kosul && yeniBicimMi(kosul) ? { kosul } : {}) });
+    }
     else if (b.tur === 'dosya') bloklar.push({ tur: 'dosya', ad: metin(b.ad, AD_EN_COK), dugme: sayi(b.dugme), dosya: nesneMi(b.dosya) ? b.dosya : {} });
     else if (b.tur === 'git') bloklar.push({ tur: 'git', yol: typeof b.yol === 'string' ? b.yol.trim().slice(0, 400) : '' });
     else if (b.tur === 'giris') bloklar.push({ tur: 'giris', ad: metin(b.ad, AD_EN_COK), profil: metin(b.profil, 120) || null });
@@ -584,6 +596,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   let sqlSonrasi = false;
   /** @type {Map<string, number>} */
   const kullanilan = new Map();
+  /** Adım bloklarının koşulları ("ne zaman çalışsın"): alanlar akışta olmalı (alan koşullarıyla aynı denetim). @type {Array<{ blok: number; ad: string; kosul: any }>} */
+  const blokKosullari = [];
   /** İkinci (üçüncü…) kez kullanılan alanların sayısı (kopya anahtarı "<alan>~n"). @type {Map<string, number>} */
   const kopyaSayilari = new Map();
   /** @type {Array<{ blok: number; alan: string; kosul: import('./akis-tasarimi.d.mts').AkisKosulu | null }>} */
@@ -729,6 +743,20 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       bekleyen = false;
       return;
     }
+    if (b.tur === 'servis') {
+      const d = servisTanimiDogrula(b.servis);
+      if (d.hatalar.length) { for (const m of d.hatalar) hata(i, m); return; }
+      if (bekleyen) { hata(i, 'Servis isteği isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+      if (cur && !kapali) { hata(i, 'Servis isteği bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }
+      const ad = b.ad || 'Servis isteği';
+      if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
+      adlar.add(ad);
+      sureyiBirak();
+      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], servisKontrolu: d.tanim, ...(b.kosul ? { blokKosulu: b.kosul } : {}) });
+      if (b.kosul) blokKosullari.push({ blok: i, ad, kosul: b.kosul });
+      sqlSonrasi = 'sql';
+      return;
+    }
     if (b.tur === 'sql') {
       const d = sqlTanimiDogrula(b.sql, { satirSiniri: s.satirSiniri });
       if (d.hatalar.length) { for (const m of d.hatalar) hata(i, m); return; }
@@ -739,7 +767,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       adlar.add(ad);
       sureyiBirak();
       // Kendi adımıdır; önceki ekran adımı (cur) açık kalır: ardındaki son beklenen mesaj ona bağlanır.
-      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], sqlKontrolu: d.tanim });
+      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], sqlKontrolu: d.tanim, ...(b.kosul ? { blokKosulu: b.kosul } : {}) });
+      if (b.kosul) blokKosullari.push({ blok: i, ad, kosul: b.kosul });
       sqlSonrasi = 'sql';
       return;
     }
@@ -833,11 +862,11 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       return;
     }
     if (b.tur === 'bekle' && sqlSonrasi) {
-      hata(i, sqlSonrasi === 'sql' ? 'SQL sorgusundan sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'
+      hata(i, sqlSonrasi === 'sql' ? 'SQL sorgusundan / servis isteğinden sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'
         : 'Dosya doğrulamadan sonra bekleme konmaz; indirme geç başlıyorsa adımdaki “indirmeyi bekleme” süresini kullanın.');
       return;
     }
-    if (b.tur === 'mesaj' && sqlSonrasi && !etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya')) {
+    if (b.tur === 'mesaj' && sqlSonrasi && !etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'servis' || x.tur === 'dosya')) {
       hata(i, `Beklenen mesaj ${sqlSonrasi === 'sql' ? 'SQL sorgusundan' : 'dosya doğrulamadan'} önce gelmeli (mesaj ekran adımının sonucudur).`);
       return;
     }
@@ -876,7 +905,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.oge ? { aranan: null } : b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}),
         ...(m && Array.isArray(m.cerceve) && m.cerceve.length ? { cerceve: m.cerceve } : {})
       };
-      const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya');
+      const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'servis' || x.tur === 'dosya');
       if (!cur) {
         hata(i, adimlar[adimlar.length - 1]?.korunanAdim ? 'Korunan adımın başarı göstergesi diyagramda değiştirilemez; beklenen mesajı bir alan grubu ya da aksiyondan sonra koyun.'
           : 'Beklenen mesajdan önce bir alan grubu ya da aksiyon olmalı.');
@@ -935,6 +964,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         : `“${ad}” alanının koşulunda “${alanEtiketi(s)}” için en az bir geçerli seçenek seçin.`);
     }
   }
+  for (const { blok, ad, kosul } of blokKosullari) for (const m of yeniKosulHatalari(kosul, '', ad, alanlar, kullanilan)) hata(blok, m.replace(' alanının koşul', ' adımının koşul'));
   const dongu = kosulDongusu(elleKosullar);
   if (dongu) {
     const h = alanlar.get(dongu);

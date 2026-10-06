@@ -110,7 +110,7 @@ function mesajDenetimiVar(a) {
 }
 /** Adım sonucu doğrulanıyor mu (başarı göstergesi, SQL sorgusu ya da indirilen dosya kontrolü)? @param {Record<string, any>} a */
 function sonucDogrulanir(a) {
-  return (nesneMi(a.kosu) && nesneMi(a.kosu.basariGostergesi)) || nesneMi(a.sqlKontrolu) || nesneMi(a.dosyaKontrolu);
+  return (nesneMi(a.kosu) && nesneMi(a.kosu.basariGostergesi)) || nesneMi(a.sqlKontrolu) || nesneMi(a.servisKontrolu) || nesneMi(a.dosyaKontrolu);
 }
 /** Başarı göstergesinin kısa okunuşu. @param {Record<string, any>} g */
 function gostergeMetni(g) {
@@ -196,7 +196,7 @@ export function eylemDenetimi(model, g = {}) {
     const dogrulayan = [...kapsam].reverse().find(sonucDogrulanir);
     if (dogrulayan) {
       const gs = nesneMi(dogrulayan.kosu) && nesneMi(dogrulayan.kosu.basariGostergesi) ? dogrulayan.kosu.basariGostergesi : null;
-      const ne = gs ? gostergeMetni(gs) : nesneMi(dogrulayan.sqlKontrolu) ? 'SQL sorgusu beklenenle karşılaştırılır' : 'indirilen dosya doğrulanır';
+      const ne = gs ? gostergeMetni(gs) : nesneMi(dogrulayan.sqlKontrolu) ? 'SQL sorgusu beklenenle karşılaştırılır' : nesneMi(dogrulayan.servisKontrolu) ? 'servis isteğinin kontrolleri tutar' : 'indirilen dosya doğrulanır';
       bek = { anahtar: 'beklenen', durum: 'tamam', baslik: baslikB, ayrinti: `Başarılı: “${adimAdi(dogrulayan)}” adımında ${ne}.` };
     } else {
       bek = {

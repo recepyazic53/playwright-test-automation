@@ -252,6 +252,9 @@ import { TALEP_GET_UCLARI, TALEP_POST_UCLARI } from './senaryolar/talep-servisi.
 import { KAPSAM_MATRISI_GET_UCLARI, KAPSAM_MATRISI_POST_UCLARI, kapsamMatrisiPdf } from './sonuclar/kapsam-matrisi.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
 import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
+import { servisSenaryosuCalistir } from './servisler/servis-islemleri.mjs';
+import { servisSenaryosuGetir } from './servisler/servis-deposu.mjs';
+import { atamalariUygula, servisTanimiDogrula } from './servisler/servis-adimi.mjs';
 import { servisAkisiCalistir } from './servisler/servis-akislari.mjs';
 import { zamanlayiciOlustur, zamanliKosuyuYurut } from './zamanlama/zamanlayici.mjs';
 import { ZAMANLAMA_POST_UCLARI, zamanlamaGetUclari } from './zamanlama/uclar.mjs';
@@ -2216,7 +2219,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
     }
 
     // --- POST /platform/sonuc/* — Playwright raporlayıcısının yazma uçları -------------------
-    const sonucEslesme = /^\/platform\/sonuc\/(durum|medya-anahtari|kosu|kaydet|bitir)$/.exec(yol);
+    const sonucEslesme = /^\/platform\/sonuc\/(durum|medya-anahtari|kosu|kaydet|bitir|servis-istegi)$/.exec(yol);
     if (req.method === 'POST' && sonucEslesme) {
       await raporlayiciIsteginiIsle(req, res, sonucEslesme[1], baglam);
       return true;
@@ -2846,6 +2849,41 @@ async function raporlayiciIsteginiIsle(req, res, islem, baglam) {
         bekleyenKosuBildirimleri.delete(bitenKosu);
         platformVeritabani().then((acik) => { if (acik) return kosuBittiBildir(acik, bitenKosu); }).catch(() => { /* bildirim koşuyu etkilemez */ });
       }, KOSU_BILDIRIM_BEKLEMESI_MS).unref());
+      return;
+    }
+    case 'servis-istegi': {
+      // Ekran koşusundaki servis isteği adımı (servisler/servis-adimi.mjs): koşucu çözülmüş atamaları gönderir; servisin kayıtlı
+      // senaryosu şablon olarak servis motoruyla (token / oturum, tablo başvuruları, kontroller) çalışır ve "Dene" olarak servisin
+      // geçmişine yazılır. Kasa açık olmalı (servis ayarları / gizli değerler). Açık okunan değerler YALNIZ koşucuya döner.
+      try {
+        acikAnahtar(db);
+        const projeId = kimlikAl(govde.projeId, 'projeId');
+        const ortamId = kimlikAl(govde.ortamId, 'ortamId');
+        const d = servisTanimiDogrula({ servisId: govde.servisId, senaryoId: govde.senaryoId, atamalar: govde.atamalar, okumalar: govde.okumalar });
+        if (d.hatalar.length) throw new DepoHatasi(d.hatalar.join(' '));
+        const sablon = servisSenaryosuGetir(db, d.tanim.senaryoId);
+        if (!sablon || sablon.projeId !== projeId || sablon.servisId !== d.tanim.servisId) throw new DepoHatasi('Şablon servis senaryosu bulunamadı (silinmiş ya da başka servise ait).');
+        const { icerik, bulunamayan } = atamalariUygula(/** @type {Record<string, any>} */ (sablon.icerik), d.tanim.atamalar ?? []);
+        const metinler = (/** @type {unknown} */ v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string')) : {});
+        const akisDegerleri = /** @type {Record<string, string>} */ (metinler(govde.akisDegerleri));
+        /** @type {{ okunan: Record<string, string>; gizliler: string[] }} */
+        let acik = { okunan: {}, gizliler: [] };
+        const r = /** @type {Record<string, any>} */ (await servisSenaryosuCalistir(db, projeId, {
+          servisId: d.tanim.servisId, ortamId, tur: 'dene', taslak: { baslik: `${metinAl(govde.baslik) || sablon.baslik} (ekran koşusu)`, kapsam: 'ikisi', icerik },
+          ...(Object.keys(akisDegerleri).length ? { akisDegerleri } : {}),
+          ekGizliler: Array.isArray(govde.gizliler) ? govde.gizliler.filter((x) => typeof x === 'string') : [],
+          okumalar: d.tanim.okumalar ?? [], acikDegerler: (x) => { acik = x; }
+        }));
+        const kontroller = Array.isArray(r.kontroller) ? r.kontroller : [];
+        const kalanlar = kontroller.filter((/** @type {any} */ k) => !k.gecti).map((/** @type {any} */ k) => `${k.ad}${k.aciklama ? `: ${k.aciklama}` : ''}`);
+        jsonGonder(res, 200, {
+          basarili: true, durum: r.durum, mesaj: r.hata ? String(r.hata) : kalanlar.length ? kalanlar.join(' · ') : null,
+          okunan: acik.okunan, gizliler: acik.gizliler, bulunamayan, kosuId: r.kosuId ?? null, durumKodu: r.durumKodu ?? null, sureMs: r.sureMs ?? null,
+          kontroller: kontroller.map((/** @type {any} */ k) => ({ ad: k.ad, gecti: k.gecti, aciklama: k.aciklama ?? '' })), ozet: typeof r.ozet === 'string' ? r.ozet.slice(0, 2000) : ''
+        });
+      } catch (e) {
+        jsonGonder(res, 200, { basarili: false, mesaj: e instanceof Error ? e.message : String(e) });
+      }
       return;
     }
     default:

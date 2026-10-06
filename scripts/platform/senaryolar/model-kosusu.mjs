@@ -393,6 +393,8 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkisAdi: adim.ortakAkisAdi } : {}),
       // SQL sorgusu adımı (sql/sql-adimi.mjs): koşucu sorguyu çalıştırıp beklenenle karşılaştırır (alan / aksiyon yok).
       ...(nesneMi(adim.sqlKontrolu) ? { sql: adim.sqlKontrolu } : {}),
+      // Servis isteği adımı (servisler/servis-adimi.mjs): koşucu isteği sunucuya iletir, kontrolleri sunucu değerlendirir.
+      ...(nesneMi(adim.servisKontrolu) ? { servis: adim.servisKontrolu } : {}),
       // İndirilen dosyayı doğrulama adımı (dosyalar/dosya-icerigi.mjs): tetikleyici düğmeye basılır, indirilen dosya beklentilerle
       // doğrulanır (alan yok).
       ...(nesneMi(adim.dosyaKontrolu) ? { dosya: adim.dosyaKontrolu } : {}),
