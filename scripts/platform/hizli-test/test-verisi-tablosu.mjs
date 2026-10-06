@@ -232,7 +232,15 @@ export function tabloTaslagiKur(g) {
     if (!v || v.kaynak === 'tablo' || typeof v.deger !== 'string' || !v.deger.trim()) continue;
     // Radyo / onay kutusu tabloya önerilmez: değeri senaryoda seçilir (seçenekler ekran modelinde).
     if (['password', 'file', 'radio', 'checkbox'].includes(String(a.tur))) continue;
-    const { tablo, sutun } = alanGrubu(a);
+    // Seçim (açılır liste) bölüm tablosuna girmez: her zaman kendi tablosunu açar, sayfadaki TÜM seçenekleri satır olur (kişi / kart /
+    // tetikle bağlı alan kendi grubunda kalır).
+    const secim = ['select', 'select-one', 'radio'].includes(String(a.tur));
+    const yer = alanGrubu(secim ? { ...a, bolum: undefined } : a);
+    let { tablo } = yer;
+    const { sutun } = yer;
+    const listeAcar = secim && !a.tabloGrubu && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU;
+    // Liste tablosu başka alanla paylaşılmaz (aynı adlı başka tablo varsa ad numaralanır).
+    for (let i = 2; (() => { const x = tablolar.get(tablo.toLocaleLowerCase('tr')); return x && (listeAcar || x.liste); })(); i++) tablo = `${adTemizle(yer.tablo, EN_COK_AD - 4)} ${i}`;
     // Sayı / tarih / saat alanı (kişi ya da kart bilgisi değilse; ör. "Adet", "Teslimat tarihi") kendi tek sütunlu tablosunu açmaz:
     // değeri senaryoda düz değer olarak kalır (tabloya taşımak veri tekrarını azaltmaz, yalnız tablo kalabalığı yapar).
     if (SERBEST_TURLER.has(String(a.tur)) && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU) continue;
@@ -247,9 +255,8 @@ export function tabloTaslagiKur(g) {
     // ekranda maskelenir.
     const ilkAlan = !t.sutunlar.length;
     t.sutunlar.push({ ad, gizli: hassasAlanMi(a, { tablo, sutun: ad }, g.ekGizliAdlar ?? []) });
-    // Tek başına duran seçim / radyo alanı: tabloya yalnız seçilen değil TÜM seçenekler yazılır (liste tablosu); grupta başka alan varsa değil.
-    const secim = ['select', 'select-one', 'radio'].includes(String(a.tur));
-    t.liste = secim && ilkAlan && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU ? { sutun: ad, secenekler: tumSecenekler(a) } : null;
+    // Seçim alanı: tabloya yalnız seçilen değil TÜM seçenekler yazılır (liste tablosu).
+    t.liste = listeAcar && ilkAlan ? { sutun: ad, secenekler: tumSecenekler(a) } : null;
     const ok = okunurDeger(a, v.deger);
     t.satir[ad] = ok.metin;
     if (ok.metin !== ok.kod && !t.sutunlar[t.sutunlar.length - 1].gizli) (t.karsiliklar[ad] ??= {})[ok.metin] = ok.kod;
