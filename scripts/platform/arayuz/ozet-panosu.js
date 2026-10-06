@@ -26,7 +26,7 @@ import {
   SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
   donemMetni, donemTemizle, kartDonemle, kartDonemliMi, SQL_ZAMAN_ASIMI_SN, sqlZamanAsimiTemizle,
   EN_COK_KART_PARAMETRESI, kartParametreDegeri, kartParametrele, kartParametreleri,
-  EN_COK_SUTUN_BICIMI, ROZET_RENKLERI, SUTUN_BICIM_TURLERI, esikleriOku, hucreSunumu, rozetKurallariniOku
+  EN_COK_SUTUN_BICIMI, ROZET_RENKLERI, SUTUN_BICIM_TURLERI, esikleriOku, hucreSunumu, rozetKurallariniOku, KART_SIMGELERI, ikinciDeger
 } from './pano-duzeni.mjs';
 import { SONUC_ARALIGI, tarihAraligiSecici } from './tarih-araligi.js';
 import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBicimle, metotOner, satirZamani, uzunMetinMi } from './buyuk-metin.mjs';
@@ -806,7 +806,23 @@ export function ozetPanosu(kap, s0) {
     const bicimlerAlani = h('fieldset', { class: 'pano-sutun-bicim-alani' }, h('legend', {}, 'Sütun biçimleri'),
       h('p', { class: 'soluk kucuk' }, 'Hücreyi değerine göre rozet, renkli sayı, değişim oku (▲ / ▼) ya da sayaç rozeti olarak gösterir; "Altına başka sütun" iki sütunu alt alta yazar (ör. hata kodu ve açıklaması).'),
       sutunOnerileri, bicimListesi, bicimEkle);
-    const tiklamaGoster = () => { tiklamaAlani.hidden = gorunum.value !== 'kutucuk'; bicimlerAlani.hidden = gorunum.value !== 'tablo'; };
+    // Görünüm ayrıntıları: simge (tüm görünümler), "Tek sayı" / "Sayı + değişim"de alt metin, ikinci sütun ve kart tonu.
+    const simge = h('select', {}, h('option', { value: '' }, 'Varsayılan'), KART_SIMGELERI.map((x) => h('option', { value: x.anahtar, selected: x.anahtar === a.simge }, x.ad)));
+    const altMetin = h('input', { type: 'text', maxlength: 80, value: a.altMetin || '', autocomplete: 'off', placeholder: 'Boşsa değer sütununun adı' });
+    const ikinciTur = h('select', { 'aria-label': 'İkinci sütunun türü' }, [['yok', 'Yok'], ['toplam', 'Toplam ("8 / 10" + çubuk)'], ['karsilastir', 'Karşılaştır (▲ / ▼ yüzde; ör. dün)']]
+      .map(([d, e]) => h('option', { value: d, selected: d === (a.ikinci?.tur || 'yok') }, e)));
+    const ikinciSutun = h('input', { type: 'text', value: a.ikinci?.sutun || '', list: sutunOnerileri.id, autocomplete: 'off', spellcheck: 'false', 'aria-label': 'İkinci sütun', placeholder: 'ör. DUN' });
+    const ikinciArtis = h('input', { type: 'checkbox', checked: a.ikinci?.artisIyi === true });
+    const kartTonu = h('input', { type: 'checkbox', checked: a.kartTonu === true });
+    const sayiAyrintilari = h('div', { class: 'pano-bicim-izgara' }, alan('Alt metin', altMetin),
+      alan('İkinci sütun', h('div', { class: 'pano-ikinci' }, ikinciTur, ikinciSutun, h('label', { class: 'secenek' }, ikinciArtis, 'Artış iyi'))),
+      h('label', { class: 'secenek' }, kartTonu, 'Kartı eşik rengiyle tonla'));
+    const ayrintiAlani = h('fieldset', { class: 'pano-ayrinti-alani' }, h('legend', {}, 'Görünüm ayrıntıları'), alan('Simge', simge), sayiAyrintilari);
+    const tiklamaGoster = () => {
+      tiklamaAlani.hidden = gorunum.value !== 'kutucuk';
+      bicimlerAlani.hidden = gorunum.value !== 'tablo';
+      sayiAyrintilari.hidden = !['sayi', 'degisim'].includes(gorunum.value);
+    };
     gorunum.addEventListener('change', tiklamaGoster);
     tiklamaGoster();
     gorunum.addEventListener('change', yardimYaz);
@@ -822,6 +838,7 @@ export function ozetPanosu(kap, s0) {
       alan('Görünüm', gorunum),
       sutunAlani,
       tiklamaAlani,
+      ayrintiAlani,
       bicimlerAlani,
       bicimAlani,
       esikAlani,
@@ -847,6 +864,12 @@ export function ozetPanosu(kap, s0) {
           const secenekler = /** @type {HTMLTextAreaElement} */ (satir.querySelector('textarea')).value.split('\n').map((m) => m.trim()).filter(Boolean);
           return { ad: ad.replace(/^:/, ''), etiket, secenekler };
         }).filter((p) => p.ad || p.etiket || p.secenekler.length),
+        ...(simge.value ? { simge: simge.value } : {}),
+        ...(['sayi', 'degisim'].includes(gorunum.value) ? {
+          ...(altMetin.value.trim() ? { altMetin: altMetin.value.trim() } : {}),
+          ...(ikinciTur.value !== 'yok' ? { ikinci: { tur: ikinciTur.value, sutun: ikinciSutun.value.trim(), ...(ikinciArtis.checked ? { artisIyi: true } : {}) } } : {}),
+          ...(kartTonu.checked ? { kartTonu: true } : {})
+        } : {}),
         sutunBicimleri: gorunum.value === 'tablo' ? [...bicimListesi.children].map((x2) => /** @type {any} */ (x2).oku()).filter(Boolean) : (a.sutunBicimleri || []),
         ...(gorunum.value === 'kutucuk' && tiklama.value ? { tiklama: { kartId: tiklama.value.split('|')[0], parametre: tiklama.value.split('|')[1] } } : {})
       };
@@ -1002,6 +1025,14 @@ export function ozetPanosu(kap, s0) {
         govde.style.removeProperty('--pano-govde-yukseklik');
       });
       tabloOdak = null;
+      tonla();
+    };
+    /** Kart tonu (ayarda açıksa): sonucun eşik rengi kartın zeminine / kenarına yansır. */
+    const tonla = () => {
+      const bolum = govde.closest('section');
+      if (!bolum) return;
+      const esik = a.kartTonu ? /** @type {HTMLElement | null} */ (govde.querySelector('[data-esik]'))?.dataset.esik || '' : '';
+      for (const r of ['kirmizi', 'sari', 'yesil']) bolum.classList.toggle(`pano-kart-ton-${r}`, esik === r);
     };
     // Tablo: sıralama yalnız ekranda; sütun sırası / görünürlük / genişlik kartın ayarına hemen kaydedilir (düzenleme kipi gerekmez;
     // hedef ve sorgu değişmediğinden önbellekteki sonuç ve "Son veri" korunur, sorgu çalışmaz).
@@ -1073,10 +1104,12 @@ export function ozetPanosu(kap, s0) {
         govde.classList.remove('yenileniyor');
       }
     });
-    return h('section', { class: 'kart pano-karti pano-sql-karti', 'aria-labelledby': basId },
-      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, ikon('veri'), a.baslik),
+    const bolum = h('section', { class: 'kart pano-karti pano-sql-karti', 'aria-labelledby': basId },
+      h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, h('span', { class: `pano-baslik-simgesi${a.simge ? ' secili' : ''}` }, ikon(a.simge || 'veri')), a.baslik),
         h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, parametreSecimleri(k), donemli ? donemSecici(k) : null, yenile)),
       sonVeri, durum, hata, govde);
+    tonla();
+    return bolum;
   }
 
   /** Nöbetçi verisi kartı: sayfa açılınca Nöbetçi'nin kendi verisinden hesaplanır (dış istek yok). */
@@ -1210,11 +1243,26 @@ function sonucGorunumu(a, sonuc, t = {}) {
     const n = gizli.has(sutunlar[i]) ? null : sayiyaCevir(ham);
     if (a.gorunum === 'yuzde') return yuzdeGorunumu(a, b, n, ham, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi');
     const renk = n === null ? null : esikRengi(n, a.esikler || []);
-    const kutu = h('div', { class: `pano-sayi${renk ? ` esik-${renk}` : ''}` },
-      h('strong', { class: 'pano-sayi-deger' }, satirlar.length ? (n !== null ? sayiBicimle(n, b) : kisaBicim(ham, b)) : '—'),
-      h('span', { class: 'pano-sayi-alt' }, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi'), esikNotu(renk));
+    // İkinci sütun: toplam ("8 / 10" + çubuk) ya da karşılaştırma (▲ %67 rozeti; ör. dünkü değer).
+    const ikinciI = a.ikinci ? sutunSiralari([a.ikinci.sutun], sutunlar)[0] ?? -1 : -1;
+    const diger = ikinciI >= 0 && satirlar.length && !gizli.has(sutunlar[ikinciI]) ? sayiyaCevir(satirlar[0][ikinciI]) : null;
+    const ik = ikinciDeger(a.ikinci, n, diger);
+    const kutu = h('div', { class: `pano-sayi${renk ? ` esik-${renk}` : ''}`, 'data-esik': renk || '' },
+      h('strong', { class: 'pano-sayi-deger' }, satirlar.length ? (n !== null ? sayiBicimle(n, b) : kisaBicim(ham, b)) : '—',
+        ik && ik.tur === 'toplam' && diger !== null ? h('span', { class: 'pano-sayi-toplam' }, ` / ${sayiBicimle(diger, b)}`) : null),
+      h('span', { class: 'pano-sayi-alt' }, satirlar.length ? (a.altMetin || sutunlar[i]) : 'Sorgu satır döndürmedi'), esikNotu(renk));
+    if (ik && ik.tur === 'toplam') {
+      kutu.append(h('span', { class: 'pano-sayi-cubuk', role: 'img', 'aria-label': `%${Math.round(ik.oran * 100)}` }, h('span', { class: `pano-sayi-cubuk-dolu${renk ? ` esik-${renk}` : ''}`, 'data-oran': String(ik.oran) })));
+    } else if (ik && ik.tur === 'karsilastir') {
+      const metin = ik.yuzde === null ? sayiBicimle(Math.abs(ik.fark), b) : `%${Math.abs(ik.yuzde).toLocaleString('tr-TR', { maximumFractionDigits: Math.abs(ik.yuzde) < 10 ? 1 : 0 })}`;
+      kutu.append(h('span', { class: 'pano-sayi-karsilastirma' }, h('span', { class: `pano-rozet renk-${ik.renk}` }, h('span', { class: 'pano-rozet-ok', 'aria-hidden': 'true' }, ik.ok), metin),
+        h('span', { class: 'soluk kucuk' }, ` ${a.ikinci.sutun}: ${diger === null ? '—' : sayiBicimle(diger, b)}`)));
+    }
     if (a.gorunum === 'degisim') kutu.append(degisimSatiri(sonuc, sutunlar[i], n, b));
-    return kutu;
+    // Çubuğun dolu kısmı: oran CSSOM ile (satır içi stil özniteliği yok).
+    for (const d of kutu.querySelectorAll('.pano-sayi-cubuk-dolu')) /** @type {HTMLElement} */ (d).style.width = `${Number(/** @type {HTMLElement} */ (d).dataset.oran) * 100}%`;
+    if (!a.simge) return kutu;
+    return h('div', { class: 'pano-sayi-yan', 'data-esik': renk || '' }, h('span', { class: `pano-sayi-simge${renk ? ` esik-${renk}` : ''}`, 'aria-hidden': 'true' }, ikon(a.simge)), kutu);
   }
   if (!satirlar.length) return h('p', { class: 'soluk kucuk' }, 'Sorgu satır döndürmedi.');
   // Tablo: tabloGorunumu (sqlKarti çağırır; sütun taşıma / gizleme / genişlik / sıralama).

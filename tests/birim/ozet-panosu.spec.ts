@@ -23,7 +23,7 @@ import {
   duzenTemizle, eksikYerlesikler, enKucukBoyut, esikRengi, eskiBicimMi, gorunurYerlesim, hucreBicimle, kartAyarla, kartEkle, kartKaldir, kartSiraTasi,
   kartYerlestir, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
   yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, sqlZamanAsimiTemizle, type PanoDuzeni,
-  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku
+  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku, ikinciDeger
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -335,6 +335,21 @@ test('sütun biçimleri: kural / eşik metni okuma, hücre sunumu, doğrulama (s
   expect(() => k([{ sutun: 'D', tur: 'rozet', kurallar: [{ deger: 'a', renk: 'mor' }] }])).toThrow('rengi geçersiz');
   expect(() => k([{ sutun: 'D', tur: 'renk', esikler: [{ islec: '>', deger: 1, renk: 'mavi' }] }])).toThrow('Eşiğin rengi geçersiz');
   expect(() => k([{ sutun: 'D', tur: 'altSatir', altSutun: 'D' }])).toThrow('kendisinin altına');
+});
+
+test('sayı kartı süsleri: ikinci sütun (toplam / karşılaştır), simge, alt metin, kart tonu doğrulaması', () => {
+  expect(ikinciDeger({ tur: 'toplam' }, 8, 10)).toEqual({ tur: 'toplam', oran: 0.8 });
+  expect(ikinciDeger({ tur: 'toplam' }, 12, 10)).toEqual({ tur: 'toplam', oran: 1 });
+  expect(ikinciDeger({ tur: 'toplam' }, 1, 0)).toBeNull();
+  expect(ikinciDeger({ tur: 'karsilastir' }, 421, 102)).toMatchObject({ ok: '▲', renk: 'kirmizi', fark: 319 });
+  expect(ikinciDeger({ tur: 'karsilastir', artisIyi: true }, 5, 10)).toMatchObject({ ok: '▼', renk: 'kirmizi', yuzde: -50 });
+  expect(ikinciDeger({ tur: 'karsilastir' }, 3, 0)).toMatchObject({ yuzde: null, fark: 3 });
+  expect(ikinciDeger({ tur: 'karsilastir' }, null, 3)).toBeNull();
+  const k = (ek: Record<string, unknown>) => kartTemizle({ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, gorunum: 'sayi', sorgu: 'SELECT 1', ...ek } }).ayar;
+  expect(k({ simge: 'onay', altMetin: 'Alt', ikinci: { tur: 'toplam', sutun: 'T' }, kartTonu: true })).toMatchObject({ simge: 'onay', altMetin: 'Alt', ikinci: { tur: 'toplam', sutun: 'T' }, kartTonu: true });
+  expect(k({ simge: 'yok-boyle', ikinci: { tur: 'yok' } })).not.toHaveProperty('simge');
+  expect(() => k({ ikinci: { tur: 'baska', sutun: 'T' } })).toThrow('İkinci sütunun türü geçersiz');
+  expect(() => k({ ikinci: { tur: 'toplam', sutun: '' } })).toThrow('İkinci sütun boş olamaz');
 });
 
 test('tablo: görünen sütunlar, taşı, gizle / göster, sıralama türleri (sayı, tarih, metin tr-TR; boşlar sonda), genişlik doğrulaması', () => {

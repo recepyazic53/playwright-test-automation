@@ -102,3 +102,6 @@ export declare function rozetKurallariniOku(metin: string): { kurallar: Array<{ 
 export declare function esikleriOku(metin: string): { esikler: Array<{ islec: string; deger: number; renk: string }>; hatalar: string[] };
 export declare function hucreSunumu(bicim: SutunBicimi | null | undefined, v: unknown, sayiBicimi?: unknown, altDeger?: unknown):
   null | { tur: 'rozet' | 'renk' | 'altSatir' | 'soluk'; metin: string; renk?: string | null; ok?: '▲' | '▼' | '='; alt?: string };
+export declare const KART_SIMGELERI: ReadonlyArray<{ anahtar: string; ad: string }>;
+export declare function ikinciDeger(ikinci: { tur: string; artisIyi?: boolean } | null | undefined, deger: number | null, diger: number | null):
+  null | { tur: 'toplam'; oran: number } | { tur: 'karsilastir'; yuzde: number | null; fark: number; ok: '▲' | '▼' | '='; renk: string };
