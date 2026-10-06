@@ -161,7 +161,8 @@ export function istekKarari(i) {
     try { koken = new URL(adres).origin; } catch { koken = ''; }
     if (!i.izinliKokenler.includes(koken)) return { izin: false, neden: 'izinsiz-koken' };
   }
-  if ((i.asama === 'tarama' || i.asama === 'secme') && !OKUMA_YONTEMLERI.includes(String(i.yontem).toUpperCase())) return { izin: false, neden: 'yazma' };
+  // (Öğe seçme — 'secme' — kullanıcının yürüttüğü sayfadır: ilgili sayfaya gidebilmek için alan doldurup istek atabilir; yazma serbest.)
+  if (i.asama === 'tarama' && !OKUMA_YONTEMLERI.includes(String(i.yontem).toUpperCase())) return { izin: false, neden: 'yazma' };
   return { izin: true };
 }
 

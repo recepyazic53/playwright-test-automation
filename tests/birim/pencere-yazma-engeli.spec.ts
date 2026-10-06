@@ -59,7 +59,7 @@ async function sayfaAc(durum: { asama: Asama }): Promise<{ page: Page; engellene
   return { page, engellenen, kapat: () => baglam.close() };
 }
 
-for (const asama of ['giris', 'baglam', 'kayit'] as const) {
+for (const asama of ['giris', 'baglam', 'kayit', 'secme'] as const) {
   test(`${asama} aşamasında sayfanın açılır penceresi (POST ile yüklenen çerçeve) engellenmez`, async () => {
     const { page, engellenen, kapat } = await sayfaAc({ asama });
     await page.getByRole('button', { name: 'Kullanıcı değiştir' }).click();
@@ -69,7 +69,7 @@ for (const asama of ['giris', 'baglam', 'kayit'] as const) {
   });
 }
 
-for (const asama of ['tarama', 'secme'] as const) {
+for (const asama of ['tarama'] as const) {
   test(`${asama} (okuma) aşamasında yazma isteği engellenir: çerçevenin POST'u iptal edilir (tasarım gereği)`, async () => {
     const { page, engellenen, kapat } = await sayfaAc({ asama });
     await page.getByRole('button', { name: 'Kullanıcı değiştir' }).click();
