@@ -64,7 +64,7 @@ test.describe('saf kurallar', () => {
     const plan2 = planKur({ baslik: 'x', alanlar: [{ anahtar: 'kod', tur: 'text', etiket: 'Adres Kodu' }], degerler: { kod: { deger: '42000' } } });
     expect(mevcutSutunAdaylari(plan2.tablolar[0], mevcutlar)[0]).toMatchObject({ kesin: true, mevcutSatir: null, eklenecekSatir: 1 });
     // Benzer ad (kısaltma): aday ama kesin değil (varsayılan seçili olmaz).
-    const plan3 = planKur({ baslik: 'x', alanlar: [{ anahtar: 'k', tur: 'text', etiket: 'Abone' }], degerler: { k: { deger: '5' } } });
+    const plan3 = planKur({ baslik: 'x', alanlar: [{ anahtar: 'k', tur: 'text', etiket: 'Abone' }], degerler: { k: { deger: 'Gold' } } });
     expect(mevcutSutunAdaylari(plan3.tablolar[0], [{ id: 'a', ad: 'Aboneler', sutunlar: [{ ad: 'Abonelik' }], satirlar: [] }])).toEqual([
       expect.objectContaining({ id: 'a', kesin: false, eslesme: [{ plan: 'Abone', hedef: 'Abonelik', tur: 'benzer' }] })
     ]);
