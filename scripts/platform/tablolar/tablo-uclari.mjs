@@ -9,6 +9,7 @@ import { ekranAlanBaglari, ekranAlanBaglariniKaydet, kullanilanOrtakAkislar, ort
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
 import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
+import { adDegisikliginiYay, adEslemi } from './ad-degisikligi.mjs';
 import { servisSenaryosuKosuyorMu } from '../servisler/servis-isleri.mjs';
 import { birlestirmeGecmisi, birlestirmeyiGeriAl, kaynaklariSil, tablolariBirlestir, veriSagligi } from './tablo-birlestirme.mjs';
 import { benzerTablolar } from './tablo-benzerligi.mjs';
@@ -145,6 +146,8 @@ export const TABLO_POST_UCLARI = [
   ['/platform/tablo/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (g.tur !== undefined && g.tur !== null && !tabloTuruGecerliMi(g.tur)) throw new DepoHatasi('Tablo türü geçersiz: kayıt, liste ya da servis olmalıdır.');
+    // Yeniden adlandırma (tablo / sütun): kaydetmeden önceki ad; kaydedince ada göre başvurular yeni ada çevrilir (ad-degisikligi.mjs).
+    const eski = g.id ? tablolariListele(db, projeId, { tabloId: kimlik(g.id) })[0] ?? null : null;
     const s = tabloKaydetEtkiyle(db, {
       projeId, id: g.id ? kimlik(g.id) : undefined, ad: typeof g.ad === 'string' ? g.ad : '', sutunlar: g.sutunlar, satirlar: g.satirlar, silinenSatirlar: g.silinenSatirlar,
       // Tablo türü ('kayit' | 'liste' | 'servis'; isteğe bağlı): kaynak.tabloTuru (tablo-deposu.mjs). Başka değer yukarıda reddedilir.
@@ -155,7 +158,9 @@ export const TABLO_POST_UCLARI = [
     }, { kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
     if (s.onayGerekli) return { onayGerekli: true, etki: s.etki };
     const [tablo] = tablolariListele(db, projeId, { tabloId: s.id, baglamDahil: true });
-    return { tablo, etki: s.etki, ...(s.guncelleme ? { guncelleme: s.guncelleme } : {}) };
+    const eslem = eski && tablo ? adEslemi(eski, tablo.ad, Array.isArray(g.sutunlar) ? g.sutunlar : []) : null;
+    const adDegisikligi = eslem ? adDegisikliginiYay(db, projeId, s.id, eslem, { kosuyorMu }) : null;
+    return { tablo, etki: s.etki, ...(s.guncelleme ? { guncelleme: s.guncelleme } : {}), ...(adDegisikligi ? { adDegisikligi } : {}) };
   }],
   // Toplu grup atama: { projeId, tabloIdler: [id], grup } — grup null / '' kaldırır. Tablonun başka bilgisi değişmez.
   ['/platform/tablo/grup-ata', (db, g) => tablolaraGrupAta(db, kimlik(g.projeId, 'projeId'), g.tabloIdler, g.grup)],
