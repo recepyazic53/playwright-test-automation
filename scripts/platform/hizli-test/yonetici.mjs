@@ -75,6 +75,7 @@ import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { EkranDogrulamaHatasi, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
+import { dallariBirlestir } from './dal-birlestirme.mjs';
 import { tumSecenekler } from './test-verisi-tablosu.mjs';
 import { farkOzeti, sayfaFarki, tetikHedefleri } from './sayfa-farki.mjs';
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
@@ -2590,6 +2591,12 @@ export function hizliTestYoneticisiOlustur(s) {
     if (tetikler.length) /** @type {any} */ (envanter).tetikler = tetikler;
     const { paket } = kayitPaketiOlustur(/** @type {any} */ (meta), /** @type {any} */ (envanter));
     const model = bitisiUygula(/** @type {Nesne} */ (paket).model, o.bitis);
+    // Hızlı testle güncelleme: ekranın bu turda görünmeyen dalının alanları korunur, yeni alanlar "ekranda görünürse" olur (dal-birlestirme.mjs).
+    const dal = meta.mevcutModel ? dallariBirlestir(model, meta.mevcutModel) : { korunan: [], kosullanan: [] };
+    if ((dal.korunan.length || dal.kosullanan.length) && !o.dalNotuYazildi) {
+      o.dalNotuYazildi = true;
+      gunluk(o, `Dal birleştirme: ${dal.korunan.length ? `bu turda görünmeyen ${dal.korunan.length} alan korundu (${dal.korunan.slice(0, 8).join(', ')}; ekranda görünürse yazılır)` : ''}${dal.korunan.length && dal.kosullanan.length ? '; ' : ''}${dal.kosullanan.length ? `${dal.kosullanan.length} yeni alan ekranda görünürse yazılır (${dal.kosullanan.slice(0, 8).join(', ')})` : ''}.`);
+    }
     /** @type {Nesne} */ (paket).meta.olusturan = 'Nöbetçi hızlı test';
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
     const anahtarlar = senaryoAnahtarlari(model, alanlar);
