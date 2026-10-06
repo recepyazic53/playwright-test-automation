@@ -289,7 +289,10 @@ test('tablo: görünen sütunlar, taşı, gizle / göster, sıralama türleri (s
   expect(satirlariSirala([['10'], ['9'], ['100']], 0, 'artan').map((x) => x[0])).toEqual(['9', '10', '100']);
   const k = (g: unknown) => duzenTemizle({ kartlar: [{ id: 'k-1', tur: 'sql', ayar: { baslik: 'S', hedef: { baglantiId: 'b1' }, sorgu: 'SELECT 1', gorunum: 'tablo', sutunGenislikleri: g } }] });
   expect(k({ durum: 180.4 }).kartlar[0].ayar?.sutunGenislikleri).toEqual({ durum: 180 });
-  expect(() => k({ durum: 10 })).toThrow('Sütun genişliği 40–1200 px');
+  // Geniş ekranda uzun metin sütunu 1200 px'i aşabilir (üst sınır 4000).
+  expect(k({ durum: 1900 }).kartlar[0].ayar?.sutunGenislikleri).toEqual({ durum: 1900 });
+  expect(() => k({ durum: 10 })).toThrow('Sütun genişliği 40–4000 px');
+  expect(() => k({ durum: 4001 })).toThrow('Sütun genişliği 40–4000 px');
 });
 
 test.describe('pano (kasa) ve SQL kartı', () => {
