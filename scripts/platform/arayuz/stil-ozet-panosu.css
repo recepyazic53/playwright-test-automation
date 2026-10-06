@@ -356,3 +356,23 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-sutun-bicimi { display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(9rem, 13rem) minmax(0, 1fr) auto; gap: 6px 8px; align-items: start; margin-bottom: 6px; }
 .pano-sutun-bicimi textarea { min-height: 2.4rem; }
 @media (max-width: 600px) { .pano-sutun-bicimi { grid-template-columns: minmax(0, 1fr); } }
+/* Kart simgesi (başlıkta), "Tek sayı" simge kutusu, toplam çubuğu, karşılaştırma rozeti ve eşik renginde kart tonu. */
+.pano-baslik-simgesi { display: inline-flex; flex: none; }
+.pano-baslik-simgesi.secili { width: 26px; height: 26px; border-radius: 8px; align-items: center; justify-content: center; background: var(--vurgu-zemin); }
+.kart-basligi h3 .pano-baslik-simgesi.secili svg { color: var(--vurgu); }
+.pano-sayi-yan { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.pano-sayi-simge { width: 46px; height: 46px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--vurgu-zemin); color: var(--vurgu); }
+.pano-sayi-simge .ikon, .pano-sayi-simge svg { width: 24px; height: 24px; }
+.pano-sayi-simge.esik-kirmizi { background: var(--hata-zemin); color: var(--hata); }
+.pano-sayi-simge.esik-sari { background: var(--atlanan-zemin); color: var(--atlanan); }
+.pano-sayi-simge.esik-yesil { background: var(--basari-zemin); color: var(--basari); }
+.pano-sayi-toplam { font-size: .62em; font-weight: 600; color: var(--metin-2); letter-spacing: 0; }
+.pano-sayi-cubuk { display: block; height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; margin-top: 6px; }
+.pano-sayi-cubuk-dolu { display: block; height: 100%; border-radius: 3px; background: var(--vurgu); }
+.pano-sayi-cubuk-dolu.esik-kirmizi { background: var(--hata); } .pano-sayi-cubuk-dolu.esik-sari { background: var(--atlanan); } .pano-sayi-cubuk-dolu.esik-yesil { background: var(--basari); }
+.pano-sayi-karsilastirma { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.pano-kart-ton-kirmizi { background: color-mix(in srgb, var(--hata-zemin) 70%, var(--panel-kati)); border-color: color-mix(in srgb, var(--hata) 35%, transparent); }
+.pano-kart-ton-sari { background: color-mix(in srgb, var(--atlanan-zemin) 70%, var(--panel-kati)); border-color: color-mix(in srgb, var(--atlanan) 35%, transparent); }
+.pano-kart-ton-yesil { background: color-mix(in srgb, var(--basari-zemin) 70%, var(--panel-kati)); border-color: color-mix(in srgb, var(--basari) 35%, transparent); }
+.pano-ikinci { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }

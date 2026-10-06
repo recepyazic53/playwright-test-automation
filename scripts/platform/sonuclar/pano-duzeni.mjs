@@ -492,6 +492,14 @@ function sqlAyari(ham) {
   });
   if (new Set(parametreler.map((p) => p.ad)).size !== parametreler.length) throw new PanoHatasi('Aynı parametre adı birden çok kez yazılmış.');
   const sutunBicimleri = sutunBicimleriTemizle(ham.sutunBicimleri);
+  // Görünüm süsleri: kart simgesi, alt metin, ikinci sütun (toplam: "8 / 10" + çubuk; karşılaştır: ▲ %67 rozeti), eşik renginde kart tonu.
+  const simge = KART_SIMGELERI.some((x) => x.anahtar === ham.simge) ? /** @type {string} */ (ham.simge) : undefined;
+  const altMetin = ham.altMetin === undefined || ham.altMetin === '' ? '' : metin(ham.altMetin, 'Alt metin', 80, { bos: true });
+  let ikinci;
+  if (nesneMi(ham.ikinci) && ham.ikinci.tur && ham.ikinci.tur !== 'yok') {
+    if (ham.ikinci.tur !== 'toplam' && ham.ikinci.tur !== 'karsilastir') throw new PanoHatasi('İkinci sütunun türü geçersiz.');
+    ikinci = { tur: ham.ikinci.tur, sutun: metin(ham.ikinci.sutun, 'İkinci sütun', 120), ...(ham.ikinci.artisIyi === true ? { artisIyi: true } : {}) };
+  }
   // Kutucuğa tıklayınca: başka bir SQL kartının parametresine kutucuğun etiketi seçilir ve o kart yenilenir.
   let tiklama;
   if (nesneMi(ham.tiklama) && ham.tiklama.kartId) {
@@ -501,7 +509,8 @@ function sqlAyari(ham) {
     tiklama = { kartId, parametre };
   }
   return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }),
-    ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}) };
+    ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}),
+    ...(simge ? { simge } : {}), ...(altMetin ? { altMetin } : {}), ...(ikinci ? { ikinci } : {}), ...(ham.kartTonu === true ? { kartTonu: true } : {}) };
 }
 
 /**
@@ -759,6 +768,26 @@ export function esikRengi(deger, esikler) {
 //   sayac   : sayı > 0 ise kırmızı rozet, değilse soluk
 //   altSatir: altSutun'un değeri hücrenin altında küçük yazıyla (alt sütun tabloda ayrıca görünmez)
 // ---------------------------------------------------------------------------------------------------------------------
+
+/** SQL kartının simgesi (başlıkta; "Tek sayı"da büyük simge kutusu). anahtar: arayüzün ikon adı. */
+export const KART_SIMGELERI = Object.freeze([
+  ['veri', 'Veritabanı'], ['onay', 'Onay'], ['uyari', 'Uyarı'], ['grafik', 'Grafik'], ['simsek', 'Şimşek'], ['saat', 'Saat'], ['kalkan', 'Kalkan'],
+  ['hedef', 'Hedef'], ['yildiz', 'Yıldız'], ['ag', 'Ağ'], ['kullanici', 'Kullanıcı'], ['katman', 'Katman'], ['takvim', 'Takvim'], ['isaret', 'İşaret']
+].map(([anahtar, ad]) => Object.freeze({ anahtar, ad })));
+
+/**
+ * İkinci sütunla değer: toplam → oran (0–1, değer / toplam); karşılaştır → yüzde fark ve renk (artış kötü varsayılan).
+ * @param {{ tur: string; artisIyi?: boolean }} ikinci @param {number | null} deger @param {number | null} diger
+ * @returns {null | { tur: 'toplam'; oran: number } | { tur: 'karsilastir'; yuzde: number | null; fark: number; ok: '▲' | '▼' | '='; renk: string }}
+ */
+export function ikinciDeger(ikinci, deger, diger) {
+  if (!ikinci || deger === null || diger === null || !Number.isFinite(deger) || !Number.isFinite(diger)) return null;
+  if (ikinci.tur === 'toplam') return diger > 0 ? { tur: 'toplam', oran: Math.max(0, Math.min(1, deger / diger)) } : null;
+  const fark = Math.round((deger - diger) * 1e9) / 1e9;
+  const iyi = ikinci.artisIyi === true;
+  return { tur: 'karsilastir', fark, yuzde: diger === 0 ? null : (fark / Math.abs(diger)) * 100, ok: fark > 0 ? '▲' : fark < 0 ? '▼' : '=',
+    renk: fark === 0 ? 'gri' : (fark > 0) === iyi ? 'yesil' : 'kirmizi' };
+}
 
 export const SUTUN_BICIM_TURLERI = Object.freeze([
   Object.freeze({ anahtar: 'rozet', ad: 'Değere göre rozet' }), Object.freeze({ anahtar: 'renk', ad: 'Eşiğe göre renk' }),

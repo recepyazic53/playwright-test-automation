@@ -487,6 +487,46 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('sayı kartı: simge, alt metin, toplam ("6 / 12" + çubuk), karşılaştırma rozeti (▲ %100), eşik renginde kart tonu; formdan ayarlanır', async () => {
+  test.setTimeout(90_000);
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 's-toplam', tur: 'sql', x: 0, y: 0, w: 4, h: 4, ayar: { baslik: 'Onaylanan', hedef: { baglantiId: bTest }, gorunum: 'sayi', simge: 'onay', altMetin: 'Tüm kayıtlar',
+      sorgu: "SELECT COUNT(CASE WHEN durum = 'onaylandi' THEN 1 END) AS onaylanan, COUNT(*) AS toplam FROM kayitlar", ikinci: { tur: 'toplam', sutun: 'toplam' } } },
+    { id: 's-fark', tur: 'sql', x: 4, y: 0, w: 4, h: 4, ayar: { baslik: 'Hatalı', hedef: { baglantiId: bTest }, gorunum: 'sayi', simge: 'uyari', kartTonu: true,
+      sorgu: "SELECT COUNT(CASE WHEN durum = 'hata' THEN 1 END) AS bugun, 2 AS dun FROM kayitlar", ikinci: { tur: 'karsilastir', sutun: 'dun' },
+      esikler: [{ islec: '>', deger: 3, renk: 'kirmizi' }] } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = (ad: string) => page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: ad }) });
+  for (const ad of ['Onaylanan', 'Hatalı']) await kart(ad).getByRole('button', { name: `Yenile: ${ad}` }).click();
+  await expect(kart('Onaylanan').locator('.pano-sayi-deger')).toHaveText('6 / 12');
+  await expect(kart('Onaylanan').locator('.pano-sayi-alt')).toHaveText('Tüm kayıtlar');
+  await expect(kart('Onaylanan').locator('.pano-sayi-simge')).toBeVisible();
+  await expect(kart('Onaylanan').locator('.pano-baslik-simgesi.secili')).toBeVisible();
+  const dolu = await kart('Onaylanan').locator('.pano-sayi-cubuk-dolu').evaluate((e) => e.getBoundingClientRect().width / (e.parentElement as HTMLElement).getBoundingClientRect().width);
+  expect(dolu).toBeCloseTo(0.5, 1);
+  await expect(kart('Onaylanan')).not.toHaveClass(/pano-kart-ton-/);
+  await expect(kart('Hatalı').locator('.pano-sayi-karsilastirma .pano-rozet')).toHaveClass(/renk-kirmizi/);
+  await expect(kart('Hatalı').locator('.pano-sayi-karsilastirma')).toContainText('▲%100');
+  await expect(kart('Hatalı').locator('.pano-sayi-karsilastirma')).toContainText('dun: 2');
+  await expect(kart('Hatalı')).toHaveClass(/pano-kart-ton-kirmizi/);
+  await expect(kart('Hatalı').locator('.pano-sayi-simge')).toHaveClass(/esik-kirmizi/);
+  // Form: alanlar dolu gelir; "Artış iyi" seçilince rozet yeşil olur.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Hatalı' }).click();
+  const pencere = page.getByRole('dialog', { name: /^Kartı düzenle/ });
+  await expect(pencere.getByLabel('Simge')).toHaveValue('uyari');
+  await expect(pencere.getByRole('combobox', { name: 'İkinci sütunun türü' })).toHaveValue('karsilastir');
+  await expect(pencere.getByRole('combobox', { name: 'İkinci sütun', exact: true })).toHaveValue('dun');
+  await pencere.getByLabel('Artış iyi').check();
+  await pencere.getByRole('button', { name: 'Uygula' }).click();
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Bitti' }).click();
+  await expect(kart('Hatalı').locator('.pano-sayi-karsilastirma .pano-rozet')).toHaveClass(/renk-yesil/);
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('sütun biçimleri: değere göre rozet, eşik rengi, değişim oku, sayaç rozeti, alt satır (alt sütun ayrıca görünmez); formdan düzenlenir', async () => {
   test.setTimeout(90_000);
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
