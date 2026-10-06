@@ -666,8 +666,8 @@ export function duzenTemizle(ham) {
 
 // Pano üst şeridi (düzende; tüm kartlar için): başlık ve açıklama, ortam (mantıksal veritabanına bağlı SQL kartları bu ortamın
 // eşlemesiyle sorgulanır; doğrudan bağlantılı kartlar etkilenmez) ve otomatik yenileme aralığı (dakika; 0 = kapalı).
-/** Otomatik yenileme seçenekleri (dakika). */
-export const OTOMATIK_YENILEME_DK = Object.freeze([0, 1, 5, 15, 30]);
+/** Otomatik yenileme seçenekleri (dakika; 60 ve 120 = 1 ve 2 saat). */
+export const OTOMATIK_YENILEME_DK = Object.freeze([0, 1, 5, 15, 30, 60, 120]);
 
 /** @param {Record<string, unknown>} ham @returns {{ baslik?: string; aciklama?: string; ortamId?: string; otomatikYenileDk?: number }} */
 function panoAyarlariTemizle(ham) {

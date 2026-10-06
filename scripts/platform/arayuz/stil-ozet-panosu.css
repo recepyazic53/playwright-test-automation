@@ -448,3 +448,6 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-grafik-aciklama .seri::before { content: ""; display: inline-block; width: 16px; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--vurgu); }
 .pano-grafik-aciklama .seri.ikinci::before { border-top: 2px dashed var(--metin-3); }
 @media (forced-colors: active) { .pano-grafik .cizgi-ikinci { stroke: GrayText; } .pano-grafik .alan { fill: transparent; } }
+/* Üst şeritteki ortak dönem: diğer şerit denetimleriyle aynı boyda ("Tüm kartlar: Bugün"). */
+.pano-serit-donem { padding-right: 0; }
+.pano-serit-donem .pano-donem .tarih-tetik { min-height: 36px; padding: 0 12px 0 6px; font-size: 13px; max-width: none; border: 0; background: transparent; box-shadow: none; }
