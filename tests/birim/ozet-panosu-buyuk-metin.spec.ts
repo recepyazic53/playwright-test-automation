@@ -133,7 +133,7 @@ test.describe('büyük metin: özet panosu arayüzü', () => {
     // Pano: metin kartları (sayfa uzasın), ortada geniş tablo kartı, altında liste ve yine metin kartları.
     const metin = (id: string) => ({ id, tur: 'metin', boyut: 'tam', yukseklik: 4, ayar: { baslik: `Not ${id}`, not: 'Dolgu kartı.', baglantilar: [] } });
     const kartlar = [metin('m1'), metin('m2'), metin('m3'),
-      { id: 't-lob', tur: 'sql', boyut: 'tam', ayar: { baslik: 'Servis günlüğü', hedef: { baglantiId }, sorgu: LOB_SORGUSU, gorunum: 'tablo',
+      { id: 't-lob', tur: 'sql', boyut: 'tam', yukseklik: 6, ayar: { baslik: 'Servis günlüğü', hedef: { baglantiId }, sorgu: LOB_SORGUSU, gorunum: 'tablo',
         sutunGenislikleri: { ISLEMZAMANI: 260, EKDOSYA: 260, EKBILGI: 420 } } },
       { id: 'l-lob', tur: 'sql', boyut: 'orta', ayar: { baslik: 'İstek listesi', hedef: { baglantiId }, sorgu: LOB_SORGUSU, gorunum: 'liste', sutunlar: ['INPUTCONTENT'] } },
       metin('m4'), metin('m5'), metin('m6'), metin('m7')];
@@ -192,11 +192,19 @@ test.describe('büyük metin: özet panosu arayüzü', () => {
       await expect(kart.locator('tbody tr')).toHaveCount(3);
       await expect(page.locator('main')).not.toContainText('[object Object]');
       const giris = hucre(kart, 0, 'INPUTCONTENT');
-      await expect(giris.locator('.pano-hucre-onizleme')).toHaveText(/^<soapenv:Envelope .*…$/);
-      expect((await giris.locator('.pano-hucre-onizleme').textContent())!.length).toBeLessThanOrEqual(120);
+      // Önizleme sütun genişliğinde: metnin tamamı tek satırda, sığmayan kısım "…" ile (CSS) kesilir; kesildiği için "Görüntüle" görünür.
+      await expect(giris.locator('.pano-hucre-onizleme')).toHaveText(/^<soapenv:Envelope .*<\/soapenv:Envelope>$/);
+      expect(await giris.locator('.pano-hucre-onizleme').evaluate((e) => e.scrollWidth > e.clientWidth + 1)).toBe(true);
       const yukseklik = await giris.locator('.pano-hucre-onizleme').evaluate((e) => e.getBoundingClientRect().height);
       expect(yukseklik).toBeLessThan(24);
       await expect(giris.getByRole('button', { name: 'Görüntüle: INPUTCONTENT, 1. satır' })).toBeVisible();
+      if (genislik === 1440) {
+        // Yer açılınca (çok geniş pencere) metin sütuna sığar: "Görüntüle" gizlenir; daralınca yeniden görünür. Hücreye tıklamak yine açar.
+        await page.setViewportSize({ width: 6000, height: 900 });
+        await expect(giris.getByRole('button', { name: 'Görüntüle: INPUTCONTENT, 1. satır' })).toBeHidden();
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await expect(giris.getByRole('button', { name: 'Görüntüle: INPUTCONTENT, 1. satır' })).toBeVisible();
+      }
       await expect(hucre(kart, 0, 'EKDOSYA')).toHaveText('(ikili veri, 16 bayt)');
       await expect(hucre(kart, 1, 'OUTPUTCONTENT')).toHaveText('{"hata":"Yetersiz bakiye","kod":51}');
       const liste = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: 'İstek listesi' }) }).locator('.pano-liste li');
@@ -323,9 +331,10 @@ test.describe('büyük metin: özet panosu arayüzü', () => {
     expect(sonra.ayni, `${ad}: kart DOM'u yeniden oluştu`).toBe(true);
   }
 
-  test('kaydırma: yatay kaydırma (scrollLeft, tekerlek, klavye, çubuk), köşe tutamağı, sütun genişliği sayfayı yukarı atmaz (1440 / 390)', async () => {
+  test('kaydırma: yatay kaydırma (scrollLeft, tekerlek, klavye, çubuk), köşe tutamağı, sütun genişliği sayfayı yukarı atmaz (900 / 390)', async () => {
     test.setTimeout(120_000);
-    for (const genislik of [1440, 390]) {
+    // 900: geniş ekran düzeninin dar ucu; uzun metin önizlemeleri en az ~12rem olduğundan 7 sütun karta sığmaz, tablo yatay kayar.
+    for (const genislik of [900, 390]) {
       const { page, hatalar, kapat } = await sayfaAc(genislik, 800);
       const kart = tabloKarti(page);
       const kutu = kart.locator('.pano-tablo');

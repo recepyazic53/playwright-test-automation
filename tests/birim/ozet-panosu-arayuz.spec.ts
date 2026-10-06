@@ -571,6 +571,20 @@ test('tablo: başlığı sürükle / menüyle taşı, gizle / göster, genişlik
   await page.mouse.move(kutu.x + kutu.width / 2 + 80, kutu.y + kutu.height / 2, { steps: 4 });
   await page.mouse.up();
   await expect.poll(async () => Number(await kart.locator('col[data-sutun="durum"]').getAttribute('width'))).toBe(Math.round(ilk + 80));
+  // İlk elle genişlikte diğer sütunlar o anki genişliklerinde sabitlenir: tablo genişliklerin toplamı kadar (kartı doldurmaz;
+  // sütunlar yan yana, biri daralınca sağdakiler sola kayar).
+  const tabloEl = kart.locator('table.pano-tablo-tablosu');
+  await expect(tabloEl).toHaveClass(/\bsabit-genislik\b/);
+  const toplam = await kart.locator('col').evaluateAll((l) => l.reduce((t, c) => t + Number(c.getAttribute('width') || 0), 0));
+  expect(await kart.locator('col:not([width])').count()).toBe(0);
+  expect(Math.abs((await tabloEl.boundingBox())!.width - toplam)).toBeLessThanOrEqual(2);
+  const sonrakiOnce = (await th('id').boundingBox())!.x;
+  await kart.getByRole('separator', { name: 'Sütun genişliği: durum' }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await th('id').boundingBox())!.x).toBeLessThan(sonrakiOnce - 4);
+  await kart.getByRole('separator', { name: 'Sütun genişliği: durum' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => Number(await kart.locator('col[data-sutun="durum"]').getAttribute('width'))).toBe(Math.round(ilk + 80));
   await kart.getByRole('separator', { name: 'Sütun genişliği: id' }).focus();
   await page.keyboard.press('ArrowRight');
   const idGenislik = Number(await kart.locator('col[data-sutun="id"]').getAttribute('width'));

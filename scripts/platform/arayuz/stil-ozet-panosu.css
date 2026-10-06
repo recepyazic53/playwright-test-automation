@@ -239,11 +239,12 @@ a.pano-sayi:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px;
 
 /* Uzun metin hücresi (CLOB / TEXT): tek satır önizleme + "Görüntüle" */
 .pano-uzun-hucre { cursor: pointer; }
-.pano-hucre-ic { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.pano-hucre-onizleme { display: block; min-width: 0; max-width: min(28rem, 60vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* Izgara: önizleme en az ~12rem, yer varsa sütun genişliğinde; sığmayan kısım "…" ile kesilir (çok sütunda tablo yatay kayar). */
+.pano-hucre-ic { display: grid; grid-template-columns: minmax(min(12rem, 45vw), 1fr) auto; align-items: center; min-width: 0; }
+.pano-hucre-onizleme { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: var(--yazi-mono); font-size: 12px; }
 .pano-tablo td.pano-uzun-hucre { overflow-wrap: normal; }
-.pano-hucre-goruntule { flex: none; min-height: 26px; padding-top: 0; padding-bottom: 0; }
+.pano-hucre-goruntule { margin-left: 6px; min-height: 26px; padding-top: 0; padding-bottom: 0; }
 .pano-uzun-hucre:hover .pano-hucre-onizleme { color: var(--vurgu); }
 
 /* Uzun metin penceresi: tam metin, arama, kopyala, servis analizine örnek ekle */
@@ -321,3 +322,6 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
   .pano-tablo-kap .pano-tablo, .pano-liste-kap > .pano-liste { flex: 1 1 auto; min-height: 3rem; max-height: none; }
   .pano-liste-kap > .pano-liste { align-content: start; }
 }
+/* Sabit genişlik (tüm sütunlara elle genişlik verilmiş): tablo genişliklerin toplamı kadar (satır içi width), sütunlar yan yana;
+   kartı aşarsa yatay kaydırma. */
+.pano-tablo-tablosu.sabit-genislik { table-layout: fixed; }
