@@ -298,3 +298,18 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 /* Panel açıkken (stil.css: kabı position: relative yapar) kap konumlanmasın: panel karta göre dursun; kart diğer kartların üstünde. */
 .pano-kart-sag:has(> .pano-donem > .tarih-paneli:not([hidden])), .pano-donem-satiri:has(> .pano-donem > .tarih-paneli:not([hidden])) { position: static; }
 .pano-ogesi:has(.pano-donem > .tarih-paneli:not([hidden])) { z-index: 30; }
+/* Kart içi kaydırma çubuğu: normalde görünmez; kartın üstüne gelince silik (kart rengine yakın), çubuğun üstüne gelince / sürüklerken vurgu
+   rengi. Ok düğmeleri yok. Chromium / Safari ::-webkit-scrollbar; diğerlerinde ince çubuk (scrollbar-color). */
+.pano-tablo::-webkit-scrollbar, .pano-liste::-webkit-scrollbar { width: 8px; height: 8px; }
+.pano-tablo::-webkit-scrollbar-track, .pano-liste::-webkit-scrollbar-track, .pano-tablo::-webkit-scrollbar-corner, .pano-liste::-webkit-scrollbar-corner { background: transparent; }
+.pano-tablo::-webkit-scrollbar-button, .pano-liste::-webkit-scrollbar-button { display: none; }
+.pano-tablo::-webkit-scrollbar-thumb, .pano-liste::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+.pano-tablo:hover::-webkit-scrollbar-thumb, .pano-liste:hover::-webkit-scrollbar-thumb, .pano-tablo:focus-visible::-webkit-scrollbar-thumb { background: var(--cizgi-2); }
+.pano-tablo::-webkit-scrollbar-thumb:hover, .pano-liste::-webkit-scrollbar-thumb:hover, .pano-tablo::-webkit-scrollbar-thumb:active, .pano-liste::-webkit-scrollbar-thumb:active { background: var(--vurgu); }
+@supports not selector(::-webkit-scrollbar) {
+  .pano-tablo, .pano-liste { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .pano-tablo:hover, .pano-liste:hover { scrollbar-color: var(--cizgi-2) transparent; }
+}
+/* Sayı sütunu: başlık da sağa yaslı (değerler başlığın altında; genişlik değişince de hizalı). */
+.pano-tablo-tablosu thead th.sayi .pano-th { justify-content: flex-end; }
+.pano-tablo-tablosu thead th.sayi { font-family: inherit; }
