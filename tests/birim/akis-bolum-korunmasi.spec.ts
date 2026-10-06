@@ -289,8 +289,12 @@ test('arayüz: koşullu bölümlü ekran diyagramda düzenlenip kaydedilir; sena
     await expect(not).toHaveAttribute('title', /görünürlük koşulu: Çoklu sorgulama seçiliyken.*bölümle birlikte aynen korunur/);
     // Grupları birleştir: "Ön bilgi"yi etkin yap, iki alanı ona ekle (taşı), boş kalan "Sorgu" grubunu sil.
     await on.getByRole('textbox', { name: 'Adım adı' }).click();
+    // Başka gruptaki alan eklenince "Taşı / İkinci kez yaz" sorulur: Taşı (varsayılan).
+    const tekrar = page.locator('dialog.onay-diyalogu');
     await page.getByRole('button', { name: 'Sorgu tipi: etkin gruba ekle' }).click();
+    await tekrar.getByRole('button', { name: 'Ekle' }).click();
     await page.getByRole('button', { name: 'Liste dosyası: etkin gruba ekle' }).click();
+    await tekrar.getByRole('button', { name: 'Ekle' }).click();
     await expect(on.getByRole('note', { name: 'Liste dosyası: bölüm (diyagramda düzenlenemez)' })).toHaveText('koşullu bölüm');
     await sorgu.getByRole('button', { name: 'Bloğu sil' }).click();
     await expect(sorgu).toHaveCount(0);

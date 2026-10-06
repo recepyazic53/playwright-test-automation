@@ -335,10 +335,15 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (CANLI ortam seçilebilir; ba
     await goruntu(page.locator('main'), '04b-akis-diyagrami-olustur.png');
     // Etkin gruba "Ekle": alan diğer gruptan taşınır; sürükleyip bırakınca geri gelir.
     await grup2.click();
+    // Başka gruptaki alan: "Taşı / İkinci kez yaz" sorulur (varsayılan Taşı).
+    const tekrar = page.locator('dialog.onay-diyalogu');
     await page.getByRole('button', { name: 'Başlangıç tarihi: etkin gruba ekle' }).click();
+    await expect(tekrar).toContainText('başka bir grupta da var');
+    await tekrar.getByRole('button', { name: 'Ekle' }).click();
     await expect(grup2).toContainText('Başlangıç tarihi');
     await expect(grup1).not.toContainText('Başlangıç tarihi');
     await page.locator('.palet-ogesi', { hasText: 'Başlangıç tarihi' }).dragTo(grup1);
+    await tekrar.getByRole('button', { name: 'Ekle' }).click();
     await expect(grup1).toContainText('Başlangıç tarihi');
     await expect(grup2).not.toContainText('Başlangıç tarihi');
     // "+" ile boş bir mesaj bloğu: kaydederken bloğun altında hata; silince kaydedilir.

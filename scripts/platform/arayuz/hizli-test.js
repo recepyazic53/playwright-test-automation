@@ -414,6 +414,28 @@ function dugmeSecenekleri(adaylar, oneri, yazi) {
   ];
 }
 
+/**
+ * "Veri girmeye devam et": önceki adımda başka bir değerle yazılmış alanlar için karar (alan başına "Taşı" / "İkinci kez yaz").
+ * Vazgeçilirse null. @param {Array<{ anahtar: string; etiket: string; adim: number; onceki: string; yeni: string }>} tekrarlar
+ * @returns {Promise<Record<string, 'tasi' | 'ikinci'> | null>}
+ */
+async function tekrarKararlariSor(tekrarlar) {
+  const { onayIste } = await import('./kosu-paneli.js');
+  /** @type {Map<string, () => 'tasi' | 'ikinci'>} */
+  const secimler = new Map();
+  const ek = h('div', { class: 'hizli-tekrarlar' }, tekrarlar.map((t, i) => {
+    const ad = `hizli-tekrar-${i}`;
+    const tasi = h('input', { type: 'radio', name: ad, value: 'tasi', checked: true });
+    const ikinci = h('input', { type: 'radio', name: ad, value: 'ikinci' });
+    secimler.set(t.anahtar, () => (/** @type {HTMLInputElement} */ (ikinci).checked ? 'ikinci' : 'tasi'));
+    return h('fieldset', { class: 'hizli-tekrar' }, h('legend', {}, `“${t.etiket}”: ${t.adim}. adımda “${t.onceki}”, şimdi “${t.yeni}”`),
+      h('label', { class: 'onay-satiri' }, tasi, h('span', {}, h('b', {}, 'Taşı: '), `alan yalnızca bu adımda “${t.yeni}” ile yazılır.`)),
+      h('label', { class: 'onay-satiri' }, ikinci, h('span', {}, h('b', {}, 'İkinci kez yaz: '), `${t.adim}. adımda “${t.onceki}”, bu adımda “${t.yeni}” yazılır (senaryoda iki ayrı alan).`)));
+  }));
+  const tamam = await onayIste({ baslik: 'Alan önceki adımda başka bir değerle yazılmıştı', metin: 'Her alan için seçin:', dugme: 'Uygula', ikonAd: 'soru', ek });
+  return tamam ? Object.fromEntries([...secimler].map(([k, f]) => [k, f()])) : null;
+}
+
 function soruCiz(o, y) {
   const s = o.soru;
   const hata = o.sonHata ? h('div', { class: 'not-kutusu hata', role: 'alert' }, o.sonHata) : null;
@@ -438,6 +460,13 @@ function soruCiz(o, y) {
       y.hemen();
       return r;
     } catch (e) {
+      // "Veri girmeye devam et": önceki adımda başka değerle yazılmış alan — taşınsın mı, ikinci kez mi yazılsın (alan başına) sorulur.
+      if (e && e.kod === 'TEKRAR' && uc === 'veri' && Array.isArray(e.govde && e.govde.tekrarlar)) {
+        const kararlar = await tekrarKararlariSor(e.govde.tekrarlar);
+        if (kararlar) return gonder(dugme, uc, { ...govde, tekrarKararlari: { ...(govde.tekrarKararlari || {}), ...kararlar } }, m);
+        m.goster('Vazgeçildi: değerler gönderilmedi.');
+        return null;
+      }
       if (!(e && e.durum === 423)) m.goster(hataMetni(e));
       return null;
     }
@@ -475,17 +504,20 @@ function soruCiz(o, y) {
     bitir.r.disabled = !s.bitirilebilir;
     const devam = secenek('bas', h('b', {}, 'Devam et: '), aday, h('span', {}, ' düğmesine bas.'), o.izin === 'sor' ? h('small', { class: 'blok soluk' }, 'Bana sor: basmadan önce ayrıca onayınız istenir.') : null);
     const baska = secenek('baska', h('b', {}, 'Başka bir düğmeye bas…'), ' (tarayıcıda tıklayarak seçin)');
+    // Veri → düğme → veri: ekranın şu anki hâli okunur, değiştirilenler ekrana yazılır ve kayda yeni veri adımı olarak eklenir.
+    const veriDevam = secenek('veriDevam', h('b', {}, 'Veri girmeye devam et.'),
+      h('small', { class: 'blok soluk' }, 'Ekranın şu anki hâli açılır; değiştirdikleriniz ekrana yazılır, sonra bu soru yeniden gelir.'));
     if (!s.adaylar.length) { devam.r.disabled = true; baska.r.checked = true; } else if (s.bitirilebilir && !sonFark?.fark?.yeniDugmeler?.length) bitir.r.checked = true; else devam.r.checked = true;
     const uygula = h('button', { type: 'button', class: 'birincil' }, 'Uygula');
     uygula.addEventListener('click', () => {
-      const k = [bitir, devam, baska].find((x) => x.r.checked);
+      const k = [bitir, devam, baska, veriDevam].find((x) => x.r.checked);
       if (!k) { m.goster('Bir seçim yapın.'); return; }
       void gonder(uygula, 'karar', k.r.value === 'bas' ? { karar: 'bas', secici: aday.value } : { karar: k.r.value }, m);
     });
     const duzelt = h('button', { type: 'button', class: 'hayalet' }, 'Veriyi düzenle');
     duzelt.addEventListener('click', () => void gonder(duzelt, 'karar', { karar: 'duzelt' }, m));
     return kart('Şimdi ne yapayım?', 'pusula', sonFark ? farkCiz(sonFark) : null, m.kutu,
-      h('fieldset', { class: 'hizli-kararlar' }, h('legend', { class: 'gorunmez' }, 'Şimdi ne yapayım?'), bitir.el, devam.el, baska.el),
+      h('fieldset', { class: 'hizli-kararlar' }, h('legend', { class: 'gorunmez' }, 'Şimdi ne yapayım?'), bitir.el, devam.el, baska.el, veriDevam.el),
       h('div', { class: 'dugmeler' }, uygula, duzelt));
   }
 
@@ -1141,6 +1173,10 @@ function veriDuragi(o, s, kart, m, gonder, y) {
       // Seçim keşfi: koşullu alan, kontrol eden seçimin grubunda durur; seçim bu durakta değilse hangi seçimde göründüğü yazılır.
       a.kosul && !grupSahibi(a) && !zincirde(a) ? h('div', { class: 'hizli-kosul soluk kucuk' }, `${a.kosul.metin} olunca görünür`) : null,
       hazirIpucu,
+      // "Veri girmeye devam et": alan önceki bir adımda; gösterilen sayfadaki değer. Değiştirilirse bu adımda yeniden yazılır.
+      a.onceki ? h('div', { class: 'hizli-kosul hizli-onceki soluk kucuk' }, a.onceki.deger !== null && a.onceki.deger !== undefined && a.onceki.deger !== ''
+        ? `${a.onceki.adim}. adımda “${(Array.isArray(a.secenekler) && (a.secenekler.find((/** @type {any} */ x) => String(x.deger) === String(a.onceki.deger)) || {}).metin) || a.onceki.deger}” yazıldı; değiştirirseniz bu adımda yeniden yazılır.`
+        : `${a.onceki.adim}. adımda boş bırakıldı; değer girerseniz bu adımda yazılır.`) : null,
       a.bagli ? h('div', { class: 'hizli-kosul soluk kucuk' }, a.bagli.belirsiz
         ? `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelebilir (keşifte kesinleşmedi; “${a.bagli.ustEtiket}” seçip yanındaki “↓ … seçeneklerini getir” ile deneyin).`
         : `Seçenekleri “${a.bagli.ustEtiket}” seçimine göre gelir.`) : null,

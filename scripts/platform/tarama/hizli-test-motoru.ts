@@ -1239,7 +1239,7 @@ export async function hizliTestiYurut(
           const bilinen = new Set(k.kesfedilen ?? []);
           const yeniSecimler = k.kesfedilen ? yeniListeler.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur && !bilinen.has(a.anahtar)) : [];
           const kesifler = yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
-          // Yerinde keşif seçimleri denerken sayfanın kuralları yazılmış metin alanlarını değiştirmiş olabilir (ör. bağlı teminat kutusu
+          // Yerinde keşif seçimleri denerken sayfanın kuralları yazılmış metin alanlarını değiştirmiş olabilir (ör. bağlı tutar kutusu
           // bedeli sıfırlar): bu turda yazılan alanlar yeniden okunur, tutmayan bir kez yeniden yazılır, yine tutmazsa alan hatası.
           if (zincirYeni || kesifler.length) {
             for (const d of k.alanlar) {

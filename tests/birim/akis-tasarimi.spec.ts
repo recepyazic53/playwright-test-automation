@@ -302,7 +302,6 @@ test('doğrulama: Bitir zorunlu ve sonda; boş/tekrarlı grup, aynı alan iki gr
     { blok: 0, mesaj: 'Alan grubunun adını yazın.' },
     { blok: 0, mesaj: 'Alan grubu boş: alan ekleyin (alansız bir adımı adlandırmak için ardından bir aksiyon gelmeli).' },
     { blok: 2, mesaj: '“A” adı başka bir alan grubunda da var; adlar tekil olmalı.' },
-    { blok: 2, mesaj: '“TC kimlik no” alanı birden çok grupta; bir alan yalnızca bir grupta olabilir.' },
     { blok: 2, mesaj: 'Kayıtta olmayan bir alan seçilmiş.' },
     { blok: 3, mesaj: 'Aksiyonun düğmesini seçin.' },
     { blok: 5, mesaj: 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).' },
@@ -393,4 +392,25 @@ test('sıra: gruptaki alan sırası modelde doldurma sırasıdır (farklı böl�
   // Diyagrama geri: aynı sıra.
   const geri = adimlardanBloklar(model, model.adimlar as Nesne[], modeldenAkisEnvanteri(model));
   expect((geri.find((b) => b.tur === 'alanlar') as Nesne).alanlar).toEqual(['teslimat', 'ad', 'hediyeNotu']);
+});
+
+test('aynı alan iki grupta ("İkinci kez yaz"): ikincisi aynı ekran kutusu için ayrı alan "(2. kez)"; modelde iki alan, ayrı kimlik ve senaryo anahtarı', () => {
+  const env = envanter();
+  const { envanter: k, hatalar } = akistanKayitEnvanteri(env, [
+    { tur: 'alanlar', ad: 'Müşteri', alanlar: ['#ad', '#tc'], zorunlu: [] },
+    { tur: 'aksiyon', dugme: 1, istegeBagli: false },
+    { tur: 'alanlar', ad: 'Yeniden', alanlar: ['#tc'], zorunlu: ['#tc'] },
+    { tur: 'aksiyon', dugme: 2, istegeBagli: false },
+    { tur: 'bitir' }
+  ]);
+  expect(hatalar).toEqual([]);
+  expect(k?.adimlar.map((a) => a.alanlar.map((x) => [x.anahtar, x.etiket]))).toEqual([[['#ad', 'Ad Soyad'], ['#tc', 'TC kimlik no']], [['#tc~2', 'TC kimlik no (2. kez)']]]);
+  const m = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket.model as Nesne;
+  const tcler = m.adimlar.flatMap((a: Nesne) => a.bolumler.flatMap((b: Nesne) => b.alanlar)).filter((x: Nesne) => x.konum?.secici === '#tc');
+  expect(tcler.length).toBe(2);
+  expect(new Set(tcler.map((x: Nesne) => x.id)).size).toBe(2);
+  expect(new Set(tcler.map((x: Nesne) => x.eslesme.senaryo)).size).toBe(2);
+  // Aynı grupta iki kez: hata.
+  expect(akistanKayitEnvanteri(env, [{ tur: 'alanlar', ad: 'A', alanlar: ['#tc', '#tc'], zorunlu: [] }, { tur: 'aksiyon', dugme: 2, istegeBagli: false }, { tur: 'bitir' }]).hatalar)
+    .toEqual([{ blok: 0, mesaj: '“TC kimlik no” bu grupta iki kez var; birini çıkarın.' }]);
 });

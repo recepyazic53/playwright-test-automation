@@ -9,7 +9,7 @@ import { korumaliTarayici } from './giris-fikstur';
 const SAYFA = `<!doctype html><html lang="tr"><body><form>
 <p><label for="tarih">Tescil Tarihi</label> <input type="text" id="tarih" class="hasDatepicker" value="01.10.2026"></p>
 <p><label for="tip">Araç Tipi</label> <select id="tip"><option value="">Seçiniz</option><option value="1">ÖZEL</option></select></p>
-<p><button type="button" id="hesapla">Prim Hesapla</button></p>
+<p><button type="button" id="hesapla">Hesapla</button></p>
 </form>
 <div id="ui-datepicker-div" class="ui-datepicker ui-widget" style="position:absolute;top:40px;left:200px;z-index:10;display:block;background:#fff">
   <div class="ui-datepicker-header"><a class="ui-datepicker-prev" title="Geri" href="#">Geri</a><a class="ui-datepicker-next" title="İleri" href="#">İleri</a>
@@ -28,7 +28,7 @@ test('açık takvim penceresindeki yıl / ay listeleri alan, ileri / geri / gün
     expect(alanlar.map((a) => a.etiket)).toEqual(['Tescil Tarihi', 'Araç Tipi']);
     const e = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
     const metinler = e.gonderim.map((a) => a.metin ?? '');
-    expect(metinler).toContain('Prim Hesapla');
+    expect(metinler).toContain('Hesapla');
     for (const yok of ['Geri', 'İleri', 'Bugün', 'Kapat', '1', '2']) expect(metinler, JSON.stringify(metinler)).not.toContain(yok);
   } finally { await tarayici.close(); }
 });

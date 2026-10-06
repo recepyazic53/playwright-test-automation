@@ -265,7 +265,7 @@ export async function akisTasarimi(icerik, s) {
     akis.querySelector(`[data-blok="${i}"] [data-alan="${CSS.escape(anahtar)}"] .sira-${yon < 0 ? 'yukari' : 'asagi'}:not(:disabled)`)?.focus();
   }
   /** Alanı hedef gruba koyar: onune verilirse o alanın önüne, yoksa sona; aynı gruptaysa yalnızca yerini değiştirir. */
-  function alanEkle(anahtar, hedef, onune) {
+  function alanEkle(anahtar, hedef, onune, secim) {
     const b = bloklar[hedef];
     if (!b || b.tur !== 'alanlar') return;
     if (b.alanlar.includes(anahtar)) {
@@ -277,6 +277,16 @@ export async function akisTasarimi(icerik, s) {
       return;
     }
     const kaynak = bloklar.find((x) => x.tur === 'alanlar' && x.alanlar.includes(anahtar));
+    // Alan başka bir grupta: taşınsın mı, ikinci kez mi yazılsın (aynı ekran kutusu için ayrı alan; senaryoda ayrı değer) sorulur.
+    if (kaynak && !secim) { void tekrarSor(anahtar, kaynak).then((s) => { if (s) alanEkle(anahtar, hedef, onune, s); }); return; }
+    if (kaynak && secim === 'ikinci') {
+      const yer0 = onune ? b.alanlar.indexOf(onune) : -1;
+      if (yer0 >= 0) b.alanlar.splice(yer0, 0, anahtar); else b.alanlar.push(anahtar);
+      if (alanBilgisi.get(anahtar)?.zorunlu) b.zorunlu.push(anahtar);
+      etkin = hedef;
+      degisti();
+      return;
+    }
     const zorunluydu = Boolean(kaynak && kaynak.zorunlu.includes(anahtar));
     const baska = Boolean(kaynak);
     const kosulVar = Boolean(kaynak && kaynak.kosullar && Object.prototype.hasOwnProperty.call(kaynak.kosullar, anahtar));
@@ -311,6 +321,21 @@ export async function akisTasarimi(icerik, s) {
     if (baska ? zorunluydu : alanBilgisi.get(anahtar)?.zorunlu) b.zorunlu.push(anahtar);
     etkin = hedef;
     degisti();
+  }
+  /**
+   * Başka grupta olan alan eklenirken karar: "Taşı" (yalnız bu grupta) ya da "İkinci kez yaz" (iki grupta; kaydedince aynı ekran kutusu için
+   * ayrı alan "<ad> (2. kez)", senaryoda ayrı değer). Vazgeçilirse null.
+   * @param {string} anahtar @param {{ ad?: string }} kaynak @returns {Promise<'tasi' | 'ikinci' | null>}
+   */
+  async function tekrarSor(anahtar, kaynak) {
+    const ad = alanBilgisi.get(anahtar)?.etiket || anahtar;
+    const tasi = h('input', { type: 'radio', name: 'akis-tekrar', value: 'tasi', checked: true });
+    const ikinci = h('input', { type: 'radio', name: 'akis-tekrar', value: 'ikinci' });
+    const ek = h('fieldset', { class: 'hizli-tekrar' }, h('legend', { class: 'gorunmez' }, 'Seçim'),
+      h('label', { class: 'onay-satiri' }, tasi, h('span', {}, h('b', {}, 'Taşı: '), `alan “${kaynak.ad || 'önceki grup'}” grubundan çıkar, yalnız bu grupta yazılır.`)),
+      h('label', { class: 'onay-satiri' }, ikinci, h('span', {}, h('b', {}, 'İkinci kez yaz: '), 'alan iki grupta da kalır; kaydedince bu grupta “', ad, ' (2. kez)” adıyla ayrı alan olur, senaryoda ayrı değer girilir.')));
+    const tamam = await onayIste({ baslik: `“${ad}” başka bir grupta da var`, metin: 'Aynı ekran kutusu bu gruba nasıl eklensin?', dugme: 'Ekle', ikonAd: 'soru', ek });
+    return tamam ? (/** @type {HTMLInputElement} */ (ikinci).checked ? 'ikinci' : 'tasi') : null;
   }
   /** "Şu adrese git" bloğunun tam adresi (salt okunur açıklama): taban adres + yol, ortam adıyla. @param {string} yol */
   function tamAdresMetni(yol) {

@@ -421,7 +421,32 @@ export const KILITLI_SECIM_SAYFASI = String.raw`<h1>Başvuru</h1>
   });
 </script>`;
 
+/**
+ * /arac-sorgu/: veri → düğme → veri. "Kod" yazılıp "Sorgula"ya basılınca sayfa "Marka"yı doldurur ve "Tip"i SİLER (Seçiniz'e döner);
+ * Tip aramadan SONRA seçilmelidir. Her sorgunun kodu kaydedilir (GET /api/arac-sorgu?kod=). "Kaydet": POST /api/arac-sorgu → "Kayıt alındı".
+ */
+export const ARAC_SORGU_SAYFASI = String.raw`<h1>Araç</h1>
+<div><label for="kod">Kod</label><input id="kod" name="kod" autocomplete="off"></div>
+<div><label for="tip">Tip</label><select id="tip" name="tip"><option value="">Seçiniz</option><option value="1">BİNEK</option><option value="2">TİCARİ</option></select></div>
+<div><label for="marka">Marka</label><input id="marka" name="marka" readonly></div>
+<p><button type="button" id="sorgula">Sorgula</button> <button type="button" id="kaydet">Kaydet</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  $('sorgula').addEventListener('click', function () {
+    fetch('/api/arac-sorgu?kod=' + encodeURIComponent($('kod').value)).then(function (r) { return r.json(); })
+      .then(function (y) { $('marka').value = y.marka; $('tip').selectedIndex = 0; });
+  });
+  $('kaydet').addEventListener('click', function () {
+    fetch('/api/arac-sorgu', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kod: $('kod').value, tip: $('tip').value, marka: $('marka').value }) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+  });
+</script>`;
+
 export class VeriDuragiUygulamasi {
+  /** /arac-sorgu/ sorgu kodları ve gönderimleri. */
+  readonly aracSorgulari: string[] = [];
+  readonly aracKayitlari: Array<Record<string, string>> = [];
   /** /kilitli-secim/ gönderimleri (değerler + Kısa'dayken tarihlere gelen olay sayısı). */
   readonly kilitliKayitlar: Array<Record<string, string | number>> = [];
   /** /ic-ice/, /adimli/ ve /kesif-dugmeli/ gönderimleri. */
@@ -451,6 +476,9 @@ export class VeriDuragiUygulamasi {
     if (i.yol === '/adimli/' && i.yontem === 'GET') return html('Başvuru', ADIMLI_SAYFASI);
     if (i.yol === '/kesif-dugmeli/' && i.yontem === 'GET') return html('Başvuru', KESIF_DUGMELI_SAYFASI);
     if (i.yol === '/kilitli-secim/' && i.yontem === 'GET') return html('Başvuru', KILITLI_SECIM_SAYFASI);
+    if (i.yol === '/arac-sorgu/' && i.yontem === 'GET') return html('Araç', ARAC_SORGU_SAYFASI);
+    if (i.yol === '/api/arac-sorgu' && i.yontem === 'GET') { const kod = i.sorgu.get('kod') ?? ''; this.aracSorgulari.push(kod); return { tur: 'application/json', govde: JSON.stringify({ marka: `MARKA-${kod}` }), gecikmeMs: 200 }; }
+    if (i.yol === '/api/arac-sorgu' && i.yontem === 'POST') { this.aracKayitlari.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/kilitli-secim' && i.yontem === 'POST') { this.kilitliKayitlar.push(JSON.parse(i.govde) as Record<string, string | number>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/ic-ice-bolum' && i.yontem === 'GET') return { tur: 'application/json', govde: '{"tamam":true}', gecikmeMs: 3500 };
     if (i.yol === '/api/ic-ice' && i.yontem === 'POST') { this.icIceKayitlar.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }

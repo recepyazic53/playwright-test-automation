@@ -22,11 +22,11 @@ const KART_DESENI = /(kart|cvv|cvc|guvenlikkodu|sonkullanma|gecerlilik)/;
 /** Tabloya önerilmeyen (kişi / kart dışında) girdi türleri: sayı, tarih, saat, aralık. */
 const SERBEST_TURLER = new Set(['number', 'date', 'datetime-local', 'time', 'month', 'week', 'range']);
 /** Metin kutusuna elle yazılan serbest değer (tutar / sayı / yıl / tarih): sayfada türü "text" olsa da tabloya önerilmez. Uzun (10+ hane)
- * düz rakam dizisi kod / numara sayılır (adres kodu, poliçe no), bu kurala girmez. */
+ * düz rakam dizisi kod / numara sayılır (adres kodu, kayıt no), bu kurala girmez. */
 const SERBEST_DEGER = /^(?:[+-]?(?:\d{1,9}|\d{1,3}(?:[.,\s]\d{3})+)(?:[.,]\d+)?\s*(?:%|tl|₺|eur|usd)?|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}[./-]\d{1,2}[./-]\d{1,2})$/iu;
 /** Serbest değer yazılabilen metin kutusu türleri (seçim / radyo / telefon değil). */
 const METIN_TURLERI = new Set(['text', 'search', 'textarea', '']);
-/** Kod / numara / anahtar adlı alan (adres kodu, poliçe no, IBAN): değeri rakam olsa da serbest değer sayılmaz (normal ad üzerinde). */
+/** Kod / numara / anahtar adlı alan (adres kodu, kayıt no, IBAN): değeri rakam olsa da serbest değer sayılmaz (normal ad üzerinde). */
 const KOD_ADI = /(kod|code|numara|number|iban|anahtar|key|^no|no$|nr$|id$)/;
 
 /**
@@ -66,7 +66,7 @@ export function alanGrubu(a) {
   const tip = a.tur === 'date' ? 'tarih' : a.tur === 'tel' ? 'telefon' : 'metin';
   const kisi = kisiKategorisi({ etiket: baslik, anahtar: a.ad ?? undefined, id: a.kimlik ?? undefined, tip });
   if (kisi) return { tablo: KISI_TABLOSU, sutun: kisi.ad };
-  // Diğer alanlar ekrandaki bölümüne göre tek tabloda (ör. "Ana Teminat Bilgileri": bedel alanları sütun); bölüm yoksa kendi tablosu.
+  // Diğer alanlar ekrandaki bölümüne göre tek tabloda (ör. "Ana Bilgiler": bedel alanları sütun); bölüm yoksa kendi tablosu.
   const b = a.bolum && typeof a.bolum === 'object' && typeof a.bolum.baslik === 'string' && a.bolum.anahtar !== 'genel' && !String(a.bolum.anahtar ?? '').startsWith('h1:')
     ? adTemizle(a.bolum.baslik) : '';
   if (b) return { tablo: b, sutun: temiz || 'Alan' };
@@ -244,7 +244,7 @@ export function tabloTaslagiKur(g) {
     // Sayı / tarih / saat alanı (kişi ya da kart bilgisi değilse; ör. "Adet", "Teslimat tarihi") kendi tek sütunlu tablosunu açmaz:
     // değeri senaryoda düz değer olarak kalır (tabloya taşımak veri tekrarını azaltmaz, yalnız tablo kalabalığı yapar).
     if (SERBEST_TURLER.has(String(a.tur)) && tablo !== KISI_TABLOSU && tablo !== KART_TABLOSU) continue;
-    // Metin kutusuna yazılmış tutar / sayı / tarih de aynı (ör. teminat bedeli, işçi sayısı, inşa yılı); tetikle bağlı alan hariç.
+    // Metin kutusuna yazılmış tutar / sayı / tarih de aynı (ör. bedel, adet, yıl); tetikle bağlı alan hariç.
     if (serbestDegerMi(a, v.deger, { tablo, sutun }, g.ekGizliAdlar ?? [])) continue;
     const anahtar = tablo.toLocaleLowerCase('tr');
     let t = tablolar.get(anahtar);

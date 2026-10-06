@@ -13,8 +13,8 @@ const SAYFA = `<style>
 </style>
 <main>
   <label for="esya">Eşya bedeli</label> <input id="esya" value="0">
-  <label for="deprem">Deprem teminatı</label> <input type="checkbox" id="deprem" name="deprem"
-    onclick="if (this.checked && document.getElementById('esya').value === '0') { this.checked = false; ac('Eşya bedeli girilmeden bu teminat seçilemez.'); }">
+  <label for="deprem">Ek seçenek</label> <input type="checkbox" id="deprem" name="deprem"
+    onclick="if (this.checked && document.getElementById('esya').value === '0') { this.checked = false; ac('Eşya bedeli girilmeden bu seçenek seçilemez.'); }">
   <div id="eski" class="kutu" style="left:600px">Önceden açık bilgi <a href="#" onclick="return false">Tamam</a></div>
 </main>
 <div id="perde" class="perde gizli"></div>
@@ -36,7 +36,7 @@ test('keşif denemesinin açtığı uyarı penceresi kapatılır, metni nota yaz
     expect(kesifler.some((k) => k.secim.includes('deprem')), JSON.stringify(kesifler)).toBe(true);
     await expect(page.locator('#uyari')).toBeHidden();
     expect(await page.evaluate(() => (window as unknown as { kapandi?: number }).kapandi)).toBe(1);
-    expect(notlar.join('\n')).toContain('Eşya bedeli girilmeden bu teminat seçilemez.');
+    expect(notlar.join('\n')).toContain('Eşya bedeli girilmeden bu seçenek seçilemez.');
     await expect(page.locator('#eski')).toBeVisible();
   } finally { await tarayici.close(); }
 });
@@ -46,9 +46,9 @@ test('hızlı test: yalnız MESAJ penceresi kapatılır (kapatma dışında dene
   try {
     const page = await tarayici.newPage();
     await page.setContent(`<style>.kutu{position:absolute;width:360px;height:140px;background:#fff;z-index:1000;border:1px solid}</style>
-      <div id="akis" class="kutu" style="left:10px;top:10px">Teklif no 1 <a href="#" id="kart">Kartla öde</a> <select><option>Peşin</option></select> <span class="close-button" onclick="this.parentNode.hidden=true">x</span></div>
-      <div id="uyari" class="kutu" style="left:400px;top:200px">Teminat 0'dan küçük olamaz. <a href="#" onclick="this.parentNode.hidden=true;return false;">Tamam</a></div>`);
-    expect(await page.evaluate(sayfaIciUyari, { yalnizMesaj: true as const })).toContain("Teminat 0'dan küçük olamaz");
+      <div id="akis" class="kutu" style="left:10px;top:10px">Kayıt no 1 <a href="#" id="kart">Kartla öde</a> <select><option>Peşin</option></select> <span class="close-button" onclick="this.parentNode.hidden=true">x</span></div>
+      <div id="uyari" class="kutu" style="left:400px;top:200px">Tutar 0'dan küçük olamaz. <a href="#" onclick="this.parentNode.hidden=true;return false;">Tamam</a></div>`);
+    expect(await page.evaluate(sayfaIciUyari, { yalnizMesaj: true as const })).toContain("Tutar 0'dan küçük olamaz");
     await expect(page.locator('#uyari')).toBeHidden();
     // Akış penceresinin kapatma düğmesi olsa da içinde bağlantı / liste var: dokunulmaz.
     expect(await page.evaluate(sayfaIciUyari, { yalnizMesaj: true as const })).toBeNull();
