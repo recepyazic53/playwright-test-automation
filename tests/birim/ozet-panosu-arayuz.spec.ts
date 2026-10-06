@@ -485,6 +485,38 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('tablo kartın yüksekliğini doldurur: uzun kartta 22rem sınırı yok, kısa kartta tablo kendi içinde kaydırılır', async () => {
+  test.setTimeout(90_000);
+  const sorgu = 'SELECT id, durum, tc_kimlik_no, tutar, gun FROM kayitlar ORDER BY id';
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 't-uzun', tur: 'sql', x: 0, y: 0, w: 6, h: 20, ayar: { baslik: 'Uzun tablo', hedef: { baglantiId: bTest }, sorgu, gorunum: 'tablo' } },
+    { id: 't-kisa', tur: 'sql', x: 6, y: 0, w: 6, h: 6, ayar: { baslik: 'Kısa tablo', hedef: { baglantiId: bTest }, sorgu, gorunum: 'tablo' } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const olc = async (baslik: string) => {
+    const kart = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: baslik }) });
+    await kart.getByRole('button', { name: `Yenile: ${baslik}` }).click();
+    await expect(kart.locator('tbody tr')).toHaveCount(12);
+    return kart.locator('.pano-tablo').evaluate((e) => {
+      const govde = e.closest('.pano-sql-govde') as HTMLElement;
+      const t = e.getBoundingClientRect();
+      const g = govde.getBoundingClientRect();
+      return { yukseklik: t.height, altBosluk: g.bottom - t.bottom, kayar: e.scrollHeight > e.clientHeight + 1 };
+    });
+  };
+  const uzun = await olc('Uzun tablo');
+  // 12 satır ~22rem'i (352 px) aşar: tablo kartla uzar, kaydırma gerekmez, altta boş tablo alanı kalmaz.
+  expect(uzun.yukseklik).toBeGreaterThan(400);
+  expect(uzun.kayar).toBe(false);
+  expect(uzun.altBosluk).toBeLessThan(24);
+  const kisa = await olc('Kısa tablo');
+  expect(kisa.kayar).toBe(true);
+  expect(kisa.altBosluk).toBeLessThan(24);
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('tablo: başlığı sürükle / menüyle taşı, gizle / göster, genişlik, sıralama (sayı, tarih, metin); kalıcı; sorgu yeniden çalışmaz', async () => {
   test.setTimeout(120_000);
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [{ id: 't-tablo', tur: 'sql', boyut: 'tam',
