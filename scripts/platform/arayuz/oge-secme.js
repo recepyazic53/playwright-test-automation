@@ -82,7 +82,7 @@ export function ogeSecmeKarti(s) {
       liste: [
         '“Öğe seç” açıkken sayfada tıkladığınız öğe seçilir; tıklama sayfaya GİTMEZ: düğmeye basılmaz, form gönderilmez.',
         'Seçtiğiniz öğenin ne olduğunu (düğme, sonuç, alan…) sorulur; seçiciyi Nöbetçi üretir, kod yazmanız gerekmez.',
-        '“Öğe seç” kapalıyken sayfayı kullanabilirsiniz (ör. sonucu görmek için hesaplayın); kayıt oluşturan / gönderen istekler engellenir.',
+        '“Öğe seç” kapalıyken sayfayı kullanabilirsiniz: alan doldurup düğmelere basarak ilgili sayfaya gidin (istekler gerçekten gider).',
         'Alanlara girdiğiniz değerler okunmaz; bitince paneldeki “Bitir”e basın.'
       ]
     });

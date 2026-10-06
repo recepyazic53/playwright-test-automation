@@ -8,9 +8,9 @@
 // seçer — öncelik türe göre: düğme / alan için rol + ad → görünen metin → kimlik → ad / etiket → adsız rol → CSS; sonuç / göstergeler
 // için değişken (rakam içeren) metinli seçiciler atlanır. Kırılganlık seçicinin türünden gelir.
 //
-// GÜVENLİK / GİZLİLİK: seçme aşamasında GET/HEAD dışındaki HER istek ağ katmanında iptal edilir (koruma.mjs > istekKarari, aşama
-// 'secme') ve sayfada form gönderimi etkisizdir (formGonderimKorumasi): kullanıcı "Öğe seç" kapalıyken sayfayı kullansa da kayıt
-// oluşmaz, form gönderilmez. Yasaklı host / izinli köken engeli her aşamada sürer. Alan DEĞERLERİ okunmaz; ekran görüntüsü alınmaz.
+// GÜVENLİK / GİZLİLİK: "Öğe seç" açıkken tıklama sayfaya iletilmez. Kapalıyken sayfayı kullanıcı yürütür: ilgili sayfaya gidebilmek için
+// alan doldurup istek atabilir (yazma isteği ve form gönderimi serbest; kullanıcı kararı). Yasaklı host / izinli köken engeli her
+// aşamada sürer. Alan DEĞERLERİ okunmaz; ekran görüntüsü alınmaz.
 import type { Browser, Page } from '@playwright/test';
 import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
@@ -22,7 +22,7 @@ import type { EngellenenIstek } from './paket-olusturucu.mjs';
 import { SECIM_KOPRUSU, SECIM_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { ogeBilgisi, ogeSecmePaneliniKur, type SeciciAdayi, type SecimPaneliDurumu } from './oge-secme-paneli';
-import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
+import { sayfadakiAlanlar } from './sayfa-envanteri';
 import { TaramaHatasi, alanKapsami, hataBilgisi, hedefSayfayiAc, type OlayGonderici } from './tarama-motoru';
 
 // eslint-disable-next-line no-control-regex
@@ -76,7 +76,7 @@ export async function ogeleriSec(browser: Browser, g: TaramaGirdisi, olay: OlayG
     const url = ws.url();
     const koken = (() => { try { return new URL(url.replace(/^ws/, 'http')).origin; } catch { return ''; } })();
     const izinsiz = g.izinliKokenler && g.izinliKokenler.length ? !g.izinliKokenler.includes(koken) : false;
-    if (durum.asama === 'secme' || adresYasakliMi(url.replace(/^ws/, 'http'), desenler) || izinsiz) {
+    if (adresYasakliMi(url.replace(/^ws/, 'http'), desenler) || izinsiz) {
       kaydet({ yontem: 'WS', adres: adresOzeti(url), asama: durum.asama, neden: 'websocket' });
       void ws.close();
       return;
@@ -171,7 +171,6 @@ export async function ogeleriSec(browser: Browser, g: TaramaGirdisi, olay: OlayG
         `window.__nobetciOgeBilgisi = ${ogeBilgisi.toString()};`,
         `(${ogeSecmePaneliniKur.toString()})(${JSON.stringify({ kopru: SECIM_KOPRUSU, kimlik: SECIM_PANELI_KIMLIGI, turler, turAdlari, alanTurleri })});`
       ].join('\n');
-      await baglam.addInitScript(formGonderimKorumasi);
       await baglam.addInitScript({ content: betik });
     };
 

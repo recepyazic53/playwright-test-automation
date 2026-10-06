@@ -565,7 +565,7 @@ export const REHBERLER = {
         baslik: 'Düğmeyi ve sonucu işaretle',
         sira: ['"1. Keşfin buldukları": modele yazılmasını istemediğiniz koşul ya da bağımlı listenin işaretini kaldırın.', '"2. Düğmeyi ve sonucu işaretle": "Sayfada seç" sayfayı görünür bir tarayıcıda açar.', 'Sayfadaki panelde "Öğe seç"i açın ve düğmeye (ör. "Hesapla"), sonra sonuç yazısına tıklayın; tıklama sayfaya gitmez, öğenin türünü (düğme, sonuç, alan…) siz seçersiniz.', 'Paneldeki "Bitir" ile dönün, "Önizlemeye geç"e basın.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Keşif bulguları', alt: 'onayla', ikon: 'pusula' }, { baslik: 'Sayfada seç', alt: 'Öğe seç', ikon: 'hedef' }, { baslik: 'Önizleme', ikon: 'goz' }] },
-        ipucu: '"Öğe seç" kapalıyken sayfayı normal kullanabilirsiniz (ör. sonucu görmek için hesaplayın); kayıt oluşturan / gönderen istekler engellenir. Düğme ve sonuç işaretlenmezse test yalnız formu doldurur, sonucu doğrulamaz.'
+        ipucu: '"Öğe seç" kapalıyken sayfayı normal kullanabilirsiniz: alan doldurup düğmelere basarak ilgili sayfaya gidin (istekler gerçekten gider). Düğme ve sonuç işaretlenmezse test yalnız formu doldurur, sonucu doğrulamaz.'
       },
       { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz. Süre sınırı ve girişte saklanan oturumun kullanılıp kullanılmayacağı Ayarlar > Koşu\'dadır; Giriş adımında hangisinin yapıldığı (saklanan oturum / baştan giriş) yazar.' }
     ]
