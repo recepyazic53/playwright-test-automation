@@ -1117,16 +1117,21 @@ function pasta(a, b, noktalar, degerAdi) {
   if (!dilimler.length) return h('p', { class: 'soluk kucuk' }, 'Grafik için sıfırdan büyük değer yok.');
   const yuzde = (/** @type {number} */ x) => `%${x.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`;
   const svg = s('svg', { viewBox: '0 0 120 120', class: 'pano-pasta', role: 'img', 'aria-label': `${a.baslik}: ${degerAdi}, ${dilimler.length} dilim` });
+  // İlk 8 dilim temanın renkleri (dilim-0…7); sonrası altın açıyla dağıtılan tonlar (komşu dilimler birbirinden ayrışır).
+  const renk = (/** @type {Element} */ el, /** @type {number} */ i) => {
+    if (i >= 8) /** @type {HTMLElement} */ (el).style.setProperty('--dilim', `oklch(70% 0.13 ${Math.round((i * 137.508) % 360)})`);
+    return el;
+  };
   let birikim = 0;
   for (const [i, d] of dilimler.entries()) {
-    svg.append(s('circle', { cx: 60, cy: 60, r: 42, pathLength: 100, class: `dilim dilim-${d.diger ? 'diger' : i}`, transform: 'rotate(-90 60 60)',
+    svg.append(renk(s('circle', { cx: 60, cy: 60, r: 42, pathLength: 100, class: `dilim dilim-${d.diger ? 'diger' : i}`, transform: 'rotate(-90 60 60)',
       'stroke-dasharray': `${d.yuzde.toFixed(3)} ${(100 - d.yuzde).toFixed(3)}`, 'stroke-dashoffset': (-birikim).toFixed(3) },
-    s('title', {}, `${d.etiket}: ${sayiBicimle(d.deger, b)} (${yuzde(d.yuzde)})`)));
+    s('title', {}, `${d.etiket}: ${sayiBicimle(d.deger, b)} (${yuzde(d.yuzde)})`)), d.diger ? -1 : i));
     birikim += d.yuzde;
   }
   return h('figure', { class: 'pano-pasta-kap' }, svg,
     h('figcaption', {}, h('ul', { class: 'pano-pasta-aciklama' }, dilimler.map((d, i) => h('li', {},
-      h('span', { class: `pano-renk dilim-${d.diger ? 'diger' : i}`, 'aria-hidden': 'true' }),
+      renk(h('span', { class: `pano-renk dilim-${d.diger ? 'diger' : i}`, 'aria-hidden': 'true' }), d.diger ? -1 : i),
       h('span', { class: 'pano-pasta-etiket' }, d.etiket), h('span', { class: 'pano-pasta-deger' }, `${yuzde(d.yuzde)} · ${sayiBicimle(d.deger, b)}`))))));
 }
 

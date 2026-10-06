@@ -700,8 +700,8 @@ export const ONDALIK_SECENEKLERI = Object.freeze(['oto', 0, 1, 2, 3]);
 export const TARIH_BICIMLERI = Object.freeze([['yok', 'Olduğu gibi'], ['gun', 'gg.aa.yyyy'], ['dakika', 'gg.aa.yyyy ss:dd']]);
 export const ORAN_SECENEKLERI = Object.freeze([['oto', 'Otomatik (0–1 ise oran)'], ['oran', 'Değer 0–1 oran'], ['yuzde', 'Değer zaten yüzde']]);
 export const GOSTERGE_SECENEKLERI = Object.freeze([['cubuk', 'İlerleme çubuğu'], ['ibre', 'Gösterge (ibre)']]);
-/** Pasta / halka grafikte en çok dilim (kalanı "Diğer"). */
-export const EN_COK_DILIM = 8;
+/** Pasta / halka grafikte en çok dilim: sınırsız (her satır kendi dilimi; "Diğer" yok). pastaDilimleri'ne sayı verilirse fazlası "Diğer". */
+export const EN_COK_DILIM = Infinity;
 /** Liste görünümünde en çok madde. */
 export const LISTE_EN_COK = 50;
 
@@ -788,7 +788,7 @@ export function degisimHesapla(simdi, onceki) {
 }
 
 /**
- * Pasta dilimleri: büyükten küçüğe, en çok EN_COK_DILIM dilim; fazlası tek "Diğer" diliminde toplanır. Sıfır / negatif atlanır.
+ * Pasta dilimleri: büyükten küçüğe; enCok verilirse (varsayılan sınırsız) fazlası tek "Diğer" diliminde toplanır. Sıfır / negatif atlanır.
  * @param {ReadonlyArray<{ etiket: string; deger: number }>} noktalar @param {number} [enCok]
  * @returns {Array<{ etiket: string; deger: number; yuzde: number; diger: boolean }>}
  */

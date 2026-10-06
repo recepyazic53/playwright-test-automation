@@ -255,8 +255,13 @@ test('biçim: yüzde (0,834 → %83,4; 83,4 → %83,4), binlik, ondalık, ön / 
   expect(degisimHesapla(8, 10)).toMatchObject({ fark: -2, yon: 'azalis' });
   expect(degisimHesapla(5, 0)).toMatchObject({ yuzde: null, yon: 'artis' });
   expect(degisimHesapla(5, null)).toBeNull();
-  const dilimler = pastaDilimleri(Array.from({ length: 11 }, (_, i) => ({ etiket: `K${i + 1}`, deger: (i + 1) * 3 })));
-  expect(dilimler).toHaveLength(EN_COK_DILIM);
+  // Varsayılan sınırsız: her satır kendi dilimi. Sınır verilirse fazlası "Diğer".
+  expect(EN_COK_DILIM).toBe(Infinity);
+  const tumu = pastaDilimleri(Array.from({ length: 11 }, (_, i) => ({ etiket: `K${i + 1}`, deger: (i + 1) * 3 })));
+  expect(tumu).toHaveLength(11);
+  expect(tumu.some((d) => d.diger)).toBe(false);
+  const dilimler = pastaDilimleri(Array.from({ length: 11 }, (_, i) => ({ etiket: `K${i + 1}`, deger: (i + 1) * 3 })), 8);
+  expect(dilimler).toHaveLength(8);
   expect(dilimler.map((d) => d.etiket)).toEqual(['K11', 'K10', 'K9', 'K8', 'K7', 'K6', 'K5', 'Diğer']);
   expect(dilimler[7]).toMatchObject({ deger: 30, diger: true });
   expect(dilimler.reduce((t, d) => t + d.yuzde, 0)).toBeCloseTo(100, 9);
