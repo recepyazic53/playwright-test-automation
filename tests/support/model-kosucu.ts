@@ -1131,6 +1131,29 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
  * servisin şablon senaryosunu servis motoruyla çalıştırır; kontrollerden biri tutmazsa adım kalır. Okunan değerler sonraki adımlara
  * ${akis:Ad} olarak geçer (açık değerler yalnız bellekte; gizliler maskelenir).
  */
+/**
+ * Ekran alanının değerindeki ${akis:Ad} (önceki SQL / servis adımında okunan değer) çözülür; okunmamış ad açık hata verir (alan
+ * yazılmaz). Gizli okunan değer yakalanan mesajlarda maskelenir.
+ */
+function akisDegeriniCoz(page: Page, alan: PlanAlani, adimBasligi: string, d: SqlDegerleri): PlanAlani {
+  if (typeof alan.deger !== 'string' || !alan.deger.includes('${')) return alan;
+  const eksik: string[] = [];
+  const deger = alan.deger.replace(/\$\{\s*akis:([^{}]+?)\s*\}/g, (tum, ad: string) => {
+    const v = d.degerler[ad.trim()];
+    if (v === undefined) { eksik.push(ad.trim()); return tum; }
+    return v;
+  });
+  if (eksik.length) {
+    const adlar = [...new Set(eksik)].map((a) => `\${akis:${a}}`).join(', ');
+    throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: ${adlar} önceki bir SQL / servis adımında okunur`,
+      `${adlar} okunmadı (okuma adı farklı ya da okuyan adım bu alandan sonra)`));
+  }
+  if (deger === alan.deger) return alan;
+  const y = mesajYakalayicisi(page);
+  for (const g of d.gizliler) if (g && deger.includes(g)) y?.gizliDegerEkle(g);
+  return { ...alan, deger };
+}
+
 async function servisAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: ServisTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
   const adres = process.env.PLATFORM_SONUC_ADRESI;
   const token = process.env.PLATFORM_SONUC_TOKENI;
@@ -1469,7 +1492,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         const doldurulanSecimler: Array<{ alan: PlanAlani; l: Locator; k: Kapsam }> = [];
         // Yazılan metin alanlarının değeri her alandan sonra yeniden okunur (hızlı testle ORTAK kural: alan-cikisi.ts > DegerIzleyici).
         const izleyici = new DegerIzleyici<PlanAlani>();
-        for (const alan of adim.alanlar) {
+        for (const hamAlan of adim.alanlar) {
+          const alan = hamAlan.atla ? hamAlan : akisDegeriniCoz(page, hamAlan, adim.baslik, sqlDegerleri);
           if (alan.atla) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, alan.atla));
             atlanan.push({ alan: alan.etiket, neden: alan.atla });

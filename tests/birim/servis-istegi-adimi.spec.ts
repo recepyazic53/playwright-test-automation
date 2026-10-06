@@ -66,7 +66,9 @@ test('akış tasarımı: servis bloğu modele (servisKontrolu) ve plana geçer, 
 
 const SAYFA = `<!doctype html><html lang="tr"><body><h1>Kayıt</h1>
 <label for="tc">TC</label><input id="tc"> <button id="kaydet" type="button">Kaydet</button><div id="durum"></div>
-<script>document.getElementById('kaydet').addEventListener('click', function () { document.getElementById('durum').textContent = 'Kaydedildi'; });</script></body></html>`;
+<label for="no">Kayıt no</label><input id="no"> <button id="onayla" type="button">Onayla</button><div id="onay"></div>
+<script>document.getElementById('kaydet').addEventListener('click', function () { document.getElementById('durum').textContent = 'Kaydedildi'; });
+document.getElementById('onayla').addEventListener('click', function () { document.getElementById('onay').textContent = 'Onaylandı: ' + document.getElementById('no').value; });</script></body></html>`;
 
 test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
   test.describe.configure({ mode: 'serial' });
@@ -87,8 +89,8 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
     expect(y.basarili, `${yol}: ${String(y.mesaj ?? '')} ${JSON.stringify(y.hatalar ?? '')}`).toBe(true);
     return y;
   };
-  const kos = async (baslik: string, tc: string): Promise<Nesne> => {
-    const yeni = await basarili('/platform/senaryo/kaydet', { projeId, ekranId, baslik, ortamIdleri: [ortamId], veri: { baslik, tc } });
+  const kos = async (baslik: string, tc: string, no = '${akis:No}'): Promise<Nesne> => {
+    const yeni = await basarili('/platform/senaryo/kaydet', { projeId, ekranId, baslik, ortamIdleri: [ortamId], veri: { baslik, tc, no } });
     const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: yeni.id, ortamId, canliOnay: true });
     expect(y.basarili, `${baslik}: ${String(y.mesaj ?? '')}`).toBe(true);
     return (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
@@ -129,6 +131,7 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
+    const noAlani = { id: 'no', tip: 'metin', etiket: { ekran: 'Kayıt no' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'no' }, konum: { secici: '#no', kirilganlik: 'dusuk' }, zorunlu: false };
     const alan = { id: 'tc', tip: 'metin', etiket: { ekran: 'TC' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'tc' }, konum: { secici: '#tc', kirilganlik: 'dusuk' }, zorunlu: false };
     const model = {
       semaSurumu: 2, tur: 'ekran', id: 'kayit', ad: 'Kayıt', aciklama: 'Servis isteği (nötr fikstür).', ekranUrl: '/kayit', girisGerekmez: true,
@@ -139,7 +142,9 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
           kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Kaydedildi', secici: '#durum' }, zamanAsimiSn: 10 } },
         { id: 'servis1', sira: 2, baslik: 'Serviste kayıt var', servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: '${tc}' }], okumalar: [{ ad: 'No', yol: 'no', kaynak: 'json' }] } },
         { id: 'servis2', sira: 3, baslik: 'Numarayla sorgu', servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: 'tekrar-${akis:No}' }] } },
-        { id: 'servis3', sira: 4, baslik: 'Hiç çalışmaz', gorunurluk: { kosul: 'hicbirZaman' }, servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: 'ATLANMALI' }] } }
+        { id: 'servis3', sira: 4, baslik: 'Hiç çalışmaz', gorunurluk: { kosul: 'hicbirZaman' }, servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: 'ATLANMALI' }] } },
+        { id: 'onay', sira: 5, baslik: 'Numara onaylanır', bolumler: [{ id: 'o', baslik: 'Onay', alanlar: [noAlani] }],
+          kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#onayla', aciklama: 'Onayla' }], basariGostergesi: { tur: 'metin', deger: 'Onaylandı: NO-12345', secici: '#onay' }, zamanAsimiSn: 10 } }
       ],
       senaryoDuzeyi: { alanlar: [{ id: 'baslik', tip: 'metin', etiket: { ekran: null, form: 'Başlık' }, zorunlu: true, benzersiz: true, yapilandirma: 'senaryo', eslesme: { senaryo: 'baslik' } }] },
       urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
@@ -162,9 +167,19 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
     const s = await kos('Kayıtlı TC', '12345');
     expect(s.durum, JSON.stringify(s.hataMesaji).slice(0, 400)).toBe('basarili');
     expect(gelenler.slice(once)).toEqual([{ tc: '12345' }, { tc: 'tekrar-NO-12345' }]);
+    // Ekran alanının değeri ${akis:No}: servisin yanıtından okunan numara sonraki ekran adımında alana yazılır (başarı metni
+    // "Onaylandı: NO-12345" ancak öyle görünür).
+    expect((s.adimlar as Nesne[]).map((a) => [a.ad, a.durum])).toContainEqual(['Numara onaylanır', 'basarili']);
     // Servisin geçmişinde "Dene" olarak görünür.
     const kosular = (await api(`/platform/servis/kosular?projeId=${projeId}&servisId=${servisId}`)) as Nesne;
     expect(JSON.stringify(kosular)).toContain('ekran koşusu');
+  });
+
+  test('ekran alanında okunmamış ${akis:…}: alan yazılmaz, adım hangi değerin okunmadığını söyleyerek kalır', async () => {
+    test.setTimeout(240_000);
+    const s = await kos('Okunmamış değer', '777', '${akis:Yok}');
+    expect(s.durum).toBe('basarisiz');
+    expect(String(s.hataMesaji)).toContain('${akis:Yok} okunmadı');
   });
 
   test('kontrol tutmazsa adım ve senaryo kalır; mesaj hangi kontrolün tutmadığını söyler', async () => {
@@ -173,6 +188,27 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
     expect(s.durum).toBe('basarisiz');
     expect(String(s.hataMesaji)).toContain('Serviste kayıt var: servis isteği başarısız');
     expect(String(s.hataMesaji)).toContain('durum');
+  });
+
+  test('arayüz: senaryo formunda alanın değeri önceki adımda okunan değer olur ("Önceki adımdan…" → ${akis:Ad} rozeti; okumadan önceki alanda seçim yok)', async () => {
+    test.setTimeout(120_000);
+    const tarayici = await korumaliTarayici();
+    try {
+      const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 1200 } })).newPage();
+      const hatalar: string[] = [];
+      page.on('pageerror', (e) => hatalar.push(String(e)));
+      await page.goto(`/#/senaryolar/yeni/${encodeURIComponent(ekranId)}`);
+      const no = page.locator('[data-alan="no"]');
+      const secim = no.getByRole('combobox', { name: 'Kayıt no: önceki adımda okunan değer' });
+      await expect(secim).toBeVisible();
+      await expect(page.locator('[data-alan="tc"]').getByRole('combobox', { name: /önceki adımda okunan değer/ })).toHaveCount(0);
+      await secim.selectOption({ label: 'No (Serviste kayıt var)' });
+      await expect(no).toContainText('Önceki adımdan: No');
+      await expect(no).toContainText('Serviste kayıt var adımında okunur');
+      await no.getByRole('button', { name: 'Kayıt no: önceki adımdan almayı kaldır' }).click();
+      await expect(no.getByRole('textbox')).toHaveValue('');
+      expect(hatalar).toEqual([]);
+    } finally { await tarayici.close(); }
   });
 
   test('arayüz: akış diyagramında "Servis isteği" bloğu — servis + şablon senaryo seçilir, şablondaki değişken atamaya eklenir; kaydedince modelde', async () => {

@@ -78,6 +78,7 @@ export const MESAJLAR = Object.freeze({
     `${adGoster(etiket)} için kullanılacak varsayılan test verisi kaydının son kullanma tarihi (${aaYyyy}) geçmiş; adım bu kayıtla reddedilebilir. Test verisindeki kaydı güncelleyin ya da senaryoya özel değer girin.`,
   eskiBeklenenSonucAlanlari: (alanlar) =>
     `Eski ${alanlar.map((a) => `"${a}"`).join('/')} alanları artık desteklenmiyor; "beklenenSonuc": { "tip": "isKuraliHatasi", "adim": "...", "mesaj": "..." } kullanın.`,
+  akisDegeriAlamaz: (etiket) => `${adGoster(etiket)} önceki adımda okunan değeri (\${akis:Ad}) alamaz; değeri doğrudan seçin.`,
   tabloBasvurusuAlamaz: (etiket) => `${adGoster(etiket)} test verisi tablosundan değer (\${Tablo.Sütun}) alamaz; değeri doğrudan seçin.`,
   tabloYok: (etiket, tablo) => `${adGoster(etiket)} için "${tablo}" adında test verisi tablosu yok (Test verisi > Tablolar).`,
   tabloSutunuYok: (etiket, tablo, sutun) => `${adGoster(etiket)} için "${tablo}" tablosunda "${sutun}" sütunu yok.`,
@@ -108,6 +109,18 @@ const TABLO_BASVURUSU = new RegExp(`^\\s*\\$\\{\\s*(${TABLO_ADI_KALIBI})(?:\\[([
  * E/H); dosya alanında değer izinli klasördeki dosyanın adıdır (ikisi de koşuda denetlenir; ekran-basvurulari.mjs ekrandakiDeger).
  */
 const TABLODAN_ALABILIR = ['secim', 'okluSecim', 'radyo', 'metin', 'sayi', 'tarih', 'telefon', 'onayKutusu', 'dosya'];
+
+/** Önceki SQL / servis adımında okunan değer: değerin tamamı "${akis:Ad}" (koşuda çözülür). */
+const AKIS_DEGERI = /^\s*\$\{\s*akis:([\p{L}_][\p{L}\p{N}_.-]{0,59})\s*\}\s*$/u;
+/** Önceki adımda okunan değeri alabilen alan tipleri (çözülen değer yazılır). */
+const AKIS_ALABILIR = ['metin', 'sayi', 'tarih', 'telefon'];
+
+/** Değerin tamamı "${akis:Ad}" ise okumanın adı, değilse null. @param {unknown} deger */
+export function akisDegeriCoz(deger) {
+  if (typeof deger !== 'string') return null;
+  const m = AKIS_DEGERI.exec(deger);
+  return m ? m[1] : null;
+}
 
 /** Değerin tamamı "${Tablo.Sütun}" ise { tablo, etiket, sutun, bicim }, değilse null. */
 export function tabloBasvurusuCoz(deger) {
@@ -503,6 +516,8 @@ function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
     let adaylar = [deger];
     // Değeri tablodan (${Tablo.Sütun}) gelen alan: seçilen satırdan değer TEK ise (baglam.tabloDegeri) o değerle değerlendirilir;
     // çözücü yoksa ya da değer satıra göre değişiyorsa (çoklu satır, "uyan tüm satırlar", seçimsiz çok satırlı tablo) bilinmiyor.
+    // Önceki adımda okunan değer (${akis:Ad}) koşuda belli olur: koşul bilinmiyor.
+    if (akisDegeriCoz(deger)) return null;
     const tb = tabloBasvurusuCoz(deger);
     if (tb) {
       const c = typeof b.tabloDegeri === 'function' ? b.tabloDegeri(tb) : null;
@@ -909,6 +924,11 @@ export function senaryoyuDogrula(senaryo, baglam) {
     if (tb) {
       tabloBasvurusunuDogrula(alan, anahtar, tb, baglam.tablolar, rapor);
       if (gorunur === false) rapor.uyari(anahtar, MESAJLAR.gorunmeyenAlan(etiketi(alan)));
+      continue;
+    }
+    // Değer önceki SQL / servis adımında okunan değer: ${akis:Ad} (biçim / seçenek denetimi koşuda çözülen değere kalır).
+    if (akisDegeriCoz(deger)) {
+      if (!AKIS_ALABILIR.includes(alan.tip)) rapor.hata(anahtar, MESAJLAR.akisDegeriAlamaz(etiketi(alan)));
       continue;
     }
     // Girdide bağlam kodu elle yazıldıysa (baglamKodu) profil anahtarı kullanılmaz.

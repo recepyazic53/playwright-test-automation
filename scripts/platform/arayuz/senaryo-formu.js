@@ -22,7 +22,7 @@ import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
-import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
+import { BILEREK_BOS_ANAHTARI, akisDegeriCoz, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { doldurDugmesi, tumunuDoldurDugmesi } from './doldur.js';
 import { SATIR_KIMLIGI, basvuru, basvurununTekDegeri, degerBasvurusuYaz, formSuzgecleri, grupAnahtari, satirUyumu, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
@@ -144,6 +144,23 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const sema = formSemasiOlustur(baglam.model, baglam.altModeller);
   // Alanların görünürlük koşulları (dal düzeni: kontrol seçimi önde, kayıt grupları seçime göre; senaryo-dallari.mjs).
   const kosullar = kosulHaritasi(baglam.model);
+  // Alanın adımından ÖNCEKİ SQL / servis adımlarının okumaları: alanın değeri ${akis:Ad} olabilir (koşuda okunan değer yazılır).
+  const akisOkumalari = (() => {
+    const adimlar = (Array.isArray(baglam.model?.adimlar) ? baglam.model.adimlar : []).filter((x) => x && typeof x.id === 'string');
+    /** @type {Map<string, Array<{ ad: string; adim: string }>>} */
+    const harita = new Map();
+    /** @type {Array<{ ad: string; adim: string }>} */
+    const biriken = [];
+    for (const a of adimlar) {
+      harita.set(a.id, biriken.slice());
+      const okumalar = a.sqlKontrolu?.okumalar ?? a.servisKontrolu?.okumalar;
+      for (const o of Array.isArray(okumalar) ? okumalar : []) {
+        if (o && typeof o.ad === 'string' && !biriken.some((b) => b.ad === o.ad)) biriken.push({ ad: o.ad, adim: String(a.baslik || a.id) });
+      }
+    }
+    return (/** @type {string | undefined} */ adimId) => (adimId && harita.get(adimId)) || [];
+  })();
+  const AKIS_ALABILIR = ['metin', 'sayi', 'tarih', 'telefon'];
   // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
   const onceki = s.taslak?.veri || senaryo?.veri || undefined;
   // Yeni senaryo: isteğe bağlı genel senaryoların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
@@ -1240,8 +1257,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ({ govde, ust } = altModelCiz(alan, id, hata, uyari));
           break;
         case 'tarih':
-          // Hassas tarih alanı (maskeli) düz metin girdisiyle kalır (aşağıdaki varsayılan).
-          if (!alan.hassas) {
+          // Hassas tarih alanı (maskeli) ve önceki adımdan (${akis:Ad}) alan tarih aşağıdaki varsayılanla çizilir.
+          if (!alan.hassas && !akisDegeriCoz(degerler[alan.anahtar])) {
             const tg = tarihGirdisi({
               id, etiket: alan.etiket, deger: degerler[alan.anahtar], bicim: alan.bicim, sinirlar: alan.sinirlar ?? null,
               referans: senaryo?.guncellenme ?? null, tablodan: tabloSecenegi(alan), tabloBasvurusu: tabloBasvurusuCoz,
@@ -1254,6 +1271,18 @@ function modelFormu(icerik, s, senaryo, baglam) {
           }
         // falls through
         default: {
+          // Değeri önceki SQL / servis adımında okunan değer (${akis:Ad}): "Önceki adımdan: Ad" rozeti + Kaldır.
+          const okunan = akisDegeriCoz(degerler[alan.anahtar]);
+          if (okunan) {
+            const kaldir = h('button', { type: 'button', class: 'kucuk-dugme hayalet', id, 'aria-label': `${alan.etiket}: önceki adımdan almayı kaldır` }, ikon('carpi'), 'Kaldır');
+            kaldir.addEventListener('click', () => { degerYaz(alan.anahtar, ''); kayit.ciz(); });
+            const kaynak = akisOkumalari(alan.adimId).find((o) => o.ad === okunan);
+            ust = alanUst(alan, id);
+            govde = h('div', { class: 'tablodan-deger' }, ikon('simsek'),
+              h('span', {}, `Önceki adımdan: ${okunan}`, h('small', { class: 'soluk' }, kaynak ? ` · ${kaynak.adim} adımında okunur` : ' · bu alandan önce okuyan adım yok; koşuda hata verir')), kaldir);
+            kontrolKaydet(alan.anahtar, [kaldir], hata, uyari);
+            break;
+          }
           // Değeri tablo başvurusu (${Tablo.Sütun}) olan alan: ham ${…} yerine "Tablodan: Tablo › Sütun" rozeti + Kaldır.
           const tb = tabloBasvurusuCoz(degerler[alan.anahtar]);
           if (tb) {
@@ -1286,7 +1315,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
             type: 'button', class: 'kucuk-dugme hayalet', title: tablodan.metin, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
             onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
           }, ikon('veri'), 'Tablodan') : null;
-          ust = alanUst(alan, id, tablodanDugmesi ? [tablodanDugmesi] : []);
+          // Önceki SQL / servis adımında okunan değer: seçilince değer ${akis:Ad} olur (koşuda okunan değer yazılır).
+          const okumalar = !alan.hassas && AKIS_ALABILIR.includes(alan.tip) ? akisOkumalari(alan.adimId) : [];
+          const akisSecimi = okumalar.length ? h('select', {
+            class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
+            onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
+          }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})`))) : null;
+          ust = alanUst(alan, id, [tablodanDugmesi, akisSecimi].filter(Boolean));
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);
         }
       }
