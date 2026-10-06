@@ -16,7 +16,7 @@
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
-import { GENEL_SUTUNLAR, baslikNormal, benzerTablolar } from '../tablolar/tablo-benzerligi.mjs';
+import { GENEL_SUTUNLAR, baslikNormal, benzerTablolar, uzaklik } from '../tablolar/tablo-benzerligi.mjs';
 import { birlestirmePlani } from '../tablolar/paket-test-verisi.mjs';
 import { ayniKavramMi, benzerAdMi, kisiAdKavrami, kokEslesirMi } from '../tablolar/doldur-onerisi.mjs';
 import { degerBasvurusuYaz, grupAnahtari, satirSabitlemesi } from '../tablolar/tablo-secimi.mjs';
@@ -88,14 +88,27 @@ export function sutunEslemesi(t, m) {
   /** @type {SutunAdayi['eslesme']} */
   const eslesme = [];
   for (const tur of /** @type {const} */ (['birebir', 'benzer'])) {
-    for (const s of t.sutunlar) {
-      if (eslesme.some((e) => e.plan === s.ad)) continue;
-      const c = m.sutunlar.find((x) => !kullanilan.has(x.ad) && !(t.tur === 'liste' && x.gizli)
-        && adlari(s.ad).some((ad) => adEslesmesi(ad, x.ad) === tur));
-      if (c) { kullanilan.add(c.ad); eslesme.push({ plan: s.ad, hedef: c.ad, tur }); }
+    // Adaylar adı en yakın olandan başlayarak eşlenir (sütun sırasıyla değil): "Telefon (kod)" → "Telefon kodu", "Telefon (numara)" →
+    // "Telefon numarası"; ilk benzer sütunu ("Telefon") kapıp sonrakini kaydırmaz.
+    /** @type {Array<{ plan: string; hedef: string; puan: number; sira: number }>} */
+    const adaylar = [];
+    t.sutunlar.forEach((s, sira) => {
+      if (eslesme.some((e) => e.plan === s.ad)) return;
+      for (const x of m.sutunlar) {
+        if (kullanilan.has(x.ad) || (t.tur === 'liste' && x.gizli)) continue;
+        const uyan = adlari(s.ad).filter((ad) => adEslesmesi(ad, x.ad) === tur);
+        if (uyan.length) adaylar.push({ plan: s.ad, hedef: x.ad, puan: Math.min(...uyan.map((ad) => uzaklik(baslikNormal(ad), baslikNormal(x.ad)))), sira });
+      }
+    });
+    adaylar.sort((a, b) => a.puan - b.puan || a.sira - b.sira);
+    for (const a of adaylar) {
+      if (kullanilan.has(a.hedef) || eslesme.some((e) => e.plan === a.plan)) continue;
+      kullanilan.add(a.hedef);
+      eslesme.push({ plan: a.plan, hedef: a.hedef, tur });
     }
   }
-  return eslesme;
+  const sira = new Map(t.sutunlar.map((s, i) => [s.ad, i]));
+  return eslesme.sort((a, b) => (sira.get(a.plan) ?? 0) - (sira.get(b.plan) ?? 0));
 }
 
 /**

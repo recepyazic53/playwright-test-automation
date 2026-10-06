@@ -29,6 +29,15 @@ const ILLER = [s('06', 'Ankara'), s('35', 'İzmir'), s('16', 'Bursa'), s('01', '
 const ADRES_SATIRLARI = [['Ankara', '06100'], ['İzmir', '35200'], ['Bursa', '16000'], ['Adana', '01100']].map(([ad, kod]) => ({ ad, degerler: { 'Adres kodu': kod } }));
 
 test.describe('saf kurallar', () => {
+  test('çok parçalı telefon: parçalar adı en yakın sütuna eşlenir (kod → Telefon kodu, numara → Telefon numarası); ilk benzer sütun kaydırmaz', () => {
+    const kisi = planKur({
+      baslik: 'Tel', alanlar: [{ anahtar: 'tk', tur: 'text', etiket: 'Cep Telefonu', kimlik: 'TelefonKodu' }, { anahtar: 'tn', tur: 'text', etiket: 'Cep Telefonu (2)', kimlik: 'Telefonu' }],
+      degerler: { tk: { deger: '532' }, tn: { deger: '1234567' } }
+    }).tablolar.find((x) => x.ad === 'Kişi bilgileri') as PlanTablosu;
+    const a = mevcutSutunAdaylari(kisi, [{ id: 'k', ad: 'Kişi', sutunlar: ['Telefon', 'Telefon kodu', 'Telefon numarası'].map((ad) => ({ ad })), satirlar: [] }]);
+    expect(a[0]?.eslesme.map((e) => [e.plan, e.hedef])).toEqual([['Telefon (kod)', 'Telefon kodu'], ['Telefon (numara)', 'Telefon numarası']]);
+  });
+
   test('alan adı ↔ sütun adı: birebir (harf / Türkçe karakter / noktalama farkı yok), benzer (kısaltma, eş anlam, kök), ilgisiz', () => {
     expect(adEslesmesi('Adres Kodu', 'Adres kodu')).toBe('birebir');
     expect(adEslesmesi('ADRES KODU:', 'adres-kodu')).toBe('birebir');

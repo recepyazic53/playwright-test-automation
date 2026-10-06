@@ -25,7 +25,7 @@ export function baslikNormal(ad) {
 }
 
 /** İki normal ad arasındaki düzenleme uzaklığı (kısa adlar için). @param {string} a @param {string} b */
-function uzaklik(a, b) {
+export function uzaklik(a, b) {
   if (a === b) return 0;
   const d = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
