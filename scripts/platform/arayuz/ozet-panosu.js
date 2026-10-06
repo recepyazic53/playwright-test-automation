@@ -17,7 +17,7 @@
 //   satırdan), tablo, liste, durum kutucukları, çubuk, çizgi, pasta / halka (en çok 8 dilim + "Diğer"). Biçim (ondalık, ön / son ek,
 //   tarih, oran) ve eşik kuralı pano-duzeni.mjs'de (saf). Grafikler SVG özniteliğiyle çizilir (satır içi stil yok).
 // DOM'a yalnız metin yazılır (h(); innerHTML yok); bağlantılar yalnız Nöbetçi içi adreslere (#/…) gider.
-import { api, bildir, degisiklikleriBirak, alan, h, ikon, kayitIzi, mesgulIken, rozet, s, yatayKaydirmaIpucu, yeniKimlik, yerlestir } from './ortak.js';
+import { api, bildir, canliOnayPenceresi, degisiklikleriBirak, alan, h, ikon, kayitIzi, mesgulIken, rozet, s, yatayKaydirmaIpucu, yeniKimlik, yerlestir } from './ortak.js';
 import {
   ESIK_ISLECLERI, ESIK_RENKLERI, EN_COK_BAGLANTI, EN_COK_ESIK, GOSTERGE_SECENEKLERI, IC_SAYFALAR, LISTE_EN_COK, ONDALIK_SECENEKLERI,
   ORAN_SECENEKLERI, OZEL_KART_TURLERI, SQL_GORUNUMLERI, TARIH_BICIMLERI, VERI_SABLONLARI, IZGARA_BOSLUK, IZGARA_SUTUN, SATIR_BIRIMI,
@@ -26,7 +26,8 @@ import {
   SUTUN_GENISLIGI, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, pastaDilimleri, sayiBicimle, sayiyaCevir, turAdi, varsayilanDuzen, varsayilanMi, yerlesikMi, yuzdeBicimle, yuzdeDegeri,
   donemMetni, donemTemizle, kartDonemle, kartDonemliMi, SQL_ZAMAN_ASIMI_SN, sqlZamanAsimiTemizle,
   EN_COK_KART_PARAMETRESI, kartParametreDegeri, kartParametrele, kartParametreleri,
-  EN_COK_SUTUN_BICIMI, ROZET_RENKLERI, SUTUN_BICIM_TURLERI, esikleriOku, hucreSunumu, rozetKurallariniOku, KART_SIMGELERI, ikinciDeger
+  EN_COK_SUTUN_BICIMI, ROZET_RENKLERI, SUTUN_BICIM_TURLERI, esikleriOku, hucreSunumu, rozetKurallariniOku, KART_SIMGELERI, ikinciDeger,
+  OTOMATIK_YENILEME_DK, etkinHedef
 } from './pano-duzeni.mjs';
 import { SONUC_ARALIGI, tarihAraligiSecici } from './tarih-araligi.js';
 import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBicimle, metotOner, satirZamani, uzunMetinMi } from './buyuk-metin.mjs';
@@ -74,7 +75,9 @@ const kartImzasi = (k, duzen = null) => {
   const t = k.ayar?.tiklama;
   const hedef = t && duzen ? duzen.kartlar.find((x) => x.id === t.kartId) : null;
   return `${k.tur}:${JSON.stringify(k.ayar ?? null)}:${JSON.stringify(k.donem ?? null)}:${JSON.stringify(k.parametreDegerleri ?? null)}`
-    + (hedef ? `:${kartParametreDegeri(hedef, t.parametre) ?? ''}` : '');
+    + (hedef ? `:${kartParametreDegeri(hedef, t.parametre) ?? ''}` : '')
+    // Panonun ortamı: mantıksal veritabanına bağlı kartın hedef rozeti ve sonucu ortama göre.
+    + (k.ayar?.hedef?.veritabaniId ? `:o=${duzen?.ortamId ?? ''}` : '');
 };
 
 /**
@@ -142,7 +145,24 @@ export function ozetPanosu(kap, s0) {
   const yardimId = yeniKimlik('pano-yardim');
   const cubuk = h('div', { class: 'pano-duzen-cubugu', hidden: true, role: 'region', 'aria-label': 'Pano düzenleme' });
   const bosNot = h('div', { class: 'pano-bos', hidden: true });
-  yerlestir(kap, cubuk, duyuru, bosNot, pano);
+  // ---- Üst şerit: başlık / açıklama, ortam, tüm kartların dönemi, otomatik yenileme, Tümünü yenile, son güncelleme ----------------
+  /** Kart kimliği → kartı yenileyen işlev (sqlKarti kaydeder). @type {Map<string, () => Promise<void>>} */
+  const yenileyiciler = new Map();
+  /** CANLI onayının anahtarı: kart + etkin hedef (pano ortamı dahil) + sorgu; bu oturumda hatırlanır. @param {any} k */
+  const onayAnahtari = (k) => `${proje.id}:${k.id}:${JSON.stringify([etkinHedef(k, kayitli.duzen), k.ayar.sorgu])}`;
+  const serit = h('div', { class: 'pano-serit', role: 'region', 'aria-label': 'Pano denetimleri' });
+  const seritBaslik = h('div', { class: 'pano-serit-baslik' });
+  const ortamSec = h('select', { class: 'pano-serit-secim', 'aria-label': 'Pano ortamı' });
+  const ortamKap = h('label', { class: 'pano-serit-alan', hidden: true, title: 'Mantıksal veritabanına bağlı SQL kartları bu ortamın eşlemesiyle sorgulanır' }, ikon('ag'), ortamSec);
+  const donemKap = h('span', { class: 'pano-serit-donem' });
+  const otoSec = h('select', { class: 'pano-serit-secim', 'aria-label': 'Otomatik yenileme' },
+    OTOMATIK_YENILEME_DK.map((dk) => h('option', { value: String(dk) }, dk ? `Her ${dk} dk yenile` : 'Otomatik yenileme kapalı')));
+  const otoDurum = h('button', { type: 'button', class: 'kucuk-dugme hayalet pano-oto-durum', hidden: true }, ikon('oynat'), 'Başlat');
+  const tumunuYenileDugmesi = h('button', { type: 'button', class: 'pano-tumunu-yenile' }, ikon('yenile'), 'Tümünü yenile');
+  const sonGuncelleme = h('span', { class: 'soluk kucuk pano-son-guncelleme' });
+  const seritAraclari = h('div', { class: 'pano-serit-araclar' }, ortamKap, donemKap, h('label', { class: 'pano-serit-alan' }, ikon('saat'), otoSec), otoDurum, tumunuYenileDugmesi, sonGuncelleme);
+  serit.append(seritBaslik, seritAraclari);
+  yerlestir(kap, serit, cubuk, duyuru, bosNot, pano);
 
   const duzenleDugmesi = h('button', { type: 'button', class: 'pano-duzenle-dugmesi', title: 'Kartları ekleyin, kaldırın, taşıyın ya da boyutlandırın (proje için saklanır)' },
     ikon('izgara'), 'Panoyu düzenle');
@@ -199,6 +219,154 @@ export function ozetPanosu(kap, s0) {
     duzenleDugmesi.focus();
   }
 
+  // ---- Üst şerit işlevleri ----------------------------------------------------------------------------------------------
+  const sqlKartlari = () => kayitli.duzen.kartlar.filter((/** @type {any} */ k) => k.tur === 'sql' && k.ayar);
+  /** Kartın etkin hedefi CANLI ortamda mı (seçeneklerden: veritabanı × ortam ya da bağlantının CANLI işareti). @param {any} k @param {any} se */
+  const kartCanliMi = (k, se) => {
+    const hd = etkinHedef(k, kayitli.duzen);
+    if (hd.veritabaniId) return Boolean(se.veritabanlari.find((/** @type {any} */ v) => v.id === hd.veritabaniId)?.ortamlar.find((/** @type {any} */ o) => o.id === hd.ortamId)?.canli);
+    return Boolean(se.baglantilar.find((/** @type {any} */ b) => b.id === hd.baglantiId)?.canli);
+  };
+  let tumuCalisiyor = false;
+  /** Otomatik yenileme bu oturumda başlatıldı mı (CANLI kart varsa kullanıcı bir kez onaylar; sayfa yeniden açılınca yine sorulur). */
+  let otomatikOnayli = false;
+  /** @type {ReturnType<typeof setInterval> | null} */
+  let otomatikZamanlayici = null;
+
+  /**
+   * SQL kartlarını yeniler (en çok 2 eşzamanlı). CANLI ortama sorgu atacak, bu oturumda onaylanmamış kart varsa TEK onay sorulur.
+   * sessiz (otomatik yenileme): onay gerekiyorsa sormaz, otomatik yenileme "Başlat"a döner.
+   * @param {{ idler?: string[]; sessiz?: boolean }} [s]
+   */
+  async function tumunuYenile(s = {}) {
+    if (tumuCalisiyor || duzenleniyor) return;
+    const kartlar = sqlKartlari().filter((/** @type {any} */ k) => !s.idler || s.idler.includes(k.id));
+    if (!kartlar.length) return;
+    let se = null;
+    try { se = await secenekler(); } catch { se = null; }
+    const onaysiz = se ? kartlar.filter((/** @type {any} */ k) => kartCanliMi(k, se) && !canliOnaylari.has(onayAnahtari(k))) : [];
+    if (onaysiz.length) {
+      if (s.sessiz) { otomatikOnayli = false; seritGuncelle(); return; }
+      const ortamlar = [...new Set(onaysiz.map((/** @type {any} */ k) => {
+        const hd = etkinHedef(k, kayitli.duzen);
+        return hd.veritabaniId ? se.veritabanlari.find((/** @type {any} */ v) => v.id === hd.veritabaniId)?.ortamlar.find((/** @type {any} */ o) => o.id === hd.ortamId)?.ad : se.baglantilar.find((/** @type {any} */ b) => b.id === hd.baglantiId)?.ad;
+      }).filter(Boolean))];
+      if (!(await canliOnayPenceresi(ortamlar.join(', ') || 'CANLI'))) return;
+      for (const k of onaysiz) canliOnaylari.add(onayAnahtari(k));
+    }
+    tumuCalisiyor = true;
+    const kuyruk = [...kartlar];
+    const isci = async () => { for (let k = kuyruk.shift(); k; k = kuyruk.shift()) await yenileyiciler.get(k.id)?.(); };
+    try {
+      await mesgulIken(tumunuYenileDugmesi, 'Yenileniyor…', () => Promise.all([isci(), isci()]));
+    } finally {
+      tumuCalisiyor = false;
+      seritGuncelle();
+    }
+  }
+
+  /** Şeridi düzene göre çizer (başlık; düzenlemede başlık / açıklama girdileri; ortam ve dönem seçimleri; otomatik yenileme). */
+  function seritGuncelle() {
+    const d = etkinDuzen();
+    if (duzenleniyor) {
+      const baslik = h('input', { type: 'text', maxlength: 80, value: d.baslik || '', placeholder: 'ör. Canlı servis durumu', 'aria-label': 'Pano başlığı' });
+      const aciklama = h('input', { type: 'text', maxlength: 200, value: d.aciklama || '', placeholder: 'ör. Anlık servis sağlığı ve artan hatalar', 'aria-label': 'Pano açıklaması' });
+      baslik.addEventListener('input', () => { calisan = { ...calisan, baslik: baslik.value }; degisti(); });
+      aciklama.addEventListener('input', () => { calisan = { ...calisan, aciklama: aciklama.value }; degisti(); });
+      if (!seritBaslik.querySelector('input')) yerlestir(seritBaslik, baslik, aciklama);
+    } else {
+      yerlestir(seritBaslik, d.baslik ? h('h2', { class: 'pano-serit-adi' }, d.baslik) : null, d.aciklama ? h('p', { class: 'soluk kucuk pano-serit-aciklama' }, d.aciklama) : null);
+    }
+    seritAraclari.hidden = duzenleniyor;
+    const sql = sqlKartlari();
+    // Ortam: mantıksal veritabanına bağlı kart varsa; seçenekler bu veritabanlarının eşlemesi olan ortamlar.
+    const vtIdler = new Set(sql.map((/** @type {any} */ k) => k.ayar.hedef?.veritabaniId).filter(Boolean));
+    ortamKap.hidden = !vtIdler.size;
+    if (vtIdler.size) {
+      secenekler().then((se) => {
+        /** @type {Map<string, { ad: string; canli: boolean }>} */
+        const ortamlar = new Map();
+        for (const v of se.veritabanlari) if (vtIdler.has(v.id)) for (const o of v.ortamlar) ortamlar.set(o.id, { ad: o.ad, canli: Boolean(o.canli) });
+        yerlestir(ortamSec, h('option', { value: '' }, 'Ortam: kartların kendi seçimi'),
+          [...ortamlar].map(([id, o]) => h('option', { value: id, selected: id === kayitli.duzen.ortamId }, `Ortam: ${o.ad}${o.canli ? ' (CANLI)' : ''}`)));
+        ortamSec.value = kayitli.duzen.ortamId || '';
+        ortamKap.classList.toggle('canli', Boolean(kayitli.duzen.ortamId && ortamlar.get(kayitli.duzen.ortamId)?.canli));
+      }).catch(() => { ortamKap.hidden = true; });
+    }
+    // Tüm kartların dönemi (döneme bağlı kart varsa): seçilen dönem hepsine yazılır ve yenilenir.
+    const donemliler = sql.filter((/** @type {any} */ k) => kartDonemliMi(k));
+    if (donemliler.length) {
+      const ortak = donemliler.every((/** @type {any} */ k) => JSON.stringify(k.donem) === JSON.stringify(donemliler[0].donem)) ? donemliler[0].donem : null;
+      const secici = tarihAraligiSecici({
+        deger: ortak || gocDonemi(), anahtar: null, kisa: true, etiket: 'Dönem: tüm kartlar',
+        degisti: (dg) => {
+          const x = /** @type {any} */ (dg);
+          tumDonemSec(x.hizli ? { hizli: x.hizli } : { baslangic: x.baslangic || new Date(0).toISOString(), bitis: x.bitis || new Date().toISOString() });
+        }
+      });
+      secici.classList.add('pano-donem');
+      yerlestir(donemKap, secici);
+    } else yerlestir(donemKap);
+    otoSec.value = String(kayitli.duzen.otomatikYenileDk || 0);
+    otoDurum.hidden = !(kayitli.duzen.otomatikYenileDk && !otomatikOnayli);
+    const zamanlar = sql.map((/** @type {any} */ k) => kayitli.sqlSonuclari[k.id]?.zaman).filter(Boolean).sort();
+    sonGuncelleme.textContent = zamanlar.length ? `Son güncelleme: ${sonVeriMetni(zamanlar[zamanlar.length - 1])}` : '';
+    otomatikKur();
+  }
+
+  /** Otomatik yenileme zamanlayıcısı: aralık seçili ve onaylıysa; sayfa gizliyken ya da düzenlemede atlanır. */
+  function otomatikKur() {
+    const dk = kayitli.duzen.otomatikYenileDk || 0;
+    const anahtar = otomatikOnayli && dk && !duzenleniyor ? dk : 0;
+    if (/** @type {any} */ (otomatikKur).aralik === anahtar) return;
+    /** @type {any} */ (otomatikKur).aralik = anahtar;
+    if (otomatikZamanlayici) clearInterval(otomatikZamanlayici);
+    otomatikZamanlayici = anahtar ? setInterval(() => {
+      if (!pano.isConnected) { if (otomatikZamanlayici) clearInterval(otomatikZamanlayici); return; }
+      if (document.hidden || duzenleniyor) return;
+      tumunuYenile({ sessiz: true });
+    }, anahtar * 60_000) : null;
+  }
+
+  /** Panonun ortak ayarını kaydeder (ortam, otomatik yenileme). @param {Record<string, unknown>} ayar */
+  async function panoAyariKaydet(ayar) {
+    const y = await api('/platform/pano/ayar', { govde: { projeId: proje.id, ayar } });
+    kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || kayitli.sqlSonuclari };
+  }
+
+  ortamSec.addEventListener('change', async () => {
+    try { await panoAyariKaydet({ ortamId: ortamSec.value }); } catch (e) { if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata'); return; }
+    ciz();
+    duyur(`Ortam: ${ortamSec.selectedOptions[0]?.textContent || ''}`);
+    // Ortamdan etkilenen kartlar (mantıksal veritabanına bağlı) yenilenir.
+    tumunuYenile({ idler: sqlKartlari().filter((/** @type {any} */ k) => k.ayar.hedef?.veritabaniId).map((/** @type {any} */ k) => k.id) });
+  });
+  /** @param {object} donem */
+  async function tumDonemSec(donem) {
+    const idler = sqlKartlari().filter((/** @type {any} */ k) => kartDonemliMi(k)).map((/** @type {any} */ k) => k.id);
+    try {
+      const y = await api('/platform/pano/donem', { govde: { projeId: proje.id, donemler: Object.fromEntries(idler.map((id) => [id, donem])) } });
+      kayitli = { duzen: y.duzen, sqlSonuclari: y.sqlSonuclari || kayitli.sqlSonuclari };
+    } catch (e) { if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata'); return; }
+    ciz();
+    duyur(`Tüm kartların dönemi: ${donemMetni(donem)}.`);
+    tumunuYenile({ idler });
+  }
+  otoSec.addEventListener('change', async () => {
+    const dk = Number(otoSec.value);
+    try { await panoAyariKaydet({ otomatikYenileDk: dk }); } catch (e) { if (!(e && e.durum === 423)) bildir(e && e.message ? e.message : String(e), 'hata'); return; }
+    // Açılınca hemen bir kez yenilenir (CANLI kart varsa onay burada sorulur); onay verilmezse "Başlat" bekler.
+    otomatikOnayli = false;
+    if (dk) { await tumunuYenile(); otomatikOnayli = !sqlKartlari().some((/** @type {any} */ k) => !canliOnaylari.has(onayAnahtari(k))) || await canliKartYok(); }
+    seritGuncelle();
+  });
+  otoDurum.addEventListener('click', async () => { await tumunuYenile(); otomatikOnayli = await canliKartYok() || sqlKartlari().every((/** @type {any} */ k) => canliOnaylari.has(onayAnahtari(k))); seritGuncelle(); });
+  /** Onay gerektiren (CANLI, bu oturumda onaylanmamış) kart yok mu. */
+  async function canliKartYok() {
+    try { const se = await secenekler(); return !sqlKartlari().some((/** @type {any} */ k) => kartCanliMi(k, se) && !canliOnaylari.has(onayAnahtari(k))); } catch { return false; }
+  }
+  tumunuYenileDugmesi.addEventListener('click', () => tumunuYenile());
+
   // ---- Çizim ------------------------------------------------------------------------------------------------------------
   // Bırakılacak hücrenin gölgesi (sürükleme / boyutlandırma sırasında; ekran okuyucudan gizli).
   const golge = h('div', { class: 'pano-golge', 'aria-hidden': 'true', hidden: true });
@@ -221,6 +389,7 @@ export function ozetPanosu(kap, s0) {
       ? 'Panoda kart yok. "Kart ekle" ile kart ekleyin ya da "Varsayılana dön"e basın.'
       : 'Panoda kart yok. "Panoyu düzenle" ile kart ekleyebilirsiniz.')]));
     varsayilanDugmesi.disabled = duzenleniyor && varsayilanMi(calisan);
+    seritGuncelle();
     yerlesimiGuncelle();
     geriYukle();
   }
@@ -990,7 +1159,6 @@ export function ozetPanosu(kap, s0) {
     const hata = h('div', { class: 'not-kutusu hata', role: 'alert', hidden: true });
     const hedefRozeti = h('span', { class: 'pano-hedef' });
     const yenile = h('button', { type: 'button', class: 'kucuk-dugme pano-yenile', 'aria-label': `Yenile: ${a.baslik}`, title: 'Sorguyu şimdi çalıştır' }, ikon('yenile'), 'Yenile');
-    const onayAnahtari = `${proje.id}:${k.id}:${JSON.stringify([a.hedef, a.sorgu])}`;
     // Sorguda :baslangic / :bitis varsa kart başlığında dönem seçimi (değerler sunucuda sürücü parametresi olarak bağlanır).
     const donemli = kartDonemliMi(k);
     const sonucCiz = (sonuc) => {
@@ -1008,7 +1176,10 @@ export function ozetPanosu(kap, s0) {
         // Kart parametresi: sonuç hangi değerle alındı; seçim sonradan değiştiyse (ör. yenileme başarısız) Yenile gerektiği söylenir.
         sonuc.parametreler ? h('span', { class: 'pano-sonuc-parametresi' }, ` · ${Object.values(sonuc.parametreler).join(' · ')}`) : null,
         sonuc.parametreler && JSON.stringify(sonuc.parametreler) !== JSON.stringify(kartParametreleri(k))
-          ? h('span', { class: 'pano-donem-farki' }, ` · Seçili ${Object.values(kartParametreleri(k)).join(' · ')} için Yenile'ye basın.`) : null);
+          ? h('span', { class: 'pano-donem-farki' }, ` · Seçili ${Object.values(kartParametreleri(k)).join(' · ')} için Yenile'ye basın.`) : null,
+        // Pano ortamı değiştiyse sonuç eski ortamın: Yenile gerektiği söylenir.
+        sonuc.ortamId && etkinHedef(k, kayitli.duzen).ortamId !== sonuc.ortamId
+          ? h('span', { class: 'pano-donem-farki' }, ' · Sonuç başka bir ortamın; seçili ortam için Yenile\'ye basın.') : null);
       // Sayı / yüzde / değişim: sabit ya da eşitlenmiş yükseklikte dikeyde ortalanır.
       govde.classList.toggle('dikey-orta', ['sayi', 'yuzde', 'degisim'].includes(a.gorunum));
       // Tablo yeniden kurulurken (sıralama, sütun taşıma / gizleme / genişlik) eski tablonun yüksekliği bir anlık sabitlenir ve
@@ -1069,7 +1240,7 @@ export function ozetPanosu(kap, s0) {
     };
     sonucCiz(kayitli.sqlSonuclari[k.id]);
     secenekler().then((se) => {
-      const h0 = a.hedef || {};
+      const h0 = etkinHedef(k, kayitli.duzen);
       if (h0.veritabaniId) {
         const v = se.veritabanlari.find((x) => x.id === h0.veritabaniId);
         const o = v && v.ortamlar.find((x) => x.id === h0.ortamId);
@@ -1079,7 +1250,8 @@ export function ozetPanosu(kap, s0) {
         yerlestir(hedefRozeti, rozet(b ? b.ad : 'bağlantı bulunamadı', b ? '' : 'hata', { kisalt: true }), b && b.canli ? rozet('CANLI ortam', 'hata') : null);
       }
     }).catch(() => { /* rozet olmadan da kart çalışır */ });
-    yenile.addEventListener('click', async () => {
+    // Kartı yenileyen işlev (Yenile düğmesi, parametre seçimi, Tümünü yenile ve otomatik yenileme aynısını çağırır).
+    const calistir = async () => {
       hata.hidden = true;
       govde.classList.add('yenileniyor');
       // Yükleniyor durumu yanıt gelene dek (en çok kartın zaman aşımı kadar) kalır; diğer kartlar bağımsızdır.
@@ -1088,10 +1260,10 @@ export function ozetPanosu(kap, s0) {
       yerlestir(durum, h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), `Sorgu çalışıyor… (en çok ${zs ?? SQL_ZAMAN_ASIMI_SN.varsayilan} sn)`);
       try {
         const y = await mesgulIken(yenile, 'Yenileniyor…', () => api(SQL_UCU, {
-          govde: { projeId: proje.id, kartId: k.id, ...(canliOnaylari.has(onayAnahtari) ? { canliOnay: true } : {}) }
+          govde: { projeId: proje.id, kartId: k.id, ...(canliOnaylari.has(onayAnahtari(k)) ? { canliOnay: true } : {}) }
         }));
         // Onay (CANLI ortamda) bu oturumda bu kart için hatırlanır; CANLI değilse zararsızdır.
-        canliOnaylari.add(onayAnahtari);
+        canliOnaylari.add(onayAnahtari(k));
         kayitli.sqlSonuclari[k.id] = y.sonuc;
         sonucCiz(y.sonuc);
         yerlestir(durum, `Güncellendi (${y.sonuc.satirlar.length.toLocaleString('tr-TR')} satır).`);
@@ -1103,7 +1275,9 @@ export function ozetPanosu(kap, s0) {
       } finally {
         govde.classList.remove('yenileniyor');
       }
-    });
+    };
+    yenile.addEventListener('click', calistir);
+    yenileyiciler.set(k.id, calistir);
     const bolum = h('section', { class: 'kart pano-karti pano-sql-karti', 'aria-labelledby': basId },
       h('div', { class: 'kart-basligi' }, h('h3', { id: basId }, h('span', { class: `pano-baslik-simgesi${a.simge ? ' secili' : ''}` }, ikon(a.simge || 'veri')), a.baslik),
         h('span', { class: 'sag pano-kart-sag' }, hedefRozeti, parametreSecimleri(k), donemli ? donemSecici(k) : null, yenile)),

@@ -23,7 +23,7 @@ import {
   duzenTemizle, eksikYerlesikler, enKucukBoyut, esikRengi, eskiBicimMi, gorunurYerlesim, hucreBicimle, kartAyarla, kartEkle, kartKaldir, kartSiraTasi,
   kartYerlestir, pastaDilimleri, sayiBicimle, tarihBicimle, varsayilanDuzen, varsayilanMi, yuzdeBicimle,
   yuzdeDegeri, gorunenSutunlar, satirlariSirala, sutunGorunurlugu, sutunTasi, sutunTuru, sqlZamanAsimiTemizle, type PanoDuzeni,
-  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku, ikinciDeger
+  kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku, ikinciDeger, panoAyarla, etkinHedef
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { MASKE, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
@@ -335,6 +335,21 @@ test('sütun biçimleri: kural / eşik metni okuma, hücre sunumu, doğrulama (s
   expect(() => k([{ sutun: 'D', tur: 'rozet', kurallar: [{ deger: 'a', renk: 'mor' }] }])).toThrow('rengi geçersiz');
   expect(() => k([{ sutun: 'D', tur: 'renk', esikler: [{ islec: '>', deger: 1, renk: 'mavi' }] }])).toThrow('Eşiğin rengi geçersiz');
   expect(() => k([{ sutun: 'D', tur: 'altSatir', altSutun: 'D' }])).toThrow('kendisinin altına');
+});
+
+test('pano üst şeridi: başlık / açıklama / ortam / otomatik yenileme doğrulaması; etkin hedef (yalnız mantıksal veritabanı)', () => {
+  const d0 = duzenTemizle({ surum: 2, kartlar: [], baslik: ' Servis ', aciklama: 'Anlık', ortamId: 'o-1', otomatikYenileDk: 5 });
+  expect(d0).toMatchObject({ baslik: 'Servis', aciklama: 'Anlık', ortamId: 'o-1', otomatikYenileDk: 5 });
+  expect(duzenTemizle({ surum: 2, kartlar: [], otomatikYenileDk: 7 })).not.toHaveProperty('otomatikYenileDk');
+  const d1 = panoAyarla(d0, { ortamId: '', otomatikYenileDk: 0 });
+  expect(d1).not.toHaveProperty('ortamId');
+  expect(d1).not.toHaveProperty('otomatikYenileDk');
+  expect(d1).toMatchObject({ baslik: 'Servis', aciklama: 'Anlık' });
+  expect(() => panoAyarla(d0, { otomatikYenileDk: 3 })).toThrow('Otomatik yenileme aralığı geçersiz');
+  expect(() => panoAyarla(d0, { baslik: 'x'.repeat(81) })).toThrow('Pano başlığı');
+  expect(etkinHedef({ ayar: { hedef: { veritabaniId: 'v', ortamId: 'o-test' } } }, { ortamId: 'o-canli' })).toEqual({ veritabaniId: 'v', ortamId: 'o-canli' });
+  expect(etkinHedef({ ayar: { hedef: { veritabaniId: 'v', ortamId: 'o-test' } } }, {})).toEqual({ veritabaniId: 'v', ortamId: 'o-test' });
+  expect(etkinHedef({ ayar: { hedef: { baglantiId: 'b' } } }, { ortamId: 'o-canli' })).toEqual({ baglantiId: 'b' });
 });
 
 test('sayı kartı süsleri: ikinci sütun (toplam / karşılaştır), simge, alt metin, kart tonu doğrulaması', () => {

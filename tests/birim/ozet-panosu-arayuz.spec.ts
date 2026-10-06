@@ -16,6 +16,7 @@ import { ayarYaz, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../sc
 import { duzenTemizle } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
 import { baglantiKaydet } from '../../scripts/platform/entegrasyonlar/depo.mjs';
+import { veritabaniKaydet } from '../../scripts/platform/sql/veritabanlari.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { SAHTE_TC } from './sahte-sql-surucusu.mjs';
@@ -28,6 +29,10 @@ let gunluk = '';
 let projeId = '';
 let bTest = '';
 let bCanli = '';
+/** Mantıksal veritabanı (TEST → test-db, CANLI → canli-db) ve ortam kimlikleri (pano ortamı testi). */
+let vtUyg = '';
+let oTest = '';
+let oCanli = '';
 let projeGoc = '';
 /** Göç testi: eski (sıralı) biçimde kasaya yazılmış düzen (sıra, genişlik, yükseklik, eşit yükseklik). */
 const ESKI_DUZEN = { surum: 1, esitYukseklik: true, kartlar: [
@@ -56,6 +61,9 @@ test.beforeAll(async () => {
   }).id;
   bTest = pg('test-db', [TEST]);
   bCanli = pg('canli-db', [CANLI]);
+  oTest = TEST;
+  oCanli = CANLI;
+  vtUyg = veritabaniKaydet(vt, projeId, { ad: 'Uygulama DB', eslemeler: { [TEST]: bTest, [CANLI]: bCanli } }).veritabani.id;
   projeGoc = projeKaydet(vt, { ad: 'Göç projesi' });
   ayarYaz(vt, PANO_AYAR_ANAHTARI, { [projeGoc]: ESKI_DUZEN });
   vt.kapat();
@@ -484,6 +492,55 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   expect(sorgular()).toHaveLength(sorguSayisi);
   expect([...hatalar, ...dar.hatalar]).toEqual([]);
   await dar.kapat();
+  await kapat();
+});
+
+test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı; CANLI\'ya geçişte tek onay), tüm kartların dönemi, Tümünü yenile, otomatik yenileme', async () => {
+  test.setTimeout(120_000);
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { baslik: 'Canlı servis durumu', aciklama: 'Anlık sağlık', kartlar: [
+    { id: 'u-vt', tur: 'sql', x: 0, y: 0, w: 6, h: 4, ayar: { baslik: 'Mantıksal', hedef: { veritabaniId: vtUyg, ortamId: oTest }, gorunum: 'sayi',
+      sorgu: 'SELECT COUNT(*) AS adet FROM kayitlar WHERE gun >= :baslangic' } },
+    { id: 'u-dogrudan', tur: 'sql', x: 6, y: 0, w: 6, h: 4, ayar: { baslik: 'Doğrudan', hedef: { baglantiId: bTest }, gorunum: 'sayi', sorgu: 'SELECT COUNT(*) AS adet FROM kayitlar' } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const serit = page.getByRole('region', { name: 'Pano denetimleri' });
+  await expect(serit.getByRole('heading', { name: 'Canlı servis durumu' })).toBeVisible();
+  await expect(serit).toContainText('Anlık sağlık');
+  const kart = (ad: string) => page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: ad }) });
+  // Tümünü yenile: iki kart birlikte (CANLI yok: onay sorulmaz).
+  await serit.getByRole('button', { name: 'Tümünü yenile' }).click();
+  for (const ad of ['Mantıksal', 'Doğrudan']) await expect(kart(ad).locator('.pano-son-veri')).toHaveText(/^Son veri:/);
+  await expect(serit).toContainText('Son güncelleme:');
+  // Ortam: CANLI seçilince tek CANLI onayı; mantıksal kart CANLI eşlemesiyle sorgulanır, doğrudan bağlantılı kart değişmez.
+  const ortam = serit.getByRole('combobox', { name: 'Pano ortamı' });
+  await expect(ortam.locator('option')).toHaveText(['Ortam: kartların kendi seçimi', 'Ortam: TEST', 'Ortam: CANLI (CANLI)']);
+  await ortam.selectOption({ label: 'Ortam: CANLI (CANLI)' });
+  const onay = page.locator('dialog.canli-onay-penceresi');
+  await expect(onay).toBeVisible();
+  await onay.getByRole('button', { name: 'Evet, devam et' }).click();
+  await expect(kart('Mantıksal').locator('.pano-hedef')).toContainText('CANLI');
+  await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).sqlSonuclari as Record<string, { ortamId?: string }>)['u-vt']?.ortamId).toBe(oCanli);
+  await expect(page.locator('dialog.canli-onay-penceresi')).toHaveCount(0);
+  // Aynı oturumda yeniden Tümünü yenile: onay sorulmaz.
+  await serit.getByRole('button', { name: 'Tümünü yenile' }).click();
+  await expect(serit.getByRole('button', { name: 'Tümünü yenile' })).toBeEnabled();
+  await expect(page.locator('dialog.canli-onay-penceresi')).toHaveCount(0);
+  // Tüm kartların dönemi: döneme bağlı karta yazılır.
+  await serit.locator('.pano-serit-donem .tarih-tetik').click();
+  await serit.locator('.pano-serit-donem').getByRole('button', { name: 'Son 7 gün' }).click();
+  await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).duzen as { kartlar: Array<{ id: string; donem?: unknown }> }).kartlar.find((x) => x.id === 'u-vt')?.donem).toEqual({ hizli: '7g' });
+  // Otomatik yenileme: seçim kaydedilir; ortam "kartların kendi seçimi"ne dönünce kaydedilir.
+  await serit.getByRole('combobox', { name: 'Otomatik yenileme' }).selectOption('5');
+  await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).duzen as { otomatikYenileDk?: number }).otomatikYenileDk).toBe(5);
+  await ortam.selectOption('');
+  await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).duzen as { ortamId?: string }).ortamId).toBeUndefined();
+  // Düzenleme kipinde başlık ve açıklama değişir.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await serit.getByRole('textbox', { name: 'Pano başlığı' }).fill('Servis izleme');
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Bitti' }).click();
+  await expect(serit.getByRole('heading', { name: 'Servis izleme' })).toBeVisible();
+  expect(hatalar).toEqual([]);
   await kapat();
 });
 
