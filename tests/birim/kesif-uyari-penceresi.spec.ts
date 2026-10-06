@@ -3,7 +3,7 @@
 // pencereyi kapatma düğmesiyle (Tamam / Kapat / ×) kapatır, metnini keşif notuna yazar; önceden açık olan pencereye dokunmaz.
 // Güvenlik: page.setContent (ağsız), korumalı tarayıcı. Değerler uydurmadır.
 import { expect, test } from '@playwright/test';
-import { envanterOku, secimleriKesfet } from '../../scripts/platform/tarama/tarama-motoru';
+import { envanterOku, sayfaIciUyari, secimleriKesfet } from '../../scripts/platform/tarama/tarama-motoru';
 import { korumaliTarayici } from './giris-fikstur';
 
 const SAYFA = `<style>
@@ -38,5 +38,20 @@ test('keşif denemesinin açtığı uyarı penceresi kapatılır, metni nota yaz
     expect(await page.evaluate(() => (window as unknown as { kapandi?: number }).kapandi)).toBe(1);
     expect(notlar.join('\n')).toContain('Eşya bedeli girilmeden bu teminat seçilemez.');
     await expect(page.locator('#eski')).toBeVisible();
+  } finally { await tarayici.close(); }
+});
+
+test('hızlı test: yalnız MESAJ penceresi kapatılır (kapatma dışında denetim yok); seçenek / bağlantı içeren akış penceresi kalır', async () => {
+  const tarayici = await korumaliTarayici();
+  try {
+    const page = await tarayici.newPage();
+    await page.setContent(`<style>.kutu{position:absolute;width:360px;height:140px;background:#fff;z-index:1000;border:1px solid}</style>
+      <div id="akis" class="kutu" style="left:10px;top:10px">Teklif no 1 <a href="#" id="kart">Kartla öde</a> <select><option>Peşin</option></select> <span class="close-button" onclick="this.parentNode.hidden=true">x</span></div>
+      <div id="uyari" class="kutu" style="left:400px;top:200px">Teminat 0'dan küçük olamaz. <a href="#" onclick="this.parentNode.hidden=true;return false;">Tamam</a></div>`);
+    expect(await page.evaluate(sayfaIciUyari, { yalnizMesaj: true as const })).toContain("Teminat 0'dan küçük olamaz");
+    await expect(page.locator('#uyari')).toBeHidden();
+    // Akış penceresinin kapatma düğmesi olsa da içinde bağlantı / liste var: dokunulmaz.
+    expect(await page.evaluate(sayfaIciUyari, { yalnizMesaj: true as const })).toBeNull();
+    await expect(page.locator('#akis')).toBeVisible();
   } finally { await tarayici.close(); }
 });

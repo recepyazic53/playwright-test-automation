@@ -46,7 +46,7 @@ import { dugmeTiklamaKorumasi, formGonderimKorumasi, ozelBilesenIsaretle, secime
 import { listedenSec, zincirKesfet } from './zincir-motoru';
 import { listedeYokMetni, secenekBekle } from './secenek-secimi';
 import { ZINCIR_SECENEK_BEKLEME_MS, gercekSecenekler, type ZincirSonucu } from './zincir-kesfi.mjs';
-import { ENVANTER_BETIGI, TaramaHatasi, alanKapsami, envanterOku, hataBilgisi, hedefSayfayiAc, secimleriKesfet, type OlayGonderici } from './tarama-motoru';
+import { ENVANTER_BETIGI, TaramaHatasi, alanKapsami, envanterOku, hataBilgisi, hedefSayfayiAc, sayfaIciUyari, secimleriKesfet, type OlayGonderici } from './tarama-motoru';
 
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -310,6 +310,23 @@ export async function hizliTestiYurut(
      * öğrenilir, sonraki istekleri de sayılmaz). Böylece sürekli açık isteği olan sitede her alanda süre sonuna kadar beklenmez.
      * Görülen bekleme metinlerini döner.
      */
+    /**
+     * Sayfa içi MESAJ pencerelerini (kapatma düğmesinden başka denetimi olmayan uyarı kutusu) kapatır; en çok 3 pencere. Metinleri
+     * çağırandan önce okunmuştur. Akış penceresi (seçenek / bağlantı içeren) kalır. Doğrulama koşusunda çağrılmaz (bitiş görmeli).
+     * Dönüş: kapatılan pencere var mı.
+     */
+    async function mesajPenceresiniKapat(): Promise<boolean> {
+      let kapandi = false;
+      for (let i = 0; i < 3; i++) {
+        const m = await islem.evaluate(sayfaIciUyari, { yalnizMesaj: true as const }).catch(() => null);
+        if (!m) break;
+        kapandi = true;
+        notlar.push(`Sayfanın mesaj penceresi kapatıldı: “${m.slice(0, 160)}”.`);
+        await sakinles(islem, 2_000);
+      }
+      return kapandi;
+    }
+
     async function sakinles(page: Page, sureMs: number, enUzunMs = UZUN_ISTEK_MS): Promise<{ metinler: string[]; zamanAsimi: boolean }> {
       const bas = Date.now();
       const metinler = new Set<string>();
@@ -1210,6 +1227,8 @@ export async function hizliTestiYurut(
             ...sonAnlik.metinler.filter((m) => !once.has(m.metin)),
             ...diyaloglar.splice(0).map((m): HizliMetin => ({ metin: m, tur: /hata|gecersiz|zorunlu|eksik|error|invalid|required/i.test(katla(m)) ? 'hata' : 'normal' }))
           ];
+          // Yeni mesaj çıktıysa sayfa içi mesaj penceresi (uyarı kutusu) kapatılır: metni kaydedildi; açık kalırsa sonraki alanların önünü keser.
+          if (yeniMetinler.length) await mesajPenceresiniKapat();
           // Doldurunca (metin uygulanınca / seçim yapılınca) beliren ya da seçenekleri yeni dolan açılır listeler arasında bağlı liste
           // zinciri (yerinde; ilk keşifle aynı zincir motoru; listeler sonunda sayfadaki değerlerine döner). Bağı bilinen listeler denenmez.
           const yeniListeler = sonAnlik.alanlar.filter((a) => !doldurOncesi.has(a.anahtar));
@@ -1244,6 +1263,8 @@ export async function hizliTestiYurut(
           if (!basabilir) { await gonder({ olay: 'hata', no: k.no, mesaj: 'Basma izni “Hayır”: Nöbetçi hiçbir düğmeye basmaz.' }); continue; }
           const onceAlanlar = sonAnlik.alanlar;
           const fark = await bas(islem, k.secici, k.metin, sonAnlik, k.no, k.cerceve ?? null);
+          // Basıştan sonra çıkan sayfa içi mesaj penceresi kapatılır (metni farkta; keşif ve sonraki adım engellenmesin). Akış penceresi kalır.
+          if (fark.yeniMetinler.length && (await mesajPenceresiniKapat())) fark.anlik = { ...(await anlikOku(islem, false)), goruntu: fark.anlik.goruntu };
           sonAnlik = fark.anlik;
           // Basıştan sonra beliren (henüz boş) seçim alanları da denenir: içlerinde koşullu alan var mı? (Sayfa yeniden açılmaz.)
           const yeniSecimler = fark.yeniAlanlar.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);

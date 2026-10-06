@@ -75,6 +75,7 @@ import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { EkranDogrulamaHatasi, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
+import { tumSecenekler } from './test-verisi-tablosu.mjs';
 import { farkOzeti, sayfaFarki, tetikHedefleri } from './sayfa-farki.mjs';
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
 import { modelBaglami, senaryoKaydet } from '../senaryolar/senaryo-servisi.mjs';
@@ -2732,7 +2733,9 @@ export function hizliTestYoneticisiOlustur(s) {
             const pt = uygulanan.plan.tablolar.find((/** @type {Nesne} */ t) => t.ad === d.planAdi);
             const an = anahtarlar[d.oturumAnahtar];
             if (!pt?.yalnizOneri || !an) { tamam = false; break; }
-            veri2[an] = pt.sutunlar.find((/** @type {Nesne} */ s) => s.ad === d.sutun)?.karsiliklar?.[d.deger]?.sayfa ?? d.deger;
+            const alan = planAlanlari(o).find((/** @type {Nesne} */ a) => a.anahtar === d.oturumAnahtar);
+            veri2[an] = pt.sutunlar.find((/** @type {Nesne} */ s) => s.ad === d.sutun)?.karsiliklar?.[d.deger]?.sayfa
+              ?? (alan ? tumSecenekler(alan).find((x) => x.metin === d.deger)?.kod : undefined) ?? d.deger;
             continue;
           }
           const pa = pinAnahtari(y.id);

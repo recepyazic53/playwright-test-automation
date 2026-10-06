@@ -384,8 +384,11 @@ function kesifAdaylari(temel: SayfaEnvanteri, sinir: number, atlananlar: Kesif[]
  * düğmesiyle (Tamam / Kapat / OK / ×, ya da close / kapat sınıflı / adlı öğe) kapatır. Pencere: dialog / modal rolleri ve sınıfları ya da
  * önde (fixed / absolute, z-index ≥ 100) duran, ekranı kaplamayan, kısa metinli öğe. Kapatma düğmesi yoksa dokunulmaz. Kütüphane adına bakılmaz.
  */
-function sayfaIciUyari(mod: 'isaretle' | 'kapat'): string | null {
+export function sayfaIciUyari(mod: 'isaretle' | 'kapat' | { yalnizMesaj: true }): string | null {
   const IS = 'data-nobetci-onceki-pencere';
+  // { yalnizMesaj }: işarete bakılmadan, yalnız MESAJ penceresi kapatılır — içinde kapatma düğmesinden başka denetim (bağlantı, düğme,
+  // alan, liste) yoktur (hızlı testte doldurma / basıştan sonra çıkan uyarı). Seçenek / bağlantı içeren akış penceresine dokunulmaz.
+  const yalnizMesaj = typeof mod === 'object' && mod.yalnizMesaj === true;
   const gorunur = (e: Element): boolean => {
     const st = getComputedStyle(e);
     const r = e.getBoundingClientRect();
@@ -412,11 +415,13 @@ function sayfaIciUyari(mod: 'isaretle' | 'kapat'): string | null {
   }).filter((e, _i, l) => !l.some((x) => x !== e && x.contains(e)));
   if (mod === 'isaretle') { for (const e of adaylar) e.setAttribute(IS, ''); return null; }
   for (const p of adaylar) {
-    if (p.hasAttribute(IS)) continue;
+    if (!yalnizMesaj && p.hasAttribute(IS)) continue;
     const metin = (p as HTMLElement).innerText.replace(/\s+/g, ' ').trim();
     if (!metin || metin.length > 400) continue;
     const k = kapatici(p);
     if (!k) continue;
+    if (yalnizMesaj && [...p.querySelectorAll('a, button, input, select, textarea, [role="button"], [onclick]')]
+      .some((e) => gorunur(e) && e !== k && !e.contains(k) && !k.contains(e) && !(e instanceof HTMLInputElement && e.type === 'hidden'))) continue;
     k.click();
     return metin;
   }

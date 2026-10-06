@@ -342,7 +342,7 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     // Senaryoda tarih DEĞERİ olsa bile (eski senaryo) Kısa'da alan o an kilitli: yazılmaz, adım notu düşer, koşu başarılı.
     const sureAlani = alanlar.find((a) => a.konum?.secici === 'input[type="radio"][name="sure"]') as Nesne;
     const kisaSecenek = (sureAlani.secenekler as Nesne[]).find((x) => x.metin === 'Kısa') as Nesne;
-    const veri = { ...(uzunSenaryo.veri as Nesne), [String(sureAlani.eslesme.senaryo)]: String(kisaSecenek.senaryoDegeri ?? kisaSecenek.metin), [anahtar('#baslangic')]: '10.10.2026', [anahtar('#bitis')]: '10.12.2026' };
+    const veri = { ...(uzunSenaryo.veri as Nesne), [String(sureAlani.eslesme.senaryo)]: String(kisaSecenek.senaryoDegeri ?? kisaSecenek.deger), [anahtar('#baslangic')]: '10.10.2026', [anahtar('#bitis')]: '10.12.2026' };
     const eski = await basarili('/platform/senaryo/kaydet', { projeId, ekranId: String(k.ekranId), baslik: 'Başvuru — eski Kısa', ortamIdleri: [ortamId], veri, tabloSecimleri: uzunSenaryo.tabloSecimleri ?? undefined });
     r = await kos(String(eski.id));
     expect(r.sonuc.durum, JSON.stringify(r.sonuc.hataMesaji).slice(0, 400)).toBe('basarili');

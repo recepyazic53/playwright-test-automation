@@ -67,6 +67,8 @@ export async function maskeIpucuVar(alan: Locator): Promise<boolean> {
 export async function alandanCik(alan: Locator, secenek: { yalnizYeni?: boolean } = {}): Promise<void> {
   const sayfa = alan.page();
   await alan.press('Tab', { timeout: 3_000 }).catch(() => alan.blur({ timeout: 2_000 }).catch(() => undefined));
+  // Dar kutuda uzun değer (ör. "1.000.000") imleç sonda kaldığı için yazının SONU görünür ("000"): kutu başa kaydırılır (yalnız görünüm).
+  await alan.evaluate((e) => { if (e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement) e.scrollLeft = 0; }, undefined, { timeout: 1_000 }).catch(() => undefined);
   if (!(await acikTakvimVar(sayfa, secenek))) return;
   const nokta = await bosNokta(sayfa);
   if (nokta) await sayfa.mouse.click(nokta.x, nokta.y).catch(() => undefined);
