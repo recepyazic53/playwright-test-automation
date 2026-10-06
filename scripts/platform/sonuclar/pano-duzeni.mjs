@@ -527,7 +527,9 @@ function sqlAyari(ham) {
     ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}),
     ...(simge ? { simge } : {}), ...(altMetin ? { altMetin } : {}), ...(ikinci ? { ikinci } : {}), ...(ham.kartTonu === true ? { kartTonu: true } : {}),
     ...(ham.satirIncele === true ? { satirIncele: true } : {}),
-    ...(typeof ham.seriSutunu === 'string' && ham.seriSutunu.trim() ? { seriSutunu: metin(ham.seriSutunu, 'Mini trend sütunu', 120) } : {}) };
+    ...(typeof ham.seriSutunu === 'string' && ham.seriSutunu.trim() ? { seriSutunu: metin(ham.seriSutunu, 'Mini trend sütunu', 120) } : {}),
+    // Renk eşiği başka bir sütuna uygulanabilir (ör. düne göre fark); boşsa gösterilen değere.
+    ...(typeof ham.esikSutunu === 'string' && ham.esikSutunu.trim() ? { esikSutunu: metin(ham.esikSutunu, 'Eşik sütunu', 120) } : {}) };
 }
 
 /**
