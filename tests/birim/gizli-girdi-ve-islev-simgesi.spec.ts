@@ -17,7 +17,7 @@ const SAYFA = `<style>
 <main>
   <div class="satir"><div class="sol"><span class="etiket">Kimlik Numarası</span></div>
     <div class="sag"><div class="sarmal"><div><input id="kimlik" name="kimlik" maxlength="11"></div></div>
-      <a href="javascript:KimlikDenetle('SIGORTALI')"><img src="img/icon_update.png"></a></div></div>
+      <a href="javascript:KimlikDenetle('BIRINCI')"><img src="img/icon_update.png"></a></div></div>
   <div class="satir"><div class="sol"><span class="etiket">Eşya (Deprem)</span></div>
     <div class="sag"><span class="sarmal"><a href="#" class="kutu" onclick="var i=this.nextElementSibling;i.click();this.textContent=i.checked?'✓':'';return false;"></a><input type="checkbox" id="C1" name="C1" value="CHECKED" class="gizli" onclick="document.getElementById('durum').textContent=this.checked?'açık':'kapalı'"></span></div></div>
   <div class="satir"><div class="sol"><span class="etiket">Görünür kutu</span></div>
@@ -48,7 +48,7 @@ test('alan yanındaki adı tanınmayan simge çağırdığı işlevden adlanır 
   const tarayici = await korumaliTarayici();
   try {
     const page = await tarayici.newPage();
-    await page.setContent(SAYFA.replace("KimlikDenetle('SIGORTALI')", "Ac('X')").replace('img/icon_update.png', 'img/x.png'));
+    await page.setContent(SAYFA.replace("KimlikDenetle('BIRINCI')", "Ac('X')").replace('img/icon_update.png', 'img/x.png'));
     const e = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
     const bilgi = JSON.stringify(e.gonderim.map((a) => [a.metin, a.alanIkonu ?? false]));
     const s = e.gonderim.find((a) => (a.metin ?? '').includes('Kimlik Numarası'));
@@ -62,7 +62,7 @@ test('CheckIdentity çağıran güncelle simgesi "Sorgula (alan)" olarak adlanı
   const tarayici = await korumaliTarayici();
   try {
     const page = await tarayici.newPage();
-    await page.setContent(SAYFA.replace("KimlikDenetle('SIGORTALI')", "CheckIdentity('INSURED')"));
+    await page.setContent(SAYFA.replace("KimlikDenetle('BIRINCI')", "CheckIdentity('INSURED')"));
     const e = await eylemAdaylariniCikar(page, { dugmeSiniri: 60 });
     const bilgi = JSON.stringify(e.gonderim.map((a) => a.metin));
     const s = e.gonderim.find((a) => a.metin === 'Sorgula (Kimlik Numarası)');
@@ -76,7 +76,7 @@ test('keşif gizli kutuyu görünen çizimden dener (tıklama koruması altında
   try {
     const page = await tarayici.newPage();
     const icerik = `<style>.gizli{display:none}.kutu{display:inline-block;width:19px;height:19px;border:1px solid}.kutu.isaretli{background:#333}</style>
-      <main><div><span>Teminat</span> <span><a href="#" class="kutu"></a><input type="checkbox" id="T1" name="T1" class="gizli"></span></div>
+      <main><div><span>Ek seçenek</span> <span><a href="#" class="kutu"></a><input type="checkbox" id="T1" name="T1" class="gizli"></span></div>
       <div id="ek" class="gizli"><label for="ekalan">Ek bedel</label><input id="ekalan"></div></main>
       <script>
         // Çizim kütüphanesi gibi: çizime tıklanınca girdi ve çizim birlikte değişir; girdiye doğrudan tıklamak çizimi güncellemez.

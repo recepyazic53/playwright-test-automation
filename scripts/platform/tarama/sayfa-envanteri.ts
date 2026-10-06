@@ -76,6 +76,9 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
   // ---- Özel açılır liste bileşenleri (gizli <select> + görünür kutu). Kural ozelBilesenIsaretle ile AYNIDIR. ----
   // Bilinen bileşen kapları (kütüphane sınıfları; siteye özgü değil) ve açılır parçaları (arama kutusu, liste).
   const OZEL_KAP = '.select2-container,.select2,.chosen-container,.bootstrap-select,.ms-parent,.ui-selectmenu-button,.selectize-control,.choices,.ts-wrapper,.dropdown.bootstrap-select';
+  // Açılmış takvim penceresi (takvim kütüphanelerinin kendi kabı): içindeki yıl / ay listeleri, ileri / geri okları ekranın alanı değildir
+  // (tarih kutusunun kendisi alandır; takvimden seçme ayrıca bilinir).
+  const TAKVIM_PENCERESI = '.ui-datepicker,#ui-datepicker-div,.datepicker-dropdown,.datepicker.dropdown-menu,.flatpickr-calendar,.daterangepicker,.pika-single,.react-datepicker,.react-datepicker-popper,.air-datepicker,.vdp-datepicker__calendar,.mat-datepicker-content,.p-datepicker,.k-calendar-container,.bootstrap-datetimepicker-widget,.xdsoft_datetimepicker,.dhx_calendar,.gj-picker';
   const OZEL_ACILIR = '.select2-dropdown,.select2-search,.chosen-drop,.bs-searchbox,.selectize-dropdown,.choices__list--dropdown,.ts-dropdown,.ms-drop';
   const OZEL_TIK = '[role="combobox"],[aria-haspopup="listbox"],[aria-haspopup="true"],.select2-selection,.chosen-single,.chosen-choices,.dropdown-toggle,.selectize-input,.choices__inner,.ts-control,button';
   /** Gizli (display:none / görünmez) ya da 2 pikselden küçük (erişilebilir gizleme) <select>. */
@@ -483,7 +486,7 @@ export function sayfadakiAlanlar(derinlik = 0, degerOku = false): SayfaEnvanteri
     const etiketAdi = el.tagName.toLowerCase();
     const tur = zenginMi(el) ? 'contenteditable' : el instanceof HTMLInputElement ? (el.getAttribute('type') || 'text').toLowerCase() : etiketAdi;
     if (['hidden', 'submit', 'button', 'reset', 'image'].includes(tur)) return;
-    if (ozelIcinde(el)) return;
+    if (ozelIcinde(el) || el.closest(TAKVIM_PENCERESI)) return;
     const devreDisi = el.matches(':disabled');
     const zorunluOzellik = el.required || el.getAttribute('aria-required') === 'true';
 

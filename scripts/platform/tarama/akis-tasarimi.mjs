@@ -584,6 +584,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   let sqlSonrasi = false;
   /** @type {Map<string, number>} */
   const kullanilan = new Map();
+  /** İkinci (üçüncü…) kez kullanılan alanların sayısı (kopya anahtarı "<alan>~n"). @type {Map<string, number>} */
+  const kopyaSayilari = new Map();
   /** @type {Array<{ blok: number; alan: string; kosul: import('./akis-tasarimi.d.mts').AkisKosulu | null }>} */
   const elleKosullar = [];
   const adlar = new Set();
@@ -619,9 +621,20 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       for (const a of b.alanlar) {
         const h = alanlar.get(a);
         if (!h) { hata(i, 'Kayıtta olmayan bir alan seçilmiş.'); continue; }
-        if (kullanilan.has(a)) { hata(i, `“${alanEtiketi(h)}” alanı birden çok grupta; bir alan yalnızca bir grupta olabilir.`); continue; }
-        kullanilan.set(a, i);
         const tus = b.tuslar && Object.prototype.hasOwnProperty.call(b.tuslar, a) ? { tus: b.tuslar[a] } : {};
+        if (kullanilan.has(a)) {
+          if (kullanilan.get(a) === i) { hata(i, `“${alanEtiketi(h)}” bu grupta iki kez var; birini çıkarın.`); continue; }
+          // Aynı alan başka bir grupta da ("İkinci kez yaz"): aynı ekran kutusu için ayrı alan — senaryoda ayrı değer, koşu iki yerde yazar.
+          const n = (kopyaSayilari.get(a) ?? 1) + 1;
+          kopyaSayilari.set(a, n);
+          const kopya = { ...h, anahtar: `${a}~${n}`, etiket: `${alanEtiketi(h)} (${n}. kez)` };
+          alanlar.set(kopya.anahtar, kopya);
+          kullanilan.set(kopya.anahtar, i);
+          hamlar.push({ ...kopya, zorunlu: b.zorunlu.includes(a), ...tus });
+          if (b.kosullar && Object.prototype.hasOwnProperty.call(b.kosullar, a)) elleKosullar.push({ blok: i, alan: kopya.anahtar, kosul: b.kosullar[a] });
+          continue;
+        }
+        kullanilan.set(a, i);
         hamlar.push({ ...h, zorunlu: b.zorunlu.includes(a), ...tus });
         if (b.kosullar && Object.prototype.hasOwnProperty.call(b.kosullar, a)) elleKosullar.push({ blok: i, alan: a, kosul: b.kosullar[a] });
       }

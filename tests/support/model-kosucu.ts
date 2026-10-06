@@ -989,6 +989,7 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
     // göstergesi yok) bir kez daha basılır — istek başlatan / sayfayı değiştiren tıklama asla tekrarlanmaz.
     const ad = a.aciklama || a.metin || a.secici;
     const guvenliBas = async (oge: Locator, zamanMs: number): Promise<void> => {
+      const tik = Date.now();
       const r = await guvenliTikla(page, oge, {
         zamanMs, ag: agIzleri.get(page) ?? null, tikla: cerceveliTikla, ad,
         ...(kosu?.basariGostergesi ? { basariVarMi: () => basariVarMi(page, kosu) } : {})
@@ -996,6 +997,8 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
       const iz = tiklamaIzi(page);
       if (r.tekrarlandi) iz.notlar.push(`“${ad}”: ${TEKRAR_NOTU}`);
       iz.etkisiz = r.etkisiz ? { ad, tekrar: r.tekrarlandi } : null;
+      // Tıklamanın başlattığı arka plan istekleri (ör. sorgu) bitene kadar beklenir: yanıt sonraki adımda yazılan alanı silebilir.
+      await arkaPlanIstekleriniBekle(page, tik);
     };
     if (a.tur === 'tikla' && a.kosul === 'gorunurse') {
       const oge = l.filter({ visible: true }).first();

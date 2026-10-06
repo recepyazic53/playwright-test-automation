@@ -58,7 +58,9 @@ export function eylemIzleriniTopla(ayar: TopladiAyari): SayfaIzleri {
       return u.origin === location.origin && /^https?:$/.test(u.protocol) ? u.pathname : null;
     } catch { return null; }
   };
-  const nobetcininMi = (e: Element): boolean => Boolean(e.closest('[id^="nobetci"]'));
+  // Nöbetçi'nin kendi öğeleri ve açılmış takvim penceresi (yıl / ay listeleri, ileri / geri okları: tarih seçimi, ekranın eylemi değil) aday olmaz.
+  const TAKVIM_PENCERESI = '.ui-datepicker,#ui-datepicker-div,.datepicker-dropdown,.datepicker.dropdown-menu,.flatpickr-calendar,.daterangepicker,.pika-single,.react-datepicker,.react-datepicker-popper,.air-datepicker,.vdp-datepicker__calendar,.mat-datepicker-content,.p-datepicker,.k-calendar-container,.bootstrap-datetimepicker-widget,.xdsoft_datetimepicker,.dhx_calendar,.gj-picker';
+  const nobetcininMi = (e: Element): boolean => Boolean(e.closest(`[id^="nobetci"],${TAKVIM_PENCERESI}`));
   const tekOge = (e: Element): { isaret: string; adaylar: SeciciAdayi[] } | null => {
     if (typeof bilgi !== 'function') return null;
     const isaret = `${ayar.onek}${++sira}`;

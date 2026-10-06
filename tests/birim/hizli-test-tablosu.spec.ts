@@ -73,7 +73,7 @@ test('sayı / tarih alanı (kişi / kart dışı) tek sütunlu tablo açmaz; do�
 });
 
 test('metin kutusuna yazılan tutar / sayı / yıl / tarih tabloya önerilmez; uzun kod ve düz metin kalır', () => {
-  const bolum = { anahtar: 'b1', baslik: 'Ana Teminat Bilgileri' };
+  const bolum = { anahtar: 'b1', baslik: 'Ana Bilgiler' };
   const t = tabloTaslagiKur({
     baslik: 'D',
     alanlar: [
@@ -86,11 +86,11 @@ test('metin kutusuna yazılan tutar / sayı / yıl / tarih tabloya önerilmez; u
       y: { deger: '2026', kaynak: 'elle' }, k: { deger: '1234567890', kaynak: 'elle' }, m: { deger: 'Depo', kaynak: 'elle' }
     }
   });
-  expect(t?.tablolar.map((x) => [x.tabloAdi, x.sutunlar.map((s) => s.ad)])).toEqual([['Ana Teminat Bilgileri', ['Adres kodu', 'Açıklama']]]);
+  expect(t?.tablolar.map((x) => [x.tabloAdi, x.sutunlar.map((s) => s.ad)])).toEqual([['Ana Bilgiler', ['Adres kodu', 'Açıklama']]]);
 });
 
 test('bölümdeki açılır liste bölüm tablosuna girmez: kendi tablosunu tüm seçenekleriyle açar; bölüm tablosunda metin alanları kalır', () => {
-  const bolum = { anahtar: 'b1', baslik: 'Poliçe Bilgileri' };
+  const bolum = { anahtar: 'b1', baslik: 'Genel Bilgiler' };
   const t = tabloTaslagiKur({
     baslik: 'E',
     alanlar: [
@@ -101,7 +101,7 @@ test('bölümdeki açılır liste bölüm tablosuna girmez: kendi tablosunu tüm
     degerler: { n: { deger: 'Depo', kaynak: 'elle' }, m: { deger: ' 6', kaynak: 'elle' }, a: { deger: 'Deneme', kaynak: 'elle' } }
   });
   expect(t?.tablolar.map((x) => [x.tabloAdi, x.sutunlar.map((s) => s.ad), x.liste?.secenekler.map((s) => s.metin) ?? null])).toEqual([
-    ['Poliçe Bilgileri', ['Not', 'Açıklama'], null],
+    ['Genel Bilgiler', ['Not', 'Açıklama'], null],
     ['İşveren Mali Mesuliyeti', ['İşveren Mali Mesuliyeti'], ['50000', '300000']]
   ]);
   const m = t?.tablolar[1];

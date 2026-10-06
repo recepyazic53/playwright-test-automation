@@ -395,9 +395,12 @@ export function senaryoAnahtarlari(model, alanlar) {
   const sonuc = {};
   const modelAlanlari = (Array.isArray(model.adimlar) ? model.adimlar : []).flatMap((a) => (Array.isArray(a.bolumler) ? a.bolumler : []))
     .flatMap((b) => (Array.isArray(b.alanlar) ? b.alanlar : [])).filter((x) => nesneMi(x) && x.yapilandirma === 'senaryo');
+  // Aynı ekran kutusu iki alan olabilir (ikinci kez yazma): her model alanı bir kez, sırayla eşlenir.
+  const kullanilan = new Set();
   for (const a of alanlar) {
     const cer = JSON.stringify(a.cerceve ?? []);
-    const m = modelAlanlari.find((x) => nesneMi(x.konum) && (x.konum.secici === a.secici) && JSON.stringify(x.konum.cerceve ?? []) === cer);
+    const m = modelAlanlari.find((x) => !kullanilan.has(x) && nesneMi(x.konum) && (x.konum.secici === a.secici) && JSON.stringify(x.konum.cerceve ?? []) === cer);
+    if (m) kullanilan.add(m);
     const anahtar = m && nesneMi(m.eslesme) && typeof m.eslesme.senaryo === 'string' ? m.eslesme.senaryo : null;
     if (anahtar) sonuc[a.anahtar] = anahtar;
   }
