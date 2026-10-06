@@ -351,6 +351,9 @@ test('pano üst şeridi: başlık / açıklama / ortam / otomatik yenileme doğr
   expect(d1).not.toHaveProperty('otomatikYenileDk');
   expect(d1).toMatchObject({ baslik: 'Servis', aciklama: 'Anlık' });
   expect(() => panoAyarla(d0, { otomatikYenileDk: 3 })).toThrow('Otomatik yenileme aralığı geçersiz');
+  // 1 ve 2 saat seçenekleri.
+  expect(panoAyarla(d0, { otomatikYenileDk: 120 })).toMatchObject({ otomatikYenileDk: 120 });
+  expect(panoAyarla(d0, { otomatikYenileDk: 60 })).toMatchObject({ otomatikYenileDk: 60 });
   expect(() => panoAyarla(d0, { baslik: 'x'.repeat(81) })).toThrow('Pano başlığı');
   expect(etkinHedef({ ayar: { hedef: { veritabaniId: 'v', ortamId: 'o-test' } } }, { ortamId: 'o-canli' })).toEqual({ veritabaniId: 'v', ortamId: 'o-canli' });
   expect(etkinHedef({ ayar: { hedef: { veritabaniId: 'v', ortamId: 'o-test' } } }, {})).toEqual({ veritabaniId: 'v', ortamId: 'o-test' });

@@ -156,9 +156,10 @@ export function ozetPanosu(kap, s0) {
   const seritBaslik = h('div', { class: 'pano-serit-baslik' });
   const ortamSec = h('select', { class: 'pano-serit-secim', 'aria-label': 'Pano ortamı' });
   const ortamKap = h('label', { class: 'pano-serit-alan', hidden: true, title: 'Mantıksal veritabanına bağlı SQL kartları bu ortamın eşlemesiyle sorgulanır' }, ikon('ag'), ortamSec);
-  const donemKap = h('span', { class: 'pano-serit-donem' });
+  // Tüm kartların dönemi: seçilen dönem döneme bağlı kartların hepsine yazılır ve kartlar yenilenir.
+  const donemKap = h('span', { class: 'pano-serit-alan pano-serit-donem', hidden: true, title: 'Tüm kartların dönemi: seçince döneme bağlı kartların hepsine yazılır ve kartlar yenilenir' });
   const otoSec = h('select', { class: 'pano-serit-secim', 'aria-label': 'Otomatik yenileme' },
-    OTOMATIK_YENILEME_DK.map((dk) => h('option', { value: String(dk) }, dk ? `Her ${dk} dk yenile` : 'Otomatik yenileme kapalı')));
+    OTOMATIK_YENILEME_DK.map((dk) => h('option', { value: String(dk) }, !dk ? 'Otomatik yenileme kapalı' : dk % 60 === 0 ? `Her ${dk / 60} saatte yenile` : `Her ${dk} dk yenile`)));
   const otoDurum = h('button', { type: 'button', class: 'kucuk-dugme hayalet pano-oto-durum', hidden: true }, ikon('oynat'), 'Başlat');
   const tumunuYenileDugmesi = h('button', { type: 'button', class: 'pano-tumunu-yenile' }, ikon('yenile'), 'Tümünü yenile');
   const sonGuncelleme = h('span', { class: 'soluk kucuk pano-son-guncelleme' });
@@ -307,8 +308,9 @@ export function ozetPanosu(kap, s0) {
         }
       });
       secici.classList.add('pano-donem');
-      yerlestir(donemKap, secici);
-    } else yerlestir(donemKap);
+      yerlestir(donemKap, h('span', { class: 'soluk kucuk' }, 'Tüm kartlar:'), secici);
+      donemKap.hidden = false;
+    } else { yerlestir(donemKap); donemKap.hidden = true; }
     otoSec.value = String(kayitli.duzen.otomatikYenileDk || 0);
     otoDurum.hidden = !(kayitli.duzen.otomatikYenileDk && !otomatikOnayli);
     const zamanlar = sql.map((/** @type {any} */ k) => kayitli.sqlSonuclari[k.id]?.zaman).filter(Boolean).sort();

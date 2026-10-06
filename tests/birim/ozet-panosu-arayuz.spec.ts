@@ -622,6 +622,7 @@ test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı;
   await serit.getByRole('button', { name: 'Tümünü yenile' }).click();
   for (const ad of ['Mantıksal', 'Doğrudan']) await expect(kart(ad).locator('.pano-son-veri')).toHaveText(/^Son veri:/);
   await expect(serit).toContainText('Son güncelleme:');
+  if (process.env.PANO_EKRAN_GORUNTUSU) await serit.screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'pano-serit.png') });
   // Ortam: CANLI seçilince tek CANLI onayı; mantıksal kart CANLI eşlemesiyle sorgulanır, doğrudan bağlantılı kart değişmez.
   const ortam = serit.getByRole('combobox', { name: 'Pano ortamı' });
   await expect(ortam.locator('option')).toHaveText(['Ortam: kartların kendi seçimi', 'Ortam: TEST', 'Ortam: CANLI (CANLI ortam)']);
@@ -641,6 +642,7 @@ test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı;
   await serit.locator('.pano-serit-donem').getByRole('button', { name: 'Son 7 gün' }).click();
   await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).duzen as { kartlar: Array<{ id: string; donem?: unknown }> }).kartlar.find((x) => x.id === 'u-vt')?.donem).toEqual({ hizli: '7g' });
   // Otomatik yenileme: seçim kaydedilir; ortam "kartların kendi seçimi"ne dönünce kaydedilir.
+  await expect(serit.getByRole('combobox', { name: 'Otomatik yenileme' }).locator('option')).toHaveText(['Otomatik yenileme kapalı', 'Her 1 dk yenile', 'Her 5 dk yenile', 'Her 15 dk yenile', 'Her 30 dk yenile', 'Her 1 saatte yenile', 'Her 2 saatte yenile']);
   await serit.getByRole('combobox', { name: 'Otomatik yenileme' }).selectOption('5');
   await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).duzen as { otomatikYenileDk?: number }).otomatikYenileDk).toBe(5);
   await ortam.selectOption('');
