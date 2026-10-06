@@ -716,6 +716,23 @@ export async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Pr
   return metinler.map((m) => m.trim()).filter(Boolean);
 }
 
+/** Koşunun proje hata pencereleri (Ayarlar > Hata pencereleri; veri okuyucudan, açık olanlar). Sayfa başına koşu başında kurulur. */
+const projeHataPencereleri = new WeakMap<Page, ReadonlyArray<{ ad: string; secici: string; cerceve?: string[] }>>();
+
+/**
+ * Görünen ilk proje hata penceresi ve metni (yoksa null). Metin koşuda yakalanan mesajlara da bildirilir (aynı metin bir kez sayılır).
+ */
+async function projeHataPenceresi(page: Page): Promise<{ ad: string; metin: string } | null> {
+  for (const p of projeHataPencereleri.get(page) ?? []) {
+    const l = kapsam(page, p.cerceve).locator(p.secici).filter({ visible: true });
+    if (!(await l.count().catch(() => 0))) continue;
+    const metin = (await l.first().innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+    mesajYakalayicisi(page)?.gostergeMetinleri(`proje-hata:${p.secici}`, metin ? [metin] : []);
+    return { ad: p.ad, metin };
+  }
+  return null;
+}
+
 /**
  * Tarayıcı pencerelerinden (alert / confirm / prompt) adımın HATASI sayılanlar. Hızlı test ve doğrulama koşusuyla aynı kural:
  *  - aksiyonunda "diyalog" yanıtı olan tıklamanın açtığı pencereler beklenendir (hızlı testte görüldü, yanıtlandı): hata değildir;
@@ -1013,7 +1030,13 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
     }
     return null;
   }
-  if (!kosu || (!kosu.basariGostergesi && !kosu.hataGostergesi && !kosu.uyarilar?.length)) return null;
+  // Proje hata penceresi (Ayarlar > Hata pencereleri) adımın kendi göstergelerinden SONRA gelir: kendi hatası / başarısı bir şey
+  // söylemiyorken görünürse adım beklemeden başarısız olur (yazısından bağımsız; metni iletiye yazılır).
+  const projeHatasi = async (): Promise<void> => {
+    const p = await projeHataPenceresi(page);
+    if (p) throw new Error(beklenenGorulenMetni(adim.baslik, kosu ? basariAciklamasi(kosu) : 'adım hatasız biter', `${p.metin || '(metinsiz)'} — proje hata penceresi: “${p.ad}”`));
+  };
+  if (!kosu || (!kosu.basariGostergesi && !kosu.hataGostergesi && !kosu.uyarilar?.length)) { await projeHatasi(); return null; }
   let son = Date.now() + sureMs;
   // Bitiş koşulu (hızlı test): "Devam" metinleri görünürken süre dolarsa bir kez daha (en çok 60 sn) beklenir; son görülen Devam
   // metni hata iletisine yazılır.
@@ -1030,6 +1053,7 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
     if (kabul) hatalar.push(kabul);
     if (hatalar.length) throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), hatalar.join(' | ')));
     if (gorunen) return kosu.basariGostergesi?.tur === 'veya' ? gostergeAciklamasi(gorunen) : null;
+    await projeHatasi();
     if (!kosu.basariGostergesi) return null;
     if (devamlar.length) {
       const sayfa = await sayfaMetni(page);
@@ -1518,6 +1542,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
 
     // Kurtarma kuralları: bu senaryonun ekranını kapsayanlar (açık ve bu ortamı kapsayanlar veri okuyucudan gelir).
     const kurallar = (ortam.veri.kurtarmaKurallari ?? []).filter((k) => ekranKapsamindaMi(k, s.ekran.id));
+    projeHataPencereleri.set(page, ortam.veri.hataPencereleri ?? []);
     const girisTarifi = (): GirisTarifi | null => { if (tarif) return tarif; try { return ortam.tarif(); } catch { return null; } };
     const olayEkle = (k: EkranKurali, adimBasligi: string, durum: KurtarmaOlayi['durum'], deneme: number, not: string): void => {
       kurtarmaOlaylari.push({ kuralId: k.id, kural: k.ad, adim: adimBasligi, durum, deneme, not });

@@ -19,7 +19,12 @@ export type SecilenOge = {
   adaySeciciler?: string[];
   alan?: HamAlan;
   alanTuru?: string;
+  /** Öğenin küçük ekran görüntüsü (PNG data adresi; hata penceresi gibi görsel tanımlananlarda). */
+  goruntu?: string;
 };
+
+/** Seçilen öğenin ekran görüntüsünün en çok uzunluğu (data adresi, karakter). */
+export declare const GORUNTU_EN_COK: number;
 
 /** "Sayfada seç" işinin (girdi.kip = 'ogeSecme') sonucu. */
 export type OgeSecmeSonucu = { kip: 'ogeSecme'; ogeler: SecilenOge[]; notlar: string[] };

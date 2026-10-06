@@ -4611,3 +4611,19 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 
 /* Açık tarih paneli (açılır takvim), altındaki kartların (backdrop-filter → ayrı yığın bağlamı) üstünde kalır. */
 :has(> .tarih-araligi > .tarih-paneli:not([hidden])) { position: relative; z-index: 30; }
+
+/* Ayarlar > Hata pencereleri (hata-pencereleri.js): görsel + ad / seçici + sil. */
+.hata-pencereleri { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hata-penceresi { display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px;
+  border: 1px solid var(--cizgi); border-radius: 10px; background: var(--panel-2); }
+.hata-penceresi.kapali { opacity: .6; }
+.hata-penceresi-gorsel { width: 9rem; max-height: 6rem; object-fit: contain; object-position: left top; border: 1px solid var(--cizgi-2); border-radius: 6px;
+  background: var(--zemin-2); }
+.hata-penceresi-gorsel.bos { display: grid; place-items: center; height: 4rem; color: var(--metin-3); }
+.hata-penceresi-bilgi { display: grid; gap: 4px; min-width: 0; }
+.hata-penceresi-bilgi input[type="text"] { width: 100%; max-width: 24rem; }
+.hata-penceresi-bilgi code { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .hata-penceresi { grid-template-columns: minmax(0, 1fr); }
+  .hata-penceresi-gorsel { width: 100%; max-height: 10rem; }
+}

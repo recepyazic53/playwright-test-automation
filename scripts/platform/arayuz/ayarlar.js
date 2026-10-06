@@ -14,6 +14,7 @@ import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 import { tablolarBolumu } from './tablolar.js';
 import { tabanAdresleriBolumu } from './taban-adresler.js';
 import { kurtarmaKurallariBolumu } from './kurtarma-kurallari.js';
+import { hataPencereleriSayfasi } from './hata-pencereleri.js';
 import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 import { entegrasyonlarBolumu } from './entegrasyonlar.js';
 import { kasayiKilitleSecimli, kilitBildirimi, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
@@ -29,6 +30,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: kanıt düzeyi ve ortam hızı profilleri, yeniden deneme ve süre limiti; tüm ayrıntılar (video / ekran görüntüsü / iz kaydı, bekleme süreleri, servis zaman aşımı, tarih biçimi, tarama / akış kaydı) Gelişmiş\'te. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   // Kurtarma kuralları eskiden "Proje ve ortamlar" sayfasının dibindeydi; orada "taşındı" bağlantısı kalır (adres: #/ayarlar/kurtarma).
   { ad: 'kurtarma', etiket: 'Kurtarma kuralları', ikon: 'yenile', aciklama: 'Koşuda bilinen geçici bir sorun görülünce ne yapılacağı: "şu görülürse şunu yap" kuralları (ör. oturum bitti yazısı → girişi yenile, HTTP 503 → bekleyip tekrar gönder). Proje düzeyindedir; ekran ve servis kuralları, kapsam (ekranlar / servisler, ortamlar) ve son 7 günde kaç kez çalıştıkları burada.' },
+  { ad: 'hata-pencereleri', etiket: 'Hata pencereleri', ikon: 'uyari', aciklama: 'Sitenin hata / uyarı mesajını gösterdiği pencereler (ör. sayfa içi uyarı kutusu). Koşu bir adımı beklerken önce ekranın kendi göstergelerine bakar; onlar bir şey söylemiyorken buradaki bir pencere görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır. Proje düzeyindedir; "Sayfada seç" ile görsel olarak tanımlanır.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Saklama kartı dört saklama kuralını (koşu sonuçları, medya inceltme, rapor ve video saklama) ve otomatik yedek sayısını tek zaman çizelgesinde gösterir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; bir izin paketiyle birkaçını tek onayla ya da tek tek açarsınız. Açtığınız izinler kasada saklanır.' },
@@ -77,7 +79,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
     entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
-    kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
+    kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, 'hata-pencereleri': hataPencereleriSayfasi, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
