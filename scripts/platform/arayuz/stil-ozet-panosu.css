@@ -313,3 +313,11 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 /* Sayı sütunu: başlık da sağa yaslı (değerler başlığın altında; genişlik değişince de hizalı). */
 .pano-tablo-tablosu thead th.sayi .pano-th { justify-content: flex-end; }
 .pano-tablo-tablosu thead th.sayi { font-family: inherit; }
+/* Geniş ekran: tablo / liste kartın kalan yüksekliğini doldurur (kart büyüdükçe daha çok satır görünür; yalnız sığmayınca kaydırılır).
+   Dosyanın sonunda: yukarıdaki genel 22rem sınırını ezer. Dar ekranda genel sınır kalır. */
+@media (min-width: 861px) {
+  .pano-sql-govde > .pano-tablo-kap, .pano-sql-govde > .pano-liste-kap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pano-tablo-kap > .yatay-kaydirma-sarmali { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pano-tablo-kap .pano-tablo, .pano-liste-kap > .pano-liste { flex: 1 1 auto; min-height: 3rem; max-height: none; }
+  .pano-liste-kap > .pano-liste { align-content: start; }
+}
