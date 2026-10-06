@@ -500,8 +500,9 @@ test('servis izleme tasarımı: zengin kutucuk (simge, nokta, fark, mini trend);
   const DURUMLAR = ['onaylandi', 'bekliyor', 'hata'];
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
     { id: 'z-serit', tur: 'sql', x: 0, y: 0, w: 12, h: 5, ayar: { baslik: 'Durum şeridi', hedef: { baglantiId: bTest }, gorunum: 'kutucuk', simge: 'kalkan',
-      sorgu: "SELECT durum, COUNT(*) AS adet, 2 AS dun, '1,3,2,' || COUNT(*) AS seri FROM kayitlar GROUP BY durum ORDER BY durum",
-      sutunlar: ['durum', 'adet'], ikinci: { tur: 'karsilastir', sutun: 'dun' }, seriSutunu: 'seri', esikler: [{ islec: '>=', deger: 4, renk: 'kirmizi' }],
+      sorgu: "SELECT durum, COUNT(*) AS adet, 2 AS dun, COUNT(*) - 2 AS fark, '1,3,2,' || COUNT(*) AS seri FROM kayitlar GROUP BY durum ORDER BY durum",
+      sutunlar: ['durum', 'adet'], ikinci: { tur: 'karsilastir', sutun: 'dun' }, seriSutunu: 'seri', esikSutunu: 'fark',
+      esikler: [{ islec: '>', deger: 3, renk: 'kirmizi' }, { islec: '>', deger: 0, renk: 'sari' }, { islec: '<=', deger: 0, renk: 'yesil' }],
       tiklama: { kartId: 'z-trend', parametre: 'durum' } } },
     { id: 'z-trend', tur: 'sql', x: 0, y: 5, w: 6, h: 6, ayar: { baslik: 'Trend', hedef: { baglantiId: bTest }, gorunum: 'cizgi',
       sorgu: 'SELECT gun, adet, adet - 1 AS dun FROM gunluk_sayim WHERE :durum IS NOT NULL', ikinci: { tur: 'karsilastir', sutun: 'dun' },
@@ -520,6 +521,10 @@ test('servis izleme tasarımı: zengin kutucuk (simge, nokta, fark, mini trend);
   const hataKutusu = kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'hata' });
   await expect(hataKutusu.locator('.pano-kutucuk-simge')).toBeVisible();
   await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-nokta')).toHaveClass(/esik-kirmizi/);
+  // Renk eşiği fark sütununa göre (değere değil): hata farkı 2 → sarı, bekliyor farkı 0 → yeşil; gösterilen sayı yine değer.
+  await expect(hataKutusu.locator('.pano-kutucuk-nokta')).toHaveClass(/esik-sari/);
+  await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'bekliyor' }).locator('.pano-kutucuk-nokta')).toHaveClass(/esik-yesil/);
+  await expect(hataKutusu.locator('.pano-kutucuk-deger')).toHaveText('4');
   await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-fark')).toContainText('▲ 4');
   await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'bekliyor' }).locator('.pano-kutucuk-fark')).toContainText('=');
   await expect(hataKutusu.locator('svg.pano-kutucuk-trend polyline')).toHaveCount(1);

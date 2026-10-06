@@ -877,9 +877,10 @@ export function ozetPanosu(kap, s0) {
     };
     for (const e of a.esikler || []) esikSatiri(e);
     esikEkle.addEventListener('click', () => esikSatiri());
+    const esikSutunu = h('input', { type: 'text', value: a.esikSutunu || '', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Eşiğin uygulanacağı sütun', placeholder: 'Boşsa gösterilen değer (ör. FARK)' });
     const esikAlani = h('fieldset', { class: 'pano-esik-alani' }, h('legend', {}, 'Renk eşikleri'),
       h('p', { class: 'soluk kucuk' }, 'İlk tutan eşiğin rengi uygulanır (ör. değer > 0 ise kırmızı). Eşik biçimlenmemiş değere bakar; "Yüzde / oran"da yüzde değerine (0,834 → 83,4).'),
-      esikListesi, esikEkle);
+      esikListesi, esikEkle, alan('Eşiğin uygulanacağı sütun (Tek sayı / kutucuk)', esikSutunu, { yardim: 'Ör. düne göre farkı veren sütun: renk farka göre, gösterilen sayı yine değer.' }));
     // Biçim: ondalık, ön / son ek, tarih; yüzde görünümünde oran, hedef ve gösterim.
     const b0 = bicimTemizle(a.bicim);
     const ondalik = h('select', {}, ONDALIK_SECENEKLERI.map((o) => h('option', { value: String(o), selected: String(o) === String(b0.ondalik) }, o === 'oto' ? 'Otomatik' : String(o))));
@@ -945,6 +946,7 @@ export function ozetPanosu(kap, s0) {
     const bicimEkle = h('button', { type: 'button', class: 'kucuk-dugme hayalet' }, ikon('arti'), 'Sütun biçimi ekle');
     const sutunOnerileri = h('datalist', { id: yeniKimlik('pano-sutunlar') }, (bilinen || []).map((x) => h('option', { value: x })));
     tiklamaSutunu.setAttribute('list', sutunOnerileri.id);
+    esikSutunu.setAttribute('list', sutunOnerileri.id);
     const kuralMetni = (/** @type {any} */ x) => (x.tur === 'rozet' ? (x.kurallar || []).map((k) => `${k.deger} = ${ROZET_RENKLERI.find((r) => r.anahtar === k.renk)?.ad.toLocaleLowerCase('tr-TR') ?? k.renk}`)
       : (x.esikler || []).map((e) => `${e.islec} ${String(e.deger).replace('.', ',')} = ${ROZET_RENKLERI.find((r) => r.anahtar === e.renk)?.ad.toLocaleLowerCase('tr-TR') ?? e.renk}`)).join('\n');
     const bicimSatiri = (x = { sutun: '', tur: 'rozet' }) => {
@@ -1052,6 +1054,7 @@ export function ozetPanosu(kap, s0) {
         }).filter((p) => p.ad || p.etiket || p.secenekler.length),
         ...(simge.value ? { simge: simge.value } : {}),
         ...(gorunum.value === 'kutucuk' && seriSutunu.value.trim() ? { seriSutunu: seriSutunu.value.trim() } : {}),
+        ...(['sayi', 'kutucuk'].includes(gorunum.value) && esikSutunu.value.trim() ? { esikSutunu: esikSutunu.value.trim() } : {}),
         ...(['sayi', 'degisim', 'kutucuk', 'cizgi'].includes(gorunum.value) ? {
           ...(altMetin.value.trim() ? { altMetin: altMetin.value.trim() } : {}),
           ...(ikinciTur.value !== 'yok' ? { ikinci: { tur: ikinciTur.value, sutun: ikinciSutun.value.trim(), ...(ikinciArtis.checked ? { artisIyi: true } : {}) } } : {}),
@@ -1448,7 +1451,10 @@ function sonucGorunumu(a, sonuc, t = {}) {
     const ham = satirlar.length ? satirlar[0][i] : null;
     const n = gizli.has(sutunlar[i]) ? null : sayiyaCevir(ham);
     if (a.gorunum === 'yuzde') return yuzdeGorunumu(a, b, n, ham, satirlar.length ? sutunlar[i] : 'Sorgu satır döndürmedi');
-    const renk = n === null ? null : esikRengi(n, a.esikler || []);
+    // Renk eşiği başka bir sütuna uygulanabilir (esikSutunu; ör. düne göre fark).
+    const esikI = a.esikSutunu ? sutunSiralari([a.esikSutunu], sutunlar)[0] ?? -1 : -1;
+    const esikDegeri = esikI >= 0 ? (satirlar.length && !gizli.has(sutunlar[esikI]) ? sayiyaCevir(satirlar[0][esikI]) : null) : n;
+    const renk = esikDegeri === null ? null : esikRengi(esikDegeri, a.esikler || []);
     // İkinci sütun: toplam ("8 / 10" + çubuk) ya da karşılaştırma (▲ %67 rozeti; ör. dünkü değer).
     const ikinciI = a.ikinci ? sutunSiralari([a.ikinci.sutun], sutunlar)[0] ?? -1 : -1;
     const diger = ikinciI >= 0 && satirlar.length && !gizli.has(sutunlar[ikinciI]) ? sayiyaCevir(satirlar[0][ikinciI]) : null;
@@ -1485,9 +1491,11 @@ function sonucGorunumu(a, sonuc, t = {}) {
     // Kutucuk süsleri: simge + eşik renginde nokta, ikinci sütunla karşılaştırma (fark), seri sütunundan mini trend ("1,0,2,3").
     const ikinciI = a.ikinci ? sutunSiralari([a.ikinci.sutun], sutunlar)[0] ?? -1 : -1;
     const seriI = a.seriSutunu ? sutunSiralari([a.seriSutunu], sutunlar)[0] ?? -1 : -1;
+    const esikI = a.esikSutunu ? sutunSiralari([a.esikSutunu], sutunlar)[0] ?? -1 : -1;
     return h('ul', { class: `pano-kutucuklar${a.simge || seriI >= 0 ? ' zengin' : ''}`, 'aria-label': `${a.baslik}: ${sutunlar[degerI]}` }, satirlar.slice(0, 60).map((r) => {
       const n = gizli.has(sutunlar[degerI]) ? null : sayiyaCevir(r[degerI]);
-      const renk = n === null ? null : esikRengi(n, a.esikler || []);
+      const esikDegeri = esikI >= 0 ? (gizli.has(sutunlar[esikI]) ? null : sayiyaCevir(r[esikI])) : n;
+      const renk = esikDegeri === null ? null : esikRengi(esikDegeri, a.esikler || []);
       const diger = ikinciI >= 0 ? sayiyaCevir(r[ikinciI]) : null;
       const ik = ikinciI >= 0 ? ikinciDeger(a.ikinci, n, diger) : null;
       // Fark ön / son eksiz (ör. "▲ 3,8"; "%-1,1" gibi yapışık yazım yok); karşılaştırılan değer ipucunda.
