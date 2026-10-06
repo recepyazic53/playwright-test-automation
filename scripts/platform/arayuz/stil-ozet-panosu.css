@@ -391,3 +391,15 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-serit-alan.canli svg { color: var(--hata); }
 .pano-tumunu-yenile { border-color: var(--vurgu); color: var(--vurgu); }
 .pano-son-guncelleme { white-space: nowrap; }
+/* Tablo satır eylemleri: "İncele" sütunu, tıklanabilir satır (başka kartın parametresi) ve satır penceresi. */
+.pano-th-islem, .pano-td-islem { text-align: right; white-space: nowrap; }
+.pano-incele { border-color: var(--vurgu); color: var(--vurgu); }
+.pano-satir-tiklanir { cursor: pointer; }
+.pano-satir-tiklanir:hover { background: var(--vurgu-zemin); }
+.pano-satir-tiklanir.secili { background: var(--vurgu-zemin); box-shadow: inset 3px 0 0 var(--vurgu); }
+.pano-satir-tiklanir:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; }
+.pano-satir-listesi { display: grid; grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr); gap: 6px 14px; margin: 8px 0 0; max-height: min(60vh, 32rem); overflow: auto; }
+.pano-satir-listesi dt { font-weight: 600; color: var(--metin-2); overflow-wrap: anywhere; }
+.pano-satir-listesi dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.pano-satir-onizleme { font-family: var(--yazi-mono); font-size: 12px; }
+@media (max-width: 600px) { .pano-satir-listesi { grid-template-columns: minmax(0, 1fr); } .pano-satir-listesi dd { margin-bottom: 6px; } }

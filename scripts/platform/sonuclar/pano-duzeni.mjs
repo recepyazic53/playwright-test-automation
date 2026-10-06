@@ -506,11 +506,14 @@ function sqlAyari(ham) {
     const kartId = typeof ham.tiklama.kartId === 'string' && KIMLIK_DESENI.test(ham.tiklama.kartId) ? ham.tiklama.kartId : '';
     const parametre = typeof ham.tiklama.parametre === 'string' && PARAMETRE_ADI.test(ham.tiklama.parametre) ? ham.tiklama.parametre : '';
     if (!kartId || !parametre) throw new PanoHatasi('Kutucuğa tıklama hedefi geçersiz.');
-    tiklama = { kartId, parametre };
+    // Tablo: satıra tıklanınca seçilecek değerin sütunu (kutucukta etiket sütunu kullanılır).
+    const sutun = ham.tiklama.sutun === undefined || ham.tiklama.sutun === '' ? '' : metin(ham.tiklama.sutun, 'Tıklamada seçilecek sütun', 120);
+    tiklama = { kartId, parametre, ...(sutun ? { sutun } : {}) };
   }
   return { baslik, hedef, sorgu, gorunum, esikler, sutunlar, sutunGenislikleri, bicim: bicimTemizle(ham.bicim), ...(zamanAsimiSn === undefined ? {} : { zamanAsimiSn }),
     ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}),
-    ...(simge ? { simge } : {}), ...(altMetin ? { altMetin } : {}), ...(ikinci ? { ikinci } : {}), ...(ham.kartTonu === true ? { kartTonu: true } : {}) };
+    ...(simge ? { simge } : {}), ...(altMetin ? { altMetin } : {}), ...(ikinci ? { ikinci } : {}), ...(ham.kartTonu === true ? { kartTonu: true } : {}),
+    ...(ham.satirIncele === true ? { satirIncele: true } : {}) };
 }
 
 /**

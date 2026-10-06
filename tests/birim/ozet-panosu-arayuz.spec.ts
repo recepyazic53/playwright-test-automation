@@ -495,6 +495,51 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await kapat();
 });
 
+test('tablo satır eylemleri: "İncele" satırın tüm sütunlarını açar; satıra tıklayınca detay kartın parametresi seçilir (seçili satır işaretli)', async () => {
+  test.setTimeout(90_000);
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 't-ozet', tur: 'sql', x: 0, y: 0, w: 12, h: 6, ayar: { baslik: 'Durum tablosu', hedef: { baglantiId: bTest }, gorunum: 'tablo', satirIncele: true,
+      sorgu: 'SELECT durum, COUNT(*) AS adet, MAX(tc_kimlik_no) AS tc FROM kayitlar GROUP BY durum ORDER BY durum', tiklama: { kartId: 't-detay', parametre: 'durum', sutun: 'durum' } } },
+    { id: 't-detay', tur: 'sql', x: 0, y: 6, w: 12, h: 8, ayar: { baslik: 'Durum ayrıntısı', hedef: { baglantiId: bTest }, gorunum: 'tablo',
+      sorgu: 'SELECT id, durum FROM kayitlar WHERE durum = :durum ORDER BY id', parametreler: [{ ad: 'durum', etiket: 'Durum', secenekler: ['onaylandi', 'bekliyor', 'hata'] }] } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = (ad: string) => page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: ad }) });
+  await kart('Durum tablosu').getByRole('button', { name: 'Yenile: Durum tablosu' }).click();
+  await expect(kart('Durum tablosu').locator('tbody tr')).toHaveCount(3);
+  await expect(kart('Durum tablosu').locator('thead th.pano-th-islem')).toHaveText('İşlem');
+  // İncele: satırın tüm sütunları (maskeli sütun maskeli); Kapat → odak düğmeye döner.
+  await kart('Durum tablosu').getByRole('button', { name: 'İncele: 2. satır' }).click();
+  const pencere = page.getByRole('dialog', { name: 'Durum tablosu · 2. satır' });
+  await expect(pencere).toBeVisible();
+  await expect(pencere.locator('dt')).toHaveText(['durum', 'adet', 'tc']);
+  await expect(pencere.locator('dd').first()).toHaveText('hata');
+  await expect(pencere.locator('dd').nth(2)).not.toContainText(SAHTE_TC);
+  await pencere.getByRole('button', { name: 'Kapat' }).click();
+  await expect(kart('Durum tablosu').getByRole('button', { name: 'İncele: 2. satır' })).toBeFocused();
+  // Satıra tıklama: detay kartın parametresi seçilir, kart yenilenir, seçili satır işaretlenir.
+  await kart('Durum tablosu').locator('tbody tr').nth(1).locator('td').first().click();
+  await expect(kart('Durum ayrıntısı').getByRole('combobox', { name: 'Durum: Durum ayrıntısı' })).toHaveValue('hata');
+  await expect.poll(() => kart('Durum ayrıntısı').locator('tbody tr td:nth-child(2)').allTextContents()).toEqual(['hata', 'hata', 'hata', 'hata']);
+  await expect(kart('Durum tablosu').locator('tbody tr').nth(1)).toHaveClass(/secili/);
+  // Klavye: satıra odaklanıp Enter.
+  await kart('Durum tablosu').locator('tbody tr').nth(0).focus();
+  await page.keyboard.press('Enter');
+  await expect(kart('Durum ayrıntısı').getByRole('combobox', { name: 'Durum: Durum ayrıntısı' })).toHaveValue('bekliyor');
+  // Form: tıklama sütunu ve İncele ayarı gelir.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Durum tablosu' }).click();
+  const form = page.getByRole('dialog', { name: /^Kartı düzenle/ });
+  await expect(form.getByLabel('Tıklayınca', { exact: true })).toHaveValue('t-detay|durum');
+  await expect(form.getByLabel('Seçilecek değerin sütunu (tablo)')).toHaveValue('durum');
+  await expect(form.getByLabel('Satırlarda "İncele" düğmesi (satırın tüm sütunları)')).toBeChecked();
+  await form.getByRole('button', { name: 'Uygula' }).click();
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Vazgeç' }).click();
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı; CANLI\'ya geçişte tek onay), tüm kartların dönemi, Tümünü yenile, otomatik yenileme', async () => {
   test.setTimeout(120_000);
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { baslik: 'Canlı servis durumu', aciklama: 'Anlık sağlık', kartlar: [
@@ -691,7 +736,7 @@ test('kart parametresi: başlıktaki seçim değeri parametre olarak bağlar ve 
   await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
   await page.getByRole('button', { name: 'Düzenle: Durum özeti' }).click();
   const pencere = page.getByRole('dialog', { name: /^Kartı düzenle/ });
-  await expect(pencere.getByLabel('Kutucuğa tıklayınca')).toHaveValue('p-detay|durum');
+  await expect(pencere.getByLabel('Tıklayınca', { exact: true })).toHaveValue('p-detay|durum');
   await pencere.getByRole('button', { name: 'Uygula' }).click();
   await page.getByRole('button', { name: 'Düzenle: Durum ayrıntısı' }).click();
   await expect(pencere.getByRole('textbox', { name: 'Parametre adı (sorguda)' })).toHaveValue(':durum');

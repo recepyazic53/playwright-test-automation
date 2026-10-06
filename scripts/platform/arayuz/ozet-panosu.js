@@ -41,6 +41,8 @@ const darEkran = () => window.matchMedia(DAR_EKRAN).matches;
 const LISTE_ILK = 10;
 /** Tablo uzun metin hücresinin önizlemesinde en çok karakter (sütun genişliğinde "…" ile kesilir; tamamı "Görüntüle"de). */
 const ONIZLEME_EN_COK = 1000;
+/** Tablonun "İşlem" (İncele) sütununun genişliği (px). */
+const ISLEM_SUTUNU_PX = 100;
 /** CANLI onayı verilmiş SQL kartları (bu sayfa oturumunda; kart hedefi / sorgusu değişince yeniden sorulur). @type {Set<string>} */
 const canliOnaylari = new Set();
 
@@ -929,13 +931,19 @@ export function ozetPanosu(kap, s0) {
     const tiklama = h('select', {}, h('option', { value: '' }, 'Hiçbir şey yapma'),
       hedefler.map((x) => h('option', { value: x.deger, selected: x.deger === tiklamaDegeri }, `${x.ad} seçilsin`)),
       tiklamaDegeri && !hedefler.some((x) => x.deger === tiklamaDegeri) ? h('option', { value: tiklamaDegeri, selected: true }, 'Kaldırılmış kart') : null);
-    const tiklamaAlani = alan('Kutucuğa tıklayınca', tiklama, { yardim: hedefler.length
-      ? 'Kutucuğun etiketi (ör. servis adı) seçilen kartın parametresine yazılır ve o kart yenilenir. Etiket o parametrenin seçeneklerinde olmalı.'
+    const tiklamaAlani = alan('Tıklayınca', tiklama, { yardim: hedefler.length
+      ? 'Kutucukta etiket, tabloda aşağıdaki sütunun değeri seçilen kartın parametresine yazılır ve o kart yenilenir. Değer o parametrenin seçeneklerinde olmalı.'
       : 'Parametreli başka bir SQL kartı yok: önce bir karta "Kart parametreleri" ekleyin.' });
+    // Tablo: tıklanan satırdan hangi sütunun değeri seçilsin; satırlarda "İncele" (satırın tamamı).
+    const tiklamaSutunu = h('input', { type: 'text', value: a.tiklama?.sutun || '', autocomplete: 'off', spellcheck: 'false', placeholder: 'ör. SERVIS' });
+    const tiklamaSutunAlani = alan('Seçilecek değerin sütunu (tablo)', tiklamaSutunu);
+    const satirIncele = h('input', { type: 'checkbox', checked: a.satirIncele === true });
+    const satirInceleAlani = h('label', { class: 'secenek' }, satirIncele, 'Satırlarda "İncele" düğmesi (satırın tüm sütunları)');
     // Sütun biçimleri (yalnız "Tablo"): sütun + biçim türü + türüne göre ayar (kurallar / eşikler metni, artış iyi, alttaki sütun).
     const bicimListesi = h('div', { class: 'pano-sutun-bicimleri' });
     const bicimEkle = h('button', { type: 'button', class: 'kucuk-dugme hayalet' }, ikon('arti'), 'Sütun biçimi ekle');
     const sutunOnerileri = h('datalist', { id: yeniKimlik('pano-sutunlar') }, (bilinen || []).map((x) => h('option', { value: x })));
+    tiklamaSutunu.setAttribute('list', sutunOnerileri.id);
     const kuralMetni = (/** @type {any} */ x) => (x.tur === 'rozet' ? (x.kurallar || []).map((k) => `${k.deger} = ${ROZET_RENKLERI.find((r) => r.anahtar === k.renk)?.ad.toLocaleLowerCase('tr-TR') ?? k.renk}`)
       : (x.esikler || []).map((e) => `${e.islec} ${String(e.deger).replace('.', ',')} = ${ROZET_RENKLERI.find((r) => r.anahtar === e.renk)?.ad.toLocaleLowerCase('tr-TR') ?? e.renk}`)).join('\n');
     const bicimSatiri = (x = { sutun: '', tur: 'rozet' }) => {
@@ -988,7 +996,9 @@ export function ozetPanosu(kap, s0) {
       h('label', { class: 'secenek' }, kartTonu, 'Kartı eşik rengiyle tonla'));
     const ayrintiAlani = h('fieldset', { class: 'pano-ayrinti-alani' }, h('legend', {}, 'Görünüm ayrıntıları'), alan('Simge', simge), sayiAyrintilari);
     const tiklamaGoster = () => {
-      tiklamaAlani.hidden = gorunum.value !== 'kutucuk';
+      tiklamaAlani.hidden = !['kutucuk', 'tablo'].includes(gorunum.value);
+      tiklamaSutunAlani.hidden = gorunum.value !== 'tablo';
+      satirInceleAlani.hidden = gorunum.value !== 'tablo';
       bicimlerAlani.hidden = gorunum.value !== 'tablo';
       sayiAyrintilari.hidden = !['sayi', 'degisim'].includes(gorunum.value);
     };
@@ -1007,6 +1017,8 @@ export function ozetPanosu(kap, s0) {
       alan('Görünüm', gorunum),
       sutunAlani,
       tiklamaAlani,
+      tiklamaSutunAlani,
+      satirInceleAlani,
       ayrintiAlani,
       bicimlerAlani,
       bicimAlani,
@@ -1040,7 +1052,9 @@ export function ozetPanosu(kap, s0) {
           ...(kartTonu.checked ? { kartTonu: true } : {})
         } : {}),
         sutunBicimleri: gorunum.value === 'tablo' ? [...bicimListesi.children].map((x2) => /** @type {any} */ (x2).oku()).filter(Boolean) : (a.sutunBicimleri || []),
-        ...(gorunum.value === 'kutucuk' && tiklama.value ? { tiklama: { kartId: tiklama.value.split('|')[0], parametre: tiklama.value.split('|')[1] } } : {})
+        ...(['kutucuk', 'tablo'].includes(gorunum.value) && tiklama.value ? { tiklama: { kartId: tiklama.value.split('|')[0], parametre: tiklama.value.split('|')[1],
+          ...(gorunum.value === 'tablo' && tiklamaSutunu.value.trim() ? { sutun: tiklamaSutunu.value.trim() } : {}) } } : {}),
+        ...(gorunum.value === 'tablo' && satirIncele.checked ? { satirIncele: true } : {})
       };
       if (!ayarYeni.baslik) throw new Error('Kart başlığı boş olamaz.');
       if (!ayarYeni.hedef) throw new Error('SQL kartı için bir veritabanı bağlantısı seçin.');
@@ -1189,7 +1203,11 @@ export function ozetPanosu(kap, s0) {
         const konum = eski ? [eski.scrollLeft, eski.scrollTop] : null;
         if (eski) govde.style.setProperty('--pano-govde-yukseklik', `${Math.ceil(govde.getBoundingClientRect().height)}px`);
         yerlestir(govde, a.gorunum === 'tablo'
-          ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet, goster: (g) => metinPenceresi({ ...g, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }) })
+          ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet,
+            goster: (g) => metinPenceresi({ ...g, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }),
+            incele: (g) => satirPenceresi({ ...g, sutunlar: sonuc.sutunlar, gizliSutunlar: sonuc.gizliSutunlar || [], kartBaslik: a.baslik, bicim: a.bicim,
+              goster: (x) => metinPenceresi({ ...x, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }) }),
+            ...(() => { const kt = kutucukTiklamasi(a); return kt.tikla ? { satirSec: kt.tikla, secili: kt.secili, hedefAdi: kt.hedefAdi } : {}; })() })
           : sonucGorunumu(a, sonuc, kutucukTiklamasi(a)));
         const yeni = /** @type {HTMLElement | null} */ (govde.querySelector('.pano-tablo'));
         if (yeni && konum) { yeni.scrollLeft = konum[0]; yeni.scrollTop = konum[1]; }
@@ -1671,10 +1689,37 @@ function tabloGorunumu(a, sonuc, t) {
   // Sabit genişlik: görünen tüm sütunların genişliği verilmişse tablo bu genişliklerin toplamı kadardır (kartı doldurmaz; sütunlar
   // birbirinin yanında durur, biri daralınca sağdakiler sola kayar). Biri "sığdır"la kaldırılınca tablo yine kartı doldurur.
   const sabit = gorunen.every((ad) => genislikler[ad]);
+  // Satır eylemleri: "İncele" (satırın tüm sütunları) ve satıra tıklayınca başka kartın parametresi (tiklama.sutun'un değeri).
+  const incele = a.satirIncele === true && typeof t.incele === 'function';
+  const tiklamaI = a.tiklama?.sutun && t.satirSec ? sutunSiralari([a.tiklama.sutun], tum)[0] ?? -1 : -1;
+  /** @param {unknown[]} r @param {number} satirI @param {HTMLElement[]} hucreler */
+  const satirKur = (r, satirI, hucreler) => {
+    const tr = h('tr', {}, ...hucreler);
+    if (incele) {
+      const d = h('button', { type: 'button', class: 'kucuk-dugme pano-incele', 'aria-label': `İncele: ${satirI + 1}. satır` }, ikon('goz'), 'İncele');
+      d.addEventListener('click', (o) => { o.stopPropagation(); t.incele?.({ satirNo: satirI + 1, satir: r, donus: d }); });
+      tr.append(h('td', { class: 'pano-td-islem' }, d));
+    }
+    if (tiklamaI >= 0) {
+      const deger = String(r[tiklamaI] ?? '');
+      tr.classList.add('pano-satir-tiklanir');
+      tr.classList.toggle('secili', deger === t.secili);
+      tr.tabIndex = 0;
+      tr.title = `${t.hedefAdi}: ${deger}`;
+      const sec = () => t.satirSec?.(deger);
+      tr.addEventListener('click', (o) => {
+        const hedef = /** @type {HTMLElement} */ (o.target);
+        if (hedef.closest('button, .pano-uzun-hucre') || String(getSelection()?.toString() ?? '')) return;
+        sec();
+      });
+      tr.addEventListener('keydown', (o) => { if (o.key === 'Enter' && o.target === tr) { o.preventDefault(); sec(); } });
+    }
+    return tr;
+  };
   const tablo = h('table', { class: `ozet-tablosu pano-tablo-tablosu${sabit ? ' sabit-genislik' : ''}` },
-    h('colgroup', {}, gorunen.map((ad) => h('col', { width: genislikler[ad] ? String(genislikler[ad]) : null, 'data-sutun': ad }))),
-    h('thead', {}, h('tr', {}, gorunen.map((ad, j) => basHucresi(ad, j)))),
-    h('tbody', {}, sirali.map((r, satirI) => h('tr', {}, gorunen.map((ad) => {
+    h('colgroup', {}, gorunen.map((ad) => h('col', { width: genislikler[ad] ? String(genislikler[ad]) : null, 'data-sutun': ad })), incele ? h('col', { width: String(ISLEM_SUTUNU_PX), 'data-islem': '' }) : null),
+    h('thead', {}, h('tr', {}, gorunen.map((ad, j) => basHucresi(ad, j)), incele ? h('th', { scope: 'col', class: 'pano-th-islem' }, 'İşlem') : null)),
+    h('tbody', {}, sirali.map((r, satirI) => satirKur(r, satirI, gorunen.map((ad) => {
       const v = r[tum.indexOf(ad)];
       const metin = hucreBicimle(v, b);
       const sb = bicimler.get(ad);
@@ -1696,7 +1741,7 @@ function tabloGorunumu(a, sonuc, t) {
       return td;
     })))));
 
-  if (sabit) tablo.style.width = `${gorunen.reduce((t, ad) => t + genislikler[ad], 0)}px`;
+  if (sabit) tablo.style.width = `${gorunen.reduce((t, ad) => t + genislikler[ad], 0) + (incele ? ISLEM_SUTUNU_PX : 0)}px`;
 
   /** Başlık hücresi: sıralama düğmesi, sütun menüsü (⋯), genişlik tutamağı; başlık sürüklenerek taşınır. @param {string} ad @param {number} j */
   function basHucresi(ad, j) {
@@ -1851,6 +1896,37 @@ function tabloGorunumu(a, sonuc, t) {
 /** Aramada işaretlenen en çok eşleşme. */
 const EN_COK_ISARET = 500;
 const DURUMLAR = [['basarili', 'Başarılı'], ['hata', 'Hata verdi'], ['', 'Bilinmiyor']];
+
+/**
+ * Satırın tamamı ("İncele"): tüm sütunlar ad — değer olarak; uzun metin önizlenir, "Görüntüle" tam metin penceresini açar.
+ * Gizli (maskeli) sütun maskeli kalır. Kapanınca odak İncele düğmesine döner.
+ * @param {{ kartBaslik: string; satirNo: number; sutunlar: string[]; satir: unknown[]; gizliSutunlar: string[]; bicim: unknown; donus: HTMLElement;
+ *   goster: (g: { sutun: string; satirNo: number; metin: string; sutunlar: string[]; satir: unknown[]; donus: HTMLElement }) => void }} g
+ */
+function satirPenceresi(g) {
+  const baslikId = yeniKimlik('pano-satir');
+  const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+  const satirlar = g.sutunlar.map((ad, i) => {
+    const metin = hucreBicimle(g.satir[i], g.bicim);
+    let deger;
+    if (uzunMetinMi(metin)) {
+      const d = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Görüntüle: ${ad}` }, 'Görüntüle');
+      d.addEventListener('click', () => g.goster({ sutun: ad, satirNo: g.satirNo, metin, sutunlar: g.sutunlar, satir: g.satir, donus: d }));
+      deger = h('dd', {}, h('span', { class: 'pano-satir-onizleme' }, metinKisalt(metin, 300)), ' ', d);
+    } else deger = h('dd', { class: typeof g.satir[i] === 'number' ? 'sayi' : null }, metin === '' ? h('span', { class: 'soluk' }, '—') : metin);
+    return [h('dt', {}, ad, g.gizliSutunlar.includes(ad) ? [' ', ikon('kilit')] : null), deger];
+  });
+  const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay pano-satir-penceresi', 'aria-labelledby': baslikId },
+    h('div', { class: 'diyalog-govde' },
+      h('h2', { id: baslikId }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('goz')), `${g.kartBaslik} · ${g.satirNo}. satır`),
+      h('dl', { class: 'pano-satir-listesi' }, satirlar.flat())),
+    h('div', { class: 'diyalog-alt' }, kapat));
+  kapat.addEventListener('click', () => diyalog.close());
+  diyalog.addEventListener('close', () => { diyalog.remove(); if (g.donus.isConnected) g.donus.focus({ preventScroll: true }); });
+  document.body.append(diyalog);
+  diyalog.showModal();
+  kapat.focus();
+}
 
 /**
  * Hücrenin tam metni penceresi. Kapanınca odak açan düğmeye döner (Esc ya da "Kapat").
