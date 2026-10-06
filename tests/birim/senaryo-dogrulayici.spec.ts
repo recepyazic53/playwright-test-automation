@@ -450,7 +450,7 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
       profilYaDaKimlikZorunlu: ['E'], tcBicim: [], tcKontrolHanesi: [], vknBicim: [], telefonBicim: [],
       tarihBicim: ['E', 'B'], tarihGelecekte: ['E'], goreliTarihAnlasilamadi: ['E', 'bugün+x'], kartNoBicim: [], cvvBicim: [], kartAyBicim: [], kartYilBicim: [],
       kartSuresiGecmis: ['01/2026'], varsayilanKayitSuresiGecmis: ['E', '01/2026'], eskiBeklenenSonucAlanlari: [liste],
-      tabloBasvurusuAlamaz: ['E'], tabloYok: ['E', 'T'], tabloSutunuYok: ['E', 'T', 'S'], gizliSutunSecimde: ['E', 'S'], gizliSutunDosyada: ['E', 'S'],
+      akisDegeriAlamaz: ['E'], tabloBasvurusuAlamaz: ['E'], tabloYok: ['E', 'T'], tabloSutunuYok: ['E', 'T', 'S'], gizliSutunSecimde: ['E', 'S'], gizliSutunDosyada: ['E', 'S'],
       bilerekBos: ['E']
     };
     const metinler = Object.entries(MESAJLAR).map(([ad, sablon]) =>

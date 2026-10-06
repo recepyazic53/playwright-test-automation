@@ -3704,6 +3704,8 @@ dialog.karsilastir-diyalogu { width: min(40rem, calc(100vw - 2rem)); }
 .kosul-satiri span { overflow-wrap: anywhere; color: var(--metin-2); }
 .tablodan-deger { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; padding: 6px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 13px; }
 .tablodan-deger > span { flex: 1 1 10rem; min-width: 0; overflow-wrap: anywhere; }
+/* Alan başlığında "Önceki adımdan…" seçimi (önceki SQL / servis adımında okunan değer). */
+.kucuk-secim { max-width: 14rem; min-width: 0; padding: 2px 6px; font-size: 12px; }
 /* Kayıt grubu (senaryo formu): aynı kayıt tablosuna bağlı alanlar için "Hazır <tablo> / Yeni" + satır seçimi; hazırda alanlar özet. */
 .kayit-grubu { display: grid; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
 .kayit-grubu-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }

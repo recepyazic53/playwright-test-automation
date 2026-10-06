@@ -171,6 +171,7 @@ export declare const MESAJLAR: {
   readonly kartSuresiGecmis: (aaYyyy: string) => string;
   readonly varsayilanKayitSuresiGecmis: (etiket: string, aaYyyy: string) => string;
   readonly eskiBeklenenSonucAlanlari: (alanlar: readonly string[]) => string;
+  readonly akisDegeriAlamaz: (etiket: string) => string;
   readonly tabloBasvurusuAlamaz: (etiket: string) => string;
   readonly tabloYok: (etiket: string, tablo: string) => string;
   readonly tabloSutunuYok: (etiket: string, tablo: string, sutun: string) => string;
@@ -181,6 +182,8 @@ export declare const MESAJLAR: {
 /** Senaryo verisinde bilerek boş bırakılan alanların listesinin anahtarı (olumsuz senaryo). */
 export declare const BILEREK_BOS_ANAHTARI: 'bilerekBos';
 export declare function bilerekBosAnahtarlari(senaryo: unknown): string[];
+/** Değerin tamamı "${akis:Ad}" ise okumanın adı (önceki SQL / servis adımında okunan değer), değilse null. */
+export declare function akisDegeriCoz(deger: unknown): string | null;
 /** Değerin tamamı "${Tablo.Sütun}" ise başvuru (tablo-secimi.mjs > degerBasvurusu ile aynı biçim), değilse null. */
 export declare function tabloBasvurusuCoz(deger: unknown): { tablo: string; etiket: string; sutun: string; bicim: string } | null;
 
