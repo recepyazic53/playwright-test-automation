@@ -84,6 +84,9 @@ function hamAlanAyikla(a) {
  * @param {unknown} ham @param {readonly string[]} [izinliTurler]
  * @returns {{ ogeler: import('./oge-isaretleri.d.mts').SecilenOge[]; hatalar: string[] }}
  */
+/** Seçilen öğenin ekran görüntüsünün en çok uzunluğu (data adresi, karakter). */
+export const GORUNTU_EN_COK = 550_000;
+
 export function secilenOgeleriAyikla(ham, izinliTurler = OGE_TURLERI) {
   /** @type {string[]} */
   const hatalar = [];
@@ -101,7 +104,9 @@ export function secilenOgeleriAyikla(ham, izinliTurler = OGE_TURLERI) {
       tur: o.tur, secici: String(o.secici).trim(), kirilganlik: KIRILGANLIKLAR.includes(o.kirilganlik) ? o.kirilganlik : 'orta',
       seciciTuru: SECICI_TURLERI.includes(o.seciciTuru) ? o.seciciTuru : 'css', metin: metin(o.metin, 200),
       ...cerceveEki(Array.isArray(o.cerceve) && o.cerceve.length <= 2 && o.cerceve.every((c) => typeof c === 'string' && c) ? o.cerceve : null),
-      adaySeciciler: (Array.isArray(o.adaySeciciler) ? o.adaySeciciler : []).filter(seciciGecerli).slice(0, 12).map(String)
+      adaySeciciler: (Array.isArray(o.adaySeciciler) ? o.adaySeciciler : []).filter(seciciGecerli).slice(0, 12).map(String),
+      // Hata penceresi gibi görsel tanımlanan öğenin küçük ekran görüntüsü (PNG data adresi; yalnız listede gösterilir, eşleştirmede kullanılmaz).
+      ...(typeof o.goruntu === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(o.goruntu) && o.goruntu.length <= GORUNTU_EN_COK ? { goruntu: o.goruntu } : {})
     };
     if (o.tur === 'alan') {
       const h = o.alan === undefined || o.alan === null ? null : hamAlanAyikla(o.alan);

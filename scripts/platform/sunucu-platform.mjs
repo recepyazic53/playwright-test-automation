@@ -150,6 +150,7 @@ import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet } from './ayarl
 import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
 import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } from './ayarlar/video-saklama.mjs';
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
+import { HATA_PENCERESI_EN_COK, hataPencereleriniKaydet, hataPencereleriniOku } from './ayarlar/hata-pencereleri.mjs';
 import { ekipKaydet, ekipSil, ortamUygulamaSurumu, raporIsaretiKaydet, uygulamaSurumuTemizle } from './ayarlar/rapor-verileri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
 import { kosuGrubuKaydet, kosuGrubuSil, kosuGruplariniListele } from './senaryolar/kosu-gruplari.mjs';
@@ -284,7 +285,7 @@ function pdfGonder(res, pdf, dosyaAdi, ek = {}) {
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Ekran paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
-const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', '/platform/tablo/kaydet', ...SERVIS_BUYUK_GOVDE_UCLARI]);
+const PAKET_UCLARI = new Set(['/platform/hata-pencereleri/kaydet', '/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', '/platform/tablo/kaydet', ...SERVIS_BUYUK_GOVDE_UCLARI]);
 for (const u of ENTEGRASYON_BUYUK_GOVDE_UCLARI) PAKET_UCLARI.add(u);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
@@ -1410,6 +1411,7 @@ const GET_UCLARI = new Map([
   // Ayarlar > Koşu: tanımlar (form) + kayıtlı değerler.
   ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
   // Ayarlar > Arayüz > Sağlık noktası (proje başına): Sonuçlar ekranındaki noktanın renk eşikleri.
+  ['/platform/hata-pencereleri', (db, q) => ({ pencereler: hataPencereleriniOku(db, kimlikAl(q.get('projeId'), 'projeId')), enCok: HATA_PENCERESI_EN_COK })],
   ['/platform/saglik-esikleri', (db, q) => ({ esikler: saglikEsikleriniOku(db, kimlikAl(q.get('projeId'), 'projeId')), varsayilan: VARSAYILAN_SAGLIK_ESIKLERI })],
   // Koşu grupları (isimli, ekranlar arası karışık senaryo seçimi; kasada şifreli — senaryolar/kosu-gruplari.mjs).
   ['/platform/kosu-gruplari', (db, q) => ({ gruplar: kosuGruplariniListele(db, kimlikAl(q.get('projeId'), 'projeId')) })],
@@ -1657,6 +1659,7 @@ const POST_UCLARI = new Map([
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
   ['/platform/kosu-gruplari/kaydet', (db, g) => ({ grup: kosuGrubuKaydet(db, { id: g.id ? kimlikAl(g.id, 'id') : null, projeId: kimlikAl(g.projeId, 'projeId'), ad: g.ad, senaryoIdleri: g.senaryoIdleri }) })],
   ['/platform/kosu-gruplari/sil', (db, g) => kosuGrubuSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id, 'id'))],
+  ['/platform/hata-pencereleri/kaydet', (db, g) => ({ pencereler: hataPencereleriniKaydet(db, kimlikAl(g.projeId, 'projeId'), g.pencereler) })],
   ['/platform/saglik-esikleri/kaydet', (db, g) => ({ esikler: saglikEsikleriniKaydet(db, kimlikAl(g.projeId, 'projeId'), g.esikler) })],
   // Ayarlar > Raporlar (PDF rapor A4). Dış istek yok; yalnız kasaya yazılır.
   ['/platform/rapor-verileri/ekip/kaydet', (db, g) => ({ id: ekipKaydet(db, { projeId: kimlikAl(g.projeId, 'projeId'), id: g.id ? kimlikAl(g.id, 'id') : null, ad: g.ad }) })],

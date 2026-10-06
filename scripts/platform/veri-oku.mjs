@@ -34,6 +34,7 @@ import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-d
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
 import { izinleriOku } from './guvenlik/izinler.mjs';
 import { ekranKurallari } from './ayarlar/kurtarma-kurallari.mjs';
+import { kosuHataPencereleri } from './ayarlar/hata-pencereleri.mjs';
 import { riskliOrtamMi } from './guvenlik/ortam-riski.mjs';
 import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
@@ -138,6 +139,8 @@ async function genelKip() {
       model.izinler = izinler;
       // Kurtarma kuralları (Ayarlar > Proje ve ortamlar): yalnız açık, türü ekran ve bu ortamı kapsayanlar; koşucu senaryonun ekranıyla süzer.
       model.kurtarmaKurallari = ekranKurallari(vt, projeId, ortamId);
+      // Proje hata pencereleri (Ayarlar > Hata pencereleri): yalnız açık olanlar, görüntüsüz; koşucu adımın kendi göstergelerinden sonra bakar.
+      model.hataPencereleri = kosuHataPencereleri(vt, projeId);
       if (!izinler['veritabani-okuma'] && model.sqlBaglantilari) {
         model.sqlBaglantilari = Object.fromEntries(Object.keys(model.sqlBaglantilari).map((id) => [id, { hata: izinMesaji('veritabani-okuma') }]));
       }

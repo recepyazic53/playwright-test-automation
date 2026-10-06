@@ -17,7 +17,7 @@ import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
-import { ALAN_TURLERI, OGE_TURLERI, OGE_TUR_ADLARI, secilenOgeleriAyikla, type OgeSecmeSonucu, type SecilenOge, type SecilenOgeTuru } from './oge-isaretleri.mjs';
+import { ALAN_TURLERI, GORUNTU_EN_COK, OGE_TURLERI, OGE_TUR_ADLARI, secilenOgeleriAyikla, type OgeSecmeSonucu, type SecilenOge, type SecilenOgeTuru } from './oge-isaretleri.mjs';
 import type { EngellenenIstek } from './paket-olusturucu.mjs';
 import { SECIM_KOPRUSU, SECIM_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, isteklerBitsin, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
@@ -42,7 +42,8 @@ const ALAN_TURU_ADLARI: Record<string, string> = { text: 'Metin', number: 'Sayı
 export function adaySirasi(adaylar: SeciciAdayi[], tur: SecilenOgeTuru): SeciciAdayi[] {
   const cikti = tur === 'sonuc' || tur === 'basari' || tur === 'hata';
   const sira = cikti ? ['rol', 'kimlik', 'etiket', 'rolAdsiz', 'metin', 'css'] : ['rol', 'metin', 'kimlik', 'etiket', 'rolAdsiz', 'css'];
-  return adaylar.filter((a) => !(cikti && (a.tur === 'rol' || a.tur === 'metin') && /\d/.test(a.secici)))
+  // Hata kabının metni her seferinde değişir: hata için metne bağlı seçiciler (rol + ad, görünen metin) hiç kullanılmaz.
+  return adaylar.filter((a) => !(cikti && (a.tur === 'rol' || a.tur === 'metin') && (tur === 'hata' || /\d/.test(a.secici))))
     .map((a, i) => ({ a, i })).sort((x, y) => sira.indexOf(x.a.tur) - sira.indexOf(y.a.tur) || x.i - y.i).map((x) => x.a);
 }
 
@@ -133,6 +134,12 @@ export async function ogeleriSec(browser: Browser, g: TaramaGirdisi, olay: OlayG
       seciciTuru: secilen.tur === 'rolAdsiz' ? 'rol' : secilen.tur, metin: ham.metin, cerceve, adaySeciciler: gecen.map((x) => x.secici), alan, alanTuru: ham.alanTuru
     }], turler);
     if (hatalar.length || !temiz.length) throw new Error(hatalar[0] ?? 'Öğe eklenemedi.');
+    // Hata göstergesi görsel tanımlanır: öğenin küçük ekran görüntüsü (listede gösterilir; eşleştirme seçiciyledir).
+    if (tur === 'hata') {
+      const png = await kapsam.locator(temiz[0].secici).first().screenshot({ timeout: 3_000, animations: 'disabled' }).catch(() => null);
+      const adres = png ? `data:image/png;base64,${png.toString('base64')}` : null;
+      if (adres && adres.length <= GORUNTU_EN_COK) temiz[0].goruntu = adres;
+    }
     ogeler.push(temiz[0]);
     bildir({ tur: 'bilgi', mesaj: `Seçildi (${OGE_TUR_ADLARI[tur]}): ${temiz[0].metin ?? temiz[0].secici}` });
     yayinla();

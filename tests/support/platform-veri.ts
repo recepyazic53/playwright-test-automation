@@ -166,4 +166,6 @@ export type PlatformModelVerisi = {
   izinler?: Record<string, boolean>;
   /** Kurtarma kuralları (Ayarlar > Proje ve ortamlar): açık, türü ekran, bu ortamı kapsayan kullanıcı kuralları (ekran kapsamı koşucuda süzülür). */
   kurtarmaKurallari?: import('../../scripts/platform/ayarlar/kurtarma-kurallari.mjs').EkranKurali[];
+  /** Proje hata pencereleri (Ayarlar > Hata pencereleri): açık olanlar; adımın kendi göstergeleri bir şey söylemiyorken görünürse adım başarısız. */
+  hataPencereleri?: Array<{ ad: string; secici: string; cerceve?: string[] }>;
 };

@@ -613,6 +613,21 @@ export const REHBERLER = {
       }
     ]
   },
+  'ayarlar-hata-pencereleri': {
+    baslik: 'Hata pencereleri',
+    adimlar: [
+      {
+        baslik: 'Hata pencereleri',
+        metin: 'Sitenin hata / uyarı mesajını gösterdiği pencereleri (ör. sayfa içi uyarı kutusu) proje düzeyinde bir kez tanımlarsınız. Koşu bir adımı beklerken önce ekranın kendi göstergelerine ve senaryonun beklenen uyarısına bakar; onlar bir şey söylemiyorken buradaki bir pencere görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır. İçindeki yazı önemli değildir.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Adım', alt: 'kendi göstergeleri', ikon: 'hedef' }, { baslik: 'Hata penceresi', alt: 'görünürse', ikon: 'uyari' }, { baslik: 'Durur', alt: 'başarısız + metin', ikon: 'carpi' }] }
+      },
+      {
+        baslik: 'Sayfada seç ile tanımlama',
+        sira: ['Ortamı ve açılacak sayfayı seçip "Sayfada seç"e basın.', '"Öğe seç" kapalıyken siteyi kullanarak pencerenin çıktığı yere gidin (istekler gerçekten gider).', '"Öğe seç"i açıp pencerenin kutusuna tıklayın, "Bitir"e basın.', '"Seçilenleri ekle" ile listeye alın; adını değiştirebilir, kapatabilir ya da silebilirsiniz.'],
+        ipucu: 'Pencerenin küçük görüntüsü yalnız bu listede gösterilir; koşuda eşleştirme seçiciyle yapılır. Seçiciyi biliyorsanız "Seçiciyi elle ekle" ile de ekleyebilirsiniz.'
+      }
+    ]
+  },
   'ayarlar-giris': {
     baslik: 'Giriş profilleri',
     adimlar: [

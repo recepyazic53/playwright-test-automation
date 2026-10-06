@@ -365,6 +365,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/taban-adresler.js', { dosya: 'taban-adresler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/kurtarma-kurallari.js', { dosya: 'kurtarma-kurallari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/hata-pencereleri.js', { dosya: 'hata-pencereleri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rest-sihirbazi.js', { dosya: 'rest-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/curl-aktarimi.js', { dosya: 'curl-aktarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
