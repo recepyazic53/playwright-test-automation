@@ -164,6 +164,9 @@ function senaryoAnahtarlari(alan) {
   return Array.isArray(s) ? s : [s];
 }
 
+/** Seçenek değerleri baştaki / sondaki boşluktan bağımsız karşılaştırılır (site kodu " 5" gibi boşluklu gelebilir; koşucu da öyle eşler). */
+const ayniSecenek = (/** @type {unknown} */ a, /** @type {unknown} */ b) => String(a).trim() === String(b).trim();
+
 function secenekDegeri(secenek) {
   return secenek.senaryoDegeri !== undefined ? secenek.senaryoDegeri : secenek.deger;
 }
@@ -457,6 +460,7 @@ function secenekBul(alan, deger) {
     ...(bag && nesneMi(bag.secenekHaritasi) ? Object.values(bag.secenekHaritasi).flat() : [])].filter(nesneMi);
   if (!havuz.length) return undefined;
   return havuz.find((s) => String(secenekDegeri(s)) === deger)
+    ?? havuz.find((s) => ayniSecenek(secenekDegeri(s), deger))
     ?? havuz.find((s) => String(s.deger) === deger)
     ?? havuz.find((s) => s.metin === deger || s.formMetni === deger);
 }
@@ -585,7 +589,7 @@ function basitAlaniDogrula(alan, anahtar, deger, b, rapor) {
       if (secenek) {
         // Bağlı alanın kendisi geçersizse (liste yok) onun hatası yeterli.
         if (!secenek.liste) return;
-        if (!secenek.liste.includes(deger)) {
+        if (!secenek.liste.some((x) => ayniSecenek(x, deger))) {
           rapor.hata(anahtar, secenek.bagimliMi
             ? MESAJLAR.bagimliSecenekDisi(etiket, String(deger), secenek.bagli.etiket, String(secenek.bagli.deger), secenek.liste)
             : MESAJLAR.secenekDisi(etiket, String(deger), secenek.liste));
@@ -782,7 +786,7 @@ function kayitAlaniniDogrula(alan, gorunur, b, rapor) {
     }
     const izinliler = kural ? null : kayitAlaniSecenekleri(kayitAlani);
     const mesaj = kural ? kural.dogrula(metin)
-      : izinliler && !izinliler.includes(metin.trim()) ? MESAJLAR.secenekDisi(etiketi(kayitAlani), metin.trim(), izinliler) : null;
+      : izinliler && !izinliler.some((x) => ayniSecenek(x, metin)) ? MESAJLAR.secenekDisi(etiketi(kayitAlani), metin.trim(), izinliler) : null;
     if (mesaj) {
       rapor.hata(yol, mesaj);
       hataVar = true;
@@ -819,7 +823,7 @@ function beklenenSonucAlaniniDogrula(alan, b, rapor) {
         rapor.hata(yol, MESAJLAR.zorunlu(altEtiket));
         continue;
       }
-      const secenek = tanim.secenekler.find((s) => secenekDegeri(s) === d);
+      const secenek = tanim.secenekler.find((s) => ayniSecenek(secenekDegeri(s), d));
       if (!secenek) {
         rapor.hata(yol, MESAJLAR.secenekDisi(altEtiket, String(d), tanim.secenekler.map(secenekDegeri)));
         continue;
