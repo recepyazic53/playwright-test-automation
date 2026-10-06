@@ -443,7 +443,31 @@ export const ARAC_SORGU_SAYFASI = String.raw`<h1>Araç</h1>
   });
 </script>`;
 
+/**
+ * /plaka-dal/: girilen değere göre iki dal. "Kod" yazılıp "Sorgula"ya basılınca kod "X" içeriyorsa "Yıl" belirir, içermiyorsa "Belge no"
+ * belirir (biri görünürken öteki gizli). "Kaydet": POST /api/plaka-dal → "Kayıt alındı".
+ */
+export const PLAKA_DAL_SAYFASI = String.raw`<h1>Dal</h1>
+<div><label for="kod">Kod</label><input id="kod" name="kod" autocomplete="off"></div>
+<div id="yilKap" hidden><label for="yil">Yıl</label><input id="yil" name="yil" autocomplete="off"></div>
+<div id="belgeKap" hidden><label for="belge">Belge no</label><input id="belge" name="belge" autocomplete="off"></div>
+<p><button type="button" id="sorgula">Sorgula</button> <button type="button" id="kaydet">Kaydet</button></p>
+<div id="sonuc" role="status"></div>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  $('sorgula').addEventListener('click', function () {
+    var x = $('kod').value.indexOf('X') >= 0;
+    $('yilKap').hidden = !x; $('belgeKap').hidden = x;
+  });
+  $('kaydet').addEventListener('click', function () {
+    fetch('/api/plaka-dal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kod: $('kod').value, yil: $('yil').value, belge: $('belge').value }) })
+      .then(function (r) { return r.json(); }).then(function () { $('sonuc').textContent = 'Kayıt alındı'; });
+  });
+</script>`;
+
 export class VeriDuragiUygulamasi {
+  /** /plaka-dal/ gönderimleri. */
+  readonly plakaDalKayitlari: Array<Record<string, string>> = [];
   /** /arac-sorgu/ sorgu kodları ve gönderimleri. */
   readonly aracSorgulari: string[] = [];
   readonly aracKayitlari: Array<Record<string, string>> = [];
@@ -477,6 +501,8 @@ export class VeriDuragiUygulamasi {
     if (i.yol === '/kesif-dugmeli/' && i.yontem === 'GET') return html('Başvuru', KESIF_DUGMELI_SAYFASI);
     if (i.yol === '/kilitli-secim/' && i.yontem === 'GET') return html('Başvuru', KILITLI_SECIM_SAYFASI);
     if (i.yol === '/arac-sorgu/' && i.yontem === 'GET') return html('Araç', ARAC_SORGU_SAYFASI);
+    if (i.yol === '/plaka-dal/' && i.yontem === 'GET') return html('Dal', PLAKA_DAL_SAYFASI);
+    if (i.yol === '/api/plaka-dal' && i.yontem === 'POST') { this.plakaDalKayitlari.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/arac-sorgu' && i.yontem === 'GET') { const kod = i.sorgu.get('kod') ?? ''; this.aracSorgulari.push(kod); return { tur: 'application/json', govde: JSON.stringify({ marka: `MARKA-${kod}` }), gecikmeMs: 200 }; }
     if (i.yol === '/api/arac-sorgu' && i.yontem === 'POST') { this.aracKayitlari.push(JSON.parse(i.govde) as Record<string, string>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
     if (i.yol === '/api/kilitli-secim' && i.yontem === 'POST') { this.kilitliKayitlar.push(JSON.parse(i.govde) as Record<string, string | number>); return { tur: 'application/json', govde: '{"tamam":true}' }; }
