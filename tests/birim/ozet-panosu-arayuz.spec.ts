@@ -520,9 +520,20 @@ test('servis izleme tasarımı: zengin kutucuk (simge, nokta, fark, mini trend);
   const hataKutusu = kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'hata' });
   await expect(hataKutusu.locator('.pano-kutucuk-simge')).toBeVisible();
   await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-nokta')).toHaveClass(/esik-kirmizi/);
-  await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-fark')).toContainText('▲ +4');
+  await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'onaylandi' }).locator('.pano-kutucuk-fark')).toContainText('▲ 4');
   await expect(kart('Durum şeridi').locator('.pano-kutucuk').filter({ hasText: 'bekliyor' }).locator('.pano-kutucuk-fark')).toContainText('=');
   await expect(hataKutusu.locator('svg.pano-kutucuk-trend polyline')).toHaveCount(1);
+  // Yerleşim: kutucuklar kartın genişliğini eşit paylaşır (sola yığılmaz) ve kartın yüksekliğine uyar.
+  const yer = await kart('Durum şeridi').locator('ul.pano-kutucuklar').evaluate((ul) => {
+    const u = ul.getBoundingClientRect();
+    const k = [...ul.querySelectorAll('.pano-kutucuk')].map((e) => e.getBoundingClientRect());
+    return { bos: u.right - Math.max(...k.map((r) => r.right)), yukseklik: Math.min(...k.map((r) => r.height)), ul: u.height,
+      yazi: parseFloat(getComputedStyle(ul.querySelector('.pano-kutucuk-deger') as Element).fontSize) };
+  });
+  expect(yer.bos).toBeLessThan(4);
+  expect(yer.yukseklik).toBeGreaterThan(yer.ul * 0.8);
+  expect(yer.yazi).toBeGreaterThan(18);
+  if (process.env.PANO_EKRAN_GORUNTUSU) await kart('Durum şeridi').screenshot({ path: join(process.env.PANO_EKRAN_GORUNTUSU, 'kutucuk-serit.png') });
   // Çizgi: dolgulu alan + kesikli dün serisi + açıklama.
   await expect(kart('Trend').locator('svg.pano-grafik .alan')).toHaveCount(1);
   await expect(kart('Trend').locator('svg.pano-grafik .cizgi-ikinci')).toHaveCount(1);

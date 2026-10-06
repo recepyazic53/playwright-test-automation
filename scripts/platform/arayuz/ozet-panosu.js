@@ -1488,9 +1488,14 @@ function sonucGorunumu(a, sonuc, t = {}) {
     return h('ul', { class: `pano-kutucuklar${a.simge || seriI >= 0 ? ' zengin' : ''}`, 'aria-label': `${a.baslik}: ${sutunlar[degerI]}` }, satirlar.slice(0, 60).map((r) => {
       const n = gizli.has(sutunlar[degerI]) ? null : sayiyaCevir(r[degerI]);
       const renk = n === null ? null : esikRengi(n, a.esikler || []);
-      const ik = ikinciI >= 0 ? ikinciDeger(a.ikinci, n, sayiyaCevir(r[ikinciI])) : null;
+      const diger = ikinciI >= 0 ? sayiyaCevir(r[ikinciI]) : null;
+      const ik = ikinciI >= 0 ? ikinciDeger(a.ikinci, n, diger) : null;
+      // Fark ön / son eksiz (ör. "▲ 3,8"; "%-1,1" gibi yapışık yazım yok); karşılaştırılan değer ipucunda.
+      const yalin = { ...b, onEk: '', sonEk: '' };
       const fark = ik && ik.tur === 'karsilastir'
-        ? h('span', { class: `pano-kutucuk-fark renk-${ik.renk}` }, h('span', { 'aria-hidden': 'true' }, ik.ok), ` ${ik.fark > 0 ? '+' : ''}${sayiBicimle(ik.fark, b)}`) : null;
+        ? h('span', { class: `pano-kutucuk-fark renk-${ik.renk}`, title: `${a.ikinci.sutun}: ${diger === null ? '—' : sayiBicimle(diger, b)}` },
+          h('span', { 'aria-hidden': 'true' }, ik.ok), ` ${sayiBicimle(Math.abs(ik.fark), yalin)}`,
+          h('span', { class: 'gorunmez' }, ` (${a.ikinci.sutun}: ${diger === null ? '—' : sayiBicimle(diger, b)})`)) : null;
       const seri = seriI >= 0 ? kucukTrend(String(r[seriI] ?? ''), renk) : null;
       const icerik = [h('span', { class: 'pano-kutucuk-etiket' },
         a.simge ? h('span', { class: `pano-kutucuk-simge${renk ? ` esik-${renk}` : ''}`, 'aria-hidden': 'true' }, ikon(a.simge)) : null,

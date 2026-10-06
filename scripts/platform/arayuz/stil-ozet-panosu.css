@@ -410,7 +410,17 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-pay-dolu { display: block; height: 100%; border-radius: 3px; background: var(--vurgu); }
 .pano-pay-metin { font-size: 12px; color: var(--metin-2); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
 /* Zengin kutucuk: simge, sağlık noktası, düne göre fark, mini trend (eşik renginde). */
-.pano-kutucuklar.zengin { grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); }
+/* Kutucuklar kartın genişliğini eşit paylaşır ve yüksekliğine uyar: kart büyüdükçe kutucuk, yazı ve mini trend birlikte büyür. */
+.pano-kutucuklar.zengin { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); grid-auto-rows: minmax(7.5rem, 1fr); flex: 1 1 auto; min-height: 0; align-content: stretch; }
+.pano-kutucuklar.zengin > li { display: grid; min-width: 0; min-height: 0; }
+.pano-kutucuklar.zengin .pano-kutucuk { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; text-align: left; gap: 4px; min-height: 0; height: 100%; container-type: size; padding: 10px 12px 8px; }
+.pano-kutucuklar.zengin .pano-kutucuk-etiket, .pano-kutucuklar.zengin .pano-kutucuk-satir { width: 100%; justify-content: flex-start; }
+.pano-kutucuklar.zengin .pano-kutucuk-ad { font-size: clamp(12px, 8cqh, 16px); }
+.pano-kutucuklar.zengin .pano-kutucuk-deger { font-size: clamp(18px, 20cqh, 46px); line-height: 1.1; }
+.pano-kutucuklar.zengin .pano-kutucuk-fark { font-size: clamp(11px, 7cqh, 15px); }
+.pano-kutucuklar.zengin .pano-kutucuk-simge { width: clamp(22px, 15cqh, 34px); height: clamp(22px, 15cqh, 34px); }
+.pano-kutucuklar.zengin .pano-kutucuk-simge svg { width: 60%; height: 60%; }
+.pano-kutucuklar.zengin .pano-kutucuk-trend { flex: 1 1 auto; min-height: 22px; height: auto; margin-top: 2px; }
 .pano-kutucuk .pano-kutucuk-etiket { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .pano-kutucuk-ad { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pano-kutucuk-simge { width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex: none;
