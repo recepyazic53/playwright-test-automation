@@ -326,3 +326,15 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 /* Sabit genişlik (tüm sütunlara elle genişlik verilmiş): tablo genişliklerin toplamı kadar (satır içi width), sütunlar yan yana;
    kartı aşarsa yatay kaydırma. */
 .pano-tablo-tablosu.sabit-genislik { table-layout: fixed; }
+/* Kart parametresi (SQL kartı başlığında seçim) ve tıklanabilir kutucuk (başka kartın parametresini seçer). */
+.pano-parametre { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.pano-parametre-secimi { max-width: 14rem; min-width: 0; padding: 2px 6px; font-size: 12px; }
+.pano-kutucuk-oge { display: grid; min-width: 0; }
+.pano-kutucuk-dugme { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+.pano-kutucuk-dugme:hover { border-color: var(--vurgu); }
+.pano-kutucuk-dugme[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--vurgu); }
+.pano-kutucuk-dugme:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px; }
+.pano-sonuc-parametresi { color: var(--metin-2); }
+.pano-parametre-satiri { display: grid; grid-template-columns: minmax(6rem, 10rem) minmax(6rem, 10rem) minmax(0, 1fr) auto; gap: 6px 8px; align-items: start; margin-bottom: 6px; }
+.pano-parametre-satiri textarea { min-height: 2.4rem; }
+@media (max-width: 600px) { .pano-parametre-satiri { grid-template-columns: minmax(0, 1fr); } }
