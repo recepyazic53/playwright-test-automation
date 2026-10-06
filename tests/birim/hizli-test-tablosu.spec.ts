@@ -88,3 +88,23 @@ test('metin kutusuna yazılan tutar / sayı / yıl / tarih tabloya önerilmez; u
   });
   expect(t?.tablolar.map((x) => [x.tabloAdi, x.sutunlar.map((s) => s.ad)])).toEqual([['Ana Teminat Bilgileri', ['Adres kodu', 'Açıklama']]]);
 });
+
+test('bölümdeki açılır liste bölüm tablosuna girmez: kendi tablosunu tüm seçenekleriyle açar; bölüm tablosunda metin alanları kalır', () => {
+  const bolum = { anahtar: 'b1', baslik: 'Poliçe Bilgileri' };
+  const t = tabloTaslagiKur({
+    baslik: 'E',
+    alanlar: [
+      { anahtar: 'n', tur: 'text', etiket: 'Not', bolum },
+      { anahtar: 'm', tur: 'select-one', etiket: 'İşveren Mali Mesuliyeti', bolum, secenekler: [{ deger: '', metin: 'Lütfen seçiniz...' }, { deger: ' 1', metin: '50000' }, { deger: ' 6', metin: '300000' }] },
+      { anahtar: 'a', tur: 'text', etiket: 'Açıklama', bolum }
+    ],
+    degerler: { n: { deger: 'Depo', kaynak: 'elle' }, m: { deger: ' 6', kaynak: 'elle' }, a: { deger: 'Deneme', kaynak: 'elle' } }
+  });
+  expect(t?.tablolar.map((x) => [x.tabloAdi, x.sutunlar.map((s) => s.ad), x.liste?.secenekler.map((s) => s.metin) ?? null])).toEqual([
+    ['Poliçe Bilgileri', ['Not', 'Açıklama'], null],
+    ['İşveren Mali Mesuliyeti', ['İşveren Mali Mesuliyeti'], ['50000', '300000']]
+  ]);
+  const m = t?.tablolar[1];
+  expect(m?.satir).toEqual({ 'İşveren Mali Mesuliyeti': '300000' });
+  expect(m?.karsiliklar['İşveren Mali Mesuliyeti']).toMatchObject({ '50000': ' 1', '300000': ' 6' });
+});
