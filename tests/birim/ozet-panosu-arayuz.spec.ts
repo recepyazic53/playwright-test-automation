@@ -440,13 +440,15 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   await expect(kart('Kuyruk').locator('.pano-sayi-deger')).toHaveText('12 adet');
   await expect(kart('Kuyruk').locator('.pano-degisim')).toHaveClass(/artis/);
   await expect(kart('Kuyruk').locator('.pano-degisim')).toContainText('▲ Arttı: 1 adet (%9,1)');
-  // Pasta: 11 kategori → 7 dilim + "Diğer"; yüzdeler açıklamada.
+  // Pasta: 11 kategori → 11 dilim ("Diğer" yok); 8. dilimden sonra üretilen renkler; yüzdeler açıklamada.
   const aciklama = kart('Kategoriler').locator('.pano-pasta-aciklama li');
-  await expect(aciklama).toHaveCount(8);
-  await expect(aciklama.last()).toContainText('Diğer');
+  await expect(aciklama).toHaveCount(11);
+  await expect(kart('Kategoriler').locator('.pano-pasta-aciklama')).not.toContainText('Diğer');
+  const renkler = await kart('Kategoriler').locator('.pano-pasta-aciklama .pano-renk').evaluateAll((l) => l.map((e) => getComputedStyle(e).backgroundColor));
+  expect(new Set(renkler).size).toBe(11);
   await expect(aciklama.first()).toContainText('Kategori 11');
   await expect(aciklama.first()).toContainText('%16,7');
-  await expect(kart('Kategoriler').locator('svg.pano-pasta circle.dilim')).toHaveCount(8);
+  await expect(kart('Kategoriler').locator('svg.pano-pasta circle.dilim')).toHaveCount(11);
   // Durum kutucukları: renk eşiklere göre (hata 4 > 3 kırmızı, bekliyor 2 ≥ 1 yeşil).
   const kutu = (ad: string) => kart('Durumlar').locator('.pano-kutucuk').filter({ hasText: ad });
   await expect(kutu('hata')).toHaveClass(/esik-kirmizi/);
@@ -477,7 +479,7 @@ test('yeni görünümler: yüzde (çubuk / ibre), pasta "Diğer", sayı + deği�
   // 390 px: önbellekten çizilir, taşma yok, sorgu yok.
   const dar = await sayfaAc(390, 900);
   await git(dar.page, '#/sonuclar/ozet');
-  await expect(dar.page.locator('.pano-pasta-aciklama li')).toHaveCount(8);
+  await expect(dar.page.locator('.pano-pasta-aciklama li')).toHaveCount(11);
   await tasmaYok(dar.page);
   expect(sorgular()).toHaveLength(sorguSayisi);
   expect([...hatalar, ...dar.hatalar]).toEqual([]);
