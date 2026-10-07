@@ -5,7 +5,9 @@ export declare const YAKALAMA_KAYNAKLARI: readonly YakalamaKaynagi[];
 export declare const YAKALAMA_KAYNAK_ETIKETLERI: Readonly<Record<YakalamaKaynagi, string>>;
 export declare const EN_COK_YAKALANAN_MESAJ: number;
 export declare const YAKALANAN_METIN_SINIRI: number;
-export declare function yakalananMetniMaskele(metin: unknown, s?: { gizliDegerler?: ReadonlyArray<string>; ekAdlar?: ReadonlyArray<string> }): string;
+export declare function yakalananMetniMaskele(metin: unknown, s?: { gizliDegerler?: ReadonlyArray<string>; ekAdlar?: ReadonlyArray<string>; kisisel?: boolean }): string;
+export declare function kisiselMaskeVarsayilani(acik: boolean): void;
+export declare function kisiselMaskeAcikMi(): boolean;
 export declare function mesajToplayici(s?: { enCok?: number; simdi?: () => string }): {
   ekle(k: { kaynak: YakalamaKaynagi; metin: string; adim?: string | null; beklenen?: boolean }): boolean;
   liste(): YakalananMesaj[];

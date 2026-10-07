@@ -143,6 +143,10 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
 
 function modelFormu(icerik, s, senaryo, baglam) {
   const sema = formSemasiOlustur(baglam.model, baglam.altModeller);
+  // Alan maskeli mi (parola gibi gizli girdi, tablo / önceki değer yok): hassas ve ("Kişisel verileri maskele" açık ya da adı sır).
+  // Ayar kapalıyken T.C. / doğum tarihi gibi hassas alanlar düz alan gibi davranır; parola, CVV, token gibi sırlar maskeli kalır.
+  const maskeli = (/** @type {{ hassas?: boolean; anahtar?: string; id?: string }} */ alan) =>
+    alan.hassas === true && (baglam.kisiselMaske !== false || gizliAdMi(String(alan.anahtar || alan.id || ''), baglam.ekGizliAdlar || []));
   // Alanların görünürlük koşulları (dal düzeni: kontrol seçimi önde, kayıt grupları seçime göre; senaryo-dallari.mjs).
   const kosullar = kosulHaritasi(baglam.model);
   // Alanın adımından ÖNCEKİ SQL / servis adımlarının okumaları: alanın değeri ${akis:Ad} olabilir (koşuda okunan değer yazılır).
@@ -721,7 +725,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   }
   /** Gizli sütuna bağlı olmayan grup alanlarının ilk değerleri: satır adı önerisi (gizli değer öneriye girmez). */
   function satirAdiOnerisi(g) {
-    return aktifUyeler(g).filter((u) => !kayitBagiOzeti(u.alan)?.gizli && !u.alan.hassas)
+    return aktifUyeler(g).filter((u) => !kayitBagiOzeti(u.alan)?.gizli && !maskeli(u.alan))
       .map((u) => degerler[u.alan.anahtar]).filter((v) => (typeof v === 'string' && v.trim() && !v.trim().startsWith('${')) || typeof v === 'number')
       .slice(0, 2).map((v) => String(v).trim()).join(' ').slice(0, 60);
   }
@@ -853,7 +857,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
    */
   function formdakiSecimler(g, t) {
     const gorunurluk = sonDurum.gorunurluk;
-    return tumAlanlar.filter((a) => a.anahtar && ['secim', 'metin'].includes(a.tip) && !a.hassas && grupBul(a.id) !== g
+    return tumAlanlar.filter((a) => a.anahtar && ['secim', 'metin'].includes(a.tip) && !maskeli(a) && grupBul(a.id) !== g
       && !(gorunurluk && gorunurluk.alanlar && gorunurluk.alanlar[a.id] === false))
       .map((a) => {
         const v = degerler[a.anahtar];
@@ -1186,7 +1190,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const akistan = ['secim', 'tarih'].includes(alan.tip) && akisDegeriCoz(degerler[alan.anahtar]);
       switch (akistan ? 'akisDegeri' : alan.tip) {
         case 'secim': {
-          const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+          const tablodan = maskeli(alan) ? null : tabloSecenegi(alan);
           const liste = alanSecenekleri(alan);
           if (alan.gorunum === 'radyo') {
             // Radyo alanında KAYNAK değerden ayrı gösterilir: seçenekler yalnız değerlerdir; "Tablodan al" başlıktaki kaynak düğmesidir
@@ -1226,7 +1230,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         case 'onayKutusu': {
           // Tabloya bağlı onay kutusu "Tablodan" alabilir: koşuda seçilen satırdaki değer evet / hayır olarak okunur
           // (true/false, evet/hayır, 1/0, E/H; tanınmazsa koşu anlaşılır hatayla durur).
-          const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+          const tablodan = maskeli(alan) ? null : tabloSecenegi(alan);
           const b = tabloBasvurusuCoz(degerler[alan.anahtar]);
           if (b) {
             const kaldir = h('button', { type: 'button', class: 'kucuk-dugme hayalet', id, 'aria-label': `${alan.etiket}: tablodan almayı kaldır` }, ikon('carpi'), 'Kaldır');
@@ -1272,7 +1276,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
           break;
         case 'tarih':
           // Hassas tarih alanı (maskeli) ve önceki adımdan (${akis:Ad}) alan tarih aşağıdaki varsayılanla çizilir.
-          if (!alan.hassas && !akisDegeriCoz(degerler[alan.anahtar])) {
+          if (!maskeli(alan) && !akisDegeriCoz(degerler[alan.anahtar])) {
             const tg = tarihGirdisi({
               id, etiket: alan.etiket, deger: degerler[alan.anahtar], bicim: alan.bicim, sinirlar: alan.sinirlar ?? null,
               referans: senaryo?.guncellenme ?? null, tablodan: tabloSecenegi(alan), tabloBasvurusu: tabloBasvurusuCoz,
@@ -1310,14 +1314,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
             break;
           }
           // Hassas alanın düz değeri maskelenir.
-          const tip = alan.tip === 'sayi' ? 'number' : alan.hassas ? 'password' : 'text';
+          const tip = alan.tip === 'sayi' ? 'number' : maskeli(alan) ? 'password' : 'text';
           const girdi = bagla(h('input', {
             type: tip, value: String(degerler[alan.anahtar] ?? ''), autocomplete: 'off', spellcheck: 'false',
             placeholder: alan.tip === 'tarih' ? (alan.bicim || '') : alan.tip === 'dosya' ? `proje köküne göre yol${alan.kabul ? ` (${alan.kabul})` : ''}` : ''
           }), id);
           if (alan.tip === 'sayi') girdi.min = '1';
           // Tabloya (ya da değer listesine) bağlı metin alanı: aynı tablodaki seçimlere göre süzülen öneriler (elle yazılabilir).
-          if (!alan.hassas && degerListeleri.some((l) => l.hedef?.alan === alan.id)) {
+          if (!maskeli(alan) && degerListeleri.some((l) => l.hedef?.alan === alan.id)) {
             oneriListesi(girdi, () => birlesikDegerler(eslesenListeler(degerListeleri, (l) => l.hedef?.alan === alan.id, alanDegeri)).map((x) => x.deger));
           }
           girdi.addEventListener('input', () => degerYaz(alan.anahtar, girdi.value, { dokun: false }));
@@ -1407,7 +1411,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     kaldir.addEventListener('click', () => { degerYaz(alan.anahtar, ''); alanlar.get(alan.id)?.ciz(); });
     let icerikEl;
     // Tabloya bağlı dosya alanı "Tablodan" alabilir: koşuda seçilen satırdaki dosya ADI kullanılır (izinli klasör kuralları aynen).
-    const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+    const tablodan = maskeli(alan) ? null : tabloSecenegi(alan);
     const tb = tabloBasvurusuCoz(deger);
     if (tb) {
       icerikEl = h('div', { class: 'dosya-karti' },
@@ -1525,7 +1529,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
           girdi = bagla(secimGirdisi(a.secenekler, String(degerler[anahtar] || '')), aid);
           girdi.addEventListener('change', () => degerYaz(anahtar, girdi.value));
         } else {
-          girdi = bagla(h('input', { type: a.hassas ? 'password' : 'text', value: String(degerler[anahtar] ?? ''), autocomplete: 'off', spellcheck: 'false', placeholder: a.tip === 'secim' ? 'değer' : '' }), aid);
+          girdi = bagla(h('input', { type: maskeli(a) ? 'password' : 'text', value: String(degerler[anahtar] ?? ''), autocomplete: 'off', spellcheck: 'false', placeholder: a.tip === 'secim' ? 'değer' : '' }), aid);
           girdi.addEventListener('input', () => degerYaz(anahtar, girdi.value, { dokun: false }));
           girdi.addEventListener('change', () => { dokunulan.add(anahtar); planla(); });
         }
@@ -2506,7 +2510,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       else if (alan.tip === 'dosya') { const x = String(v ?? ''); m = x ? (dosyaBilgileri[x]?.ad || dosyaReferansiCoz(x)?.ad || x) : null; }
       else if (alan.tip === 'kimlik') { const kip = degerler[`${alan.id}#kip`]; m = kip === 'profil' ? String(degerler[`${alan.id}#profil`] || '') || 'profil seçilmedi' : kip === 'yeni' ? 'yeni kimlik' : null; }
       else if (alan.tip === 'altModel') m = degerler[`${alan.anahtar}#ozel`] === true ? 'senaryoya özel' : null;
-      else { const x = String(v ?? '').trim(); m = x ? (alan.hassas ? '••••' : x) : null; }
+      else { const x = String(v ?? '').trim(); m = x ? (maskeli(alan) ? '••••' : x) : null; }
       o[alan.id] = m ? kisa(String(m)) : null;
     }
     return o;

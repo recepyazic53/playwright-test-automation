@@ -9,7 +9,9 @@ import { chromium, expect, test, type Browser } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
-import { adGizliMi, ekGizliAdlar, ekGizliAdlariKaydet } from '../../scripts/platform/ayarlar/maskeleme.mjs';
+import { adGizliMi, ekGizliAdlar, ekGizliAdlariKaydet, kisiselVeriMaskelenir, kisiselVeriMaskesiKaydet } from '../../scripts/platform/ayarlar/maskeleme.mjs';
+import { kisiselMaskeVarsayilani, yakalananMetniMaskele } from '../../scripts/platform/sonuclar/yakalanan-mesajlar.mjs';
+import { MASKE as PANO_MASKE, sonucuMaskele } from '../../scripts/platform/sonuclar/pano-sql.mjs';
 import { okumaGizliMi } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
@@ -36,7 +38,34 @@ test('ek adlar kasada şifreli saklanır; doğrulanır; kasa kilitliyken boş li
     expect(ekGizliAdlariKaydet(vt, [' musteriAnahtari ', 'musteriAnahtari', 'kurumKodu'])).toEqual(['musteriAnahtari', 'kurumKodu']);
     expect(adGizliMi(vt, 'KURUM_KODU')).toBe(true);
     expect(String(vt.tek("SELECT deger_json FROM ayarlar WHERE anahtar = 'maskeleme'")?.deger_json)).toMatch(/^kasa:v1:/);
+    // "Kişisel verileri maskele": varsayılan açık; kapatılınca ek adlar korunur, ek adlar kaydedilince ayar korunur.
+    expect(kisiselVeriMaskelenir(vt)).toBe(true);
+    expect(() => kisiselVeriMaskesiKaydet(vt, 'hayır')).toThrow('true ya da false');
+    expect(kisiselVeriMaskesiKaydet(vt, false)).toBe(false);
+    expect(kisiselVeriMaskelenir(vt)).toBe(false);
+    expect(ekGizliAdlar(vt)).toEqual(['musteriAnahtari', 'kurumKodu']);
+    ekGizliAdlariKaydet(vt, ['kurumKodu']);
+    expect(kisiselVeriMaskelenir(vt)).toBe(false);
   } finally { vt.kapat(); klasor.temizle(); }
+});
+
+test('kişisel veri maskesi kapalı: uzun sayı / e-posta ve pano kişisel sütun kalıpları açık, sırlar maskeli', () => {
+  const metin = 'TC 12345678950 tel 0532 123 45 67 mail ali@ornek.com parola=Gizli123';
+  const acik = yakalananMetniMaskele(metin, { kisisel: true });
+  expect(acik).not.toContain('12345678950');
+  expect(acik).not.toContain('ali@');
+  const kapali = yakalananMetniMaskele(metin, { kisisel: false });
+  expect(kapali).toContain('12345678950');
+  expect(kapali).toContain('ali@ornek.com');
+  expect(kapali).not.toContain('Gizli123');
+  // Süreç geneli varsayılan (sunucu / koşucu ayarlar).
+  kisiselMaskeVarsayilani(false);
+  try { expect(yakalananMetniMaskele(metin)).toContain('0532 123 45 67'); } finally { kisiselMaskeVarsayilani(true); }
+  expect(yakalananMetniMaskele(metin)).not.toContain('0532 123 45 67');
+  // Pano: kişisel adlı sütun ve T.C. kalıbı yalnız ayar açıkken maskelenir; parola sütunu her zaman.
+  const r = { sutunlar: ['TCKN', 'PAROLA', 'ACIKLAMA'], satirlar: [['10000000146', 'x1', 'kimlik 10000000146']] };
+  expect(sonucuMaskele(r, { ekler: [], gizliDegerler: [] }).satirlar[0]).toEqual([PANO_MASKE, PANO_MASKE, `kimlik ${PANO_MASKE}`]);
+  expect(sonucuMaskele(r, { ekler: [], gizliDegerler: [], kisisel: false }).satirlar[0]).toEqual(['10000000146', PANO_MASKE, 'kimlik 10000000146']);
 });
 
 test.describe('Güvenlik > Maskeleme arayüzü', () => {

@@ -15,7 +15,7 @@
 
 import {
   DepoHatasi, baglamProfilleriniListele, degisiklikGecmisiListele, ekranModeliGetir, ekranlariListele, girisProfilleriniListele,
-  ortamlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, senaryoSil, testVerisiProfilleriniListele, testVerisiTurleriniListele
+  ortamlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, senaryoSil, testVerisiProfiliGetir, testVerisiProfilleriniListele, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryo-girisi.mjs';
 import { senaryoAdimGoruntusuAyikla } from '../ayarlar/kayit-kurallari.mjs';
@@ -24,6 +24,8 @@ import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiO
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula, senaryoAyariAlanlari } from './deger-listesi-modeli.mjs';
 import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
 import { BAGLAM_ONEKI, tabloKaydet, tablolariListele, tablolariListeleOnbellekli } from '../tablolar/tablo-deposu.mjs';
+import { ekGizliAdlar, kisiselVeriMaskelenir } from '../ayarlar/maskeleme.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { basvuru, basvurununTekDegeri, grupAnahtari, sutunBul, tabloBul, tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari.mjs';
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
@@ -536,13 +538,18 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
     } else {
       const tur = turler.find((x) => x.ad === t.ad);
       if (!tur) continue;
-      for (const p of testVerisiProfilleriniListele(vt, projeId, tur.id).filter((x) => ortamdaMi(x.ortamId)).sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
+      // "Kişisel verileri maskele" kapalıysa adı sır sayılmayan hassas alanlar da değeriyle önizlenir.
+      const ekler = ekGizliAdlar(vt);
+      const kisiselAcik = !kisiselVeriMaskelenir(vt);
+      for (const p0 of testVerisiProfilleriniListele(vt, projeId, tur.id).filter((x) => ortamdaMi(x.ortamId)).sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
+        const p = kisiselAcik && p0.hassasAlanlar.length ? (testVerisiProfiliGetir(vt, p0.id, { coz: true }) ?? p0) : p0;
+        const gizli = (/** @type {{ ad: string; hassas?: boolean }} */ a) => Boolean(a.hassas) && (!kisiselAcik || gizliAdMi(a.ad, ekler));
         liste.set(p.ad, {
           ad: p.ad, tur: 'testVerisi', kapsam: p.ortamId ? 'ortam' : 'tum',
-          // Maskeli önizleme: hassas alanların DEĞERİ gönderilmez, yalnızca dolu olup olmadığı.
+          // Maskeli önizleme: gizli kalan hassas alanların DEĞERİ gönderilmez, yalnızca dolu olup olmadığı.
           alanlar: tur.alanlar.map((a) => ({
-            etiket: a.etiket, dolu: a.hassas ? p.doluHassasAlanlar.includes(a.ad) : p.degerler[a.ad] !== undefined && p.degerler[a.ad] !== null && p.degerler[a.ad] !== '',
-            ...(a.hassas ? {} : { deger: p.degerler[a.ad] == null ? '' : String(p.degerler[a.ad]) })
+            etiket: a.etiket, dolu: gizli(a) ? p0.doluHassasAlanlar.includes(a.ad) : p.degerler[a.ad] !== undefined && p.degerler[a.ad] !== null && p.degerler[a.ad] !== '',
+            ...(gizli(a) ? {} : { deger: p.degerler[a.ad] == null ? '' : String(p.degerler[a.ad]) })
           }))
         });
       }
@@ -551,6 +558,8 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
   }
   return {
     ekran, ortamlar, model: mb.model, altModeller: mb.altModeller, modelSurumu: mb.surum, profiller, akislar: mb.akislar, akisId: mb.akisId,
+    // Ayarlar > Güvenlik > Maskeleme > "Kişisel verileri maskele" (kapalıysa formda hassas alanlar açık görünür; sırlar hariç).
+    kisiselMaske: kisiselVeriMaskelenir(vt), ekGizliAdlar: ekGizliAdlar(vt),
     veriKaynagi,
     olusturulabilir: Boolean(veriKaynagi),
     // Senaryonun "Giriş" seçimi için giriş profillerinin ADLARI (değer yok; ortamId null = tüm ortamlar).

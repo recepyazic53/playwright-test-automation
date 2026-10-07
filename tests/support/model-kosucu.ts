@@ -48,6 +48,7 @@ import { adimGoruntusuAyari, indirilenDosyaAyari, sayiAyari, secimAyari, sureAya
 import { adimGoruntusuAlinsinMi } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
+import { kisiselMaskeAcikMi } from '../../scripts/platform/sonuclar/yakalanan-mesajlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { atamalariCoz, type ServisTanimi } from '../../scripts/platform/servisler/servis-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
@@ -1095,7 +1096,17 @@ type SqlDegerleri = { degerler: Record<string, string>; gizliler: string[] };
  * (${akis:Ad} → önceki SQL okumaları, ${alan} → senaryo değeri). Sonuç (en çok 20 satır, gizliler maskeli) ek olarak rapora;
  * uyuşmazsa "Beklenen / Görülen" hatası.
  */
-async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: SqlTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
+/**
+ * "Kişisel verileri maskele" kapalıysa (Ayarlar > Güvenlik > Maskeleme) okumaların "gizli" işareti yalnız adı sır olanlarda geçerli
+ * (ör. TC / doğum tarihi okuması raporda açık görünür; parola / token okuması maskeli kalır).
+ */
+function okumaGizliliginiUygula<T extends { okumalar?: Array<{ ad: string; gizli?: boolean }> }>(tanim: T): T {
+  if (kisiselMaskeAcikMi() || !tanim.okumalar?.length) return tanim;
+  return { ...tanim, okumalar: tanim.okumalar.map((o) => (o.gizli && !gizliAdMi(o.ad) ? { ...o, gizli: false } : o)) };
+}
+
+async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanimHam: SqlTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
+  const tanim = okumaGizliliginiUygula(tanimHam);
   // Hedef: mantıksal veritabanı → bu ortamın eşlemesi (veri-oku.mjs çözdü) ya da doğrudan bağlantı. Çözülemezse sorgu atılmaz.
   const hedef = kosuSqlAyari(ortam.veri, tanim);
   if ('hata' in hedef) throw new Error(`${adimBasligi}: ${hedef.hata}`);
@@ -1154,7 +1165,8 @@ function akisDegeriniCoz(page: Page, alan: PlanAlani, adimBasligi: string, d: Sq
   return { ...alan, deger };
 }
 
-async function servisAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: ServisTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
+async function servisAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanimHam: ServisTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
+  const tanim = okumaGizliliginiUygula(tanimHam);
   const adres = process.env.PLATFORM_SONUC_ADRESI;
   const token = process.env.PLATFORM_SONUC_TOKENI;
   const projeId = process.env.NOBETCI_PROJE_ID;

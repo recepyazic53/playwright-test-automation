@@ -146,7 +146,9 @@
 // yanıtlarda dönmez.
 
 import { KATEGORI_SECENEKLERI, siniflandirmaKurallari, siniflandirmaKurallariniKaydet } from './ayarlar/siniflandirma-kurallari.mjs';
-import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet } from './ayarlar/maskeleme.mjs';
+import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet, kisiselVeriMaskelenir, kisiselVeriMaskesiKaydet } from './ayarlar/maskeleme.mjs';
+import { kisiselMaskeVarsayilani } from './sonuclar/yakalanan-mesajlar.mjs';
+import { gizliAdMi } from './ayarlar/gizli-adlar.mjs';
 import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
 import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } from './ayarlar/video-saklama.mjs';
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
@@ -440,6 +442,8 @@ export function platformEtkinligiBildir() {
 
 /** Kasa açıldığında kayıtlı süreyi yükler. @param {import('./veritabani/baglanti.mjs').Veritabani} db */
 function guvenlikAyariniYukle(db) {
+  // Ayarlar > Güvenlik > Maskeleme > "Kişisel verileri maskele" (yakalanan mesajlar, raporlar; süreç geneli).
+  kisiselMaskeVarsayilani(kisiselVeriMaskelenir(db));
   try {
     const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, GUVENLIK_AYAR_ANAHTARI));
     const dk = Number(ayar?.otomatikKilitDakika);
@@ -1136,15 +1140,24 @@ function girisProfiliGorunumu(p) {
   };
 }
 
-/** @param {import('./veritabani/depo.mjs').TestVerisiProfili} p */
-function testVerisiProfiliGorunumu(p) {
+/**
+ * Test verisi profilinin görünümü: hassas alanların değeri gelmez (maske). Ayarlar > Güvenlik > Maskeleme > "Kişisel verileri maskele"
+ * kapalıysa adı sır sayılmayan (parola, CVV, token… değil) hassas alanlar çözülmüş değeriyle, hassas olmayan alan gibi gelir.
+ * @param {import('./veritabani/depo.mjs').TestVerisiProfili} p @param {import('./veritabani/baglanti.mjs').Veritabani} db
+ */
+function testVerisiProfiliGorunumu(p, db) {
+  const ekler = ekGizliAdlar(db);
+  const acik = kisiselVeriMaskelenir(db) ? [] : p.hassasAlanlar.filter((ad) => !gizliAdMi(ad, ekler));
+  const cozulmus = acik.length ? testVerisiProfiliGetir(db, p.id, { coz: true }) : undefined;
+  const hassasAlanlar = p.hassasAlanlar.filter((ad) => !acik.includes(ad));
   /** @type {Record<string, unknown>} */
   const degerler = {};
   for (const [ad, deger] of Object.entries(p.degerler)) {
-    degerler[ad] = p.hassasAlanlar.includes(ad) ? maskeli(p.doluHassasAlanlar.includes(ad)) : deger;
+    degerler[ad] = hassasAlanlar.includes(ad) ? maskeli(p.doluHassasAlanlar.includes(ad)) : deger;
   }
+  for (const ad of acik) degerler[ad] = cozulmus?.degerler[ad] ?? '';
   for (const ad of p.doluHassasAlanlar) if (!(ad in degerler)) degerler[ad] = maskeli(true);
-  return { id: p.id, projeId: p.projeId, turId: p.turId, ortamId: p.ortamId, ad: p.ad, degerler, hassasAlanlar: p.hassasAlanlar, guncellenme: p.guncellenme };
+  return { id: p.id, projeId: p.projeId, turId: p.turId, ortamId: p.ortamId, ad: p.ad, degerler, hassasAlanlar, guncellenme: p.guncellenme };
 }
 
 /** Ortam seçimi: verilen kimlik (projede olmalı) ya da projenin varsayılan ortamı. @param {Veritabani} db @param {string} projeId @param {unknown} d */
@@ -1406,7 +1419,7 @@ const GET_UCLARI = new Map([
   }],
   ['/platform/test-verisi-turleri', (db, q) => ({ turler: testVerisiTurleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')) })],
   ['/platform/test-verisi-profilleri', (db, q) => ({
-    profiller: testVerisiProfilleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(testVerisiProfiliGorunumu)
+    profiller: testVerisiProfilleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')).map((p) => testVerisiProfiliGorunumu(p, db))
   })],
   ['/platform/gecmis', (db, q) => {
     const kayitlar = degisiklikGecmisiListele(db, metinAl(q.get('varlikTuru')), metinAl(q.get('varlikId')))
@@ -1432,7 +1445,7 @@ const GET_UCLARI = new Map([
   // Ayarlar > Arayüz > Nöbetçi nasıl açılsın (kendi penceresi / varsayılan tarayıcı; başlatıcı okur, bkz. ayarlar/acilis-tercihi.mjs).
   ['/platform/acilis', () => ({ acilis: acilisTercihiniOku(VERI_KOKU) })],
   // Ayarlar > Güvenlik > Maskeleme: çekirdek gizli ad listesi (değiştirilemez) + kullanıcının ek adları.
-  ['/platform/maskeleme', (db) => ({ cekirdek: CEKIRDEK_GIZLI_ADLAR, ekAdlar: ekGizliAdlar(db) })],
+  ['/platform/maskeleme', (db) => ({ cekirdek: CEKIRDEK_GIZLI_ADLAR, ekAdlar: ekGizliAdlar(db), kisiselVeri: kisiselVeriMaskelenir(db) })],
   // Ayarlar > Koşu > Hata sınıflandırma: kullanıcının kuralları + seçilebilen kategoriler.
   ['/platform/siniflandirma', (db) => ({ kurallar: siniflandirmaKurallari(db), kategoriler: KATEGORI_SECENEKLERI })],
   // Ayarlar > İzinler: durum (kayıt yoksa kapalı) + son değişiklikler (yapan makine adları kasada şifreli → eşleme).
@@ -1661,7 +1674,11 @@ const POST_UCLARI = new Map([
     baslarkenIsaretle(db, projeId, { gizli: g.gizli, girisGerekmez: g.girisGerekmez, incelendi: g.incelendi });
     return { baslarken: baslarkenDurumu(db, projeId) };
   }],
-  ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
+  ['/platform/maskeleme/kaydet', (db, g) => {
+    const ekAdlar = Array.isArray(g.ekAdlar) ? ekGizliAdlariKaydet(db, g.ekAdlar) : ekGizliAdlar(db);
+    if (typeof g.kisiselVeri === 'boolean') kisiselMaskeVarsayilani(kisiselVeriMaskesiKaydet(db, g.kisiselVeri));
+    return { ekAdlar, kisiselVeri: kisiselVeriMaskelenir(db) };
+  }],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
   ['/platform/kosu-gruplari/kaydet', (db, g) => ({ grup: kosuGrubuKaydet(db, { id: g.id ? kimlikAl(g.id, 'id') : null, projeId: kimlikAl(g.projeId, 'projeId'), ad: g.ad, senaryoIdleri: g.senaryoIdleri }) })],
   ['/platform/kosu-gruplari/sil', (db, g) => kosuGrubuSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id, 'id'))],
@@ -1936,7 +1953,7 @@ const POST_UCLARI = new Map([
       id: secimliKimlik(g.id), projeId: kimlikAl(g.projeId, 'projeId'), turId: kimlikAl(g.turId, 'turId'), ad: metinAl(g.ad),
       degerler: /** @type {Record<string, string | number | boolean | null>} */ (degerler), ortamId: ortamSecimi(g.ortamId)
     });
-    return { profil: testVerisiProfiliGorunumu(/** @type {import('./veritabani/depo.mjs').TestVerisiProfili} */ (testVerisiProfiliGetir(db, id))) };
+    return { profil: testVerisiProfiliGorunumu(/** @type {import('./veritabani/depo.mjs').TestVerisiProfili} */ (testVerisiProfiliGetir(db, id)), db) };
   }],
   ['/platform/test-verisi-profili/sil', (db, g) => ({ silindi: testVerisiProfiliSil(db, kimlikAl(g.id)) })],
   ['/platform/test-verisi-profili/goster', (db, g) => {

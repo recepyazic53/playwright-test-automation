@@ -7,8 +7,8 @@ export declare const PANO_SQL_EN_COK_ZAMAN_ASIMI_MS: number;
 export declare function kartZamanAsimiMs(sn: unknown): number;
 export declare const PANO_SQL_SATIR_SINIRI: number;
 export declare const MASKE: string;
-export declare function gizliSutunMu(ad: string, ekler: ReadonlyArray<string>): boolean;
-export declare function sonucuMaskele(r: { sutunlar: string[]; satirlar: unknown[][] }, m: { ekler: ReadonlyArray<string>; gizliDegerler: ReadonlyArray<string> }):
+export declare function gizliSutunMu(ad: string, ekler: ReadonlyArray<string>, kisisel?: boolean): boolean;
+export declare function sonucuMaskele(r: { sutunlar: string[]; satirlar: unknown[][] }, m: { ekler: ReadonlyArray<string>; gizliDegerler: ReadonlyArray<string>; kisisel?: boolean }):
   { sutunlar: string[]; satirlar: unknown[][]; gizliSutunlar: string[] };
 export declare function hataIletisi(hata: unknown, ayar: { sunucu?: string; kullanici?: string; parola?: string; veritabani?: string; port?: number | null }, zamanAsimiMs: number): string;
 export declare function sqlKarti(vt: Veritabani, projeId: string, kartId: string): {

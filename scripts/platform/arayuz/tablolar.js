@@ -48,7 +48,8 @@ function secimYaz(metin) {
 function kopya(t) {
   return {
     id: t ? t.id : undefined, ad: t ? t.ad : '',
-    sutunlar: t ? t.sutunlar.map((s) => ({ ad: s.ad, eskiAd: s.ad, gizli: s.gizli, tip: s.tip, karsiliklar: { ...(s.karsiliklar || {}) } }))
+    // acik: gizli sütun ama "Kişisel verileri maskele" kapalı (Ayarlar > Güvenlik) — değer düz gösterilir, yine şifreli saklanır.
+    sutunlar: t ? t.sutunlar.map((s) => ({ ad: s.ad, eskiAd: s.ad, gizli: s.gizli, acik: s.acik === true, tip: s.tip, karsiliklar: { ...(s.karsiliklar || {}) } }))
       : [{ ad: 'Değer', eskiAd: null, gizli: false, tip: 'metin', karsiliklar: {} }],
     satirlar: t ? t.satirlar.map((r) => ({ id: r.id, ad: r.ad || '', ortamId: r.ortamId, degerler: { ...r.degerler }, doluGizli: new Set(r.doluGizli), degisti: false })) : [],
     silinen: new Set(), degisti: !t, baglam: Boolean(t && t.baglam),
@@ -997,9 +998,9 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
         // Hedef satırın beklenen boş hücresi vurgulanır (değer girilince vurgu kalkar).
         const bekleyen = hedefte && hedef.sutunlar.includes(s.ad) && !String(r.degerler[anahtar] ?? '').trim() && !(s.gizli && r.doluGizli.has(s.eskiAd || s.ad));
         const g = h('input', {
-          type: s.gizli ? 'password' : 'text', value: secim ? secimGoster(r.degerler[anahtar]) : r.degerler[anahtar] ?? '', autocomplete: s.gizli ? 'new-password' : 'off',
+          type: s.gizli && !s.acik ? 'password' : 'text', value: secim ? secimGoster(r.degerler[anahtar]) : r.degerler[anahtar] ?? '', autocomplete: s.gizli ? 'new-password' : 'off',
           title: secim ? 'Değer — metin (ör. 34 — İSTANBUL)' : null,
-          placeholder: s.gizli && r.doluGizli.has(s.eskiAd || s.ad) ? '•••• kayıtlı' : '', 'aria-label': `${no}. satır ${s.ad}`
+          placeholder: s.gizli && !s.acik && r.doluGizli.has(s.eskiAd || s.ad) ? '•••• kayıtlı' : '', 'aria-label': `${no}. satır ${s.ad}`
         });
         g.addEventListener('input', () => { r.degerler[s.ad] = secim ? secimYaz(g.value) : g.value; if (anahtar !== s.ad) delete r.degerler[anahtar]; r.degisti = true; durumCiz(); });
         if (bekleyen) g.addEventListener('input', () => { g.closest('td')?.classList.toggle('veri-bekliyor-hucresi', !g.value.trim()); });

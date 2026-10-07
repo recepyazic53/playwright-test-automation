@@ -28,11 +28,21 @@ export const EN_COK_YAKALANAN_MESAJ = 50;
 /** Mesaj metninin en çok uzunluğu (maskelemeden sonra). */
 export const YAKALANAN_METIN_SINIRI = 500;
 const MASKE = '•••';
+/**
+ * Süreç geneli "Kişisel verileri maskele" (Ayarlar > Güvenlik > Maskeleme): sunucu kasa açılınca / ayar kaydedilince, koşucu veri
+ * okununca ayarlar. Kapalıyken uzun rakam dizileri ve e-postalar maskelenmez (sırlar — bilinen gizli değerler, gizli adlar — yine
+ * maskelenir). Çağıran { kisisel } ile ezebilir.
+ */
+let kisiselVarsayilan = true;
+/** @param {boolean} acik */
+export function kisiselMaskeVarsayilani(acik) { kisiselVarsayilan = acik !== false; }
+/** @returns {boolean} */
+export const kisiselMaskeAcikMi = () => kisiselVarsayilan;
 
 /**
  * Yakalanan metni maskeler ve kısaltır.
  * @param {unknown} metin
- * @param {{ gizliDegerler?: ReadonlyArray<string>; ekAdlar?: ReadonlyArray<string> }} [s]
+ * @param {{ gizliDegerler?: ReadonlyArray<string>; ekAdlar?: ReadonlyArray<string>; kisisel?: boolean }} [s]
  * @returns {string}
  */
 export function yakalananMetniMaskele(metin, s = {}) {
@@ -67,10 +77,12 @@ export function yakalananMetniMaskele(metin, s = {}) {
     }
     m = sonuc + m.slice(konum);
   }
-  m = m
-    // 4) Uzun rakam dizileri (kart / kimlik / telefon no) ve e-posta adresleri.
-    .replace(/\d(?:[ -]?\d){9,}/g, MASKE)
-    .replace(/[\p{L}\p{N}._%+-]+@([\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+)/gu, `${MASKE}@$1`);
+  // 4) Uzun rakam dizileri (kart / kimlik / telefon no) ve e-posta adresleri — "Kişisel verileri maskele" açıkken.
+  if (s.kisisel ?? kisiselVarsayilan) {
+    m = m
+      .replace(/\d(?:[ -]?\d){9,}/g, MASKE)
+      .replace(/[\p{L}\p{N}._%+-]+@([\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+)/gu, `${MASKE}@$1`);
+  }
   return m.length > YAKALANAN_METIN_SINIRI ? `${m.slice(0, YAKALANAN_METIN_SINIRI - 1)}…` : m;
 }
 

@@ -47,6 +47,7 @@ import {
   TEKRAR_PLANI_DEGISKENI, VARSAYILAN_VERI_KOSUSU_SINIRI, VERI_KIPI_DEGISKENI, basvuruGruplari, satirOzeti, tekrarPlaniniAyristir, veriKosulariniAc
 } from './tablolar/veri-kosulari.mjs';
 import { kayitliKosuOrtamDegiskenleri, kosuAyarlariniOku } from './ayarlar/kosu-ayarlari.mjs';
+import { kisiselVeriMaskelenir } from './ayarlar/maskeleme.mjs';
 import { YUKLEME_KLASORU_DEGISKENI, yuklemeDosyasiYolu } from './senaryolar/model-kosusu.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -158,6 +159,8 @@ async function genelKip() {
       // Kullanıcının kaydettiği koşu ayarları (ortam değişkeni adıyla): Nöbetçi dışından (terminal / CI) başlatılan koşularda
       // ortam değişkeni yoksa bunlar kullanılır (tests/support/kosu-ayarlari.ts).
       kosuAyarlari: kayitliKosuOrtamDegiskenleri(vt),
+      // Ayarlar > Güvenlik > Maskeleme > "Kişisel verileri maskele" (koşucu yakalanan mesajlarda ve raporlarda uygular).
+      kisiselMaske: kisiselVeriMaskelenir(vt),
       giris: giris && !girisIzni ? gizlisiz(giris) : giris,
       // Senaryoların ("Giriş" seçimi) ve akışların ("Yeniden giriş" adımı) ADIYLA seçtiği giriş profilleri — yalnızca
       // kullanılanlar (şifreler yalnızca bu sürecin çıktısında; giriş bilgisi izni kapalıysa hiç verilmez).

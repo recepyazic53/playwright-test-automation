@@ -1241,13 +1241,27 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
 
 /** Güvenlik > Maskeleme: çekirdek liste (salt okunur) + kullanıcının ek gizli adları (her satıra bir ad). */
 async function maskelemeKarti() {
-  const { cekirdek, ekAdlar } = await api('/platform/maskeleme');
+  const { cekirdek, ekAdlar, kisiselVeri } = await api('/platform/maskeleme');
+  // "Kişisel verileri maskele": kapalıyken T.C. / vergi no, doğum tarihi, kart ve telefon no ekranda ve raporlarda açık görünür.
+  const kisisel = h('input', { type: 'checkbox', checked: kisiselVeri !== false });
+  const kisiselMesaj = mesajKutusu();
+  kisisel.addEventListener('change', async () => {
+    kisiselMesaj.temizle();
+    try {
+      const r = await api('/platform/maskeleme/kaydet', { govde: { kisiselVeri: kisisel.checked } });
+      kisisel.checked = r.kisiselVeri;
+      kisiselMesaj.goster(r.kisiselVeri ? 'Kişisel veriler maskelenecek.' : 'Kişisel veriler artık maskelenmiyor (parola, token gibi sırlar yine maskeli).', 'basari');
+    } catch (hata) { kisisel.checked = !kisisel.checked; kisiselMesaj.goster(hata.message); }
+  });
   const liste = h('textarea', { rows: '4', spellcheck: 'false', autocomplete: 'off', class: 'kod-alani', placeholder: 'musteriAnahtari' });
   liste.value = ekAdlar.join('\n');
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   const form = h('form', { class: 'kart', novalidate: true, 'aria-label': 'Maskeleme' }, h('h3', {}, ikon('goz'), 'Maskeleme'),
     h('p', { class: 'soluk' }, 'Adı bu listede geçen alanların, başlıkların ve servis okumalarının değerleri raporlarda maskelenir, ekran paketlerinde reddedilir. Çekirdek liste güvenlik gereği değiştirilemez; kendi adlarınızı ekleyebilirsiniz.'),
+    h('label', { class: 'secenek' }, kisisel, 'Kişisel verileri maskele (T.C. / vergi no, doğum tarihi, kart ve telefon no)'),
+    h('p', { class: 'soluk kucuk' }, 'Kapalıyken bu değerler senaryo formunda, test verisinde, sonuçlarda, raporlarda ve panoda açık görünür. Parola, TOTP, token, anahtar ve CVV her zaman maskelenir; kasadaki değerler yine şifreli saklanır.'),
+    kisiselMesaj.kutu,
     h('p', { class: 'kucuk' }, h('b', {}, 'Çekirdek: '), cekirdek.join(', ')),
     mesaj.kutu,
     alan('Ek gizli adlar (her satıra bir ad)', liste, { yardim: 'Harf, rakam, "-", "_"; 2–40 karakter. Büyük/küçük harf ve "-", "_" yok sayılır (ör. musteriAnahtari → Musteri_Anahtari da gizli).' }),
