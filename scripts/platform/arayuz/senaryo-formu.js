@@ -32,6 +32,7 @@ import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 import { tarihGirdisi } from './goreli-tarih-girdisi.js';
+import { gizliAdMi } from './gizli-adlar.mjs';
 import { talepAlani } from './talep-alani.js';
 import { veriBekliyorNotu } from './veri-bekliyor.js';
 import { HAZIRLIK_BASLIKLARI, alanMaddesi, eylemDenetimi, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
@@ -147,15 +148,18 @@ function modelFormu(icerik, s, senaryo, baglam) {
   // Alanın adımından ÖNCEKİ SQL / servis adımlarının okumaları: alanın değeri ${akis:Ad} olabilir (koşuda okunan değer yazılır).
   const akisOkumalari = (() => {
     const adimlar = (Array.isArray(baglam.model?.adimlar) ? baglam.model.adimlar : []).filter((x) => x && typeof x.id === 'string');
-    /** @type {Map<string, Array<{ ad: string; adim: string }>>} */
+    /** @type {Map<string, Array<{ ad: string; adim: string; gizli: boolean }>>} */
     const harita = new Map();
-    /** @type {Array<{ ad: string; adim: string }>} */
+    /** @type {Array<{ ad: string; adim: string; gizli: boolean }>} */
     const biriken = [];
     for (const a of adimlar) {
       harita.set(a.id, biriken.slice());
       const okumalar = a.sqlKontrolu?.okumalar ?? a.servisKontrolu?.okumalar;
       for (const o of Array.isArray(okumalar) ? okumalar : []) {
-        if (o && typeof o.ad === 'string' && !biriken.some((b) => b.ad === o.ad)) biriken.push({ ad: o.ad, adim: String(a.baslik || a.id) });
+        // Okuma gizli işaretliyse (ya da işaret yoksa adı gizli adlardan biriyse) değeri raporda ve kayıtta maskelenir.
+        if (o && typeof o.ad === 'string' && !biriken.some((b) => b.ad === o.ad)) {
+          biriken.push({ ad: o.ad, adim: String(a.baslik || a.id), gizli: o.gizli === true || (o.gizli === undefined && gizliAdMi(o.ad)) });
+        }
       }
     }
     return (/** @type {string | undefined} */ adimId) => (adimId && harita.get(adimId)) || [];
@@ -1176,7 +1180,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         return okumalar.length ? h('select', {
           class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
           onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
-        }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})`))) : null;
+        }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})${o.gizli ? ' · gizli' : ''}`))) : null;
       };
       // Değeri önceki adımdan gelen seçim / tarih alanı "Önceki adımdan: Ad" rozetiyle (varsayılan çizim) gösterilir.
       const akistan = ['secim', 'tarih'].includes(alan.tip) && akisDegeriCoz(degerler[alan.anahtar]);
