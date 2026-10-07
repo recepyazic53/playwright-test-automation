@@ -8,13 +8,16 @@
 //   POST /platform/pano/donem { projeId, donemler: { kartId: dönem } }  döneme bağlı kartların dönem seçimi
 //   POST /platform/pano/sql/denetle { projeId, sorgu } yalnız okuma kuralı (bağlantı AÇILMAZ; kart eklerken uyarı)
 //   POST /platform/pano/sql/yenile { projeId, kartId } SQL kartını çalıştırır (izin: Veritabanı okuma; CANLI'da canliOnay: true)
+//   POST /platform/pano/sql/incele { projeId, kartId, satirIndeksi, zaman }  tablo satırının İncele sorgusu (izinler Yenile ile aynı)
 // NOT: import.meta KULLANILMAZ.
 import { DepoHatasi, ortamlariListele } from '../veritabani/depo.mjs';
 import { sqlBaglantilari } from '../sql/sorgu-bagdastirici.mjs';
 import { veritabanlariListele } from '../sql/veritabanlari.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { panoGetir, panoKaydet } from './ozet-panosu.mjs';
-import { PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, PANO_SQL_SATIR_SINIRI, PANO_SQL_UCU, PANO_SQL_ZAMAN_ASIMI_MS, panoSorgusuDenetle, panoSqlYenile } from './pano-sql.mjs';
+import {
+  PANO_INCELE_UCU, PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, PANO_SQL_SATIR_SINIRI, PANO_SQL_UCU, PANO_SQL_ZAMAN_ASIMI_MS, panoSorgusuDenetle, panoSqlIncele, panoSqlYenile
+} from './pano-sql.mjs';
 import { sablonSecenekleri, sablonSonucu } from './pano-sablonlari.mjs';
 import { kartDonemle, kartDonemliMi, kartParametrele, panoAyarla } from './pano-duzeni.mjs';
 
@@ -70,7 +73,11 @@ export const PANO_POST_UCLARI = [
     const projeId = kimlik(g.projeId, 'projeId');
     // SQL kartlarının sorgusu kaydederken de yalnız okuma kuralından geçer (Yenile'de yeniden denetlenir).
     const kartlar = g.duzen && Array.isArray(g.duzen.kartlar) ? g.duzen.kartlar : [];
-    for (const k of kartlar) if (k && k.tur === 'sql' && k.ayar && typeof k.ayar.sorgu === 'string') panoSorgusuDenetle(k.ayar.sorgu);
+    for (const k of kartlar) {
+      if (!k || k.tur !== 'sql' || !k.ayar) continue;
+      if (typeof k.ayar.sorgu === 'string') panoSorgusuDenetle(k.ayar.sorgu);
+      if (typeof k.ayar.inceleSorgusu === 'string' && k.ayar.inceleSorgusu.trim()) panoSorgusuDenetle(k.ayar.inceleSorgusu);
+    }
     panoKaydet(db, projeId, g.duzen);
     return panoGetir(db, projeId);
   }],
@@ -125,5 +132,8 @@ export const PANO_POST_UCLARI = [
     panoSorgusuDenetle(g.sorgu);
     return { gecerli: true };
   }],
-  [PANO_SQL_UCU, async (db, g) => ({ sonuc: await panoSqlYenile(db, kimlik(g.projeId, 'projeId'), kimlik(g.kartId, 'kartId')) })]
+  [PANO_SQL_UCU, async (db, g) => ({ sonuc: await panoSqlYenile(db, kimlik(g.projeId, 'projeId'), kimlik(g.kartId, 'kartId')) })],
+  [PANO_INCELE_UCU, async (db, g) => ({
+    sonuc: await panoSqlIncele(db, kimlik(g.projeId, 'projeId'), kimlik(g.kartId, 'kartId'), { satirIndeksi: g.satirIndeksi, zaman: g.zaman })
+  })]
 ];

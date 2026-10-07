@@ -24,7 +24,7 @@ import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
 import { riskliOrtamMi } from './ortam-riski.mjs';
 import { tumVeritabanlari } from '../sql/veritabanlari.mjs';
 import { izinGerekli, izinleriOku } from './izinler.mjs';
-import { PANO_SQL_UCU, panoSqlCanliOrtamlari } from '../sonuclar/pano-sql.mjs';
+import { PANO_INCELE_UCU, PANO_SQL_UCU, panoSqlCanliOrtamlari } from '../sonuclar/pano-sql.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
@@ -191,7 +191,7 @@ export function gerekenIzinler(vt, yol, g) {
       // Veritabanı bağlantısını dene: bağlantı bir CANLI ortamın veritabanı eşlemesindeyse (SQL > Veritabanları) CANLI sayılır.
       const adlar = canliEslemeOrtamlari(vt, g);
       if (adlar.length) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = adlar.join(', '); }
-    } else if (yol === PANO_SQL_UCU) {
+    } else if (yol === PANO_SQL_UCU || yol === PANO_INCELE_UCU) {
       // Özet panosu SQL kartı: kartın bağlantısı CANLI ortama aitse (veritabanı + CANLI ortam ya da bağlantının ortamı / eşlemesi).
       const adlar = panoSqlCanliOrtamlari(vt, g);
       if (adlar.length) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = adlar.join(', '); }

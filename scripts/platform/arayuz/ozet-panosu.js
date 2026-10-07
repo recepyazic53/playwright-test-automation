@@ -34,6 +34,7 @@ import { durumOner, govdeGibiMi, govdeKokAdi, KESILDI_EKI, metinKisalt, metniBic
 import { oranSaglikSinifi } from './sonuclar.js';
 
 const SQL_UCU = '/platform/pano/sql/yenile';
+const INCELE_UCU = '/platform/pano/sql/incele';
 /** Dar ekran (tek sütun; stil-ozet-panosu.css ile aynı eşik). */
 const DAR_EKRAN = '(max-width: 860px)';
 const darEkran = () => window.matchMedia(DAR_EKRAN).matches;
@@ -942,7 +943,17 @@ export function ozetPanosu(kap, s0) {
     const tiklamaSutunu = h('input', { type: 'text', value: a.tiklama?.sutun || '', autocomplete: 'off', spellcheck: 'false', placeholder: 'ör. SERVIS' });
     const tiklamaSutunAlani = alan('Seçilecek değerin sütunu (tablo)', tiklamaSutunu);
     const satirIncele = h('input', { type: 'checkbox', checked: a.satirIncele === true });
-    const satirInceleAlani = h('label', { class: 'secenek' }, satirIncele, 'Satırlarda "İncele" düğmesi (satırın tüm sütunları)');
+    // İncele sorgusu (isteğe bağlı): İncele penceresinde satırın altında ayrıntı tablosu (ör. o hataya ait son 10 kayıt).
+    const inceleSorgusu = h('textarea', { rows: 5, class: 'mono pano-incele-sorgusu', spellcheck: 'false', maxlength: 20000,
+      placeholder: 'ör. SELECT … FROM … WHERE METOT = :METOT AND HATA = :HATA FETCH FIRST 10 ROWS ONLY' });
+    inceleSorgusu.value = a.inceleSorgusu || '';
+    const inceleSorguAlani = alan('İncele\'de çalışacak sorgu (isteğe bağlı)', inceleSorgusu, { yardim: 'İncele\'ye basınca bu sorgu çalışır ve sonucu satırın altında '
+      + 'tablo olarak gösterilir. Tıklanan satırın sütunlarını :SUTUN_ADI (ör. :METOT), kartın parametrelerini :ad, dönemi :baslangic / :bitis olarak '
+      + 'kullanın; değerler parametre olarak bağlanır. Yalnız okuma; sonuç maskelenir. Boşsa İncele yalnız satırı gösterir.' });
+    const satirInceleAlani = h('div', {}, h('label', { class: 'secenek' }, satirIncele, 'Satırlarda "İncele" düğmesi (satırın tüm sütunları)'), inceleSorguAlani);
+    const inceleGoster = () => { inceleSorguAlani.hidden = !satirIncele.checked; };
+    satirIncele.addEventListener('change', inceleGoster);
+    inceleGoster();
     // Sütun biçimleri (yalnız "Tablo"): sütun + biçim türü + türüne göre ayar (kurallar / eşikler metni, artış iyi, alttaki sütun).
     const bicimListesi = h('div', { class: 'pano-sutun-bicimleri' });
     const bicimEkle = h('button', { type: 'button', class: 'kucuk-dugme hayalet' }, ikon('arti'), 'Sütun biçimi ekle');
@@ -1065,12 +1076,17 @@ export function ozetPanosu(kap, s0) {
         sutunBicimleri: gorunum.value === 'tablo' ? [...bicimListesi.children].map((x2) => /** @type {any} */ (x2).oku()).filter(Boolean) : (a.sutunBicimleri || []),
         ...(['kutucuk', 'tablo'].includes(gorunum.value) && tiklama.value ? { tiklama: { kartId: tiklama.value.split('|')[0], parametre: tiklama.value.split('|')[1],
           ...(gorunum.value === 'tablo' && tiklamaSutunu.value.trim() ? { sutun: tiklamaSutunu.value.trim() } : {}) } } : {}),
-        ...(gorunum.value === 'tablo' && satirIncele.checked ? { satirIncele: true } : {})
+        ...(gorunum.value === 'tablo' && satirIncele.checked ? { satirIncele: true, ...(inceleSorgusu.value.trim() ? { inceleSorgusu: inceleSorgusu.value } : {}) } : {})
       };
       if (!ayarYeni.baslik) throw new Error('Kart başlığı boş olamaz.');
       if (!ayarYeni.hedef) throw new Error('SQL kartı için bir veritabanı bağlantısı seçin.');
       // Yalnız okuma kuralı sunucuda denetlenir (bağlantı açılmaz): kaydetmeden önce uyarı.
       await api('/platform/pano/sql/denetle', { govde: { projeId: proje.id, sorgu: ayarYeni.sorgu } });
+      if (ayarYeni.inceleSorgusu) {
+        try { await api('/platform/pano/sql/denetle', { govde: { projeId: proje.id, sorgu: ayarYeni.inceleSorgusu } }); } catch (e) {
+          throw new Error(`İncele sorgusu: ${e && e.message ? e.message : String(e)}`);
+        }
+      }
       return ayarYeni;
     };
   }
@@ -1217,7 +1233,15 @@ export function ozetPanosu(kap, s0) {
           ? tabloGorunumu(a, sonuc, { siralama, odak: tabloOdak, sirala: tabloSirala, kaydet: tabloKaydet,
             goster: (g) => metinPenceresi({ ...g, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }),
             incele: (g) => satirPenceresi({ ...g, sutunlar: sonuc.sutunlar, gizliSutunlar: sonuc.gizliSutunlar || [], kartBaslik: a.baslik, bicim: a.bicim,
-              goster: (x) => metinPenceresi({ ...x, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }) }),
+              goster: (x) => metinPenceresi({ ...x, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }),
+              // İncele sorgusu: önbellekteki sonucun satırı sunucuda bulunur (satır gönderilmez). CANLI ortamda kartın bu oturumdaki
+              // onayı geçerlidir; onay yoksa standart CANLI penceresi bir kez açılır (api) ve sonra kart için hatırlanır.
+              ...(a.inceleSorgusu ? { ayrinti: async () => {
+                const y = await api(INCELE_UCU, { govde: { projeId: proje.id, kartId: k.id, satirIndeksi: sonuc.satirlar.indexOf(g.satir), zaman: sonuc.zaman,
+                  ...(canliOnaylari.has(onayAnahtari(k)) ? { canliOnay: true } : {}) } });
+                canliOnaylari.add(onayAnahtari(k));
+                return y.sonuc;
+              }, gosterAyrinti: (x) => metinPenceresi({ ...x, proje, kartBaslik: a.baslik, zaman: sonuc.zaman }) } : {}) }),
             ...(() => { const kt = kutucukTiklamasi(a); return kt.tikla ? { satirSec: kt.tikla, secili: kt.secili, hedefAdi: kt.hedefAdi } : {}; })() })
           : sonucGorunumu(a, sonuc, kutucukTiklamasi(a)));
         const yeni = /** @type {HTMLElement | null} */ (govde.querySelector('.pano-tablo'));
@@ -1985,16 +2009,66 @@ function satirPenceresi(g) {
     } else deger = h('dd', { class: typeof g.satir[i] === 'number' ? 'sayi' : null }, metin === '' ? h('span', { class: 'soluk' }, '—') : metin);
     return [h('dt', {}, ad, g.gizliSutunlar.includes(ad) ? [' ', ikon('kilit')] : null), deger];
   });
-  const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay pano-satir-penceresi', 'aria-labelledby': baslikId },
+  // İncele sorgusu varsa satırın altında ayrıntı tablosu: pencere açılınca çalışır (onay penceresi gerekirse api açar).
+  const ayrinti = g.ayrinti ? h('section', { class: 'pano-ayrinti', 'aria-label': 'Ayrıntı kayıtları', 'aria-busy': 'true' },
+    h('p', { class: 'soluk kucuk' }, h('span', { class: 'donen-kucuk', 'aria-hidden': 'true' }), ' Ayrıntı sorgusu çalışıyor…')) : null;
+  const diyalog = h('dialog', { class: `onay-diyalogu genis-onay pano-satir-penceresi${ayrinti ? ' ayrintili' : ''}`, 'aria-labelledby': baslikId },
     h('div', { class: 'diyalog-govde' },
       h('h2', { id: baslikId }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('goz')), `${g.kartBaslik} · ${g.satirNo}. satır`),
-      h('dl', { class: 'pano-satir-listesi' }, satirlar.flat())),
+      h('dl', { class: 'pano-satir-listesi' }, satirlar.flat()), ayrinti),
     h('div', { class: 'diyalog-alt' }, kapat));
+  if (ayrinti && g.ayrinti) {
+    g.ayrinti().then((r) => {
+      if (!diyalog.isConnected) return;
+      ayrinti.setAttribute('aria-busy', 'false');
+      yerlestir(ayrinti, ayrintiTablosu(r, g));
+    }).catch((e) => {
+      if (!diyalog.isConnected) return;
+      ayrinti.setAttribute('aria-busy', 'false');
+      yerlestir(ayrinti, e && e.durum === 423 ? h('p', { class: 'soluk kucuk' }, 'Ayrıntı sorgusu çalıştırılmadı.')
+        : h('p', { class: 'hata-metni', role: 'alert' }, e && e.message ? e.message : String(e)));
+    });
+  }
   kapat.addEventListener('click', () => diyalog.close());
   diyalog.addEventListener('close', () => { diyalog.remove(); if (g.donus.isConnected) g.donus.focus({ preventScroll: true }); });
   document.body.append(diyalog);
   diyalog.showModal();
   kapat.focus();
+}
+
+/** Ayrıntı hücresindeki tarih-saat (ISO) yerel saatle "gg.aa.yyyy ss:dd:sn"; diğerleri hucreBicimle. @param {unknown} v */
+function ayrintiMetni(v) {
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.test(v.trim())) {
+    const t = new Date(v.trim());
+    if (!Number.isNaN(t.getTime())) {
+      const iki = (/** @type {number} */ x) => String(x).padStart(2, '0');
+      return `${iki(t.getDate())}.${iki(t.getMonth() + 1)}.${t.getFullYear()} ${iki(t.getHours())}:${iki(t.getMinutes())}:${iki(t.getSeconds())}`;
+    }
+  }
+  return hucreBicimle(v, { tarih: 'yok' });
+}
+
+/**
+ * İncele sorgusunun sonucu: başlıklı tablo; uzun metin (ör. istek / yanıt) kısaltılır, "Görüntüle" tam metin penceresini açar.
+ * @param {{ sutunlar: string[]; satirlar: unknown[][]; gizliSutunlar?: string[]; kesildi?: boolean; satirSiniri?: number }} r
+ * @param {{ gosterAyrinti?: (x: { sutun: string; satirNo: number; metin: string; sutunlar: string[]; satir: unknown[]; donus: HTMLElement }) => void }} g
+ */
+function ayrintiTablosu(r, g) {
+  if (!r.satirlar.length) return h('p', { class: 'soluk kucuk' }, 'Ayrıntı sorgusu kayıt döndürmedi.');
+  const gizli = new Set(r.gizliSutunlar || []);
+  const govde = r.satirlar.map((satir, i) => h('tr', {}, r.sutunlar.map((ad, j) => {
+    const metin = ayrintiMetni(satir[j]);
+    if (!uzunMetinMi(metin)) return h('td', { class: typeof satir[j] === 'number' ? 'sayi' : null }, metin);
+    const d = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `Görüntüle: ${ad}, ${i + 1}. kayıt` }, 'Görüntüle');
+    d.addEventListener('click', () => g.gosterAyrinti?.({ sutun: ad, satirNo: i + 1, metin, sutunlar: r.sutunlar, satir, donus: d }));
+    return h('td', { class: 'pano-ayrinti-uzun' }, h('span', { class: 'pano-satir-onizleme' }, metinKisalt(metin, 160)), ' ', d);
+  })));
+  return h('div', {},
+    h('p', { class: 'soluk kucuk' }, `${r.satirlar.length.toLocaleString('tr-TR')} kayıt`, r.kesildi ? ` (ilk ${r.satirSiniri ?? r.satirlar.length} gösteriliyor)` : ''),
+    h('div', { class: 'pano-ayrinti-tablo', tabindex: '0', role: 'region', 'aria-label': 'Ayrıntı tablosu' },
+      h('table', { class: 'ozet-tablosu' },
+        h('thead', {}, h('tr', {}, r.sutunlar.map((ad) => h('th', { scope: 'col' }, ad, gizli.has(ad) ? [' ', ikon('kilit')] : null)))),
+        h('tbody', {}, govde))));
 }
 
 /**

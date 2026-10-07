@@ -26,7 +26,7 @@ import {
   kartParametreDegeri, kartParametrele, kartParametreleri, kartTemizle, sorgudaParametreVar, esikleriOku, hucreSunumu, rozetKurallariniOku, ikinciDeger, panoAyarla, etkinHedef, parametreyleDegisenler
 } from '../../scripts/platform/sonuclar/pano-duzeni.mjs';
 import { PANO_AYAR_ANAHTARI, PANO_SONUC_ANAHTARI, panoGetir, panoKaydet } from '../../scripts/platform/sonuclar/ozet-panosu.mjs';
-import { MASKE, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
+import { MASKE, PANO_INCELE_UCU, PANO_SQL_UCU, hataIletisi, kartZamanAsimiMs, panoSqlIncele, panoSqlYenile } from '../../scripts/platform/sonuclar/pano-sql.mjs';
 import { PANO_POST_UCLARI } from '../../scripts/platform/sonuclar/pano-uclari.mjs';
 import { sablonSonucu } from '../../scripts/platform/sonuclar/pano-sablonlari.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
@@ -535,6 +535,48 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     const r = await panoSqlYenile(vt, projeA, 'k-yaz');
     expect(r.satirlar).toEqual([[12]]);
     expect(sorgular()[0]).toBe('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
+  });
+
+  test('İncele sorgusu: önbellekteki satırın sütunları parametre olarak bağlanır; maskeli; yalnız okuma; CANLI onayı Yenile ile aynı', async () => {
+    const ana = 'SELECT durum, COUNT(*) AS n, MAX(tc_kimlik_no) AS tc_kimlik_no FROM kayitlar GROUP BY durum ORDER BY durum';
+    const incele = (sorgu: string, ek: Record<string, unknown> = {}) => sqlKarti('k-incele', ana, { satirIncele: true, inceleSorgusu: sorgu, ...ek });
+    // Yazan İncele sorgusu kaydedilmez; İncele kapalıysa sorgu saklanmaz.
+    expect(() => kaydetUcu(vt, { projeId: projeA, duzen: kartEkle(varsayilanDuzen(), incele('DELETE FROM kayitlar')) })).toThrow('Pano yalnız okuma sorgusu çalıştırır');
+    kaydetUcu(vt, { projeId: projeA, duzen: kartEkle(varsayilanDuzen(), incele('SELECT 1', { satirIncele: false })) });
+    expect(panoGetir(vt, projeA).duzen.kartlar.find((k) => k.id === 'k-incele')?.ayar).not.toHaveProperty('inceleSorgusu');
+    const sorgu = 'SELECT id, durum, tc_kimlik_no, aciklama FROM kayitlar WHERE durum = :DURUM ORDER BY id DESC LIMIT 3';
+    kaydetUcu(vt, { projeId: projeA, duzen: kartEkle(varsayilanDuzen(), incele(sorgu)) });
+    // Sonuç yokken (Yenile'den önce) çalışmaz.
+    await expect(panoSqlIncele(vt, projeA, 'k-incele', { satirIndeksi: 0, zaman: '' })).rejects.toThrow('Kartın sonucu değişti');
+    const r = await panoSqlYenile(vt, projeA, 'k-incele');
+    const i = r.satirlar.findIndex((s) => s[0] === 'hata');
+    writeFileSync(gunluk, '');
+    const uc = PANO_POST_UCLARI.find(([y]) => y === PANO_INCELE_UCU)?.[1] as (db: Veritabani, g: Record<string, unknown>) => Promise<{ sonuc: { sutunlar: string[]; satirlar: unknown[][]; gizliSutunlar: string[] } }>;
+    const d = (await uc(vt, { projeId: projeA, kartId: 'k-incele', satirIndeksi: i, zaman: r.zaman })).sonuc;
+    expect(d.sutunlar).toEqual(['id', 'durum', 'tc_kimlik_no', 'aciklama']);
+    expect(d.satirlar).toHaveLength(3);
+    expect(d.satirlar.every((s) => s[1] === 'hata' && s[2] === MASKE)).toBe(true);
+    expect(d.gizliSutunlar).toEqual(['tc_kimlik_no']);
+    expect(JSON.stringify(d)).not.toContain(SAHTE_TC);
+    // Değer SQL metnine eklenmez (sürücü parametresi); salt okunur oturum; sonuç önbelleğe yazılmaz.
+    expect(sorgular()).toEqual(['SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY', sorgu.replace(':DURUM', '$1')]);
+    expect(panoGetir(vt, projeA).sqlSonuclari['k-incele'].sutunlar).toEqual(['durum', 'n', 'tc_kimlik_no']);
+    // Sonuç arada yenilendiyse, satır yoksa, sütun yoksa ya da maskeliyse çalışmaz.
+    await expect(panoSqlIncele(vt, projeA, 'k-incele', { satirIndeksi: i, zaman: 'eski' })).rejects.toThrow('Kartın sonucu değişti');
+    await expect(panoSqlIncele(vt, projeA, 'k-incele', { satirIndeksi: 99, zaman: r.zaman })).rejects.toThrow('Kartın sonucu değişti');
+    for (const [s, beklenen] of [['SELECT 1 WHERE :YOK = 1', 'sütunu yok'], ['SELECT 1 WHERE :tc_kimlik_no = 1', 'maskeli olduğu için']]) {
+      kaydetUcu(vt, { projeId: projeA, duzen: kartEkle(varsayilanDuzen(), incele(s)) });
+      const r2 = await panoSqlYenile(vt, projeA, 'k-incele');
+      await expect(panoSqlIncele(vt, projeA, 'k-incele', { satirIndeksi: 0, zaman: r2.zaman })).rejects.toThrow(beklenen);
+    }
+    // İncele sorgusu olmayan kart.
+    kaydetUcu(vt, { projeId: projeA, duzen: kartEkle(varsayilanDuzen(), sqlKarti('k-incele', ana, { satirIncele: true })) });
+    const r3 = await panoSqlYenile(vt, projeA, 'k-incele');
+    await expect(panoSqlIncele(vt, projeA, 'k-incele', { satirIndeksi: 0, zaman: r3.zaman })).rejects.toThrow('İncele sorgusu yok');
+    // CANLI ortamdaki kart: İncele de Yenile gibi CANLI izni + onay ister.
+    kaydetUcu(vt, { projeId: projeA, duzen: kartEkle(varsayilanDuzen(), incele(sorgu, { hedef: { veritabaniId: vKayit, ortamId: CANLI } })) });
+    expect(gerekenIzinler(vt, PANO_INCELE_UCU, { projeId: projeA, kartId: 'k-incele' })).toMatchObject({ izinler: ['veritabani-okuma', 'canli-ortam'], canliOnayGerekli: true });
+    kaydetUcu(vt, { projeId: projeA, duzen: varsayilanDuzen() });
   });
 
   test('zaman aşımı ve satır sınırı (500); anlaşılır hata iletisi adres, kullanıcı ve parola içermez', async () => {
