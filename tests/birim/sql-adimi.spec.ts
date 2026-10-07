@@ -90,10 +90,22 @@ test('ekran akışı: SQL bloğu kendi adımı olur (son beklenen mesaj ekran ad
   expect(adimlardanBloklar(m, m.adimlar, modeldenAkisEnvanteri(m)).map((b) => b.tur)).toEqual(['alanlar', 'aksiyon', 'mesaj', 'sql', 'bitir']);
   const plan = modelKosuPlani(m, {});
   expect(plan.adimlar[1]).toMatchObject({ baslik: 'Veritabanına yazıldı', sql: { baglantiId: 'db1' }, sonAdim: true });
-  // Aksiyonsuz alan grubundan hemen sonra SQL olmaz; SQL'den sonra bekleme konmaz.
-  expect(akistanKayitEnvanteri(ENV, [{ tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'sql', ad: '', sql }, { tur: 'bitir' }]).hatalar[0].mesaj).toContain('aksiyondan');
+  // Düğmesiz alan grubundan sonra SQL (son kontrol): ekran adımı alanlarla biter, SQL ondan sonra koşar; sonraki aksiyon yeni adımdır.
+  const sonKontrol = akistanKayitEnvanteri(ENV, [{ tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'sql', ad: 'Son kontrol', sql },
+    { tur: 'aksiyon', dugme: 0, istegeBagli: false }, { tur: 'bitir' }]);
+  expect(sonKontrol.hatalar).toEqual([]);
+  const m3 = kayitPaketiOlustur(META, sonKontrol.envanter as NonNullable<typeof sonKontrol.envanter>).paket.model as Nesne;
+  expect(m3.adimlar.map((a: Nesne) => [a.baslik, Boolean(a.sqlKontrolu)])).toEqual([['Kayıt', false], ['Son kontrol', true], ['Kaydet', false]]);
+  expect(adimlardanBloklar(m3, m3.adimlar, modeldenAkisEnvanteri(m3)).map((b) => b.tur)).toEqual(['alanlar', 'sql', 'alanlar', 'aksiyon', 'bitir']);
+  // SQL'den sonra bekleme konmaz.
   expect(akistanKayitEnvanteri(ENV, [{ tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'aksiyon', dugme: 0, istegeBagli: false },
     { tur: 'sql', ad: '', sql }, { tur: 'bekle', saniye: 2 }, { tur: 'bitir' }]).hatalar[0].mesaj).toContain('yeniden dene');
+  // Değer okuyan SQL akışın başında; ardından alanlar + aksiyon gelince beklenen mesaj ve bekleme o ekran adımınındır.
+  const bastaSql = akistanKayitEnvanteri(ENV, [{ tur: 'sql', ad: 'Değer al', sql }, { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] },
+    { tur: 'bekle', saniye: 1 }, { tur: 'aksiyon', dugme: 0, istegeBagli: false }, { tur: 'mesaj', mesaj: null, metin: 'Kaydedildi' }, { tur: 'bitir' }]);
+  expect(bastaSql.hatalar).toEqual([]);
+  const m2 = kayitPaketiOlustur(META, bastaSql.envanter as NonNullable<typeof bastaSql.envanter>).paket.model as Nesne;
+  expect(m2.adimlar.map((a: Nesne) => [a.baslik, a.kosu?.basariGostergesi ?? null])).toEqual([['Değer al', null], ['Kayıt', { tur: 'metin', deger: 'Kaydedildi' }]]);
 });
 
 test('servis akışı: SQL adımı doğrulanır (servis / senaryo istemez); oturum akışında SQL okuması sayılır', () => {

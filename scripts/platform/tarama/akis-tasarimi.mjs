@@ -619,6 +619,9 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   };
   etkin.forEach((b, i) => {
     if (b.tur !== 'mesaj') grup = null;
+    // SQL / servis / dosya bloğundan sonra yeni bir ekran adımı (alan grubu, aksiyon, genel senaryo) başlarsa sonraki beklenen mesaj
+    // ve bekleme o adımındır (ör. akışın başında değer okuyan SQL, ardından alanlar ve "Kaydet" mesajı).
+    if (b.tur === 'alanlar' || b.tur === 'aksiyon' || b.tur === 'ortak') sqlSonrasi = false;
     if (b.tur === 'alanlar') {
       if (!b.ad) hata(i, 'Alan grubunun adını yazın.');
       else if (adlar.has(b.ad)) hata(i, `“${b.ad}” adı başka bir alan grubunda da var; adlar tekil olmalı.`);
@@ -747,7 +750,9 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const d = servisTanimiDogrula(b.servis);
       if (d.hatalar.length) { for (const m of d.hatalar) hata(i, m); return; }
       if (bekleyen) { hata(i, 'Servis isteği isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
-      if (cur && !kapali) { hata(i, 'Servis isteği bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }
+      // Düğmesiz alan grubundan sonra da gelebilir (ör. son kontrol): o ekran adımı alanlar doldurulunca biter; sonraki aksiyon / alanlar
+      // yeni adım başlatır (istek ondan önce koşmaz). Ardındaki beklenen mesaj yine o ekran adımınındır.
+      if (cur && !kapali) kapali = true;
       const ad = b.ad || 'Servis isteği';
       if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
       adlar.add(ad);
@@ -761,7 +766,9 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const d = sqlTanimiDogrula(b.sql, { satirSiniri: s.satirSiniri });
       if (d.hatalar.length) { for (const m of d.hatalar) hata(i, m); return; }
       if (bekleyen) { hata(i, 'SQL sorgusu isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
-      if (cur && !kapali) { hata(i, 'SQL sorgusu bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }
+      // Düğmesiz alan grubundan sonra da gelebilir (ör. son kontrol): o ekran adımı alanlar doldurulunca biter; sonraki aksiyon / alanlar
+      // yeni adım başlatır (sorgu ondan önce koşmaz). Ardındaki beklenen mesaj yine o ekran adımınındır.
+      if (cur && !kapali) kapali = true;
       const ad = b.ad || 'SQL sorgusu';
       if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
       adlar.add(ad);
