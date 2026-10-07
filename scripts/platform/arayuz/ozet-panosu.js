@@ -1297,7 +1297,9 @@ export function ozetPanosu(kap, s0) {
       if (h0.veritabaniId) {
         const v = se.veritabanlari.find((x) => x.id === h0.veritabaniId);
         const o = v && v.ortamlar.find((x) => x.id === h0.ortamId);
-        yerlestir(hedefRozeti, rozet(v ? `${v.ad}${o ? ` · ${o.ad}` : ''}` : 'bağlantı bulunamadı', v ? '' : 'hata', { kisalt: true }), o && o.canli ? rozet('CANLI ortam', 'hata') : null);
+        // Panonun ortamı seçiliyse ortam üst şeritte yazılı: kart ayrıca veritabanı / ortam / CANLI rozeti göstermez.
+        if (kayitli.duzen.ortamId && v && o) { yerlestir(hedefRozeti); return; }
+        yerlestir(hedefRozeti,rozet(v ? `${v.ad}${o ? ` · ${o.ad}` : ''}` : 'bağlantı bulunamadı', v ? '' : 'hata', { kisalt: true }), o && o.canli ? rozet('CANLI ortam', 'hata') : null);
       } else {
         const b = se.baglantilar.find((x) => x.id === h0.baglantiId);
         yerlestir(hedefRozeti, rozet(b ? b.ad : 'bağlantı bulunamadı', b ? '' : 'hata', { kisalt: true }), b && b.canli ? rozet('CANLI ortam', 'hata') : null);

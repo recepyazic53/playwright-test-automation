@@ -670,7 +670,9 @@ test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı;
   const onay = page.locator('dialog.canli-onay-penceresi');
   await expect(onay).toBeVisible();
   await onay.getByRole('button', { name: 'Evet, devam et' }).click();
-  await expect(kart('Mantıksal').locator('.pano-hedef')).toContainText('CANLI');
+  // Ortam şeritte yazılı: mantıksal kart ayrıca rozet göstermez; doğrudan bağlantılı kart kendi bağlantısını gösterir.
+  await expect(kart('Mantıksal').locator('.pano-hedef')).toBeEmpty();
+  await expect(kart('Doğrudan').locator('.pano-hedef')).not.toBeEmpty();
   await expect.poll(async () => ((await nobetciApi(nobetci, `/platform/pano?projeId=${projeId}`)).sqlSonuclari as Record<string, { ortamId?: string }>)['u-vt']?.ortamId).toBe(oCanli);
   await expect(page.locator('dialog.canli-onay-penceresi')).toHaveCount(0);
   // Aynı oturumda yeniden Tümünü yenile: onay sorulmaz.
