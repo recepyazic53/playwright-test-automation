@@ -299,19 +299,6 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 /* Panel açıkken (stil.css: kabı position: relative yapar) kap konumlanmasın: panel karta göre dursun; kart diğer kartların üstünde. */
 .pano-kart-sag:has(> .pano-donem > .tarih-paneli:not([hidden])), .pano-donem-satiri:has(> .pano-donem > .tarih-paneli:not([hidden])) { position: static; }
 .pano-ogesi:has(.pano-donem > .tarih-paneli:not([hidden])) { z-index: 30; }
-/* Panodaki tüm kayan alanlar (kart, tablo, liste, açıklama…): kaydırma çubuğu normalde görünmez; alanın üstüne gelince (tekerlekle
-   kaydırırken de) kart rengine yakın silik, çubuğun üstüne gelince / sürüklerken vurgu rengi. Ok düğmeleri yok. Chromium / Safari
-   ::-webkit-scrollbar; diğerlerinde ince ve silik çubuk (scrollbar-color). */
-.ozet-panosu ::-webkit-scrollbar { width: 8px; height: 8px; }
-.ozet-panosu ::-webkit-scrollbar-track, .ozet-panosu ::-webkit-scrollbar-corner { background: transparent; }
-.ozet-panosu ::-webkit-scrollbar-button { display: none; }
-.ozet-panosu ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
-.ozet-panosu :hover::-webkit-scrollbar-thumb, .ozet-panosu :focus-visible::-webkit-scrollbar-thumb { background: var(--cizgi-2); }
-.ozet-panosu ::-webkit-scrollbar-thumb:hover, .ozet-panosu ::-webkit-scrollbar-thumb:active { background: var(--vurgu); }
-@supports not selector(::-webkit-scrollbar) {
-  .ozet-panosu, .ozet-panosu * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
-  .ozet-panosu :hover { scrollbar-color: var(--cizgi-2) transparent; }
-}
 /* Sayı sütunu: başlık da sağa yaslı (değerler başlığın altında; genişlik değişince de hizalı). */
 .pano-tablo-tablosu thead th.sayi .pano-th { justify-content: flex-end; }
 .pano-tablo-tablosu thead th.sayi { font-family: inherit; }

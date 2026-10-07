@@ -4629,3 +4629,16 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
   .hata-penceresi { grid-template-columns: minmax(0, 1fr); }
   .hata-penceresi-gorsel { width: 100%; max-height: 10rem; }
 }
+/* Uygulamadaki tüm kayan alanlar (sayfa, kenar çubuğu, pencereler, kartlar, tablolar…): kaydırma çubuğu normalde görünmez; alanın üstüne gelince (tekerlekle
+   kaydırırken de) kart rengine yakın silik, çubuğun üstüne gelince / sürüklerken vurgu rengi. Ok düğmeleri yok. Chromium / Safari
+   ::-webkit-scrollbar; diğerlerinde ince ve silik çubuk (scrollbar-color). */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+:hover::-webkit-scrollbar-thumb, :focus-visible::-webkit-scrollbar-thumb { background: var(--cizgi-2); }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: var(--vurgu); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  :hover { scrollbar-color: var(--cizgi-2) transparent; }
+}
