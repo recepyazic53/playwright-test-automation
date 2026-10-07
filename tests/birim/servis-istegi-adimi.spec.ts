@@ -132,7 +132,7 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     const noAlani = { id: 'no', tip: 'metin', etiket: { ekran: 'Kayıt no' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'no' }, konum: { secici: '#no', kirilganlik: 'dusuk' }, zorunlu: false };
-    // "Önceki adımdan…" kuralları: hassas alanda yalnız GİZLİ okumalar, tarih alanında da seçim çıkar.
+    // "Önceki adımdan…": hassas alanda ve tarih alanında da seçim çıkar.
     const kimlikAlani = { id: 'kimlik', tip: 'metin', hassas: true, etiket: { ekran: 'Kimlik no' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'kimlik' }, konum: { secici: '#kimlik', kirilganlik: 'dusuk' }, zorunlu: false };
     const dogumAlani = { id: 'dogum', tip: 'tarih', etiket: { ekran: 'Doğum tarihi' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'dogum' }, konum: { secici: '#dogum', kirilganlik: 'dusuk' }, zorunlu: false };
     const alan = { id: 'tc', tip: 'metin', etiket: { ekran: 'TC' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'tc' }, konum: { secici: '#tc', kirilganlik: 'dusuk' }, zorunlu: false };
@@ -210,11 +210,11 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
       await expect(no).toContainText('Serviste kayıt var adımında okunur');
       await no.getByRole('button', { name: 'Kayıt no: önceki adımdan almayı kaldır' }).click();
       await expect(no.getByRole('textbox')).toHaveValue('');
-      // Hassas alan (Kimlik no): seçim çıkar ama yalnız GİZLİ okuma listelenir (No gizli değil).
+      // Hassas alan (Kimlik no): seçim çıkar, tüm okumalar listelenir (gizli olan işaretli).
       const kimlik = page.locator('[data-alan="kimlik"]');
       const kimlikSecimi = kimlik.getByRole('combobox', { name: 'Kimlik no: önceki adımda okunan değer' });
       await expect(kimlikSecimi).toBeVisible();
-      expect(await kimlikSecimi.locator('option').allTextContents()).toEqual(['Önceki adımdan…', 'Kimlik (Serviste kayıt var) · gizli']);
+      expect(await kimlikSecimi.locator('option').allTextContents()).toEqual(['Önceki adımdan…', 'No (Serviste kayıt var)', 'Kimlik (Serviste kayıt var) · gizli']);
       await kimlikSecimi.selectOption({ label: 'Kimlik (Serviste kayıt var) · gizli' });
       await expect(kimlik).toContainText('Önceki adımdan: Kimlik');
       await kimlik.getByRole('button', { name: 'Kimlik no: önceki adımdan almayı kaldır' }).click();

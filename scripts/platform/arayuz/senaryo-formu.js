@@ -164,20 +164,6 @@ function modelFormu(icerik, s, senaryo, baglam) {
     }
     return (/** @type {string | undefined} */ adimId) => (adimId && harita.get(adimId)) || [];
   })();
-  const AKIS_ALABILIR = ['metin', 'sayi', 'tarih', 'telefon'];
-  /**
-   * "Önceki adımdan…" seçimi: alanın adımından önce okuma tanımlı SQL / servis adımı varsa. Hassas alanda (kimlik no, parola…) yalnız GİZLİ
-   * işaretli okumalar listelenir: değer koşuda yazılır ama raporda ve kayıtta maskelenir. Hassas olmayan alanda tüm okumalar.
-   */
-  const akisSecimiYap = (alan, kayit) => {
-    if (!AKIS_ALABILIR.includes(alan.tip)) return null;
-    const okumalar = akisOkumalari(alan.adimId).filter((o) => !alan.hassas || o.gizli);
-    if (!okumalar.length) return null;
-    return h('select', {
-      class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
-      onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
-    }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})${o.gizli ? ' · gizli' : ''}`)));
-  };
   // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
   const onceki = s.taslak?.veri || senaryo?.veri || undefined;
   // Yeni senaryo: isteğe bağlı genel senaryoların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
@@ -1187,7 +1173,18 @@ function modelFormu(icerik, s, senaryo, baglam) {
         return;
       }
       kayit.ozetCiz = null;
-      switch (alan.tip) {
+      // Önceki SQL / servis adımında okunan değer: değer alan her alanda (hassas olanlarda da) "Önceki adımdan…" seçimi; seçilince
+      // değer ${akis:Ad} olur (koşuda okunan değer yazılır).
+      const akisSecimiYap = () => {
+        const okumalar = akisOkumalari(alan.adimId);
+        return okumalar.length ? h('select', {
+          class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
+          onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
+        }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})${o.gizli ? ' · gizli' : ''}`))) : null;
+      };
+      // Değeri önceki adımdan gelen seçim / tarih alanı "Önceki adımdan: Ad" rozetiyle (varsayılan çizim) gösterilir.
+      const akistan = ['secim', 'tarih'].includes(alan.tip) && akisDegeriCoz(degerler[alan.anahtar]);
+      switch (akistan ? 'akisDegeri' : alan.tip) {
         case 'secim': {
           const tablodan = alan.hassas ? null : tabloSecenegi(alan);
           const liste = alanSecenekleri(alan);
@@ -1213,7 +1210,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
               type: 'button', class: 'kucuk-dugme hayalet kaynak-dugmesi', title: `Değer kaynağı: ${tablodan.metin}`, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
               onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
             }, ikon('veri'), 'Tablodan al') : null;
-            ust = alanUst(alan, id, kaynakDugmesi ? [kaynakDugmesi] : []);
+            ust = alanUst(alan, id, [kaynakDugmesi, akisSecimiYap()].filter(Boolean));
             ust.el.querySelector('label').id = `${id}-etiket`;
             ust.el.querySelector('label').removeAttribute('for');
             kontrolKaydet(alan.anahtar, radyolar, hata, uyari);
@@ -1221,7 +1218,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
             const sel = bagla(secimGirdisi(liste, String(degerler[alan.anahtar] || ''), alan.bagimlilik && !liste.length ? 'Önce bağlı alanı seçin' : 'Seçin…', tablodan), id);
             sel.addEventListener('change', () => degerYaz(alan.anahtar, sel.value));
             govde = sel;
-            ust = alanUst(alan, id);
+            ust = alanUst(alan, id, [akisSecimiYap()].filter(Boolean));
             kontrolKaydet(alan.anahtar, [sel], hata, uyari);
           }
           break;
@@ -1282,11 +1279,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
               degistir: (d) => degerYaz(alan.anahtar, d, { dokun: false })
             });
             govde = tg.el;
-            ust = alanUst(alan, id, [akisSecimiYap(alan, kayit)].filter(Boolean));
+            ust = alanUst(alan, id, [akisSecimiYap()].filter(Boolean));
             kontrolKaydet(alan.anahtar, tg.girdiler, hata, uyari);
             break;
           }
         // falls through
+        case 'akisDegeri':
         default: {
           // Değeri önceki SQL / servis adımında okunan değer (${akis:Ad}): "Önceki adımdan: Ad" rozeti + Kaldır.
           const okunan = akisDegeriCoz(degerler[alan.anahtar]);
@@ -1332,9 +1330,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
             type: 'button', class: 'kucuk-dugme hayalet', title: tablodan.metin, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
             onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
           }, ikon('veri'), 'Tablodan') : null;
-          // Önceki SQL / servis adımında okunan değer: seçilince değer ${akis:Ad} olur (koşuda okunan değer yazılır).
-          const akisSecimi = akisSecimiYap(alan, kayit);
-          ust = alanUst(alan, id, [tablodanDugmesi, akisSecimi].filter(Boolean));
+          ust = alanUst(alan, id, [tablodanDugmesi, alan.tip === 'dosya' ? null : akisSecimiYap()].filter(Boolean));
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);
         }
       }

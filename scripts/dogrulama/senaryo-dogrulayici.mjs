@@ -112,8 +112,8 @@ const TABLODAN_ALABILIR = ['secim', 'okluSecim', 'radyo', 'metin', 'sayi', 'tari
 
 /** Önceki SQL / servis adımında okunan değer: değerin tamamı "${akis:Ad}" (koşuda çözülür). */
 const AKIS_DEGERI = /^\s*\$\{\s*akis:([\p{L}_][\p{L}\p{N}_.-]{0,59})\s*\}\s*$/u;
-/** Önceki adımda okunan değeri alabilen alan tipleri (çözülen değer yazılır). */
-const AKIS_ALABILIR = ['metin', 'sayi', 'tarih', 'telefon'];
+/** Önceki adımda okunan değeri alabilen alan tipleri (çözülen değer yazılır; hassas alanlar dahil, seçimde değer seçeneğin değeridir). */
+const AKIS_ALABILIR = ['metin', 'sayi', 'tarih', 'telefon', 'secim'];
 
 /** Değerin tamamı "${akis:Ad}" ise okumanın adı, değilse null. @param {unknown} deger */
 export function akisDegeriCoz(deger) {
