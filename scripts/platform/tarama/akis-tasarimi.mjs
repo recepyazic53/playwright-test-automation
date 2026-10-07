@@ -594,6 +594,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   let sure = 0; // düğmeden önce (alanlardan sonra) bekleme: sonraki düğmeye bağlanır, düğme yoksa adımın sonuna
   /** Son blok(lar) SQL sorgusu ya da dosya doğrulama (yan adım): ardından bekleme / ara mesaj konmaz. @type {false | 'sql' | 'dosya'} */
   let sqlSonrasi = false;
+  /** Son SQL / servis isteği adımının tanımı (ardından gelen bekleme bu tanımın sonraBekleSn'ine eklenir). @type {Record<string, any> | null} */
+  let sonIstekTanimi = null;
   /** @type {Map<string, number>} */
   const kullanilan = new Map();
   /** Adım bloklarının koşulları ("ne zaman çalışsın"): alanlar akışta olmalı (alan koşullarıyla aynı denetim). @type {Array<{ blok: number; ad: string; kosul: any }>} */
@@ -757,6 +759,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
       adlar.add(ad);
       sureyiBirak();
+      delete d.tanim.sonraBekleSn;
+      sonIstekTanimi = d.tanim;
       adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], servisKontrolu: d.tanim, ...(b.kosul ? { blokKosulu: b.kosul } : {}) });
       if (b.kosul) blokKosullari.push({ blok: i, ad, kosul: b.kosul });
       sqlSonrasi = 'sql';
@@ -774,6 +778,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       adlar.add(ad);
       sureyiBirak();
       // Kendi adımıdır; önceki ekran adımı (cur) açık kalır: ardındaki son beklenen mesaj ona bağlanır.
+      delete d.tanim.sonraBekleSn;
+      sonIstekTanimi = d.tanim;
       adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], sqlKontrolu: d.tanim, ...(b.kosul ? { blokKosulu: b.kosul } : {}) });
       if (b.kosul) blokKosullari.push({ blok: i, ad, kosul: b.kosul });
       sqlSonrasi = 'sql';
@@ -868,9 +874,16 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       hata(i, 'Bu korunan parça ayrı blok olarak kullanılamaz.');
       return;
     }
+    // SQL / servis isteğinden sonra bekleme: istek adımı bittikten sonra beklenir (tanımın sonraBekleSn'i).
+    if (b.tur === 'bekle' && sqlSonrasi === 'sql' && sonIstekTanimi) {
+      if (!(Number.isInteger(b.saniye) && b.saniye >= 1 && b.saniye <= BEKLEME_EN_COK_SN)) { hata(i, `Bekleme süresi 1–${BEKLEME_EN_COK_SN} saniye arasında tam sayı olmalı.`); return; }
+      const toplam = (sonIstekTanimi.sonraBekleSn ?? 0) + b.saniye;
+      if (toplam > 600) { hata(i, 'Bir istekten sonra toplam bekleme en çok 600 saniye olabilir.'); return; }
+      sonIstekTanimi.sonraBekleSn = toplam;
+      return;
+    }
     if (b.tur === 'bekle' && sqlSonrasi) {
-      hata(i, sqlSonrasi === 'sql' ? 'SQL sorgusundan / servis isteğinden sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'
-        : 'Dosya doğrulamadan sonra bekleme konmaz; indirme geç başlıyorsa adımdaki “indirmeyi bekleme” süresini kullanın.');
+      hata(i, 'Dosya doğrulamadan sonra bekleme konmaz; indirme geç başlıyorsa adımdaki “indirmeyi bekleme” süresini kullanın.');
       return;
     }
     if (b.tur === 'mesaj' && sqlSonrasi && !etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'servis' || x.tur === 'dosya')) {

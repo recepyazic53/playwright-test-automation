@@ -1463,9 +1463,18 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     const adimGovdesi = async (adim: PlanAdimi): Promise<void> => {
         ekranaDonuldu = false;
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
-        if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
+        // Akışta istekten sonra "Bekle" varsa (sonraBekleSn) adım bitince beklenir.
+        if (adim.sql) {
+          await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri);
+          if (adim.sql.sonraBekleSn) await page.waitForTimeout(adim.sql.sonraBekleSn * 1000);
+          return;
+        }
         // Servis isteği adımı: sayfaya dokunmaz; servisin şablon senaryosu sunucuda çalışır.
-        if (adim.servis) { await servisAdiminiUygula(testInfo, adim.baslik, adim.servis, s, ortam, sqlDegerleri); return; }
+        if (adim.servis) {
+          await servisAdiminiUygula(testInfo, adim.baslik, adim.servis, s, ortam, sqlDegerleri);
+          if (adim.servis.sonraBekleSn) await page.waitForTimeout(adim.servis.sonraBekleSn * 1000);
+          return;
+        }
         // İndirilen dosyayı doğrulama adımı: düğmeye basılır, indirilen dosya beklentilerle doğrulanır.
         if (adim.dosya) {
           adimMesajlariniTemizle(page);

@@ -15,6 +15,7 @@ export type SqlTanimi = {
   beklenen: SqlBeklenen;
   yenidenDeneme?: { sureSn: number; aralikSn: number };
   zamanAsimiSn?: number;
+  sonraBekleSn?: number;
   okumalar?: SqlOkuma[];
 };
 export type SqlSonucu = { sutunlar: string[]; satirlar: unknown[][]; kesildi?: boolean };
