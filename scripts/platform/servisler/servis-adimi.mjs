@@ -65,8 +65,15 @@ export function servisTanimiDogrula(ham) {
     okumalar.push({ ad, yol, ...(kaynak ? { kaynak } : {}), ...(o.gizli === true ? { gizli: true } : {}) });
   }
   if (okumalar.length > SERVIS_OKUMA_EN_COK) hatalar.push(`En çok ${SERVIS_OKUMA_EN_COK} okuma yapılabilir.`);
+  // İstekten sonra bekleme (diyagramda servis bloğundan sonraki "Bekle"): koşucu adım bitince bu kadar bekler.
+  let sonraBekleSn;
+  if (t.sonraBekleSn !== undefined && t.sonraBekleSn !== null && t.sonraBekleSn !== '') {
+    const b = Number(t.sonraBekleSn);
+    if (!Number.isInteger(b) || b < 1 || b > 600) hatalar.push('İstekten sonra bekleme 1–600 saniye arasında tam sayı olmalı.');
+    else sonraBekleSn = b;
+  }
   return {
-    tanim: { servisId, senaryoId, ...(atamalar.length ? { atamalar: atamalar.slice(0, SERVIS_ATAMA_EN_COK) } : {}), ...(okumalar.length ? { okumalar: okumalar.slice(0, SERVIS_OKUMA_EN_COK) } : {}) },
+    tanim: { servisId, senaryoId, ...(sonraBekleSn ? { sonraBekleSn } : {}), ...(atamalar.length ? { atamalar: atamalar.slice(0, SERVIS_ATAMA_EN_COK) } : {}), ...(okumalar.length ? { okumalar: okumalar.slice(0, SERVIS_OKUMA_EN_COK) } : {}) },
     hatalar
   };
 }

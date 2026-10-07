@@ -97,9 +97,17 @@ test('ekran akışı: SQL bloğu kendi adımı olur (son beklenen mesaj ekran ad
   const m3 = kayitPaketiOlustur(META, sonKontrol.envanter as NonNullable<typeof sonKontrol.envanter>).paket.model as Nesne;
   expect(m3.adimlar.map((a: Nesne) => [a.baslik, Boolean(a.sqlKontrolu)])).toEqual([['Kayıt', false], ['Son kontrol', true], ['Kaydet', false]]);
   expect(adimlardanBloklar(m3, m3.adimlar, modeldenAkisEnvanteri(m3)).map((b) => b.tur)).toEqual(['alanlar', 'sql', 'alanlar', 'aksiyon', 'bitir']);
-  // SQL'den sonra bekleme konmaz.
-  expect(akistanKayitEnvanteri(ENV, [{ tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'aksiyon', dugme: 0, istegeBagli: false },
-    { tur: 'sql', ad: '', sql }, { tur: 'bekle', saniye: 2 }, { tur: 'bitir' }]).hatalar[0].mesaj).toContain('yeniden dene');
+  // SQL'den sonra bekleme: SQL adımının tanımına (sonraBekleSn) yazılır, koşu planında adımda; diyagrama ayrı "Bekle" bloğu olarak döner.
+  const bekleli = akistanKayitEnvanteri(ENV, [{ tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'aksiyon', dugme: 0, istegeBagli: false },
+    { tur: 'sql', ad: 'Kontrol', sql }, { tur: 'bekle', saniye: 2 }, { tur: 'bekle', saniye: 3 }, { tur: 'bitir' }]);
+  expect(bekleli.hatalar).toEqual([]);
+  const m4 = kayitPaketiOlustur(META, bekleli.envanter as NonNullable<typeof bekleli.envanter>).paket.model as Nesne;
+  expect(m4.adimlar[1].sqlKontrolu.sonraBekleSn).toBe(5);
+  expect(modelKosuPlani(m4, {}).adimlar[1].sql).toMatchObject({ sonraBekleSn: 5 });
+  const geri = adimlardanBloklar(m4, m4.adimlar, modeldenAkisEnvanteri(m4));
+  expect(geri.map((b) => b.tur)).toEqual(['alanlar', 'aksiyon', 'sql', 'bekle', 'bitir']);
+  expect(geri.find((b) => b.tur === 'sql')).not.toHaveProperty('sql.sonraBekleSn');
+  expect(geri.find((b) => b.tur === 'bekle')).toMatchObject({ saniye: 5 });
   // Değer okuyan SQL akışın başında; ardından alanlar + aksiyon gelince beklenen mesaj ve bekleme o ekran adımınındır.
   const bastaSql = akistanKayitEnvanteri(ENV, [{ tur: 'sql', ad: 'Değer al', sql }, { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] },
     { tur: 'bekle', saniye: 1 }, { tur: 'aksiyon', dugme: 0, istegeBagli: false }, { tur: 'mesaj', mesaj: null, metin: 'Kaydedildi' }, { tur: 'bitir' }]);

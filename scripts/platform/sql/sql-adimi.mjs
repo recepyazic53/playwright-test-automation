@@ -178,6 +178,12 @@ export function sqlTanimiDogrula(ham, s = {}) {
     if (!tamSayi(z, 1, 300)) hatalar.push('Sorgu zaman aşımı 1–300 saniye arasında tam sayı olmalı.');
     else tanim.zamanAsimiSn = z;
   }
+  // Sorgudan sonra bekleme (diyagramda SQL bloğundan sonraki "Bekle"): koşucu adım bitince bu kadar bekler.
+  if (h.sonraBekleSn !== undefined && h.sonraBekleSn !== null && h.sonraBekleSn !== '') {
+    const b = Number(h.sonraBekleSn);
+    if (!tamSayi(b, 1, 600)) hatalar.push('Sorgudan sonra bekleme 1–600 saniye arasında tam sayı olmalı.');
+    else tanim.sonraBekleSn = b;
+  }
   const okumalar = Array.isArray(h.okumalar) ? h.okumalar : [];
   if (okumalar.length > 20) hatalar.push('En çok 20 değer okunabilir.');
   /** @type {Array<Record<string, unknown>>} */

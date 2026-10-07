@@ -684,14 +684,18 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
     // Servis isteği adımı: tek blok (tanım aynen; koşul diyagramda gösterilebiliyorsa).
     if (nesneMi(adim.servisKontrolu)) {
       const k = nesneMi(adim.gorunurluk) ? diyagramKosulu(gorunurlukIfadesi(model, adim.gorunurluk), env, new Set(), modelEtiketleri) : null;
-      bloklar.push({ tur: 'servis', ad: String(adim.baslik || adim.id), servis: kopya(adim.servisKontrolu), ...(k ? { kosul: k } : {}) });
+      const { sonraBekleSn, ...servis } = kopya(adim.servisKontrolu);
+      bloklar.push({ tur: 'servis', ad: String(adim.baslik || adim.id), servis, ...(k ? { kosul: k } : {}) });
+      if (Number.isInteger(sonraBekleSn) && sonraBekleSn > 0) bloklar.push({ tur: 'bekle', saniye: sonraBekleSn });
       continue;
     }
     // SQL sorgusu adımı: tek blok (tanım aynen).
     if (nesneMi(adim.sqlKontrolu)) {
       // Adımın koşulu ("ne zaman çalışsın"): diyagramda gösterilebiliyorsa bloğa.
       const k = nesneMi(adim.gorunurluk) ? diyagramKosulu(gorunurlukIfadesi(model, adim.gorunurluk), env, new Set(), modelEtiketleri) : null;
-      bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql: kopya(adim.sqlKontrolu), ...(k ? { kosul: k } : {}) });
+      const { sonraBekleSn, ...sql } = kopya(adim.sqlKontrolu);
+      bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql, ...(k ? { kosul: k } : {}) });
+      if (Number.isInteger(sonraBekleSn) && sonraBekleSn > 0) bloklar.push({ tur: 'bekle', saniye: sonraBekleSn });
       continue;
     }
     // Dosya doğrulama adımı: tek blok (tetikleyici düğme sağ listedeki sırasıyla; tanım aynen).
