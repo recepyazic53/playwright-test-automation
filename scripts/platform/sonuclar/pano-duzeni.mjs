@@ -108,6 +108,12 @@ export function sorgudaParametreVar(sorgu, ad) {
   return new RegExp(`(^|[^:\\w]):${ad}(?![\\w])`).test(kod);
 }
 
+/** SQL'in kodundaki (dizgi / yorum dışı) ":ad" parametre adları, ilk geçiş sırasıyla ve tekrarsız. @param {unknown} sorgu @returns {string[]} */
+export function sorguParametreAdlari(sorgu) {
+  const kod = String(sorgu ?? '').replace(/'(?:[^']|'')*'|"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, ' ');
+  return [...new Set([...kod.matchAll(/(?:^|[^:\w]):([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]))];
+}
+
 // Kart parametresi (SQL kartı): sorgudaki ":ad" için kart başlığında seçim kutusu. Tanım ayarda (ayar.parametreler: [{ ad, etiket,
 // secenekler }]); seçili değer kartta (kart.parametreDegerleri: { ad: değer }; düzenleme kipi gerekmez). Değer sürücü parametresi
 // olarak bağlanır (SQL metnine eklenmez). Seçili değer yoksa ya da artık seçeneklerde değilse ilk seçenek kullanılır.
@@ -527,6 +533,10 @@ function sqlAyari(ham) {
     ...(parametreler.length ? { parametreler } : {}), ...(tiklama ? { tiklama } : {}), ...(sutunBicimleri.length ? { sutunBicimleri } : {}),
     ...(simge ? { simge } : {}), ...(altMetin ? { altMetin } : {}), ...(ikinci ? { ikinci } : {}), ...(ham.kartTonu === true ? { kartTonu: true } : {}),
     ...(ham.satirIncele === true ? { satirIncele: true } : {}),
+    // "İncele"de çalışan ayrıntı sorgusu (isteğe bağlı; yalnız İncele açıkken): tıklanan satırın sütunları :SUTUN, kartın parametreleri
+    // :ad ve dönem :baslangic / :bitis olarak bağlanır (pano-sql.mjs > panoSqlIncele).
+    ...(ham.satirIncele === true && typeof ham.inceleSorgusu === 'string' && ham.inceleSorgusu.trim()
+      ? { inceleSorgusu: metin(ham.inceleSorgusu, 'İncele sorgusu', SQL_EN_UZUN, { cokSatir: true }) } : {}),
     ...(typeof ham.seriSutunu === 'string' && ham.seriSutunu.trim() ? { seriSutunu: metin(ham.seriSutunu, 'Mini trend sütunu', 120) } : {}),
     // Renk eşiği başka bir sütuna uygulanabilir (ör. düne göre fark); boşsa gösterilen değere.
     ...(typeof ham.esikSutunu === 'string' && ham.esikSutunu.trim() ? { esikSutunu: metin(ham.esikSutunu, 'Eşik sütunu', 120) } : {}) };

@@ -9,6 +9,7 @@ export declare function donemAraligi(donem: unknown, simdi?: Date): { baslangic:
 export declare function donemMetni(donem: unknown): string;
 export declare function sqlDonemParametreleri(sorgu: unknown): { baslangic: boolean; bitis: boolean };
 export declare function sorgudaParametreVar(sorgu: unknown, ad: string): boolean;
+export declare function sorguParametreAdlari(sorgu: unknown): string[];
 export declare const EN_COK_KART_PARAMETRESI: number;
 export declare const EN_COK_PARAMETRE_SECENEGI: number;
 export declare function kartParametreDegeri(kart: { ayar?: any; parametreDegerleri?: Record<string, string> }, ad: string): string | null;

@@ -605,6 +605,46 @@ test('tablo satır eylemleri: "İncele" satırın tüm sütunlarını açar; sat
   await kapat();
 });
 
+test('İncele sorgusu: pencerede satırın altında ayrıntı tablosu (satırın sütunu parametre); formda yalnız İncele açıkken', async () => {
+  test.setTimeout(90_000);
+  const inceleSorgusu = 'SELECT id, durum, tc_kimlik_no FROM kayitlar WHERE durum = :durum ORDER BY id DESC LIMIT 3';
+  const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { kartlar: [
+    { id: 't-ozet', tur: 'sql', x: 0, y: 0, w: 12, h: 6, ayar: { baslik: 'Durum tablosu', hedef: { baglantiId: bTest }, gorunum: 'tablo', satirIncele: true, inceleSorgusu,
+      sorgu: 'SELECT durum, COUNT(*) AS adet FROM kayitlar GROUP BY durum ORDER BY durum' } }] } });
+  expect(kaydet.basarili, kaydet.mesaj).not.toBe(false);
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/ozet');
+  const kart = page.locator('section.pano-sql-karti').filter({ has: page.getByRole('heading', { name: 'Durum tablosu' }) });
+  await kart.getByRole('button', { name: 'Yenile: Durum tablosu' }).click();
+  await expect(kart.locator('tbody tr')).toHaveCount(3);
+  await kart.getByRole('button', { name: 'İncele: 2. satır' }).click();
+  const pencere = page.getByRole('dialog', { name: 'Durum tablosu · 2. satır' });
+  await expect(pencere.locator('dd').first()).toHaveText('hata');
+  const tablo = pencere.getByRole('region', { name: 'Ayrıntı tablosu' });
+  await expect(tablo.locator('thead th')).toHaveText(['id', 'durum', 'tc_kimlik_no']);
+  await expect(tablo.locator('tbody tr')).toHaveCount(3);
+  await expect.poll(() => tablo.locator('tbody td:nth-child(2)').allTextContents()).toEqual(['hata', 'hata', 'hata']);
+  await expect(tablo).not.toContainText(SAHTE_TC);
+  await expect(pencere.getByText('3 kayıt')).toBeVisible();
+  await pencere.getByRole('button', { name: 'Kapat' }).click();
+  // Form: İncele sorgusu yalnız İncele açıkken görünür; kayıtlı sorgu gelir.
+  await page.getByRole('button', { name: 'Panoyu düzenle' }).click();
+  await page.getByRole('button', { name: 'Düzenle: Durum tablosu' }).click();
+  const form = page.getByRole('dialog', { name: /^Kartı düzenle/ });
+  const alan = form.getByLabel('İncele\'de çalışacak sorgu (isteğe bağlı)');
+  await expect(alan).toHaveValue(inceleSorgusu);
+  await form.getByLabel('Satırlarda "İncele" düğmesi (satırın tüm sütunları)').uncheck();
+  await expect(alan).toBeHidden();
+  await form.getByLabel('Satırlarda "İncele" düğmesi (satırın tüm sütunları)').check();
+  await alan.fill('DELETE FROM kayitlar');
+  await form.getByRole('button', { name: 'Uygula' }).click();
+  await expect(form.getByText(/İncele sorgusu: .*yalnız okuma/)).toBeVisible();
+  await form.getByRole('button', { name: 'Vazgeç' }).click();
+  await page.getByRole('region', { name: 'Pano düzenleme' }).getByRole('button', { name: 'Vazgeç' }).click();
+  expect(hatalar).toEqual([]);
+  await kapat();
+});
+
 test('üst şerit: başlık / açıklama, ortam seçimi (mantıksal veritabanı; CANLI\'ya geçişte tek onay), tüm kartların dönemi, Tümünü yenile, otomatik yenileme', async () => {
   test.setTimeout(120_000);
   const kaydet = await nobetciApi(nobetci, '/platform/pano/kaydet', { projeId, duzen: { baslik: 'Canlı servis durumu', aciklama: 'Anlık sağlık', kartlar: [

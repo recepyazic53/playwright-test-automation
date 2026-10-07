@@ -31,12 +31,13 @@ import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { adMaskeleyici, bilinenGizliDegerler } from './html-rapor.mjs';
 import { tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { panoGetir, sqlSonucuYaz } from './ozet-panosu.mjs';
-import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, etkinHedef, kartParametreleri, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
+import { SQL_ZAMAN_ASIMI_SN, VARSAYILAN_DONEM, donemAraligi, donemTemizle, etkinHedef, kartParametreleri, sorguParametreAdlari, sqlDonemParametreleri, sqlZamanAsimiTemizle } from './pano-duzeni.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; kesildi: boolean; gizliSutunlar: string[]; satirSiniri: number; parametreler?: Record<string, string> }} PanoSqlSonucu */
 
 export const PANO_SQL_UCU = '/platform/pano/sql/yenile';
+export const PANO_INCELE_UCU = '/platform/pano/sql/incele';
 export const PANO_SQL_ZAMAN_ASIMI_MS = SQL_ZAMAN_ASIMI_SN.varsayilan * 1000;
 export const PANO_SQL_EN_COK_ZAMAN_ASIMI_MS = SQL_ZAMAN_ASIMI_SN.enCok * 1000;
 export const PANO_SQL_SATIR_SINIRI = 500;
@@ -171,12 +172,6 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   const kart = sqlKarti(vt, projeId, kartId);
   panoSorgusuDenetle(kart.ayar.sorgu);
   const h = kart.ayar.hedef;
-  const { baglanti } = sqlHedefi(vt, h.veritabaniId ? { veritabaniId: h.veritabaniId } : { baglantiId: h.baglantiId },
-    { projeId, ...(h.ortamId ? { ortamId: h.ortamId } : {}) });
-  // Bağlantının "Yalnız okuma" seçimi ne olursa olsun pano sorgusu salt okunur oturumda çalışır.
-  const ayar = { ...veritabaniAyari(baglanti.alanlar), yalnizOkuma: true };
-  const zamanAsimiMs = Math.max(200, Math.min(PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, Number(s.zamanAsimiMs) || kartZamanAsimiMs(kart.ayar.zamanAsimiSn)));
-  const satirSiniri = Math.max(1, Math.min(PANO_SQL_SATIR_SINIRI, Math.floor(Number(s.satirSiniri) || PANO_SQL_SATIR_SINIRI)));
   // Dönem: sorguda :baslangic / :bitis varsa kartın dönemi (yoksa varsayılan) Date olarak SÜRÜCÜ PARAMETRESİ bağlanır (Oracle :ad,
   // SQL Server @ad, PostgreSQL $n, MySQL ? — veritabani-suruculeri.mjs > parametreleriDonustur); SQL metnine hiçbir değer eklenmez.
   const p = sqlDonemParametreleri(kart.ayar.sorgu);
@@ -189,12 +184,38 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   Object.assign(parametreler, kartParam);
   if (aralik && p.baslangic) parametreler.baslangic = aralik.baslangic;
   if (aralik && p.bitis) parametreler.bitis = aralik.bitis;
+  const { maskeli, kesildi, satirSiniri } = await sorguyuCalistir(vt, projeId, kart, kart.ayar.sorgu, parametreler, s, PANO_SQL_SATIR_SINIRI);
+  // "Sayı + değişim" için önceki YENİLEMENİN ilk satırı (önbellekteki maskeli sonuçtan; aynı sorgu ve hedef). İlk yenilemede null.
+  const eski = panoGetir(vt, projeId).sqlSonuclari[kartId];
+  const onceki = eski ? { zaman: eski.zaman, sutunlar: eski.sutunlar, ilkSatir: eski.satirlar[0] ?? null } : null;
+  /** @type {PanoSqlSonucu} */
+  const sonuc = { zaman: simdi.toISOString(), ...maskeli, kesildi, satirSiniri, onceki,
+    ...(Object.keys(kartParam).length ? { parametreler: kartParam } : {}),
+    ...(h.veritabaniId && h.ortamId ? { ortamId: h.ortamId } : {}),
+    ...(aralik ? { donem: { secim: donemTemizle(kart.donem) ?? { ...VARSAYILAN_DONEM }, baslangic: aralik.baslangic.toISOString(), bitis: aralik.bitis.toISOString() } } : {}) };
+  sqlSonucuYaz(vt, projeId, kartId, sonuc);
+  return sonuc;
+}
+
+/**
+ * Kartın hedefinde sorguyu yalnız okuma olarak çalıştırır ve sonucu maskeler (Yenile ve İncele ortak yolu).
+ * @param {Veritabani} vt @param {string} projeId @param {ReturnType<typeof sqlKarti>} kart @param {string} sorgu
+ * @param {Record<string, unknown>} parametreler @param {{ zamanAsimiMs?: number; satirSiniri?: number }} s @param {number} enCokSatir
+ */
+async function sorguyuCalistir(vt, projeId, kart, sorgu, parametreler, s, enCokSatir) {
+  const h = kart.ayar.hedef;
+  const { baglanti } = sqlHedefi(vt, h.veritabaniId ? { veritabaniId: h.veritabaniId } : { baglantiId: h.baglantiId },
+    { projeId, ...(h.ortamId ? { ortamId: h.ortamId } : {}) });
+  // Bağlantının "Yalnız okuma" seçimi ne olursa olsun pano sorgusu salt okunur oturumda çalışır.
+  const ayar = { ...veritabaniAyari(baglanti.alanlar), yalnizOkuma: true };
+  const zamanAsimiMs = Math.max(200, Math.min(PANO_SQL_EN_COK_ZAMAN_ASIMI_MS, Number(s.zamanAsimiMs) || kartZamanAsimiMs(kart.ayar.zamanAsimiSn)));
+  const satirSiniri = Math.max(1, Math.min(enCokSatir, Math.floor(Number(s.satirSiniri) || enCokSatir)));
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let zamanlayici;
   let ham;
   try {
     ham = await Promise.race([
-      veritabaniSorgusu(ayar, kart.ayar.sorgu, parametreler, { zamanAsimiMs: Math.max(1000, zamanAsimiMs), satirSiniri, yasakDesenleri: etkinYasakDesenleri(vt) }),
+      veritabaniSorgusu(ayar, sorgu, parametreler, { zamanAsimiMs: Math.max(1000, zamanAsimiMs), satirSiniri, yasakDesenleri: etkinYasakDesenleri(vt) }),
       new Promise((_, reddet) => { zamanlayici = setTimeout(() => reddet(Object.assign(new Error('zaman aşımı'), { code: 'PANO_ZAMAN_ASIMI' })), zamanAsimiMs); })
     ]);
   } catch (e) {
@@ -207,14 +228,52 @@ export async function panoSqlYenile(vt, projeId, kartId, s = {}) {
   let gizliDegerler = [];
   try { gizliDegerler = bilinenGizliDegerler(vt, projeId).map(String); } catch { gizliDegerler = []; }
   const maskeli = sonucuMaskele({ sutunlar: r.sutunlar, satirlar: r.satirlar.slice(0, satirSiniri) }, { ekler: ekGizliAdlar(vt), gizliDegerler });
-  // "Sayı + değişim" için önceki YENİLEMENİN ilk satırı (önbellekteki maskeli sonuçtan; aynı sorgu ve hedef). İlk yenilemede null.
-  const eski = panoGetir(vt, projeId).sqlSonuclari[kartId];
-  const onceki = eski ? { zaman: eski.zaman, sutunlar: eski.sutunlar, ilkSatir: eski.satirlar[0] ?? null } : null;
-  /** @type {PanoSqlSonucu} */
-  const sonuc = { zaman: simdi.toISOString(), ...maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri, onceki,
-    ...(Object.keys(kartParam).length ? { parametreler: kartParam } : {}),
-    ...(h.veritabaniId && h.ortamId ? { ortamId: h.ortamId } : {}),
-    ...(aralik ? { donem: { secim: donemTemizle(kart.donem) ?? { ...VARSAYILAN_DONEM }, baslangic: aralik.baslangic.toISOString(), bitis: aralik.bitis.toISOString() } } : {}) };
-  sqlSonucuYaz(vt, projeId, kartId, sonuc);
-  return sonuc;
+  return { maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri };
+}
+
+/** İncele sorgusunun en çok satırı (ayrıntı penceresi; sorgu kendisi de sınırlamalıdır, ör. FETCH FIRST 10 ROWS ONLY). */
+export const PANO_INCELE_SATIR_SINIRI = 100;
+
+/**
+ * Tablo satırının "İncele"si: kartın ayrıntı sorgusu (ayar.inceleSorgusu) kartın hedefinde yalnız okuma olarak çalışır; sonuç
+ * maskelenir, önbelleğe YAZILMAZ. Satır istemciden alınmaz: önbellekteki son sonucun satirIndeksi'ndeki satırı kullanılır (zaman
+ * aynı olmalı; arada yenilendiyse yeniden İncele istenir). Bağlanan değerler (SQL metnine eklenmez, sürücü parametresi):
+ *   :baslangic / :bitis  sonucun alındığı dönem; kart parametresi :ad  sonucun alındığı seçim; diğer :AD  satırın aynı adlı sütunu
+ *   (büyük / küçük harf duyarsız). Maskeli sütun bağlanamaz.
+ * @param {Veritabani} vt @param {string} projeId @param {string} kartId @param {{ satirIndeksi: unknown; zaman: unknown }} g
+ * @param {{ zamanAsimiMs?: number; satirSiniri?: number }} [s]
+ */
+export async function panoSqlIncele(vt, projeId, kartId, g, s = {}) {
+  izinGerekli(vt, 'veritabani-okuma', 'panoSqlIncele');
+  const kart = sqlKarti(vt, projeId, kartId);
+  const sorgu = /** @type {{ inceleSorgusu?: string }} */ (kart.ayar).inceleSorgusu;
+  if (!sorgu) throw new DepoHatasi('Bu kartın İncele sorgusu yok.');
+  panoSorgusuDenetle(sorgu);
+  const sonuc = panoGetir(vt, projeId).sqlSonuclari[kartId];
+  const i = Number(g.satirIndeksi);
+  if (!sonuc || sonuc.zaman !== g.zaman || !Number.isInteger(i) || i < 0 || i >= sonuc.satirlar.length) {
+    throw new DepoHatasi('Kartın sonucu değişti. İncele\'ye yeniden basın.');
+  }
+  if (sonuc.ortamId && kart.ayar.hedef.ortamId !== sonuc.ortamId) throw new DepoHatasi('Tablodaki sonuç başka bir ortamın. Önce kartı yenileyin.');
+  const satir = sonuc.satirlar[i];
+  const sutunlar = sonuc.sutunlar.map(String);
+  const gizli = new Set((sonuc.gizliSutunlar ?? []).map(String));
+  const kartParam = kartParametreleri(kart);
+  /** @type {Record<string, unknown>} */
+  const parametreler = {};
+  for (const ad of sorguParametreAdlari(sorgu)) {
+    if (ad === 'baslangic' || ad === 'bitis') {
+      parametreler[ad] = sonuc.donem ? new Date(sonuc.donem[ad]) : donemAraligi(kart.donem, new Date())[ad];
+      continue;
+    }
+    const kp = sonuc.parametreler?.[ad] ?? kartParam[ad];
+    if (kp !== undefined) { parametreler[ad] = kp; continue; }
+    let j = sutunlar.indexOf(ad);
+    if (j < 0) j = sutunlar.findIndex((x) => x.toUpperCase() === ad.toUpperCase());
+    if (j < 0) throw new DepoHatasi(`İncele sorgusundaki ":${ad}" için tabloda "${ad}" sütunu yok. Tablonun sütunları: ${sutunlar.join(', ')}.`);
+    if (gizli.has(sutunlar[j]) || satir[j] === MASKE) throw new DepoHatasi(`"${sutunlar[j]}" maskeli olduğu için İncele sorgusunda kullanılamaz.`);
+    parametreler[ad] = satir[j] ?? null;
+  }
+  const { maskeli, kesildi, satirSiniri } = await sorguyuCalistir(vt, projeId, kart, sorgu, parametreler, s, PANO_INCELE_SATIR_SINIRI);
+  return { zaman: new Date().toISOString(), ...maskeli, kesildi, satirSiniri };
 }

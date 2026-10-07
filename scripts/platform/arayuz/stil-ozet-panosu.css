@@ -91,7 +91,7 @@
 .pano-form { display: grid; gap: 10px; min-width: 0; }
 .pano-form .alan { margin: 0; }
 .pano-form input[type="text"], .pano-form input[type="number"], .pano-form select, .pano-form textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
-.pano-sorgu { min-height: 7.5rem; font-size: 12.5px; }
+.pano-sorgu, .pano-incele-sorgusu { min-height: 7.5rem; font-size: 12.5px; }
 .pano-yerlesik-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .pano-yerlesik-listesi li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); min-width: 0; }
 .pano-yerlesik-listesi li > div { min-width: 0; }
@@ -403,6 +403,15 @@ dialog.pano-metin-penceresi { width: min(64rem, calc(100vw - 2rem)); }
 .pano-satir-listesi dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .pano-satir-onizleme { font-family: var(--yazi-mono); font-size: 12px; }
 @media (max-width: 600px) { .pano-satir-listesi { grid-template-columns: minmax(0, 1fr); } .pano-satir-listesi dd { margin-bottom: 6px; } }
+/* İncele sorgusu: satır kısa listede, altında ayrıntı tablosu (geniş pencere; uzun istek / yanıt kısaltılır, "Görüntüle" ile açılır). */
+.pano-satir-penceresi.ayrintili { width: min(96vw, 1200px); max-width: min(96vw, 1200px); }
+.pano-satir-penceresi.ayrintili .pano-satir-listesi { max-height: min(26vh, 14rem); }
+.pano-ayrinti { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--cizgi); }
+.pano-ayrinti-tablo { max-height: min(46vh, 30rem); overflow: auto; }
+.pano-ayrinti-tablo table { width: 100%; }
+.pano-ayrinti-tablo th { position: sticky; top: 0; background: var(--panel); white-space: nowrap; }
+.pano-ayrinti-tablo td { vertical-align: top; white-space: nowrap; }
+.pano-ayrinti-tablo td.pano-ayrinti-uzun { white-space: normal; min-width: 18rem; max-width: 34rem; overflow-wrap: anywhere; }
 /* Sütun biçimi: etiket (her değer rozet) ve pay çubuğu (0–100). */
 .pano-rozet.renk-etiket { color: var(--vurgu-2); background: color-mix(in srgb, var(--vurgu-2) 14%, transparent); border-color: color-mix(in srgb, var(--vurgu-2) 35%, transparent); font-family: var(--yazi-mono); font-weight: 600; }
 .pano-pay { display: flex; align-items: center; gap: 8px; min-width: 7rem; }

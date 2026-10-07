@@ -17,3 +17,7 @@ export declare function sqlKarti(vt: Veritabani, projeId: string, kartId: string
 export declare function panoSqlCanliOrtamlari(vt: Veritabani, g: { projeId?: unknown; kartId?: unknown }): string[];
 export declare function panoSorgusuDenetle(sql: string): void;
 export declare function panoSqlYenile(vt: Veritabani, projeId: string, kartId: string, s?: { zamanAsimiMs?: number; satirSiniri?: number; simdi?: () => Date }): Promise<PanoSqlSonucu>;
+export declare const PANO_INCELE_UCU: '/platform/pano/sql/incele';
+export declare const PANO_INCELE_SATIR_SINIRI: number;
+export declare function panoSqlIncele(vt: Veritabani, projeId: string, kartId: string, g: { satirIndeksi: unknown; zaman: unknown },
+  s?: { zamanAsimiMs?: number; satirSiniri?: number }): Promise<{ zaman: string; sutunlar: string[]; satirlar: unknown[][]; gizliSutunlar: string[]; kesildi: boolean; satirSiniri: number }>;
