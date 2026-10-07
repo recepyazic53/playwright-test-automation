@@ -32,6 +32,7 @@ import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 import { tarihGirdisi } from './goreli-tarih-girdisi.js';
+import { gizliAdMi } from './gizli-adlar.mjs';
 import { talepAlani } from './talep-alani.js';
 import { veriBekliyorNotu } from './veri-bekliyor.js';
 import { HAZIRLIK_BASLIKLARI, alanMaddesi, eylemDenetimi, hazirlikOzeti, ortamDenetimiMetni, veriMaddesi } from './hazirlik.mjs';
@@ -147,20 +148,36 @@ function modelFormu(icerik, s, senaryo, baglam) {
   // Alanın adımından ÖNCEKİ SQL / servis adımlarının okumaları: alanın değeri ${akis:Ad} olabilir (koşuda okunan değer yazılır).
   const akisOkumalari = (() => {
     const adimlar = (Array.isArray(baglam.model?.adimlar) ? baglam.model.adimlar : []).filter((x) => x && typeof x.id === 'string');
-    /** @type {Map<string, Array<{ ad: string; adim: string }>>} */
+    /** @type {Map<string, Array<{ ad: string; adim: string; gizli: boolean }>>} */
     const harita = new Map();
-    /** @type {Array<{ ad: string; adim: string }>} */
+    /** @type {Array<{ ad: string; adim: string; gizli: boolean }>} */
     const biriken = [];
     for (const a of adimlar) {
       harita.set(a.id, biriken.slice());
       const okumalar = a.sqlKontrolu?.okumalar ?? a.servisKontrolu?.okumalar;
       for (const o of Array.isArray(okumalar) ? okumalar : []) {
-        if (o && typeof o.ad === 'string' && !biriken.some((b) => b.ad === o.ad)) biriken.push({ ad: o.ad, adim: String(a.baslik || a.id) });
+        // Okuma gizli işaretliyse (ya da işaret yoksa adı gizli adlardan biriyse) değeri raporda ve kayıtta maskelenir.
+        if (o && typeof o.ad === 'string' && !biriken.some((b) => b.ad === o.ad)) {
+          biriken.push({ ad: o.ad, adim: String(a.baslik || a.id), gizli: o.gizli === true || (o.gizli === undefined && gizliAdMi(o.ad)) });
+        }
       }
     }
     return (/** @type {string | undefined} */ adimId) => (adimId && harita.get(adimId)) || [];
   })();
   const AKIS_ALABILIR = ['metin', 'sayi', 'tarih', 'telefon'];
+  /**
+   * "Önceki adımdan…" seçimi: alanın adımından önce okuma tanımlı SQL / servis adımı varsa. Hassas alanda (kimlik no, parola…) yalnız GİZLİ
+   * işaretli okumalar listelenir: değer koşuda yazılır ama raporda ve kayıtta maskelenir. Hassas olmayan alanda tüm okumalar.
+   */
+  const akisSecimiYap = (alan, kayit) => {
+    if (!AKIS_ALABILIR.includes(alan.tip)) return null;
+    const okumalar = akisOkumalari(alan.adimId).filter((o) => !alan.hassas || o.gizli);
+    if (!okumalar.length) return null;
+    return h('select', {
+      class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
+      onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
+    }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})${o.gizli ? ' · gizli' : ''}`)));
+  };
   // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
   const onceki = s.taslak?.veri || senaryo?.veri || undefined;
   // Yeni senaryo: isteğe bağlı genel senaryoların "dahil" anahtarı akıştaki "Yeni senaryolarda" seçimiyle başlar.
@@ -1265,7 +1282,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
               degistir: (d) => degerYaz(alan.anahtar, d, { dokun: false })
             });
             govde = tg.el;
-            ust = alanUst(alan, id);
+            ust = alanUst(alan, id, [akisSecimiYap(alan, kayit)].filter(Boolean));
             kontrolKaydet(alan.anahtar, tg.girdiler, hata, uyari);
             break;
           }
@@ -1316,11 +1333,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
             onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
           }, ikon('veri'), 'Tablodan') : null;
           // Önceki SQL / servis adımında okunan değer: seçilince değer ${akis:Ad} olur (koşuda okunan değer yazılır).
-          const okumalar = !alan.hassas && AKIS_ALABILIR.includes(alan.tip) ? akisOkumalari(alan.adimId) : [];
-          const akisSecimi = okumalar.length ? h('select', {
-            class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
-            onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
-          }, h('option', { value: '' }, 'Önceki adımdan…'), okumalar.map((o) => h('option', { value: o.ad }, `${o.ad} (${o.adim})`))) : null;
+          const akisSecimi = akisSecimiYap(alan, kayit);
           ust = alanUst(alan, id, [tablodanDugmesi, akisSecimi].filter(Boolean));
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);
         }

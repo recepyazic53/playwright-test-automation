@@ -109,7 +109,7 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
           const b = JSON.parse(g || '{}') as Nesne;
           gelenler.push(b);
           r.writeHead(200, { 'Content-Type': 'application/json' });
-          r.end(JSON.stringify(b.tc === 'HATA' ? { durum: 'hata' } : { durum: 'ok', no: `NO-${String(b.tc)}` }));
+          r.end(JSON.stringify(b.tc === 'HATA' ? { durum: 'hata' } : { durum: 'ok', no: `NO-${String(b.tc)}`, kimlik: '99999999999' }));
         });
         return;
       }
@@ -132,6 +132,9 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     const noAlani = { id: 'no', tip: 'metin', etiket: { ekran: 'Kayıt no' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'no' }, konum: { secici: '#no', kirilganlik: 'dusuk' }, zorunlu: false };
+    // "Önceki adımdan…" kuralları: hassas alanda yalnız GİZLİ okumalar, tarih alanında da seçim çıkar.
+    const kimlikAlani = { id: 'kimlik', tip: 'metin', hassas: true, etiket: { ekran: 'Kimlik no' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'kimlik' }, konum: { secici: '#kimlik', kirilganlik: 'dusuk' }, zorunlu: false };
+    const dogumAlani = { id: 'dogum', tip: 'tarih', etiket: { ekran: 'Doğum tarihi' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'dogum' }, konum: { secici: '#dogum', kirilganlik: 'dusuk' }, zorunlu: false };
     const alan = { id: 'tc', tip: 'metin', etiket: { ekran: 'TC' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'tc' }, konum: { secici: '#tc', kirilganlik: 'dusuk' }, zorunlu: false };
     const model = {
       semaSurumu: 2, tur: 'ekran', id: 'kayit', ad: 'Kayıt', aciklama: 'Servis isteği (nötr fikstür).', ekranUrl: '/kayit', girisGerekmez: true,
@@ -140,10 +143,10 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
       adimlar: [
         { id: 'form', sira: 1, baslik: 'Kayıt', bolumler: [{ id: 'b', baslik: 'Kayıt', alanlar: [alan] }],
           kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Kaydedildi', secici: '#durum' }, zamanAsimiSn: 10 } },
-        { id: 'servis1', sira: 2, baslik: 'Serviste kayıt var', servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: '${tc}' }], okumalar: [{ ad: 'No', yol: 'no', kaynak: 'json' }] } },
+        { id: 'servis1', sira: 2, baslik: 'Serviste kayıt var', servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: '${tc}' }], okumalar: [{ ad: 'No', yol: 'no', kaynak: 'json' }, { ad: 'Kimlik', yol: 'kimlik', kaynak: 'json', gizli: true }] } },
         { id: 'servis2', sira: 3, baslik: 'Numarayla sorgu', servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: 'tekrar-${akis:No}' }] } },
         { id: 'servis3', sira: 4, baslik: 'Hiç çalışmaz', gorunurluk: { kosul: 'hicbirZaman' }, servisKontrolu: { servisId, senaryoId: sablonId, atamalar: [{ bul: '${TC}', deger: 'ATLANMALI' }] } },
-        { id: 'onay', sira: 5, baslik: 'Numara onaylanır', bolumler: [{ id: 'o', baslik: 'Onay', alanlar: [noAlani] }],
+        { id: 'onay', sira: 5, baslik: 'Numara onaylanır', bolumler: [{ id: 'o', baslik: 'Onay', alanlar: [noAlani, kimlikAlani, dogumAlani] }],
           kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#onayla', aciklama: 'Onayla' }], basariGostergesi: { tur: 'metin', deger: 'Onaylandı: NO-12345', secici: '#onay' }, zamanAsimiSn: 10 } }
       ],
       senaryoDuzeyi: { alanlar: [{ id: 'baslik', tip: 'metin', etiket: { ekran: null, form: 'Başlık' }, zorunlu: true, benzersiz: true, yapilandirma: 'senaryo', eslesme: { senaryo: 'baslik' } }] },
@@ -207,6 +210,21 @@ test.describe('gerçek koşu (sahte ekran + sahte REST servisi)', () => {
       await expect(no).toContainText('Serviste kayıt var adımında okunur');
       await no.getByRole('button', { name: 'Kayıt no: önceki adımdan almayı kaldır' }).click();
       await expect(no.getByRole('textbox')).toHaveValue('');
+      // Hassas alan (Kimlik no): seçim çıkar ama yalnız GİZLİ okuma listelenir (No gizli değil).
+      const kimlik = page.locator('[data-alan="kimlik"]');
+      const kimlikSecimi = kimlik.getByRole('combobox', { name: 'Kimlik no: önceki adımda okunan değer' });
+      await expect(kimlikSecimi).toBeVisible();
+      expect(await kimlikSecimi.locator('option').allTextContents()).toEqual(['Önceki adımdan…', 'Kimlik (Serviste kayıt var) · gizli']);
+      await kimlikSecimi.selectOption({ label: 'Kimlik (Serviste kayıt var) · gizli' });
+      await expect(kimlik).toContainText('Önceki adımdan: Kimlik');
+      await kimlik.getByRole('button', { name: 'Kimlik no: önceki adımdan almayı kaldır' }).click();
+      // Tarih alanı: hassas değil, tüm okumalar listelenir (önceden hiç çıkmıyordu).
+      const dogum = page.locator('[data-alan="dogum"]');
+      const dogumSecimi = dogum.getByRole('combobox', { name: 'Doğum tarihi: önceki adımda okunan değer' });
+      await expect(dogumSecimi).toBeVisible();
+      expect(await dogumSecimi.locator('option').allTextContents()).toEqual(['Önceki adımdan…', 'No (Serviste kayıt var)', 'Kimlik (Serviste kayıt var) · gizli']);
+      await dogumSecimi.selectOption({ label: 'No (Serviste kayıt var)' });
+      await expect(dogum).toContainText('Önceki adımdan: No');
       expect(hatalar).toEqual([]);
     } finally { await tarayici.close(); }
   });
