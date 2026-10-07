@@ -25,7 +25,7 @@ import { tumVeritabanlari } from '../sql/veritabanlari.mjs';
 import { izinGerekli } from '../guvenlik/izinler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
-import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { ekGizliAdlar, kisiselVeriMaskelenir } from '../ayarlar/maskeleme.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { baslikNormal } from '../tablolar/tablo-benzerligi.mjs';
 import { adMaskeleyici, bilinenGizliDegerler } from './html-rapor.mjs';
@@ -46,9 +46,12 @@ export const MASKE = '•••';
 /** Kişisel / gizli veri taşıyan sütun adları (normal ad üzerinde; gizliAdMi listesine ek). */
 const KISISEL_SUTUN = /(tckimlik|kimlikno|kimliknumara|tckn|^tcno|^tc$|^tc[_-]?no|nationalid|identityno|vergino|vergikimlik|^vkn|pasaport|passport|kartno|kartnumara|cardnumber|cardno|creditcard|^kart$|cvv|cvc|cv2|guvenlikkod|securitycode|iban|parola|sifre|password|passwd)/;
 
-/** Sütun adı gizli mi (çekirdek + kullanıcının ek adları + kişisel veri adları)? @param {string} ad @param {ReadonlyArray<string>} ekler */
-export function gizliSutunMu(ad, ekler) {
-  return gizliAdMi(ad, ekler) || KISISEL_SUTUN.test(baslikNormal(ad));
+/**
+ * Sütun adı gizli mi (çekirdek + kullanıcının ek adları; "Kişisel verileri maskele" açıkken kişisel veri adları da)?
+ * @param {string} ad @param {ReadonlyArray<string>} ekler @param {boolean} [kisisel]
+ */
+export function gizliSutunMu(ad, ekler, kisisel = true) {
+  return gizliAdMi(ad, ekler) || (kisisel && KISISEL_SUTUN.test(baslikNormal(ad)));
 }
 
 /** Hücre değerinde kişisel veri kalıbı (geçerli T.C. kimlik no, IBAN) maskelenir. @param {string} m */
@@ -59,16 +62,19 @@ function kaliplariMaskele(m) {
 
 /**
  * Sonucu maskeler: gizli sütunların tüm değerleri, diğer metin hücrelerinde bilinen gizli değerler ve kişisel veri kalıpları.
- * @param {{ sutunlar: string[]; satirlar: unknown[][] }} r @param {{ ekler: ReadonlyArray<string>; gizliDegerler: ReadonlyArray<string> }} m
+ * "Kişisel verileri maskele" kapalıysa (m.kisisel === false) kişisel veri adları ve T.C. / IBAN kalıpları maskelenmez.
+ * @param {{ sutunlar: string[]; satirlar: unknown[][] }} r @param {{ ekler: ReadonlyArray<string>; gizliDegerler: ReadonlyArray<string>; kisisel?: boolean }} m
  */
 export function sonucuMaskele(r, m) {
-  const gizli = r.sutunlar.map((s) => gizliSutunMu(String(s), m.ekler));
+  const kisisel = m.kisisel !== false;
+  const gizli = r.sutunlar.map((s) => gizliSutunMu(String(s), m.ekler, kisisel));
+  const kalip = (/** @type {string} */ x) => (kisisel ? kaliplariMaskele(x) : x);
   const ad = adMaskeleyici([...m.gizliDegerler]);
   const satirlar = r.satirlar.map((satir) => satir.map((v, i) => {
     if (v === null || v === undefined) return null;
     if (gizli[i]) return MASKE;
-    if (typeof v === 'string') return kaliplariMaskele(ad(v));
-    if (typeof v === 'number' && Number.isInteger(v) && v > 9_999_999_999) return kaliplariMaskele(String(v)) === MASKE ? MASKE : v;
+    if (typeof v === 'string') return kalip(ad(v));
+    if (typeof v === 'number' && Number.isInteger(v) && v > 9_999_999_999) return kalip(String(v)) === MASKE ? MASKE : v;
     return v;
   }));
   return { sutunlar: r.sutunlar.map(String), satirlar, gizliSutunlar: r.sutunlar.filter((_, i) => gizli[i]).map(String) };
@@ -227,7 +233,7 @@ async function sorguyuCalistir(vt, projeId, kart, sorgu, parametreler, s, enCokS
   /** @type {string[]} */
   let gizliDegerler = [];
   try { gizliDegerler = bilinenGizliDegerler(vt, projeId).map(String); } catch { gizliDegerler = []; }
-  const maskeli = sonucuMaskele({ sutunlar: r.sutunlar, satirlar: r.satirlar.slice(0, satirSiniri) }, { ekler: ekGizliAdlar(vt), gizliDegerler });
+  const maskeli = sonucuMaskele({ sutunlar: r.sutunlar, satirlar: r.satirlar.slice(0, satirSiniri) }, { ekler: ekGizliAdlar(vt), gizliDegerler, kisisel: kisiselVeriMaskelenir(vt) });
   return { maskeli, kesildi: Boolean(r.kesildi) || r.satirlar.length > satirSiniri, satirSiniri };
 }
 

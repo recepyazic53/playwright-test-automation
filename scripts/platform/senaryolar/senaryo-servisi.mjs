@@ -558,6 +558,8 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
   }
   return {
     ekran, ortamlar, model: mb.model, altModeller: mb.altModeller, modelSurumu: mb.surum, profiller, akislar: mb.akislar, akisId: mb.akisId,
+    // Ayarlar > Güvenlik > Maskeleme > "Kişisel verileri maskele" (kapalıysa formda hassas alanlar açık görünür; sırlar hariç).
+    kisiselMaske: kisiselVeriMaskelenir(vt), ekGizliAdlar: ekGizliAdlar(vt),
     veriKaynagi,
     olusturulabilir: Boolean(veriKaynagi),
     // Senaryonun "Giriş" seçimi için giriş profillerinin ADLARI (değer yok; ortamId null = tüm ortamlar).

@@ -1,5 +1,7 @@
 // TEST VERİSİ TABLOLARI — HTTP uçları (sunucu-platform.mjs GET_UCLARI / POST_UCLARI'na eklenir). Belirteç, gövde ve kasa
-// kilidi sunucuda denetlenir. Gizli sütun değerleri hiçbir yanıtta dönmez.
+// kilidi sunucuda denetlenir. Gizli sütun değerleri yanıtta dönmez ("Kişisel verileri maskele" kapalıysa adı sır olmayan gizli sütunlar hariç).
+import { ekGizliAdlar, kisiselVeriMaskelenir } from '../ayarlar/maskeleme.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { basename } from 'node:path';
 import { acikAnahtar } from '../kasa.mjs';
 import { onbellekte } from '../veritabani/nesil-onbellegi.mjs';
@@ -62,8 +64,9 @@ const istegeBagliKimlik = (d, alan) => (d === undefined || d === null || d === '
  * @param {Veritabani} db @param {string} projeId
  */
 export function secimTablolari(db, projeId) {
+  const acik = kisiselAcikSutunMu(db);
   return tablolariListele(db, projeId, { cozulsun: true }).map((t) => {
-    const gizliler = t.sutunlar.filter((c) => c.gizli).map((c) => c.ad);
+    const gizliler = t.sutunlar.filter((c) => c.gizli && !acik(c.ad)).map((c) => c.ad);
     if (!gizliler.length) return t;
     return {
       ...t,
@@ -82,6 +85,46 @@ export function secimTablolari(db, projeId) {
   });
 }
 
+/**
+ * Ayarlar > Güvenlik > Maskeleme > "Kişisel verileri maskele" kapalıysa: adı sır sayılmayan (parola, CVV, token… değil) gizli sütun
+ * açık gösterilir. Açıksa (varsayılan) hiçbir gizli sütun açık değildir.
+ * @param {Veritabani} db @returns {(ad: string) => boolean}
+ */
+function kisiselAcikSutunMu(db) {
+  if (kisiselVeriMaskelenir(db)) return () => false;
+  const ekler = ekGizliAdlar(db);
+  return (ad) => !gizliAdMi(ad, ekler);
+}
+
+/**
+ * Tablolar ekranının listesi. Kişisel maske kapalıysa açık gizli sütunların değeri çözülmüş gelir (sütunda acik: true; kaydedince
+ * yine şifreli yazılır); sır sütunların değeri gelmez.
+ * @param {Veritabani} db @param {string} projeId @param {boolean} baglamDahil
+ */
+function tabloListesi(db, projeId, baglamDahil) {
+  const acik = kisiselAcikSutunMu(db);
+  const liste = tablolariListele(db, projeId, { baglamDahil });
+  if (!liste.some((t) => t.sutunlar.some((c) => c.gizli && acik(c.ad)))) return liste;
+  const cozulmus = new Map(tablolariListele(db, projeId, { baglamDahil, cozulsun: true }).map((t) => [t.id, t]));
+  return liste.map((t) => {
+    const acikSutunlar = t.sutunlar.filter((c) => c.gizli && acik(c.ad)).map((c) => c.ad);
+    const c = cozulmus.get(t.id);
+    if (!acikSutunlar.length || !c) return t;
+    const satirlar = new Map(c.satirlar.map((r) => [r.id, r]));
+    return {
+      ...t,
+      sutunlar: t.sutunlar.map((s) => (acikSutunlar.includes(s.ad) ? { ...s, acik: true } : s)),
+      satirlar: t.satirlar.map((r) => {
+        const cr = satirlar.get(r.id);
+        if (!cr) return r;
+        const degerler = { ...r.degerler };
+        for (const ad of acikSutunlar) degerler[ad] = cr.degerler[ad] ?? null;
+        return { ...r, degerler };
+      })
+    };
+  });
+}
+
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const TABLO_GET_UCLARI = [
   // baglam=1: bağlam profilleri de tablo olarak (Tablolar ekranı); diğer ekranlar yalnız test verisi tablolarını görür. Tablolar
@@ -92,7 +135,7 @@ export const TABLO_GET_UCLARI = [
     const projeId = kimlik(q.get('projeId'), 'projeId');
     if (q.get('secim') === '1') return { tablolar: secimTablolari(db, projeId) };
     const baglamDahil = q.get('baglam') === '1';
-    return { tablolar: tablolariListele(db, projeId, { baglamDahil }), ...(baglamDahil ? tabloEkranKullanimi(db, projeId) : {}) };
+    return { tablolar: tabloListesi(db, projeId, baglamDahil), ...(baglamDahil ? tabloEkranKullanimi(db, projeId) : {}) };
   }],
   // Test verisi ekranının üstündeki "Veri sağlığı" (benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular; değer dönmez).
   // Veri sağlığı özeti önbellekli (nesil-onbellegi.mjs): veritabanında herhangi bir değişiklik olunca yeniden hesaplanır; yanıt kopyadır.
