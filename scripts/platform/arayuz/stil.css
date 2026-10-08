@@ -1111,6 +1111,12 @@ dialog.onay-diyalogu { width: min(34rem, calc(100vw - 2rem)); padding: 0; overfl
 .onay-diyalogu h2 .diyalog-ikon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--vurgu); background: var(--vurgu-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vurgu) 30%, transparent); }
 .onay-diyalogu.tehlikeli h2 .diyalog-ikon { color: var(--hata); background: var(--hata-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hata) 30%, transparent); }
 .onay-diyalogu .diyalog-alt { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 24px 18px; margin-top: 10px; border-top: 1px solid var(--cizgi); background: var(--panel-2); }
+/* Onay penceresi ekrandan uzunsa (uzun senaryo listesi, hazırlık kontrolü, kısa ekran): gövde kendi içinde kayar, alt düğme şeridi
+   (Çalıştır / Vazgeç…) her zaman görünür kalır. Gövde + şerit bir form içindeyse form da aynı sütun düzenini alır. */
+dialog.onay-diyalogu[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 1.5rem); }
+dialog.onay-diyalogu[open] > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.onay-diyalogu .diyalog-govde { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.onay-diyalogu .diyalog-alt { flex: 0 0 auto; }
 .onay-ozeti { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0 12px; }
 .onay-ozeti > div { padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
 .onay-ozeti dt { font: 600 10px var(--yazi-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--metin-3); margin-bottom: 4px; }
