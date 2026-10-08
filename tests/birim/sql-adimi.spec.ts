@@ -116,6 +116,30 @@ test('ekran akışı: SQL bloğu kendi adımı olur (son beklenen mesaj ekran ad
   expect(m2.adimlar.map((a: Nesne) => [a.baslik, a.kosu?.basariGostergesi ?? null])).toEqual([['Değer al', null], ['Kayıt', { tur: 'metin', deger: 'Kaydedildi' }]]);
 });
 
+test('okumanın "Kullanılacağı alanlar"ı: doğrulanır (tekil, kırpılmış), akıştan modele geçer, modelden diyagrama geri döner; anahtarlar modelin alan kimliğidir', () => {
+  const d = sqlTanimiDogrula({ baglantiId: 'db1', sql: 'SELECT no FROM kayit', beklenen: { tur: 'bosDegil' },
+    okumalar: [{ ad: 'No', sutun: 'NO', hedefAlanlar: [' no ', 'no', '', 7] }, { ad: 'Durum', sutun: 'DURUM', hedefAlanlar: [] }] });
+  expect(d.hatalar).toEqual([]);
+  expect(d.tanim.okumalar).toEqual([{ ad: 'No', sutun: 'NO', hedefAlanlar: ['no'] }, { ad: 'Durum', sutun: 'DURUM' }]);
+  // Yeni kayıt: diyagramdaki alan anahtarı (blok.alanlar) modelde alanın kimliği olur; hedef aynı anahtarla saklanır.
+  const ilk = akistanKayitEnvanteri(ENV, [{ tur: 'sql', ad: 'Değer al', sql: { baglantiId: 'db1', sql: 'SELECT no FROM kayit', beklenen: { tur: 'bosDegil' }, okumalar: [{ ad: 'No', sutun: 'NO', hedefAlanlar: ['#no'] }] } },
+    { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'aksiyon', dugme: 0, istegeBagli: false }, { tur: 'bitir' }]);
+  expect(ilk.hatalar).toEqual([]);
+  const m = kayitPaketiOlustur(META, ilk.envanter as NonNullable<typeof ilk.envanter>).paket.model as Nesne;
+  const alanId = m.adimlar[1].bolumler[0].alanlar[0].id;
+  expect(m.adimlar[0].sqlKontrolu.okumalar).toEqual([{ ad: 'No', sutun: 'NO', hedefAlanlar: [alanId] }]);
+  // Modelden diyagrama: alan grubunun anahtarı ile okumanın hedefi aynı kalır (yeniden kaydedince değişmez).
+  const geri = adimlardanBloklar(m, m.adimlar, modeldenAkisEnvanteri(m));
+  const grup = geri.find((b) => b.tur === 'alanlar') as Nesne;
+  expect((geri.find((b) => b.tur === 'sql') as Nesne).sql.okumalar[0].hedefAlanlar).toEqual(grup.alanlar);
+  // Akışta olmayan hedef atılır, not düşülür.
+  const yok = akistanKayitEnvanteri(ENV, [{ tur: 'sql', ad: 'Değer al', sql: { baglantiId: 'db1', sql: 'SELECT no FROM kayit', beklenen: { tur: 'bosDegil' }, okumalar: [{ ad: 'No', sutun: 'NO', hedefAlanlar: ['#yok'] }] } },
+    { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] }, { tur: 'aksiyon', dugme: 0, istegeBagli: false }, { tur: 'bitir' }]);
+  const py = kayitPaketiOlustur(META, yok.envanter as NonNullable<typeof yok.envanter>).paket;
+  expect((py.model as Nesne).adimlar[0].sqlKontrolu.okumalar).toEqual([{ ad: 'No', sutun: 'NO' }]);
+  expect(py.bilinmeyenler).toContain('"Değer al" adımındaki "No" okumasının kullanılacağı alan akışta yok; o alan çıkarıldı.');
+});
+
 test('servis akışı: SQL adımı doğrulanır (servis / senaryo istemez); oturum akışında SQL okuması sayılır', () => {
   const icerik = akisIceriginiDogrula({ adimlar: [{ ad: 'Kontrol', tur: 'sql', sql: { baglantiId: 'db1', sql: 'SELECT token FROM oturum', beklenen: { tur: 'bosDegil' }, okumalar: [{ ad: 'Token', sutun: 'token' }] } }] }, 'oturum');
   expect(icerik.adimlar[0]).toMatchObject({ tur: 'sql', okumalar: [], sql: { baglantiId: 'db1', okumalar: [{ ad: 'Token', sutun: 'token' }] } });

@@ -258,6 +258,12 @@ export async function akisTasarimi(icerik, s) {
 
   // ---- Blok işlemleri -------------------------------------------------------------------------
   const alanGrubu = (anahtar) => bloklar.findIndex((b) => b.tur === 'alanlar' && b.alanlar.includes(anahtar));
+  /**
+   * SQL / servis bloğundaki okumanın "Kullanılacağı alanlar" seçenekleri: bloktan SONRAKİ alan gruplarındaki alanlar (okunan değer
+   * yalnız sonraki adımlarda kullanılabilir), akıştaki sırayla. @param {number} i blok sırası
+   */
+  const okumaHedefAlanlari = (i) => [...new Set(bloklar.slice(i + 1).flatMap((b) => (b.tur === 'alanlar' ? b.alanlar : [])))]
+    .map((anahtar) => ({ anahtar, etiket: alanBilgisi.get(anahtar)?.etiket || anahtar }));
   /** Alanı grubun içinde bir yukarı / aşağı taşır (gruptaki sıra = koşuda doldurma sırası). */
   function alanSirala(i, anahtar, yon) {
     const l = bloklar[i].alanlar;
@@ -1092,7 +1098,7 @@ export async function akisTasarimi(icerik, s) {
       ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
-        servisAdimiFormu(b.servis, { projeId: s.proje.id, degisti: sakla }),
+        servisAdimiFormu(b.servis, { projeId: s.proje.id, degisti: sakla, alanlar: okumaHedefAlanlari(i) }),
         blokKosulu(b, i),
         h('p', { class: 'soluk kucuk' }, 'Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar. Servisin kendi geçmişine de "Dene" olarak yazılır.')
       ];
@@ -1104,7 +1110,7 @@ export async function akisTasarimi(icerik, s) {
       ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
-        sqlAdimiFormu(b.sql, { ...sqlKaynaklari, degisti: sakla, yerTutucuOrnegi: '${alanAnahtari}' }),
+        sqlAdimiFormu(b.sql, { ...sqlKaynaklari, degisti: sakla, yerTutucuOrnegi: '${alanAnahtari}', alanlar: okumaHedefAlanlari(i) }),
         blokKosulu(b, i),
         h('p', { class: 'soluk kucuk' }, 'SQL’de senaryonun değerleri ${alanAnahtari}, önceki SQL adımlarında okunan değerler ${akis:Ad} ile yazılır. Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar.')
       ];

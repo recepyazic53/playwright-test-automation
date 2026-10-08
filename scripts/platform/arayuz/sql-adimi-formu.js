@@ -98,10 +98,50 @@ export function sqlOzeti(t) {
   return { sqlSatiri: ilk.length > 90 ? `${ilk.slice(0, 90)}…` : ilk, beklenen };
 }
 
+/** @typedef {{ anahtar: string; etiket: string }} OkumaHedefAlani */
+
+/**
+ * Okumanın "Kullanılacağı alanlar" seçimi (ortak: SQL ve servis adımı; yalnız ekran akış tasarımında, alan listesi verilince).
+ * Senaryo formunda "Önceki adımdan…" yalnız seçilen alanlarda, yalnız bu okumayla önerilir; seçim yoksa hiçbir alanda önerilmez.
+ * Eşleme kendiliğinden yapılmaz: kişi seçer. Bu adımdan sonra artık olmayan seçili alan "(bu adımdan sonra yok)" diye görünür, kaldırılabilir.
+ * @param {{ ad?: string; hedefAlanlar?: string[] }} o okuma (yerinde değişir) @param {OkumaHedefAlani[]} alanlar
+ * @param {() => void} degisti @param {string} etiket erişilebilir ad öneki (ör. "1. okuma")
+ */
+export function okumaHedefSecimi(o, alanlar, degisti, etiket) {
+  const ozet = h('span', { class: 'okuma-hedef-ozeti' });
+  const etiketi = (/** @type {string} */ a) => alanlar.find((x) => x.anahtar === a)?.etiket ?? `${a} (bu adımdan sonra yok)`;
+  const ozetCiz = () => {
+    const l = Array.isArray(o.hedefAlanlar) ? o.hedefAlanlar : [];
+    ozet.textContent = l.length ? l.map(etiketi).join(', ') : 'seçilmedi — senaryoda önerilmez';
+    ozet.classList.toggle('soluk', !l.length);
+  };
+  const yaz = (/** @type {string} */ anahtar, /** @type {boolean} */ secili) => {
+    const l = (Array.isArray(o.hedefAlanlar) ? o.hedefAlanlar : []).filter((x) => x !== anahtar);
+    if (secili) l.push(anahtar);
+    if (l.length) o.hedefAlanlar = l; else delete o.hedefAlanlar;
+    ozetCiz(); degisti();
+  };
+  const secililer = Array.isArray(o.hedefAlanlar) ? o.hedefAlanlar : [];
+  const satirlar = [...alanlar.map((a) => ({ anahtar: a.anahtar, etiket: a.etiket })),
+    ...secililer.filter((a) => !alanlar.some((x) => x.anahtar === a)).map((a) => ({ anahtar: a, etiket: etiketi(a) }))];
+  ozetCiz();
+  return h('details', { class: 'okuma-hedefleri' },
+    h('summary', {}, h('span', {}, 'Kullanılacağı alanlar: '), ozet),
+    satirlar.length
+      ? h('div', { class: 'okuma-hedef-listesi', role: 'group', 'aria-label': `${etiket}: kullanılacağı alanlar` }, satirlar.map((a) => {
+        const kutu = h('input', { type: 'checkbox', checked: secililer.includes(a.anahtar) || null });
+        kutu.addEventListener('change', () => yaz(a.anahtar, /** @type {HTMLInputElement} */ (kutu).checked));
+        return h('label', { class: 'secenek' }, kutu, a.etiket);
+      }))
+      : h('p', { class: 'soluk kucuk' }, 'Bu adımdan sonra alan yok.'),
+    h('p', { class: 'soluk kucuk' }, 'Senaryo formunda “Önceki adımdan…” yalnız seçilen alanlarda bu okumayı önerir; hiçbiri seçilmezse hiçbir alanda görünmez.'));
+}
+
 /**
  * @param {any} t SQL tanımı (yerinde değişir)
  * @param {{ baglantilar: SqlBaglantisi[]; veritabanlari?: SqlVeritabani[]; ortamlar?: SqlKaynaklari['ortamlar']; onek?: string;
- *   degisti: () => void; gizliMi?: (ad: string) => boolean; yerTutucuOrnegi?: string }} s
+ *   degisti: () => void; gizliMi?: (ad: string) => boolean; yerTutucuOrnegi?: string; alanlar?: OkumaHedefAlani[] }} s
+ *   alanlar: ekran akış tasarımında ekranın alanları (verilirse her okumada "Kullanılacağı alanlar" seçimi çıkar).
  */
 export function sqlAdimiFormu(t, s) {
   const onek = s.onek ?? '';
@@ -236,6 +276,7 @@ export function sqlAdimiFormu(t, s) {
       gizli.addEventListener('change', () => { o.gizli = gizli.checked; degisti(); });
       return h('div', { class: 'okuma-karti' },
         h('div', { class: 'okuma-ust' }, ad, sutun),
+        s.alanlar ? okumaHedefSecimi(o, s.alanlar, degisti, `${onek}${k + 1}. okuma`) : null,
         h('div', { class: 'okuma-alt' }, h('label', { class: 'secenek' }, gizli, 'gizli'),
           h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${onek}${k + 1}. okumayı sil`, onclick: () => {
             l.splice(k, 1); if (!l.length) delete t.okumalar; okumalariCiz(); degisti();
