@@ -4,7 +4,7 @@
 // Geçti, değilse Kaldı ("Beklenen / Görülen" biçiminde mesaj).
 //
 // Tanım (SqlTanimi):
-//   { veritabaniId | baglantiId, sql, beklenen, yenidenDeneme?: { sureSn, aralikSn }, zamanAsimiSn?, okumalar?: [{ ad, sutun, gizli? }] }
+//   { veritabaniId | baglantiId, sql, beklenen, yenidenDeneme?: { sureSn, aralikSn }, zamanAsimiSn?, okumalar?: [{ ad, sutun, gizli?, hedefAlanlar? }] }
 //   veritabaniId: mantıksal veritabanı (Ayarlar > Entegrasyonlar > Veritabanları; koşuda ortamın eşlemesiyle bağlantıya çözülür;
 //   önerilen). baglantiId: doğrudan bağlantı (eski; her ortamda aynı bağlantı). İkisinden yalnız biri bulunur.
 //   beklenen: { tur: 'satirSayisi', deger: N } | { tur: 'sutunDegeri', sutun, deger } (ilk satır) | { tur: 'bosDegil' } |
@@ -106,6 +106,27 @@ export function sqlYerTutuculari(sql) {
   return { kodda, metinde };
 }
 
+/** Okumanın senaryo formunda önerileceği en çok alan sayısı. */
+export const OKUMA_HEDEF_EN_COK = 50;
+
+/**
+ * Okumanın "Kullanılacağı alanlar"ı (ekran modelinin alan kimlikleri, alan.id): senaryo formunda "Önceki adımdan…" yalnız bu alanlarda, yalnız bu
+ * okumayla önerilir; boşsa hiçbir alanda önerilmez. Metin olmayanlar, boşlar ve tekrarlar atılır. Servis adımı da kullanır
+ * (servis-adimi.mjs aynı kuralı içe aktarmadan uygular).
+ * @param {unknown} ham @returns {string[]}
+ */
+export function okumaHedefleri(ham) {
+  if (!Array.isArray(ham)) return [];
+  /** @type {string[]} */
+  const sonuc = [];
+  for (const x of ham) {
+    const a = typeof x === 'string' ? x.trim().slice(0, 200) : '';
+    if (a && !sonuc.includes(a)) sonuc.push(a);
+    if (sonuc.length >= OKUMA_HEDEF_EN_COK) break;
+  }
+  return sonuc;
+}
+
 /** Metindeki ${akis:Ad} adları. @param {string} metin */
 const akisAdlari = (metin) => [...String(metin ?? '').matchAll(YER_TUTUCU)].map((m) => m[1].trim()).filter((x) => x.startsWith('akis:')).map((x) => x.slice(5).trim());
 
@@ -195,7 +216,8 @@ export function sqlTanimiDogrula(ham, s = {}) {
     if (!ad && !sutun) continue;
     if (!AD.test(ad)) { hatalar.push(`${k + 1}. okuma: ad geçersiz (harf ya da "_" ile başlar; harf, rakam, "_", "-").`); continue; }
     if (!sutun) { hatalar.push(`"${ad}" okuması: sütun adını yazın.`); continue; }
-    temizOkumalar.push({ ad, sutun, ...(typeof x.gizli === 'boolean' ? { gizli: x.gizli } : {}) });
+    const hedefler = okumaHedefleri(x.hedefAlanlar);
+    temizOkumalar.push({ ad, sutun, ...(typeof x.gizli === 'boolean' ? { gizli: x.gizli } : {}), ...(hedefler.length ? { hedefAlanlar: hedefler } : {}) });
   }
   if (temizOkumalar.length) tanim.okumalar = temizOkumalar;
   return { tanim, hatalar };

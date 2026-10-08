@@ -5,7 +5,7 @@ export type SqlBeklenen =
   | { tur: 'bosDegil' }
   | { tur: 'bos' }
   | { tur: 'tabloEsit'; sutunlar: string[]; satirlar: string[][] };
-export type SqlOkuma = { ad: string; sutun: string; gizli?: boolean };
+export type SqlOkuma = { ad: string; sutun: string; gizli?: boolean; hedefAlanlar?: string[] };
 export type SqlTanimi = {
   /** Mantıksal veritabanı (koşuda ortamın eşlemesiyle bağlantıya çözülür; önerilen). baglantiId ile ikisinden biri bulunur. */
   veritabaniId?: string;
@@ -37,6 +37,8 @@ export declare const SQL_BEKLENEN_ETIKETLERI: Readonly<Record<string, string>>;
 export declare const SQL_RAPOR_SATIR_SINIRI: number;
 export declare const SQL_SORGU_SATIR_SINIRI: number;
 export declare const SQL_SATIR_SINIRI_EN_COK: number;
+export declare const OKUMA_HEDEF_EN_COK: number;
+export declare function okumaHedefleri(ham: unknown): string[];
 export declare const SQL_EN_UZUN: number;
 export declare function satirSiniriCoz(v: unknown): number;
 export declare function satirSiniriUyarisi(beklenen: unknown, satirSiniri: number): string | null;

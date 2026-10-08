@@ -2799,6 +2799,15 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .yanit-secici .yanit-alanlari { max-height: 360px; margin-top: 0; }
 .yanit-secici .yanit-alani-arama { width: 100%; }
 .okuma-karti .okuma-alt .secenek { margin: 0; }
+/* Okumanın "Kullanılacağı alanlar"ı (sql-adimi-formu.js > okumaHedefSecimi; SQL ve servis adımı, ekran akış tasarımı). */
+.okuma-hedefleri { min-width: 0; }
+.okuma-hedefleri > summary { cursor: pointer; overflow-wrap: anywhere; }
+.okuma-hedef-ozeti { font-weight: 600; }
+.okuma-hedef-ozeti.soluk { font-weight: normal; }
+.okuma-hedef-listesi { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2px 12px; max-height: 240px; overflow: auto; margin: 6px 0; min-width: 0; }
+.okuma-hedef-listesi .secenek { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.okuma-karti .okuma-hedefleri input[type="checkbox"], .servis-okumasi .okuma-hedefleri input[type="checkbox"] { width: auto; }
+.servis-okumasi { display: grid; gap: 4px; min-width: 0; }
 @media (max-width: 600px) {
   .servis-akis-diyagrami .diyagram-dugumu { padding: 10px 12px 10px 14px; }
   .servis-akis-diyagrami .tasarim-denetimleri { margin-left: 0; }

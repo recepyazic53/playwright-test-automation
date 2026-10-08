@@ -1507,6 +1507,25 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (!p.blokKosulu || !adimlar[i]) return;
     if (!yeniKosulYaz(adimlar[i], p.blokKosulu, undefined)) bilinmeyenler.push(`"${p.ad}" adımının koşulundaki alan akışta yok; koşul yazılmadı.`);
   });
+  // SQL / servis okumalarının "Kullanılacağı alanlar"ı (senaryo formunda öneri): kayıt anahtarı → modeldeki alan kimliği. Akışta
+  // olmayan alan atılır (not düşülür); hiçbiri kalmazsa anahtar silinir (okuma hiçbir alanda önerilmez).
+  altAdimlar.forEach((p, i) => {
+    const adim = adimlar[i];
+    const tur = p.sqlKontrolu ? 'sqlKontrolu' : p.servisKontrolu ? 'servisKontrolu' : null;
+    if (!tur || !adim || !nesneMi(adim[tur]) || !Array.isArray(adim[tur].okumalar)) return;
+    adim[tur] = { ...adim[tur], okumalar: adim[tur].okumalar.map((/** @type {Record<string, any>} */ o) => {
+      if (!Array.isArray(o.hedefAlanlar)) return o;
+      const { hedefAlanlar, ...geri } = o;
+      /** @type {string[]} */
+      const idler = [];
+      for (const a of hedefAlanlar) {
+        const m = hamdanModel.get(a);
+        if (!m) { bilinmeyenler.push(`"${p.ad}" adımındaki "${o.ad}" okumasının kullanılacağı alan akışta yok; o alan çıkarıldı.`); continue; }
+        if (!idler.includes(String(m.id))) idler.push(String(m.id));
+      }
+      return idler.length ? { ...geri, hedefAlanlar: idler } : geri;
+    }) };
+  });
 
   if (!envanter.basariGostergesi) bilinmeyenler.push('Başarı göstergesi seçilmedi: son adımın sonucu doğrulanmaz (modelde son adıma "kosu.basariGostergesi" ekleyin).');
   bilinmeyenler.push('Hata göstergesi (iş kuralı uyarılarının çıktığı öğe) kayıtta seçilmez; iş kuralı hatası beklenen senaryolarda sayfanın metni aranır.');

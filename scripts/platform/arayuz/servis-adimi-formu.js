@@ -4,6 +4,7 @@
 // nesnesi yerinde değiştirilir; her değişiklikte degisti() çağrılır. Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
 import { api, h, ikon, yerlestir } from './ortak.js';
 import { SERVIS_ATAMA_EN_COK, SERVIS_OKUMA_EN_COK, servisOzeti } from './servis-adimi.mjs';
+import { okumaHedefSecimi } from './sql-adimi-formu.js';
 
 /** Proje başına servis listesi (bir kez okunur). @type {Map<string, Promise<Array<{ id: string; ad: string; tur: string }>>>} */
 const servisOnbellegi = new Map();
@@ -46,7 +47,8 @@ function sablonDegiskenleri(icerik) {
 
 /**
  * @param {any} t servis tanımı (yerinde değişir)
- * @param {{ projeId: string; degisti: () => void }} s
+ * @param {{ projeId: string; degisti: () => void; alanlar?: import('./sql-adimi-formu.js').OkumaHedefAlani[] }} s
+ *   alanlar: ekran akış tasarımında ekranın alanları (verilirse her okumada "Kullanılacağı alanlar" seçimi çıkar).
  */
 export function servisAdimiFormu(t, s) {
   if (!Array.isArray(t.atamalar)) t.atamalar = [];
@@ -109,8 +111,9 @@ export function servisAdimiFormu(t, s) {
       ad.addEventListener('input', () => { o.ad = /** @type {HTMLInputElement} */ (ad).value.trim(); degisti(); });
       yol.addEventListener('input', () => { o.yol = /** @type {HTMLInputElement} */ (yol).value.trim(); degisti(); });
       gizli.addEventListener('change', () => { if (/** @type {HTMLInputElement} */ (gizli).checked) o.gizli = true; else delete o.gizli; degisti(); });
-      return h('div', { class: 'servis-satiri' }, ad, yol, h('label', { class: 'onay-satiri kucuk' }, gizli, 'gizli'),
+      const satir = h('div', { class: 'servis-satiri' }, ad, yol, h('label', { class: 'onay-satiri kucuk' }, gizli, 'gizli'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet tehlike', 'aria-label': `${i + 1}. okumayı sil`, onclick: () => { t.okumalar.splice(i, 1); okumalariCiz(); degisti(); } }, ikon('cop')));
+      return s.alanlar ? h('div', { class: 'servis-okumasi' }, satir, okumaHedefSecimi(o, s.alanlar, degisti, `${i + 1}. okuma`)) : satir;
     }), h('button', { type: 'button', class: 'kucuk-dugme', disabled: t.okumalar.length >= SERVIS_OKUMA_EN_COK || null, onclick: () => { t.okumalar.push({ ad: '', yol: '' }); okumalariCiz(); degisti(); } }, '+ Okuma'));
   }
   atamalariCiz();

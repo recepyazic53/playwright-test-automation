@@ -4,7 +4,7 @@
 // adımlara ${akis:Ad} olarak geçer. Kontrollerden biri tutmazsa adım kalır.
 //
 // Tanım (ServisTanimi):
-//   { servisId, senaryoId, atamalar?: [{ bul, deger }], okumalar?: [{ ad, yol, kaynak?: 'xml' | 'json' | 'baslik', gizli? }] }
+//   { servisId, senaryoId, atamalar?: [{ bul, deger }], okumalar?: [{ ad, yol, kaynak?: 'xml' | 'json' | 'baslik', gizli?, hedefAlanlar? }] }
 //   atama: şablonun gövdesinde / yolunda / başlıklarında geçen "bul" metninin (ör. ${Kişi.TC kimlik no} ya da sabit bir değer) her
 //   geçtiği yer "deger" ile değiştirilir. deger'de ${alanAnahtari} (senaryonun değeri) ve ${akis:Ad} (önceki adımda okunan) yazılabilir;
 //   koşucu bunları çözer, sunucuya çözülmüş metin gider.
@@ -23,7 +23,7 @@ const metin = (/** @type {unknown} */ d, /** @type {number} */ en) => (typeof d 
 
 /**
  * @typedef {{ bul: string; deger: string }} ServisAtamasi
- * @typedef {{ ad: string; yol: string; kaynak?: 'xml' | 'json' | 'baslik'; gizli?: boolean }} ServisOkumasi
+ * @typedef {{ ad: string; yol: string; kaynak?: 'xml' | 'json' | 'baslik'; gizli?: boolean; hedefAlanlar?: string[] }} ServisOkumasi
  * @typedef {{ servisId: string; senaryoId: string; atamalar?: ServisAtamasi[]; okumalar?: ServisOkumasi[] }} ServisTanimi
  */
 
@@ -62,7 +62,14 @@ export function servisTanimiDogrula(ham) {
     if (adlar.has(ad)) { hatalar.push(`"${ad}" okuması birden çok kez yazılmış.`); continue; }
     adlar.add(ad);
     const kaynak = o.kaynak === 'xml' || o.kaynak === 'json' || o.kaynak === 'baslik' ? o.kaynak : undefined;
-    okumalar.push({ ad, yol, ...(kaynak ? { kaynak } : {}), ...(o.gizli === true ? { gizli: true } : {}) });
+    // Kullanılacağı alanlar (senaryo formunda öneri): sql-adimi.mjs > okumaHedefleri ile aynı kural (en çok 50, tekil, kırpılmış).
+    /** @type {string[]} */
+    const hedefler = [];
+    for (const x of Array.isArray(o.hedefAlanlar) ? o.hedefAlanlar : []) {
+      const a = typeof x === 'string' ? x.trim().slice(0, 200) : '';
+      if (a && !hedefler.includes(a) && hedefler.length < 50) hedefler.push(a);
+    }
+    okumalar.push({ ad, yol, ...(kaynak ? { kaynak } : {}), ...(o.gizli === true ? { gizli: true } : {}), ...(hedefler.length ? { hedefAlanlar: hedefler } : {}) });
   }
   if (okumalar.length > SERVIS_OKUMA_EN_COK) hatalar.push(`En çok ${SERVIS_OKUMA_EN_COK} okuma yapılabilir.`);
   // İstekten sonra bekleme (diyagramda servis bloğundan sonraki "Bekle"): koşucu adım bitince bu kadar bekler.

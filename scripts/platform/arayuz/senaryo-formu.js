@@ -150,11 +150,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
   // Alanların görünürlük koşulları (dal düzeni: kontrol seçimi önde, kayıt grupları seçime göre; senaryo-dallari.mjs).
   const kosullar = kosulHaritasi(baglam.model);
   // Alanın adımından ÖNCEKİ SQL / servis adımlarının okumaları: alanın değeri ${akis:Ad} olabilir (koşuda okunan değer yazılır).
+  // hedefAlanlar: akış tasarımında okumanın "Kullanılacağı alanlar"ı (modelin alan kimlikleri, alan.id); "Önceki adımdan…" seçimi
+  // yalnız bu alanlarda çıkar (akisSecimiYap).
   const akisOkumalari = (() => {
     const adimlar = (Array.isArray(baglam.model?.adimlar) ? baglam.model.adimlar : []).filter((x) => x && typeof x.id === 'string');
-    /** @type {Map<string, Array<{ ad: string; adim: string; gizli: boolean }>>} */
+    /** @type {Map<string, Array<{ ad: string; adim: string; gizli: boolean; hedefAlanlar: string[] }>>} */
     const harita = new Map();
-    /** @type {Array<{ ad: string; adim: string; gizli: boolean }>} */
+    /** @type {Array<{ ad: string; adim: string; gizli: boolean; hedefAlanlar: string[] }>} */
     const biriken = [];
     for (const a of adimlar) {
       harita.set(a.id, biriken.slice());
@@ -162,7 +164,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       for (const o of Array.isArray(okumalar) ? okumalar : []) {
         // Okuma gizli işaretliyse (ya da işaret yoksa adı gizli adlardan biriyse) değeri raporda ve kayıtta maskelenir.
         if (o && typeof o.ad === 'string' && !biriken.some((b) => b.ad === o.ad)) {
-          biriken.push({ ad: o.ad, adim: String(a.baslik || a.id), gizli: o.gizli === true || (o.gizli === undefined && gizliAdMi(o.ad)) });
+          biriken.push({ ad: o.ad, adim: String(a.baslik || a.id), gizli: o.gizli === true || (o.gizli === undefined && gizliAdMi(o.ad)),
+            hedefAlanlar: Array.isArray(o.hedefAlanlar) ? o.hedefAlanlar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [] });
         }
       }
     }
@@ -1177,10 +1180,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
         return;
       }
       kayit.ozetCiz = null;
-      // Önceki SQL / servis adımında okunan değer: değer alan her alanda (hassas olanlarda da) "Önceki adımdan…" seçimi; seçilince
-      // değer ${akis:Ad} olur (koşuda okunan değer yazılır).
+      // Önceki SQL / servis adımında okunan değer: "Önceki adımdan…" seçimi yalnız okumanın "Kullanılacağı alanlar"ında (akış tasarımı;
+      // hassas alanlarda da) çıkar, hedefi seçilmemiş okuma hiçbir alanda önerilmez. Seçilince değer ${akis:Ad} olur (koşuda okunan
+      // değer yazılır). Önceden seçilmiş ${akis:Ad} değeri hedef olmasa da rozetle görünür ve çalışır.
       const akisSecimiYap = () => {
-        const okumalar = akisOkumalari(alan.adimId);
+        const okumalar = akisOkumalari(alan.adimId).filter((o) => o.hedefAlanlar.includes(String(alan.id)));
         return okumalar.length ? h('select', {
           class: 'kucuk-secim', 'aria-label': `${alan.etiket}: önceki adımda okunan değer`,
           onchange: (o) => { const v = o.currentTarget.value; if (v) { degerYaz(alan.anahtar, '${akis:' + v + '}'); kayit.ciz(); } }
