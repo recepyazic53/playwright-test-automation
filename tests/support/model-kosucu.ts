@@ -31,6 +31,7 @@ import { gercekSecenekler, yuklenmeBeklemesi } from '../../scripts/platform/tara
 import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
 import { listeDurumu, listedenSecenekSec, listedeYokMetni, secenekBekle, secenekEslestir, type ListeSecenegi, type SecenekBekleSonucu } from '../../scripts/platform/tarama/secenek-secimi';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
+import { ozelBilesendenSec } from '../../scripts/platform/tarama/ozel-secim';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
@@ -458,66 +459,6 @@ async function hedefSecenek(l: Locator, s: ListeSecenegi): Promise<ListeSecenegi
   return d ? secenekEslestir(d.secenekler, s) : null;
 }
 
-/**
- * Açılan listede tıklanacak görünen seçenek (aynı belgede): role=option ya da liste öğesi. Öncelik: metni tam (senaryo metni ya da
- * gizli listedeki seçeneğin metni), değeri (data-value / id sonu), sonra metin senaryo metniyle başlar, en son içerir. Bulunan öğe
- * işaretlenir; bulunamazsa false.
- */
-function gorunenSecenegiIsaretle(e: Element, a: { isaret: string; metinler: string[]; deger: string; aranan: string }): boolean {
-  const d = e.ownerDocument;
-  const n = (t: string): string => t.replace(/\s+/g, ' ').trim().toLocaleLowerCase('tr-TR');
-  const gorunur = (x: Element): boolean => {
-    const r = x.getBoundingClientRect();
-    const st = (d.defaultView ?? window).getComputedStyle(x);
-    return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
-  };
-  const uygun = (x: Element): boolean => !x.closest('select') && gorunur(x) && x.getAttribute('aria-disabled') !== 'true';
-  // Rollü seçenekler (role=option / listbox öğesi) önce; rolsüz bileşenlerde görünen liste öğeleri (li / data-value).
-  const rollu = [...d.querySelectorAll('[role="option"], [role="listbox"] li, [role="tree"] li, [role="treeitem"]')].filter(uygun);
-  const rolsuz = [...d.querySelectorAll('li, [data-value]')].filter((x) => !rollu.includes(x) && uygun(x));
-  const metin = (x: Element): string => n((x as HTMLElement).innerText ?? x.textContent ?? '');
-  const tamlar = a.metinler.map(n).filter(Boolean);
-  const aranan = n(a.aranan);
-  const degerMi = (x: Element): boolean => {
-    const v = x.getAttribute('data-value') ?? x.getAttribute('data-id') ?? '';
-    return Boolean(a.deger) && (v === a.deger || (x.id ?? '').endsWith(`-${a.deger}`));
-  };
-  const kismi = (liste: Element[]): Element | undefined => (aranan ? liste.find((x) => metin(x).startsWith(aranan)) ?? liste.find((x) => metin(x).includes(aranan)) : undefined);
-  const bulunan = [...rollu, ...rolsuz].find((x) => tamlar.includes(metin(x))) ?? [...rollu, ...rolsuz].find(degerMi) ?? kismi(rollu) ?? kismi(rolsuz);
-  if (!bulunan) return false;
-  bulunan.setAttribute('data-nobetci-ozel-secenek', a.isaret);
-  return true;
-}
-
-/**
- * Bileşenin açık kalan listesi (görünen arama kutusu ya da liste kutusu; ör. select2'nin gövdeye eklenen penceresi): önce kutuya
- * yeniden tıklanır (aç / kapa), kapanmazsa belgeye "dışarı tıklama" (mousedown / mouseup) gönderilir. Escape kullanılmaz (üstteki
- * pencereyi — ör. iframe'i taşıyan açılır pencere — kapatabilir).
- */
-async function acikListeyiKapat(k: Kapsam, l: Locator, isaret: string): Promise<void> {
-  const acik = async (): Promise<boolean> => l.evaluate((e) => {
-    const d = e.ownerDocument;
-    const gorunur = (x: Element): boolean => {
-      const r = x.getBoundingClientRect();
-      const st = (d.defaultView ?? window).getComputedStyle(x);
-      return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
-    };
-    return [...d.querySelectorAll('[data-nobetci-ozel-ara], [role="listbox"]')].some((x) => !x.closest('select') && !x.hasAttribute('data-nobetci-onceden') && gorunur(x));
-  }).catch(() => false);
-  if (!(await acik())) return;
-  if (await l.evaluate(ozelBilesenIsaretle, isaret).catch(() => false)) {
-    const kutu = k.locator(`[data-nobetci-ozel="${isaret}"]`).first();
-    await kutu.click({ timeout: 2_000 }).catch(() => undefined);
-    await kutu.evaluate((e) => e.removeAttribute('data-nobetci-ozel'), undefined, { timeout: 1_000 }).catch(() => undefined);
-  }
-  if (await acik()) {
-    await l.evaluate((e) => {
-      const b = e.ownerDocument.body;
-      for (const t of ['mousedown', 'mouseup', 'click']) b.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: e.ownerDocument.defaultView }));
-    }).catch(() => undefined);
-  }
-}
-
 async function ozelSec(k: Kapsam, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
   const s = secenekBul(alan.secenekler, alan.deger);
   // Hedef: gizli listedeki seçenek (değer, metin tam, sonra "kod - ad" metni kodla başlar / içerir).
@@ -528,58 +469,8 @@ async function ozelSec(k: Kapsam, alan: PlanAlani, l: Locator, adimBasligi: stri
   const hedef = ilk.deger;
   const deger = async (): Promise<string | null> => l.inputValue({ timeout: 2_000 }).catch(() => null);
   if ((await deger()) === hedef) return;
-  const isaret = `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-  if (await l.evaluate(ozelBilesenIsaretle, isaret).catch(() => false)) {
-    const kutu = k.locator(`[data-nobetci-ozel="${isaret}"]`).first();
-    let aramaKutusu: Locator | null = null;
-    // Tıklamadan önce zaten görünen liste kutuları (sayfanın sabit listeleri) açık kalan pencere sayılmaz.
-    await l.evaluate((e) => { for (const x of e.ownerDocument.querySelectorAll('[role="listbox"]')) if ((x as HTMLElement).offsetParent) x.setAttribute('data-nobetci-onceden', ''); }).catch(() => undefined);
-    try {
-      await kutu.click({ timeout: 5_000 });
-      // Açılan arama kutusu: bileşenin odakladığı metin kutusu ya da görünen bir arama kutusu (aynı belgede).
-      const ara = await l.evaluate((e, i) => {
-        const d = e.ownerDocument;
-        const gorunur = (x: Element | null): boolean => {
-          if (!x) return false;
-          const r = x.getBoundingClientRect();
-          const st = (d.defaultView ?? window).getComputedStyle(x);
-          return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
-        };
-        const metinKutusu = (x: Element | null): x is HTMLInputElement => !!x && x.tagName === 'INPUT' && ['text', 'search', ''].includes((x as HTMLInputElement).type) && gorunur(x);
-        const a = d.activeElement;
-        const bulunan = metinKutusu(a) ? a : [...d.querySelectorAll('input[type="search"],input[role="searchbox"],input[role="combobox"],input[aria-autocomplete]')].find(metinKutusu);
-        if (!bulunan) return false;
-        bulunan.setAttribute('data-nobetci-ozel-ara', i);
-        return true;
-      }, isaret).catch(() => false);
-      if (ara) {
-        aramaKutusu = k.locator(`[data-nobetci-ozel-ara="${isaret}"]`).first();
-        await aramaKutusu.fill('', { timeout: 3_000 });
-        await aramaKutusu.pressSequentially(s.metin, { delay: 20, timeout: 10_000 });
-      }
-      // Görünen seçenek ("kod - ad" metinli listelerde senaryo kodu metnin tamamı değildir): metin tam → değer → başlar → içerir.
-      // Liste arama sonucunu geç çizebilir: kısa aralıklarla aranır.
-      const secenekIsareti = `${isaret}s`;
-      const bilgi = { isaret: secenekIsareti, metinler: [s.metin, ilk.metin], deger: hedef, aranan: s.metin };
-      let bulundu = false;
-      for (const bitis = Date.now() + 3_000; !bulundu && Date.now() < bitis;) {
-        bulundu = await l.evaluate(gorunenSecenegiIsaretle, bilgi).catch(() => false);
-        if (!bulundu) await new Promise((c) => setTimeout(c, 100));
-      }
-      if (bulundu) {
-        const secenek = k.locator(`[data-nobetci-ozel-secenek="${secenekIsareti}"]`).first();
-        await secenek.click({ timeout: 3_000 }).catch(() => undefined);
-      }
-      await expect.poll(deger, { timeout: 2_000 }).toBe(hedef).catch(() => undefined);
-    } catch { /* görünen bileşenden seçilemedi: yedek yol */ } finally {
-      await kutu.evaluate((e) => e.removeAttribute('data-nobetci-ozel'), undefined, { timeout: 1_000 }).catch(() => undefined);
-    }
-    // Liste açık kaldıysa (seçilemedi ya da bileşen seçimden sonra kapanmadı) kapatılır: açık pencere sonraki alanın kutusunu ve
-    // düğmeleri örter. İşaret kontrolden SONRA kaldırılır (önce kaldırılırsa açık liste görülmez).
-    await acikListeyiKapat(k, l, isaret);
-    // İşaretler belgeden temizlenir (seçimden sonra bileşenin penceresi belgeden kaldırılmış olabilir: öğeye bağlı temizlik beklerdi).
-    await l.evaluate((e) => { for (const x of e.ownerDocument.querySelectorAll('[data-nobetci-onceden], [data-nobetci-ozel-ara], [data-nobetci-ozel-secenek], [data-nobetci-ozel]')) for (const a of ['data-nobetci-onceden', 'data-nobetci-ozel-ara', 'data-nobetci-ozel-secenek', 'data-nobetci-ozel']) x.removeAttribute(a); }).catch(() => undefined);
-  }
+  // Görünen aramalı kutudan seçilir (ortak kural: tarama/ozel-secim.ts); olmazsa yedek yol.
+  await ozelBilesendenSec(k, l, ilk, s.metin);
   // Yedek yol: değer GÜNCEL öğeye (liste bu arada yeniden kurulmuş olabilir; hedef yeniden aranır) input / change olaylarıyla yazılır.
   if ((await deger()) !== hedef) {
     const guncel = (await hedefSecenek(l, s)) ?? ilk;

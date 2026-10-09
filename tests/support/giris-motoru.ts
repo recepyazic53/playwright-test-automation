@@ -23,6 +23,8 @@ import {
 import { CAPTCHA_MESAJI, captchaAlgila, kodAlaniniAlgila } from '../../scripts/platform/giris/algilama.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiYaz, kodYanitiniBekle } from '../../scripts/platform/giris/elle-kod.mjs';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
+import { ozelBilesendenSec } from '../../scripts/platform/tarama/ozel-secim';
+import { secenekBekle } from '../../scripts/platform/tarama/secenek-secimi';
 import { totpKoduUret } from './totp';
 import { sureAyari } from './kosu-ayarlari';
 
@@ -664,6 +666,12 @@ async function hedefAdimi(
           const deger = doldur(a.deger);
           // Gizli <select> (aramalı liste bileşenlerinin arkasındaki gerçek liste) görünmese de değeri yazılır.
           const zorla = b ? !b.gorunur : false;
+          // Gizli liste: arkasındaki görünen aramalı kutu (select2 vb.) varsa seçim ondan yapılır (ortak kural: tarama/ozel-secim.ts) —
+          // sayfanın kendi olayları (ör. seçime göre yüklenen bağlı liste) çalışsın; gizli listeye doğrudan yazmak bunları tetiklemeyebilir.
+          if (b && zorla) {
+            const r = await secenekBekle(l, { deger, metin: deger }, { sinirMs: Math.max(eylemMs, 1_000) });
+            if (r.secenek && await ozelBilesendenSec(b.cerceve, l, r.secenek, deger)) { await sayfaSakinlessin(sayfa); return; }
+          }
           try {
             await l.selectOption(deger, { timeout: Math.min(eylemMs, 2_000), force: zorla });
           } catch (hata) {
