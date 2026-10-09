@@ -301,7 +301,7 @@ async function ekranAyrintisi(icerik, s) {
    */
   const nobetciTaramasi = () => {
     if (!modelVar) { taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }); return; }
-    location.hash = `#/hizli-test/duzenle/${encodeURIComponent(e.id)}`;
+    location.hash = `#/hizli-test/guncelle/${encodeURIComponent(e.id)}`;
   };
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
