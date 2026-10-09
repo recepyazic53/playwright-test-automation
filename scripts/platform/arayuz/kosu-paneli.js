@@ -557,20 +557,18 @@ async function birTaneCalistir(oturum, satir, ek) {
  */
 function ekranAnaliziSonucu(yanit) {
   const a = yanit.ekranAnalizi;
-  if (!a) {
-    bildir(yanit.ekranAnaliziHatasi ? `Ekran karşılaştırılamadı: ${yanit.ekranAnaliziHatasi}` : 'Ekran karşılaştırılamadı: koşu ekrana ulaşamadı.', 'hata');
-    return;
-  }
-  const notlar = Array.isArray(a.notlar) ? a.notlar : [];
-  const kapat = h('button', { type: 'button', class: a.bulguSayisi ? 'hayalet' : '' }, 'Kapat');
-  const git = a.bulguSayisi ? h('button', { type: 'button' }, 'Değişiklikleri gör') : null;
+  // Karşılaştırılamadıysa da pencere açılır (kısa bildirim gözden kaçıyordu).
+  const hata = a ? null : yanit.ekranAnaliziHatasi ? `Ekran karşılaştırılamadı: ${yanit.ekranAnaliziHatasi}` : 'Ekran karşılaştırılamadı: koşu ekrana ulaşamadı.';
+  const notlar = a && Array.isArray(a.notlar) ? a.notlar : [];
+  const kapat = h('button', { type: 'button', class: a?.bulguSayisi ? 'hayalet' : '' }, 'Kapat');
+  const git = a?.bulguSayisi ? h('button', { type: 'button' }, 'Değişiklikleri gör') : null;
   const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'ekran-analizi-basligi' },
     h('div', { class: 'diyalog-govde' },
       h('h2', { id: 'ekran-analizi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('soru')), 'Modeli güncelle: sonuç'),
-      h('p', {}, a.bulguSayisi
+      hata ? h('p', { class: 'hata-metni' }, hata) : h('p', {}, a.bulguSayisi
         ? `Senaryo koşarken ekranda modelden farklı ${a.bulguSayisi} şey bulundu (yeni / kaybolan alan, yeni / kaldırılan seçenek). Değişiklikler sayfasında tek tek kabul edin ya da reddedin.`
         : 'Alanlarda ve seçeneklerde modelden farklı bir şey bulunmadı.'),
-      a.gizlenenSayisi ? h('p', { class: 'soluk' }, `Daha önce reddettiğiniz ${a.gizlenenSayisi} fark yeniden gösterilmedi.`) : null,
+      a?.gizlenenSayisi ? h('p', { class: 'soluk' }, `Daha önce reddettiğiniz ${a.gizlenenSayisi} fark yeniden gösterilmedi.`) : null,
       notlar.length ? h('ul', {}, notlar.map((n) => h('li', {}, n))) : null),
     h('div', { class: 'diyalog-alt' }, kapat, git));
   kapat.addEventListener('click', () => diyalog.close());
