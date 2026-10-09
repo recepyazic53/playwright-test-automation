@@ -805,10 +805,11 @@ async function yedekleme(govde, baglam, yenile) {
   });
   govde.replaceChildren(ortakKart, ortakAkisAlani, disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, veriKarti, sonucTemizlemeKarti());
   // Hızlı aramadan gelince (#/ayarlar/yedekleme/disa | ice): ilgili kart görünür alana gelir ve ilk öğesine odaklanılır.
-  const hedef = baglam.odak === 'disa' ? disaForm : baglam.odak === 'ice' ? iceKart : null;
+  // "Yeni ekip sürümü" bandından (#/ayarlar/yedekleme/ortak): Ekip paylaşımı kartı açılır, Güncelle düğmesine odaklanılır.
+  const hedef = baglam.odak === 'disa' ? disaForm : baglam.odak === 'ice' ? iceKart : baglam.odak === 'ortak' ? ortakKart : null;
   if (hedef) {
     hedef.scrollIntoView({ block: 'start' });
-    /** @type {HTMLElement | null} */ (baglam.odak === 'ice' ? iceBaslat : hedef.querySelector('input[type="password"]'))?.focus();
+    /** @type {HTMLElement | null} */ (baglam.odak === 'ice' ? iceBaslat : baglam.odak === 'ortak' ? hedef.querySelector('[data-ortak-guncelle]') : hedef.querySelector('input[type="password"]'))?.focus();
   }
 }
 

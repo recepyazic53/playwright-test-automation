@@ -4704,3 +4704,7 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .kayit-listesi > li.kayit-duzenleme:hover { background: var(--panel-2); }
 .kayit-listesi > li.kayit-duzenleme > div > .kart, tr.kayit-duzenleme > td > div > .kart { margin: 0; }
 tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
+
+/* Ekip paylaşımı: yeni sürüm bandı ve üst menüdeki işaret (uygulama.js > ortakSurumuIzle). */
+.ust-nav .ortak-surum-isareti { margin-left: 6px; padding: 1px 6px; font-size: 10.5px; line-height: 1.4; }
+.ortak-surum-bandi .bant-simge { color: var(--uyari, var(--vurgu)); }

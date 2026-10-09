@@ -2099,8 +2099,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
     }
   };
   const tokenYok = () => jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
-  // Kimliği doğrulanmış her istek (durum sorgusu hariç) otomatik kilit sayacını sıfırlar.
-  if (disTokenGecerli && yol !== '/platform/durum') platformEtkinligiBildir();
+  // Kimliği doğrulanmış her istek (durum sorgusu ve arayüzün arka plandaki "yeni ekip sürümü var mı" sorgusu hariç) otomatik kilit
+  // sayacını sıfırlar.
+  const arkaPlanSorgusu = yol === '/platform/durum' || (yol === '/platform/ortak/durum' && url.searchParams.get('izle') === '1');
+  if (disTokenGecerli && !arkaPlanSorgusu) platformEtkinligiBildir();
 
   // Arka plan kipi (kullanıcı tercihiyle kasa kilitliyken planlı koşu için anahtar bellekte): arayüz KİLİTLİDİR. Varsayılan
   // reddet — yalnız durum, kasayı açma/kilitleme, çalışma alanı seçimi ve raporlayıcının yazma uçları geçer; diğer her uç 423.

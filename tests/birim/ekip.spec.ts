@@ -2,7 +2,7 @@
 // o kişi ilk Admin olur); liste doluysa listede olmayan ad "Yetkili değilsiniz" alır ve kasa kilitli kalır. Ekip bölümü ve uçları
 // yalnız Admin'e açıktır; girişteki ad ekip paylaşımında "kim yaptı" adı olur.
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect, test, type Browser } from '@playwright/test';
@@ -132,6 +132,39 @@ test.describe('kasa açılışı ve Ayarlar > Ekip', () => {
     await expect(page.getByRole('form', { name: 'Maskeleme' }).getByLabel('Ek gizli adlar (her satıra bir ad)')).toBeVisible();
     await page.getByRole('form', { name: 'Maskeleme' }).getByRole('button', { name: 'Maskeleme: aç / kapat' }).click();
     await expect(page.getByRole('form', { name: 'Maskeleme' }).getByLabel('Ek gizli adlar (her satıra bir ad)')).toBeHidden();
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('ekipte yeni sürüm varsa her ekranda bant ve üst menüde işaret; Güncelle Ekip paylaşımına götürür; kapatılınca o sürüm için çıkmaz', async () => {
+    test.setTimeout(60_000);
+    await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA, kullaniciAdi: 'Recep' });
+    if (!((await nobetciApi(nobetci, '/platform/projeler')).projeler as unknown[]).length) await nobetciApi(nobetci, '/platform/proje/kaydet', { ad: 'Kart Projesi' });
+    const ortakKlasor = mkdtempSync(join(klasor, 'ortak-'));
+    // Başkası v1 yayınlamış (bu makine henüz almadı).
+    writeFileSync(join(ortakKlasor, 'ortak.json'), JSON.stringify({ bicim: 1, surumler: [{ surum: 1, dosya: 'ortak-0001-x.tayedek', yapan: 'dogukan.aka', zaman: new Date().toISOString(), not: 'daskinko', bayt: 1 }] }));
+    expect((await nobetciApi(nobetci, '/platform/ortak/klasor', { klasor: ortakKlasor })).basarili).not.toBe(false);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/senaryolar');
+    const bant = page.locator('.ortak-surum-bandi');
+    await expect(bant).toContainText('Ekipte yeni sürüm var: v1 (dogukan.aka', { timeout: 15_000 });
+    await expect(bant).toContainText('Not: daskinko');
+    await expect(page.locator('.ust-nav .ortak-surum-isareti')).toBeVisible();
+    await bant.getByRole('button', { name: 'Güncelle' }).click();
+    await expect(page).toHaveURL(/#\/ayarlar\/yedekleme\/ortak$/);
+    await expect(page.locator('[data-ortak-guncelle]')).toBeFocused();
+    // Kapatılan sürüm bu sekmede yeniden gösterilmez; işaret güncellenene kadar kalır.
+    await page.goto('/#/senaryolar');
+    await page.reload();
+    await expect(bant).toBeVisible({ timeout: 15_000 });
+    await bant.getByRole('button', { name: 'Bildirimi kapat' }).click();
+    await page.reload();
+    await expect(page.locator('.ust-nav .ortak-surum-isareti')).toBeVisible({ timeout: 15_000 });
+    await expect(bant).toHaveCount(0);
+    await nobetciApi(nobetci, '/platform/ortak/klasor', { klasor: '' });
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
