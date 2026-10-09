@@ -356,7 +356,7 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
   const secenekler = page.getByRole('menuitem');
   await expect(secenekler).toHaveText([/^Nöbetçi taraması/, /^Paket yükle/, /^Akışı kaydet/]);
-  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/yalnız okur ya da seçimleri de gezer/);
+  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/seçtiğiniz senaryonun verileriyle gezer/);
   await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
@@ -488,6 +488,23 @@ test('Paket yükle (tekrar analiz): "Bulguları hesapla" Bulgular\'a geçer; "ka
   await page.getByRole('button', { name: 'Bulguları hesapla' }).click();
   await expect(page).toHaveURL(/\/bulgular$/);
   await expect(page.getByRole('dialog', { name: 'Değişiklikleriniz kaydedilmeyecek' })).toHaveCount(0);
+  // Sade Değişiklikler sayfası: tek satır özet, türe göre gruplar, satırda Kabul et / Reddet; sayı kartı, filtre ve yan panel yok.
+  await expect(page.getByRole('heading', { name: 'Değişiklikler', level: 2 })).toBeVisible();
+  await expect(page.locator('.bulgu-ozet-satiri')).toContainText(/^\d+ değişiklik/);
+  await expect(page.locator('.bulgu-metrikleri, .filtre-cipi, .etki-sutunu')).toHaveCount(0);
+  const ilk = page.locator('.bulgu-grubu .bulgu-satiri').first();
+  await expect(ilk.getByRole('button', { name: 'Kabul et' })).toBeVisible();
+  await expect(ilk.getByRole('button', { name: 'Reddet' })).toBeVisible();
+  await expect(ilk.locator('.etki-paneli')).toHaveCount(0);
+  await ilk.locator('summary', { hasText: 'Ayrıntı' }).click();
+  await expect(ilk.locator('.etki-paneli')).toBeVisible();
+  await page.getByRole('button', { name: 'Hepsini kabul et' }).click();
+  await expect(page.locator('.bulgu-satiri.karar-kabul')).toHaveCount(await page.locator('.bulgu-satiri').count());
+  await expect(page.getByRole('button', { name: 'Uygula' })).toBeEnabled();
+  for (const genislik of [1400, 390]) {
+    await page.setViewportSize({ width: genislik, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `${genislik}px`).toBeLessThanOrEqual(0);
+  }
   agKontrol(istekler);
   await page.close();
 });

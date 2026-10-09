@@ -1,14 +1,13 @@
-// "Bulgular" ekranı (tekrar analiz): yeni ekran paketi ile güncel model arasındaki farklar.
-//   Özet metrikler · tür filtreleri · bulgu satırları (tür rozeti, konum, eski → yeni, bağlam profiline göre
-//   görünürlük) · Kabul et / Reddet · toplu kabul/red · "Kararları uygula" (YALNIZCA kabul edilenlerle yeni
-//   model sürümü; reddedilenler hatırlanır, aynı değişiklik tekrar gösterilmez).
-//   Etki paneli (seçili bulgu): etkilenen senaryolar; zorunlu yeni alanda eksik değer → toplu değer atama
+// "Değişiklikler" ekranı (bulgular; Modeli güncelle › Nöbetçi taraması / paket ile tekrar analiz): güncel modelle farklar.
+//   Tek satır özet · türe göre gruplu satırlar (tek cümle + konum, "Tabloya da ekle", "N senaryo etkilenir") · Kabul et / Reddet ·
+//   Hepsini kabul / reddet · "Uygula" (YALNIZCA kabul edilenlerle yeni model sürümü; reddedilenler hatırlanır, tekrar gösterilmez).
+//   Satırın "Ayrıntı"sı: eski → yeni, görünürlük, etkilenen senaryolar; zorunlu yeni alanda eksik değer → toplu değer atama
 //   (bulgu kabul edilip uygulandıktan sonra) ya da tek tek düzenleme; "Eksik kombinasyonlara senaryo öner"
-//   ve "Yapay zekâ ile yorumla" (gizli değer içermeyen analiz dosyası; Nöbetçi hiçbir yapay zekâ servisine bağlanmaz).
-// Karar taslağı sekme oturumunda (sessionStorage) tutulur; kalıcı olan yalnızca "Kararları uygula"dır.
+//   (yapay zekâ ile yorumlama ekranın ⋯ menüsünde).
+// Karar taslağı sekme oturumunda (sessionStorage) tutulur; kalıcı olan yalnızca "Uygula"dır.
 import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import {
-  BULGU_TURLERI, baglamMatrisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, onayIste
+  BULGU_TURLERI, baglamMatrisi, claudeDosyasiOlustur, farkGosterimi, goreliZaman, onayIste
 } from './ekran-ortak.js';
 
 const ETKI_METNI = { eksikDeger: 'eksik değer', kullanilanSecenek: 'kullanılan seçenek', kaldirilanAlanKullanimi: 'başvuru', tipKontrolu: 'tip kontrolü', gorunmezProfil: 'görünmez profil' };
@@ -42,8 +41,8 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
   const baslik = h('div', { class: 'sayfa-basligi' },
     h('div', {},
       h('div', { class: 'kirinti' }, h('span', {}, s.proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/ekranlar' }, 'Ekranlar'),
-        h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: ekranAdresi }, v.ekran.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Bulgular')),
-      h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Bulgular'),
+        h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: ekranAdresi }, v.ekran.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Değişiklikler')),
+      h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Değişiklikler'),
         v.analiz ? (v.analiz.durum === 'uygulandi'
           ? rozet(v.analiz.sonucSurum ? `uygulandı → v${v.analiz.sonucSurum}` : 'uygulandı (model değişmedi)', 'basari')
           : rozet('karar bekliyor', 'uyari')) : null),
@@ -53,8 +52,6 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
         v.analiz.meta.baglamProfilleri && v.analiz.meta.baglamProfilleri.length ? h('span', {}, ikon('hedef'), `bağlam: ${v.analiz.meta.baglamProfilleri.join(', ')}`) : null,
         h('span', { title: tarihMetni(v.analiz.zaman) }, ikon('saat'), `yüklendi ${goreliZaman(v.analiz.zaman)}`)) : null),
     h('div', { class: 'eylemler' },
-      v.analiz ? yorumlaDugmesi(s) : null,
-      h('a', { class: 'dugme', href: `${ekranAdresi}/yukle` }, ikon('yukle'), 'Yeni paket yükle'),
       h('a', { class: 'dugme hayalet', href: ekranAdresi }, ikon('geri'), 'Ekrana dön')));
   if (!v.analiz) {
     yerlestir(icerik, baslik, bosDurum('Bu ekran için analiz yok.', 'Ekranın yeni bir ekran paketini yükleyin: paket güncel modelle karşılaştırılır ve farklar burada bulgu olarak listelenir.', {
@@ -70,84 +67,73 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
   if (uygulandi) { for (const b of a.bulgular) if (b.karar) kararlar.set(b.id, b.karar); }
   else for (const [id, k] of Object.entries(taslakOku(a.id))) if (a.bulgular.some((b) => b.id === id) && (k === 'kabul' || k === 'red')) kararlar.set(id, k);
   const etki = new Map(a.etki.map((x) => [x.bulguId, x]));
-  let filtre = '';
-  let secili = secimKorunsun && a.bulgular.some((b) => b.id === secimKorunsun) ? secimKorunsun
-    : (a.bulgular.find((b) => (etki.get(b.id)?.senaryolar.length ?? 0) > 0) || a.bulgular[0] || {}).id;
+  // Toplu atama / uygulama sonrası yeniden çizimde ayrıntısı açık kalacak satır.
+  const secili = secimKorunsun && a.bulgular.some((b) => b.id === secimKorunsun) ? secimKorunsun : null;
 
-  const metrikAlani = h('div', {});
-  const filtreAlani = h('div', {});
+  const ozetAlani = h('div', {});
   const listeAlani = h('div', {});
-  const etkiAlani = h('div', {});
   const altCubuk = h('div', {});
+  /** Ayrıntısı açık satırlar (yeniden çizimde açık kalsın). */
+  const acik = new Set();
 
   const ciz = () => {
     const kabul = a.bulgular.filter((b) => kararlar.get(b.id) === 'kabul').length;
     const red = a.bulgular.filter((b) => kararlar.get(b.id) === 'red').length;
     const bekleyen = a.bulgular.length - kabul - red;
-    const etkilenen = new Set();
-    for (const b of a.bulgular) {
-      if (uygulandi && kararlar.get(b.id) !== 'kabul') continue;
-      for (const x of etki.get(b.id)?.senaryolar ?? []) etkilenen.add(x.id);
-    }
-    const kart = (sinif, etiket, deger, alt) => h('div', { class: `sonuc-karti ${sinif}` },
-      h('div', { class: 'kart-etiket' }, etiket), h('div', { class: 'kart-deger' }, h('span', { class: 'kart-sayi' }, String(deger))), h('div', { class: 'kart-alt' }, h('span', {}, alt)));
-    yerlestir(metrikAlani, h('div', { class: 'sonuc-kartlari bulgu-metrikleri' },
-      kart('', 'Toplam bulgu', a.bulgular.length, `${Object.keys(a.ozet.turler).length} türde${a.gizlenenSayisi ? ` · ${a.gizlenenSayisi} gizli` : ''}`),
-      kart('basarili', uygulandi ? 'Kabul edildi' : 'Kabul edilecek', kabul, uygulandi ? 'modele eklendi' : 'yeni sürüme girer'),
-      kart('basarisiz', uygulandi ? 'Reddedildi' : 'Reddedilecek', red, 'hatırlanır, tekrar gösterilmez'),
-      kart('atlanan', 'Karar bekleyen', bekleyen, uygulandi ? 'hatırlanmadı' : bekleyen ? 'karar verin' : 'hepsi karara bağlandı'),
-      kart('durduruldu', 'Etkilenen senaryo', etkilenen.size, `${a.senaryoSayisi} senaryodan`)));
-    // Filtre çipleri
-    const turSayilari = a.ozet.turler;
-    const cip = (tur, etiket, sayi) => h('button', { type: 'button', class: 'rozet hap filtre-cipi', 'aria-pressed': filtre === tur ? 'true' : 'false', onclick: () => { filtre = tur; ciz(); } }, etiket, h('b', {}, String(sayi)));
-    yerlestir(filtreAlani, h('div', { class: 'bulgu-arac-cubugu' },
-      h('div', { class: 'kategori-cipleri', role: 'group', 'aria-label': 'Bulgu türü' }, cip('', 'Tümü', a.bulgular.length),
-        Object.entries(turSayilari).map(([t, n]) => cip(t, BULGU_TURLERI[t]?.etiket || t, n))),
+    // Tek satır özet: "5 değişiklik: 2 yeni alan, 1 kaldırılan alan, …"
+    const turler = Object.entries(a.ozet.turler).map(([t, n]) => `${n} ${(BULGU_TURLERI[t]?.etiket || t).toLocaleLowerCase('tr')}`);
+    yerlestir(ozetAlani, h('div', { class: 'bulgu-ozet-satiri' },
+      h('p', {}, h('b', {}, `${a.bulgular.length} değişiklik`), turler.length ? `: ${turler.join(', ')}` : ''),
       uygulandi ? null : h('span', { class: 'sag' },
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => toplu('kabul') }, ikon('onay'), filtre ? 'Görünenleri kabul et' : 'Tümünü kabul et'),
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => toplu('red') }, ikon('carpi'), filtre ? 'Görünenleri reddet' : 'Tümünü reddet'),
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', disabled: !kararlar.size, onclick: () => toplu(null) }, 'Kararları temizle'))));
+        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => toplu('kabul') }, ikon('onay'), 'Hepsini kabul et'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => toplu('red') }, ikon('carpi'), 'Hepsini reddet'))));
     listeCiz();
-    etkiCiz();
     altCubukCiz(kabul, red, bekleyen);
   };
 
-  const gorunenler = () => a.bulgular.filter((b) => !filtre || b.tur === filtre);
   function toplu(karar) {
-    for (const b of gorunenler()) { if (karar) kararlar.set(b.id, karar); else kararlar.delete(b.id); }
+    for (const b of a.bulgular) kararlar.set(b.id, karar);
     taslakYaz(a.id, kararlar);
     ciz();
   }
 
+  /** Türe göre gruplu satırlar: tek cümle + konum, "Tabloya da ekle", "N senaryo etkilenir", Kabul et / Reddet, istenirse Ayrıntı. */
   function listeCiz() {
-    const liste = gorunenler();
-    yerlestir(listeAlani, h('ul', { class: 'bulgu-listesi kart', 'aria-label': 'Bulgular' }, liste.map((b) => {
-      const k = kararlar.get(b.id) || null;
-      const e = etki.get(b.id);
-      const etkiSayisi = e ? e.senaryolar.length : 0;
-      const kararDugmesi = (tur, etiket, ikonAd) => h('button', {
-        type: 'button', class: `kucuk-dugme karar-dugmesi ${tur}`, 'aria-pressed': k === tur ? 'true' : 'false',
-        onclick: (o) => { o.stopPropagation(); if (k === tur) kararlar.delete(b.id); else kararlar.set(b.id, tur); taslakYaz(a.id, kararlar); ciz(); }
-      }, ikon(ikonAd), etiket);
-      return h('li', {
-        class: `bulgu-satiri ${secili === b.id ? 'secili' : ''} ${k ? `karar-${k}` : ''}`.trim(), 'data-bulgu': b.id, tabindex: '0',
-        'aria-label': `${b.baslik}${k ? ` (${k === 'kabul' ? 'kabul' : 'red'})` : ''}`,
-        onclick: () => { secili = b.id; listeCiz(); etkiCiz(); },
-        onkeydown: (o) => { if (o.key === 'Enter' || o.key === ' ') { o.preventDefault(); secili = b.id; listeCiz(); etkiCiz(); } }
-      },
-        h('div', { class: 'bulgu-tur' }, bulguRozeti(b.tur)),
-        h('div', { class: 'bulgu-ana' },
-          h('strong', {}, b.baslik),
-          h('small', {}, b.konum),
-          farkGosterimi(b),
-          tabloSecimi(b),
-          b.baglam ? h('div', { class: 'bulgu-baglam' }, h('span', { class: 'cok-soluk kucuk' }, 'görünürlük:'), baglamMatrisi(b.baglam, a.profiller)) : null),
-        h('div', { class: 'bulgu-sag' },
-          etkiSayisi ? h('span', { class: `etki-hapi ${e.tur === 'eksikDeger' || e.tur === 'kullanilanSecenek' ? 'uyari' : ''}`, title: e.mesaj }, ikon('liste'), `${etkiSayisi} senaryo`) : null,
-          uygulandi
-            ? (k === 'kabul' ? rozet('kabul edildi', 'basari') : k === 'red' ? rozet('reddedildi', 'hata') : rozet('karar verilmedi'))
-            : h('div', { class: 'karar-grubu', role: 'group', 'aria-label': `Karar: ${b.baslik}` }, kararDugmesi('kabul', 'Kabul et', 'onay'), kararDugmesi('red', 'Reddet', 'carpi'))));
-    })));
+    const gruplar = new Map();
+    for (const b of a.bulgular) { if (!gruplar.has(b.tur)) gruplar.set(b.tur, []); gruplar.get(b.tur).push(b); }
+    const sira = Object.keys(BULGU_TURLERI);
+    const turlar = [...gruplar.keys()].sort((x, y) => (sira.indexOf(x) + 1 || 99) - (sira.indexOf(y) + 1 || 99));
+    yerlestir(listeAlani, turlar.map((tur) => h('section', { class: 'bulgu-grubu' },
+      h('h3', {}, BULGU_TURLERI[tur]?.etiket || tur, ' ', rozet(String(gruplar.get(tur).length))),
+      h('ul', { class: 'bulgu-listesi kart', 'aria-label': BULGU_TURLERI[tur]?.etiket || tur }, gruplar.get(tur).map(satir)))));
+  }
+
+  /** @param {any} b */
+  function satir(b) {
+    const k = kararlar.get(b.id) || null;
+    const e = etki.get(b.id);
+    const etkiSayisi = e ? e.senaryolar.length : 0;
+    const kararDugmesi = (tur, etiket, ikonAd) => h('button', {
+      type: 'button', class: `kucuk-dugme karar-dugmesi ${tur}`, 'aria-pressed': k === tur ? 'true' : 'false',
+      onclick: () => { if (k === tur) kararlar.delete(b.id); else kararlar.set(b.id, tur); taslakYaz(a.id, kararlar); ciz(); }
+    }, ikon(ikonAd), etiket);
+    const ayrinti = h('details', { class: 'bulgu-ayrintisi', open: acik.has(b.id) || null },
+      h('summary', {}, 'Ayrıntı'));
+    ayrinti.addEventListener('toggle', () => {
+      if (ayrinti.open) { acik.add(b.id); if (ayrinti.childElementCount === 1) ayrinti.append(etkiIcerigi(b)); } else acik.delete(b.id);
+    });
+    if (acik.has(b.id)) ayrinti.append(etkiIcerigi(b));
+    return h('li', { class: `bulgu-satiri ${k ? `karar-${k}` : ''}`.trim(), 'data-bulgu': b.id, 'aria-label': `${b.baslik}${k ? ` (${k === 'kabul' ? 'kabul' : 'red'})` : ''}` },
+      h('div', { class: 'bulgu-ana' },
+        h('strong', {}, b.baslik),
+        b.konum ? h('small', {}, b.konum) : null,
+        tabloSecimi(b),
+        etkiSayisi ? h('small', { class: `etki-notu ${e.tur === 'eksikDeger' || e.tur === 'kullanilanSecenek' ? 'uyari' : ''}`, title: e.mesaj }, ikon('liste'), `${etkiSayisi} senaryo etkilenir`) : null,
+        ayrinti),
+      h('div', { class: 'bulgu-sag' },
+        uygulandi
+          ? (k === 'kabul' ? rozet('kabul edildi', 'basari') : k === 'red' ? rozet('reddedildi', 'hata') : rozet('karar verilmedi'))
+          : h('div', { class: 'karar-grubu', role: 'group', 'aria-label': `Karar: ${b.baslik}` }, kararDugmesi('kabul', 'Kabul et', 'onay'), kararDugmesi('red', 'Reddet', 'carpi'))));
   }
 
   /**
@@ -167,9 +153,8 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
       h('span', { class: 'soluk' }, ` (${o.sutun})`));
   }
 
-  function etkiCiz() {
-    const b = a.bulgular.find((x) => x.id === secili);
-    if (!b) { yerlestir(etkiAlani); return; }
+  /** @param {any} b */
+  function etkiIcerigi(b) {
     const e = etki.get(b.id);
     const k = kararlar.get(b.id);
     const senaryoListesi = e && e.senaryolar.length ? h('ul', { class: 'etki-senaryolari' }, e.senaryolar.map((x) => h('li', {},
@@ -212,10 +197,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
     }
     const oner = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('simsek'), 'Eksik kombinasyonlara senaryo öner');
     oner.addEventListener('click', () => claudeDosyasiOlustur({ proje: s.proje, ekranId: s.ekranId, tur: 'eksik-kombinasyon', bulguId: b.id }, oner));
-    yerlestir(etkiAlani, h('section', { class: 'kart etki-paneli', 'aria-label': 'Etki paneli' },
-      h('div', { class: 'bolum-etiketi' }, ikon('hedef'), 'Etki paneli'),
-      h('div', { class: 'etki-basligi' }, bulguRozeti(b.tur), h('strong', {}, b.baslik)),
-      h('p', { class: 'kucuk soluk' }, b.konum),
+    return h('div', { class: 'etki-paneli satir-ici', 'aria-label': `Ayrıntı: ${b.baslik}` },
       farkGosterimi(b),
       b.baglam ? h('div', { class: 'etki-baglam' }, h('div', { class: 'ara-baslik' }, 'Bağlam profiline göre görünürlük (gözlem)'), baglamMatrisi(b.baglam, a.profiller),
         h('p', { class: 'kucuk cok-soluk' }, 'Bilgi amaçlıdır: koşuda alan görünüyorsa doldurulur, görünmüyorsa atlanır; "mutlaka görünmeli" işaretli senaryo başarısız olur.')) : null,
@@ -224,7 +206,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
       e && e.mesaj ? h('p', { class: `etki-mesaji ${e.senaryolar.length ? 'var' : ''}` }, e.mesaj) : h('p', { class: 'kucuk soluk' }, 'Bu bulgu senaryo verisini etkilemiyor.'),
       senaryoListesi,
       atama,
-      h('div', { class: 'etki-alt' }, oner, h('span', { class: 'kucuk cok-soluk' }, 'Yapay zekâ aracınız için gizli değer içermeyen bir öneri isteği dosyası yazılır.'))));
+      h('div', { class: 'etki-alt' }, oner, h('span', { class: 'kucuk cok-soluk' }, 'Yapay zekâ aracınız için gizli değer içermeyen bir öneri isteği dosyası yazılır.')));
   }
 
   function altCubukCiz(kabul, red, bekleyen) {
@@ -233,7 +215,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
         `Kararlar ${tarihMetni(a.uygulanma)} tarihinde uygulandı: ${kabul} kabul, ${red} red${a.sonucSurum ? ` → model v${a.sonucSurum}` : ' (yeni sürüm oluşmadı)'}. Reddedilen değişiklikler sonraki paketlerde gösterilmez.`));
       return;
     }
-    const uygula = h('button', { type: 'button', class: 'birincil', disabled: !kabul && !red }, ikon('onay'), 'Kararları uygula');
+    const uygula = h('button', { type: 'button', class: 'birincil', disabled: !kabul && !red }, ikon('onay'), 'Uygula');
     uygula.addEventListener('click', async () => {
       const kabulListesi = a.bulgular.filter((b) => kararlar.get(b.id) === 'kabul');
       const redListesi = a.bulgular.filter((b) => kararlar.get(b.id) === 'red');
@@ -298,16 +280,8 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
     a.bilinmeyenler.length ? h('ul', { class: 'bilinmeyen-listesi' }, a.bilinmeyenler.map((b) => h('li', {}, b))) : null,
     a.gerekenAyarlar.filter((g) => g.durum !== 'tamam' && g.durum !== 'bilgi').map((g) => h('p', { class: 'kucuk' }, h('b', {}, `${g.etiket}: ${g.deger}`), ` — ${g.aciklama} `, g.baglanti ? h('a', { href: g.baglanti }, 'Ayarlar') : null))) : null;
 
-  yerlestir(icerik, baslik, metrikAlani, filtreAlani,
-    h('div', { class: 'bulgu-izgarasi' },
-      h('div', { class: 'bulgu-sutunu' }, listeAlani, gizli, ekBilgi),
-      h('aside', { class: 'etki-sutunu' }, etkiAlani)),
-    altCubuk);
+  if (secili) acik.add(secili);
+  yerlestir(icerik, baslik, ozetAlani, listeAlani, gizli, ekBilgi, altCubuk);
   ciz();
 }
 
-function yorumlaDugmesi(s) {
-  const d = h('button', { type: 'button', class: 'hayalet' }, ikon('simsek'), 'Yapay zekâ ile yorumla');
-  d.addEventListener('click', () => claudeDosyasiOlustur({ proje: s.proje, ekranId: s.ekranId, tur: 'yorumla' }, d));
-  return d;
-}

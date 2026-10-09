@@ -4714,3 +4714,15 @@ tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
 .ortak-birlestirme .birlestirme-bolumu h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
 .ortak-birlestirme .birlestirme-bolumu li { margin: 6px 0; }
 .ortak-birlestirme small.blok { display: block; margin-top: 2px; }
+
+/* Değişiklikler (bulgular.js): tek satır özet, türe göre gruplar, satır içi ayrıntı. */
+.bulgu-ozet-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 var(--b3, 12px); }
+.bulgu-ozet-satiri p { margin: 0; flex: 1 1 18rem; }
+.bulgu-ozet-satiri .sag { display: flex; gap: 6px; flex-wrap: wrap; }
+.bulgu-grubu { margin: 0 0 var(--b3, 12px); }
+.bulgu-grubu > h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 14px; }
+.bulgu-satiri .etki-notu { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--metin-2); }
+.bulgu-satiri .etki-notu.uyari { color: var(--uyari-metin, #b7791f); }
+.bulgu-ayrintisi { margin-top: 4px; }
+.bulgu-ayrintisi > summary { cursor: pointer; font-size: 12.5px; color: var(--metin-2); }
+.etki-paneli.satir-ici { margin-top: 6px; padding: 10px 12px; border-radius: var(--yaricap, 8px); background: var(--panel-2); }
