@@ -22,7 +22,7 @@ import {
 import { sayfaPaketiAkisi } from './sayfa-paketi.js';
 import { akisDiyagrami } from './akis-diyagrami.mjs';
 import { akisModeli } from './model-formu.mjs';
-import { onayIste } from './kosu-paneli.js';
+import { onayIste, secenekIste } from './kosu-paneli.js';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { bulgularEkrani } from './bulgular.js';
 import { ekranBaglariSekmesi } from './ekran-baglari.js';
@@ -295,14 +295,28 @@ async function ekranAyrintisi(icerik, s) {
     ekran: { ...e, modelTuru: s.listeKaydi?.modelTuru ?? d.modelTuru, modelSurumu: d.surum, urlYolu: s.listeKaydi?.urlYolu ?? null },
     sonra: () => { location.hash = '#/ekranlar'; yenile(); }
   });
+  /** "Nöbetçi taraması": nasıl taransın (modeli yoksa yalnız okuma). */
+  const nobetciTaramasi = async () => {
+    const tara = () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar });
+    if (!modelVar) { tara(); return; }
+    const secim = await secenekIste({
+      baslik: 'Nöbetçi taraması', ikonAd: 'ara', metin: 'Sonunda önceki hâliyle karşılaştırılır; hiçbir değişiklik onayınız olmadan modele girmez.',
+      secenekler: [
+        { deger: 'oku', etiket: 'Yalnız oku (hızlı)', ikonAd: 'ara', aciklama: 'Sayfayı arka planda açar, yalnızca okur; hiçbir yere tıklamaz.' },
+        { deger: 'gez', etiket: 'Seçimleri de gez', ikonAd: 'simsek', aciklama: 'Bir seçimle açılan alanlar için akışı gezer; gerektiğinde size sorar.' }
+      ]
+    });
+    if (secim === 'oku') tara();
+    else if (secim === 'gez') location.hash = `#/hizli-test/duzenle/${encodeURIComponent(e.id)}`;
+  };
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
-      // Hızlı testin düzenleme kipi: mevcut modelle başlar; başka bir dalda (ör. önceki sayfadaki seçime göre) beliren alanlar eklenir.
-      modelVar && !altModel && !ortakAkis ? { ikon: 'simsek', metin: 'Nöbetçi taraması', aciklama: 'Nöbetçi ekranı gezer (seçimle açılan alanlar dahil); farkları gösterir, onayınızla günceller.',
-        fn: () => { location.hash = `#/hizli-test/duzenle/${encodeURIComponent(e.id)}`; } } : null,
+      // Nöbetçi taraması (tek giriş): "Yalnız oku" (arka planda okur, paket üretir) ya da "Seçimleri de gez" (seçime göre açılan alanlar için
+      // akışı gezer; düzenleme kipi). Modeli olmayan ekranda yalnız okuma.
+      altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Nöbetçi taraması', aciklama: 'Nöbetçi ekranı tarar: yalnız okur ya da seçimleri de gezer; farkları gösterir, onayınızla günceller.',
+        fn: () => nobetciTaramasi() },
       { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
-      altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
       altModel ? null : {
         ikon: 'video', metin: 'Akışı kaydet',
         aciklama: ortakAkis ? 'Başlangıç ekranının adresinden: o ekranda gerekli adımları, sonra genel senaryoyu siz yürütürsünüz; Nöbetçi kaydeder.' : 'Çok adımlı / koşullu akışlarda: işlemi siz yaparsınız, Nöbetçi adımları kaydeder.',

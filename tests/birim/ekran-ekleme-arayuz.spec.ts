@@ -355,8 +355,8 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await menuDugmesi.click();
   await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
   const secenekler = page.getByRole('menuitem');
-  await expect(secenekler).toHaveText([/^Nöbetçi taraması/, /^Paket yükle/, /^Ekranı tara/, /^Akışı kaydet/]);
-  await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveAccessibleDescription(/Sayfa değiştiyse/);
+  await expect(secenekler).toHaveText([/^Nöbetçi taraması/, /^Paket yükle/, /^Akışı kaydet/]);
+  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/yalnız okur ya da seçimleri de gezer/);
   await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
@@ -384,7 +384,7 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await page.close();
 });
 
-test('genel senaryo sayfası: "Modeli güncelle" menüsü Paket yükle / Akışı kaydet (Ekranı tara yok; yapay zekâ yardımcıları ⋯ menüsünde); alt modelde yalnız Paket yükle', async () => {
+test('genel senaryo sayfası: "Modeli güncelle" menüsü Paket yükle / Akışı kaydet (Nöbetçi taraması yok; yapay zekâ yardımcıları ⋯ menüsünde); alt modelde yalnız Paket yükle', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>;
@@ -398,7 +398,7 @@ test('genel senaryo sayfası: "Modeli güncelle" menüsü Paket yükle / Akış�
   const menuDugmesi = page.getByRole('button', { name: /^Modeli güncelle/ });
   await menuDugmesi.click();
   await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/, /^Akışı kaydet/]);
-  await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveCount(0);
   // "Akışı kaydet": başlangıç ekranı sorulur (genel senaryoyu kullanan ekran önde); başlangıç sayfası o ekranın adresi olur.
   await page.getByRole('menuitem', { name: 'Akışı kaydet' }).click();
   const kayit = page.locator('dialog[open]');
