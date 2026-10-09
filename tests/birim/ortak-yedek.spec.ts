@@ -1,4 +1,5 @@
 // KORUMA TESTLERİ — ortak (ekip) yedek: yayında kişiye özel bilgi ayıklanır, içe aktarmada yerel kişisel değer korunur.
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { veritabaniAc } from '../../scripts/platform/veritabani/baglanti.mjs';
@@ -10,6 +11,7 @@ import {
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { yedekAc, yedekDosyasiYaz, yedekIceAktar, yedekOlustur } from '../../scripts/platform/yedek.mjs';
 import { iceAktarmaHazirla, iceAktarmaUygula } from '../../scripts/platform/ice-aktarma.mjs';
+import { ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from '../../scripts/platform/ortak-paylasim.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 const PAROLA = 'Ekip-Ortak-Kasa-Parolasi-1';
@@ -65,6 +67,55 @@ test('ortak yedek kişisel bilgiyi ayıklar; içe aktaran kendi bilgisini korur,
     expect(ent).toBeTruthy();
     b.kapat();
     a.kapat();
+  } finally {
+    klasor.temizle();
+  }
+});
+
+test('ortak klasör: sürümlü yayın, güncelleme uyarısı ve "önce güncelleyin" koruması', async () => {
+  const klasor = geciciKlasor('ortak-klasor');
+  try {
+    const a = await veritabaniniHazirla(null);
+    await kasaOlustur(a, PAROLA, { kdf: HIZLI_KDF });
+    const proje = projeKaydet(a, { ad: 'Ortak' });
+    const ekran = ekranKaydet(a, { projeId: proje, anahtar: 'form', ad: 'Form' });
+    senaryoKaydet(a, { projeId: proje, ekranId: ekran, baslik: 'Senaryo 1', icerik: { adim: 1 } });
+    const paylasim = join(klasor.yol, 'paylasim');
+    expect(() => ortakKlasorAyarla(a, join(klasor.yol, 'yok'))).toThrow('bulunamadı');
+    mkdirSync(paylasim);
+    ortakKlasorAyarla(a, paylasim);
+
+    const v1 = await ortakYayinla(a, { yapan: 'ayse', not: 'ilk' });
+    expect(v1).toMatchObject({ surum: 1, yapan: 'ayse', not: 'ilk' });
+    expect(ortakDurum(a)).toMatchObject({ sonSurum: 1, benimSurum: 1, guncelleVar: false });
+
+    // B: aynı kasayı benimser; yayınlanan sürümü alır
+    const b = await veritabaniniHazirla(null);
+    await yedekIceAktar(b, yedekOlustur(a).veri, PAROLA, { mod: 'tamYukle', medyaKlasoru: null });
+    ortakKlasorAyarla(b, paylasim);
+    expect(ortakDurum(b)).toMatchObject({ sonSurum: 1, benimSurum: 0, guncelleVar: true });
+
+    // A ikinci sürümü yayınlar; B güncellemeden yayınlayamaz
+    senaryoKaydet(a, { projeId: proje, ekranId: ekran, baslik: 'Senaryo 2', icerik: { adim: 2 } });
+    await ortakYayinla(a, { yapan: 'ayse' });
+    await expect(ortakYayinla(b, { yapan: 'can' })).rejects.toMatchObject({ kod: 'ONCE_GUNCELLE' });
+
+    const { yol, kayit } = ortakSurumDosyasi(b);
+    expect(kayit.surum).toBe(2);
+    const hazirlik = await iceAktarmaHazirla(b, yol, PAROLA);
+    iceAktarmaUygula(b, hazirlik, { tumu: true }, { yapan: 'can' });
+    ortakAlindiIsaretle(b, kayit.surum);
+    expect(sayimlar(b).senaryolar).toBe(2);
+    expect(ortakDurum(b).guncelleVar).toBe(false);
+
+    const v3 = await ortakYayinla(b, { yapan: 'can' });
+    expect(v3.surum).toBe(3);
+    expect(ortakDurum(b).surumler.map((s) => s.surum)).toEqual([3, 2, 1]);
+    // Ortak ayarlar yedeğe girmez (makineye özel)
+    const acik = await yedekAc(join(paylasim, v3.dosya), PAROLA);
+    expect((acik.tablolar.ayarlar ?? []).some((s) => String(s.anahtar).startsWith('ortak-'))).toBe(false);
+    a.kapat();
+    b.kapat();
   } finally {
     klasor.temizle();
   }

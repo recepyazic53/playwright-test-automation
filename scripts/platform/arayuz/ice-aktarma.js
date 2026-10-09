@@ -74,7 +74,8 @@ const degerMetni = (d) => {
 
 /**
  * @param {HTMLElement} kapsayici
- * @param {{ mod: 'hosgeldin' | 'ayarlar'; bitti: () => void; vazgec: () => void }} secenekler
+ * @param {{ mod: 'hosgeldin' | 'ayarlar'; bitti: () => void; vazgec: () => void; baslangicIsId?: string; uygulandi?: () => void | Promise<void> }} secenekler
+ * baslangicIsId: hazır bir içe aktarma işi (ör. ortak klasör güncellemesi) — dosya/parola adımı atlanır. uygulandi: uygulama başarılı olunca çağrılır.
  */
 export function iceAktarmaAkisi(kapsayici, secenekler) {
   let isId = null;
@@ -537,6 +538,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       const esleme = onizleme.projeEslemesi && onizleme.projeEslemesi.uygulanan;
       const { sonuc } = await api(`/platform/yedek/ice-aktar/${isId}/uygula`, { govde: esleme ? { secimler, esleme } : { secimler } });
       isId = null;
+      if (secenekler.uygulandi) await secenekler.uygulandi();
       ozetEkrani(onizleme, sonuc);
     } catch (hata) {
       mesaj.goster(hata.message);
@@ -595,5 +597,10 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       h('div', { class: 'dugmeler' }, devam)));
   }
 
-  dosyaFormu();
+  if (secenekler.baslangicIsId) {
+    isId = secenekler.baslangicIsId;
+    izle(ilerlemeEkrani());
+  } else {
+    dosyaFormu();
+  }
 }

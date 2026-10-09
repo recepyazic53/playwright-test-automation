@@ -160,7 +160,7 @@ import { kullanimModunuKaydet, kullanimModunuOku } from './ayarlar/kullanim-modu
 import { baslarkenDurumu, baslarkenIsaretle } from './ayarlar/baslarken.mjs';
 import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -194,6 +194,7 @@ import {
   YEDEK_KLASORU_AYARI, YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, seciliYedekKlasoru, varsayilanYedekKlasoru, veriKlasoruYedekYolu,
   yedekBoyutTahmini, yedekDosyaAdi, yedekDosyasiYaz
 } from './yedek.mjs';
+import { ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from './ortak-paylasim.mjs';
 import {
   KlasorHatasi, YENIDEN_BASLATMA_DEGISKENI, ayarDosyasiYolu, klasorYoluDogrula, veriAyariniOku, veriAyariniYaz, veriKlasoruDurumu,
   veriyiKopyalaVeDogrula, yazilabilirOlmali
@@ -1494,6 +1495,8 @@ const GET_UCLARI = new Map([
   // Sonuçlar > Genel > Özet: Dikkat / Bakım / Kapsam ve güvenlik kartları ve özet kutuları (sonuclar/farkindalik.mjs; kısa önbellekli).
   ['/platform/sonuclar/farkindalik', (db, q) => farkindalikVerisi(db, kimlikAl(q.get('projeId'), 'projeId'), { aralik: sorgudanAralik(q), sonYedek: sonYedekZamani(db) })],
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
+  // Ekip paylaşımı (ortak klasör): klasör, son sürüm, bende olan sürüm, güncelleme var mı, sürüm listesi.
+  ['/platform/ortak/durum', (db) => ({ ortak: ortakDurum(db) })],
   ['/platform/yedek/klasor', (db) => ({ klasor: yedekKlasoruBilgisi(db) })],
   ['/platform/yedek/otomatik-liste', (db) => ({ klasor: varsayilanYedekKlasoru(db), dosyalar: yedekDosyalari(db) })]
 ]);
@@ -1664,6 +1667,40 @@ const POST_UCLARI = new Map([
   ['/platform/senaryolar/cogalt', (db, g) => senaryolariCogalt(db, kimlikAl(g.projeId, 'projeId'), { idler: g.idler, adet: g.adet, sablon: g.sablon, onay: g.onay === true })],
   ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
   // Yedek yükleme uyarısı kapatıldı ("Tamam" / "İzinlere git"): bayrak silinir, kimse için bir daha gösterilmez.
+  // Ekip paylaşımı (ortak klasör; ortak-paylasim.mjs): klasör seç / yayınla / güncelle (içe aktarma önizlemesini başlatır) / alındı işareti.
+  ['/platform/ortak/klasor', (db, g) => {
+    if (typeof g.klasor === 'string' && g.klasor.trim()) {
+      const d = klasorYoluDogrula(g.klasor, { yasakKokler: YASAK_KOKLER });
+      yazilabilirOlmali(d.yol);
+      ortakKlasorAyarla(db, d.yol);
+      return { ortak: ortakDurum(db), uyarilar: d.uyarilar };
+    }
+    ortakKlasorAyarla(db, null);
+    return { ortak: ortakDurum(db), uyarilar: [] };
+  }],
+  ['/platform/ortak/yayinla', async (db, g) => {
+    const kayit = await ortakYayinla(db, { not: typeof g.not === 'string' ? g.not : '' });
+    console.log(`[platform] Ortak klasöre v${kayit.surum} yayınlandı.`);
+    return { kayit, ortak: ortakDurum(db) };
+  }],
+  ['/platform/ortak/guncelle', (db, g) => {
+    denemeSiniri.kontrolEt();
+    if (iceAktarma.aktifIs()) throw new YedekHatasi('MESGUL', 'Başka bir içe aktarma sürüyor; bitmesini bekleyin.');
+    const parola = typeof g.parola === 'string' ? g.parola : '';
+    if (!parola) throw new YedekHatasi('VERI', 'Ortak yedeğin kasa parolası gerekli.');
+    const { yol, kayit } = ortakSurumDosyasi(db, Number.isInteger(g.surum) ? /** @type {number} */ (g.surum) : undefined);
+    // OneDrive dosyası yerel geçici kopyadan okunur (eşitleme yarıda kalsa da tutarlı kalır; iş bitince silinir).
+    eskiYuklemeleriTemizle();
+    mkdirSync(yuklemeKlasoru(), { recursive: true });
+    const gecici = join(yuklemeKlasoru(), `yukleme-${randomBytes(8).toString('hex')}.tayedek`);
+    copyFileSync(yol, gecici);
+    const isId = iceAktarma.baslat(gecici, parola, { geciciDosya: true });
+    return { isId, surum: kayit.surum };
+  }],
+  ['/platform/ortak/alindi', (db, g) => {
+    ortakAlindiIsaretle(db, Number(g.surum));
+    return { ortak: ortakDurum(db) };
+  }],
   ['/platform/yedek-uyarisi/kapat', (db) => ({ kapatildi: yedekUyarisiniKapat(db) })],
   ['/platform/acilis/kaydet', (db, g) => ({ acilis: acilisTercihiniKaydet(VERI_KOKU, g.bicim) })],
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],

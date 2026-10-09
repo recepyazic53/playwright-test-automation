@@ -392,6 +392,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/pdf-rapor.js', { dosya: 'pdf-rapor.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarih-araligi.js', { dosya: 'tarih-araligi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veri-klasoru.js', { dosya: 'veri-klasoru.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ortak-paylasim.js', { dosya: 'ortak-paylasim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/entegrasyonlar.js', { dosya: 'entegrasyonlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/zamanlanmis-kosular.js', { dosya: 'zamanlanmis-kosular.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akis-diyagrami.js', { dosya: 'servis-akis-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],

@@ -81,7 +81,7 @@ export const YEDEK_UZANTISI = '.tayedek';
  * Yedeğe GİRMEYEN ayarlar kayıtları (ayarlar.anahtar). Özet panosu SQL kartlarının son sonuçları yalnız önbellektir ("Yenile" ile
  * yeniden alınır): yedek alınırken atılır, eski yedeklerde varsa açılırken yok sayılır. Pano düzeni ("ozetPanosu") yedeğe girer.
  */
-export const YEDEK_DISI_AYARLAR = Object.freeze([PANO_SONUC_ANAHTARI]);
+export const YEDEK_DISI_AYARLAR = Object.freeze([PANO_SONUC_ANAHTARI, 'ortak-klasor', 'ortak-durum']);
 
 /** Yedek dışı ayarlar kaydı mı? @param {unknown} satir */
 function yedekDisiAyarMi(satir) {
