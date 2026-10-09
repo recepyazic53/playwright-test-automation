@@ -194,6 +194,7 @@ import {
   YEDEK_KLASORU_AYARI, YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, seciliYedekKlasoru, varsayilanYedekKlasoru, veriKlasoruYedekYolu,
   yedekBoyutTahmini, yedekDosyaAdi, yedekDosyasiYaz
 } from './yedek.mjs';
+import { ekipUyeleriKaydet, ekipUyeleriOku, girisDenetle } from './ekip.mjs';
 import { kullaniciAdiOku, kullaniciAdiYaz, ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from './ortak-paylasim.mjs';
 import {
   KlasorHatasi, YENIDEN_BASLATMA_DEGISKENI, ayarDosyasiYolu, klasorYoluDogrula, veriAyariniOku, veriAyariniYaz, veriKlasoruDurumu,
@@ -898,9 +899,9 @@ function alaniKapat(secenekler = {}) {
 /**
  * Kayıttaki bir çalışma alanını açar: veritabanı dosyası varsa ve kasası oluşturulmuşsa parola doğrulanır (çalışma alanı
  * başına kaba kuvvet beklemesi); başarılıysa açık çalışma alanı kapatılıp bu açılır. Yanlış parolada hiçbir şey değişmez.
- * @param {string} id @param {string} parola
+ * @param {string} id @param {string} parola @param {string} [kullaniciAdi] ekip denetimi (ekip.mjs)
  */
-async function alaniAc(id, parola) {
+async function alaniAc(id, parola, kullaniciAdi = '') {
   platformCalismaAlanlariniHazirla();
   if (aktifAlan?.sabit) throw new CalismaAlaniHatasi('SABIT', 'Bu sunucu tek bir veritabanıyla (PLATFORM_VERITABANI) başlatıldı; çalışma alanı değiştirilemez.');
   const { defter } = kayitDefteriniHazirla(VERI_KOKU);
@@ -920,6 +921,7 @@ async function alaniAc(id, parola) {
       if (kasaDurumu(aday).olusturuldu && !arayuzAcikMi(aday)) {
         const acilan = aday;
         await sinir.dene(() => kasaAc(acilan, parola));
+        ekipGirisi(acilan, kullaniciAdi);
       }
     } catch (hata) {
       if (aday !== vt) aday.kapat();
@@ -973,7 +975,7 @@ function hataYaniti(hata) {
   // Taban adresine bağlı servisin adresi farklılaşıyor: hiçbir şey yazılmadı; arayüz karar penceresini açar, isteği kararla yineler (ortak.js > api).
   if (hata instanceof TabanKarariHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, mesaj: hata.message, karar: hata.karar } };
   if (hata instanceof KasaHatasi) {
-    const kodlar = { PAROLA_KISA: 400, PAROLA_YANLIS: 403, KASA_KILITLI: 423, KASA_YOK: 409, KASA_VAR: 409, ZARF_BOZUK: 400, COK_DENEME: 429 };
+    const kodlar = { PAROLA_KISA: 400, PAROLA_YANLIS: 403, KASA_KILITLI: 423, KASA_YOK: 409, KASA_VAR: 409, ZARF_BOZUK: 400, COK_DENEME: 429, YETKISIZ: 403 };
     return {
       durum: kodlar[hata.kod] ?? 400,
       govde: { basarili: false, kod: hata.kod, mesaj: hata.message, ...(hata.bekleSaniye ? { bekleSaniye: hata.bekleSaniye } : {}) }
@@ -1087,6 +1089,29 @@ async function acikVeritabani() {
   // Arka plan kipi (anahtar yalnız planlı koşunun işi için bellekte): arayüz için kasa KİLİTLİDİR.
   if (!arayuzAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
   return db;
+}
+
+// ---- Ekip (Ayarlar > Ekip; ekip.mjs): dosyayı açan kişi ve rolü. Ekip listesi boşken herkes Admin sayılır. -------------------
+/** @type {import('./ekip.mjs').EkipUyesi} */
+let oturumKullanicisi = { ad: '', rol: 'admin' };
+const YETKISIZ_MESAJI = 'Yetkili değilsiniz: bu kullanıcı adı bu dosyanın ekip listesinde yok. Ekibin Admin\'ine başvurun.';
+/**
+ * Kasa açıldıktan hemen sonra: kullanıcı adı ekip listesinde mi (liste boşsa ad verilmişse o kişi ilk Admin olur). Değilse kasa
+ * hemen kilitlenir ve "Yetkili değilsiniz". Girişteki ad, ekip paylaşımında "kim yaptı" adı olur.
+ * @param {import('./veritabani/baglanti.mjs').Veritabani} db @param {unknown} ad
+ */
+function ekipGirisi(db, ad) {
+  const kisi = girisDenetle(db, ad);
+  if (!kisi) {
+    kasaKilitle(db);
+    throw new KasaHatasi('YETKISIZ', YETKISIZ_MESAJI);
+  }
+  oturumKullanicisi = kisi;
+  if (kisi.ad) kullaniciAdiYaz(db, kisi.ad);
+}
+/** Ayarlar > Ekip yalnız Admin'e açıktır. */
+function adminOlmali() {
+  if (oturumKullanicisi.rol !== 'admin') throw new KasaHatasi('YETKISIZ', 'Bu bölüm yalnız ekibin Admin\'i içindir.');
 }
 
 /** @param {boolean} dolu */
@@ -1497,6 +1522,8 @@ const GET_UCLARI = new Map([
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
   // Ekip paylaşımı (ortak klasör): klasör, son sürüm, bende olan sürüm, güncelleme var mı, sürüm listesi.
   ['/platform/ortak/durum', (db) => ({ ortak: ortakDurum(db), kullaniciAdi: kullaniciAdiOku(db) })],
+  // Ayarlar > Ekip (yalnız Admin): üyeler ve dosyayı açan kişi.
+  ['/platform/ekip', (db) => { adminOlmali(); return { uyeler: ekipUyeleriOku(db), ben: oturumKullanicisi.ad }; }],
   ['/platform/yedek/klasor', (db) => ({ klasor: yedekKlasoruBilgisi(db) })],
   ['/platform/yedek/otomatik-liste', (db) => ({ klasor: varsayilanYedekKlasoru(db), dosyalar: yedekDosyalari(db) })]
 ]);
@@ -1697,6 +1724,7 @@ const POST_UCLARI = new Map([
     const isId = iceAktarma.baslat(gecici, parola, { geciciDosya: true });
     return { isId, surum: kayit.surum };
   }],
+  ['/platform/ekip/kaydet', (db, g) => { adminOlmali(); return { uyeler: ekipUyeleriKaydet(db, g.uyeler, oturumKullanicisi.ad), ben: oturumKullanicisi.ad }; }],
   ['/platform/ortak/kullanici-adi', (db, g) => {
     kullaniciAdiYaz(db, g.ad);
     return { kullaniciAdi: kullaniciAdiOku(db) };
@@ -2101,6 +2129,8 @@ export async function platformIsteginiIsle(req, res, baglam) {
         otomatikKilit: { dakika: otomatikKilitDakika, sonKilitlenme: otomatikKilitZamani },
         // Açık çalışma alanı (yalnızca görünen ad; seçim ekranında da görünür) ve son dışa aktarımdan beri değişiklik.
         calismaAlani: aktifAlan ? { id: aktifAlan.id, ad: aktifAlan.ad, sabit: aktifAlan.sabit } : null,
+        // Dosyayı açan kişi ve rolü (Ayarlar > Ekip yalnız Admin'e görünür); kasa kapalıyken yok.
+        kullanici: db && arayuzAcikMi(db) ? { ...oturumKullanicisi, ekipVar: ekipUyeleriOku(db).length > 0 } : null,
         degisiklik: db ? degisiklikDurumu(db) : null,
         // Planlı koşular (gizli olmayan): anahtar zamanlayıcı için bellekte mi, DPAPI dosyası var mı, kilit menüsü iki seçenekli mi.
         zamanlama: arkaPlan.kilitDurumu(db)
@@ -2145,7 +2175,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
           return true;
         }
         case 'ac': {
-          const acilan = await kasaSirali(() => alaniAc(alanKimligi(), metinAl(g.parola)));
+          const acilan = await kasaSirali(() => alaniAc(alanKimligi(), metinAl(g.parola), metinAl(g.kullaniciAdi)));
           jsonGonder(res, 200, { basarili: true, calismaAlani: acilan });
           return true;
         }
@@ -2575,6 +2605,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
         const kasa = await kasaSirali(async () => {
           const k = await denemeSiniri.dene(() => kasaAc(db, metin(govde.parola)));
+          ekipGirisi(db, govde.kullaniciAdi);
           arkaPlan.kasaAcildi(db);
           return k;
         });

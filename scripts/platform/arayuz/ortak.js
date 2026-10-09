@@ -863,6 +863,20 @@ export function dosyaSecimi(girdi, secildi, secenekler = {}) {
   };
 }
 
+const KULLANICI_ADI_ANAHTARI = 'nobetci.kullaniciAdi';
+/**
+ * Dosya açılırken "Kullanıcı adı" (Ayarlar > Ekip listesindeki ad). Son girilen ad bu tarayıcıda hatırlanır (yalnız kolaylık).
+ * @returns {{ kapsayici: HTMLElement; girdi: HTMLInputElement; hatirla: () => void }}
+ */
+export function kullaniciAdiAlani() {
+  const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'text', autocomplete: 'username', spellcheck: 'false', maxlength: '60', name: 'kullaniciAdi' }));
+  try { girdi.value = localStorage.getItem(KULLANICI_ADI_ANAHTARI) || ''; } catch { /* depolama kapalı */ }
+  girdi.id = yeniKimlik('kullanici-adi');
+  const kapsayici = h('div', { class: 'alan' }, h('label', { for: girdi.id }, 'Kullanıcı adı'), girdi,
+    h('div', { class: 'yardim' }, 'Bu dosyanın ekip listesindeki adınız. Ekip kullanılmıyorsa boş bırakabilirsiniz.'));
+  return { kapsayici, girdi, hatirla: () => { try { localStorage.setItem(KULLANICI_ADI_ANAHTARI, girdi.value.trim()); } catch { /* depolama kapalı */ } } };
+}
+
 /**
  * Parola/gizli değer alanı: type=password + "Göster" anahtarı. kayitli.dolu ise alan boş
  * bırakılırsa mevcut değer korunur; "Kayıtlı değeri göster" (gosterFn) açıkça istenince
