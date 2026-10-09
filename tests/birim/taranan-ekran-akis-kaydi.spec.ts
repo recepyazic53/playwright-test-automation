@@ -15,8 +15,9 @@ import { girisTarifiKaydet } from '../../scripts/platform/giris/tarif-deposu.mjs
 import { EkranDogrulamaHatasi, modeliDogrula, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { anlasilirDogrulamaIletisi, semaSurumunuYukselt } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 import { akisKaydet, akisTasarimi } from '../../scripts/platform/ekranlar/akis-servisi.mjs';
+import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import type { AkisBlogu } from '../../scripts/platform/tarama/akis-tasarimi.mjs';
-import { taramaIsteginiIsle, taramaYoneticisiOlustur, type IsGorunumu, type TaramaYoneticisi } from '../../scripts/platform/tarama/yonetici.mjs';
+import { altModelAnlikGoruntusu, taramaIsteginiIsle, taramaYoneticisiOlustur, type IsGorunumu, type TaramaYoneticisi } from '../../scripts/platform/tarama/yonetici.mjs';
 import { yerelSunucu } from './giris-fikstur';
 import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 import { TARAMA_KULLANICI, TARAMA_PAROLA, TaramaFiksturu, YASAKLI_GORSEL_HOST, taramaGirisTarifi } from './tarama-fikstur';
@@ -164,6 +165,20 @@ test('taranan ekranda yeni akış açılıp kaydedilince de model sürüm 2 olur
   const m = model(ekranId);
   expect(m.semaSurumu).toBe(2);
   expect((m.akislar as Nesne[]).map((a) => a.ad)).toEqual(['Ana akış', 'Gönderimli akış']);
+});
+
+test('yeniden taramada genel senaryo başvuruları (tüm akışlar) doğrulamaya gider; "bu projede yok" denmez', async () => {
+  await ekranEkle('taranan-genel-a', 'Genel A');
+  await ekranEkle('taranan-genel-b', 'Genel B');
+  const p = kopya(paket) as Nesne & { model: Nesne };
+  const adim = { id: 'genelAdim', sira: 99, baslik: 'Genel adım', ortakAkis: { dosya: 'taranan-genel-a.model.json' } };
+  (p.model.adimlar as Nesne[]).push(adim);
+  // İkinci akış (ör. sürüm 2 model): yalnız orada geçen başvuru da alınmalı.
+  const ikinciAkis = { id: 'ikinci', ad: 'İkinci', adimlar: [{ id: 'yalnizIkinci', sira: 1, baslik: 'Yalnız ikinci', ortakAkis: { dosya: 'taranan-genel-b.model.json' } }] };
+  const anlik = altModelAnlikGoruntusu(vt, projeId, { ...p.model, akislar: [ikinciAkis] });
+  expect(Object.keys(anlik).sort()).toEqual(['taranan-genel-a.model.json', 'taranan-genel-b.model.json']);
+  const d = sayfaPaketiniDogrula(p, { altModelKaynagi: (dosya: string) => anlik[dosya] });
+  expect(d.hatalar.filter((h) => /bu projede yok/.test(h.mesaj))).toEqual([]);
 });
 
 test('sürüm 1 model: koşu tanımı yoksa yükseltilmez; genel senaryo / alt model / sürüm 2 dokunulmaz; v1 model geçerli kalır', () => {

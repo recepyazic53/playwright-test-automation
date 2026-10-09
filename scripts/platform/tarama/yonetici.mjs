@@ -182,24 +182,37 @@ function ortamBaglamProfilleri(vt, projeId, ortamId) {
   return sonuc;
 }
 
-/** Ekranın modelindeki alt model başvuruları → (dosya → model) anlık görüntüsü (sonuç doğrulaması için). @param {Veritabani} vt @param {string} projeId @param {Nesne} model */
-function altModelAnlikGoruntusu(vt, projeId, model) {
+/**
+ * Ekranın modelindeki alt model ve genel senaryo (ortak akış) başvuruları → (dosya → model) anlık görüntüsü (sonuç doğrulaması için).
+ * Tüm akışlar gezilir; başvurulan modelin kendi başvuruları da (iç içe genel senaryo / alt model) eklenir; her dosya bir kez.
+ * @param {Veritabani} vt @param {string} projeId @param {Nesne} model
+ */
+export function altModelAnlikGoruntusu(vt, projeId, model) {
   /** @type {Record<string, unknown>} */
   const sonuc = {};
-  const dosyalar = new Set();
+  /** @type {string[]} */
+  const kuyruk = [];
   const gez = (/** @type {unknown} */ d) => {
     if (Array.isArray(d)) { d.forEach(gez); return; }
     if (!nesneMi(d)) return;
     const n = /** @type {Nesne} */ (d);
-    if (nesneMi(n.altModel) && typeof n.altModel.dosya === 'string') dosyalar.add(n.altModel.dosya);
+    for (const k of ['altModel', 'ortakAkis']) {
+      const b = n[k];
+      if (nesneMi(b) && typeof b.dosya === 'string') kuyruk.push(b.dosya);
+    }
     for (const v of Object.values(n)) gez(v);
   };
-  gez(model.adimlar);
-  for (const dosya of dosyalar) {
-    const anahtar = String(dosya).replace(/\.model\.json$/, '');
-    const e = ekranlariListele(vt, projeId).find((x) => x.anahtar === anahtar);
+  gez([model.adimlar, model.akislar]);
+  const ekranlar = ekranlariListele(vt, projeId);
+  for (let i = 0; i < kuyruk.length; i++) {
+    const dosya = kuyruk[i];
+    if (dosya in sonuc) continue;
+    const anahtar = dosya.replace(/\.model\.json$/, '');
+    const e = ekranlar.find((x) => x.anahtar === anahtar);
     const m = e ? ekranModeliGetir(vt, e.id) : undefined;
-    if (m && nesneMi(m.model)) sonuc[String(dosya)] = m.model;
+    if (!m || !nesneMi(m.model)) continue;
+    sonuc[dosya] = m.model;
+    gez([m.model.adimlar, m.model.akislar]);
   }
   return sonuc;
 }

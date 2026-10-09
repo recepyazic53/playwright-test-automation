@@ -116,6 +116,8 @@ export type TaramaYoneticisi = {
   kapat(): void;
 };
 
+/** Modelin alt model + genel senaryo başvuruları (tüm akışlar, iç içe) → dosya → model. */
+export declare function altModelAnlikGoruntusu(vt: Veritabani, projeId: string, model: Record<string, unknown>): Record<string, unknown>;
 export declare function taramaYoneticisiOlustur(secenekler: {
   projeKoku: string; playwrightCli?: string; zamanAsimiMs?: number; saklamaMs?: number; ortamDegiskenleri?: NodeJS.ProcessEnv; hataAyiklama?: boolean;
 }): TaramaYoneticisi;
