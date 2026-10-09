@@ -38,6 +38,8 @@ export function kartlariKatlanirYap(kapsayici, bolum) {
   /** @param {Element} kart */
   const isle = (kart) => {
     if (!(kart instanceof HTMLElement) || kart.dataset.katlanir || kart.closest('dialog')) return;
+    // Bir düğmeyle açılan ekleme / düzenleme formları katlanmaz (açılınca hep açık).
+    if (kart.classList.contains('form-paneli') || kart.closest('.kayit-duzenleme, .entegrasyon-form-alani, .zamanlama-form-alani')) return;
     const baslik = kart.firstElementChild;
     // Başlık: kartın ilk çocuğu h3 ya da içinde h3 olan bölüm başlığı satırı.
     const h3 = baslik && baslik.tagName === 'H3' ? baslik : baslik && baslik.classList.contains('bolum-basligi') ? baslik.querySelector('h3') : null;

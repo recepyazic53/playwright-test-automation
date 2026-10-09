@@ -135,4 +135,42 @@ test.describe('kasa açılışı ve Ayarlar > Ekip', () => {
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
+
+  test('Düzenle formu tıklanan satırın hemen altında ve açık gelir; "Ortam ekle" formu listenin altında', async () => {
+    test.setTimeout(60_000);
+    await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA, kullaniciAdi: 'Recep' });
+    let projeler = (await nobetciApi(nobetci, '/platform/projeler')).projeler as Array<{ id: string }>;
+    if (!projeler.length) { await nobetciApi(nobetci, '/platform/proje/kaydet', { ad: 'Kart Projesi' }); projeler = (await nobetciApi(nobetci, '/platform/projeler')).projeler as Array<{ id: string }>; }
+    const projeId = projeler[0].id;
+    for (const [ad, varsayilan] of [['TESTX', true], ['UATX', false]] as const) {
+      await nobetciApi(nobetci, '/platform/ortam/kaydet', { projeId, ad, tabanUrl: `http://127.0.0.1:9/${ad.toLowerCase()}/`, varsayilan, riskli: false });
+    }
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    await baglam.addInitScript(() => { try { localStorage.setItem('nobetci.ayarKartlariVarsayilan', 'kapali'); } catch { /* yok */ } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/proje');
+    const ortamKarti = page.locator('.kart').filter({ has: page.getByRole('heading', { name: /^Ortamlar/ }) });
+    await ortamKarti.getByRole('heading', { name: /^Ortamlar/ }).click();
+    await page.getByRole('button', { name: 'UATX: düzenle' }).click();
+    const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Ortamı düzenle: UATX' }) });
+    await expect(form.getByLabel('Ortam adı')).toBeVisible();
+    // Form, UATX satırının hemen altındaki satırda; satır "düzenleniyor".
+    expect(await form.evaluate((f) => {
+      const kap = f.closest('li.kayit-duzenleme');
+      const onceki = kap?.previousElementSibling;
+      return Boolean(kap && onceki?.classList.contains('duzenleniyor') && onceki.textContent?.includes('UATX'));
+    })).toBe(true);
+    await form.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(form).toHaveCount(0);
+    await expect(page.locator('li.duzenleniyor')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ortam ekle' }).click();
+    const yeni = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Yeni ortam' }) });
+    await expect(yeni.getByLabel('Ortam adı')).toBeVisible();
+    // Yeni ortam formu listenin altında (liste içinde değil).
+    expect(await yeni.evaluate((f) => !f.closest('li') && Boolean(f.parentElement?.previousElementSibling?.matches('ul.kayit-listesi')))).toBe(true);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
 });

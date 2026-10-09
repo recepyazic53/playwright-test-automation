@@ -3,7 +3,7 @@
 // tür seç → alanları doldur (gizliler maskeli) → "Bağlantıyı dene" (YALNIZ siz basınca, önce hedef adresi gösteren onayla) → kaydet.
 // Gizli alanlar API'den { dolu, maske } olarak gelir; boş bırakılırsa kayıtlı değer korunur.
 // Ayrıca: Sonuçlar'daki test ayrıntısı için "Hata kaydı aç" düğmesi (hataKaydiDugmesi) ve DBeaver bağlantılarını içe aktarma.
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, formuYerinde, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { diyalogAc, onayIste } from './ekran-ortak.js';
 import { sqlKaynaklariniUnut } from './sql-adimi-formu.js';
 import { veritabanlariBolumu } from './veritabanlari.js';
@@ -49,7 +49,8 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
   const turAdi = (t) => (turler.find((x) => x.tur === t) || { ad: t }).ad;
   const ortamAdi = (id) => (ortamlar.find((o) => o.id === id) || { ad: 'silinmiş ortam' }).ad;
   const formAlani = h('div', { class: 'entegrasyon-form-alani' });
-  const sihirbaz = (b) => {
+  const sihirbaz = (b, satir = null) => {
+    formuYerinde(formAlani, satir);
     yerlestir(formAlani, baglantiSihirbazi({ proje, turler, ortamlar, baglanti: b, kapat: () => formAlani.replaceChildren(), kaydedildi: yenile }));
     formAlani.scrollIntoView({ block: 'nearest' });
   };
@@ -110,7 +111,7 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
         b.durum ? h('div', { class: `kayit-meta entegrasyon-durum ${b.durum.sonuc}` }, `Son deneme ${tarihMetni(b.durum.zaman)}: ${b.durum.mesaj}`)
           : h('div', { class: 'kayit-meta soluk' }, 'Henüz denenmedi. "Dene" ile bağlantıyı sınayın.')),
       h('div', { class: 'kayit-eylemleri' }, denemeDugmesi,
-        h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${b.ad}: düzenle`, onclick: () => sihirbaz(b) }, ikon('duzenle'), 'Düzenle'),
+        h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${b.ad}: düzenle`, onclick: (o) => sihirbaz(b, o.currentTarget.closest('li')) }, ikon('duzenle'), 'Düzenle'),
         etkinDugmesi, silDugmesi));
   });
 
@@ -123,9 +124,9 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
     h('div', { class: 'bolum-basligi' },
       h('h3', {}, 'Bağlantılar', rozet(String(baglantilar.length))),
       h('div', { class: 'dugmeler' }, dbeaver, h('button', { type: 'button', class: 'birincil', onclick: () => sihirbaz(null) }, ikon('arti'), 'Bağlantı ekle'))),
-    formAlani,
     baglantilar.length ? h('ul', { class: 'kayit-listesi' }, satirlar)
       : bosDurum('Henüz bağlantı yok.', 'Bir uygulamayı bağlamak için "+ Bağlantı ekle"ye basın. Bağlantılar kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.', { ikon: 'ag', rol: 'status' }),
+    formAlani,
     veritabanlari);
 }
 

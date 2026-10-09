@@ -4698,3 +4698,9 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .kart > .bolum-basligi:first-child .dugmeler { flex-wrap: wrap; margin: 0; }
 /* Açık (açılır / kapanır) kart vurgulu: ince vurgu kenarı + hafif parıltı; kapalı kartlar düz. */
 .kart.katlanir:not(.kapali) { box-shadow: 0 0 0 1px color-mix(in srgb, var(--vurgu) 42%, transparent), 0 0 44px -20px var(--vurgu), 0 16px 40px -16px rgba(0, 0, 0, .55); }
+
+/* Ayarlar listeleri: düzenleme formu tıklanan satırın hemen altında, listede kendi satırında (formuYerinde). */
+.kayit-listesi > li.kayit-duzenleme { display: block; padding: 12px 16px 16px; background: var(--panel-2); }
+.kayit-listesi > li.kayit-duzenleme:hover { background: var(--panel-2); }
+.kayit-listesi > li.kayit-duzenleme > div > .kart, tr.kayit-duzenleme > td > div > .kart { margin: 0; }
+tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }

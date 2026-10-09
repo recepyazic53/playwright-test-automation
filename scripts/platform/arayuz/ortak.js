@@ -868,6 +868,42 @@ const KULLANICI_ADI_ANAHTARI = 'nobetci.kullaniciAdi';
  * Dosya açılırken "Kullanıcı adı" (Ayarlar > Ekip listesindeki ad). Son girilen ad bu tarayıcıda hatırlanır (yalnız kolaylık).
  * @returns {{ kapsayici: HTMLElement; girdi: HTMLInputElement; hatirla: () => void }}
  */
+const FORM_YERLERI = new WeakMap();
+/**
+ * Ayarlar listelerinde ekleme / düzenleme formunun yeri. satir (li ya da tr) verilirse form o satırın HEMEN ALTINDA, listede kendi
+ * satırında açılır ve satır "düzenleniyor" diye işaretlenir; verilmezse (ör. "Ortam ekle") formAlani'nin sayfadaki ilk yerinde
+ * (listenin altında). Form kapanınca (formAlani boşalınca) satır gizlenir, işaret kalkar. Formu formAlani'ne koymadan önce çağrılır.
+ * @param {HTMLElement} formAlani @param {HTMLElement | null} [satir]
+ */
+export function formuYerinde(formAlani, satir = null) {
+  let yer = FORM_YERLERI.get(formAlani);
+  if (!yer) {
+    yer = { capa: document.createComment('form-yeri'), satir: /** @type {HTMLElement | null} */ (null) };
+    FORM_YERLERI.set(formAlani, yer);
+    formAlani.before(yer.capa);
+    const y = yer;
+    new MutationObserver(() => {
+      if (formAlani.childElementCount) return;
+      y.satir?.classList.remove('duzenleniyor');
+      const kap = formAlani.closest('.kayit-duzenleme');
+      if (kap) kap.hidden = true;
+    }).observe(formAlani, { childList: true });
+  }
+  yer.satir?.classList.remove('duzenleniyor');
+  const eski = formAlani.closest('.kayit-duzenleme');
+  if (satir) {
+    const kap = satir.tagName === 'TR'
+      ? h('tr', { class: 'kayit-duzenleme' }, h('td', { colspan: String(satir.children.length) }, formAlani))
+      : h('li', { class: 'kayit-duzenleme' }, formAlani);
+    satir.after(kap);
+    satir.classList.add('duzenleniyor');
+  } else {
+    yer.capa.after(formAlani);
+  }
+  yer.satir = satir;
+  if (eski) eski.remove();
+}
+
 export function kullaniciAdiAlani() {
   const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'text', autocomplete: 'username', spellcheck: 'false', maxlength: '60', name: 'kullaniciAdi' }));
   try { girdi.value = localStorage.getItem(KULLANICI_ADI_ANAHTARI) || ''; } catch { /* depolama kapalı */ }
