@@ -23,6 +23,8 @@ export const TABLO_ADI_EN_UZUN = 60;
 export const INCELEME_KURALLARI = 'Sayfayı benimle birlikte, adım adım incele ve analizi tek seferde bitir; bilmediğin dalı "bilinmiyor" diye bırakma. '
   + 'Önce sayfayı okuyup veri gerektiren dalları (ör. kimlik / vergi no / pasaport sorgusu, kayıt ya da belge numarasıyla sorgu, adres kodu) '
   + 've basılması gereken düğmeleri sırayla listele. Seçimleri ve okları kendin değiştirerek koşullu alanları ve bağımlı listeleri çıkar. '
+  + 'Sayfada görünen BÜTÜN giriş alanlarını modele al (testte kullanılmayacak yardımcı alanlar dahil, ör. adres arama listeleri): '
+  + 'Nöbetçi ekranı bu modelle karşılaştırır, modelde olmayan alan "yeni alan" görünür. '
   + 'Veri gereken her dalda DUR ve bana hangi alana ne gireceğimi söyle ("şuraya … gir ve sorgula, bitince tamam yaz"); '
   + 'ben girip "tamam" deyince açılan alanları, etiketleri ve uyarıları oku, sonra sıradaki dala geç. '
   + 'Kart no, CVV, parola, kimlik / vergi no gibi kişisel ya da gizli bilgileri alanlara ASLA sen yazma (ben onaylasam da); ben yazarım. '

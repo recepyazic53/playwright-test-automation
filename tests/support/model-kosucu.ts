@@ -1268,7 +1268,7 @@ async function ekraniOku(page: Page, adim: { id: string; baslik: string }): Prom
   const env = await envanterOku(page).catch(() => null);
   const eylem = await eylemAdaylariniCikar(page, { cerceveler: true }).catch(() => null);
   // Bağlantılar da tutulur (işaretli): modeldeki düğme bağlantı olabilir; "yeni düğme" notunda bağlantılar sayılmaz.
-  const dugmeler = (eylem?.gonderim ?? []).map((d) => ({ metin: d.metin, secici: d.secici, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), ...(d.baglanti ? { baglanti: true as const } : {}) }));
+  const dugmeler = (eylem?.gonderim ?? []).filter((d) => !d.alanIkonu).map((d) => ({ metin: d.metin, secici: d.secici, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), ...(d.baglanti ? { baglanti: true as const } : {}) }));
   return { adimId: adim.id, baslik: adim.baslik, alanlar: env?.alanlar ?? [], dugmeler };
 }
 

@@ -85,7 +85,8 @@ export async function ekranKesfi(page: Page, ac: () => Promise<void>): Promise<E
     }
     const eylem = await eylemAdaylariniCikar(page, { cerceveler: true }).catch(() => null);
     for (const d of eylem?.gonderim ?? []) {
-      if (!d.metin || dugmeler.has(d.metin)) continue;
+      // Alanın yanındaki simge düğme sayılmaz (alanın parçası).
+      if (!d.metin || d.alanIkonu || dugmeler.has(d.metin)) continue;
       const g: GorulenDugme = { metin: d.metin, secici: d.secici, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), ...(d.baglanti ? { baglanti: true as const } : {}) };
       dugmeler.set(d.metin, g);
       if (d.kayitOlusturabilir) { kayitli.push(d.metin); continue; }
