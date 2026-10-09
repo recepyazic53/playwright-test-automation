@@ -167,6 +167,12 @@ test.describe('saf kurallar', () => {
     expect(ornekDegeri(model, { anahtar: 'o', secici: '#onay' }, veri)).toEqual({ deger: true, kaynak: 'elle' });
     expect(ornekDegeri(model, { anahtar: 'y', secici: '#yeni' }, veri)).toBeNull();
     expect(ornekDegeri(model, { anahtar: 'a', secici: '#ad' }, {})).toBeNull();
+    // Radyo: modelde input[name="X"], okumada input[type="radio"][name="X"] (aday seçiciler denenir); değer yazıysa sayfadaki değere çevrilir.
+    const radyoModel = { adimlar: [{ bolumler: [{ alanlar: [{ yapilandirma: 'senaryo', konum: { secici: 'input[name="Renewal"]' }, eslesme: { senaryo: 'islemTipi' } }] }] }] };
+    const radyo = { anahtar: 'radyo:Renewal', secici: 'input[type="radio"][name="Renewal"]', adaySeciciler: ['input[type="radio"][name="Renewal"]', 'input[name="Renewal"]'], radyolar: [{ deger: 'false', metin: 'Yeni İş' }, { deger: 'true', metin: 'Yenileme' }] };
+    expect(ornekDegeri(radyoModel, radyo, { islemTipi: 'false' })).toEqual({ deger: 'false', kaynak: 'elle' });
+    expect(ornekDegeri(radyoModel, radyo, { islemTipi: 'YENİ İŞ' })).toEqual({ deger: 'false', kaynak: 'elle' });
+    expect(ornekDegeri(radyoModel, { ...radyo, adaySeciciler: [] }, { islemTipi: 'false' })).toBeNull();
   });
 
   test('bitiş etiketlerinin varsayılanı: son basıştan sonraki metin Bitti, bekleme Devam, hata kutusu Hata', () => {

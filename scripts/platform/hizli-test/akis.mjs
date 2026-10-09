@@ -415,13 +415,28 @@ export function senaryoAnahtarlari(model, alanlar) {
  * @returns {{ deger: string | boolean; kaynak: 'elle' | 'tablo' } | null}
  */
 export function ornekDegeri(model, alan, veri) {
-  const anahtar = senaryoAnahtarlari(model, [alan])[alan.anahtar];
+  // Modeldeki seçici sayfa okumasındakinden farklı yazılmış olabilir (ör. radyo: modelde input[name="X"], okumada
+  // input[type="radio"][name="X"]): okumanın aday seçicileri de denenir.
+  const seciciler = [alan.secici, ...(Array.isArray(alan.adaySeciciler) ? alan.adaySeciciler : [])].filter((x, i, l) => typeof x === 'string' && x && l.indexOf(x) === i);
+  let anahtar;
+  for (const secici of seciciler) {
+    anahtar = senaryoAnahtarlari(model, [{ ...alan, secici }])[alan.anahtar];
+    if (anahtar) break;
+  }
   if (!anahtar) return null;
   const d = veri[anahtar];
   if (d === undefined || d === null || d === '' || typeof d === 'object') return null;
   if (typeof d === 'boolean') return { deger: d, kaynak: 'elle' };
-  const deger = String(d);
-  return { deger, kaynak: /^\s*\$\{[^{}]+\}\s*$/u.test(deger) ? 'tablo' : 'elle' };
+  let deger = String(d);
+  if (/^\s*\$\{[^{}]+\}\s*$/u.test(deger)) return { deger, kaynak: 'tablo' };
+  // Radyo / seçim: senaryo değeri seçeneğin değeri değil de yazısıysa sayfadaki değere çevrilir.
+  const secenekler = Array.isArray(alan.radyolar) && alan.radyolar.length ? alan.radyolar : Array.isArray(alan.secenekler) ? alan.secenekler : [];
+  if (secenekler.length && !secenekler.some((s) => String(s.deger) === deger)) {
+    const katla = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
+    const s = secenekler.find((x) => katla(x.metin) === katla(deger));
+    if (s) deger = String(s.deger);
+  }
+  return { deger, kaynak: 'elle' };
 }
 
 /**

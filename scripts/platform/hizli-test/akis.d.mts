@@ -30,7 +30,7 @@ export declare function kayitEnvanteriKur(
   bitis: { bitti: string[]; hata: string[] }
 ): import('../tarama/paket-olusturucu.mjs').KayitEnvanteri;
 export declare function bitisiUygula<T extends Record<string, any>>(model: T, bitis: { bitti: string[]; devam: string[]; adres: string | null; ogeler?: Array<{ secici: string; cerceve?: string[] }> }): T;
-export declare function ornekDegeri(model: Record<string, any>, alan: { anahtar: string; secici: string; cerceve?: string[] }, veri: Record<string, unknown>): { deger: string | boolean; kaynak: 'elle' | 'tablo' } | null;
+export declare function ornekDegeri(model: Record<string, any>, alan: { anahtar: string; secici: string; cerceve?: string[]; adaySeciciler?: string[]; radyolar?: Array<{ deger: unknown; metin?: unknown }>; secenekler?: Array<{ deger: unknown; metin?: unknown }> }, veri: Record<string, unknown>): { deger: string | boolean; kaynak: 'elle' | 'tablo' } | null;
 export declare function senaryoAnahtarlari(model: Record<string, any>, alanlar: Array<{ anahtar: string; secici: string; cerceve?: string[] }>): Record<string, string>;
 export declare function senaryoVerisiKur(
   model: Record<string, any>, anahtarlar: Record<string, string>, degerler: Record<string, unknown>,
