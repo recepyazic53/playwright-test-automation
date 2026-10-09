@@ -1363,8 +1363,11 @@ async function sonucDetayi(icerik, id, proje) {
         h('a', { class: 'dugme', href: medyaUrl(v.id, true), download: '' }, '⬇ Videoyu indir'))) : h('p', { class: 'soluk' }, 'Video yok.'),
     videoAlani,
     izler.filter((z) => z.yedekDisi).map(yedekDisiNotu),
-    izler.some((z) => !z.yedekDisi) ? h('div', { class: 'dugmeler' }, ...izler.filter((z) => !z.yedekDisi).map((z) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(z.id, true), download: '' }, '⬇ İzi (trace) indir')),
-      h('span', { class: 'soluk kucuk' }, 'İz dosyası ', h('code', {}, 'npx playwright show-trace <dosya>'), ' ile açılır.')) : null,
+    // İz: Nöbetçi içinde Playwright'ın iz görüntüleyicisiyle yeni sekmede açılır (iz şifreli medya ucundan okunur) ya da indirilir.
+    izler.some((z) => !z.yedekDisi) ? h('div', { class: 'dugmeler' }, ...izler.filter((z) => !z.yedekDisi).flatMap((z) => [
+      h('a', { class: 'dugme kucuk-dugme', href: `/iz-goruntuleyici/index.html?trace=${encodeURIComponent(medyaUrl(z.id))}`, target: '_blank', rel: 'noopener noreferrer' }, '▶ İzi görüntüle'),
+      h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(z.id, true), download: '' }, '⬇ İzi (trace) indir')]),
+      h('span', { class: 'soluk kucuk' }, 'İz yeni sekmede açılır: adımlar, her adımdaki sayfa, ağ istekleri ve konsol. İndirilen dosya ', h('code', {}, 'npx playwright show-trace <dosya>'), ' ile de açılır.')) : null,
     digerleri.filter((d) => d.yedekDisi).map(yedekDisiNotu),
     digerleri.some((d) => !d.yedekDisi) ? h('div', { class: 'dugmeler' }, ...digerleri.filter((d) => !d.yedekDisi).map((d) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(d.id, true), download: '' }, `⬇ ${d.ad}`))) : null,
     dosyaEkleri.length ? dogrulananDosyalar(dosyaEkleri.map((m) => dogrulananDosyaIndir(m.ad.slice(DOSYA_EKI_ONEKI.length), async () => {

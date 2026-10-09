@@ -52,7 +52,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     aciklama: 'Akış adımlarının ekran görüntüsü. Yalnız başarısız adımda: yalnız testin başarısız olduğu adımın görüntüsü alınır. Seçili adımlarda: yalnız ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar (giriş ve ekran açılışı görüntüsü alınmaz). Senaryo formunda senaryo başına değiştirilebilir. Görüntü alınamazsa koşu sürer; raporda "görüntü alınamadı" notu kalır.',
     tur: 'secim', varsayilan: 'her', secenekler: [['her', 'Her adımda'], ['yalnizKalan', 'Yalnız başarısız adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']], env: 'NOBETCI_ADIM_GORUNTUSU' },
   { anahtar: 'iz', grup: 'Kayıt', etiket: 'İz (trace)',
-    aciklama: 'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı (DOM) ve ekran anları, konsol mesajları. Sonuç ayrıntısından indirilip Playwright iz görüntüleyicisiyle (npx playwright show-trace <dosya> ya da trace.playwright.dev) açılır. "Yalnız başarılı testlerde": iz her testte alınır, başarısız testlerinki kaydedilmeden silinir.',
+    aciklama: 'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı (DOM) ve ekran anları, konsol mesajları. Sonuç ayrıntısında "İzi görüntüle" ile Nöbetçi içinde açılır; indirilen dosya Playwright iz görüntüleyicisiyle (npx playwright show-trace <dosya> ya da trace.playwright.dev) de açılır. "Yalnız başarılı testlerde": iz her testte alınır, başarısız testlerinki kaydedilmeden silinir.',
     tur: 'secim', varsayilan: 'yalnizHata',
     secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız başarısız testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
   { anahtar: 'indirilenDosya', grup: 'Kayıt', etiket: 'Doğrulanan dosya (ek)',
