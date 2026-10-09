@@ -6,6 +6,7 @@
 // Güvenlik: yalnızca 127.0.0.1'deki örnek başvuru fikstürü (model-fikstur.ts); ayrı bir Nöbetçi geçici veritabanıyla çalışır.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { request as httpIstegi } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
@@ -169,6 +170,46 @@ test('varsayılanlar (bugünkü davranış): her adımda görüntü, video her t
   expect(k.durum).toBe('basarisiz');
   expect(k.medya.filter((m) => sinif(m) === 'kalanAdim')).toEqual([]);
   for (const s of ['video', 'iz', 'testSonu'] as const) expect(k.medya.some((m) => sinif(m) === s), s).toBe(true);
+});
+
+test('iz görüntüleyici: sonuç ayrıntısında "İzi görüntüle" izi Nöbetçi içinde yeni sekmede açar (adımlar, ağ); dosyalar yalnız kendi klasöründen, güvenlik başlıklarıyla', async () => {
+  test.setTimeout(120_000);
+  // Dosya sunumu: yalnız görüntüleyici klasöründeki izinli türler; klasör dışı / bilinmeyen tür / yöntem reddedilir.
+  const giris = await fetch(`${nobetci.adres}/iz-goruntuleyici/index.html`);
+  expect(giris.status).toBe(200);
+  expect(giris.headers.get('content-security-policy')).toContain("connect-src 'self'");
+  expect(giris.headers.get('referrer-policy')).toBe('no-referrer');
+  expect((await fetch(`${nobetci.adres}/iz-goruntuleyici/sw.bundle.js`)).headers.get('content-type')).toContain('javascript');
+  // Ham istek (fetch adresi sadeleştirir; "../" sunucuya olduğu gibi gitsin).
+  const ham = (yol: string) => new Promise<number>((coz, red) => {
+    const u = new URL(nobetci.adres);
+    httpIstegi({ host: u.hostname, port: u.port, path: yol, method: 'GET' }, (r) => { r.resume(); coz(r.statusCode ?? 0); }).on('error', red).end();
+  });
+  for (const yol of ['/iz-goruntuleyici/..%2Fpackage.json', '/iz-goruntuleyici/../../package.json', '/iz-goruntuleyici/assets/../../../package.json',
+    '/iz-goruntuleyici/.gizli.js', '/iz-goruntuleyici/yok.html', '/iz-goruntuleyici/index.php']) {
+    expect(await ham(yol), yol).toBe(404);
+  }
+  expect((await fetch(`${nobetci.adres}/iz-goruntuleyici/index.html`, { method: 'POST' })).status).not.toBe(200);
+
+  const { page, hatalar, kapat } = await sayfaAc();
+  try {
+    await page.goto(`/#/sonuclar/sonuc/${encodeURIComponent(String(sonSonuc.get(KALAN)))}`);
+    const goruntule = page.getByRole('link', { name: '▶ İzi görüntüle' });
+    await expect(goruntule).toBeVisible();
+    await expect(page.getByRole('link', { name: '⬇ İzi (trace) indir' })).toBeVisible();
+    expect(await goruntule.getAttribute('href')).toMatch(/^\/iz-goruntuleyici\/index\.html\?trace=%2Fplatform%2Fmedya%2F/);
+    const [sekme] = await Promise.all([page.waitForEvent('popup'), goruntule.click()]);
+    const sekmeHatalari: string[] = [];
+    sekme.on('pageerror', (e) => sekmeHatalari.push(String(e)));
+    sekme.on('console', (m) => { if (m.type() === 'error' && /Content Security Policy/.test(m.text()) && !/Framing ''/.test(m.text())) sekmeHatalari.push(m.text()); });
+    // Görüntüleyici izi şifreli medya ucundan yükler: koşunun adımları (Nöbetçi adım adlarıyla), o anki sayfa ve ağ sekmesi görünür.
+    await expect(sekme.getByText('Toplam hesaplanır').first()).toBeVisible({ timeout: 30_000 });
+    await expect(sekme.getByText('Sisteme giriş yapılır').first()).toBeVisible();
+    await sekme.getByRole('tab', { name: /Network/ }).click();
+    await expect(sekme.getByText(/127\.0\.0\.1/).first()).toBeVisible();
+    expect(sekmeHatalari).toEqual([]);
+    expect(hatalar).toEqual([]);
+  } finally { await kapat(); }
 });
 
 test('yalnız kalan adımda + video ekranla aynı: başarılıda adım görüntüsü yok, kalanda yalnız kalan adımın görüntüsü; video koşu ekran boyutunda', async () => {

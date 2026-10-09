@@ -687,7 +687,7 @@ export const REHBERLER = {
       {
         baslik: 'Kayıt: görüntü, video ve iz',
         metin: ['Video, test sonu ekran görüntüsü ve iz (trace) için: her testte, yalnız başarılı testlerde, yalnız başarısız testlerde ya da kapalı. "Yalnız başarılı"da kayıt her testte alınır, başarısız testlerinki kaydedilmeden silinir.',
-          'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı ve ekran anları. Sonuç ayrıntısından indirilir, Playwright iz görüntüleyicisiyle (npx playwright show-trace) açılır.',
+          'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı ve ekran anları. Sonuç ayrıntısında "İzi görüntüle" ile Nöbetçi içinde yeni sekmede açılır; indirilen dosya Playwright iz görüntüleyicisiyle (npx playwright show-trace) de açılır.',
           'Adım ekran görüntüleri: her adımda (varsayılan), yalnız başarısız adımda, seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) ya da kapalı; senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan) ya da Ekranla aynı (koşu ekran boyutu).'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', alt: 'görüntü', ikon: 'ekran' }, { baslik: 'Test sonu', alt: 'görüntü', ikon: 'onay' }, { baslik: 'Video', alt: 'boyut', ikon: 'video' }, { baslik: 'İz', alt: 'trace', ikon: 'liste' }] }
       },

@@ -46,6 +46,7 @@ import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
 import { veriKoku } from './platform/calisma-alanlari.mjs';
 import { kurulumKimligi } from './platform/kurulum-kimligi.mjs';
+import { izGoruntuleyiciIsteginiIsle } from './platform/iz-goruntuleyici.mjs';
 import {
   DOSYA_KLASORU_DEGISKENI, artikKlasorleriTemizle, geciciDosyaKoku, kosuKlasoruOlustur, kosuKlasorunuSil, sahipYaz
 } from './platform/dosyalar/gecici-dosyalar.mjs';
@@ -327,6 +328,7 @@ const calisanSurecler = new Map();
 // ---- Platform arayüzü (scripts/platform/arayuz/) ----------------------------------------
 // GET /            → kabuk (index.html; oturum token'ı <meta> olarak enjekte edilir)
 // GET /arayuz/*    → kabuğun statik CSS/JS dosyaları (sır içermez)
+// GET /iz-goruntuleyici/* → Playwright'ın iz görüntüleyicisi (playwright-core içinden; platform/iz-goruntuleyici.mjs)
 // Tüm HTML yanıtları: Cache-Control: no-store (token tarayıcı önbelleğine düşmesin),
 // X-Frame-Options: SAMEORIGIN (başka sitelerin çerçevelemesi engellenir).
 const ARAYUZ_KLASORU = join(buDosyaninKlasoru, 'platform', 'arayuz');
@@ -543,6 +545,7 @@ function arayuzIsteginiIsle(req, res) {
     res.end(paketBicimiBelgesi(join(buDosyaninKlasoru, '..')));
     return true;
   }
+  if (izGoruntuleyiciIsteginiIsle(req, res)) return true;
   const dosya = ARAYUZ_DOSYALARI.get(yol);
   if (!dosya) return false;
   res.writeHead(200, { 'Content-Type': dosya.tur, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
