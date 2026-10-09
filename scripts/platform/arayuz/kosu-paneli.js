@@ -460,8 +460,7 @@ export function secenekIste(s) {
  * veriKipi: koşu anı ezmesi ('tek' | 'tumu'; 'senaryo' / yok = senaryodaki çalıştırma biçimi). tekrar: başarısızları tekrar
  * çalıştırma ({ kaynakKosuId, model: 'kosudaki' | 'guncel', veri: 'guncel' | 'kosudaki' }; sunucu o koşudaki satırları kurar).
  * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string; tekBasina?: boolean;
- *   veriKipi?: string; tekrar?: { kaynakKosuId: string; model?: string; veri?: string }; uygulamaSurumu?: string; ekranAnalizi?: boolean }} s
- *   ekranAnalizi: Nöbetçi taraması (keşif + senaryo; okunan ekran modelle karşılaştırılır, farklar Değişiklikler'e).
+ *   veriKipi?: string; tekrar?: { kaynakKosuId: string; model?: string; veri?: string }; uygulamaSurumu?: string }} s
  *   uygulamaSurumu: koşu diyaloğunda girilen uygulama sürümü (her senaryo isteğine eklenir; boşsa ortamınki).
  */
 export function kosuBaslat(s) {
@@ -472,7 +471,7 @@ export function kosuBaslat(s) {
   const gorunur = gorunurSeciminiAl() || s.gorunur === true;
   const veriEki = { ...(gorunur ? { gorunur: true } : {}), ...(s.veriKipi && s.veriKipi !== 'senaryo' ? { veriKipi: s.veriKipi } : {}), ...(s.tekrar ? { tekrar: s.tekrar } : {}),
     // Koşu diyaloğunda girilen uygulama sürümü (boşsa sunucu ortam ayarındakini kullanır; PDF rapor A4).
-    ...(s.uygulamaSurumu ? { uygulamaSurumu: s.uygulamaSurumu } : {}), ...(s.ekranAnalizi ? { ekranAnalizi: true } : {}) };
+    ...(s.uygulamaSurumu ? { uygulamaSurumu: s.uygulamaSurumu } : {}) };
   if (kosuSuruyorMu()) {
     if (!tekMi || durum.oturum.ortam.id !== s.ortam.id) { bildir('Önce sürmekte olan koşunun bitmesini bekleyin (ya da durdurun).', 'hata'); return false; }
     const satir = satirOlustur(yeniler[0]);
@@ -547,36 +546,6 @@ async function birTaneCalistir(oturum, satir, ek) {
   else if (yanit.durum === 'iptal') satir.durum = 'durduruldu';
   else satir.durum = 'basarisiz';
   yay('satir-bitti');
-  if (ek.ekranAnalizi && yanit && yanit.basarili !== false) ekranAnaliziSonucu(yanit);
-}
-
-/**
- * Modeli güncelle bitti: koşu sırasında okunan ekranların modelle farkı. Alan / seçenek farkı varsa Değişiklikler sayfasına
- * (kabul / ret) gidilir; düğme notları burada da listelenir.
- * @param {Record<string, any>} yanit
- */
-function ekranAnaliziSonucu(yanit) {
-  const a = yanit.ekranAnalizi;
-  // Karşılaştırılamadıysa da pencere açılır (kısa bildirim gözden kaçıyordu).
-  const hata = a ? null : yanit.ekranAnaliziHatasi ? `Ekran karşılaştırılamadı: ${yanit.ekranAnaliziHatasi}` : 'Ekran karşılaştırılamadı: koşu ekrana ulaşamadı.';
-  const notlar = a && Array.isArray(a.notlar) ? a.notlar : [];
-  const kapat = h('button', { type: 'button', class: a?.bulguSayisi ? 'hayalet' : '' }, 'Kapat');
-  const git = a?.bulguSayisi ? h('button', { type: 'button' }, 'Değişiklikleri gör') : null;
-  const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'ekran-analizi-basligi' },
-    h('div', { class: 'diyalog-govde' },
-      h('h2', { id: 'ekran-analizi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('soru')), 'Modeli güncelle: sonuç'),
-      hata ? h('p', { class: 'hata-metni' }, hata) : h('p', {}, a.bulguSayisi
-        ? `Senaryo koşarken ekranda modelden farklı ${a.bulguSayisi} şey bulundu (yeni / kaybolan alan, yeni / kaldırılan seçenek). Değişiklikler sayfasında tek tek kabul edin ya da reddedin.`
-        : 'Alanlarda ve seçeneklerde modelden farklı bir şey bulunmadı.'),
-      a?.gizlenenSayisi ? h('p', { class: 'soluk' }, `Daha önce reddettiğiniz ${a.gizlenenSayisi} fark yeniden gösterilmedi.`) : null,
-      notlar.length ? h('ul', {}, notlar.map((n) => h('li', {}, n))) : null),
-    h('div', { class: 'diyalog-alt' }, kapat, git));
-  kapat.addEventListener('click', () => diyalog.close());
-  git?.addEventListener('click', () => { diyalog.close(); location.hash = `#/ekranlar/e/${a.ekranId}/bulgular`; });
-  diyalog.addEventListener('close', () => diyalog.remove());
-  document.body.append(diyalog);
-  diyalog.showModal();
-  (git ?? kapat).focus();
 }
 
 function oturumuBitirGerekirse(oturum) {
@@ -740,7 +709,7 @@ const ADIM_DURUMU = {
  * Adım listesi: "Adımlar N / M başarılı"; çalışan adım sarı (süre canlı akar), biten yeşil, hata veren kırmızı.
  * @param {Array<{ ad: string; durum: string; sureMs?: number | null; baslangic?: number }>} adimlar @param {boolean} canli
  */
-function adimListesi(adimlar, canli) {
+export function adimListesi(adimlar, canli) {
   const basarili = adimlar.filter((a) => a.durum === 'basarili').length;
   return h('div', { class: 'kosu-adimlari', 'aria-label': 'Adımlar', 'aria-live': canli ? 'polite' : null },
     h('div', { class: 'kosu-adimlari-baslik' }, ikon('liste'), h('b', {}, 'Adımlar'), adimlar.length ? h('span', { class: 'soluk' }, `${basarili} / ${adimlar.length} başarılı`) : null),

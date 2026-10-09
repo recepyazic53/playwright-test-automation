@@ -108,7 +108,12 @@ export function hizliTestEkrani(icerik, parcalar, baglam) {
     return;
   }
   if (parcalar[0] === 'o' && parcalar[1]) { oturumEkrani(govde, parcalar[1]); return; }
-  // #/hizli-test/guncelle/<ekran>: Modeli güncelle (sonunda yalnız farklar); #/hizli-test/duzenle/<ekran>: testi düzenle (senaryo kaydedilir).
+  // #/hizli-test/guncelle/<ekran>: Modeli güncelle > Nöbetçi taraması (nobetci-taramasi.js: keşif + senaryo, modelle karşılaştırma).
+  if (parcalar[0] === 'guncelle' && parcalar[1]) {
+    import('./nobetci-taramasi.js').then((m) => m.nobetciTaramasiEkrani(icerik, proje, parcalar[1])).catch((e) => bildir(hataMetni(e), 'hata'));
+    return;
+  }
+  // #/hizli-test/duzenle/<ekran>: testi düzenle (senaryo kaydedilir).
   const ekranId = (parcalar[0] === 'duzenle' || parcalar[0] === 'guncelle') ? parcalar[1] || null : null;
   baslatEkrani(govde, proje, ekranId, parcalar[0] === 'guncelle' && Boolean(ekranId));
 }
