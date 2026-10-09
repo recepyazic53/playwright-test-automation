@@ -44,6 +44,13 @@ function varsayilanYapan(vt) {
   } catch {
     // kullanıcı adı okunamazsa genel ad kullanılır
   }
+  // Ekip paylaşımında kişinin seçtiği ad (Ayarlar > Yedekleme > Ekip paylaşımı) işletim sistemi adının önüne geçer.
+  try {
+    const secili = /** @type {{ ad?: unknown } | null} */ (ayarGetir(vt, 'kullanici-adi'));
+    if (secili && typeof secili.ad === 'string' && secili.ad.trim()) kullanici = secili.ad.trim();
+  } catch {
+    // kasa kapalıysa / ayar okunamazsa işletim sistemi adı kalır
+  }
   return `${kullanici}@${makine}`;
 }
 

@@ -49,8 +49,12 @@ test.describe('Ayarlar > Yedekleme > Ekip paylaşımı', () => {
     await expect(kart).toBeVisible();
     await expect(kart.getByRole('button', { name: 'Yayınla' })).toHaveCount(0);
 
+    await kart.getByLabel('Adınız').fill('Ayşe');
+    await kart.getByRole('button', { name: 'Kaydet' }).first().click();
+    await expect(kart.getByLabel('Adınız')).toHaveValue('Ayşe');
+    expect((await nobetciApi(nobetci, '/platform/ortak/durum') as unknown as { kullaniciAdi?: string }).kullaniciAdi).toBe('Ayşe');
     await kart.getByLabel('Ortak klasör (tam yol)').fill(paylasim);
-    await kart.getByRole('button', { name: 'Kaydet' }).click();
+    await kart.getByRole('button', { name: 'Kaydet' }).nth(1).click();
     await expect(kart.getByText('Klasörde henüz yayınlanmış sürüm yok.')).toBeVisible();
 
     await kart.getByLabel('Sürüm notu').fill('ilk sürüm');

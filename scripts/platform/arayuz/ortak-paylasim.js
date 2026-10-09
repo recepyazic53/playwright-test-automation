@@ -8,8 +8,17 @@ import { iceAktarmaAkisi } from './ice-aktarma.js';
  * @param {Record<string, any>} ortak GET /platform/ortak/durum > ortak
  * @param {{ yenile: () => void; projeleriYenile: () => Promise<void>; akisAlani: HTMLElement; gizle: (gizli: boolean) => void }} baglam
  */
-export function ortakPaylasimKarti(ortak, baglam) {
+export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
   const mesaj = mesajKutusu();
+  const adGirdisi = h('input', { type: 'text', autocomplete: 'off', maxlength: '60', value: kullaniciAdi || '', placeholder: 'Örn. Ayşe', 'aria-label': 'Adınız' });
+  const adKaydet = h('button', { type: 'button' }, ikon('onay'), 'Kaydet');
+  adKaydet.addEventListener('click', async () => {
+    mesaj.temizle();
+    try {
+      await mesgulIken(adKaydet, 'Kaydediliyor…', () => api('/platform/ortak/kullanici-adi', { govde: { ad: adGirdisi.value } }));
+      bildir('Adınız kaydedildi.');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
   const girdi = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', class: 'mono', value: ortak.klasor || '', placeholder: 'Örn. C:\\Users\\ben\\OneDrive\\NobetciOrtak', 'aria-label': 'Ortak klasör (tam yol)' });
   const kaydet = h('button', { type: 'button' }, ikon('onay'), 'Kaydet');
   kaydet.addEventListener('click', async () => {
@@ -87,6 +96,9 @@ export function ortakPaylasimKarti(ortak, baglam) {
   return h('div', { class: 'kart', role: 'group', 'aria-label': 'Ekip paylaşımı' },
     h('h3', {}, ikon('kullanici'), 'Ekip paylaşımı'),
     h('p', { class: 'soluk' }, 'Ekip aynı ortak klasörü (OneDrive / ağ sürücüsü) kullanır: biri "Yayınla" der, diğerleri "Güncelle" ile alır. Her yayın yeni bir sürümdür, eskileri silinmez. Ekip aynı kasa parolasını kullanır. Giriş bilgileri ve entegrasyon gizlileri kişiye özeldir: paylaşılmaz, güncellemede sizinki korunur.'),
+    h('div', { class: 'alan' }, h('label', { for: adGirdisi.id || (adGirdisi.id = yeniKimlik('ortak-ad')) }, 'Adınız'),
+      h('div', { class: 'satir-girdi' }, adGirdisi, adKaydet),
+      h('div', { class: 'yardim' }, 'Değişiklik geçmişinde ve yayınlarda "kim yaptı" olarak görünür. Bu bilgisayara özeldir; boşsa işletim sistemi kullanıcı adı kullanılır.')),
     h('div', { class: 'alan' }, h('label', { for: girdi.id || (girdi.id = yeniKimlik('ortak-klasor')) }, 'Ortak klasör'),
       h('div', { class: 'satir-girdi' }, girdi, kaydet),
       h('div', { class: 'yardim' }, 'Boş bırakırsanız paylaşım kapalıdır. Klasörün herkesle paylaşıldığından ve eşitlendiğinden emin olun.')),

@@ -734,7 +734,7 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
 }
 
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, tahmin, saklamaFormu, { klasor: yedekKlasoru }, veriKarti, { ortak }] = await Promise.all([
+  const [{ klasor, dosyalar }, tahmin, saklamaFormu, { klasor: yedekKlasoru }, veriKarti, { ortak, kullaniciAdi }] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
     api('/platform/yedek/tahmin').catch(() => null),
     saklamaKarti(),
@@ -781,7 +781,7 @@ async function yedekleme(govde, baglam, yenile) {
     yedekKlasoruBolumu(yedekKlasoru, yenile),
     liste);
   const ortakAkisAlani = h('div', {});
-  const ortakKart = ortakPaylasimKarti(ortak, {
+  const ortakKart = ortakPaylasimKarti(ortak, kullaniciAdi, {
     yenile, projeleriYenile: () => baglam.projeleriYenile(), akisAlani: ortakAkisAlani,
     gizle: (g) => { for (const k of [disaForm, iceKart, otomatikKart, ortakKart]) k.hidden = g; }
   });

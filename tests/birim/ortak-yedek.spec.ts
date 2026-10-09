@@ -6,12 +6,12 @@ import { veritabaniAc } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { baglantiKaydet, baglantilariListele } from '../../scripts/platform/entegrasyonlar/depo.mjs';
 import {
-  ekranKaydet, girisProfiliGetir, girisProfiliKaydet, kosuOlustur, kosuSonucuEkle, ortamKaydet, projeKaydet,
+  degisiklikGecmisiListele, ekranKaydet, girisProfiliGetir, girisProfiliKaydet, kosuOlustur, kosuSonucuEkle, ortamKaydet, projeKaydet,
   senaryoGetir, senaryoKaydet, sayimlar, veritabaniniHazirla
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { yedekAc, yedekDosyasiYaz, yedekIceAktar, yedekOlustur } from '../../scripts/platform/yedek.mjs';
 import { iceAktarmaHazirla, iceAktarmaUygula } from '../../scripts/platform/ice-aktarma.mjs';
-import { ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from '../../scripts/platform/ortak-paylasim.mjs';
+import { kullaniciAdiOku, kullaniciAdiYaz, ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from '../../scripts/platform/ortak-paylasim.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 const PAROLA = 'Ekip-Ortak-Kasa-Parolasi-1';
@@ -153,6 +153,33 @@ test('geri dönüş: eski sürüm alınınca yeni sürüm yayınlanabilir; araya
     writeFileSync(join(paylasim, 'ortak.json'), JSON.stringify(liste));
     expect(ortakDurum(a)).toMatchObject({ geriDonus: false, guncelleVar: true });
     await expect(ortakYayinla(a, { yapan: 'ayse' })).rejects.toMatchObject({ kod: 'ONCE_GUNCELLE' });
+    a.kapat();
+  } finally {
+    klasor.temizle();
+  }
+});
+
+test('kullanıcı adı: değişiklik geçmişinde "kim yaptı" ve yayında yayınlayan olarak görünür; yedeğe girmez', async () => {
+  const klasor = geciciKlasor('ortak-ad');
+  try {
+    const a = await veritabaniniHazirla(null);
+    await kasaOlustur(a, PAROLA, { kdf: HIZLI_KDF });
+    expect(() => kullaniciAdiYaz(a, 'a@b')).toThrow('@');
+    kullaniciAdiYaz(a, ' Ayşe ');
+    expect(kullaniciAdiOku(a)).toBe('Ayşe');
+    const proje = projeKaydet(a, { ad: 'Ortak' });
+    const ekran = ekranKaydet(a, { projeId: proje, anahtar: 'form', ad: 'Form' });
+    const s1 = senaryoKaydet(a, { projeId: proje, ekranId: ekran, baslik: 'S', icerik: { adim: 1 } });
+    const kayit = degisiklikGecmisiListele(a, 'senaryo', s1)[0] as { yapan: string; islem: string };
+    expect(kayit).toMatchObject({ islem: 'olustur' });
+    expect(kayit.yapan.startsWith('Ayşe@')).toBe(true);
+    const paylasim = join(klasor.yol, 'p');
+    mkdirSync(paylasim);
+    ortakKlasorAyarla(a, paylasim);
+    const v = await ortakYayinla(a);
+    expect(v.yapan).toBe('Ayşe');
+    const acik = await yedekAc(join(paylasim, v.dosya), PAROLA);
+    expect((acik.tablolar.ayarlar ?? []).some((x) => x.anahtar === 'kullanici-adi')).toBe(false);
     a.kapat();
   } finally {
     klasor.temizle();

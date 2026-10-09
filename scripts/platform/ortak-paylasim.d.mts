@@ -22,3 +22,6 @@ export declare function ortakYayinla(
 ): Promise<OrtakSurum>;
 export declare function ortakSurumDosyasi(vt: Veritabani, surum?: number): { yol: string; kayit: OrtakSurum };
 export declare function ortakAlindiIsaretle(vt: Veritabani, surum: number): void;
+export declare const KULLANICI_ADI_AYARI: string;
+export declare function kullaniciAdiOku(vt: Veritabani): string;
+export declare function kullaniciAdiYaz(vt: Veritabani, ad: unknown): void;

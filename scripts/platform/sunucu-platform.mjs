@@ -194,7 +194,7 @@ import {
   YEDEK_KLASORU_AYARI, YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, seciliYedekKlasoru, varsayilanYedekKlasoru, veriKlasoruYedekYolu,
   yedekBoyutTahmini, yedekDosyaAdi, yedekDosyasiYaz
 } from './yedek.mjs';
-import { ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from './ortak-paylasim.mjs';
+import { kullaniciAdiOku, kullaniciAdiYaz, ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from './ortak-paylasim.mjs';
 import {
   KlasorHatasi, YENIDEN_BASLATMA_DEGISKENI, ayarDosyasiYolu, klasorYoluDogrula, veriAyariniOku, veriAyariniYaz, veriKlasoruDurumu,
   veriyiKopyalaVeDogrula, yazilabilirOlmali
@@ -1496,7 +1496,7 @@ const GET_UCLARI = new Map([
   ['/platform/sonuclar/farkindalik', (db, q) => farkindalikVerisi(db, kimlikAl(q.get('projeId'), 'projeId'), { aralik: sorgudanAralik(q), sonYedek: sonYedekZamani(db) })],
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
   // Ekip paylaşımı (ortak klasör): klasör, son sürüm, bende olan sürüm, güncelleme var mı, sürüm listesi.
-  ['/platform/ortak/durum', (db) => ({ ortak: ortakDurum(db) })],
+  ['/platform/ortak/durum', (db) => ({ ortak: ortakDurum(db), kullaniciAdi: kullaniciAdiOku(db) })],
   ['/platform/yedek/klasor', (db) => ({ klasor: yedekKlasoruBilgisi(db) })],
   ['/platform/yedek/otomatik-liste', (db) => ({ klasor: varsayilanYedekKlasoru(db), dosyalar: yedekDosyalari(db) })]
 ]);
@@ -1696,6 +1696,10 @@ const POST_UCLARI = new Map([
     copyFileSync(yol, gecici);
     const isId = iceAktarma.baslat(gecici, parola, { geciciDosya: true });
     return { isId, surum: kayit.surum };
+  }],
+  ['/platform/ortak/kullanici-adi', (db, g) => {
+    kullaniciAdiYaz(db, g.ad);
+    return { kullaniciAdi: kullaniciAdiOku(db) };
   }],
   ['/platform/ortak/alindi', (db, g) => {
     ortakAlindiIsaretle(db, Number(g.surum));

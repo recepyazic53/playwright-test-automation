@@ -18,6 +18,7 @@ import { YEDEK_UZANTISI, YedekHatasi, yedekDosyasiYaz } from './yedek.mjs';
 export const ORTAK_KLASOR_AYARI = 'ortak-klasor';
 export const ORTAK_DURUM_AYARI = 'ortak-durum';
 export const ORTAK_LISTE_DOSYASI = 'ortak.json';
+export const KULLANICI_ADI_AYARI = 'kullanici-adi';
 
 /**
  * @typedef {{ surum: number; dosya: string; yapan: string; zaman: string; not: string; bayt: number }} OrtakSurum
@@ -58,6 +59,19 @@ function listeOku(klasor) {
   } catch {
     throw new YedekHatasi('VERI', 'Ortak klasördeki sürüm listesi (ortak.json) okunamadı; dosya bozulmuş olabilir.');
   }
+}
+
+/** Kişinin seçtiği ad ("kim ne yaptı" kayıtlarında görünür); yoksa boş. @param {import('./veritabani/baglanti.mjs').Veritabani} vt */
+export function kullaniciAdiOku(vt) {
+  const a = /** @type {{ ad?: unknown } | null} */ (ayarGetir(vt, KULLANICI_ADI_AYARI));
+  return a && typeof a.ad === 'string' ? a.ad : '';
+}
+
+/** @param {import('./veritabani/baglanti.mjs').Veritabani} vt @param {unknown} ad */
+export function kullaniciAdiYaz(vt, ad) {
+  const t = typeof ad === 'string' ? ad.trim() : '';
+  if (t.length > 60 || /[\u0000-\u001f@]/.test(t)) throw new YedekHatasi('VERI', 'Ad en fazla 60 karakter olmalı ve "@" içermemelidir.');
+  ayarYaz(vt, KULLANICI_ADI_AYARI, { ad: t });
 }
 
 /** @param {import('./veritabani/baglanti.mjs').Veritabani} vt @param {unknown} klasor */
@@ -108,7 +122,7 @@ export async function ortakYayinla(vt, secenekler = {}) {
   await yedekDosyasiYaz(vt, hedef, { ortak: true, ...(secenekler.ilerleme ? { ilerleme: secenekler.ilerleme } : {}) });
   /** @type {OrtakSurum} */
   const kayit = {
-    surum, dosya, yapan: (secenekler.yapan ?? '').trim() || userInfo().username, zaman,
+    surum, dosya, yapan: (secenekler.yapan ?? '').trim() || kullaniciAdiOku(vt) || userInfo().username, zaman,
     not: String(secenekler.not ?? '').trim().slice(0, 300), bayt: statSync(hedef).size
   };
   const gecici = join(klasor, `${ORTAK_LISTE_DOSYASI}.${process.pid}.gecici`);
