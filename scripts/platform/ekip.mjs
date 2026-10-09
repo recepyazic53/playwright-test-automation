@@ -25,14 +25,26 @@ function adTemizle(ad) {
   return t;
 }
 
+/** Ekip ayarı değerinden üye listesi (geçersiz kayıtlar atlanır). @param {unknown} deger @returns {EkipUyesi[]} */
+export function ekipUyeleriniAyikla(deger) {
+  const a = /** @type {{ uyeler?: unknown } | null} */ (deger && typeof deger === 'object' ? deger : null);
+  const dizi = Array.isArray(a?.uyeler) ? a.uyeler : [];
+  return dizi
+    .filter((/** @type {any} */ u) => u && typeof u.ad === 'string' && u.ad.trim())
+    .map((/** @type {any} */ u) => ({ ad: String(u.ad).trim(), rol: u.rol === 'admin' ? 'admin' : 'kullanici' }));
+}
+
+/** Ad listede mi (büyük / küçük harf ve boşluk yok sayılır). @param {EkipUyesi[]} uyeler @param {unknown} ad @returns {EkipUyesi | null} */
+export function ekipteBul(uyeler, ad) {
+  const t = typeof ad === 'string' ? ad.trim() : '';
+  if (!t) return null;
+  return uyeler.find((u) => anahtar(u.ad) === anahtar(t)) ?? null;
+}
+
 /** Kayıtlı ekip (kasa kilitli / okunamazsa boş). @param {import('./veritabani/baglanti.mjs').Veritabani} vt @returns {EkipUyesi[]} */
 export function ekipUyeleriOku(vt) {
   try {
-    const a = /** @type {{ uyeler?: unknown } | null} */ (ayarGetir(vt, EKIP_AYARI));
-    const dizi = Array.isArray(a?.uyeler) ? a.uyeler : [];
-    return dizi
-      .filter((/** @type {any} */ u) => u && typeof u.ad === 'string' && u.ad.trim())
-      .map((/** @type {any} */ u) => ({ ad: String(u.ad).trim(), rol: u.rol === 'admin' ? 'admin' : 'kullanici' }));
+    return ekipUyeleriniAyikla(ayarGetir(vt, EKIP_AYARI));
   } catch {
     return [];
   }
@@ -52,8 +64,7 @@ export function girisDenetle(vt, ad) {
     ayarYaz(vt, EKIP_AYARI, { uyeler: [ilk] });
     return ilk;
   }
-  if (!t) return null;
-  return uyeler.find((u) => anahtar(u.ad) === anahtar(t)) ?? null;
+  return ekipteBul(uyeler, t);
 }
 
 /**

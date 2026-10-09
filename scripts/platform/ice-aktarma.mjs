@@ -53,6 +53,7 @@ import { projeKalintilari } from './proje-yonetimi.mjs';
 import { servisIceriginiMaskele } from './ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from './ayarlar/maskeleme.mjs';
 import { yerelKisiseliKoru } from './ortak-kisisel.mjs';
+import { EKIP_AYARI, ekipUyeleriniAyikla, ekipteBul } from './ekip.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -377,6 +378,21 @@ function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek, medy
   };
 }
 
+/** Yedekteki ekip listesi (ayarlar satırı; yedeğin anahtarıyla şifreli). @param {Satir[]} ayarlar @param {Buffer} anahtar @param {string} ad */
+function ekipDenetimi(ayarlar, anahtar, ad) {
+  const satir = ayarlar.find((s) => s.anahtar === EKIP_AYARI);
+  if (!satir || typeof satir.deger_json !== 'string') return;
+  /** @type {unknown} */
+  let deger = null;
+  try { deger = JSON.parse(zarfMi(satir.deger_json) ? zarfCoz(anahtar, satir.deger_json) : satir.deger_json); } catch { return; }
+  const uyeler = ekipUyeleriniAyikla(deger);
+  if (uyeler.length && !ekipteBul(uyeler, ad)) {
+    throw new KasaHatasi('YETKISIZ', ad.trim()
+      ? 'Yetkili değilsiniz: bu kullanıcı adı yedeğin ekip listesinde yok. Ekibin Admin\'ine başvurun. Hiçbir şey yüklenmedi.'
+      : 'Bu yedek ekiple kullanılıyor: ekip listesindeki kullanıcı adınızı yazın. Hiçbir şey yüklenmedi.');
+  }
+}
+
 /**
  * Yedeği açar ve BELLEKTE bir hazırlık alanı + önizleme üretir. Hiçbir şey YAZMAZ.
  * - vt null ise (veritabanı dosyası henüz yok) boş bir bellek veritabanıyla karşılaştırılır.
@@ -387,7 +403,9 @@ function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek, medy
  * @param {Veritabani | null} vt
  * @param {Buffer | string} dosya Buffer ya da dosya yolu (büyük yedekler akışla okunur)
  * @param {string} parola
- * @param {{ ilerleme?: IlerlemeFn; medyaKlasoru?: string | null }} [secenekler]
+ * kullaniciAdi (ilk kurulum, "Yedekten yükle"): yerelde kasa yoksa ve yedeğin ekip listesi doluysa ad listede olmalıdır; değilse
+ * KasaHatasi(YETKISIZ) — hiçbir şey hazırlanmaz. Liste boşsa denetim yok (ad, uygulamadan sonra ilk Admin olur).
+ * @param {{ ilerleme?: IlerlemeFn; medyaKlasoru?: string | null; kullaniciAdi?: string }} [secenekler]
  * @returns {Promise<Hazirlik>}
  */
 export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
@@ -420,6 +438,7 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
     const kasaVar = kasaDurumu(yerel).olusturuldu;
     const hedefAnahtar = Buffer.from(kasaVar ? acikAnahtar(yerel) : yedek.kasaAnahtari);
     const ayniAnahtar = anahtarlarAyni(hedefAnahtar, yedek.kasaAnahtari);
+    if (!kasaVar && secenekler.kullaniciAdi !== undefined) ekipDenetimi(yedek.tablolar.ayarlar ?? [], yedek.kasaAnahtari, secenekler.kullaniciAdi);
     ilerleme('yeniden şifreleniyor', 50);
     const eskiYapanBicimi = Number(yedek.manifest.semaSurumu) < 3;
     /** @type {Record<string, Satir[]>} */
@@ -874,7 +893,8 @@ export class IceAktarmaYoneticisi {
    * Yüklenen dosya için hazırlığı başlatır (arka planda). Kaba kuvvet beklemesi sürüyorsa
    * COK_DENEME; başka iş sürüyorsa MESGUL. Bekleyen (hazır) eski önizlemeler atılır.
    * dosya bir yol ve geciciDosya: true ise hazırlık bitince (başarılı/başarısız) dosya silinir.
-   * @param {Buffer | string} dosya @param {string} parola @param {{ geciciDosya?: boolean }} [secenekler]
+   * kullaniciAdi: ilk kurulumda yedeğin ekip listesi denetimi (iceAktarmaHazirla).
+   * @param {Buffer | string} dosya @param {string} parola @param {{ geciciDosya?: boolean; kullaniciAdi?: string }} [secenekler]
    * @returns {string} iş kimliği
    */
   baslat(dosya, parola, secenekler = {}) {
@@ -906,7 +926,8 @@ export class IceAktarmaYoneticisi {
         const vt = await this.veritabani(false);
         const hazirlik = await iceAktarmaHazirla(vt, dosya, parola, {
           ilerleme: (asama, yuzde) => { gorunum.asama = asama; gorunum.yuzde = yuzde; },
-          ...(this.medyaKlasoru ? { medyaKlasoru: this.medyaKlasoru() } : {})
+          ...(this.medyaKlasoru ? { medyaKlasoru: this.medyaKlasoru() } : {}),
+          ...(secenekler.kullaniciAdi !== undefined ? { kullaniciAdi: secenekler.kullaniciAdi } : {})
         });
         this.denemeSiniri?.basarili();
         if (gorunum.durum === 'iptal') {

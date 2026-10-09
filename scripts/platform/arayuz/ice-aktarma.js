@@ -3,7 +3,7 @@
 // olarak ya da mevcut bir projeye (ortamları o projenin ortamlarına eşlenerek) aktarılır; seçim değişince önizleme yenilenir. Hoş geldiniz ekranında (boş veritabanı:
 // yedeğin parolası bu bilgisayarın kasa parolası olur) ve Ayarlar > Yedekleme'de kullanılır.
 import {
-  ApiHatasi, TOKEN, alan, alanHatasi, api, bosDurum, boyutMetni, dosyaSecimi, geriSayim, h, ikon, mesajKutusu, parolaAlani, rozet, tarihMetni, yeniKimlik
+  ApiHatasi, TOKEN, alan, alanHatasi, api, bosDurum, boyutMetni, dosyaSecimi, geriSayim, h, ikon, kullaniciAdiAlani, mesajKutusu, parolaAlani, rozet, tarihMetni, yeniKimlik
 } from './ortak.js';
 
 const ADIMLAR = [['dosya', 'Dosya ve parola'], ['hazirlik', 'Hazırlık'], ['onizleme', 'Önizleme ve seçim'], ['ozet', 'Özet']];
@@ -107,6 +107,8 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         ? 'Yedeği oluşturan bilgisayardaki kasa parolası. Bu bilgisayarda da kasa parolası olarak kullanılacak.'
         : 'Yedeği oluşturan kasanın parolası (bu bilgisayarın parolasından farklı olabilir).'
     });
+    // İlk kurulum: yedek ekiple kullanılıyorsa ad ekip listesinde olmalı (yüklemeden önce denetlenir).
+    const kullanici = secenekler.mod === 'hosgeldin' ? kullaniciAdiAlani() : null;
     const mesaj = mesajKutusu();
     const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Yükle ve önizle');
     const form = h('form', { class: 'kart', novalidate: true },
@@ -115,6 +117,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       mesaj.kutu,
       alan('Yedek dosyası', dosyaGirdisi, { zorunlu: true, icerik: h('div', {}, dosyaSecimiDurumu.kutu), yardim: 'Yalnızca bu platformun ürettiği .tayedek dosyaları.' }),
       parola.kapsayici,
+      kullanici ? kullanici.kapsayici : null,
       h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'Vazgeç')));
     if (onMesaj) mesaj.goster(onMesaj.metin, onMesaj.tur);
     form.addEventListener('submit', (olay) => {
@@ -127,7 +130,8 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       else if (!dosya.name.toLowerCase().endsWith('.tayedek')) { alanHatasi(dosyaGirdisi, 'Dosya uzantısı .tayedek olmalıdır.'); hata = true; }
       if (!parola.girdi.value) { alanHatasi(parola.girdi, 'Yedeğin parolasını girin.'); hata = true; }
       if (hata) { form.querySelector('[aria-invalid="true"]')?.focus(); return; }
-      yukle(dosya, parola.girdi.value);
+      if (kullanici) kullanici.hatirla();
+      yukle(dosya, parola.girdi.value, kullanici ? kullanici.girdi.value.trim() : undefined);
     });
     goster('dosya', form);
   }
@@ -163,12 +167,13 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     });
   }
 
-  function yukle(dosya, parola) {
+  function yukle(dosya, parola, kullaniciAdi) {
     const ilerle = ilerlemeEkrani();
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/platform/yedek/ice-aktar');
     xhr.setRequestHeader('X-Test-Sunucu-Token', TOKEN);
     xhr.setRequestHeader('X-Kasa-Parola', encodeURIComponent(parola));
+    if (kullaniciAdi !== undefined) xhr.setRequestHeader('X-Kullanici-Adi', encodeURIComponent(kullaniciAdi));
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     xhr.upload.onprogress = (o) => { if (o.lengthComputable) ilerle('Dosya yükleniyor…', (o.loaded / o.total) * 100); };
     xhr.onerror = () => dosyaFormu({ metin: 'Dosya yüklenemedi: sunucuya ulaşılamadı.', tur: 'hata' });
