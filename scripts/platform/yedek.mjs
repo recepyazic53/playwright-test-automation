@@ -67,6 +67,7 @@ import {
 import { MEDYA_SIHIRLI, medyaCoz, medyaDosyaAdiGecerliMi, medyaKlasoru, medyaSifrele } from './medya.mjs';
 import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
 import { PANO_SONUC_ANAHTARI } from './sonuclar/ozet-panosu.mjs';
+import { ortakIcinTemizle } from './ortak-kisisel.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -318,8 +319,9 @@ function v2BaslikOlustur(kdf, dosyaTuzu) {
  * @param {Record<string, boolean>} secim
  * @param {string | null} klasor medya klasörü (null: medya dosyası eklenmez)
  * @param {IlerlemeFn} ilerleme
+ * @param {boolean} [ortak] ORTAK (ekip) yedeği: kişiye özel bilgi (giriş / entegrasyon gizlileri) ayıklanır, koşu geçmişi girmez (ortak-kisisel.mjs)
  */
-function icerikHazirla(vt, secim, klasor, ilerleme) {
+function icerikHazirla(vt, secim, klasor, ilerleme, ortak = false) {
   const kasaAnahtari = acikAnahtar(vt);
   const kdf = kasaKdfOku(vt);
   const dogrulayici = vt.metaOku('kasa_dogrulayici');
@@ -334,6 +336,7 @@ function icerikHazirla(vt, secim, klasor, ilerleme) {
     ilerleme('veri okunuyor', 2 + Math.round((8 * (i + 1)) / TABLOLAR.length));
   });
   tablolar.ayarlar = (tablolar.ayarlar ?? []).filter((s) => !yedekDisiAyarMi(s));
+  if (ortak) Object.assign(tablolar, ortakIcinTemizle(tablolar, kasaAnahtari));
   /** @type {Array<{ id: string; yol: string; boyut: number; tur: string }>} */
   const medyaListesi = [];
   /** @type {Record<string, { sayi: number; bayt: number }>} */
@@ -365,6 +368,7 @@ function icerikHazirla(vt, secim, klasor, ilerleme) {
       bicimSurumu: BICIM_SURUMU,
       semaSurumu: mevcutSemaSurumu(vt),
       olusturulma: new Date().toISOString(),
+      ...(ortak ? { ortak: true } : {}),
       makine: yerelMakine(vt),
       sayimlar: sayimlar(vt),
       medya: {
@@ -413,13 +417,13 @@ export function yedekOlustur(vt, secenekler = {}) {
  * Kasa AÇIK olmalı. Medya dosyası şifreli değilse (sihirli bayt yoksa) yedek İPTAL edilir.
  * @param {Veritabani} vt
  * @param {string} hedef
- * @param {MedyaSecimi & { medyaKlasoru?: string | null; ilerleme?: IlerlemeFn }} [secenekler]
+ * @param {MedyaSecimi & { medyaKlasoru?: string | null; ilerleme?: IlerlemeFn; ortak?: boolean }} [secenekler] ortak: ekip yedeği (kişiye özel bilgisiz)
  */
 export async function yedekDosyasiYaz(vt, hedef, secenekler = {}) {
   const ilerleme = secenekler.ilerleme ?? (() => {});
   const secim = medyaSeciminiCoz(secenekler);
   const klasor = secenekler.medyaKlasoru !== undefined ? secenekler.medyaKlasoru : (vt.yol ? medyaKlasoru(vt.yol) : null);
-  const { icerik, medyaListesi, kasaAnahtari, kdf } = icerikHazirla(vt, secim, klasor, ilerleme);
+  const { icerik, medyaListesi, kasaAnahtari, kdf } = icerikHazirla(vt, secim, klasor, ilerleme, secenekler.ortak === true);
   ilerleme('sıkıştırılıyor', 11);
   const sikistirilmis = gzipSync(Buffer.from(JSON.stringify(icerik), 'utf8'), { level: 9 });
   const baslik = v2BaslikOlustur(kdf, randomBytes(16));
@@ -646,7 +650,7 @@ function icerikAc(sikistirilmis, surum) {
  *   tablolar: Record<string, Record<string, unknown>[]>;
  * }} DogrulanmisIcerik
  * @typedef {{
- *   bicimSurumu: number; semaSurumu: number; olusturulma: string; makine: { id: string; ad: string };
+ *   bicimSurumu: number; semaSurumu: number; olusturulma: string; makine: { id: string; ad: string }; ortak?: boolean;
  *   sayimlar: Record<string, number>;
  *   medya?: { secim: Record<string, boolean>; dosyaSayisi: number; bayt: number; turler: Record<string, { sayi: number; bayt: number }> };
  * }} YedekManifesti
