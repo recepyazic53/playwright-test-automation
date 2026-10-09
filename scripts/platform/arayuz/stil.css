@@ -4666,3 +4666,13 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .taban-servis-tablosu th, .taban-servis-tablosu td { overflow-wrap: anywhere; vertical-align: top; }
 .taban-servis-tablosu select, .taban-servis-tablosu input[type="text"], .taban-servis-tablosu input:not([type]) { width: 100%; min-width: 0; box-sizing: border-box; text-overflow: ellipsis; }
 .taban-servis-tablosu .taban-servis-yolu { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ayarlar kartları: başlığa tıklayınca açılır / kapanır (kart-katla.js). Kapalıyken yalnız başlık ve kısa durum (.kart-ozet). */
+.kart.katlanir > .kart-katla-basligi { cursor: pointer; user-select: none; margin-bottom: 0; }
+.kart.katlanir:not(.kapali) > .kart-katla-basligi { margin-bottom: 12px; }
+.kart.katlanir.kapali > :not(.kart-katla-basligi):not(.kart-ozet) { display: none !important; }
+.kart.katlanir.kapali > .kart-ozet { margin: 10px 0 0; }
+.kart-katla-dugmesi { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--metin-2); border-radius: 6px; flex: none; }
+.kart-katla-dugmesi:hover { background: var(--panel-2); color: var(--metin); }
+.kart-katla-dugmesi .ikon { transition: transform .15s ease; }
+.kart.katlanir.kapali .kart-katla-dugmesi .ikon { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .kart-katla-dugmesi .ikon { transition: none; } }
