@@ -128,7 +128,7 @@ test('varsayılan Ekran: onay kutusu / genel senaryo seçimi yok; önde tara / k
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText('Ekran ekle');
   // En üstte paket yükleme; altında tek satırda tara / hızlı test, kaydet ve yapay zekâ kutusu.
-  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet', 'Yapay zekâ ile oluştur', 'Boş başla']);
+  await expect(page.locator('section.ekleme-secenekleri .ekleme-kutusu h3')).toHaveText(['Nöbetçi taraması', 'Akışı kaydet', 'Yapay zekâ ile oluştur', 'Boş başla']);
   await expect(page.locator('section.ileri-duzey-bolumu')).toBeVisible();
   // Sunucu varsayılanı da ekran: seçim gönderilmezse paket ekran olarak önizlenir.
   const o = await basarili('/platform/sayfa-paketi/onizle', { projeId, paket: paket('ornek-basvuru', 'Örnek Başvuru') });

@@ -145,7 +145,7 @@ test('gezinme: önceki sayfanın modülü geç yüklenirse yeni sayfanın üstü
   await page.close();
 });
 
-test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit, tek eylem); paket yükleme ve yapay zekâ görünür bölümde (açılır değil); üst not yok; istek metni tek kaynaktan; 390px taşma yok', async () => {
+test('Ekran ekle: Nöbetçi taraması ve Akışı kaydet (yan yana eşit, tek eylem); paket yükleme ve yapay zekâ görünür bölümde (açılır değil); üst not yok; istek metni tek kaynaktan; 390px taşma yok', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   // Ekranlar sayfasının düğmesi "Ekran ekle" (sayfanın adıyla aynı); eski "Sayfa ekle" adı hiçbir yerde kalmaz.
@@ -154,11 +154,11 @@ test('Ekran ekle: Ekranı tara / hızlı test ve Akışı kaydet (yan yana eşit
   await expect(page.getByText('Sayfa ekle')).toHaveCount(0);
   await page.goto('/#/ekranlar/yeni');
   // Sıra: en üstte "Paket yükle" (sürükle bırak) → tek satırda eşit boyutlu üç yol (Ekranı tara / hızlı test, Akışı kaydet, Yapay zekâ ile oluştur). Eski "Ne oluşturulsun?",
-  // "Ya da: Hızlı test", üst notlar ve genel senaryo / başlangıç adımı seçimi yok.
+  // "Ya da: Nöbetçi taraması", üst notlar ve genel senaryo / başlangıç adımı seçimi yok.
   const ana = page.locator('section.ekleme-secenekleri .ekleme-kutusu');
   const ileri = page.locator('section.ileri-duzey-bolumu');
   await expect(page.getByRole('heading', { name: 'Ya da başka bir yolla ekleyin' })).toBeVisible();
-  await expect(ana.locator('h3')).toHaveText(['Ekranı tara / hızlı test', 'Akışı kaydet', 'Yapay zekâ ile oluştur', 'Boş başla']);
+  await expect(ana.locator('h3')).toHaveText(['Nöbetçi taraması', 'Akışı kaydet', 'Yapay zekâ ile oluştur', 'Boş başla']);
   await expect(page.locator('details.ileri-duzey')).toHaveCount(0);
   await expect(ileri).toBeVisible();
   await expect(ileri.getByRole('heading', { name: 'Paket yükle', exact: true })).toBeVisible();
@@ -350,22 +350,24 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
   await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
-  // Model eylemleri tek menüde: her seçenekte bir satırlık açıklama; klavyeyle gezilir.
+  // Model eylemleri tek menüde (yalnız modeli güncelleyenler): her seçenekte bir satırlık açıklama; klavyeyle gezilir.
   const menuDugmesi = page.getByRole('button', { name: /^Modeli güncelle/ });
   await menuDugmesi.click();
   await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
   const secenekler = page.getByRole('menuitem');
-  await expect(secenekler).toHaveText([/^Paket yükle/, /^Hızlı testle güncelle/, /^Ekranı tara/, /^Akışı kaydet/, /^Tekrar analiz et/, /^Yapay zekâ ile yorumla/]);
+  await expect(secenekler).toHaveText([/^Nöbetçi taraması/, /^Paket yükle/, /^Ekranı tara/, /^Akışı kaydet/]);
   await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveAccessibleDescription(/Sayfa değiştiyse/);
-  await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Hızlı testle güncelle' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
   await page.keyboard.press('End');
-  await expect(page.getByRole('menuitem', { name: 'Yapay zekâ ile yorumla' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'Akışı kaydet' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menuDugmesi).toBeFocused();
   await expect(secenekler.first()).toBeHidden();
-  await menuDugmesi.click();
+  // Modeli değiştirmeyen yapay zekâ yardımcıları "⋯" (ekran işlemleri) menüsünde.
+  await page.getByRole('button', { name: /^Ekran işlemleri/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Yapay zekâ ile yorumla' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Tekrar analiz et' }).click();
   const d = page.locator('dialog[open]');
   await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
@@ -382,7 +384,7 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await page.close();
 });
 
-test('genel senaryo sayfası: "Modeli güncelle" menüsü Paket yükle / Akışı kaydet / Tekrar analiz et / Yapay zekâ ile yorumla (Ekranı tara yok); alt modelde yalnız Paket yükle', async () => {
+test('genel senaryo sayfası: "Modeli güncelle" menüsü Paket yükle / Akışı kaydet (Ekranı tara yok; yapay zekâ yardımcıları ⋯ menüsünde); alt modelde yalnız Paket yükle', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>;
@@ -395,7 +397,7 @@ test('genel senaryo sayfası: "Modeli güncelle" menüsü Paket yükle / Akış�
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortak.id)}`);
   const menuDugmesi = page.getByRole('button', { name: /^Modeli güncelle/ });
   await menuDugmesi.click();
-  await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/, /^Akışı kaydet/, /^Tekrar analiz et/, /^Yapay zekâ ile yorumla/]);
+  await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/, /^Akışı kaydet/]);
   await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveCount(0);
   // "Akışı kaydet": başlangıç ekranı sorulur (genel senaryoyu kullanan ekran önde); başlangıç sayfası o ekranın adresi olur.
   await page.getByRole('menuitem', { name: 'Akışı kaydet' }).click();
@@ -435,7 +437,7 @@ test('genel senaryo: "Tekrar analiz et" başlangıç ekranını sorar; istek met
   const { page, istekler } = await arayuz();
   const ortak = ((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>).find((e) => e.anahtar === ONAY_AKIS_ANAHTARI)!;
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortak.id)}`);
-  await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+  await page.getByRole('button', { name: /^Ekran işlemleri/ }).click();
   await page.getByRole('menuitem', { name: 'Tekrar analiz et' }).click();
   const d = page.locator('dialog[open]');
   const baslangic = d.getByLabel('Başlangıç ekranı');
@@ -514,7 +516,9 @@ test('istek metni diyalogları (tekrar analiz, yapay zekâ ile yorumla): "Metni 
       await page.setViewportSize({ width: genislik, height: 900 });
       await page.goto('/#/ekranlar');
       await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
-      await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+      // Ekran sayfası açılmadan liste sayfasındaki "⋯" düğmelerine basılmasın.
+      await expect(page.getByRole('button', { name: /^Modeli güncelle/ })).toBeVisible();
+      await page.getByRole('button', { name: /^Ekran işlemleri/ }).click();
       await page.getByRole('menuitem', { name: dugme }).click();
       const d = page.locator('dialog[open]');
       if (olustur) await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();

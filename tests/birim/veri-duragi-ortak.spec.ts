@@ -94,7 +94,7 @@ test.describe('motor (127.0.0.1)', () => {
   });
 });
 
-test.describe('hızlı test ve normal koşu (127.0.0.1)', () => {
+test.describe('Nöbetçi taraması ve normal koşu (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Veri-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
@@ -161,7 +161,7 @@ test.describe('hızlı test ve normal koşu (127.0.0.1)', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('A: varsayılan tarihli alana yazılan değer, sonradan başka alanın sorgusu ezse de sayfada kalır (hızlı test → kayıt → normal koşu)', async () => {
+  test('A: varsayılan tarihli alana yazılan değer, sonradan başka alanın sorgusu ezse de sayfada kalır (Nöbetçi taraması → kayıt → normal koşu)', async () => {
     test.setTimeout(600_000);
     const id = String((await basarili('/platform/hizli-test/baslat', {
       projeId, ortamId, hedef: '/tarihli/', ekranAdi: 'Kayıt formu', izin: 'evet', cumle: 'Gönder düğmesine bas, "Kayıt tamam" görünce bitir'

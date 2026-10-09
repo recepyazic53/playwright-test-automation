@@ -264,5 +264,5 @@ export function tabloTaslagiKur(g) {
     t.baglar[a.anahtar] = { tablo: t.tabloAdi, sutun: ad, basvuru: degerBasvurusuYaz(t.tabloAdi, ad) };
   }
   if (!tablolar.size) return null;
-  return { satirAdi: adTemizle(g.baslik || 'Hızlı test') || 'Hızlı test', tablolar: [...tablolar.values()] };
+  return { satirAdi: adTemizle(g.baslik || 'Nöbetçi taraması') || 'Nöbetçi taraması', tablolar: [...tablolar.values()] };
 }

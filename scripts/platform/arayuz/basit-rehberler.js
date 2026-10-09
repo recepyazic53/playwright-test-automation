@@ -18,10 +18,10 @@ export const BASIT_MOD_REHBERLERI = {
     ]
   },
   'hizli-test': {
-    baslik: 'Hızlı test',
+    baslik: 'Nöbetçi taraması',
     adimlar: [
       {
-        baslik: 'Hızlı test',
+        baslik: 'Nöbetçi taraması',
         metin: ['Sayfanın adresini verin; Nöbetçi alanları bulur, eksik veriyi size sorar ve testi sizinle birlikte kurar. Altı durak vardır: Başlat, Keşfet, Veri durağı, Adım adım, Bitiş koşulu, Kaydet.',
           'Değer uydurulmaz: her alanı siz yazarsınız ya da “Doldur” ile test verisi tablosundan seçersiniz.']
       },

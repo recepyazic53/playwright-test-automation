@@ -66,7 +66,7 @@ table.kisi{border-collapse:collapse}table.kisi th{font-size:12px;text-align:left
 
 type Alan = { ad: string | null; etiket: string | null; mevcut?: string | null; hazir?: boolean };
 
-test.describe('Hızlı test: alan etiketleri ve hazır değerler (127.0.0.1)', () => {
+test.describe('Nöbetçi taraması: alan etiketleri ve hazır değerler (127.0.0.1)', () => {
   let sunucu: Awaited<ReturnType<typeof yerelSunucu>>;
   let tarayici: Browser;
   let page: Page;

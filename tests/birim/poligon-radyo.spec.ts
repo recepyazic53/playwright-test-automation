@@ -47,7 +47,7 @@ test.describe('poligon', () => {
   test.beforeAll(async () => { test.setTimeout(120_000); po = await poligonOrtami(); });
   test.afterAll(async () => { await po?.kapat(); });
 
-  test('rapor (olumsuz): id\'siz "Biçim" radyosu CSV seçilir; hızlı test, doğrulama ve normal koşu bicim=csv gönderir', async () => {
+  test('rapor (olumsuz): id\'siz "Biçim" radyosu CSV seçilir; Nöbetçi taraması, doğrulama ve normal koşu bicim=csv gönderir', async () => {
     test.setTimeout(400_000);
     const r = await ekranKos(po, plan('/rapor'));
     expect(r.asamalar, JSON.stringify(r.bulgular)).toMatchObject({ veri: true, eylem: true, bitis: true, dogrulama: true, kayit: true, normal: true, sayac: true });

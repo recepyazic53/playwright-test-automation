@@ -256,7 +256,7 @@ test.describe('Basit mod (127.0.0.1)', () => {
     await tam.getByRole('button', { name: /Test işlemleri/ }).click();
     await menu.getByRole('menuitem', { name: 'Düzenle' }).click();
     await expect(page).toHaveURL(new RegExp(`#/hizli-test/duzenle/${tamEkran}$`));
-    await expect(page.getByRole('heading', { name: 'Hızlı test: Tam form (düzenle)' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Nöbetçi taraması: Tam form (düzenle)' })).toBeVisible();
     await page.goto('/#/testlerim');
     // Gelişmiş'te oluşturulanlar: yalnız sayı + "Gelişmiş'te göster".
     const not = page.locator('.gelismis-testler-notu');
@@ -362,7 +362,7 @@ test.describe('Basit mod (127.0.0.1)', () => {
     }
     // Yeni test: Hızlı test sihirbazı (Başlat durağı).
     await page.goto('/#/hizli-test');
-    await expect(page.getByRole('heading', { name: 'Yeni hızlı test' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Yeni Nöbetçi taraması' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Nöbetçi sayfadaki düğmelere basabilir mi?' })).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();

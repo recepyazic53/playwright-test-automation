@@ -1631,7 +1631,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     a.bagimlilik = { alan: String(u.id), ...(harita ? { secenekHaritasi: harita } : {}), ...(yuklenmeMs ? { yuklenmeMs } : {}) };
     a.secenekler = null;
     a.seceneklerDurumu = 'kismi';
-    a.seceneklerKaynagi = 'hızlı test keşfi (bağlı liste)';
+    a.seceneklerKaynagi = 'Nöbetçi taraması keşfi (bağlı liste)';
     a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Seçenekleri "')),
       `Seçenekleri "${etiketMetni(u.etiket, u.id)}" seçimine bağlı (bağlı liste keşfi${harita ? `; ${Object.keys(harita).length} üst değer denendi` : ''}).`];
   }
@@ -1644,7 +1644,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     a.tetik = { alan: String(u.id), olay: olay === 'belirdi' ? 'belirdi' : 'doldu' };
     const ustEtiket = etiketMetni(u.etiket, u.id);
     a.notlar = [...(Array.isArray(a.notlar) ? a.notlar : []).filter((x) => !String(x).startsWith('Tetik: ')),
-      `Tetik: "${ustEtiket}" girilince ${olay === 'belirdi' ? 'belirir' : 'seçenekleri gelir'} (hızlı test; koşu bunu bekler).`];
+      `Tetik: "${ustEtiket}" girilince ${olay === 'belirdi' ? 'belirir' : 'seçenekleri gelir'} (Nöbetçi taraması; koşu bunu bekler).`];
   }
   for (const m of envanter.zincirBulgulari ?? []) {
     const t = temizMetin(m, sayac, 400);

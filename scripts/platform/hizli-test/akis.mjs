@@ -496,12 +496,14 @@ export function eksikAlanlar(alanlar, degerler) {
 }
 
 /**
- * Hızlı testin önerdiği senaryo başlığı: "<ekran adı> — hızlı test"; ad zaten "hızlı test" içeriyorsa ek konmaz ("Başvuru hızlı
+ * Hızlı testin önerdiği senaryo başlığı: "<ekran adı> — Nöbetçi taraması"; ad zaten "Nöbetçi taraması" içeriyorsa ek konmaz ("Başvuru hızlı
  * testi — hızlı test" olmasın). @param {string} ekranAdi @returns {string}
  */
 export function hizliSenaryoBasligi(ekranAdi) {
   const ad = String(ekranAdi || '').trim();
-  return ad.toLocaleLowerCase('tr').includes('hızlı test') ? ad : `${ad} — hızlı test`;
+  // Ad zaten 'Nöbetçi taraması' (ya da eski adıyla 'hızlı test') içeriyorsa ek konmaz.
+  const kucuk = ad.toLocaleLowerCase('tr');
+  return kucuk.includes('nöbetçi taraması') || kucuk.includes('hızlı test') ? ad : `${ad} — Nöbetçi taraması`;
 }
 
 /**
@@ -515,5 +517,5 @@ export function sayfaUyarisi(hedefYol, anlikYol) {
     try { return new URL(String(m || '/'), 'http://x.invalid').pathname.replace(/\/+$/, '') || '/'; } catch { return String(m || '/'); }
   };
   if (!hedefYol || !anlikYol || yol(hedefYol) === yol(anlikYol)) return null;
-  return `İstediğiniz sayfa (${yol(hedefYol)}) açılmadı: site ${yol(anlikYol)} sayfasına yönlendirdi. Giriş, kullanıcı ya da bağlam seçimi ya da yetki gerekiyor olabilir. Bu sayfada devam ederseniz alanlar ve düğmeler bu sayfadan seçilir; yanlış sayfaysa "Hızlı testi iptal et" deyip önce girişi / seçimi tamamlayın.`;
+  return `İstediğiniz sayfa (${yol(hedefYol)}) açılmadı: site ${yol(anlikYol)} sayfasına yönlendirdi. Giriş, kullanıcı ya da bağlam seçimi ya da yetki gerekiyor olabilir. Bu sayfada devam ederseniz alanlar ve düğmeler bu sayfadan seçilir; yanlış sayfaysa "Nöbetçi taramasını iptal et" deyip önce girişi / seçimi tamamlayın.`;
 }

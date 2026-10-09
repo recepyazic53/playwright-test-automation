@@ -250,7 +250,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
 | (düğmesiz adım) | `aksiyonlar`'da tıklama yoksa `basariGostergesi` / `uyarilar` alanlar doldurulduktan (alanın `doldurucuParametreleri.tus`'una — ör. `Tab` — basıldıktan) sonra denetlenir: alandan çıkınca çıkan mesajlar için (akış diyagramında alan grubundan sonra gelen beklenen mesaj). |
 | `ekranGoruntusu` | `true`: "Ekran görüntüsü al" işareti. Adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır; diğer seçimlerde etkisizdir. |
-| `bitisKosulu` | (isteğe bağlı; Hızlı test yazar) `{ "devam": [metin] }` — en çok 10 "Devam" metni (ör. `"Hesaplanıyor…"`). Başarı göstergesi ("Bitti" mesajları / adres) ister. Koşucu süre dolduğunda bir "Devam" metni hâlâ görünüyorsa bir kez daha (en çok 60 sn) bekler; başarı göstergesi ya da kabul edilen uyarı ("Hata" metinleri, `uyarilar`) görünmezse adım **"Bitiş mesajı görülmedi"** ile düşer (son görülen Devam metni iletide). Yazılmazsa davranış eskisi gibidir. |
+| `bitisKosulu` | (isteğe bağlı; Nöbetçi taraması yazar) `{ "devam": [metin] }` — en çok 10 "Devam" metni (ör. `"Hesaplanıyor…"`). Başarı göstergesi ("Bitti" mesajları / adres) ister. Koşucu süre dolduğunda bir "Devam" metni hâlâ görünüyorsa bir kez daha (en çok 60 sn) bekler; başarı göstergesi ya da kabul edilen uyarı ("Hata" metinleri, `uyarilar`) görünmezse adım **"Bitiş mesajı görülmedi"** ile düşer (son görülen Devam metni iletide). Yazılmazsa davranış eskisi gibidir. |
 
 ### Çerçeve (iframe) içindeki alanlar
 
@@ -499,7 +499,7 @@ sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür / o düğmeden
 kimliği ve ek bilgileri korunur; kayıtta olmayan alanlar yeni modelde yoktur (Bulgular'da "kaldırıldı", reddedilebilir);
 artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarılıp bilinmeyenlere yazılır.
 
-### Hızlı test (sihirbaz; `#/hizli-test`)
+### Nöbetçi taraması (sihirbaz; `#/hizli-test`)
 
 Basit modun "+ Yeni test"i; Gelişmiş modda Oluştur menüsünden ve Ekran ekle sayfasından da açılır. Altı durak:
 

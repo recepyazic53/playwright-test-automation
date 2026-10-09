@@ -42,7 +42,7 @@ function gruplar(ayarBolumleri) {
     {
       grup: 'Ekran testleri',
       ogeler: [
-        { baslik: 'Hızlı test', aciklama: 'Adresi verin; Nöbetçi adım adım sorarak ekranı ve senaryoyu kursun', ikonAd: 'simsek', git: () => '#/hizli-test' },
+        { baslik: 'Nöbetçi taraması', aciklama: 'Adresi verin; Nöbetçi adım adım sorarak ekranı ve senaryoyu kursun', ikonAd: 'simsek', git: () => '#/hizli-test' },
         { baslik: 'Senaryo', aciklama: 'Bir ekranda yeni test durumu', ikonAd: 'liste', git: ekranSec },
         { baslik: 'Ekran', aciklama: 'Tara, akışı kaydet ya da yapay zekâ ile oluştur', ikonAd: 'ekran', git: () => '#/ekranlar/yeni' },
         { baslik: 'Ekranı tara', aciklama: 'Nöbetçi sayfayı kendisi okusun', ikonAd: 'ara', git: () => '#/ekranlar/yeni/tara' },

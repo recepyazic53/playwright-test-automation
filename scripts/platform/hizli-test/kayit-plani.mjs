@@ -342,7 +342,7 @@ export function planKur(g0) {
     if (s) degerler[k] = { deger: s.kod, kaynak: 'sayfa' };
   }
   const t = tabloTaslagiKur({ baslik: g.baslik, alanlar: g.alanlar.filter((a) => !zincir.alanlar.has(String(a.anahtar))), degerler, ekGizliAdlar: g.ekGizliAdlar });
-  const satirAdi = adTemizle(g.baslik || 'Hızlı test') || 'Hızlı test';
+  const satirAdi = adTemizle(g.baslik || 'Nöbetçi taraması') || 'Nöbetçi taraması';
   /** @type {PlanTablosu[]} */
   const tablolar = [];
   const etiketi = (/** @type {string} */ anahtar) => String(g.alanlar.find((a) => a.anahtar === anahtar)?.etiket ?? anahtar);
@@ -583,7 +583,7 @@ function planYazIslem(vt, projeId, plan, secim, bilgi) {
     if (sec.islem === 'atla') continue;
     if (!['yeni', 'yeniAd', 'birlestir', 'bagla', 'sutunEkle'].includes(sec.islem)) throw new Error(`"${t.ad}" için bilinmeyen seçim: ${sec.islem}.`);
     const mevcutlar = tablolariListele(vt, projeId, sec.islem === 'bagla' ? { cozulsun: true } : {});
-    const kaynak = { tur: 'kayit', olusturan: 'Nöbetçi hızlı test', ekran: bilgi.ekranAdi.slice(0, 120), yazilma: new Date().toISOString() };
+    const kaynak = { tur: 'kayit', olusturan: 'Nöbetçi taraması', ekran: bilgi.ekranAdi.slice(0, 120), yazilma: new Date().toISOString() };
     const kayitSatiri = (/** @type {Set<string>} */ kullanilan, /** @type {Record<string, string | null>} */ d, /** @type {string} */ temel = plan.satirAdi) => {
       let ad = temel;
       for (let i = 2; kullanilan.has(kucuk(ad)); i++) ad = `${temel.slice(0, 55)} ${i}`;
@@ -732,7 +732,7 @@ export function veriBekleyenSatirlariYaz(vt, projeId, g) {
       grup.uyeler.push({ anahtar: x.anahtar, etiket: x.etiket, sutun: yer.sutun });
     }
     const sonuc = [];
-    const kaynak = { tur: 'kayit', olusturan: 'Nöbetçi hızlı test', ekran: g.ekranAdi.slice(0, 120), yazilma: new Date().toISOString() };
+    const kaynak = { tur: 'kayit', olusturan: 'Nöbetçi taraması', ekran: g.ekranAdi.slice(0, 120), yazilma: new Date().toISOString() };
     for (const grup of gruplar.values()) {
       const mevcut = tablolariListele(vt, projeId).find((t) => kucuk(t.ad) === kucuk(grup.tablo) && !t.baglam);
       const kullanilan = new Set((mevcut?.satirlar ?? []).map((r) => kucuk(r.ad)));
@@ -880,7 +880,7 @@ export function ikiliKapsam(boyutlar, enCok) {
 export function senaryoOnerileri(plan, baslik, s = {}) {
   const enCok = Number.isInteger(s.enCok) && Number(s.enCok) > 0 ? Number(s.enCok) : VARSAYILAN_ONERI_SAYISI;
   /** @type {import('./kayit-plani.d.mts').SenaryoOnerisi[]} */
-  const liste = [{ indeks: 0, baslik, gerekce: 'Hızlı testte yaptığınız ve kaydettiğiniz akış', varsayilanSecili: true, alt: null, veriGerekli: [], eksikAlanlar: [] }];
+  const liste = [{ indeks: 0, baslik, gerekce: 'Nöbetçi taramasıte yaptığınız ve kaydettiğiniz akış', varsayilanSecili: true, alt: null, veriGerekli: [], eksikAlanlar: [] }];
   const alanlar = s.alanlar ?? [];
   /** Aynı alan + ad bir kez. @param {Array<{ anahtar: string; etiket: string }>} l */
   const tekEksik = (l) => [...new Map(l.map((x) => [`${x.anahtar}\u0001${x.etiket}`, x])).values()];

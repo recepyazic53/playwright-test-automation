@@ -275,11 +275,6 @@ async function ekranAyrintisi(icerik, s) {
   const d = await api(`/platform/ekran?projeId=${encodeURIComponent(s.proje.id)}&id=${encodeURIComponent(s.ekranId)}`);
   const e = d.ekran;
   const devreDisi = e.durum === 'devre_disi';
-  const menu = ekranMenusu({
-    proje: s.proje, idler: s.idler,
-    ekran: { ...e, modelTuru: s.listeKaydi?.modelTuru ?? d.modelTuru, modelSurumu: d.surum, urlYolu: s.listeKaydi?.urlYolu ?? null },
-    sonra: () => { location.hash = '#/ekranlar'; yenile(); }
-  });
   const adres = `#/ekranlar/e/${encodeURIComponent(e.id)}`;
   const paketYukle = () => { location.hash = `${adres}/yukle`; };
   // Model eylemleri tek menüde ("Modeli güncelle ▾"; modeli yoksa "Model ekle ▾"): her seçenekte bir satırlık "ne zaman kullanılır".
@@ -288,24 +283,31 @@ async function ekranAyrintisi(icerik, s) {
   // ama bir BAŞLANGIÇ EKRANININ adresinden kaydedilir ve tekrar analiz edilir (başlangıç ekranı sorulur).
   const altModel = d.modelTuru === 'altModel';
   const ortakAkis = d.modelTuru === 'ortakAkis' ? (d.ortakAkis || { baslangicEkranlari: [], sonBaslangicEkranId: null }) : null;
+  const menu = ekranMenusu({
+    proje: s.proje, idler: s.idler,
+    // Modeli değiştirmeyen yapay zekâ yardımcıları "Modeli güncelle" menüsünde değil, burada.
+    ekOgeler: [
+      modelVar && !altModel ? { ikon: 'yenile', metin: 'Tekrar analiz et', aciklama: ortakAkis ? 'Genel senaryoyu yapay zekâ aracınızla, başlangıç ekranının adresinden yeniden inceletmek için istek metni.' : 'Modeli yapay zekâ aracınızla yeniden inceletmek için istek metni (bağlam profilleriyle).',
+        fn: () => tekrarAnalizDiyalogu({ proje: s.proje, ekran: e, baglamProfilleri: d.baglamProfilleri, sonSecim: d.analiz.sonBaglamProfilleri, paketYukle, ortakAkis }) } : null,
+      modelVar && !altModel ? { ikon: 'simsek', metin: 'Yapay zekâ ile yorumla', aciklama: 'Model, bulgular ve senaryo özetlerini yorum için dosyaya yazar (gizli değer yok).',
+        fn: () => claudeDosyasiOlustur({ proje: s.proje, ekranId: e.id, tur: 'yorumla' }, null) } : null
+    ],
+    ekran: { ...e, modelTuru: s.listeKaydi?.modelTuru ?? d.modelTuru, modelSurumu: d.surum, urlYolu: s.listeKaydi?.urlYolu ?? null },
+    sonra: () => { location.hash = '#/ekranlar'; yenile(); }
+  });
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
-      { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
       // Hızlı testin düzenleme kipi: mevcut modelle başlar; başka bir dalda (ör. önceki sayfadaki seçime göre) beliren alanlar eklenir.
-      modelVar && !altModel && !ortakAkis ? { ikon: 'simsek', metin: 'Hızlı testle güncelle', aciklama: 'Başka bir seçimle açılan alanlar modelde yoksa: akışı o seçimle yürütürsünüz, yeni alanlar eklenir.',
+      modelVar && !altModel && !ortakAkis ? { ikon: 'simsek', metin: 'Nöbetçi taraması', aciklama: 'Nöbetçi ekranı gezer (seçimle açılan alanlar dahil); farkları gösterir, onayınızla günceller.',
         fn: () => { location.hash = `#/hizli-test/duzenle/${encodeURIComponent(e.id)}`; } } : null,
+      { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
       altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
       altModel ? null : {
         ikon: 'video', metin: 'Akışı kaydet',
         aciklama: ortakAkis ? 'Başlangıç ekranının adresinden: o ekranda gerekli adımları, sonra genel senaryoyu siz yürütürsünüz; Nöbetçi kaydeder.' : 'Çok adımlı / koşullu akışlarda: işlemi siz yaparsınız, Nöbetçi adımları kaydeder.',
         fn: () => kayitBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar })
-      },
-      modelVar && !altModel ? 'ayrac' : null,
-      modelVar && !altModel ? { ikon: 'yenile', metin: 'Tekrar analiz et', aciklama: ortakAkis ? 'Genel senaryoyu yapay zekâ aracınızla, başlangıç ekranının adresinden yeniden inceletmek için istek metni.' : 'Modeli yapay zekâ aracınızla yeniden inceletmek için istek metni (bağlam profilleriyle).',
-        fn: () => tekrarAnalizDiyalogu({ proje: s.proje, ekran: e, baglamProfilleri: d.baglamProfilleri, sonSecim: d.analiz.sonBaglamProfilleri, paketYukle, ortakAkis }) } : null,
-      modelVar && !altModel ? { ikon: 'simsek', metin: 'Yapay zekâ ile yorumla', aciklama: 'Model, bulgular ve senaryo özetlerini yorum için dosyaya yazar (gizli değer yok).',
-        fn: () => claudeDosyasiOlustur({ proje: s.proje, ekranId: e.id, tur: 'yorumla' }, null) } : null
+      }
     ]
   });
   const agac = d.agac || (d.altModel ? d.altModel.agac : null);

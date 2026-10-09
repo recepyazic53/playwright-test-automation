@@ -1,4 +1,4 @@
-// DAL BİRLEŞTİRME — "Hızlı testle güncelle" başka bir dalın alanlarını silmez (dal-birlestirme.mjs). Sahte sayfa (/plaka-dal/): Kod "X"
+// DAL BİRLEŞTİRME — "Nöbetçi taramasıyla güncelle" başka bir dalın alanlarını silmez (dal-birlestirme.mjs). Sahte sayfa (/plaka-dal/): Kod "X"
 // içeriyorsa Sorgula'dan sonra "Yıl", içermiyorsa "Belge no" belirir. Önce X'li dal hızlı testle kaydedilir; sonra aynı ekran X'siz dalla
 // güncellenir. Modelde iki alan da "ekranda görünürse" koşuluyla durur; iki senaryo da koşar (her biri kendi dalının alanını yazar).
 // Güvenlik: yalnız 127.0.0.1'deki sahte sayfa; geçici veritabanı. Değerler UYDURMADIR.
@@ -35,7 +35,7 @@ test('saf: görünmeyen eski alan eski adımına (komşusunun ardına) koşullu 
   expect(y2.kosullar).toBeUndefined();
 });
 
-test.describe('hızlı testle güncelleme iki dalı birleştirir (127.0.0.1)', () => {
+test.describe('Nöbetçi taramasıyla güncelleme iki dalı birleştirir (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Dal-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;

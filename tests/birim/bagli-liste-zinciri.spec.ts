@@ -134,7 +134,7 @@ test.describe('otomatik tarama', () => {
   });
 });
 
-test.describe('hızlı test', () => {
+test.describe('Nöbetçi taraması', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Zincir-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
@@ -233,7 +233,7 @@ test.describe('hızlı test', () => {
     await bekle(id, ['kaydet']);
     // Senaryo önerileri: bağlı listeler gözlenen geçerli bir yolla BİRLİKTE değişir (il değişip ilçe / mahalle / sokak eski kalmaz); zincirin
     // kökü farklı her satırı (aynı kökten ikinci satır yok) tek başına öneri değil, bağımsız seçimi (Yapı tarzı) değişen önerilere katılır.
-    const ozet = ((await basarili('/platform/hizli-test/ozet', { id, baslik: 'Adres — hızlı test' })).ozet as Nesne);
+    const ozet = ((await basarili('/platform/hizli-test/ozet', { id, baslik: 'Adres — Nöbetçi taraması' })).ozet as Nesne);
     const oneriler = (ozet.senaryolar as Nesne[]).slice(1);
     const degisim = (x: Nesne): Record<string, string> => Object.fromEntries((x.alt?.degisiklikler ?? []).map((d: Nesne) => [d.etiket, d.deger]));
     expect(oneriler.length, JSON.stringify(ozet.senaryolar)).toBeGreaterThan(0);
@@ -245,7 +245,7 @@ test.describe('hızlı test', () => {
     expect(degisim(adana), JSON.stringify(ozet.senaryolar)).toMatchObject({ 'İl': 'Adana', 'İlçe': 'Seyhan', 'Mahalle': 'Reşatbey', 'Sokak': '2. Sokak' });
     expect(adana.gerekce).toContain('adres: farklı il');
     expect(adana.baslik).toContain('İl: Adana / Seyhan / Reşatbey / 2. Sokak');
-    const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Adres — hızlı test', senaryoIndeksleri: [adana.indeks] });
+    const k = await basarili('/platform/hizli-test/kaydet', { id, baslik: 'Adres — Nöbetçi taraması', senaryoIndeksleri: [adana.indeks] });
     // Test verisi: zincir TEK tablo (sütun = halka, satır = gözlenen geçerli kombinasyon); halkalar ayrı ekran listesi değil.
     const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
     const zt = tablolar.find((t) => t.ad === 'İl - İlçe - Mahalle - Sokak') as Nesne;

@@ -47,7 +47,7 @@ test('kural (saf): bekleyen hücreler tablonun güncel hâlinden; gizli sütunda
   expect(veriBekliyorMesaji([{ etiket: 'X' }, { etiket: 'Y' }, { etiket: 'X' }])).toBe('Şu alanların değeri yok: X, Y — test verisinde doldurun.');
 });
 
-test.describe('hızlı test özeti → veri bekliyor → test verisi → koşu (127.0.0.1)', () => {
+test.describe('Nöbetçi taraması özeti → veri bekliyor → test verisi → koşu (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Bekliyor-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;

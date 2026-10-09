@@ -193,9 +193,9 @@ function eklemeKutulari(s, secenek) {
   // Genel senaryoda "Boş başla" en basit yol: ilk kutu (tara / kaydet bir başlangıç ekranı ister).
   const kutular = [
     ortakMi(s) && !yalnizYz ? bosBaslaKutusu(s, kutu) : null,
-    // Yeni ekranda "Ekranı tara / hızlı test": adres → keşfet → eksikleri sor → ekranı ve senaryoyu kaydet (#/hizli-test sihirbazı).
+    // Yeni ekranda "Nöbetçi taraması": adres → keşfet → eksikleri sor → ekranı ve senaryoyu kaydet (#/hizli-test sihirbazı).
     // Genel senaryo ve tekrar analiz sihirbazı kullanmaz: eski tarama penceresi açılır.
-    s.tara && !yalnizYz ? kutu('tara-kutusu', 'ara', analiz || ortakMi(s) || s.ekran ? 'Ekranı tara' : 'Ekranı tara / hızlı test',
+    s.tara && !yalnizYz ? kutu('tara-kutusu', 'ara', analiz || ortakMi(s) || s.ekran ? 'Ekranı tara' : 'Nöbetçi taraması',
       h('p', {}, analiz || ortakMi(s) || s.ekran ? 'Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.'
         : 'Adresi verin, gerisini Nöbetçi yapsın: alanları bulur, eksik veriyi sorar, ekranı ve senaryoyu kaydeder. Basit ve tek adımlı sayfalar için.'),
       analiz || ortakMi(s) || s.ekran
@@ -260,7 +260,7 @@ function bosBaslaKutusu(s, kutu) {
 // Aynı adlı tablo varken seçim yapılmadan kabul edilemez; onaylanmayan hiçbir şey yazılmaz.
 // ---------------------------------------------------------------------------------------
 
-const TV_KAYNAK = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı', hizli: 'Hızlı test' };
+const TV_KAYNAK = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı', hizli: 'Nöbetçi taraması' };
 const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi', servis: 'Servis verisi' };
 
 /**

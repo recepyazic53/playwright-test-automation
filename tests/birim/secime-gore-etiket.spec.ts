@@ -78,7 +78,7 @@ test.describe('keşif (127.0.0.1)', () => {
   });
 });
 
-test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
+test.describe('Nöbetçi taraması, kayıt ve normal koşu (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Etiket-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
@@ -278,7 +278,7 @@ test.describe('hızlı test, kayıt ve normal koşu (127.0.0.1)', () => {
     expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji).slice(0, 400)).toBe('basarili');
     expect(u.etiketliKayitlar.slice(once)).toEqual([{ tip: 'T', ad: 'Deneme Ticaret', kimlik: '1234567890', telefon: '2125550000', secenekNo: '1' }]);
   });
-  test('Özel dalı: tuşla yazılamayan takvimli doğum tarihi ve süslü (gizli) liste hızlı test → kayıt → normal koşuda doğru değerle; salt okunur hesaplanan alanlar sorulmaz, bitişte değerleriyle', async () => {
+  test('Özel dalı: tuşla yazılamayan takvimli doğum tarihi ve süslü (gizli) liste Nöbetçi taraması → kayıt → normal koşuda doğru değerle; salt okunur hesaplanan alanlar sorulmaz, bitişte değerleriyle', async () => {
     test.setTimeout(600_000);
     for (const son = Date.now() + 30_000; (await api('/platform/tarama/aktif')).is && Date.now() < son;) await new Promise((c) => setTimeout(c, 250));
     const id = String((await basarili('/platform/hizli-test/baslat', {

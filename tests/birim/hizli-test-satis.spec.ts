@@ -109,9 +109,9 @@ test.afterAll(async () => {
 });
 
 test.describe('saf kurallar', () => {
-  test('senaryo başlığı: ad "hızlı test" içeriyorsa ek konmaz (büyük / küçük harf, Türkçe)', () => {
-    expect(hizliSenaryoBasligi('Başvuru')).toBe('Başvuru — hızlı test');
-    expect(hizliSenaryoBasligi('Başvuru hızlı testi')).toBe('Başvuru hızlı testi');
+  test('senaryo başlığı: ad "Nöbetçi taraması" içeriyorsa ek konmaz (büyük / küçük harf, Türkçe)', () => {
+    expect(hizliSenaryoBasligi('Başvuru')).toBe('Başvuru — Nöbetçi taraması');
+    expect(hizliSenaryoBasligi('Başvuru Nöbetçi taramasını')).toBe('Başvuru Nöbetçi taramasını');
     expect(hizliSenaryoBasligi('BAŞVURU HIZLI TEST')).toBe('BAŞVURU HIZLI TEST');
   });
   test('1.12 yer tutucu seçenek: SEÇİNİZ / Seçiniz / Lütfen seçin / -- / ilk seçenek ""/"0"/"-1"; gerçek değerler değil', () => {
@@ -189,7 +189,7 @@ test.describe('saf kurallar', () => {
   });
 });
 
-test('hızlı test: çok adımlı satış formu baştan sona (1.12, 1.11, 1.14, 1.13/1.16, 1.9, 1.15, 1.10, 1.21 doğrulama, 1.17, 1.18, 1.8 arayüz)', async () => {
+test('Nöbetçi taraması: çok adımlı satış formu baştan sona (1.12, 1.11, 1.14, 1.13/1.16, 1.9, 1.15, 1.10, 1.21 doğrulama, 1.17, 1.18, 1.8 arayüz)', async () => {
   test.setTimeout(420_000);
   const b = await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/satis/', ekranAdi: 'Satış formu', izin: 'evet' });
   const id = String(b.id);
