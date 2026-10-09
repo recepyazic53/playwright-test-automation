@@ -4657,3 +4657,12 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
   * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
   :hover { scrollbar-color: var(--cizgi-2) transparent; }
 }
+/* Servis taban adresleri: ekleme düğmesi solda, görünüm seçimi sağ köşede, ikisi de kutunun içinde; "Servis bazında" tablosu kutuya sığar. */
+.taban-kutusu > .taban-arac-cubugu { margin: 0 0 12px; }
+.taban-servis-tablosu { table-layout: fixed; width: 100%; min-width: calc(36px + 15rem + 8rem + var(--ortam-sayisi, 2) * 11rem); }
+.taban-servis-tablosu .taban-sec-sutunu { width: 36px; }
+.taban-servis-tablosu .taban-servis-sutunu { width: 28%; }
+.taban-servis-tablosu .taban-ad-sutunu { width: 13%; }
+.taban-servis-tablosu th, .taban-servis-tablosu td { overflow-wrap: anywhere; vertical-align: top; }
+.taban-servis-tablosu select, .taban-servis-tablosu input[type="text"], .taban-servis-tablosu input:not([type]) { width: 100%; min-width: 0; box-sizing: border-box; text-overflow: ellipsis; }
+.taban-servis-tablosu .taban-servis-yolu { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
