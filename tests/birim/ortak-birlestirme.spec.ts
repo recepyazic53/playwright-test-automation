@@ -6,7 +6,7 @@ import { ekranKaydet, projeKaydet, senaryoGetir, senaryoKaydet, veritabaniniHazi
 import { yedekIceAktar, yedekOlustur } from '../../scripts/platform/yedek.mjs';
 import { hazirligiAt, iceAktarmaHazirla, iceAktarmaUygula } from '../../scripts/platform/ice-aktarma.mjs';
 import { ortakAlindiIsaretle, ortakDurum, ortakKlasorAyarla, ortakSurumDosyasi, ortakYayinla } from '../../scripts/platform/ortak-paylasim.mjs';
-import { birlestirmeSecimi, ucluFark } from '../../scripts/platform/ortak-birlestirme.mjs';
+import { birlestirmeSecimi, eklediklerimiSil, ucluFark } from '../../scripts/platform/ortak-birlestirme.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 const PAROLA = 'Ekip-Birlestirme-Parolasi-1';
@@ -47,15 +47,15 @@ test('üçlü fark: onların yenisi / değişikliği / çakışma / silme listel
     const farklar = ucluFark(b, taban.tablolar, onlar.tablolar, acikAnahtar(b));
     hazirligiAt(taban);
     const senaryolar = farklar.filter((f) => f.tablo === 'senaryolar').map((f) => [f.baslik, f.tur]).sort();
-    expect(senaryolar).toEqual([['S1', 'degisti'], ['S3', 'yeni'], ['S4', 'cakisma'], ['S5', 'silindi']]);
+    expect(senaryolar).toEqual([['S1', 'degisti'], ['S2', 'benimDegisti'], ['S3', 'yeni'], ['S4', 'cakisma'], ['S5', 'silindi']]);
     expect(farklar.find((f) => f.id === s1)?.alanlar.join(',')).toContain('icerik');
-    // Senaryolar dışında listelenen bir şey yok (benim değişikliklerim ve kişisel ayarlar listelenmez).
+    // Senaryolar dışında listelenen bir şey yok (kişiye / makineye özel ayarlar karşılaştırılmaz).
     expect(farklar.filter((f) => f.tablo !== 'senaryolar')).toEqual([]);
 
     // Çakışmada karar zorunlu.
     expect(() => birlestirmeSecimi(farklar, {})).toThrow('Çakışan kayıt için karar verin');
     const secim = birlestirmeSecimi(farklar, { [`senaryolar:${s3}`]: 'haric', [`senaryolar:${s4}`]: 'benimki' });
-    expect(secim).toEqual({ secimler: { senaryolar: [s1] }, dahil: 1, haric: 2 });
+    expect(secim).toEqual({ secimler: { senaryolar: [s1] }, silinecekler: [], dahil: 1, haric: 2, geriAlinan: 0 });
 
     iceAktarmaUygula(b, onlar, { secimler: secim.secimler }, { yapan: 'birim-test' });
     hazirligiAt(onlar);
@@ -68,6 +68,21 @@ test('üçlü fark: onların yenisi / değişikliği / çakışma / silme listel
     ortakAlindiIsaretle(b, 2);
     expect((await ortakYayinla(b, { yapan: 'recep', not: 'birleşik' })).surum).toBe(3);
     expect(ortakDurum(b)).toMatchObject({ benimSurum: 3, sonSurum: 3, guncelleVar: false });
+
+    // Güncelken (taban = son sürüm) yalnız benim yaptıklarım çıkar; dahil edilmeyen değişiklik son sürümdeki hâline döner, eklediğim silinir.
+    senaryoKaydet(b, { id: s1, projeId: proje, ekranId: ekran, baslik: 'S1', icerik: { adim: 99 } });
+    const s6 = senaryoKaydet(b, { projeId: proje, ekranId: ekran, baslik: 'S6', icerik: { adim: 6 } });
+    const v3 = await iceAktarmaHazirla(b, ortakSurumDosyasi(b, 3).yol, PAROLA, { medyaKlasoru: null });
+    const benim = ucluFark(b, v3.tablolar, v3.tablolar, acikAnahtar(b));
+    expect(benim.map((f) => [f.baslik, f.tur]).sort()).toEqual([['S1', 'benimDegisti'], ['S6', 'benimYeni']]);
+    const geri = birlestirmeSecimi(benim, { [`senaryolar:${s1}`]: 'haric', [`senaryolar:${s6}`]: 'haric' });
+    expect(geri).toMatchObject({ secimler: { senaryolar: [s1] }, silinecekler: [{ tablo: 'senaryolar', id: s6 }], geriAlinan: 2 });
+    iceAktarmaUygula(b, v3, { secimler: geri.secimler }, { yapan: 'birim-test' });
+    hazirligiAt(v3);
+    expect(eklediklerimiSil(b, geri.silinecekler, 'recep')).toBe(1);
+    expect(senaryoGetir(b, s1)?.icerik).toEqual({ adim: 10 });
+    expect(senaryoGetir(b, s6)).toBeUndefined();
+    expect(String(b.tek("SELECT aciklama FROM degisiklik_gecmisi WHERE varlik_id = ? AND islem = 'sil'", [s6])?.aciklama)).toContain('geri alındı');
     a.kapat();
     b.kapat();
   } finally {

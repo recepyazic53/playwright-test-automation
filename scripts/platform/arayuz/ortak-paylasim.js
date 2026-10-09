@@ -38,7 +38,10 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
     const not = h('input', { type: 'text', maxlength: '300', placeholder: 'Ne değişti? (isteğe bağlı)', 'aria-label': 'Sürüm notu' });
     yayinla.addEventListener('click', async () => {
       mesaj.temizle();
-      if (ortak.guncelleVar) { birlestirmeFormu(not.value); return; }
+      if (ortak.guncelleVar) { birlestirmeFormu(not.value, true); return; }
+      // Güncelken de yayından önce değişiklikleriniz gözden geçirilir (yanlışlıkla yapılan dahil edilmesin). Hiç sürüm alınmadıysa
+      // ya da bilinçli geri dönüşteyse doğrudan yayınlanır.
+      if (ortak.benimSurum > 0 && !ortak.geriDonus) { birlestirmeFormu(not.value, false); return; }
       try {
         const y = await mesgulIken(yayinla, 'Yayınlanıyor…', () => api('/platform/ortak/yayinla', { govde: { not: not.value } }));
         bildir(`v${y.kayit.surum} yayınlandı.`); window.dispatchEvent(new Event('ortak-durum-degisti'));
@@ -82,18 +85,22 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
   }
 
   /**
-   * Birleştir ve yayınla: parola → son sürüm hazırlanır → üçlü karşılaştırma → kararlar → uygula + yayınla.
-   * @param {string} notMetni
+   * Birleştir ve yayınla (güncel değilken) / Yayınla (güncelken): parola → son sürüm hazırlanır → üçlü karşılaştırma → kararlar → uygula + yayınla.
+   * @param {string} notMetni @param {boolean} birlestirme güncel değil (onun değişiklikleri de listelenir)
    */
-  function birlestirmeFormu(notMetni) {
+  function birlestirmeFormu(notMetni, birlestirme) {
     const isiAt = (/** @type {string | null} */ isId) => { if (isId) void api(`/platform/yedek/ice-aktar/${isId}/iptal`, { govde: {} }).catch(() => {}); };
     const kapat = (/** @type {string | null} */ isId) => { isiAt(isId); baglam.akisAlani.replaceChildren(); baglam.gizle(false); };
     const parola = parolaAlani('Ekibin ortak kasa parolası', { zorunlu: true, otomatik: 'current-password' });
     const m = mesajKutusu();
     const git = h('button', { type: 'submit', class: 'birincil' }, 'Karşılaştır');
     const form = h('form', { class: 'kart', novalidate: true },
-      h('h3', {}, ikon('uyari'), `Çakışma var: v${ortak.sonSurum} sizde yok`),
-      h('p', { class: 'soluk' }, `Siz en son ${ortak.benimSurum ? `v${ortak.benimSurum}` : 'hiçbir sürümü'} aldınız; o zamandan beri ekip v${ortak.sonSurum} yayınladı. Onun yaptıklarını görüp hangilerini dahil edeceğinizi seçersiniz; sizin değişiklikleriniz olduğu gibi kalır. Sonra birleşmiş hâl yeni sürüm olarak yayınlanır.`),
+      birlestirme
+        ? h('h3', {}, ikon('uyari'), `Çakışma var: v${ortak.sonSurum} sizde yok`)
+        : h('h3', {}, ikon('yukle'), 'Yayınlamadan önce: değişiklikleriniz'),
+      h('p', { class: 'soluk' }, birlestirme
+        ? `Siz en son ${ortak.benimSurum ? `v${ortak.benimSurum}` : 'hiçbir sürümü'} aldınız; o zamandan beri ekip v${ortak.sonSurum} yayınladı. Onun yaptıklarını ve sizin yaptıklarınızı görüp hangilerinin yeni sürüme gireceğini seçersiniz. Sonra birleşmiş hâl yeni sürüm olarak yayınlanır.`
+        : `v${ortak.sonSurum} sürümünden bu yana yaptıklarınız listelenir; yanlışlıkla yapılanın işaretini kaldırırsanız yeni sürüme girmez (sizde de geri alınır).`),
       m.kutu, parola.kapsayici,
       h('div', { class: 'dugmeler' }, git, h('button', { type: 'button', class: 'hayalet', onclick: () => kapat(null) }, 'Vazgeç')));
     form.addEventListener('submit', async (olay) => {
@@ -103,7 +110,7 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
       let isId = null;
       try {
         const f = await mesgulIken(git, 'Karşılaştırılıyor…', async () => {
-          const g = await api('/platform/ortak/guncelle', { govde: { parola: parola.girdi.value } });
+          const g = await api('/platform/ortak/guncelle', { govde: { parola: parola.girdi.value, ...(birlestirme ? {} : { surum: ortak.sonSurum }) } });
           isId = g.isId;
           for (;;) {
             const { is } = await api(`/platform/yedek/ice-aktar/${isId}`).catch((e) => ({ is: { durum: 'hata', mesaj: e.message } }));
@@ -123,8 +130,9 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
   }
 
   /**
-   * Onun değişiklikleri: yeni / değişen (dahil et, varsayılan işaretli), çakışma (onunki / benimki, seçim zorunlu), onda silinen (bilgi).
-   * @param {string} isId @param {{ farklar: Array<Record<string, any>>; sonSurum: number; tabanYok: boolean }} f @param {string} notMetni @param {() => void} vazgec
+   * Onun değişiklikleri: yeni / değişen (dahil et, varsayılan işaretli), çakışma (onunki / benimki, seçim zorunlu), onda silinen (bilgi);
+   * sizin yaptıklarınız: değiştirdiğiniz / eklediğiniz / sildiğiniz (dahil et, varsayılan işaretli; kaldırılırsa sizde de geri alınır).
+   * @param {string} isId @param {{ farklar: Array<Record<string, any>>; sonSurum: number; tabanYok: boolean; birlestirme: boolean }} f @param {string} notMetni @param {() => void} vazgec
    */
   function kararEkrani(isId, f, notMetni, vazgec) {
     const kararlar = new Map();
@@ -134,10 +142,12 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
     const onun = f.farklar.filter((x) => x.tur === 'yeni' || x.tur === 'degisti');
     const cakisan = f.farklar.filter((x) => x.tur === 'cakisma');
     const silinen = f.farklar.filter((x) => x.tur === 'silindi');
+    const benim = f.farklar.filter((x) => x.tur === 'benimDegisti' || x.tur === 'benimYeni' || x.tur === 'benimSildi');
+    const ONEK = { yeni: 'Eklendi: ', degisti: 'Değişti: ', benimDegisti: 'Değiştirdiniz: ', benimYeni: 'Eklediniz: ', benimSildi: 'Sildiniz: ' };
     const onunSatiri = (/** @type {Record<string, any>} */ x) => {
       const kutu = h('input', { type: 'checkbox', checked: true, 'aria-label': `Dahil et: ${ad(x)}` });
       kutu.addEventListener('change', () => kararlar.set(anahtar(x), kutu.checked ? 'dahil' : 'haric'));
-      return h('li', {}, h('label', { class: 'secenek' }, kutu, h('span', {}, h('b', {}, x.tur === 'yeni' ? 'Eklendi: ' : 'Değişti: '), ad(x), alanlar(x))));
+      return h('li', {}, h('label', { class: 'secenek' }, kutu, h('span', {}, h('b', {}, /** @type {Record<string, string>} */ (ONEK)[x.tur] || ''), ad(x), alanlar(x))));
     };
     const cakismaSatiri = (/** @type {Record<string, any>} */ x) => {
       const grup = `cakisma-${x.tablo}-${x.id}`;
@@ -151,14 +161,26 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
     };
     const m = mesajKutusu();
     const notGirdisi = h('input', { type: 'text', maxlength: '250', value: notMetni || '', placeholder: 'Ne değişti? (isteğe bağlı)', 'aria-label': 'Sürüm notu' });
-    const uygula = h('button', { type: 'button', class: 'birincil' }, ikon('yukle'), `Birleştir ve yayınla (v${f.sonSurum + 1})`);
+    const uygula = h('button', { type: 'button', class: 'birincil' }, ikon('yukle'), `${f.birlestirme ? 'Birleştir ve yayınla' : 'Yayınla'} (v${f.sonSurum + 1})`);
     uygula.addEventListener('click', async () => {
       m.temizle();
       const eksik = cakisan.find((x) => !kararlar.has(anahtar(x)));
       if (eksik) { m.goster(`Çakışan kayıt için seçin (Onunki / Benimki): ${ad(eksik)}`); return; }
+      // Dahil edilmeyen, sizin eklediğiniz kayıtlar sizde de silinir: ayrıca onay.
+      const silinecek = benim.filter((x) => x.tur === 'benimYeni' && kararlar.get(anahtar(x)) === 'haric');
+      if (silinecek.length) {
+        const { onayIste } = await import('./kosu-paneli.js');
+        const tamam = await onayIste({
+          baslik: `${silinecek.length} kayıt silinsin mi?`, ikonAd: 'uyari', dugme: 'Sil ve yayınla',
+          metin: 'Dahil etmediğiniz, sizin eklediğiniz kayıtlar yeni sürüme girmez ve bu bilgisayarda da silinir (değişiklik geçmişinde kalır).',
+          liste: silinecek.map(ad)
+        });
+        if (!tamam) return;
+      }
       try {
-        const y = await mesgulIken(uygula, 'Birleştiriliyor…', () => api('/platform/ortak/birlestir/uygula', { govde: { isId, kararlar: Object.fromEntries(kararlar), not: notGirdisi.value } }));
-        bildir(`v${y.kayit.surum} yayınlandı (${y.dahil} değişiklik dahil edildi${y.haric ? `, ${y.haric} dahil edilmedi` : ''}).`);
+        const y = await mesgulIken(uygula, 'Yayınlanıyor…', () => api('/platform/ortak/birlestir/uygula', { govde: { isId, kararlar: Object.fromEntries(kararlar), not: notGirdisi.value } }));
+        const ekler = [f.birlestirme ? `${y.dahil} değişiklik dahil edildi${y.haric ? `, ${y.haric} dahil edilmedi` : ''}` : '', y.geriAlinan ? `${y.geriAlinan} değişikliğiniz geri alındı` : ''].filter(Boolean);
+        bildir(`v${y.kayit.surum} yayınlandı${ekler.length ? ` (${ekler.join('; ')})` : ''}.`);
         window.dispatchEvent(new Event('ortak-durum-degisti'));
         await baglam.projeleriYenile();
         baglam.gizle(false); baglam.akisAlani.replaceChildren(); baglam.yenile();
@@ -168,12 +190,13 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
       ? h('section', { class: 'birlestirme-bolumu' }, h('h4', {}, baslik, ' ', h('span', { class: 'rozet' }, String(satirlar.length))), h('p', { class: 'soluk kucuk' }, aciklama), h('ul', { class: 'duz-liste' }, satirlar))
       : null);
     baglam.akisAlani.replaceChildren(h('div', { class: 'kart ortak-birlestirme' },
-      h('h3', {}, ikon('uyari'), `v${f.sonSurum} ile birleştir`),
+      f.birlestirme ? h('h3', {}, ikon('uyari'), `v${f.sonSurum} ile birleştir`) : h('h3', {}, ikon('yukle'), `Yayınlamadan önce: v${f.sonSurum} sürümünden bu yana`),
       f.tabanYok ? h('p', { class: 'not-kutusu uyari kucuk', role: 'note' }, 'En son aldığınız sürümün dosyası klasörde yok; bu yüzden farklı olan her kayıt "ikiniz de değiştirdiniz" olarak listelenir.') : null,
-      f.farklar.length ? null : h('p', { class: 'not-kutusu bilgi', role: 'status' }, 'Onun değişiklikleri sizinkilerle çakışmıyor; yalnız sizin değişiklikleriniz var.'),
+      f.farklar.length ? null : h('p', { class: 'not-kutusu bilgi', role: 'status' }, f.birlestirme ? 'Onun değişiklikleri sizinkilerle çakışmıyor.' : 'Son sürümden bu yana değişikliğiniz yok.'),
       bolum('Onun yaptıkları', 'İşaretli olanlar sizde de uygulanır. İşaretini kaldırdığınız değişiklik yeni sürüme girmez (onunkinin üzerine yazılır).', onun.map(onunSatiri)),
       bolum('Çakışanlar', 'Aynı kaydı ikiniz de değiştirdiniz: hangisi kalsın?', cakisan.map(cakismaSatiri)),
       bolum('Onda silinenler', 'Bilgi: sizde durur; yayınlarsanız yeni sürümde yine olur. İstemiyorsanız sonra silin.', silinen.map((x) => h('li', {}, ad(x)))),
+      bolum('Sizin yaptıklarınız', 'İşaretli olanlar yeni sürüme girer. İşaretini kaldırdığınız değişiklik sizde de geri alınır: değiştirdiğiniz son sürümdeki hâline döner, sildiğiniz geri gelir, eklediğiniz silinir.', benim.map(onunSatiri)),
       m.kutu,
       h('div', { class: 'satir-girdi' }, notGirdisi, uygula),
       h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: vazgec }, 'Vazgeç'))));
