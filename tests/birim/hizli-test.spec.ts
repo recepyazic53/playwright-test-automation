@@ -14,7 +14,7 @@ import { chromium, expect, test, type Browser, type Page } from '@playwright/tes
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import {
-  basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku, sabitKisim, sayfaUyarisi, tekAday, varsayilanEtiketler
+  basmaKarari, beklemeMetniMi, ornekDegeri, bitisKosulu, bitisiUygula, canliOnayMetni, cumleyiOku, sabitKisim, sayfaUyarisi, tekAday, varsayilanEtiketler
 } from '../../scripts/platform/hizli-test/akis.mjs';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { HizliTestUygulamasi } from './hizli-test-fikstur';
@@ -146,11 +146,29 @@ test.describe('saf kurallar', () => {
     expect(basmaKarari({ izin: 'evet', adaySayisi: 1 })).toBe('bas');
     expect(basmaKarari({ izin: 'evet', adaySayisi: 3 })).toBe('sor');
     expect(basmaKarari({ izin: 'evet', adaySayisi: 3, kullaniciSecti: true })).toBe('bas');
+    // Modeli güncellerken kayıt oluşturabilecek düğmeye "evet" izninde de sorulur.
+    expect(basmaKarari({ izin: 'evet', adaySayisi: 1, kullaniciSecti: true, sormadanBasma: true })).toBe('sor');
+    expect(basmaKarari({ izin: 'hayir', adaySayisi: 1, sormadanBasma: true })).toBe('basma');
     const adaylar = [{ secici: 'a', metin: 'Hesapla' }, { secici: 'b', metin: 'Temizle' }];
     expect(tekAday(adaylar, ['hesapla'])?.secici).toBe('a');
     expect(tekAday(adaylar, [])).toBeNull();
     expect(canliOnayMetni('evet')).toBe('CANLI ortamda düğmelere basılacak, kayıt oluşabilir.');
   });
+  test('örnek senaryo değeri: model alanı seçici + çerçeveyle eşlenir; tablo başvurusu tablo kaynağı; nesne / boş değer alınmaz', () => {
+    const model = { adimlar: [{ bolumler: [{ alanlar: [
+      { yapilandirma: 'senaryo', konum: { secici: '#ad' }, eslesme: { senaryo: 'adSoyad' } },
+      { yapilandirma: 'senaryo', konum: { secici: '#tip', cerceve: ['#f'] }, eslesme: { senaryo: 'tip' } },
+      { yapilandirma: 'senaryo', konum: { secici: '#onay' }, eslesme: { senaryo: 'onay' } }
+    ] }] }] };
+    const veri = { adSoyad: '${Kişi.Ad soyad}', tip: 'kurumsal', onay: true, beklenen: { tip: 'hata' } };
+    expect(ornekDegeri(model, { anahtar: 'a', secici: '#ad' }, veri)).toEqual({ deger: '${Kişi.Ad soyad}', kaynak: 'tablo' });
+    expect(ornekDegeri(model, { anahtar: 't', secici: '#tip', cerceve: ['#f'] }, veri)).toEqual({ deger: 'kurumsal', kaynak: 'elle' });
+    expect(ornekDegeri(model, { anahtar: 't', secici: '#tip' }, veri)).toBeNull();
+    expect(ornekDegeri(model, { anahtar: 'o', secici: '#onay' }, veri)).toEqual({ deger: true, kaynak: 'elle' });
+    expect(ornekDegeri(model, { anahtar: 'y', secici: '#yeni' }, veri)).toBeNull();
+    expect(ornekDegeri(model, { anahtar: 'a', secici: '#ad' }, {})).toBeNull();
+  });
+
   test('bitiş etiketlerinin varsayılanı: son basıştan sonraki metin Bitti, bekleme Devam, hata kutusu Hata', () => {
     expect(beklemeMetniMi('Hesaplanıyor…')).toBe(true);
     expect(beklemeMetniMi('Lütfen bekleyin')).toBe(true);
@@ -787,6 +805,25 @@ test('düzenleme kipi (aynı ekran): yeni model sürümü; kaydetmeden önce far
   } finally { await tarayici.close(); }
   expect(await surum()).toBe(surumOnce + 1);
   expect(await senaryoBasliklari()).toEqual([...new Set([...onceSenaryolar, 'Başvuru formu — bireysel'])].sort());
+  await isBitsin();
+});
+
+test('modeli güncelleme: seçilen örnek senaryonun verileri alanlara dolar (yeniden sorulmaz); başka ekranın senaryosu reddedilir', async () => {
+  test.setTimeout(120_000);
+  await isBitsin();
+  expect(kayitli).not.toBeNull();
+  const sec = await api(`/platform/hizli-test/secenekler?projeId=${projeId}&ekranId=${kayitli?.ekranId}`);
+  expect((sec.ekran as Nesne).senaryolar).toEqual(expect.arrayContaining([expect.objectContaining({ id: kayitli?.senaryoId })]));
+  expect(await api('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', ornekSenaryoId: 'yok-boyle-senaryo' }))
+    .toMatchObject({ basarili: false });
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', ornekSenaryoId: kayitli?.senaryoId })).id);
+  const o = await bekle(id, ['veri']);
+  const alan = (etiket: string): Nesne => o.soru.alanlar.find((a: Nesne) => a.etiket === etiket);
+  expect(alan('Ad soyad').deger).toBeTruthy();
+  // Senaryodaki tablo başvurusu olduğu gibi gelir (tablo kaynağı).
+  expect(alan('Müşteri tipi')).toMatchObject({ deger: '${Müşteri tipi.Müşteri tipi}', kaynak: 'tablo' });
+  expect(o.gunluk.map((g: Nesne) => String(g.metin ?? g)).join(' ')).toContain('senaryosundan doldurulur');
+  await basarili('/platform/hizli-test/iptal', { id });
   await isBitsin();
 });
 

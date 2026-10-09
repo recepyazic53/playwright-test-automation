@@ -61,7 +61,7 @@
 // NOT: import.meta KULLANILMAZ. Tipler: yonetici.d.mts.
 import { randomBytes } from 'node:crypto';
 import {
-  DepoHatasi, baglamProfilleriniListele, ekranlariListele, ekranModeliGetir, ortamlariListele, projeGetir, senaryoGetir
+  DepoHatasi, baglamProfilleriniListele, ekranlariListele, ekranModeliGetir, ortamlariListele, projeGetir, senaryoGetir, senaryolariListele
 } from '../veritabani/depo.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
@@ -79,7 +79,7 @@ import { dallariBirlestir } from './dal-birlestirme.mjs';
 import { tumSecenekler } from './test-verisi-tablosu.mjs';
 import { farkOzeti, sayfaFarki, tetikHedefleri } from './sayfa-farki.mjs';
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
-import { modelBaglami, senaryoKaydet } from '../senaryolar/senaryo-servisi.mjs';
+import { modelBaglami, senaryoKaydet, senaryoOrtamVerisi } from '../senaryolar/senaryo-servisi.mjs';
 import { senaryoHazirligi } from '../senaryolar/hazirlik-servisi.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
@@ -96,7 +96,7 @@ import { kosuKlasoruOlustur, kosuKlasorunuSil } from '../dosyalar/gecici-dosyala
 import { degerBasvurusu, grupAnahtari, satirSabitlemesi } from '../tablolar/tablo-secimi.mjs';
 import {
   BITIS_BEKLEME_SN, IZINLER, IZIN_ADLARI, adayMesajlari, basmaKarari, beklemeMetniMi, bitisKosulu, bitisiUygula, bitisUyarilari, canliOnayMetni, cumleyiOku,
-  eksikAlanlar, hizliSenaryoBasligi, kayitEnvanteriKur, sayfaUyarisi, secimDegerleriniUydur, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
+  eksikAlanlar, hizliSenaryoBasligi, kayitEnvanteriKur, ornekDegeri, sayfaUyarisi, secimDegerleriniUydur, senaryoAnahtarlari, senaryoVerisiKur, tekAday, varsayilanEtiketler
 } from './akis.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -252,6 +252,16 @@ export function hizliTestYoneticisiOlustur(s) {
     if (ust && !alan.bagli) alan.bagli = { ust };
     o.alanlar.set(alan.anahtar, { alan, yeni });
     adim.alanlar.push(alan);
+    ornektenDoldur(o, alan);
+  };
+  /**
+   * Modeli güncellerken seçilen örnek senaryonun değeri (alan boşsa): kullanıcı her alanı yeniden girmez; değiştirebilir. Değeri olmayan
+   * (ör. ekranda yeni çıkan) alan sorulur. @param {Nesne} o @param {Nesne} alan
+   */
+  const ornektenDoldur = (o, alan) => {
+    if (!o.ornek || o.degerler[alan.anahtar] || alan.tur === 'file' || typeof alan.secici !== 'string') return;
+    const d = ornekDegeri(o.ornek.model, /** @type {any} */ (alan), o.ornek.veri);
+    if (d) o.degerler[alan.anahtar] = d;
   };
   // ---- Koşullu alanlar (seçim keşfi): bir seçimin belirli değerinde beliren alanlar ----
   /**
@@ -440,6 +450,7 @@ export function hizliTestYoneticisiOlustur(s) {
           // görünmüyor. "Sayfada hazır" sayılmaz; alan gerçekten görününce (değerli okumada) hazır / değer tazelenir (hazirTazele).
           const alan = { ...g, hazir: false, mevcut: null, kosul: { secim: String(k.secim), degerler: [String(d.deger)] } };
           o.alanlar.set(alan.anahtar, { alan, yeni: false });
+          ornektenDoldur(o, alan);
           // Kontrol alanının (ve onun önceki koşullu alanlarının) hemen sonrasına.
           let konum = adim.alanlar.findIndex((/** @type {Nesne} */ x) => x.anahtar === k.secim);
           if (konum >= 0) { while (konum + 1 < adim.alanlar.length && adim.alanlar[konum + 1].kosul?.secim === k.secim) konum++; adim.alanlar.splice(konum + 1, 0, alan); }
@@ -696,7 +707,7 @@ export function hizliTestYoneticisiOlustur(s) {
     const adaylar = o.sonAnlik?.dugmeler ?? [];
     if (o.izin === 'evet' && o.basisNo === 0) {
       const a = tekAday(adaylar, o.cumle.dugmeler);
-      if (a && basmaKarari({ izin: o.izin, adaySayisi: 1 }) === 'bas') {
+      if (a && basmaKarari({ izin: o.izin, adaySayisi: 1, sormadanBasma: Boolean(o.modelGuncelleme && a.kayitOlusturabilir) }) === 'bas') {
         gunluk(o, `Evet izni: tek aday “${a.metin ?? a.secici}”; basılıyor.`);
         basmayaBasla(o, { secici: a.secici, metin: a.metin, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {}) });
         return;
@@ -1836,7 +1847,11 @@ export function hizliTestYoneticisiOlustur(s) {
       const e = ekranlariListele(vt, projeId).find((x) => x.id === ekranId);
       if (!e) throw new DepoHatasi('Ekran bulunamadı.');
       const m = ekranModeliGetir(vt, e.id);
-      ekran = { id: e.id, ad: e.ad, urlYolu: m && nesneMi(m.model) && typeof m.model.ekranUrl === 'string' ? m.model.ekranUrl : null };
+      ekran = {
+        id: e.id, ad: e.ad, urlYolu: m && nesneMi(m.model) && typeof m.model.ekranUrl === 'string' ? m.model.ekranUrl : null,
+        // Modeli güncellerken "Hangi senaryonun verileriyle gezilsin?" (yalnız başlık; değerler arayüze gitmez).
+        senaryolar: senaryolariListele(vt, { projeId, ekranId: e.id }).map((s) => ({ id: s.id, baslik: s.baslik }))
+      };
     }
     const suren = [...oturumlar.values()].find((x) => x.projeId === projeId && !['kaydedildi', 'iptal', 'hata'].includes(x.durum));
     return {
@@ -1887,6 +1902,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const ayni = ekranlariListele(vt, projeId).find((x) => x.anahtar === anahtar);
       ekran = ayni ? { id: ekranModeliGetir(vt, ayni.id) ? ayni.id : null, ad: ayni.ad, anahtar } : { id: null, ad, anahtar };
     }
+    const ornek = ekran.id && typeof g.ornekSenaryoId === 'string' && g.ornekSenaryoId ? ornekSenaryo(vt, projeId, String(ekran.id), g.ornekSenaryoId, ortamId) : null;
     // Bağlam profili (teste göre seçilir): tarayıcı açılmadan doğrulanır; taramaya profil ADIYLA verilir (aynı çözüm ve denetim yolu).
     const baglamSecimi = baglamSeciminiDogrula(vt, projeId, ortam, g);
     // İzinler ve CANLI onayı: taramayla AYNI denetim (tarayıcı açılmadan). CANLI'da kilit yok; onay bir kez istenir.
@@ -1910,7 +1926,9 @@ export function hizliTestYoneticisiOlustur(s) {
       // Seçilen bağlam profili ({ tur, id, ad } | null; değerleri oturumda tutulmaz) ve tarayıcıda uygulandı mı (her açılışta yeniden uygulanır).
       baglamProfili: baglamSecimi, baglamUygulandi: false,
       durum: 'kesif', baslangic: simdi(), sonErisim: simdi(), komutNo: 0, bekleyen: null, calisiyor: 'Sayfa açılıyor ve keşfediliyor… (hiçbir düğmeye basılmaz)',
-      adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
+      // Modeli güncelleme (mevcut ekran): örnek senaryo (model + çözülmüş veri; yalnız bellekte) ve kayıt oluşturabilecek düğmeye sormadan basılmaz.
+      ornek, modelGuncelleme: Boolean(ekran.id),
+      adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: ornek ? { ...ornek.tabloSecimleri } : {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
       // Bağlı listeler: alt → üst; tablolar için seçenek gözlemleri; zincir keşfinin bulguları (kullanıcıya gösterilen cümleler).
       bagliUst: new Map(), gozlemler: [], bulgular: [],
       // Keşifte kesinleşmeyen bağların alt listeleri (belirsiz bağ; seçenek gelince silinir).
@@ -1928,7 +1946,25 @@ export function hizliTestYoneticisiOlustur(s) {
     isiDinle(o, isId);
     gunluk(o, `Başlatıldı: ${ortam.ad} ortamı, izin “${IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (izin)]}”${o.cumle.dugmeler.length || o.cumle.mesajlar.length ? `; cümleden: ${[...o.cumle.dugmeler.map((x) => `düğme “${x}”`), ...o.cumle.mesajlar.map((x) => `mesaj “${x}”`)].join(', ')}` : ''}.`);
     if (baglamSecimi) gunluk(o, `Bağlam: ${baglamSecimi.tur} = ${baglamSecimi.ad} seçildi; girişten sonra uygulanacak.`);
+    if (ornek) gunluk(o, `Veriler “${ornek.baslik}” senaryosundan doldurulur${ornek.ortamAdi ? ` (${ornek.ortamAdi} verisi)` : ''}; değeri olmayan alanlar sorulur.`);
     return { id };
+  }
+
+  /**
+   * Örnek senaryo: ekranın senaryosu; verisi seçilen ortamınki, o ortamda yoksa ilk verili ortamınki. Kasa açık olmalı (veri şifreli).
+   * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string} senaryoId @param {string} ortamId
+   */
+  function ornekSenaryo(vt, projeId, ekranId, senaryoId, ortamId) {
+    const s = senaryoGetir(vt, kimlikAl(senaryoId, 'ornekSenaryoId'));
+    if (!s || s.projeId !== projeId || s.ekranId !== ekranId) throw new DepoHatasi('Örnek senaryo bu ekranın senaryosu değil.');
+    const m = ekranModeliGetir(vt, ekranId);
+    if (!m || !nesneMi(m.model)) throw new DepoHatasi('Ekranın modeli bulunamadı.');
+    const icerik = /** @type {Nesne} */ (s.icerik ?? {});
+    const ortamlar = nesneMi(icerik.ortamlar) ? Object.keys(icerik.ortamlar) : [];
+    const veriOrtami = ortamlar.includes(ortamId) ? ortamId : ortamlar[0];
+    const veri = veriOrtami ? senaryoOrtamVerisi(vt, icerik, veriOrtami) ?? {} : {};
+    const ortamAdi = veriOrtami && veriOrtami !== ortamId ? ortamlariListele(vt, projeId).find((x) => x.id === veriOrtami)?.ad ?? null : null;
+    return { id: s.id, baslik: s.baslik, model: m.model, veri, tabloSecimleri: nesneMi(icerik.tabloSecimleri) ? /** @type {Nesne} */ (icerik.tabloSecimleri) : {}, ortamAdi };
   }
 
   /**
@@ -2236,7 +2272,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const aday = (o.sonAnlik?.dugmeler ?? []).find((/** @type {Nesne} */ x) => x.secici === g.secici);
       if (!aday) throw new HizliTestHatasi('DUGME', 'Basılacak düğmeyi adaylardan seçin (listede yoksa “Başka bir düğmeye bas…”).');
       const d = { secici: aday.secici, metin: aday.metin, ...(aday.cerceve?.length ? { cerceve: aday.cerceve } : {}) };
-      if (basmaKarari({ izin: o.izin, adaySayisi: 1, kullaniciSecti: true }) === 'sor') { o.onayBekleyen = { ...d, kayitOlusturabilir: aday.kayitOlusturabilir }; o.durum = 'onay'; }
+      if (basmaKarari({ izin: o.izin, adaySayisi: 1, kullaniciSecti: true, sormadanBasma: Boolean(o.modelGuncelleme && aday.kayitOlusturabilir) }) === 'sor') { o.onayBekleyen = { ...d, kayitOlusturabilir: aday.kayitOlusturabilir }; o.durum = 'onay'; }
       else basmayaBasla(o, d);
       return { tamam: true };
     }

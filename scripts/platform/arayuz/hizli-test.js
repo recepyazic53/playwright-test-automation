@@ -183,6 +183,10 @@ async function baslatEkrani(govde, proje, ekranId) {
   if (s.ekran) ad.readOnly = true;
   const adres = h('input', { type: 'text', id: 'hizli-adres', maxlength: 2000, autocomplete: 'off', placeholder: '/basvuru', value: s.ekran && s.ekran.urlYolu ? s.ekran.urlYolu : '' });
   const ortam = h('select', { id: 'hizli-ortam' }, (s.ortamlar || []).map((o) => h('option', { value: o.id, selected: o.varsayilan || null }, o.canli ? `${o.ad} — CANLI ortam` : o.ad)));
+  // Modeli güncellerken: hangi senaryonun verileriyle gezilsin (kullanıcı seçer; değeri olmayan alan sorulur).
+  const ornekler = s.ekran && Array.isArray(s.ekran.senaryolar) ? s.ekran.senaryolar : [];
+  const ornek = ornekler.length ? h('select', { id: 'hizli-ornek' }, h('option', { value: '' }, 'Senaryo seçin…'),
+    ornekler.map((x) => h('option', { value: x.id }, x.baslik)), h('option', { value: '__yok' }, 'Senaryo kullanma (verileri ben gireyim)')) : null;
   const cumle = h('textarea', { id: 'hizli-cumle', rows: 2, maxlength: 1000, placeholder: 'ör. Hesapla butonuna tıklayacağım, Başvurunuz alındı yazısını görünce bitir' });
   const girissiz = h('input', { type: 'checkbox', id: 'hizli-girissiz' });
   const girissizSatiri = h('label', { class: 'onay-satiri', for: 'hizli-girissiz' }, girissiz, 'Giriş yapmadan aç (ortamın giriş tarifi kullanılmaz)');
@@ -208,6 +212,8 @@ async function baslatEkrani(govde, proje, ekranId) {
     h('div', { class: 'alan' }, h('label', { for: 'hizli-adres' }, 'Sayfa adresi'), adres,
       h('div', { class: 'yardim' }, 'Ortamın adresine göre yol (ör. /basvuru) ya da tam adres. Başka bir sitenin adresi kayıtlı değilse kaydetmeyi size sorarım.')),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-ortam' }, 'Ortam'), ortam),
+    ornek ? h('div', { class: 'alan' }, h('label', { for: 'hizli-ornek' }, 'Hangi senaryonun verileriyle gezilsin?'), ornek,
+      h('div', { class: 'yardim' }, 'Alanlar bu senaryonun değerleriyle doldurulur; değiştirebilirsiniz. Senaryoda değeri olmayan (ör. ekranda yeni çıkan) alanlar size sorulur. Kayıt oluşturabilecek düğmelere (ör. Kaydet, Onayla) sormadan basılmaz.')) : null,
     girissizSatiri,
     baglam.el,
     h('div', { class: 'alan' }, h('label', { for: 'hizli-cumle' }, 'Ne yapılsın? ', h('span', { class: 'soluk' }, '(isteğe bağlı)')), cumle,
@@ -221,6 +227,7 @@ async function baslatEkrani(govde, proje, ekranId) {
     const izin = (izinler.find((x) => x.r.checked) || { r: { value: '' } }).r.value;
     if (!ad.value.trim()) { mesaj.goster('Testin adını yazın.'); ad.focus(); return; }
     if (!adres.value.trim()) { mesaj.goster('Sayfa adresini yazın.'); adres.focus(); return; }
+    if (ornek && !ornek.value) { mesaj.goster('Hangi senaryonun verileriyle gezileceğini seçin.'); ornek.focus(); return; }
     if (!izin) { mesaj.goster('Nöbetçi’nin düğmelere basıp basamayacağını seçin.'); izinler[0].r.focus(); return; }
     const o = secilenOrtam();
     let canliOnay = false;
@@ -237,7 +244,8 @@ async function baslatEkrani(govde, proje, ekranId) {
         govde: {
           projeId: proje.id, ortamId: ortam.value, hedef: adres.value.trim(), ...(s.ekran ? { ekranId: s.ekran.id } : { ekranAdi: ad.value.trim() }),
           cumle: cumle.value.trim() || undefined, izin, girissiz: girissiz.checked || undefined, ...(canliOnay ? { canliOnay: true } : {}),
-          ...(baglam.secim().length ? { baglamProfilleri: baglam.secim() } : {})
+          ...(baglam.secim().length ? { baglamProfilleri: baglam.secim() } : {}),
+          ...(ornek && ornek.value && ornek.value !== '__yok' ? { ornekSenaryoId: ornek.value } : {})
         }
       });
       // Başka bir sitenin tam adresi kayıtlı değilse sorulur; onaylanmadan hiçbir istek atılmaz.

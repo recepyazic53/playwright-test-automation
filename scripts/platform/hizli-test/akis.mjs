@@ -187,12 +187,13 @@ export function tekAday(adaylar, cumleDugmeleri = []) {
 
 /**
  * Basma kararı. evet: tek aday belliyse basılır, birden çok aday varsa sorulur; sor: her basıştan önce onay; hayir: hiç basılmaz.
- * @param {{ izin: string; adaySayisi: number; kullaniciSecti?: boolean }} g kullaniciSecti: kullanıcı düğmeyi kendisi seçti ("Devam et: X")
+ * sormadanBasma: kayıt oluşturabilecek düğmeye (ör. modeli güncellerken Poliçeleştir / Ödeme) "evet" izninde de önce sorulur.
+ * @param {{ izin: string; adaySayisi: number; kullaniciSecti?: boolean; sormadanBasma?: boolean }} g kullaniciSecti: kullanıcı düğmeyi kendisi seçti ("Devam et: X")
  * @returns {'bas' | 'sor' | 'basma'}
  */
 export function basmaKarari(g) {
   if (g.izin === 'hayir') return 'basma';
-  if (g.izin === 'sor') return 'sor';
+  if (g.izin === 'sor' || g.sormadanBasma) return 'sor';
   return g.kullaniciSecti || g.adaySayisi === 1 ? 'bas' : 'sor';
 }
 
@@ -405,6 +406,22 @@ export function senaryoAnahtarlari(model, alanlar) {
     if (anahtar) sonuc[a.anahtar] = anahtar;
   }
   return sonuc;
+}
+
+/**
+ * Örnek senaryodan oturum alanının değeri (modeli güncellerken "Hangi senaryonun verileriyle gezilsin?"): model alanı seçici + çerçeveyle
+ * eşlenir, senaryodaki değeri alınır. Tablo başvurusu ("${Tablo.Sütun}") tablo kaynağı olur. Değer yoksa / nesneyse (ör. beklenen sonuç) null.
+ * @param {Record<string, any>} model @param {{ anahtar: string; secici: string; cerceve?: string[] }} alan @param {Record<string, unknown>} veri
+ * @returns {{ deger: string | boolean; kaynak: 'elle' | 'tablo' } | null}
+ */
+export function ornekDegeri(model, alan, veri) {
+  const anahtar = senaryoAnahtarlari(model, [alan])[alan.anahtar];
+  if (!anahtar) return null;
+  const d = veri[anahtar];
+  if (d === undefined || d === null || d === '' || typeof d === 'object') return null;
+  if (typeof d === 'boolean') return { deger: d, kaynak: 'elle' };
+  const deger = String(d);
+  return { deger, kaynak: /^\s*\$\{[^{}]+\}\s*$/u.test(deger) ? 'tablo' : 'elle' };
 }
 
 /**

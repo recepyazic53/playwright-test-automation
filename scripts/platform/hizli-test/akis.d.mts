@@ -10,7 +10,7 @@ export declare const ETIKET_EN_COK: number;
 export declare function canliOnayMetni(izin: string): string;
 export declare function cumleyiOku(cumle: unknown): { mesajlar: string[]; dugmeler: string[] };
 export declare function tekAday<T extends { secici: string; metin: string | null }>(adaylar: T[], cumleDugmeleri?: string[]): T | null;
-export declare function basmaKarari(g: { izin: string; adaySayisi: number; kullaniciSecti?: boolean }): 'bas' | 'sor' | 'basma';
+export declare function basmaKarari(g: { izin: string; adaySayisi: number; kullaniciSecti?: boolean; sormadanBasma?: boolean }): 'bas' | 'sor' | 'basma';
 export declare function beklemeMetniMi(metin: unknown): boolean;
 export declare function degiskenMetinMi(metin: unknown): boolean;
 export declare function varsayilanEtiketler(gorulenler: Array<{ metin: string; tur: string; basis: number; sonuc?: boolean; onceGorundu?: boolean }>, sonBasis: number): Record<string, BitisEtiketi | null>;
@@ -30,6 +30,7 @@ export declare function kayitEnvanteriKur(
   bitis: { bitti: string[]; hata: string[] }
 ): import('../tarama/paket-olusturucu.mjs').KayitEnvanteri;
 export declare function bitisiUygula<T extends Record<string, any>>(model: T, bitis: { bitti: string[]; devam: string[]; adres: string | null; ogeler?: Array<{ secici: string; cerceve?: string[] }> }): T;
+export declare function ornekDegeri(model: Record<string, any>, alan: { anahtar: string; secici: string; cerceve?: string[] }, veri: Record<string, unknown>): { deger: string | boolean; kaynak: 'elle' | 'tablo' } | null;
 export declare function senaryoAnahtarlari(model: Record<string, any>, alanlar: Array<{ anahtar: string; secici: string; cerceve?: string[] }>): Record<string, string>;
 export declare function senaryoVerisiKur(
   model: Record<string, any>, anahtarlar: Record<string, string>, degerler: Record<string, unknown>,
