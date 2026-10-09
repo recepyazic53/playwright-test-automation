@@ -330,11 +330,8 @@ test('arayüz: tarama diyaloğunda keşif varsayılan açık; CANLI ortama geçi
   const tarayici = await korumaliTarayici();
   try {
     const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 } })).newPage();
-    await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekranId)}`);
-    await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
-    // Nöbetçi taraması → "Yalnız oku" (eski "Ekranı tara").
-    await page.getByRole('menuitem', { name: 'Nöbetçi taraması' }).click();
-    await page.locator('dialog[open]').getByRole('button', { name: /Yalnız oku/ }).click();
+    // Okuyan tarama diyaloğu: Ekran ekle › Ekranı tara (modeli olan ekranda Nöbetçi taraması hızlı test ekranını açar).
+    await page.goto('/#/ekranlar/yeni/tara');
     const d = page.locator('dialog[open]');
     const kesif = d.getByRole('checkbox', { name: /Açılır listeleri keşfet/ });
     await expect(kesif).toBeChecked();
