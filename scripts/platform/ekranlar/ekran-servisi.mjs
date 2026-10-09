@@ -31,6 +31,7 @@ import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { modelAlanlari, alanEtiketi as paketAlanEtiketi } from '../tablolar/paket-tablolari.mjs';
 import { bagTablolari, etiketMetni, secimeGoreVar } from '../tablolar/secime-gore-bag.mjs';
+import { secenekleriTabloyaYaz, tabloOnerisi } from '../tablolar/secenek-tablosu.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
 /** Yapay zekâ aracının inceleme kuralları ve tekrar analiz ek kuralı: TEK kaynak paket-istekleri.mjs (arayüz de aynı dosyayı kullanır). */
@@ -903,6 +904,8 @@ export function analizGetir(vt, projeId, ekranId) {
   // Bağlam profiline göre görünürlük (bilgi): paketteki gözlem.
   const pbg = nesneMi(paketModeli.baglamGorunurlugu) ? /** @type {Nesne} */ (paketModeli.baglamGorunurlugu) : {};
   const pbgAlanlar = nesneMi(pbg.alanlar) ? /** @type {Record<string, unknown>} */ (pbg.alanlar) : {};
+  // Seçenek bulgularının tablo önerisi: alanın bağlı olduğu test verisi tablosu (ekranın + ortak akışların bağları).
+  const tablo = secenekTabloBaglami(vt, projeId, ekranId);
   // Uygulanmış analizde "eksik değer" listesi GÜNCEL senaryolara göre yeniden hesaplanır (toplu atamadan sonra azalır).
   return {
     ...temel,
@@ -911,7 +914,11 @@ export function analizGetir(vt, projeId, ekranId) {
       meta: a.meta, gizlenenSayisi: a.gizlenenSayisi ?? 0, gizlenenler: a.gizlenenler ?? [], gerekenAyarlar: a.gerekenAyarlar ?? [],
       bilinmeyenler: a.bilinmeyenler ?? [], senaryoOneriSayisi: a.senaryoOneriSayisi ?? 0, kanitlar: a.kanitlar ?? [],
       profiller: Array.isArray(pbg.profiller) ? pbg.profiller : [],
-      bulgular: bulgular.map((b) => ({ ...b, karar: kararlar[String(b.id)] ?? null, baglam: b.alanId && nesneMi(pbgAlanlar[String(b.alanId)]) ? pbgAlanlar[String(b.alanId)] : null })),
+      bulgular: bulgular.map((b) => {
+        const oneri = tablo.oneri(b);
+        return { ...b, karar: kararlar[String(b.id)] ?? null, baglam: b.alanId && nesneMi(pbgAlanlar[String(b.alanId)]) ? pbgAlanlar[String(b.alanId)] : null,
+          ...(oneri ? { tabloOnerisi: oneri } : {}) };
+      }),
       ozet: bulguOzeti(bulgular), etki, senaryoSayisi: senaryolar.length,
       atlananlar: a.atlananlar ?? []
     }
@@ -919,11 +926,23 @@ export function analizGetir(vt, projeId, ekranId) {
 }
 
 /**
+ * Seçenek bulgularının tablo önerisi için bağlam: etkin alan bağları ve projenin tabloları (bulgu başına öneri).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
+ */
+function secenekTabloBaglami(vt, projeId, ekranId) {
+  const baglar = /** @type {Record<string, any>} */ (etkinAlanBaglari(vt, ekranId));
+  const tablolar = /** @type {any[]} */ (tablolariListele(vt, projeId));
+  return { tablolar, oneri: (/** @type {any} */ b) => tabloOnerisi(baglar, tablolar, b) };
+}
+
+/**
  * Kararları uygular: YALNIZCA kabul edilen bulgularla yeni model sürümü (hiç kabul yoksa sürüm
  * oluşmaz); reddedilenler imzasıyla hatırlanır (aynı değişiklik bir dahaki pakette gösterilmez);
  * karar verilmeyenler hatırlanmaz. Yeni model ortak doğrulayıcıdan geçmezse hiçbir şey yazılmaz.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
- * @param {{ analizId: unknown; kabul: unknown; red: unknown; yapan?: string }} girdi
+ * tablo: kabul edilen yeni / kaldırılan seçenek bulgularından bağlı test verisi tablosuna da yansıtılacakların kimlikleri (isteğe bağlı;
+ * yalnız uygulanabilir öneriler yazılır — secenek-tablosu.mjs).
+ * @param {{ analizId: unknown; kabul: unknown; red: unknown; tablo?: unknown; yapan?: string }} girdi
  */
 export function analizUygula(vt, projeId, ekranId, girdi) {
   acikAnahtar(vt);
@@ -972,9 +991,17 @@ export function analizUygula(vt, projeId, ekranId, girdi) {
     const yazilacak = Object.fromEntries(Object.entries(nesneMi(bekleyenBaglar) ? /** @type {Record<string, Nesne>} */ (bekleyenBaglar) : {})
       .filter(([alanId]) => kabulAlanlari.has(alanId) && sonAlanlar.has(alanId)));
     if (Object.keys(yazilacak).length) ekranAlanBaglariniKaydet(vt, projeId, ekranId, { ...ekranAlanBaglari(vt, ekranId), ...yazilacak });
+    // Kabul edilen seçenek bulgularından kullanıcının seçtikleri bağlı tabloya da yazılır (yeni seçenek → satır, kalkan → satır silinir).
+    const tabloya = liste(girdi.tablo).filter((id) => kabul.includes(id));
+    let tabloSonucu = { eklenen: 0, silinen: 0 };
+    if (tabloya.length) {
+      const tb = secenekTabloBaglami(vt, projeId, ekranId);
+      const oneriler = tabloya.map((id) => tb.oneri(bulgular.find((b) => b.id === id))).filter((o) => o && o.uygulanabilir);
+      tabloSonucu = secenekleriTabloyaYaz(vt, projeId, tb.tablolar, /** @type {any[]} */ (oneriler));
+    }
     return {
       surum: sonuc ? sonuc.surum : mevcut.surum, yeniSurum: Boolean(sonuc), kabul: kabul.length, red: red.length, kararsiz: bulgular.length - kabul.length - red.length,
-      baglanan: Object.keys(yazilacak).length
+      baglanan: Object.keys(yazilacak).length, tabloyaEklenen: tabloSonucu.eklenen, tablodanSilinen: tabloSonucu.silinen
     };
   });
 }

@@ -65,6 +65,8 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
   const a = v.analiz;
   const uygulandi = a.durum === 'uygulandi';
   const kararlar = new Map();
+  /** Tabloya yansıtılmayacak seçenek bulguları (varsayılan: hepsi yansıtılır). */
+  const tabloDisi = new Set();
   if (uygulandi) { for (const b of a.bulgular) if (b.karar) kararlar.set(b.id, b.karar); }
   else for (const [id, k] of Object.entries(taslakOku(a.id))) if (a.bulgular.some((b) => b.id === id) && (k === 'kabul' || k === 'red')) kararlar.set(id, k);
   const etki = new Map(a.etki.map((x) => [x.bulguId, x]));
@@ -138,6 +140,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
           h('strong', {}, b.baslik),
           h('small', {}, b.konum),
           farkGosterimi(b),
+          tabloSecimi(b),
           b.baglam ? h('div', { class: 'bulgu-baglam' }, h('span', { class: 'cok-soluk kucuk' }, 'görünürlük:'), baglamMatrisi(b.baglam, a.profiller)) : null),
         h('div', { class: 'bulgu-sag' },
           etkiSayisi ? h('span', { class: `etki-hapi ${e.tur === 'eksikDeger' || e.tur === 'kullanilanSecenek' ? 'uyari' : ''}`, title: e.mesaj }, ikon('liste'), `${etkiSayisi} senaryo`) : null,
@@ -145,6 +148,23 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
             ? (k === 'kabul' ? rozet('kabul edildi', 'basari') : k === 'red' ? rozet('reddedildi', 'hata') : rozet('karar verilmedi'))
             : h('div', { class: 'karar-grubu', role: 'group', 'aria-label': `Karar: ${b.baslik}` }, kararDugmesi('kabul', 'Kabul et', 'onay'), kararDugmesi('red', 'Reddet', 'carpi'))));
     })));
+  }
+
+  /**
+   * Yeni / kaldırılan seçenek bulgusu: bağlı test verisi tablosuna da yansıtılsın mı (kabul edilirse uygulanır). Uygulanamazsa neden yazılır.
+   * @param {any} b
+   */
+  function tabloSecimi(b) {
+    const o = b.tabloOnerisi;
+    if (!o) return null;
+    const eylem = o.islem === 'ekle' ? 'Tabloya da ekle' : 'Tablodan da çıkar';
+    if (!o.uygulanabilir) return h('div', { class: 'bulgu-tablo soluk kucuk' }, ikon('veri'), ` ${o.tabloAd}: ${o.neden}`);
+    if (uygulandi) return h('div', { class: 'bulgu-tablo soluk kucuk' }, ikon('veri'), ` ${eylem}: ${o.tabloAd}`);
+    const kutu = h('input', { type: 'checkbox', checked: !tabloDisi.has(b.id) });
+    kutu.addEventListener('click', (e) => e.stopPropagation());
+    kutu.addEventListener('change', () => { if (kutu.checked) tabloDisi.delete(b.id); else tabloDisi.add(b.id); });
+    return h('label', { class: 'secenek bulgu-tablo kucuk', onclick: (e) => e.stopPropagation() }, kutu, `${eylem}: `, h('b', {}, o.tabloAd),
+      h('span', { class: 'soluk' }, ` (${o.sutun})`));
   }
 
   function etkiCiz() {
@@ -225,10 +245,11 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
       if (!tamam) return;
       try {
         const r = await mesgulIken(uygula, 'Uygulanıyor…', () => api('/platform/ekran/analiz/uygula', {
-          govde: { projeId: s.proje.id, ekranId: s.ekranId, analizId: a.id, kabul: kabulListesi.map((b) => b.id), red: redListesi.map((b) => b.id) }
+          govde: { projeId: s.proje.id, ekranId: s.ekranId, analizId: a.id, kabul: kabulListesi.map((b) => b.id), red: redListesi.map((b) => b.id),
+            tablo: kabulListesi.filter((b) => b.tabloOnerisi && b.tabloOnerisi.uygulanabilir && !tabloDisi.has(b.id)).map((b) => b.id) }
         }));
         taslakSil(a.id);
-        bildir(`${r.yeniSurum ? `Model v${r.surum} oluşturuldu (${r.kabul} kabul, ${r.red} red).` : `${r.red} bulgu reddedildi; model değişmedi.`}${r.baglanan ? ` ${r.baglanan} alan test verisi tablosuna bağlandı.` : ''}`);
+        bildir(`${r.yeniSurum ? `Model v${r.surum} oluşturuldu (${r.kabul} kabul, ${r.red} red).` : `${r.red} bulgu reddedildi; model değişmedi.`}${r.baglanan ? ` ${r.baglanan} alan test verisi tablosuna bağlandı.` : ''}${r.tabloyaEklenen ? ` Tabloya ${r.tabloyaEklenen} seçenek eklendi.` : ''}${r.tablodanSilinen ? ` Tablodan ${r.tablodanSilinen} satır çıkarıldı.` : ''}`);
         await bulgularEkrani(icerik, s, secili);
       } catch (e) {
         if (e.durum === 423) return;
