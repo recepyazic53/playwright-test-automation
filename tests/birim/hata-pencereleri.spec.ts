@@ -17,6 +17,7 @@ import { HATA_PENCERESI_EN_COK, hataPencereleriniKaydet, hataPencereleriniOku, k
 import { adaySirasi } from '../../scripts/platform/tarama/oge-secme-motoru';
 import { secilenOgeleriAyikla } from '../../scripts/platform/tarama/oge-isaretleri.mjs';
 import { HIZLI_KDF } from './platform-ortak';
+import { beklenenMesajiBekle } from '../support/beklenen-sonuc';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- model JSON'u serbestçe gezilir (test verisi)
 type Nesne = Record<string, any>;
@@ -143,4 +144,16 @@ test('öğe seçme: hata türünde metne bağlı seçici üretilmez (mesaj deği
   ], ['hata']);
   expect(ogeler[0].goruntu).toBe('data:image/png;base64,iVBORw0KGgo=');
   expect(ogeler[1]).not.toHaveProperty('goruntu');
+});
+
+test('beklenen hata adımı: beklenen mesaj gelmeden başka hata (proje hata penceresi) görünürse süre dolmadan biter; beklenen mesaj önce gelir', async () => {
+  // Durdurucu ikinci okumada pencere metnini verir (beklenen mesaj hiç gelmez): 20 sn beklenmez.
+  let n = 0;
+  const bas = Date.now();
+  const r = await beklenenMesajiBekle(async () => 'sayfa', ['Limit aşıldı'], { zamanAsimiMs: 20_000, aralikMs: 50, durdur: async () => (++n >= 2 ? 'Mükerrer poliçe — proje hata penceresi' : null) });
+  expect(r).toEqual({ sonGorulen: 'Mükerrer poliçe — proje hata penceresi' });
+  expect(Date.now() - bas).toBeLessThan(2_000);
+  // Beklenen mesaj görünüyorsa durdurucuya bakılmaz.
+  const e = await beklenenMesajiBekle(async () => 'Limit aşıldı (kod 3)', ['Limit aşıldı'], { zamanAsimiMs: 1_000, durdur: async () => 'başka hata' });
+  expect(e.eslesen).toBe('Limit aşıldı');
 });

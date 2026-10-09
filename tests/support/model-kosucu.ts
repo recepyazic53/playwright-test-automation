@@ -40,7 +40,7 @@ import {
   yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanBasariGostergesi, type PlanKosuTanimi
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { girisKokenleri, type GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
-import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
+import { beklenenGorulenMetni, beklenenMesajiBekle, eslesenMesajiBul, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
 import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKapat, type GirisKimligi } from './giris-motoru';
 import { oturumKilidiyle, oturumuSifreliYaz, yeniOturumuYukle } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
@@ -919,7 +919,12 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
   if (plan.beklenen.tur === 'hata' && plan.beklenen.adim === adim.id) {
     const beklenenler = plan.beklenen.mesajlar.length ? plan.beklenen.mesajlar : [plan.beklenen.mesaj];
     const oku = async (): Promise<string> => (kosu?.hataGostergesi ? hataMetni(page, kosu) : sayfaMetni(page));
-    const r = await beklenenMesajiBekle(oku, beklenenler, { zamanAsimiMs: sureMs });
+    // Beklenen mesaj yerine proje hata penceresi (Ayarlar > Hata pencereleri) başka bir yazıyla çıkarsa süre dolmadan başarısız.
+    const durdur = async (): Promise<string | null> => {
+      const p = await projeHataPenceresi(page);
+      return p && !eslesenMesajiBul(p.metin, beklenenler) ? `${p.metin || '(metinsiz)'} — proje hata penceresi: “${p.ad}”` : null;
+    };
+    const r = await beklenenMesajiBekle(oku, beklenenler, { zamanAsimiMs: sureMs, durdur });
     if (r.eslesen && beklenenler.length > 1) return `uyarı "${r.eslesen}"`;
     if (!r.eslesen) {
       const gorulen = r.sonGorulen || (kosu && kosu.basariGostergesi && (await basariVarMi(page, kosu)) ? `uyarı çıkmadı, ${basariAciklamasi(kosu).replace(/r$/, 'dü')}` : '');

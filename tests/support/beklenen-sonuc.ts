@@ -60,7 +60,7 @@ export function beklenenGorulenMetni(
 export async function beklenenMesajiBekle(
   metniOku: () => Promise<string>,
   beklenenler: readonly string[],
-  secenekler: { zamanAsimiMs: number; aralikMs?: number }
+  secenekler: { zamanAsimiMs: number; aralikMs?: number; durdur?: () => Promise<string | null> }
 ): Promise<{ eslesen?: string; sonGorulen: string }> {
   const bitis = Date.now() + secenekler.zamanAsimiMs;
   const aralik = secenekler.aralikMs ?? 500;
@@ -70,6 +70,9 @@ export async function beklenenMesajiBekle(
     if (metin.trim()) sonGorulen = metin;
     const eslesen = eslesenMesajiBul(metin, beklenenler);
     if (eslesen) return { eslesen, sonGorulen: metin };
+    // durdur: beklenen mesaj gelmeden başka bir hata görünürse (ör. proje hata penceresi) süre dolmadan bitirilir; görülen metin döner.
+    const durdu = secenekler.durdur ? await secenekler.durdur().catch(() => null) : null;
+    if (durdu !== null) return { sonGorulen: durdu };
     if (Date.now() >= bitis) return { sonGorulen };
     await new Promise((coz) => setTimeout(coz, aralik));
   }
