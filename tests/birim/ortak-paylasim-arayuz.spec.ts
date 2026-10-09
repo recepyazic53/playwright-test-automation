@@ -76,8 +76,12 @@ test.describe('Ayarlar > Yedekleme > Ekip paylaşımı', () => {
     await kart.getByRole('button', { name: 'Güncelle' }).click();
     await page.getByRole('textbox', { name: /Ekibin ortak kasa parolası/ }).fill(PAROLA);
     await page.getByRole('button', { name: 'Önizle' }).click();
-    await expect(page.getByRole('button', { name: /Seçilenleri uygula/ })).toBeVisible({ timeout: 30_000 });
-    await page.getByRole('button', { name: /Seçilenleri uygula/ }).click();
+    // Ekip güncellemesi sürümün tamamını alır: işaret kaldırılamaz, seçim düğmeleri yok.
+    await expect(page.getByRole('button', { name: 'Güncellemeyi uygula' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Ekip güncellemesinde sürümün tamamı alınır')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hiçbirini seçme' })).toHaveCount(0);
+    for (const k of await page.locator('input[type="checkbox"].uc-durumlu').all()) await expect(k).toBeDisabled();
+    await page.getByRole('button', { name: 'Güncellemeyi uygula' }).click();
     await page.getByRole('button', { name: 'Devam' }).click();
 
     await expect(kart.getByText('Güncelsiniz (v2).')).toBeVisible();

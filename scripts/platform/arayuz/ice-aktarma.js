@@ -74,8 +74,10 @@ const degerMetni = (d) => {
 
 /**
  * @param {HTMLElement} kapsayici
- * @param {{ mod: 'hosgeldin' | 'ayarlar'; bitti: () => void; vazgec: () => void; baslangicIsId?: string; uygulandi?: () => void | Promise<void> }} secenekler
+ * @param {{ mod: 'hosgeldin' | 'ayarlar'; bitti: () => void; vazgec: () => void; baslangicIsId?: string; uygulandi?: () => void | Promise<void>; tamami?: boolean }} secenekler
  * baslangicIsId: hazır bir içe aktarma işi (ör. ortak klasör güncellemesi) — dosya/parola adımı atlanır. uygulandi: uygulama başarılı olunca çağrılır.
+ * tamami: sürümün tamamı alınır (ekip paylaşımı Güncelle): yeni ve değişen kayıtların hepsi seçili, işaret kaldırılamaz. Bir kaydı
+ * istemeyen, aldıktan sonra siler / değiştirir — böylece değişiklik geçmişinde görünür (izsiz, kazara geri alma olmaz).
  */
 export function iceAktarmaAkisi(kapsayici, secenekler) {
   let isId = null;
@@ -338,8 +340,9 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     const seciliSay = (ogeler) => ogeler.reduce((n, o) => n + (seciliMi(o.tablo, o.id) ? 1 : 0), 0);
 
     /** Grup / tür başlığındaki üç durumlu kutu: tümü seçiliyse işaretli, hiçbiri değilse boş, arada "kısmi" (indeterminate + aria-checked="mixed"). */
+    const tamami = secenekler.tamami === true;
     const ucDurumluKutu = (etiket, ogeler) => {
-      const kutu = h('input', { type: 'checkbox', class: 'uc-durumlu', 'aria-label': etiket });
+      const kutu = h('input', { type: 'checkbox', class: 'uc-durumlu', 'aria-label': etiket, disabled: tamami });
       guncelleyiciler.push(() => {
         const n = seciliSay(ogeler);
         kutu.checked = n > 0 && n === ogeler.length;
@@ -369,7 +372,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     };
 
     const ogeKutusu = (tablo, oge, grupAdi) => {
-      const kutu = h('input', { type: 'checkbox', checked: seciliMi(tablo, oge.id), id: yeniKimlik('sec') });
+      const kutu = h('input', { type: 'checkbox', checked: seciliMi(tablo, oge.id), id: yeniKimlik('sec'), disabled: tamami });
       kutu.addEventListener('change', () => { secimAyarla(tablo, oge.id, kutu.checked); secimiGuncelle(); });
       cizilenKutular.push({ tablo, id: oge.id, kutu });
       return h('label', { class: 'secenek', for: kutu.id }, kutu,
@@ -495,7 +498,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       secimiGuncelle();
     };
     const mesaj = mesajKutusu();
-    const uygulaDugmesi = h('button', { type: 'button', class: 'birincil' }, 'Seçilenleri uygula');
+    const uygulaDugmesi = h('button', { type: 'button', class: 'birincil' }, tamami ? 'Güncellemeyi uygula' : 'Seçilenleri uygula');
     uygulaDugmesi.addEventListener('click', () => uygula(onizleme, secilen, uygulaDugmesi, mesaj));
     const t = onizleme.toplam;
     goster('onizleme', h('div', {},
@@ -511,6 +514,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       onizleme.kasaBenimsenecek
         ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Bu bilgisayarda henüz kasa yok. Uyguladığınızda yedeğin parolası bu bilgisayarın kasa parolası olur.'))
         : null,
+      tamami ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, h('p', {}, 'Ekip güncellemesinde sürümün tamamı alınır. İstemediğiniz bir kaydı aldıktan sonra silin ya da değiştirin; böylece değişiklik geçmişinde görünür ve yayınladığınızda ekip kimin neyi değiştirdiğini görür.')) : null,
       eslemeBolumu(onizleme),
       bolumler.length ? bolumler : bosDurum('Yedekte bu bilgisayardan farklı bir ayar veya profil yok.', null, { ikon: 'onay' }),
       eklenecekSatirlari.length ? h('section', { class: 'grup', 'aria-label': 'Koşular ve geçmiş' },
@@ -520,8 +524,8 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       medyaBolumu(onizleme.medya),
       h('div', { class: 'sabit-alt' }, mesaj.kutu, h('div', { class: 'dugmeler' }, uygulaDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'İptal'),
         h('span', { class: 'bosluk' }), secimSayaci,
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => tumunuSec(true) }, 'Tümünü seç'),
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => tumunuSec(false) }, 'Hiçbirini seçme')))));
+        tamami ? null : h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => tumunuSec(true) }, 'Tümünü seç'),
+        tamami ? null : h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => tumunuSec(false) }, 'Hiçbirini seçme')))));
     secimiGuncelle();
     // Eşleme değişince önizleme yeniden çizilir: odak değiştirilen seçime döner.
     if (odak) kapsayici.querySelector(odak)?.focus();
