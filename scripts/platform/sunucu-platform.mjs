@@ -99,6 +99,7 @@
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
 //   POST /platform/ekran/analiz/uygula { projeId, ekranId, analizId, kabul, red } yalnızca kabul edilenlerle yeni sürüm
 //   GET  /platform/ekran/surumler?projeId&ekranId                         ekran sürümleri (Nöbetçi taraması geçmişi)
+//   POST /platform/ekran/surumler/sifirla { projeId, ekranId }             ekran sürümlerini siler (sonraki tarama ilk tarama olur)
 //   POST /platform/ekran/surum/modele-ekle { projeId, ekranId, anahtar }    son sürümdeki gelen alanı modele ekler → bulgular
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
 //   POST /platform/senaryolar/tarih-donusumu { projeId, senaryoIdleri, onay? }  eskimiş sabit tarihler → "bugün+N" (onaysız önizleme)
@@ -241,7 +242,7 @@ import {
 } from './ekranlar/ekran-servisi.mjs';
 import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele, bosOrtakAkisOlustur, ortakAkisAdaylari, ortakAkisEkranlaraEkle } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
-import { alaniModeleEkle, ekranSurumleri, kosuEkranSurumu } from './ekranlar/ekran-surumleri.mjs';
+import { alaniModeleEkle, ekranSurumleri, ekranSurumleriniSifirla, kosuEkranSurumu } from './ekranlar/ekran-surumleri.mjs';
 import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
 } from './ekranlar/ekran-yonetimi.mjs';
@@ -1611,6 +1612,7 @@ const POST_UCLARI = new Map([
     olusturulacak: g.olusturulacak === 'ortakAkis' ? 'ortakAkis' : 'ekran'
   })],
   ['/platform/ekran/analiz/yukle', (db, g) => analizYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, { medyaKlasoru: medyaKlasoruYolu(), testVerisi: g.testVerisi })],
+  ['/platform/ekran/surumler/sifirla', (db, g) => ekranSurumleriniSifirla(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],
   ['/platform/ekran/surum/modele-ekle', (db, g) => alaniModeleEkle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.anahtar ?? ''), { medyaKlasoru: medyaKlasoruYolu() })],
   ['/platform/ekran/analiz/uygula', (db, g) => analizUygula(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { analizId: g.analizId, kabul: g.kabul, red: g.red })],
   ['/platform/ekran/analiz/iptal', (db, g) => analizIptal(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.analizId)],

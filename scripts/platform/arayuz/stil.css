@@ -4734,3 +4734,4 @@ tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
 .ekran-surumleri { display: grid; gap: 12px; }
 .ekran-surumu summary { cursor: pointer; }
 .ekran-surumu-diyalogu .diyalog-govde { max-height: 70vh; overflow: auto; }
+.ekran-surumleri-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
