@@ -200,7 +200,8 @@ import {
   KlasorHatasi, YENIDEN_BASLATMA_DEGISKENI, ayarDosyasiYolu, klasorYoluDogrula, veriAyariniOku, veriAyariniYaz, veriKlasoruDurumu,
   veriyiKopyalaVeDogrula, yazilabilirOlmali
 } from './ayarlar/klasor-secimi.mjs';
-import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
+import { IceAktarmaYoneticisi, MASKE, hazirligiAt, iceAktarmaHazirla } from './ice-aktarma.mjs';
+import { birlestirmeSecimi, ucluFark } from './ortak-birlestirme.mjs';
 import {
   SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kosuyaDahilAyarla,
   modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryolariCogalt, senaryoListesi, senaryoSonSonucu, senaryolariSil
@@ -1109,6 +1110,8 @@ function ekipGirisi(db, ad) {
   oturumKullanicisi = kisi;
   if (kisi.ad) kullaniciAdiYaz(db, kisi.ad);
 }
+/** Ekip birleştirmesi: içe aktarma işi → üçlü fark ve karşılaştırılan son sürüm (uygulanınca silinir). @type {Map<string, { farklar: import('./ortak-birlestirme.mjs').UcluFarkOgesi[]; surum: number }>} */
+const ortakBirlestirmeleri = new Map();
 /** "Yedekten yükle" işi → girilen kullanıcı adı (uygulanınca oturum kullanıcısı olur). @type {Map<string, string>} */
 const iceAktarmaKullanicilari = new Map();
 /** Ayarlar > Ekip yalnız Admin'e açıktır. */
@@ -1727,6 +1730,64 @@ const POST_UCLARI = new Map([
     return { isId, surum: kayit.surum };
   }],
   ['/platform/ekip/kaydet', (db, g) => { adminOlmali(); return { uyeler: ekipUyeleriKaydet(db, g.uyeler, oturumKullanicisi.ad), ben: oturumKullanicisi.ad }; }],
+  // Güncel değilken yayınlama (ortak-birlestirme.mjs): son sürüm /platform/ortak/guncelle ile hazırlanır (iş), burada en son alınan
+  // sürüm (taban) aynı parolayla açılır ve üçlü karşılaştırılır; yalnız onların tabandan sonra yaptığı listelenir. Uygula: seçilenler
+  // içe aktarılır, son sürüm "alındı" sayılır ve birleşmiş hâl yeni sürüm olarak yayınlanır.
+  ['/platform/ortak/birlestir/fark', async (db, g) => {
+    const isId = typeof g.isId === 'string' ? g.isId : '';
+    const parola = typeof g.parola === 'string' ? g.parola : '';
+    if (!parola) throw new YedekHatasi('VERI', 'Ortak yedeğin kasa parolası gerekli.');
+    const onlar = iceAktarma.hazirlikAl(isId);
+    if (!onlar) throw new YedekHatasi('BULUNAMADI', 'Son sürüm hazırlanmadı (süresi dolmuş olabilir); yeniden deneyin.');
+    const d = ortakDurum(db);
+    const surum = Number.isInteger(g.surum) ? /** @type {number} */ (g.surum) : d.sonSurum;
+    /** @type {Record<string, Record<string, unknown>[]>} */
+    let taban = {};
+    let tabanYok = false;
+    /** @type {import('./ice-aktarma.mjs').Hazirlik | null} */
+    let tabanHazirlik = null;
+    let gecici = '';
+    try {
+      if (d.benimSurum > 0) {
+        try {
+          const { yol } = ortakSurumDosyasi(db, d.benimSurum);
+          eskiYuklemeleriTemizle();
+          mkdirSync(yuklemeKlasoru(), { recursive: true });
+          gecici = join(yuklemeKlasoru(), `yukleme-${randomBytes(8).toString('hex')}.tayedek`);
+          copyFileSync(yol, gecici);
+          tabanHazirlik = await iceAktarmaHazirla(db, gecici, parola, { medyaKlasoru: null });
+          taban = tabanHazirlik.tablolar;
+        } catch (hata) {
+          if (hata instanceof KasaHatasi) throw hata;
+          tabanYok = true; // en son alınan sürüm dosyası yok: her fark çakışma sayılır (kullanıcı tek tek seçer)
+        }
+      }
+      const farklar = ucluFark(db, taban, onlar.tablolar, acikAnahtar(db));
+      ortakBirlestirmeleri.set(isId, { farklar, surum });
+      return { farklar, benimSurum: d.benimSurum, sonSurum: surum, tabanYok };
+    } finally {
+      if (tabanHazirlik) hazirligiAt(tabanHazirlik);
+      if (gecici) { try { unlinkSync(gecici); } catch { /* zaten yok */ } }
+    }
+  }],
+  ['/platform/ortak/birlestir/uygula', async (db, g) => {
+    const isId = typeof g.isId === 'string' ? g.isId : '';
+    const kayitli = ortakBirlestirmeleri.get(isId);
+    if (!kayitli) throw new YedekHatasi('BULUNAMADI', 'Karşılaştırma bulunamadı; yeniden başlatın.');
+    /** @type {ReturnType<typeof birlestirmeSecimi>} */
+    let secim;
+    try { secim = birlestirmeSecimi(kayitli.farklar, g.kararlar); } catch (hata) { throw new YedekHatasi('VERI', /** @type {Error} */ (hata).message); }
+    if (ortakDurum(db).sonSurum !== kayitli.surum) {
+      throw new YedekHatasi('ONCE_GUNCELLE', 'Bu arada ortak klasörde daha yeni bir sürüm yayınlandı; karşılaştırmayı yeniden başlatın.');
+    }
+    await iceAktarma.uygula(isId, { secimler: secim.secimler });
+    ortakBirlestirmeleri.delete(isId);
+    ortakAlindiIsaretle(db, kayitli.surum);
+    const not = [typeof g.not === 'string' ? g.not.trim() : '', `v${kayitli.surum} ile birleştirildi${secim.haric ? `; ${secim.haric} değişiklik dahil edilmedi` : ''}`].filter(Boolean).join(' · ');
+    const kayit = await ortakYayinla(db, { not });
+    console.log(`[platform] Ortak klasöre v${kayit.surum} yayınlandı (v${kayitli.surum} ile birleştirildi: ${secim.dahil} dahil, ${secim.haric} hariç).`);
+    return { kayit, dahil: secim.dahil, haric: secim.haric, ortak: ortakDurum(db) };
+  }],
   ['/platform/ortak/kullanici-adi', (db, g) => {
     kullaniciAdiYaz(db, g.ad);
     return { kullaniciAdi: kullaniciAdiOku(db) };

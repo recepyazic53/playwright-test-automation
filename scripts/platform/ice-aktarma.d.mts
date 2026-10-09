@@ -116,6 +116,10 @@ export declare function iceAktarmaHazirla(
   vt: Veritabani | null, dosya: Buffer | string, parola: string, secenekler?: { ilerleme?: IlerlemeFn; medyaKlasoru?: string | null; kullaniciAdi?: string }
 ): Promise<Hazirlik>;
 export declare function hazirligiAt(hazirlik: Hazirlik): void;
+export type KayitGorunumu = { gorunum: Record<string, unknown>; karsilastirma: Record<string, unknown>; maskeli: Set<string>; imza: string };
+export declare function kayitGorunumu(vt: Veritabani, tablo: string, satir: Record<string, unknown>, anahtar: Buffer): KayitGorunumu;
+export declare function kayitBasligi(tablo: string, gorunum: Record<string, unknown>, id: string): string;
+export declare function kayitFarkAlanlari(a: KayitGorunumu, b: KayitGorunumu): string[];
 export declare function iceAktarmaMedyasiniYaz(vt: Veritabani, hazirlik: Hazirlik, secenekler?: { ilerleme?: IlerlemeFn }): Promise<MedyaYerlestirmeSonucu>;
 export declare function eslemeOnizlemesi(vt: Veritabani | null, hazirlik: Hazirlik, esleme: unknown): Promise<Onizleme>;
 export declare function iceAktarmaUygula(vt: Veritabani, hazirlik: Hazirlik, secim: Secim, secenekler?: { yapan?: string }): UygulamaSonucu;
@@ -129,6 +133,7 @@ export declare class IceAktarmaYoneticisi {
     simdi?: () => number;
   });
   temizle(): void;
+  hazirlikAl(id: string): Hazirlik | null;
   aktifIs(): string | null;
   baslat(dosya: Buffer | string, parola: string, secenekler?: { geciciDosya?: boolean; kullaniciAdi?: string }): string;
   bekle(id: string): Promise<IsGorunumu | undefined>;
