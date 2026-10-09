@@ -18,6 +18,9 @@
 //                        sorulur (Nöbetçi koşu paneli ya da terminal), null → giriş profilindeki ayar.
 //                        kodAlani boşsa kod alanı sayfadan otomatik bulunur (algilama.mjs).
 //   zamanAsimiSn         giriş sonrası başarı/hata göstergesini bekleme süresi (varsayılan 45)
+//   girisSonrasiAkis     null ya da { dosya, degerler } — HER GİRİŞTEN SONRA çalışacak akış (kullanıcının genel senaryolarından
+//                        seçilir; dosya "<anahtar>.model.json"); degerler: akışın istediği alanların değerleri (giris-sonrasi-akis.mjs).
+//                        Koşucu senaryonun akışında aynı akış varsa bunu çalıştırmaz (senaryodaki koşar).
 //   baglamDegistirme     null ya da { baglamTuru, adimlar: [...] } — giriş SONRASI bağlam (rol/şube…)
 //                        seçimi; adımlardaki "{alan}" yer tutucuları seçilen bağlam profilinin alanlarıyla dolar.
 //   girisAdimlari        İSTEĞE BAĞLI sıralı giriş formu adımları. Özel adımlar: kullaniciAdi (kullaniciAlani'na
@@ -197,6 +200,24 @@ export function girisTarifiniDogrula(ham) {
     }
   }
 
+  // Her girişte çalışacak akış (isteğe bağlı): genel senaryo dosyası + alan değerleri.
+  let girisSonrasiAkis = null;
+  if (ham.girisSonrasiAkis !== undefined && ham.girisSonrasiAkis !== null) {
+    const g = ham.girisSonrasiAkis;
+    if (!nesneMi(g) || typeof g.dosya !== 'string' || !/^[a-z0-9][a-z0-9-]{0,80}\.model\.json$/.test(g.dosya)) {
+      hatalar.push('Her girişte çalışacak akış geçersiz (akışı listeden seçin).');
+    } else {
+      /** @type {Record<string, string>} */
+      const degerler = {};
+      for (const [k, v] of Object.entries(nesneMi(g.degerler) ? g.degerler : {}).slice(0, 60)) {
+        if (!/^[\p{L}\p{N}_.-]{1,60}$/u.test(k)) { hatalar.push(`Akış alanı adı geçersiz: ${k.slice(0, 60)}`); continue; }
+        if (v === null || v === undefined || v === '') continue;
+        degerler[k] = String(v).slice(0, 500);
+      }
+      girisSonrasiAkis = { dosya: g.dosya, degerler };
+    }
+  }
+
   // Giriş adımları (isteğe bağlı; yoksa varsayılan sıra — normalleştirilmiş tarife EKLENMEZ).
   let girisAdimlari = null;
   if (ham.girisAdimlari !== undefined && ham.girisAdimlari !== null) {
@@ -220,6 +241,7 @@ export function girisTarifiniDogrula(ham) {
     ikinciAdim,
     zamanAsimiSn: sure(ham.zamanAsimiSn, 'Giriş bekleme süresi (sn)', VARSAYILAN_ZAMAN_ASIMI_SN, 5, 600),
     baglamDegistirme,
+    ...(girisSonrasiAkis ? { girisSonrasiAkis } : {}),
     ...(girisAdimlari ? { girisAdimlari } : {})
   };
   return { gecerli: hatalar.length === 0, tarif: /** @type {any} */ (tarif), hatalar };
@@ -388,6 +410,11 @@ export function baglamAlanlari(tarif) {
   return adimAlanlari(tarif.baglamDegistirme?.adimlar ?? []);
 }
 
+/** Her girişte çalışacak akışın (çözülmüş tarif.girisSonrasi) adımlarının kullandığı alan adları. @param {import('./tarif.d.mts').GirisTarifi} tarif */
+export function girisSonrasiAlanlari(tarif) {
+  return adimAlanlari(tarif.girisSonrasi?.adimlar ?? []);
+}
+
 /** Tarifin giriş adımlarının kullandığı GİRİŞ PROFİLİ ek alan adları. @param {import('./tarif.d.mts').GirisTarifi} tarif */
 export function girisAlanlari(tarif) {
   return adimAlanlari(tarif.girisAdimlari ?? []);
@@ -423,6 +450,7 @@ export const GIRIS_HATA_KODLARI = Object.freeze({
   ALAN_BULUNAMADI: 'Giriş sayfasında alan bulunamadı',
   ZAMAN_ASIMI: 'Giriş zaman aşımına uğradı',
   BAGLAM_ADIMI: 'Bağlam değiştirme adımı başarısız',
+  GIRIS_SONRASI_AKIS: 'Girişten sonra çalışan akış başarısız',
   GIRIS_ADIMI: 'Giriş adımı başarısız',
   TARIF_GECERSIZ: 'Giriş tarifi geçersiz',
   KOKEN_UYUSMAZ: 'Giriş bilgisi farklı bir siteye yazılmadı'

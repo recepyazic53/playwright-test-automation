@@ -1309,6 +1309,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     if (!adimGoruntusuAlinsinMi(adimGoruntusu, { isaretli: adim?.kosu?.ekranGoruntusu === true })) return;
     await attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
   };
+  // Giriş tarifindeki "her girişte çalışacak akış" senaryonun (dahil) adımlarında da varsa tariftekini çalıştırılmaz: senaryodaki koşar.
+  const tarifAkisiSenaryoda = Boolean(tarif?.girisSonrasi && plan.adimlar.some((a) => a.dahil !== false && a.ortakAkisDosyasi === tarif.girisSonrasi?.dosya));
   /** Bağlam değiştirme (tarifte varsa; senaryonun bağlam profiliyle) — ilk girişten ve yeniden girişten sonra. */
   const baglamiUygula = async (t: GirisTarifi): Promise<void> => {
     if (!t.baglamDegistirme) return;
@@ -1336,7 +1338,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         // Kayıtlı oturum kullanılmaz: çerezler temizlenir, seçilen (ya da varsayılan) profille girilir. Varsayılan dışı profilin
         // oturumu paylaşılan oturum dosyasına YAZILMAZ (diğer senaryolar varsayılan profille devam eder).
         await oturumuKapat(page);
-        await girisYap(page, tarif, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif) });
+        await girisYap(page, tarif, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif), girisSonrasiAtla: tarifAkisiSenaryoda });
         // Oturum dosyası kasa anahtarından türetilen anahtarla ŞİFRELİ yazılır (oturum-kasasi.ts; düz metin çerez diske yazılmaz).
         if (giris.profil === null) await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
       } else if (!(await oturumGecerliMi(page, tarif))) {
@@ -1344,7 +1346,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         // bir sürecin bu arada yazdığı oturumu dener; geçerliyse aynı kullanıcıyla ikinci kez giriş yapılmaz (oturum düşmez).
         await oturumKilidiyle(ortam.oturumDosyasi(), async () => {
           if (await yeniOturumuYukle(page.context(), ortam.oturumDosyasi()) && await oturumGecerliMi(page, tarif)) return;
-          await girisYap(page, tarif, ortam.kimlik(), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif) });
+          await girisYap(page, tarif, ortam.kimlik(), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif), girisSonrasiAtla: tarifAkisiSenaryoda });
           await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
         });
       }
@@ -1391,7 +1393,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           const t = tarif ?? ortam.tarif();
           const donus = page.url();
           await oturumuKapat(page);
-          await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
+          await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t), girisSonrasiAtla: tarifAkisiSenaryoda });
           await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`, adim);
           await baglamiUygula(t);
           if (/^https?:/i.test(donus)) await sayfayiAc(page, donus);
@@ -1544,7 +1546,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
       const t = girisTarifi();
       if (!t) return 'giriş tarifi yok (giriş yenilenemedi)';
       await oturumuKapat(page);
-      await girisYap(page, t, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
+      await girisYap(page, t, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t), girisSonrasiAtla: tarifAkisiSenaryoda });
       await baglamiUygula(t);
       await sayfayiAc(page, plan.ekranUrl);
       return 'giriş yenilendi';

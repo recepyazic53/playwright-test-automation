@@ -4,6 +4,7 @@
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
 import { DepoHatasi, ortamGetir, ortamKaydet } from '../veritabani/depo.mjs';
 import { girisTarifiniDogrula } from './tarif.mjs';
+import { girisSonrasiCoz } from './giris-sonrasi-akis.mjs';
 
 export const GIRIS_TARIFI_ANAHTARI = 'girisTarifi';
 
@@ -20,7 +21,8 @@ export function etkinGirisTarifi(vt, projeId, ortamId) {
   const kayitli = ortam.ayarlar[GIRIS_TARIFI_ANAHTARI];
   if (kayitli !== undefined && kayitli !== null) {
     const d = girisTarifiniDogrula(kayitli);
-    return { tarif: d.tarif, kaynak: 'kayitli', hatalar: d.hatalar };
+    // Her girişte çalışacak akış koşucu için çözülür (akış her seferinde modelden okunur; tarifte yalnız seçim + değerler durur).
+    return { tarif: girisSonrasiCoz(vt, projeId, d.tarif), kaynak: 'kayitli', hatalar: d.hatalar };
   }
   return { tarif: null, kaynak: 'yok', hatalar: [] };
 }

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { adresiAyir, kokenKayitliMi } from '../../scripts/platform/arayuz/adres-ayirma.mjs';
-import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { ekranKaydet, ekranModeliEkle, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { korumaliTarayici } from './giris-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
@@ -37,6 +37,12 @@ test.beforeAll(async () => {
   izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Örnek proje' });
   ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: TABAN, varsayilan: true, ayarlar: { riskli: false } });
+  // "Her girişte çalışacak akış" için seçilebilecek genel senaryo (iki değer ister).
+  const kd = ekranKaydet(vt, { projeId, anahtar: 'kullanici-degistir', ad: 'Kullanıcı değiştir' });
+  ekranModeliEkle(vt, { ekranId: kd, model: { semaSurumu: 2, tur: 'ortakAkis', id: 'kullanici-degistir', ad: 'Kullanıcı değiştir', kosullar: {}, adimlar: [{ id: 'sec', sira: 1, baslik: 'Seçilir', bolumler: [{ id: 'b', alanlar: [
+    { id: 'acenteKodu', tip: 'secim', etiket: { ekran: 'Acente Partajı' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'acenteKodu' }, seceneklerDurumu: 'dinamik', konum: { secici: '#acente' } },
+    { id: 'acenteKullanicisi', tip: 'secim', etiket: { ekran: 'Acente Kullanıcısı' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'acenteKullanicisi' }, seceneklerDurumu: 'dinamik', konum: { secici: '#kullanici' } }
+  ] }], kosu: { aksiyonlar: [{ tur: 'tikla', secici: 'button', metin: 'DEĞİŞTİR' }] } }] } });
   vt.kapat();
   nobetci = await nobetciBaslat(klasor, vtYolu);
   expect((await nobetciApi(nobetci, '/platform/kasa/ac', { parola: KASA_PAROLASI })).basarili).toBe(true);
@@ -171,5 +177,34 @@ test('oturum kontrol adresi boşsa giriş sonrası açılan sayfa otomatik türe
   await expect(page.getByText('Giriş tarifi kaydedildi.')).toBeVisible();
   const tarif = ((await nobetciApi(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Array<{ ortamId: string; tarif: Record<string, unknown> }>).find((o) => o.ortamId === ortamId)?.tarif;
   expect(tarif).toMatchObject({ girisAdresi: '/giris', oturumKontrolAdresi: '/panel' });
+  await page.context().close();
+});
+
+test('her girişte çalışacak akış: akışlardan seçilir, istediği alanlar sorulur (boşsa kaydedilmez), seçim ve değerler tarife yazılır', async () => {
+  // Önceki testler bu ortamın tarifini kaydetmiş olabilir: form "Elle tanımla" ile açılsın diye sıfırlanır.
+  await nobetciApi(nobetci, '/platform/giris-tarifi/sifirla', { projeId, ortamId });
+  const { page } = await formuAc();
+  const form = page.locator('form.tarif-formu');
+  await form.getByLabel('Giriş sayfasının adresi').fill('/giris');
+  await form.getByLabel('Kullanıcı adı alanı').fill('#kullanici');
+  await form.getByLabel('Parola alanı').fill('#parola');
+  await form.getByLabel('Giriş düğmesi').fill('#giris');
+  await form.getByLabel('Başarı göstergesi (zorunlu)', { exact: true }).fill('Çıkış');
+  const bolum = form.locator('fieldset.giris-sonrasi-akis');
+  await expect(bolum).toBeVisible();
+  await bolum.getByLabel('Akış').selectOption({ label: 'Kullanıcı değiştir' });
+  await expect(bolum).toContainText('“Kullanıcı değiştir” akışı şu değerleri istiyor:');
+  await bolum.getByLabel('Acente Partajı').fill('30447');
+  // Bir değer boşsa kaydedilmez.
+  await form.getByRole('button', { name: 'Tarifi kaydet' }).click();
+  await expect(bolum.getByText('Acente Kullanıcısı: akış bu değeri istiyor.')).toBeVisible();
+  await bolum.getByLabel('Acente Kullanıcısı').fill('30447001');
+  await form.getByRole('button', { name: 'Tarifi kaydet' }).click();
+  await expect(page.getByText('Giriş tarifi kaydedildi.')).toBeVisible();
+  const o = ((await nobetciApi(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Array<{ ortamId: string; tarif: Record<string, any> }>).find((x) => x.ortamId === ortamId);
+  expect(o?.tarif.girisSonrasiAkis).toEqual({ dosya: 'kullanici-degistir.model.json', degerler: { acenteKodu: '30447', acenteKullanicisi: '30447001' } });
+  // Koşucuya giden tarifte akış çözülmüş (adımlar + değerler).
+  expect(o?.tarif.girisSonrasi).toMatchObject({ ad: 'Kullanıcı değiştir', degerler: { acenteKodu: '30447' } });
+  expect((o?.tarif.girisSonrasi.adimlar as Array<{ islem: string }>).map((a) => a.islem)).toEqual(['sec', 'sec', 'tikla']);
   await page.context().close();
 });

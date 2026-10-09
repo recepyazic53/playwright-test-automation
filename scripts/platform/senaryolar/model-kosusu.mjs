@@ -391,6 +391,7 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       // Ortak akıştan açılan adım: "yalnızca test ortamı" (koşucu canlı ortamda atlar) ve ortak akışın adı (raporda).
       ...(adim.yalnizTest === true ? { yalnizTest: true } : {}),
       ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkisAdi: adim.ortakAkisAdi } : {}),
+      ...(typeof adim.ortakAkisDosyasi === 'string' ? { ortakAkisDosyasi: adim.ortakAkisDosyasi } : {}),
       // SQL sorgusu adımı (sql/sql-adimi.mjs): koşucu sorguyu çalıştırıp beklenenle karşılaştırır (alan / aksiyon yok).
       ...(nesneMi(adim.sqlKontrolu) ? { sql: adim.sqlKontrolu } : {}),
       // Servis isteği adımı (servisler/servis-adimi.mjs): koşucu isteği sunucuya iletir, kontrolleri sunucu değerlendirir.

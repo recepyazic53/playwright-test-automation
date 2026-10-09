@@ -92,6 +92,8 @@ export type PlanAdimi = {
   ekranAcilmadan?: boolean;
   /** Ortak akıştan açılan adımın ortak akış adı. */
   ortakAkisAdi?: string;
+  /** Ortak akıştan açılan adımın kaynak dosyası ("<anahtar>.model.json"). */
+  ortakAkisDosyasi?: string;
   /** SQL sorgusu adımı: koşucu veritabanı sorgusunu beklenenle karşılaştırır. */
   sql?: import('../sql/sql-adimi.mjs').SqlTanimi;
   servis?: import('../servisler/servis-adimi.mjs').ServisTanimi;
