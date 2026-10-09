@@ -1233,12 +1233,13 @@ export async function hizliTestiYurut(
           // zinciri (yerinde; ilk keşifle aynı zincir motoru; listeler sonunda sayfadaki değerlerine döner). Bağı bilinen listeler denenmez.
           const yeniListeler = sonAnlik.alanlar.filter((a) => !doldurOncesi.has(a.anahtar));
           const adaylar = zincirAdaylari(onceAlanlar, sonAnlik.alanlar, new Set(k.bilinenBagli ?? []));
-          const zincirYeni = !k.bekle?.length && adaylar.length ? await yerindeZincirKesfi(adaylar).catch(() => null) : null;
+          // kesifsiz (örnek senaryo): yerinde zincir / seçim keşfi yapılmaz — listeler değiştirilip geri alınınca sayfa bağlı alanları sıfırlayabilir.
+          const zincirYeni = !k.kesifsiz && !k.bekle?.length && adaylar.length ? await yerindeZincirKesfi(adaylar).catch(() => null) : null;
           // Yerinde keşif: doldurunca (ör. bir seçim uygulanınca) beliren, henüz keşfedilmemiş seçimler ilk keşfin kurallarıyla denenir
           // (keşifte kaçırılmış olsalar bile; iç içe dahil). Seçimler sonunda ilk değerlerine döner.
           const bilinen = new Set(k.kesfedilen ?? []);
           const yeniSecimler = k.kesfedilen ? yeniListeler.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur && !bilinen.has(a.anahtar)) : [];
-          const kesifler = yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
+          const kesifler = !k.kesifsiz && yeniSecimler.length && !kapandi ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
           // Yerinde keşif seçimleri denerken sayfanın kuralları yazılmış metin alanlarını değiştirmiş olabilir (ör. bağlı tutar kutusu
           // bedeli sıfırlar): bu turda yazılan alanlar yeniden okunur, tutmayan bir kez yeniden yazılır, yine tutmazsa alan hatası.
           if (zincirYeni || kesifler.length) {
@@ -1268,10 +1269,10 @@ export async function hizliTestiYurut(
           sonAnlik = fark.anlik;
           // Basıştan sonra beliren (henüz boş) seçim alanları da denenir: içlerinde koşullu alan var mı? (Sayfa yeniden açılmaz.)
           const yeniSecimler = fark.yeniAlanlar.filter((a) => ['select', 'radio', 'checkbox'].includes(a.tur) && !a.devreDisi && !a.saltOkunur);
-          const kesifler = yeniSecimler.length ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
+          const kesifler = !k.kesifsiz && yeniSecimler.length ? await yeniAlanKesfi(yeniSecimler).catch(() => [] as HizliKesif[]) : [];
           // Basınca beliren ya da seçenekleri yeni dolan açılır listeler arasında bağlı liste zinciri (yerinde; ilk keşifle aynı motor).
           const adaylar = zincirAdaylari(onceAlanlar, fark.anlik.alanlar, new Set(k.bilinenBagli ?? []));
-          const zincirYeni = adaylar.length ? await yerindeZincirKesfi(adaylar).catch(() => null) : null;
+          const zincirYeni = !k.kesifsiz && adaylar.length ? await yerindeZincirKesfi(adaylar).catch(() => null) : null;
           // Keşif sayfanın değerlerini geri yükledi; son okuma (sayfanın doldurduğu değerlerle) tazelenir.
           if (kesifler.length || zincirYeni) { sonAnlik = { ...(await anlikOku(islem, false)), goruntu: fark.anlik.goruntu }; fark.anlik = sonAnlik; }
           await gonder({ olay: 'basildi', no: k.no, fark, kesifler, ...(zincirYeni ? { zincir: zincirYeni } : {}) });

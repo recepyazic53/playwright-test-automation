@@ -870,11 +870,9 @@ test('modeli güncelleme sonu: senaryo kaydedilmez, model değişmez; ulaşılma
   const senaryoOnce = await senaryoSayisi();
   // Düzenleme kipinde (modelGuncelleme yok) "farklar" kullanılamaz.
   const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', cumle: '"Tutar:"', ornekSenaryoId: kayitli?.senaryoId, modelGuncelleme: true })).id);
-  let o = await bekle(id, ['veri']);
+  // Örnek senaryo var: veri durağı kendiliğinden geçilir (değerler senaryodan); Hayır izni → düğme / mesaj seçimi.
+  let o = await bekle(id, ['hayirSecim']);
   expect(o.modelGuncelleme).toBe(true);
-  const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
-  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('Deneme Kişi'), [alan('Müşteri tipi')]: deger('bireysel') } });
-  o = await bekle(id, ['hayirSecim']);
   await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: o.soru.adaylar.find((a: Nesne) => a.metin === 'Hesapla').secici, mesajlar: ['Tutar:'] });
   o = await bekle(id, ['bitis']);
   await basarili('/platform/hizli-test/bitis', { id, etiketler: o.soru.etiketler });
