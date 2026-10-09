@@ -98,6 +98,8 @@
 //                                      (+ onaylanan test verisi tabloları / alan bağlantıları; değiştir ve analiz/yukle da alır)
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
 //   POST /platform/ekran/analiz/uygula { projeId, ekranId, analizId, kabul, red } yalnızca kabul edilenlerle yeni sürüm
+//   GET  /platform/ekran/surumler?projeId&ekranId                         ekran sürümleri (Nöbetçi taraması geçmişi)
+//   POST /platform/ekran/surum/modele-ekle { projeId, ekranId, anahtar }    son sürümdeki gelen alanı modele ekler → bulgular
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
 //   POST /platform/senaryolar/tarih-donusumu { projeId, senaryoIdleri, onay? }  eskimiş sabit tarihler → "bugün+N" (onaysız önizleme)
 //   POST /platform/ekran/senaryolar/tablo-donusumu { projeId, ekranId?, onay?, secimler?: [{ senaryoId, alan }] }  tabloya bağlı
@@ -239,7 +241,7 @@ import {
 } from './ekranlar/ekran-servisi.mjs';
 import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele, bosOrtakAkisOlustur, ortakAkisAdaylari, ortakAkisEkranlaraEkle } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
-import { kosuAnaliziniYukle } from './ekranlar/kosu-analizi.mjs';
+import { alaniModeleEkle, ekranSurumleri, kosuEkranSurumu } from './ekranlar/ekran-surumleri.mjs';
 import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
 } from './ekranlar/ekran-yonetimi.mjs';
@@ -1433,6 +1435,7 @@ const GET_UCLARI = new Map([
     return surumAyrintisi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')), surum);
   }],
   ['/platform/ekran/analiz', (db, q) => analizGetir(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
+  ['/platform/ekran/surumler', (db, q) => ekranSurumleri(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ekran/akislar', (db, q) => akislariListele(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ortak-akis/ekranlar', (db, q) => ortakAkisAdaylari(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ekran/akis/tasarim', (db, q) => {
@@ -1608,6 +1611,7 @@ const POST_UCLARI = new Map([
     olusturulacak: g.olusturulacak === 'ortakAkis' ? 'ortakAkis' : 'ekran'
   })],
   ['/platform/ekran/analiz/yukle', (db, g) => analizYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, { medyaKlasoru: medyaKlasoruYolu(), testVerisi: g.testVerisi })],
+  ['/platform/ekran/surum/modele-ekle', (db, g) => alaniModeleEkle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.anahtar ?? ''), { medyaKlasoru: medyaKlasoruYolu() })],
   ['/platform/ekran/analiz/uygula', (db, g) => analizUygula(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { analizId: g.analizId, kabul: g.kabul, red: g.red })],
   ['/platform/ekran/analiz/iptal', (db, g) => analizIptal(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.analizId)],
   ['/platform/ekran/akis/kaydet', (db, g) => akisKaydet(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
@@ -2662,10 +2666,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
         // Koşu bitene kadar yanıt bekletilir (satır "çalışıyor" görünür); durdurma /durdur, canlı görüntü /canli ile.
         const db = await acikVeritabani();
         const sonuc = await senaryoCalistir(db, govde, kosucu, calistirmaSecenekleri(db));
-        // Modeli güncelle: koşu sırasında okunan ekranlar modelle karşılaştırılır, farklar ekranın Değişiklikler'ine yüklenir.
+        // Modeli güncelle (Nöbetçi taraması): okunan ekran yeni ekran sürümü olur, bir öncekiyle karşılaştırılır (ekranlar/ekran-surumleri.mjs).
         if (govde.ekranAnalizi === true && typeof sonuc.govde.sonucId === 'string' && typeof sonuc.govde.senaryoId === 'string') {
           try {
-            const ekranAnalizi = await kosuAnaliziniYukle(db, { sonucId: sonuc.govde.sonucId, senaryoId: sonuc.govde.senaryoId }, { medyaKlasoru: medyaKlasoruYolu() });
+            const ekranAnalizi = await kosuEkranSurumu(db, { sonucId: sonuc.govde.sonucId, senaryoId: sonuc.govde.senaryoId }, { medyaKlasoru: medyaKlasoruYolu() });
             jsonGonder(res, sonuc.httpDurum, { ...sonuc.govde, ekranAnalizi });
           } catch (h) {
             jsonGonder(res, sonuc.httpDurum, { ...sonuc.govde, ekranAnalizi: null, ekranAnaliziHatasi: h instanceof Error ? h.message : String(h) });

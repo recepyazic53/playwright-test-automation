@@ -10,7 +10,7 @@
 //   ekranları göster"); silinmiş ekranlar (mezar taşı) "Tüm ekranlar"ın altında listelenir (geri yükle / temizle).
 // "Ekran ekle" yalnız ekran oluşturur (her ekran başka senaryoda önceki adım olabilir); eski ortak-akis bağlantısı geriye uyum için durur.
 // "Kullanan ekranlar" ve "Ekranlara ekle…" vardır.
-// Adresler: #/ekranlar · #/ekranlar/yeni[/tara | /ortak-akis] ·#/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
+// Adresler: #/ekranlar · #/ekranlar/yeni[/tara | /ortak-akis] ·#/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /surumler | /yukle | /bulgular] ·
 //   #/ekranlar/tarama/<iş kimliği> (otomatik taramanın ilerlemesi → önizleme/kabul)
 // Ekran keşfinin yolları (öncelik sırasıyla): "Ekranı tara", "Akışı kaydet" ve — "İleri düzey" altında, kapalı — ekran paketi (kullanıcı istek metnini ve biçim dosyasını sayfa bağlantısıyla yapay zekâ aracına verir; araç sayfayı
 // düğme kurallarına göre — paket-istekleri.mjs > INCELEME_KURALLARI — inceleyip paketi üretir, paket burada yüklenir).
@@ -296,8 +296,8 @@ async function ekranAyrintisi(icerik, s) {
     sonra: () => { location.hash = '#/ekranlar'; yenile(); }
   });
   /**
-   * "Nöbetçi taraması": modeli olan ekranda seçilen senaryo normal koşar; koşu sırasında ekran okunur, bitince farklar (yeni / kaybolan
-   * alan, seçenek, düğme) gösterilir (kosu-paneli.js > ekranAnaliziSonucu). Modeli yoksa sayfayı okuyan tarama (değişmedi).
+   * "Nöbetçi taraması": modeli olan ekranda önce keşif (seçimler / düğmeler denenir), sonra seçilen senaryo koşar; Nöbetçi'nin gördüğü
+   * hâl yeni ekran sürümü olur ve bir öncekiyle karşılaştırılır (ekran-surumleri.js). Modeli yoksa sayfayı okuyan tarama (değişmedi).
    */
   const nobetciTaramasi = async () => {
     if (!modelVar) { taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }); return; }
@@ -311,7 +311,7 @@ async function ekranAyrintisi(icerik, s) {
     const { canliOnayIste, kosuBaslat, onerilenOrtam, secenekIste } = await import('./kosu-paneli.js');
     const secilen = senaryolar.length === 1 ? senaryolar[0].id : await secenekIste({
       baslik: 'Hangi senaryo koşsun?', ikonAd: 'ara',
-      metin: 'Nöbetçi senaryoyu koşarken ekranı okur; bitince yeni / kaybolan alanları, seçenekleri ve düğmeleri gösterir.',
+      metin: 'Nöbetçi önce ekranı keşfeder (seçimler, düğmeler), sonra bu senaryoyla doldurur; ekranın gördüğü hâlini bir önceki taramayla karşılaştırır.',
       secenekler: senaryolar.map((x) => ({ deger: x.id, etiket: x.baslik, ikonAd: 'oynat' }))
     });
     const senaryo = senaryolar.find((x) => x.id === secilen);
@@ -326,8 +326,8 @@ async function ekranAyrintisi(icerik, s) {
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
-      // Nöbetçi taraması (tek giriş): seçilen senaryo koşarken ekran okunur, bitince farklar.
-      altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Nöbetçi taraması', aciklama: 'Seçtiğiniz senaryoyu koşar, koşarken ekranı okur; bitince yeni / kaybolan alanları, seçenekleri ve düğmeleri gösterir, onayınızla günceller.',
+      // Nöbetçi taraması (tek giriş): keşif + seçilen senaryo; ekran sürümü bir öncekiyle karşılaştırılır.
+      altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Nöbetçi taraması', aciklama: 'Ekranı keşfeder, seçtiğiniz senaryoyla doldurur; ekranın bir önceki taramaya göre değişen alanlarını, seçeneklerini ve düğmelerini gösterir.',
         fn: () => nobetciTaramasi() },
       { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
       altModel ? null : {
@@ -342,7 +342,9 @@ async function ekranAyrintisi(icerik, s) {
     ['model', 'Model', null], ['gecmis', 'Model geçmişi', d.gecmis.length], ['kanitlar', 'Kanıtlar', d.analiz.kanitlar.length],
     ...(d.model ? [['akis', 'Akışlar', Array.isArray(d.model.akislar) && d.model.akislar.length ? d.model.akislar.length : 1]] : []),
     // Test verisi: ekranlarda ve genel senaryoda (bağları onu kullanan ekranlara varsayılan olarak geçer); alt modelde yok.
-    ...(d.model && d.modelTuru !== 'altModel' ? [['veri', 'Test verisi', null]] : [])
+    ...(d.model && d.modelTuru !== 'altModel' ? [['veri', 'Test verisi', null]] : []),
+    // Nöbetçi taramasının ekran sürümleri (ekranın gördüğü hâli; yalnız ekranlarda).
+    ...(d.model && !altModel && !ortakAkis ? [['surumler', 'Ekran sürümleri', null]] : [])
   ];
   const sekmeAlani = h('div', {});
   yerlestir(icerik,
@@ -387,6 +389,7 @@ async function ekranAyrintisi(icerik, s) {
   if (s.sekme === 'kanitlar') { kanitSekmesi(sekmeAlani, d); return; }
   if (s.sekme === 'akis' && d.model) { await akisSekmesi(sekmeAlani, s, d, icerik); return; }
   if (s.sekme === 'veri' && d.model) { await ekranBaglariSekmesi(sekmeAlani, s, e); return; }
+  if (s.sekme === 'surumler') { await (await import('./ekran-surumleri.js')).ekranSurumleriSekmesi(sekmeAlani, s, e); return; }
   if (!agac) {
     yerlestir(sekmeAlani, bosDurum('Bu ekranın modeli yok.', 'Yapay zekâ aracınızın ürettiği bir ekran paketini yükleyerek, ekranı tarayarak ya da akışı kaydederek model oluşturun. Mevcut senaryolar korunur.', {
       ikon: 'katman', eylem: h('div', { class: 'dugmeler' },

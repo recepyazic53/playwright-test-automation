@@ -4726,3 +4726,11 @@ tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
 .bulgu-ayrintisi { margin-top: 4px; }
 .bulgu-ayrintisi > summary { cursor: pointer; font-size: 12.5px; color: var(--metin-2); }
 .etki-paneli.satir-ici { margin-top: 6px; padding: 10px 12px; border-radius: var(--yaricap, 8px); background: var(--panel-2); }
+
+/* Nöbetçi taraması: ekran sürümleri (ekran-surumleri.js) */
+.ekran-surumu-listesi { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
+.ekran-surumu-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--cizgi, #e5e5e5); }
+.ekran-surumu-listesi li .kucuk-dugme { margin-left: auto; }
+.ekran-surumleri { display: grid; gap: 12px; }
+.ekran-surumu summary { cursor: pointer; }
+.ekran-surumu-diyalogu .diyalog-govde { max-height: 70vh; overflow: auto; }

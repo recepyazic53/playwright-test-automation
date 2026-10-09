@@ -30,6 +30,7 @@ import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/pl
 import { gercekSecenekler, yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
 import { ENVANTER_BETIGI, envanterOku, hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
 import { eylemAdaylariniCikar } from '../../scripts/platform/tarama/eylem-kesfi-motoru';
+import { ekranKesfi, type EkranKesfi } from './ekran-kesfi';
 import { listeDurumu, listedenSecenekSec, listedeYokMetni, secenekBekle, secenekEslestir, type ListeSecenegi, type SecenekBekleSonucu } from '../../scripts/platform/tarama/secenek-secimi';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { ozelBilesendenSec } from '../../scripts/platform/tarama/ozel-secim';
@@ -1274,6 +1275,7 @@ async function ekraniOku(page: Page, adim: { id: string; baslik: string }): Prom
 export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitliSenaryo: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
   /** Ekran analizi (Modeli güncelle): adım kimliği → okunanlar (kurtarma adımı tekrar koşarsa sonuncusu). */
   const gozlemler = new Map<string, EkranGozlemi>();
+  let kesif: EkranKesfi | null = null;
   // Çerçeve (iframe) içindeki alanlar da okunsun diye sayfa betiği her belgeye eklenir (yalnız analizde).
   if (EKRAN_ANALIZI) await page.addInitScript({ content: ENVANTER_BETIGI });
   // Eski kayıtlı modellerdeki iç içe metinli düğme seçicileri (`tag:text-is("…")`) çalışırken düzeltilir (bkz. secici-duzelt.mjs).
@@ -1384,7 +1386,11 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     // sayfada — girişsiz senaryoda ortamın taban adresinde — EKRAN AÇILMADAN önce koşar; bitince "Ekran açılır", sonra ekran
     // adımları. Model "bastakiOrtakAkislar": "sonra" ise işaret yoktur: ekran önce açılır (eski davranış).
     const bastakiler = plan.adimlar.filter((a) => a.ekranAcilmadan === true);
-    const ekranAdimlari = plan.adimlar.filter((a) => a.ekranAcilmadan !== true);
+    const tumEkranAdimlari = plan.adimlar.filter((a) => a.ekranAcilmadan !== true);
+    // Modeli güncelle: ekranın kendi adımları bitince durulur (sondaki genel senaryolar — ödeme / poliçeleştirme — koşmaz; amaç
+    // yalnız ekrana veri girip okumaktır, kayıt oluşturulmaz).
+    const sonKendiAdim = tumEkranAdimlari.map((a) => !a.ortakAkisAdi).lastIndexOf(true);
+    const ekranAdimlari = EKRAN_ANALIZI && sonKendiAdim >= 0 ? tumEkranAdimlari.slice(0, sonKendiAdim + 1) : tumEkranAdimlari;
     /** Son koşan adım "Ekrana dön" ile bitti mi (baştaki blok böyle bitince ekran ikinci kez açılmaz; o dönüş ekranı açmıştır). */
     let ekranaDonuldu = false;
 
@@ -1717,6 +1723,14 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
         await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
       });
       simdikiAdim = null;
+      // Modeli güncelle: önce keşif (seçimler / düğmeler denenir), sonra ekran yeniden açılır ve senaryo temiz ekranda koşar.
+      // Keşif koşuyu düşürmez.
+      if (EKRAN_ANALIZI) {
+        await test.step('Ekran keşfi (seçimler ve düğmeler denenir)', async () => {
+          kesif = await ekranKesfi(page, () => sayfayiAc(page, plan.ekranUrl)).catch(() => null);
+          await sayfayiAc(page, plan.ekranUrl);
+        });
+      }
 
       // Göreli tarihler (senaryo / tablo / model değeri "bugün+7" …): raporda hem ifade hem bu koşuda yazılan tarih görünür.
       const goreliler = plan.adimlar.filter((a) => a.dahil).flatMap((a) => a.alanlar).filter((a) => a.goreliIfade && !a.atla && !gizliAdMi(a.etiket) && !gizliAdMi(a.anahtar))
@@ -1750,7 +1764,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     if (kurtarmaOlaylari.length) testInfo.annotations.push({ type: 'kurtarma', description: JSON.stringify(kurtarmaOlaylari) });
     // Modeli güncelle: okunan ekranlar koşu sonucuna ek olarak yazılır (koşu başarısız olsa da; o ana kadar gezilenler).
     if (EKRAN_ANALIZI) {
-      await testInfo.attach('ekran-analizi', { contentType: 'application/json', body: JSON.stringify({ surum: 1, gozlemler: [...gozlemler.values()] }) }).catch(() => undefined);
+      await testInfo.attach('ekran-analizi', { contentType: 'application/json', body: JSON.stringify({ surum: 2, kesif, gozlemler: [...gozlemler.values()] }) }).catch(() => undefined);
     }
   }
   if (engellenen.length) throw new Error(`Yasaklı adrese istek engellendi: ${[...new Set(engellenen)].join(', ')}.`);
