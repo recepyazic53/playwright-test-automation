@@ -57,6 +57,8 @@ export declare function calistirmaIsteginiHazirla(vt: Veritabani, govde: Record<
   ekOrtam: Record<string, string>;
 };
 export declare function gorunurOrtami(govde: Record<string, unknown>): Record<string, string>;
+export declare const EKRAN_ANALIZI_DEGISKENI: string;
+export declare function ekranAnaliziOrtami(govde: Record<string, unknown>): Record<string, string>;
 export declare function senaryoCalistir(
   vt: Veritabani, govde: Record<string, unknown>, kosucu: Kosucu | null, secenekler?: CalistirmaSecenekleri
 ): Promise<{ httpDurum: number; govde: Record<string, unknown> }>;

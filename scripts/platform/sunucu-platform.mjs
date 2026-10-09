@@ -239,6 +239,7 @@ import {
 } from './ekranlar/ekran-servisi.mjs';
 import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele, bosOrtakAkisOlustur, ortakAkisAdaylari, ortakAkisEkranlaraEkle } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
+import { kosuAnaliziniYukle } from './ekranlar/kosu-analizi.mjs';
 import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
 } from './ekranlar/ekran-yonetimi.mjs';
@@ -2661,6 +2662,16 @@ export async function platformIsteginiIsle(req, res, baglam) {
         // Koşu bitene kadar yanıt bekletilir (satır "çalışıyor" görünür); durdurma /durdur, canlı görüntü /canli ile.
         const db = await acikVeritabani();
         const sonuc = await senaryoCalistir(db, govde, kosucu, calistirmaSecenekleri(db));
+        // Modeli güncelle: koşu sırasında okunan ekranlar modelle karşılaştırılır, farklar ekranın Değişiklikler'ine yüklenir.
+        if (govde.ekranAnalizi === true && typeof sonuc.govde.sonucId === 'string' && typeof sonuc.govde.senaryoId === 'string') {
+          try {
+            const ekranAnalizi = await kosuAnaliziniYukle(db, { sonucId: sonuc.govde.sonucId, senaryoId: sonuc.govde.senaryoId }, { medyaKlasoru: medyaKlasoruYolu() });
+            jsonGonder(res, sonuc.httpDurum, { ...sonuc.govde, ekranAnalizi });
+          } catch (h) {
+            jsonGonder(res, sonuc.httpDurum, { ...sonuc.govde, ekranAnalizi: null, ekranAnaliziHatasi: h instanceof Error ? h.message : String(h) });
+          }
+          return true;
+        }
         jsonGonder(res, sonuc.httpDurum, sonuc.govde);
         return true;
       }

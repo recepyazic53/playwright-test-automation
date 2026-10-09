@@ -356,7 +356,7 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
   const secenekler = page.getByRole('menuitem');
   await expect(secenekler).toHaveText([/^Nöbetçi taraması/, /^Paket yükle/, /^Akışı kaydet/]);
-  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/seçtiğiniz senaryonun verileriyle gezer/);
+  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/Seçtiğiniz senaryoyu koşar, koşarken ekranı okur/);
   await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();

@@ -75,7 +75,7 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
   ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' && govde.tekBasina === true });
-  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: { ...veriKosusuOrtami(vt, projeId, hedef, govde), ...surumOrtami(vt, hedef, govde), ...gorunurOrtami(govde) } };
+  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: { ...veriKosusuOrtami(vt, projeId, hedef, govde), ...surumOrtami(vt, hedef, govde), ...gorunurOrtami(govde), ...ekranAnaliziOrtami(govde) } };
 }
 
 /**
@@ -85,6 +85,13 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
  */
 export function gorunurOrtami(govde) {
   return govde.gorunur === true ? { [GORUNUR_KOSU_DEGISKENI]: '1' } : {};
+}
+
+/** Modeli güncelle (ekran analizi): koşucu her adımda ekranı okur (model-kosucu.ts > EKRAN_ANALIZI). */
+export const EKRAN_ANALIZI_DEGISKENI = 'NOBETCI_EKRAN_ANALIZI';
+/** @param {Record<string, unknown>} govde @returns {Record<string, string>} */
+export function ekranAnaliziOrtami(govde) {
+  return govde.ekranAnalizi === true ? { [EKRAN_ANALIZI_DEGISKENI]: '1' } : {};
 }
 
 /**
