@@ -4657,3 +4657,13 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
   * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
   :hover { scrollbar-color: var(--cizgi-2) transparent; }
 }
+/* Ayarlar kartları: başlığa tıklayınca açılır / kapanır (kart-katla.js). Kapalıyken yalnız başlık ve kısa durum (.kart-ozet). */
+.kart.katlanir > .kart-katla-basligi { cursor: pointer; user-select: none; margin-bottom: 0; }
+.kart.katlanir:not(.kapali) > .kart-katla-basligi { margin-bottom: 12px; }
+.kart.katlanir.kapali > :not(.kart-katla-basligi):not(.kart-ozet) { display: none !important; }
+.kart.katlanir.kapali > .kart-ozet { margin: 10px 0 0; }
+.kart-katla-dugmesi { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--metin-2); border-radius: 6px; flex: none; }
+.kart-katla-dugmesi:hover { background: var(--panel-2); color: var(--metin); }
+.kart-katla-dugmesi .ikon { transition: transform .15s ease; }
+.kart.katlanir.kapali .kart-katla-dugmesi .ikon { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .kart-katla-dugmesi .ikon { transition: none; } }

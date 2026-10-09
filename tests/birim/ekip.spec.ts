@@ -108,4 +108,31 @@ test.describe('kasa açılışı ve Ayarlar > Ekip', () => {
     await expect(kart.getByRole('button', { name: 'Recep: sil' })).toBeDisabled();
     expect(hatalar).toEqual([]);
   });
+
+  test('Ayarlar kartları başlığıyla kapalı başlar, tıklayınca açılır, açık olan hatırlanır', async () => {
+    test.setTimeout(60_000);
+    // Bu test tek başına da koşabilsin: kasa Recep (Admin) ile açık.
+    await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA, kullaniciAdi: 'Recep' });
+    if (!((await nobetciApi(nobetci, '/platform/projeler')).projeler as unknown[]).length) await nobetciApi(nobetci, '/platform/proje/kaydet', { ad: 'Kart Projesi' });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    // Otomasyonda kartlar açık başlar; bu test kullanıcının gördüğü varsayılanı (kapalı) dener.
+    await baglam.addInitScript(() => { try { localStorage.setItem('nobetci.ayarKartlariVarsayilan', 'kapali'); } catch { /* yok */ } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/guvenlik');
+    const form = page.getByRole('form', { name: 'Maskeleme' });
+    const dugme = form.getByRole('button', { name: 'Maskeleme: aç / kapat' });
+    await expect(dugme).toHaveAttribute('aria-expanded', 'false');
+    await expect(form.getByLabel('Ek gizli adlar (her satıra bir ad)')).toBeHidden();
+    await form.getByRole('heading', { name: /Maskeleme/ }).click();
+    await expect(dugme).toHaveAttribute('aria-expanded', 'true');
+    await expect(form.getByLabel('Ek gizli adlar (her satıra bir ad)')).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('form', { name: 'Maskeleme' }).getByLabel('Ek gizli adlar (her satıra bir ad)')).toBeVisible();
+    await page.getByRole('form', { name: 'Maskeleme' }).getByRole('button', { name: 'Maskeleme: aç / kapat' }).click();
+    await expect(page.getByRole('form', { name: 'Maskeleme' }).getByLabel('Ek gizli adlar (her satıra bir ad)')).toBeHidden();
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
 });

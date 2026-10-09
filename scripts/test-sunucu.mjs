@@ -396,6 +396,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/veri-klasoru.js', { dosya: 'veri-klasoru.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortak-paylasim.js', { dosya: 'ortak-paylasim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekip.js', { dosya: 'ekip.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/kart-katla.js', { dosya: 'kart-katla.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/entegrasyonlar.js', { dosya: 'entegrasyonlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/zamanlanmis-kosular.js', { dosya: 'zamanlanmis-kosular.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akis-diyagrami.js', { dosya: 'servis-akis-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],
