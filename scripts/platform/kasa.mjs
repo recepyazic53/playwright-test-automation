@@ -48,7 +48,7 @@ export const HASSAS_SUTUNLAR = Object.freeze(Object.fromEntries(
 
 export class KasaHatasi extends Error {
   /**
-   * @param {'PAROLA_KISA' | 'PAROLA_YANLIS' | 'KASA_KILITLI' | 'KASA_YOK' | 'KASA_VAR' | 'ZARF_BOZUK' | 'COK_DENEME'} kod
+   * @param {'PAROLA_KISA' | 'PAROLA_YANLIS' | 'KASA_KILITLI' | 'KASA_YOK' | 'KASA_VAR' | 'ZARF_BOZUK' | 'COK_DENEME' | 'YETKISIZ'} kod
    * @param {string} mesaj
    * @param {{ bekleSaniye?: number }} [ek]
    */

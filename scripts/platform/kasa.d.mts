@@ -1,7 +1,7 @@
 // scripts/platform/kasa.mjs için tip bildirimi.
 import type { Veritabani } from './veritabani/baglanti.mjs';
 
-export type KasaHataKodu = 'PAROLA_KISA' | 'PAROLA_YANLIS' | 'KASA_KILITLI' | 'KASA_YOK' | 'KASA_VAR' | 'ZARF_BOZUK' | 'COK_DENEME';
+export type KasaHataKodu = 'PAROLA_KISA' | 'PAROLA_YANLIS' | 'KASA_KILITLI' | 'KASA_YOK' | 'KASA_VAR' | 'ZARF_BOZUK' | 'COK_DENEME' | 'YETKISIZ';
 export declare class KasaHatasi extends Error {
   constructor(kod: KasaHataKodu, mesaj: string, ek?: { bekleSaniye?: number });
   readonly kod: KasaHataKodu;

@@ -15,7 +15,7 @@
 // henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
-  degisiklikleriBirak, kaydirmaKenarlariniIzle, kasaDurumunuBildir, parolaAlani, rozet, s, temaDugmesi, yerlestir
+  degisiklikleriBirak, kaydirmaKenarlariniIzle, kasaDurumunuBildir, kullaniciAdiAlani, parolaAlani, rozet, s, temaDugmesi, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberBaglaminiAyarla, rehberDugmesi, rehberOtomatikDene, sayfaRehberiBaglantisiKur } from './rehber.js';
@@ -25,7 +25,7 @@ import { olusturMenusu } from './olustur-menusu.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { tabloSiralamaKur } from './tablo-siralama.js';
 import { aranabilirSecimKur } from './aranabilir-secim.js';
-import { ayarlarBolumu, AYAR_BOLUMLERI, ESKI_ADRESLER, UST_SAYFALAR, ustSayfaBolumu } from './ayarlar.js';
+import { ayarBolumleri, ayarlarBolumu, ESKI_ADRESLER, UST_SAYFALAR, ustSayfaBolumu } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 import { kasayiKilitleSecimli, kilitBildirimi } from './zamanlanmis-kosular.js';
 import { riskliSecimi } from './ortam-riski.mjs';
@@ -707,6 +707,7 @@ function geriSayimHalkasi() {
 
 function kilitEkrani(beklemeSaniye) {
   sayfaBasligi('Kasa kilitli');
+  const kullanici = kullaniciAdiAlani();
   const parola = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'current-password' });
   const mesaj = mesajKutusu();
   const halka = geriSayimHalkasi();
@@ -721,7 +722,7 @@ function kilitEkrani(beklemeSaniye) {
       h('h1', {}, 'Kasa kilitli'),
       cokluAlan ? h('p', { class: 'kilit-alan-adi' }, h('span', { class: 'ca-avatar kucuk', 'aria-hidden': 'true' }, basHarf(alan.ad)), h('span', {}, alan.ad)) : null,
       h('p', { class: 'soluk' }, cokluAlan ? 'Devam etmek için bu çalışma alanının kasa parolasını girin.' : 'Devam etmek için kasa parolasını girin.')),
-    mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
+    mesaj.kutu, halka.kutu, kullanici.kapsayici, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
     durum.sunucu && durum.sunucu.zamanlama && durum.sunucu.zamanlama.anahtarBellekte
       ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Planlı koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Planlı koşular).') : null,
     baska ? h('div', { class: 'kilit-alt' }, baska) : null);
@@ -743,7 +744,8 @@ function kilitEkrani(beklemeSaniye) {
     alanHatasi(parola.girdi, '');
     if (!parola.girdi.value) { alanHatasi(parola.girdi, 'Parolayı girin.'); parola.girdi.focus(); return; }
     try {
-      await mesgulIken(gonder, 'Açılıyor…', () => api('/platform/kasa/ac', { govde: { parola: parola.girdi.value }, kilitOlayiYok: true }));
+      await mesgulIken(gonder, 'Açılıyor…', () => api('/platform/kasa/ac', { govde: { parola: parola.girdi.value, kullaniciAdi: kullanici.girdi.value.trim() }, kilitOlayiYok: true }));
+      kullanici.hatirla();
       kasaDurumunuBildir(true);
       parola.girdi.value = '';
       durdur();
@@ -762,7 +764,7 @@ function kilitEkrani(beklemeSaniye) {
   });
   ekran(odakSayfa({ ustMetin: cokluAlan ? `kilitli · ${alan.ad}` : 'kilitli' }, anaAlan('ortali dar', form)));
   ekranTemizle = () => durdur();
-  parola.girdi.focus();
+  (kullanici.girdi.value ? parola.girdi : kullanici.girdi).focus();
 }
 
 // ---------------------------------------------------------------------------------------
@@ -899,7 +901,7 @@ function anaDuzen() {
     yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
   }) : null;
   const sunucu = sunucuDurumu();
-  const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, ustSayfalar: UST_SAYFALAR });
+  const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: ayarBolumleri(durum), ustSayfalar: UST_SAYFALAR });
   // Basit mod (basit-mod.js): menü yalnız Testlerim · Sonuçlar · Ayarlar, "Oluştur" yerine "+ Yeni test"; Gelişmiş'e ait sayfanın
   // üstünde not; sağda Basit / Gelişmiş anahtarı. Kullanım modu iki modda da üst çubuktaki çalışma alanı menüsünde ("Basit moda geç" / "Gelişmiş moda geç"), Ayarlar'ın yan panelinde ve Ayarlar > Arayüz'dedir. Gelişmiş üst çubuğu dolu olduğu için orada ayrı anahtar yoktur.
   const basit = durum.kullanimModu.mod === 'basit';
@@ -910,7 +912,7 @@ function anaDuzen() {
     markaOgesi(),
     projeSecici(),
     kaydirmaKenarlariniIzle(h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, basit ? [navTestlerim, navBasitSonuclar, navAyarlar] : [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navRaporlar, navAyarlar])),
-    basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
+    basit ? yeniTestDugmesi() : olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: ayarBolumleri(durum), yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
     hizliAramaDugmesi(aramaBaglami), sunucu, basit ? modAnahtari('basit', (hedef) => moduDegistir(hedef)) : null, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
   hizliAramaKisayolu(aramaBaglami);
@@ -984,7 +986,7 @@ function anaDuzen() {
       navAyarlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Ayarlar');
-      ayarlarEkrani(main, AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
+      ayarlarEkrani(main, ayarBolumleri(durum).some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
     } else {
       // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
       (bolum === 'sonuclar' && alt === 'raporlar' ? navRaporlar : navSonuclar).setAttribute('aria-current', 'page');
@@ -1055,7 +1057,7 @@ const mesajKutusuHata = (metin) => h('div', { class: 'not-kutusu hata', role: 'a
 function ayarlarEkrani(main, bolum, odak = null) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
   const altNav = h('nav', { class: 'alt-nav', 'aria-label': 'Ayarlar bölümleri' },
-    AYAR_BOLUMLERI.map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
+    ayarBolumleri(durum).map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
   // Ayarlar'dan üst menüye taşınan sayfalar: eski yerinden de bulunabilsin diye "taşındı" bağlantıları (Ayarlar'da yalnız ayarlar kalır).
   const tasinan = h('nav', { class: 'alt-nav tasinan-bolumler', 'aria-label': 'Üst menüye taşınan sayfalar' },
     h('div', { class: 'alt-nav-alt-baslik' }, 'Üst menüye taşındı'),

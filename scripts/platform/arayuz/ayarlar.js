@@ -2,6 +2,7 @@
 // Yedekleme, Güvenlik. Tüm veriler /platform/* uç noktalarından gelir; gizli değerler
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
+import { ekipBolumu } from './ekip.js';
 import {
   ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
   kisaAciklama, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
@@ -34,11 +35,21 @@ export const AYAR_BOLUMLERI = [
   { ad: 'hata-pencereleri', etiket: 'Hata pencereleri', ikon: 'uyari', aciklama: 'Sitenin hata / uyarı mesajını gösterdiği pencereler (ör. sayfa içi uyarı kutusu). Koşu bir adımı beklerken önce ekranın kendi göstergelerine bakar; onlar bir şey söylemiyorken buradaki bir pencere görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır. Proje düzeyindedir; "Sayfada seç" ile görsel olarak tanımlanır.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Saklama kartı dört saklama kuralını (koşu sonuçları, medya inceltme, rapor ve video saklama) ve otomatik yedek sayısını tek zaman çizelgesinde gösterir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
+  { ad: 'ekip', etiket: 'Ekip', ikon: 'kullanici', yalnizAdmin: true, aciklama: 'Bu dosyayı açabilecek kişiler ve rolleri (Admin / Kullanıcı). Liste doluysa dosyayı yalnız listedeki kullanıcı adları açar; bu bölümü yalnız Admin görür.' },
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; bir izin paketiyle birkaçını tek onayla ya da tek tek açarsınız. Açtığınız izinler kasada saklanır.' },
   { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
   { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'PDF raporlarının kullandığı kararlarınız: ekip listesi ve ekran / servis → ekip eşlemesi (sahip önerisi), kritik işaretli ekran, servis ve akışlar (öncelik ve durum rozeti) ve süre eşikleri (ekran, servis, metot). Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır.' },
   { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı, listelerin sayfa boyları ve Sonuçlar > Özet kartlarının eşikleri.' }
 ];
+
+/**
+ * Kişinin görebileceği Ayarlar bölümleri: "yalnizAdmin" bölümler (Ekip) Kullanıcı rolündekilere gösterilmez (sunucu da reddeder).
+ * @param {any} durum uygulama durumu (durum.sunucu.kullanici: dosyayı açan kişi ve rolü)
+ */
+export function ayarBolumleri(durum) {
+  const kullaniciMi = durum && durum.sunucu && durum.sunucu.kullanici && durum.sunucu.kullanici.rol === 'kullanici';
+  return AYAR_BOLUMLERI.filter((b) => !b.yalnizAdmin || !kullaniciMi);
+}
 
 /**
  * Üst menüdeki günlük iş sayfaları (Ayarlar'dan taşındı): Test verisi (tablolar) ve Planlı koşular (planlı koşu
@@ -66,7 +77,8 @@ const ISLEM_ETIKETI = {
  *   odak: bölüm içinde odaklanılacak öğe (İzinler: #/ayarlar/izinler/<izin anahtarı>).
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
-  const tanim = AYAR_BOLUMLERI.find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
+  const tanim = ayarBolumleri(baglam.durum).find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
+  bolum = tanim.ad;
   const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
     h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
       h('span', {}, 'Ayarlar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, tanim.etiket)),
@@ -80,7 +92,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
     entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
-    kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, 'hata-pencereleri': hataPencereleriSayfasi, yedekleme, guvenlik, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
+    kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, 'hata-pencereleri': hataPencereleriSayfasi, yedekleme, guvenlik, ekip: ekipBolumu, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti

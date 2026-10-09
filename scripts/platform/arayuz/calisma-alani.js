@@ -3,7 +3,7 @@
 // Yeniden adlandır · Çalışma alanını kapat) ve kapatma diyaloğu ("Son hâlini dışa aktarmak ister misiniz?").
 // Sunucu: /platform/calisma-alanlari, /platform/calisma-alani/{olustur,ac,kapat,yeniden-adlandir,kaldir}.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, bildir, geriSayim, h, ikon, mesgulIken, parolaAlani, tarihMetni, yeniKimlik } from './ortak.js';
+import { api, bildir, geriSayim, h, ikon, kullaniciAdiAlani, mesgulIken, parolaAlani, tarihMetni, yeniKimlik } from './ortak.js';
 import { etiketliAlan, formDiyalogu } from './ekran-yonetimi.js';
 import { disaAktarmaFormu } from './ayarlar.js';
 
@@ -129,16 +129,18 @@ export function alanKaldirDiyalogu(s) {
  * @param {{ alan: { id: string; ad: string; beklemeSaniye?: number; veritabaniVar?: boolean }; acildi: () => void }} s
  */
 export function alanAcDiyalogu(s) {
+  const kullanici = kullaniciAdiAlani();
   const parola = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'current-password' });
   let durdur = () => {};
   const d = formDiyalogu({
     baslik: `Aç: ${s.alan.ad}`, ikonAd: 'kilit', dugme: 'Kilidi aç',
     aciklama: 'Bu çalışma alanının kasa parolasını girin. Açık çalışma alanı (varsa) kapatılır.',
-    govde: [parola.kapsayici],
+    govde: [kullanici.kapsayici, parola.kapsayici],
     gonder: async (tamam) => {
       if (!parola.girdi.value) throw new Error('Parolayı girin.');
       try {
-        await api('/platform/calisma-alani/ac', { govde: { id: s.alan.id, parola: parola.girdi.value }, kilitOlayiYok: true });
+        await api('/platform/calisma-alani/ac', { govde: { id: s.alan.id, parola: parola.girdi.value, kullaniciAdi: kullanici.girdi.value.trim() }, kilitOlayiYok: true });
+        kullanici.hatirla();
       } catch (hata) {
         parola.girdi.select();
         let bekle = hata.durum === 429 ? hata.bekleSaniye : 0;
@@ -169,7 +171,7 @@ export function alanAcDiyalogu(s) {
   }
   d.diyalog.addEventListener('close', () => durdur());
   if (s.alan.beklemeSaniye > 0) beklemeBaslat(s.alan.beklemeSaniye, 'Art arda yanlış parola girildi.', d.tamam);
-  parola.girdi.focus();
+  (kullanici.girdi.value ? parola.girdi : kullanici.girdi).focus();
 }
 
 /**

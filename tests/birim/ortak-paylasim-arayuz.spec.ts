@@ -27,7 +27,7 @@ test.describe('Ayarlar > Yedekleme > Ekip paylaşımı', () => {
     senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Senaryo 1', icerik: { adim: 1 } });
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, { NOBETCI_REHBER_OTOMATIK: '0' });
-    await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });
+    await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA, kullaniciAdi: 'Ayşe' });
     tarayici = await chromium.launch();
   });
   test.afterAll(async () => {
@@ -49,12 +49,11 @@ test.describe('Ayarlar > Yedekleme > Ekip paylaşımı', () => {
     await expect(kart).toBeVisible();
     await expect(kart.getByRole('button', { name: 'Yayınla' })).toHaveCount(0);
 
-    await kart.getByLabel('Adınız').fill('Ayşe');
-    await kart.getByRole('button', { name: 'Kaydet' }).first().click();
-    await expect(kart.getByLabel('Adınız')).toHaveValue('Ayşe');
+    // Yayınlardaki ad: dosyayı açarken girilen kullanıcı adı (Ayarlar > Ekip); kartta ayrıca yazılmaz.
+    await expect(kart).toContainText('Yayınlarda adınız: Ayşe');
     expect((await nobetciApi(nobetci, '/platform/ortak/durum') as unknown as { kullaniciAdi?: string }).kullaniciAdi).toBe('Ayşe');
     await kart.getByLabel('Ortak klasör (tam yol)').fill(paylasim);
-    await kart.getByRole('button', { name: 'Kaydet' }).nth(1).click();
+    await kart.getByRole('button', { name: 'Kaydet' }).click();
     await expect(kart.getByText('Klasörde henüz yayınlanmış sürüm yok.')).toBeVisible();
 
     await kart.getByLabel('Sürüm notu').fill('ilk sürüm');
