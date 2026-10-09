@@ -296,32 +296,12 @@ async function ekranAyrintisi(icerik, s) {
     sonra: () => { location.hash = '#/ekranlar'; yenile(); }
   });
   /**
-   * "Nöbetçi taraması": modeli olan ekranda önce keşif (seçimler / düğmeler denenir), sonra seçilen senaryo koşar; okunan ekran modelle
-   * karşılaştırılır, farklar Değişiklikler'e düşer (kosu-paneli.js > ekranAnaliziSonucu). Modeli yoksa sayfayı okuyan tarama (değişmedi).
+   * "Nöbetçi taraması": modeli olan ekranda kendi sayfası (hızlı test düzeni; nobetci-taramasi.js): keşif + seçilen senaryo, okunan ekran
+   * modelle karşılaştırılır, farklar Değişiklikler'e düşer. Modeli yoksa sayfayı okuyan tarama (değişmedi).
    */
-  const nobetciTaramasi = async () => {
+  const nobetciTaramasi = () => {
     if (!modelVar) { taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }); return; }
-    const p = encodeURIComponent(s.proje.id);
-    const [senaryolar, ortamlar] = await Promise.all([
-      api(`/platform/senaryolar?projeId=${p}`).then((y) => (y.senaryolar || []).filter((x) => x.ekranId === e.id)),
-      api(`/platform/ortamlar?projeId=${p}`).then((y) => y.ortamlar || [])
-    ]).catch((h) => { bildir(`Senaryolar alınamadı: ${h.message}`, 'hata'); return [null, null]; });
-    if (!senaryolar) return;
-    if (!senaryolar.length) { bildir('Bu ekranın senaryosu yok. Önce bir senaryo ekleyin; Nöbetçi o senaryoyu koşarken ekranı okur.', 'hata'); return; }
-    const { canliOnayIste, kosuBaslat, onerilenOrtam, secenekIste } = await import('./kosu-paneli.js');
-    const secilen = senaryolar.length === 1 ? senaryolar[0].id : await secenekIste({
-      baslik: 'Hangi senaryo koşsun?', ikonAd: 'ara',
-      metin: 'Nöbetçi önce ekranı keşfeder (seçimler, düğmeler), sonra bu senaryoyla doldurur; gördüğünü modelle karşılaştırır, farkları Değişiklikler sayfasında gösterir.',
-      secenekler: senaryolar.map((x) => ({ deger: x.id, etiket: x.baslik, ikonAd: 'oynat' }))
-    });
-    const senaryo = senaryolar.find((x) => x.id === secilen);
-    if (!senaryo) return;
-    const tanimli = ortamlar.filter((o) => (senaryo.ortamlar || []).some((x) => x.ortamId === o.id && x.tanimli));
-    const ortam = onerilenOrtam(tanimli.length ? tanimli : ortamlar);
-    if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
-    if (!(await canliOnayIste(ortam))) return;
-    kosuBaslat({ projeId: s.proje.id, ortam, senaryolar: [{ id: senaryo.id, baslik: senaryo.baslik, ekranAdi: e.ad }], tur: 'tekil', esZamanli: true,
-      baslik: `Modeli güncelle: ${e.ad}`, tekBasina: true, ekranAnalizi: true });
+    location.hash = `#/hizli-test/guncelle/${encodeURIComponent(e.id)}`;
   };
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({

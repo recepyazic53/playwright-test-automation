@@ -581,3 +581,18 @@ test('arayüz ve belge metinleri yapay zekâ aracından bağımsız: kullanıcı
   expect(paketIstekCumlesi()).not.toContain('docs/');
   expect(paketIstekCumlesi()).toContain(BICIM_DOSYASI_ADI);
 });
+
+test('Modeli güncelle > Nöbetçi taraması: hızlı test düzeninde kendi sayfası (durak şeridi, senaryo seçimi); koşu paneli açılmaz', async () => {
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
+  await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+  await page.getByRole('menuitem', { name: 'Nöbetçi taraması' }).click();
+  await expect(page).toHaveURL(/#\/hizli-test\/guncelle\//);
+  await expect(page.getByRole('heading', { name: 'Nöbetçi taraması: Örnek Başvuru' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Nöbetçi taraması durakları' }).getByRole('listitem')).toHaveText([/Senaryo/, /Keşif/, /Senaryoyla doldurma/, /Sonuç/]);
+  await expect(page.getByRole('button', { name: 'Taramayı başlat' }).or(page.getByText('Bu ekranın senaryosu yok.'))).toBeVisible();
+  await expect(page.getByText('Koşu sürüyor')).toHaveCount(0);
+  agKontrol(istekler);
+  await page.close();
+});

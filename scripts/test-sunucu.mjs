@@ -437,6 +437,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/playwright-disa-aktarma.js', { dosya: 'playwright-disa-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablolar.js', { dosya: 'tablolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-baglari.js', { dosya: 'ekran-baglari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/nobetci-taramasi.js', { dosya: 'nobetci-taramasi.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/servis-govdesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-govdesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/hesap-kurallari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'hesap-kurallari.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -1125,7 +1126,8 @@ function gorunurOrtamDegiskeni(ek) {
 /** @param {unknown} ek @returns {Record<string, string>} */
 function ekranAnaliziOrtamDegiskeni(ek) {
   if (!ek || typeof ek !== 'object' || Array.isArray(ek)) return {};
-  return /** @type {Record<string, unknown>} */ (ek).NOBETCI_EKRAN_ANALIZI === '1' ? { NOBETCI_EKRAN_ANALIZI: '1' } : {};
+  // Tarama koşusu "deneme" olarak işaretlenir (TEST_SUNUCU_DENEME: Sonuçlar ve rapor hesaplarına girmez).
+  return /** @type {Record<string, unknown>} */ (ek).NOBETCI_EKRAN_ANALIZI === '1' ? { NOBETCI_EKRAN_ANALIZI: '1', TEST_SUNUCU_DENEME: '1' } : {};
 }
 async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null, ekOrtam = null }) {
   const veriOrtami = veriKosusuOrtamDegiskenleri(ekOrtam);

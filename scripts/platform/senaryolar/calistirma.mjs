@@ -91,7 +91,8 @@ export function gorunurOrtami(govde) {
 export const EKRAN_ANALIZI_DEGISKENI = 'NOBETCI_EKRAN_ANALIZI';
 /** @param {Record<string, unknown>} govde @returns {Record<string, string>} */
 export function ekranAnaliziOrtami(govde) {
-  return govde.ekranAnalizi === true ? { [EKRAN_ANALIZI_DEGISKENI]: '1' } : {};
+  // Tarama koşusu "deneme" olarak işaretlenir (raporlayıcı: denemeKosusu): Sonuçlar ve rapor hesaplarına girmez.
+  return govde.ekranAnalizi === true ? { [EKRAN_ANALIZI_DEGISKENI]: '1', TEST_SUNUCU_DENEME: '1' } : {};
 }
 
 /**
