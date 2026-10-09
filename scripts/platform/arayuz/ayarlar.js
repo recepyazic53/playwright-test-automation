@@ -6,6 +6,7 @@ import {
   ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
   kisaAciklama, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
+import { ortakPaylasimKarti } from './ortak-paylasim.js';
 import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
 import { HIZ_ALANLARI, HIZ_PROFILLERI, KANIT_ALANLARI, KANIT_PROFILLERI, hizDegerleri, hizProfili, kanitDegerleri, kanitProfili } from './kosu-profilleri.mjs';
 import { girisTarifiBolumu } from './giris-tarifi.js';
@@ -733,12 +734,13 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
 }
 
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, tahmin, saklamaFormu, { klasor: yedekKlasoru }, veriKarti] = await Promise.all([
+  const [{ klasor, dosyalar }, tahmin, saklamaFormu, { klasor: yedekKlasoru }, veriKarti, { ortak, kullaniciAdi }] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
     api('/platform/yedek/tahmin').catch(() => null),
     saklamaKarti(),
     api('/platform/yedek/klasor'),
-    veriKlasoruKarti()
+    veriKlasoruKarti(),
+    api('/platform/ortak/durum')
   ]);
 
   // Dışa aktar (ortak form — "Çalışma alanını kapat" > "Dışa aktar ve kapat" da bunu kullanır)
@@ -750,7 +752,7 @@ async function yedekleme(govde, baglam, yenile) {
   const iceKart = h('div', { class: 'kart' }, h('h3', {}, ikon('yukle'), 'İçe aktar'),
     h('p', { class: 'soluk' }, 'Bir yedekteki kayıtları bu bilgisayardakilerle karşılaştırır; neyin ekleneceğini ve değişeceğini seçersiniz. Bu bilgisayardaki kayıtlar silinmez.'),
     h('div', { class: 'dugmeler' }, iceBaslat));
-  const digerKartlar = () => [disaForm, otomatikKart];
+  const digerKartlar = () => [disaForm, otomatikKart, ortakKart];
   iceBaslat.addEventListener('click', () => {
     iceKart.hidden = true;
     for (const k of digerKartlar()) k.hidden = true;
@@ -778,7 +780,12 @@ async function yedekleme(govde, baglam, yenile) {
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     yedekKlasoruBolumu(yedekKlasoru, yenile),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, veriKarti, sonucTemizlemeKarti());
+  const ortakAkisAlani = h('div', {});
+  const ortakKart = ortakPaylasimKarti(ortak, kullaniciAdi, {
+    yenile, projeleriYenile: () => baglam.projeleriYenile(), akisAlani: ortakAkisAlani,
+    gizle: (g) => { for (const k of [disaForm, iceKart, otomatikKart, ortakKart]) k.hidden = g; }
+  });
+  govde.replaceChildren(ortakKart, ortakAkisAlani, disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, veriKarti, sonucTemizlemeKarti());
   // Hızlı aramadan gelince (#/ayarlar/yedekleme/disa | ice): ilgili kart görünür alana gelir ve ilk öğesine odaklanılır.
   const hedef = baglam.odak === 'disa' ? disaForm : baglam.odak === 'ice' ? iceKart : null;
   if (hedef) {

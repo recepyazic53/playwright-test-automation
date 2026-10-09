@@ -52,6 +52,7 @@ import { eslemeyiUygula, projeEslemesiBilgisi } from './ice-aktarma-esleme.mjs';
 import { projeKalintilari } from './proje-yonetimi.mjs';
 import { servisIceriginiMaskele } from './ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from './ayarlar/maskeleme.mjs';
+import { yerelKisiseliKoru } from './ortak-kisisel.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -444,6 +445,9 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
         return satir;
       });
     }
+    // ORTAK (ekip) yedeği: gelen satırlarda kişiye özel değerler (giriş / entegrasyon gizlileri) yerelden geri konur; boş gelen değer
+    // kişinin kendi bilgisinin üzerine yazılmaz (ortak-kisisel.mjs).
+    if (yedek.manifest.ortak === true && vt && kasaVar) yerelKisiseliKoru(vt, tablolar, hedefAnahtar);
     ilerleme('önizleme hazırlanıyor', 75);
     const medya = medyaOnizlemesi(yerel, tablolar.medya ?? [], yedek.medyaDosyalari, klasor, yedek.manifest);
     const onizleme = onizlemeOlustur(yerel, tablolar, hedefAnahtar, yedek.manifest, !kasaVar, medya);

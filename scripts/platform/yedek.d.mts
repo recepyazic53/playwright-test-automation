@@ -25,6 +25,7 @@ export interface YedekManifesti {
   semaSurumu: number;
   olusturulma: string;
   makine: { id: string; ad: string };
+  ortak?: boolean;
   sayimlar: Record<string, number>;
   /** Biçim 2: yedeğe alınan medya dosyaları (biçim 1'de yok). */
   medya?: YedekMedyaOzeti;
@@ -80,7 +81,7 @@ export declare function yedekOlustur(vt: Veritabani, secenekler?: { ilerleme?: I
 export declare function yedekDosyasiYaz(
   vt: Veritabani,
   hedef: string,
-  secenekler?: MedyaSecimi & { medyaKlasoru?: string | null; ilerleme?: IlerlemeFn }
+  secenekler?: MedyaSecimi & { medyaKlasoru?: string | null; ilerleme?: IlerlemeFn; ortak?: boolean }
 ): Promise<{ dosya: string; boyut: number; manifest: YedekManifesti }>;
 export declare function yedekBoyutTahmini(vt: Veritabani): {
   secenekler: Record<keyof CozulmusMedyaSecimi, { sayi: number; bayt: number }>;
