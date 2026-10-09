@@ -96,6 +96,11 @@ function korunanSilinen(etki) {
     liste: l.map((x) => `Çıkarılacak: ${x}`)
   };
 }
+/** Kaydetme onayında: önceki hâline göre model değişiklikleri (sunucu etki.farklar) — metin ve liste satırları. */
+function farkOzeti(etki) {
+  const l = Array.isArray(etki && etki.farklar) ? etki.farklar : [];
+  return { metin: l.length ? `Önceki hâline göre ${l.length} değişiklik var (listede). ` : '', liste: l.map((x) => `Değişiklik: ${x}`) };
+}
 /** Kaydetme onayında: eski biçimli (sürüm 1; ör. otomatik tarama) model kaydederken yeni biçime güncellenecekse not. */
 const semaNotu = (etki) => (etki && etki.semaYukseltme ? 'Bu ekranın modeli eski biçimde; kaydederken yeni biçime güncellenecek (mevcut senaryolar etkilenmez). ' : '');
 /** Kayıttan sonra: model yeni biçime güncellendiyse bildirimin eki. */
@@ -1403,10 +1408,10 @@ export async function akisTasarimi(icerik, s) {
         const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: ortakKayit ? `“${veri.ekran.ad}” genel senaryoyu bu kayıtla güncellensin mi?` : on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
-          metin: silinen.metin + semaNotu(on.etki) + ortakOzeti() + (ekr
+          metin: farkOzeti(on.etki).metin + silinen.metin + semaNotu(on.etki) + ortakOzeti() + (ekr
             ? `${ekr.length ? `Bu genel senaryoyu kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu genel senaryoyu kullanan ekran yok. '}Kaydedince genel senaryonun yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
-          liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))], dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari',
+          liste: [...farkOzeti(on.etki).liste, ...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))], dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari',
           // Kapalı düğmenin nedeni (aynı adlı tablo için karar / boş yeni ad) düğmelerin altında, "Bölüme git" ile.
           ek: tv ? tv.bolum : null, nedenler: tv ? () => (tv.hazir() ? [] : tv.bekleyenler()) : null, baglan: (fn) => { tvYenile = fn; }
         });
@@ -1432,10 +1437,10 @@ export async function akisTasarimi(icerik, s) {
         const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: on.etki.yeni ? `“${ad}” akışı oluşturulsun mu?` : `“${ad}” akışı kaydedilsin mi?`,
-          metin: silinen.metin + semaNotu(on.etki) + ortakOzeti() + (ekr
+          metin: farkOzeti(on.etki).metin + silinen.metin + semaNotu(on.etki) + ortakOzeti() + (ekr
             ? `${ekr.length ? `Bu genel senaryoyu kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu genel senaryoyu kullanan ekran yok. '}Kaydedince genel senaryonun yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
-          liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))],
+          liste: [...farkOzeti(on.etki).liste, ...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))],
           dugme: on.etki.yeni ? 'Oluştur' : 'Kaydet', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari'
         });
         if (!onay) return;

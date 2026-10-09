@@ -220,7 +220,11 @@ test.describe('veritabanı: akış diyagramından kaydet → yeniden oku', () =>
 
   test('gruplar birleştirilip kaydedilir: bölüm koşulu, kod yöntemi ve kimliği kalır; onayda silinecek korunan parça yok; bağsız koşul yok', () => {
     const duzen = birlestir(tasarim());
-    expect(kaydet(duzen, false)).toEqual({ etki: { yeni: false, senaryolar: [] }, akisId: 'ana' });
+    // Onayda önceki hâline göre değişiklikler (karşılaştırma motoru) listelenir; silinecek korunan parça yok.
+    const on = kaydet(duzen, false) as { etki: { farklar?: string[]; korunanSilinen?: unknown } };
+    expect(on).toMatchObject({ etki: { yeni: false, senaryolar: [] }, akisId: 'ana' });
+    expect(on.etki.korunanSilinen).toBeUndefined();
+    expect(on.etki.farklar).toEqual(expect.arrayContaining(['Yeni adım: Sorgula (2. adım)', 'Kaldırılan adım: Sorgu (2. adım)']));
     expect(kaydet(duzen)).toMatchObject({ akisId: 'ana', surum: 2 });
     const son = model();
     expect(bolumOzellikleri(alaninBolumu(son, 'listeDosyasi'))).toEqual({ id: 'cokluListe', gorunurluk: { kosul: 'cokluSorgu' }, pomMetodu: 'listeyiDoldur' });
