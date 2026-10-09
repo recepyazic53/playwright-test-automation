@@ -252,8 +252,7 @@ legend { font: 600 11px var(--yazi-mono); letter-spacing: .08em; text-transform:
 .kart-basligi .alt { color: var(--metin-3); font-size: 12.5px; }
 .kart-basligi .sag { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .kart.vurgulu { box-shadow: 0 0 0 1px color-mix(in srgb, var(--vurgu) 45%, transparent), 0 0 40px -18px var(--vurgu), 0 12px 40px -14px rgba(0, 0, 0, .5); }
-.form-paneli { box-shadow: 0 0 0 1px color-mix(in srgb, var(--vurgu) 42%, transparent), 0 0 44px -20px var(--vurgu), 0 16px 40px -16px rgba(0, 0, 0, .55); }
-.form-paneli > h3:first-child::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--vurgu); box-shadow: 0 0 10px var(--vurgu); }
+/* Form panelleri diğer kartlarla aynı görünür (eskiden parlak kenar + başlıkta nokta vardı; Ayarlar'da tutarsız görünüyordu). */
 .pasif-kart { opacity: .72; border: 1px dashed var(--cizgi-2); box-shadow: none; }
 
 /* 3.4 Rozetler (etiketler) */
@@ -4676,3 +4675,26 @@ button.sayfa-rehberi.hazir::after { content: ''; width: 7px; height: 7px; border
 .kart-katla-dugmesi .ikon { transition: transform .15s ease; }
 .kart.katlanir.kapali .kart-katla-dugmesi .ikon { transform: rotate(-90deg); }
 @media (prefers-reduced-motion: reduce) { .kart-katla-dugmesi .ikon { transition: none; } }
+/* Ayarlar: bölüm başlığı (başlık + sayı + düğme) kendi kutusunun üst satırında (kart-katla.js > kutula). */
+.kart > .bolum-basligi:first-child { margin: 0; }
+.kart.katlanir:not(.kapali) > .bolum-basligi.kart-katla-basligi { margin-bottom: 12px; }
+.kart > .bolum-basligi:first-child h3 { margin: 0; }
+.bolum-kutusu > .kayit-listesi:last-child, .bolum-kutusu > ul:last-child { margin-bottom: 0; }
+.taban-baslik-sag { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.taban-baslik-sag .taban-arac-sol { min-height: 0; }
+/* Girdi + düğme aynı satırda, diğer formlarla aynı aralık (Ekip paylaşımı, Yedek klasörü, Veri klasörü). */
+.satir-girdi { display: flex; align-items: center; gap: var(--b2); flex-wrap: wrap; }
+.satir-girdi > input, .satir-girdi > select { flex: 1 1 16rem; min-width: 0; }
+.satir-girdi > button { flex: none; }
+.satir-girdi + .yardim, .satir-girdi + .dugmeler, div:has(> .satir-girdi) + .dugmeler { margin-top: var(--b2); }
+/* Ayarlar > Ekip: kişi satırı (kullanıcı adı · rol · sil) tek satırda; satırlar arası aynı aralık. */
+.ekip-listesi { display: grid; gap: var(--b2); margin: var(--b2) 0; }
+.ekip-satiri { display: grid; grid-template-columns: minmax(0, 1fr) 11rem auto auto; gap: var(--b2); align-items: center; }
+@media (max-width: 600px) { .ekip-satiri { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+/* Bölüm kutusu dar ekranda taşmasın: başlık satırı kırılır, düğmeler alta geçer. */
+.bolum-kutusu, .kart.katlanir { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.kart > .bolum-basligi:first-child { flex-wrap: wrap; min-width: 0; }
+.kart > .bolum-basligi:first-child > * { min-width: 0; }
+.kart > .bolum-basligi:first-child .dugmeler { flex-wrap: wrap; margin: 0; }
+/* Açık (açılır / kapanır) kart vurgulu: ince vurgu kenarı + hafif parıltı; kapalı kartlar düz. */
+.kart.katlanir:not(.kapali) { box-shadow: 0 0 0 1px color-mix(in srgb, var(--vurgu) 42%, transparent), 0 0 44px -20px var(--vurgu), 0 16px 40px -16px rgba(0, 0, 0, .55); }

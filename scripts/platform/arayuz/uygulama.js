@@ -1058,17 +1058,11 @@ function ayarlarEkrani(main, bolum, odak = null) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
   const altNav = h('nav', { class: 'alt-nav', 'aria-label': 'Ayarlar bölümleri' },
     ayarBolumleri(durum).map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
-  // Ayarlar'dan üst menüye taşınan sayfalar: eski yerinden de bulunabilsin diye "taşındı" bağlantıları (Ayarlar'da yalnız ayarlar kalır).
-  const tasinan = h('nav', { class: 'alt-nav tasinan-bolumler', 'aria-label': 'Üst menüye taşınan sayfalar' },
-    h('div', { class: 'alt-nav-alt-baslik' }, 'Üst menüye taşındı'),
-    h('a', { href: '#/veri', title: 'Üst menüye taşındı: Test verisi' }, ikon('veri'), 'Test verisi'),
-    h('a', { href: '#/planli-kosular', title: 'Üst menüye taşındı: Planlı koşular' }, ikon('tarih'), 'Planlı koşular'));
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Ayarlar'),
     h('div', { class: 'kabuk-duzen' },
-      h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav, tasinan,
+      h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav,
         // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): Anahtar üst çubukta ve burada da durur.
-        h('div', { class: 'kullanim-modu-secimi' }, h('span', { class: 'kucuk soluk' }, 'Kullanım modu'), modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef))),
-        h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
+        h('div', { class: 'kullanim-modu-secimi' }, h('span', { class: 'kucuk soluk' }, 'Kullanım modu'), modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef)))),
       icerik));
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak, moduDegistir });
 }

@@ -116,7 +116,9 @@ async function yukle(kap, proje) {
     sol.replaceChildren();
     yerlestir(govdeAlani, gorunum === 'servis' ? servisGorunumu(proje, veri, yenile) : tabanGorunumu(proje, veri, yenile, sol));
   };
-  yerlestir(icerik, h('div', { class: 'taban-arac-cubugu' }, sol, gorunumSecimi), govdeAlani);
+  // Görünüm seçimi ve ekleme düğmesi başlık satırının sağında; başlık kutunun içinde üst satırdadır (Ayarlar: kart-katla.js).
+  baslik.append(h('div', { class: 'taban-baslik-sag' }, gorunumSecimi, sol));
+  yerlestir(icerik, govdeAlani);
   yerlestir(kap, baslik, yardim.panel, icerik);
   ciz();
 }

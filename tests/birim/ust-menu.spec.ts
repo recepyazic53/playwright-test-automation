@@ -70,13 +70,11 @@ test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
     await expect(page.getByRole('region', { name: 'Planlı koşu kuralları' })).toBeVisible();
     await expect(page.getByRole('form', { name: 'Planlı koşu davranışı' })).toBeVisible();
 
-    // Ayarlar: bölüm listesinde Test verisi yok; "Üst menüye taşındı" bağlantıları yeni yerlere gider.
+    // Ayarlar: bölüm listesinde Test verisi ve Planlı koşular yok (üst menüde); kenar çubuğunda "taşındı" bağlantıları da yok.
     await menu.getByRole('link', { name: 'Ayarlar' }).click();
     const bolumler = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
-    await expect(bolumler.getByRole('link')).toHaveText(['Proje ve ortamlar', 'Giriş profilleri', 'Koşu', 'Kurtarma kuralları', 'Hata pencereleri', 'Yedekleme', 'Güvenlik', 'İzinler', 'Entegrasyonlar', 'Raporlar', 'Arayüz']);
-    const tasinan = page.getByRole('navigation', { name: 'Üst menüye taşınan sayfalar' });
-    await tasinan.getByRole('link', { name: 'Test verisi' }).click();
-    await expect(page).toHaveURL(/#\/veri$/);
+    await expect(bolumler.getByRole('link')).toHaveText(['Proje ve ortamlar', 'Giriş profilleri', 'Koşu', 'Kurtarma kuralları', 'Hata pencereleri', 'Yedekleme', 'Güvenlik', 'Ekip', 'İzinler', 'Entegrasyonlar', 'Raporlar', 'Arayüz']);
+    await expect(page.getByRole('navigation', { name: 'Üst menüye taşınan sayfalar' })).toHaveCount(0);
     await page.goto('/#/ayarlar/kosu');
     await expect(page.locator('.zamanlanmis-kosular')).toHaveCount(0);
     await page.locator('.tasindi-notu').getByRole('link', { name: 'Planlı koşular' }).click();
