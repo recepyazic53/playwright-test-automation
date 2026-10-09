@@ -4708,3 +4708,9 @@ tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
 /* Ekip paylaşımı: yeni sürüm bandı ve üst menüdeki işaret (uygulama.js > ortakSurumuIzle). */
 .ust-nav .ortak-surum-isareti { margin-left: 6px; padding: 1px 6px; font-size: 10.5px; line-height: 1.4; }
 .ortak-surum-bandi .bant-simge { color: var(--uyari, var(--vurgu)); }
+
+/* Ekip paylaşımı: birleştirme / yayın öncesi gözden geçirme (ortak-paylasim.js > kararEkrani). */
+.ortak-birlestirme .birlestirme-bolumu { margin-top: var(--b3, 12px); }
+.ortak-birlestirme .birlestirme-bolumu h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+.ortak-birlestirme .birlestirme-bolumu li { margin: 6px 0; }
+.ortak-birlestirme small.blok { display: block; margin-top: 2px; }

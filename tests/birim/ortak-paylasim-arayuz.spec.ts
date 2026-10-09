@@ -135,4 +135,36 @@ test.describe('Ayarlar > Yedekleme > Ekip paylaşımı', () => {
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
+
+  test('güncelken Yayınla: değişiklikleriniz listelenir; işareti kaldırılan geri alınır ve yeni sürüme girmez', async () => {
+    test.setTimeout(90_000);
+    const projeler = (await nobetciApi(nobetci, '/platform/projeler') as unknown as { projeler: Array<{ id: string; ad: string; aciklama: string | null }> }).projeler;
+    const p = projeler[0];
+    await nobetciApi(nobetci, '/platform/proje/kaydet', { id: p.id, ad: p.ad, aciklama: 'yanlışlıkla yazıldı' });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1100 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/yedekleme');
+    const kart = page.getByRole('group', { name: 'Ekip paylaşımı' });
+    await expect(kart.getByText('Güncelsiniz (v4).')).toBeVisible();
+    await kart.getByRole('button', { name: 'Yayınla' }).click();
+    await expect(page.getByRole('heading', { name: 'Yayınlamadan önce: değişiklikleriniz' })).toBeVisible();
+    await page.getByRole('textbox', { name: /Ekibin ortak kasa parolası/ }).fill(PAROLA);
+    await page.getByRole('button', { name: 'Karşılaştır' }).click();
+    const pano = page.locator('.ortak-birlestirme');
+    await expect(pano.getByRole('heading', { name: 'Sizin yaptıklarınız' })).toBeVisible({ timeout: 30_000 });
+    const kutu = pano.getByRole('checkbox', { name: `Dahil et: Projeler › ${p.ad}` });
+    await expect(kutu).toBeChecked();
+    await expect(pano).toContainText(`Değiştirdiniz: Projeler › ${p.ad}`);
+    await kutu.uncheck();
+    await pano.getByRole('button', { name: 'Yayınla (v5)' }).click();
+    await expect(kart.getByText('Güncelsiniz (v5).')).toBeVisible({ timeout: 30_000 });
+    const sonra = (await nobetciApi(nobetci, '/platform/projeler') as unknown as { projeler: Array<{ id: string; aciklama: string | null }> }).projeler.find((x) => x.id === p.id);
+    expect(sonra?.aciklama ?? null).toBe(p.aciklama ?? null);
+    const v5 = (JSON.parse(readFileSync(join(klasor, 'paylasim', 'ortak.json'), 'utf8')) as { surumler: Array<Record<string, unknown>> }).surumler.find((x) => x.surum === 5);
+    expect(String(v5?.not)).toMatch(/\d+ değişiklik geri alındı$/);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
 });

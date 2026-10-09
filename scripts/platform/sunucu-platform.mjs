@@ -201,7 +201,7 @@ import {
   veriyiKopyalaVeDogrula, yazilabilirOlmali
 } from './ayarlar/klasor-secimi.mjs';
 import { IceAktarmaYoneticisi, MASKE, hazirligiAt, iceAktarmaHazirla } from './ice-aktarma.mjs';
-import { birlestirmeSecimi, ucluFark } from './ortak-birlestirme.mjs';
+import { birlestirmeSecimi, eklediklerimiSil, ucluFark } from './ortak-birlestirme.mjs';
 import {
   SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kosuyaDahilAyarla,
   modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryolariCogalt, senaryoListesi, senaryoSonSonucu, senaryolariSil
@@ -1110,7 +1110,7 @@ function ekipGirisi(db, ad) {
   oturumKullanicisi = kisi;
   if (kisi.ad) kullaniciAdiYaz(db, kisi.ad);
 }
-/** Ekip birleştirmesi: içe aktarma işi → üçlü fark ve karşılaştırılan son sürüm (uygulanınca silinir). @type {Map<string, { farklar: import('./ortak-birlestirme.mjs').UcluFarkOgesi[]; surum: number }>} */
+/** Ekip birleştirmesi: içe aktarma işi → üçlü fark, karşılaştırılan son sürüm, birleştirme mi (güncel değildi) — uygulanınca silinir. @type {Map<string, { farklar: import('./ortak-birlestirme.mjs').UcluFarkOgesi[]; surum: number; birlestirme: boolean }>} */
 const ortakBirlestirmeleri = new Map();
 /** "Yedekten yükle" işi → girilen kullanıcı adı (uygulanınca oturum kullanıcısı olur). @type {Map<string, string>} */
 const iceAktarmaKullanicilari = new Map();
@@ -1763,8 +1763,8 @@ const POST_UCLARI = new Map([
         }
       }
       const farklar = ucluFark(db, taban, onlar.tablolar, acikAnahtar(db));
-      ortakBirlestirmeleri.set(isId, { farklar, surum });
-      return { farklar, benimSurum: d.benimSurum, sonSurum: surum, tabanYok };
+      ortakBirlestirmeleri.set(isId, { farklar, surum, birlestirme: surum > d.benimSurum });
+      return { farklar, benimSurum: d.benimSurum, sonSurum: surum, tabanYok, birlestirme: surum > d.benimSurum };
     } finally {
       if (tabanHazirlik) hazirligiAt(tabanHazirlik);
       if (gecici) { try { unlinkSync(gecici); } catch { /* zaten yok */ } }
@@ -1782,11 +1782,17 @@ const POST_UCLARI = new Map([
     }
     await iceAktarma.uygula(isId, { secimler: secim.secimler });
     ortakBirlestirmeleri.delete(isId);
+    // Dahil edilmeyen, benim eklediklerim: bende de silinir (yayınlanan sürümle bu bilgisayar aynı kalsın).
+    if (secim.silinecekler.length) eklediklerimiSil(db, secim.silinecekler, oturumKullanicisi.ad || undefined);
     ortakAlindiIsaretle(db, kayitli.surum);
-    const not = [typeof g.not === 'string' ? g.not.trim() : '', `v${kayitli.surum} ile birleştirildi${secim.haric ? `; ${secim.haric} değişiklik dahil edilmedi` : ''}`].filter(Boolean).join(' · ');
+    const ekler = [
+      kayitli.birlestirme ? `v${kayitli.surum} ile birleştirildi${secim.haric ? `; ${secim.haric} değişiklik dahil edilmedi` : ''}` : '',
+      secim.geriAlinan ? `${secim.geriAlinan} değişiklik geri alındı` : ''
+    ].filter(Boolean).join('; ');
+    const not = [typeof g.not === 'string' ? g.not.trim() : '', ekler].filter(Boolean).join(' · ');
     const kayit = await ortakYayinla(db, { not });
-    console.log(`[platform] Ortak klasöre v${kayit.surum} yayınlandı (v${kayitli.surum} ile birleştirildi: ${secim.dahil} dahil, ${secim.haric} hariç).`);
-    return { kayit, dahil: secim.dahil, haric: secim.haric, ortak: ortakDurum(db) };
+    console.log(`[platform] Ortak klasöre v${kayit.surum} yayınlandı (${ekler || 'gözden geçirildi'}).`);
+    return { kayit, dahil: secim.dahil, haric: secim.haric, geriAlinan: secim.geriAlinan, ortak: ortakDurum(db) };
   }],
   ['/platform/ortak/kullanici-adi', (db, g) => {
     kullaniciAdiYaz(db, g.ad);
