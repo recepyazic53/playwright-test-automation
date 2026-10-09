@@ -1109,6 +1109,8 @@ function ekipGirisi(db, ad) {
   oturumKullanicisi = kisi;
   if (kisi.ad) kullaniciAdiYaz(db, kisi.ad);
 }
+/** "Yedekten yükle" işi → girilen kullanıcı adı (uygulanınca oturum kullanıcısı olur). @type {Map<string, string>} */
+const iceAktarmaKullanicilari = new Map();
 /** Ayarlar > Ekip yalnız Admin'e açıktır. */
 function adminOlmali() {
   if (oturumKullanicisi.rol !== 'admin') throw new KasaHatasi('YETKISIZ', 'Bu bölüm yalnız ekibin Admin\'i içindir.');
@@ -2419,7 +2421,13 @@ export async function platformIsteginiIsle(req, res, baglam) {
         jsonGonder(res, 400, { basarili: false, mesaj: 'Boş dosya gönderildi.' });
         return true;
       }
-      const isId = iceAktarma.baslat(dosya, parola, { geciciDosya: true });
+      // İlk kurulum ("Yedekten yükle"): kullanıcı adı yedeğin ekip listesinde mi — hazırlıkta denetlenir; uygulamadan sonra oturum.
+      const hamAd = req.headers['x-kullanici-adi'];
+      /** @type {string | undefined} */
+      let kullaniciAdi;
+      try { kullaniciAdi = typeof hamAd === 'string' ? decodeURIComponent(hamAd) : undefined; } catch { kullaniciAdi = ''; }
+      const isId = iceAktarma.baslat(dosya, parola, { geciciDosya: true, ...(kullaniciAdi !== undefined ? { kullaniciAdi } : {}) });
+      if (kullaniciAdi !== undefined) iceAktarmaKullanicilari.set(isId, kullaniciAdi);
       parola = '';
       jsonGonder(res, 202, { basarili: true, isId });
       return true;
@@ -2492,6 +2500,9 @@ export async function platformIsteginiIsle(req, res, baglam) {
         ? { tumu: true, ...esleme }
         : { secimler: /** @type {Record<string, string[]>} */ (govde.secimler), ...esleme };
       const sonuc = await iceAktarma.uygula(isEslesme[1], secim);
+      const yukleyen = iceAktarmaKullanicilari.get(isEslesme[1]);
+      iceAktarmaKullanicilari.delete(isEslesme[1]);
+      if (yukleyen !== undefined && vt && arayuzAcikMi(vt)) ekipGirisi(vt, yukleyen);
       // Yeni çalışma alanına ilk yükleme: kayıt defteri (son açılan, proje sayısı) ve bağlantı dosyası güncellenir.
       if (vt && aktifAlan && !aktifAlan.sabit) {
         try { alanAcildi(VERI_KOKU, aktifAlan.id, { projeSayisi: Number(vt.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) }); } catch { /* yalnızca gösterim */ }

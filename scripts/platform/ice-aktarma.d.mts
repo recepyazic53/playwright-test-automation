@@ -113,7 +113,7 @@ export interface IsGorunumu {
 }
 
 export declare function iceAktarmaHazirla(
-  vt: Veritabani | null, dosya: Buffer | string, parola: string, secenekler?: { ilerleme?: IlerlemeFn; medyaKlasoru?: string | null }
+  vt: Veritabani | null, dosya: Buffer | string, parola: string, secenekler?: { ilerleme?: IlerlemeFn; medyaKlasoru?: string | null; kullaniciAdi?: string }
 ): Promise<Hazirlik>;
 export declare function hazirligiAt(hazirlik: Hazirlik): void;
 export declare function iceAktarmaMedyasiniYaz(vt: Veritabani, hazirlik: Hazirlik, secenekler?: { ilerleme?: IlerlemeFn }): Promise<MedyaYerlestirmeSonucu>;
@@ -130,7 +130,7 @@ export declare class IceAktarmaYoneticisi {
   });
   temizle(): void;
   aktifIs(): string | null;
-  baslat(dosya: Buffer | string, parola: string, secenekler?: { geciciDosya?: boolean }): string;
+  baslat(dosya: Buffer | string, parola: string, secenekler?: { geciciDosya?: boolean; kullaniciAdi?: string }): string;
   bekle(id: string): Promise<IsGorunumu | undefined>;
   durum(id: string): IsGorunumu | undefined;
   uygula(id: string, secim: Secim, secenekler?: { yapan?: string }): Promise<UygulamaSonucu>;
