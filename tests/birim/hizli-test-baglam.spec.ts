@@ -203,7 +203,7 @@ async function hizliSayfa(yol: string): Promise<{ tarayici: Browser; sayfa: Page
   let tarayici: Browser | null = null;
   while (!tarayici) {
     try { tarayici = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPortu}`); } catch {
-      if (Date.now() > son) throw new Error('hızlı test tarayıcısına bağlanılamadı');
+      if (Date.now() > son) throw new Error('Nöbetçi taraması tarayıcısına bağlanılamadı');
       await new Promise((c) => setTimeout(c, 250));
     }
   }
@@ -292,7 +292,7 @@ test('arayüz: başlat formunda bağlam seçimi; profil yokken bilgi; oturumda s
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/hizli-test');
-    await expect(page.getByRole('heading', { name: 'Yeni hızlı test' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: 'Yeni Nöbetçi taraması' })).toBeVisible({ timeout: 30_000 });
     const grup = page.getByRole('group', { name: /Bağlam/ });
     const secim = grup.getByLabel('Şube:');
     await expect(secim).toBeVisible();

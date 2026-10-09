@@ -176,7 +176,7 @@ export function hizliTestYoneticisiOlustur(s) {
   const oturumGetir = (id, etkilesim = true) => {
     temizle();
     const o = typeof id === 'string' && OTURUM_KIMLIGI.test(id) ? oturumlar.get(id) : undefined;
-    if (!o) throw new HizliTestHatasi('BULUNAMADI', 'Hızlı test bulunamadı (süresi dolmuş ya da sunucu yeniden başlamış olabilir).', 404);
+    if (!o) throw new HizliTestHatasi('BULUNAMADI', 'Nöbetçi taraması bulunamadı (süresi dolmuş ya da sunucu yeniden başlamış olabilir).', 404);
     o.sonErisim = simdi();
     if (etkilesim && o.tarayici === 'acik') { try { tarama().hizliUzat(o.isId); } catch { /* iş bitti: olay ayrıca gelir */ } }
     return o;
@@ -214,8 +214,8 @@ export function hizliTestYoneticisiOlustur(s) {
   };
   /** Oturum düzenlenebilir durumda mı (süren komut / bitmiş oturum yok)? @param {Nesne} o @param {string[]} durumlar */
   const durumda = (o, durumlar) => {
-    if (o.durum === 'hata' || o.durum === 'iptal') throw new HizliTestHatasi('BITTI', o.hata?.mesaj ?? 'Hızlı test bitti.', 409);
-    if (!durumlar.includes(o.durum)) throw new HizliTestHatasi('DURUM', 'Hızlı test şu anda bu işlemi beklemiyor; sayfayı yenileyin.', 409, { durum: o.durum });
+    if (o.durum === 'hata' || o.durum === 'iptal') throw new HizliTestHatasi('BITTI', o.hata?.mesaj ?? 'Nöbetçi taraması bitti.', 409);
+    if (!durumlar.includes(o.durum)) throw new HizliTestHatasi('DURUM', 'Nöbetçi taraması şu anda bu işlemi beklemiyor; sayfayı yenileyin.', 409, { durum: o.durum });
     // Komut gönderilemezse (tarayıcı kapalı) dönülecek durum.
     o.islemOncesi = { durum: o.durum, calisiyor: o.calisiyor ?? null };
   };
@@ -807,7 +807,7 @@ export function hizliTestYoneticisiOlustur(s) {
       o.tarayici = 'kapali';
       if (['kaydedildi', 'iptal', 'hata', 'askida'].includes(o.durum)) return;
       const h = nesneMi(e.hata) ? e.hata : null;
-      const neden = { kod: String(h?.kod ?? 'SUREC'), mesaj: String(h?.mesaj ?? 'Hızlı test tarayıcısı kapandı.') };
+      const neden = { kod: String(h?.kod ?? 'SUREC'), mesaj: String(h?.mesaj ?? 'Nöbetçi taraması tarayıcısı kapandı.') };
       // Kaydet aşaması tarayıcı gerektirmez: oturum ve kayıt düğmesi çalışmaya devam eder.
       if (o.durum === 'kaydet') { o.bekleyen = null; return; }
       if (o.durum === 'dogrulama') {
@@ -1878,7 +1878,7 @@ export function hizliTestYoneticisiOlustur(s) {
       const e = ekranlariListele(vt, projeId).find((x) => x.id === kimlikAl(g.ekranId, 'ekranId'));
       if (!e) throw new DepoHatasi('Ekran bulunamadı.');
       const m = ekranModeliGetir(vt, e.id);
-      if (m && nesneMi(m.model) && (m.model.tur === 'altModel' || m.model.tur === 'ortakAkis')) throw new HizliTestHatasi('EKRAN_TURU', 'Alt model ve genel senaryo hızlı testle düzenlenmez.');
+      if (m && nesneMi(m.model) && (m.model.tur === 'altModel' || m.model.tur === 'ortakAkis')) throw new HizliTestHatasi('EKRAN_TURU', 'Alt model ve genel senaryo Nöbetçi taramasıyla düzenlenmez.');
       ekran = { id: e.id, ad: e.ad, anahtar: e.anahtar };
     } else {
       const ad = metin(g.ekranAdi, 120);
@@ -2597,7 +2597,7 @@ export function hizliTestYoneticisiOlustur(s) {
       o.dalNotuYazildi = true;
       gunluk(o, `Dal birleştirme: ${dal.korunan.length ? `bu turda görünmeyen ${dal.korunan.length} alan korundu (${dal.korunan.slice(0, 8).join(', ')}; ekranda görünürse yazılır)` : ''}${dal.korunan.length && dal.kosullanan.length ? '; ' : ''}${dal.kosullanan.length ? `${dal.kosullanan.length} yeni alan ekranda görünürse yazılır (${dal.kosullanan.slice(0, 8).join(', ')})` : ''}.`);
     }
-    /** @type {Nesne} */ (paket).meta.olusturan = 'Nöbetçi hızlı test';
+    /** @type {Nesne} */ (paket).meta.olusturan = 'Nöbetçi taraması';
     const alanlar = o.adimlar.flatMap((/** @type {Nesne} */ a) => a.alanlar);
     const anahtarlar = senaryoAnahtarlari(model, alanlar);
     // Olumsuz senaryo: hatanın göründüğü adım (son basışın adımı).
@@ -3033,7 +3033,7 @@ export function hizliTestYoneticisiOlustur(s) {
     if (['kaydedildi', 'iptal'].includes(o.durum)) return { iptal: true };
     dosyaKlasorunuSil(o);
     o.durum = 'iptal';
-    o.hata = { kod: 'IPTAL', mesaj: 'Hızlı test iptal edildi; hiçbir şey kaydedilmedi.' };
+    o.hata = { kod: 'IPTAL', mesaj: 'Nöbetçi taraması iptal edildi; hiçbir şey kaydedilmedi.' };
     try { tarama().iptal(o.isId); } catch { /* iş zaten bitti */ }
     return { iptal: true };
   }
@@ -3057,8 +3057,8 @@ export function hizliTestYoneticisiOlustur(s) {
   async function tarayiciyiGoster(g) {
     const o = oturumGetir(String(g.id ?? ''), false);
     const t = o.tarayici === 'acik' ? tarayiciIsi(o) : null;
-    if (!t || t.durum !== 'suruyor') return { gosterildi: false, mesaj: 'Hızlı test tarayıcısı şu anda kapalı.' };
-    if (!t.gorunur) return { gosterildi: false, mesaj: 'Hızlı test tarayıcısı görünmez çalışıyor; pencere gösterilemez.' };
+    if (!t || t.durum !== 'suruyor') return { gosterildi: false, mesaj: 'Nöbetçi taraması tarayıcısı şu anda kapalı.' };
+    if (!t.gorunur) return { gosterildi: false, mesaj: 'Nöbetçi taraması tarayıcısı görünmez çalışıyor; pencere gösterilemez.' };
     const y = await canliKanalaIstek(t.canliDuyuruYolu, '/one-getir');
     return y && y.durum === 200 ? { gosterildi: true, mesaj: 'Tarayıcı penceresi öne getirildi.' } : { gosterildi: false, mesaj: 'Tarayıcı penceresi henüz hazır değil; birazdan yeniden deneyin.' };
   }
@@ -3070,7 +3070,7 @@ export function hizliTestYoneticisiOlustur(s) {
   async function tamSayfa(id) {
     const o = oturumGetir(id, false);
     const t = o.tarayici === 'acik' ? tarayiciIsi(o) : null;
-    if (!t || t.durum !== 'suruyor') return { durum: 409, jpeg: null, mesaj: 'Hızlı test tarayıcısı şu anda kapalı.' };
+    if (!t || t.durum !== 'suruyor') return { durum: 409, jpeg: null, mesaj: 'Nöbetçi taraması tarayıcısı şu anda kapalı.' };
     return canliTamSayfaAl(t.canliDuyuruYolu);
   }
 
@@ -3152,7 +3152,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
         res.end(t.jpeg);
         return true;
       }
-      gonder(404, { basarili: false, mesaj: 'Bilinmeyen hızlı test uç noktası.' });
+      gonder(404, { basarili: false, mesaj: 'Bilinmeyen Nöbetçi taraması uç noktası.' });
       return true;
     }
     if (req.method !== 'POST') { gonder(405, { basarili: false, mesaj: 'Yöntem desteklenmiyor.' }); return true; }
@@ -3189,7 +3189,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
     const islemler = {
       '/platform/hizli-test/baslat': () => {
         const sonuc = y.baslat(db, govde, { sunucuAdresi: `http://127.0.0.1:${req.socket.localPort}` });
-        console.log(`[platform] Hızlı test başlatıldı (${sonuc.id}).`);
+        console.log(`[platform] Nöbetçi taraması başlatıldı (${sonuc.id}).`);
         return sonuc;
       },
       '/platform/hizli-test/veri': () => y.veri(db, govde, { medyaKlasoru: b.medyaKlasoru(), dosyaKoku: b.dosyaKoku?.() }),
@@ -3211,7 +3211,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
       '/platform/hizli-test/tarayiciyi-goster': () => y.tarayiciyiGoster(govde)
     };
     const islem = islemler[yol];
-    if (!islem) { gonder(404, { basarili: false, mesaj: 'Bilinmeyen hızlı test uç noktası.' }); return true; }
+    if (!islem) { gonder(404, { basarili: false, mesaj: 'Bilinmeyen Nöbetçi taraması uç noktası.' }); return true; }
     gonder(200, { basarili: true, ...(await islem()) });
     return true;
   } catch (hata) {

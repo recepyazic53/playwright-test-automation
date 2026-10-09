@@ -129,7 +129,7 @@ test.describe('normal koşu (model-kosucu)', () => {
 
 // ---- Hızlı test motoru (aynı kural: basış öncesi sakinlik, etkisiz basışın bir kez tekrarı) ------------------------------------------
 
-test.describe('hızlı test motoru', () => {
+test.describe('Nöbetçi taraması motoru', () => {
   let tarayici: Browser;
   let sunucu: Awaited<ReturnType<typeof yerelSunucu>>;
   const durum: KartSunucusu = { odeme: 0 };

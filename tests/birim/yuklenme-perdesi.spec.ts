@@ -27,7 +27,7 @@ const SAYFA = (perde: string, kalkmaMs: number | null): string => `<style>
 
 const esc = (page: Page): Promise<number> => page.evaluate(() => (window as unknown as { escSayisi: number }).escSayisi);
 
-test('kalkan perde (dönen gösterge, şeffaf): hızlı test yolu ve normal koşu yolu Escape göndermeden bekler, sonra basar', async () => {
+test('kalkan perde (dönen gösterge, şeffaf): Nöbetçi taraması yolu ve normal koşu yolu Escape göndermeden bekler, sonra basar', async () => {
   const tarayici = await korumaliTarayici();
   try {
     const page = await tarayici.newPage();

@@ -355,7 +355,7 @@ async function hizliSayfa(yol = '/basvuru/'): Promise<{ tarayici: Browser; sayfa
   let tarayici: Browser | null = null;
   while (!tarayici) {
     try { tarayici = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPortu}`); } catch {
-      if (Date.now() > son) throw new Error('hızlı test tarayıcısına bağlanılamadı');
+      if (Date.now() > son) throw new Error('Nöbetçi taraması tarayıcısına bağlanılamadı');
       await new Promise((c) => setTimeout(c, 250));
     }
   }
@@ -555,7 +555,7 @@ test('maskeli alanlar ve uzun yoklama: gerçek tuşlarla yazılır (yaz-sil-yaz 
   await basarili('/platform/hizli-test/onay', { id, cevap: true });
   o = await bekle(id, ['karar'], 90);
   expect(uygulama.maskeliKayitlar.length).toBe(once + 1);
-  maskeliKaniti(uygulama.maskeliKayitlar.at(-1) as Nesne, 'hızlı test');
+  maskeliKaniti(uygulama.maskeliKayitlar.at(-1) as Nesne, 'Nöbetçi taraması');
   expect(o.adimlar[0].fark.sureMs, 'basıştan sonra sayfa izleme (ms)').toBeLessThan(10_000);
   await basarili('/platform/hizli-test/karar', { id, karar: 'bitir' });
   o = await bekle(id, ['bitis']);
@@ -821,9 +821,9 @@ test('arayüz: #/hizli-test sihirbazı baştan sona (Oluştur menüsü, CANLI on
     await page.goto('/#/sonuclar');
     // Gelişmiş modda Oluştur menüsünden.
     await page.getByRole('button', { name: 'Oluştur menüsü' }).click();
-    await page.getByRole('menuitem', { name: /Hızlı test/ }).click();
+    await page.getByRole('menuitem', { name: /Nöbetçi taraması/ }).click();
     await expect(page).toHaveURL(/#\/hizli-test$/);
-    await expect(page.getByRole('heading', { name: 'Hızlı test', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Nöbetçi taraması', exact: true })).toBeVisible();
     const form = page.locator('form.hizli-baslat');
     await tasmaYok(page, 'Başlat');
     // İzin seçilmeden başlamaz.

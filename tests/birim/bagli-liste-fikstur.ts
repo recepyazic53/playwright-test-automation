@@ -133,7 +133,7 @@ function yanginSecenekleri(tur: string, ust: string, dairesiz: boolean): Array<[
 
 export const YANGIN_SAYFASI = `<h1>Yangın başvurusu talebi</h1>
 <style>.izgara{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;max-width:900px}.izgara label{display:block}.kod{display:flex;gap:6px;align-items:center}.kod img{cursor:pointer;width:20px;height:20px;background:#2a2}
-/* Özel çizimli radyo: girdi gizli, seçim etiketle (gerçek sitelerdeki gibi; hızlı test ve normal koşu zorla işaretler). */
+/* Özel çizimli radyo: girdi gizli, seçim etiketle (gerçek sitelerdeki gibi; Nöbetçi taraması ve normal koşu zorla işaretler). */
 input[name="basvuranTipi"]{display:none}input[name="basvuranTipi"]+span::before{content:"○ "}input[name="basvuranTipi"]:checked+span::before{content:"● "}</style>
 <fieldset><legend>Başvuran Tipi</legend>
 <label><input type="radio" name="basvuranTipi" value="O" checked><span>Özel</span></label>

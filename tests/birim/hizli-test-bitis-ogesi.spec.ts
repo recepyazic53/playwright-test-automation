@@ -66,7 +66,7 @@ async function hizliSayfa(): Promise<{ tarayici: Browser; sayfa: Page }> {
   let tarayici: Browser | null = null;
   while (!tarayici) {
     try { tarayici = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPortu}`); } catch {
-      if (Date.now() > son) throw new Error('hızlı test tarayıcısına bağlanılamadı');
+      if (Date.now() > son) throw new Error('Nöbetçi taraması tarayıcısına bağlanılamadı');
       await new Promise((c) => setTimeout(c, 250));
     }
   }

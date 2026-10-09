@@ -84,7 +84,7 @@ const GORUNURLUK_MS = 2_000;
 const ARKA_PLAN_EN_COK_MS = 8_000;
 /** Adım boyunca çıkan tarayıcı uyarıları (alert / confirm); uyarılar kapatılır (confirm iptal edilir). */
 const tarayiciUyarilari: string[] = [];
-/** Tıklamanın açtığı onay / soru penceresine yanıt (modelde aksiyonun "diyalog"u; hızlı testte görüldü): o pencereler beklenendir. */
+/** Tıklamanın açtığı onay / soru penceresine yanıt (modelde aksiyonun "diyalog"u; Nöbetçi taramasıte görüldü): o pencereler beklenendir. */
 let diyalogYaniti: 'kabul' | 'iptal' | null = null;
 const beklenenUyarilar: string[] = [];
 const surenIstekler = new Map<Request, number>();

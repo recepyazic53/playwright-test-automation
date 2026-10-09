@@ -102,7 +102,7 @@ test('poligon: her ekran insan yoluyla baştan sona tamamlanır (sayaç: tam bir
 });
 
 for (const p of PLANLAR) {
-  test(`hızlı test: ${p.kok}`, async () => {
+  test(`Nöbetçi taraması: ${p.kok}`, async () => {
     test.skip(SECILI.length > 0 && !SECILI.includes(p.kok), 'seçili değil');
     test.setTimeout(600_000);
     const r = await ekranKos(po, p, { rapor: RAPOR });
@@ -114,7 +114,7 @@ for (const p of PLANLAR) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
-// HIZLI TEST ARAYÜZÜ — Nöbetçi'nin hızlı test ekranı kullanıcı gibi sürülür; her kontrol ✓ / ✗ + not olarak arayuz.json'a yazılır.
+// HIZLI TEST ARAYÜZÜ — Nöbetçi'nin Nöbetçi taraması ekranı kullanıcı gibi sürülür; her kontrol ✓ / ✗ + not olarak arayuz.json'a yazılır.
 // ---------------------------------------------------------------------------------------------------------------------------------
 const arayuzSonuclari: Nesne[] = [];
 async function kontrol(bolum: string, ad: string, is: () => Promise<string | void>): Promise<boolean> {
@@ -159,7 +159,7 @@ async function veriSatirlari(page: Page): Promise<string[]> {
 }
 const satirBul = (page: Page, etiket: string) => page.locator('.hizli-alanlar .hizli-alan').filter({ has: page.locator('.hizli-alan-baslik label', { hasText: new RegExp(`^${etiket.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }) }).first();
 
-test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra, Doldur, karar, bitiş, kaydet, özet sekmesi, düzenleme', async () => {
+test('Nöbetçi taraması arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra, Doldur, karar, bitiş, kaydet, özet sekmesi, düzenleme', async () => {
   test.skip(SECILI.length > 0 && !SECILI.includes('arayuz'), 'seçili değil');
   test.setTimeout(900_000);
   const tarayici = await korumaliTarayici();
@@ -296,12 +296,12 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
     });
     // İş başvurusu beceri etiketi (yaz + Enter) yüzünden ilerleyemez (bkz. ekran koşusu): arayüzden iptal edilir, akışın geri kalanı
     // üyelik ekranında (önce onay → form → yönlendirme) denenir.
-    await kontrol(B, '“Hızlı testi iptal et” onay penceresi → iptal; “Yeni hızlı test başlat” bağlantısı', async () => {
-      await soruKarti(page).getByRole('button', { name: 'Hızlı testi iptal et' }).click();
+    await kontrol(B, '“Nöbetçi taramasını iptal et” onay penceresi → iptal; “Yeni Nöbetçi taraması başlat” bağlantısı', async () => {
+      await soruKarti(page).getByRole('button', { name: 'Nöbetçi taramasını iptal et' }).click();
       const d = page.locator('dialog[open]');
       await expect(d).toBeVisible();
       await d.getByRole('button', { name: 'İptal et' }).click();
-      await expect(page.getByRole('link', { name: 'Yeni hızlı test başlat' })).toBeVisible(UZUN);
+      await expect(page.getByRole('link', { name: 'Yeni Nöbetçi taraması başlat' })).toBeVisible(UZUN);
     });
     await isBitsin();
     const U = 'Evet / üyelik';
@@ -407,7 +407,7 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
       return `doğrulamada gönderim: ${sayac('/uyelik').gonderim - sd}`;
     });
     let ekranId = '';
-    await kontrol(U, '“Kaydet — özeti göster” özeti YENİ SEKMEDE açar; “Onayla ve kaydet” → Test kaydedildi; “Hızlı teste dön” bağlantısı', async () => {
+    await kontrol(U, '“Kaydet — özeti göster” özeti YENİ SEKMEDE açar; “Onayla ve kaydet” → Test kaydedildi; “Nöbetçi taramasına dön” bağlantısı', async () => {
       await page.getByLabel('Senaryonun adı').fill('Poligon arayüz senaryosu');
       const yeniSekme = baglam.waitForEvent('page', { timeout: 30_000 });
       await soruKarti(page).getByRole('button', { name: 'Kaydet — özeti göster' }).click();
@@ -418,7 +418,7 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
       await ozet.screenshot({ path: join(RAPOR, 'ui-07-ozet-sekmesi.png'), fullPage: true });
       await ozet.getByRole('button', { name: /Onayla ve kaydet/ }).click();
       await expect(ozet.getByRole('heading', { name: 'Test kaydedildi' })).toBeVisible(UZUN);
-      await expect(ozet.getByRole('link', { name: 'Hızlı teste dön' })).toBeVisible();
+      await expect(ozet.getByRole('link', { name: 'Nöbetçi taramasına dön' })).toBeVisible();
       const akis = await ozet.getByRole('link', { name: 'Akış diyagramında aç' }).getAttribute('href');
       ekranId = decodeURIComponent(/#\/ekranlar\/e\/([^/]+)\/akis/.exec(akis ?? '')?.[1] ?? '');
       await ozet.close();
@@ -502,7 +502,7 @@ test('hızlı test arayüzü: kullanıcı gibi (iş başvurusu, Evet) — sıra,
   } finally { await tarayici.close(); }
 });
 
-test('hızlı test arayüzü: izin kipleri (Bana sor / Hayır), iptal, 390 px yerleşim', async () => {
+test('Nöbetçi taraması arayüzü: izin kipleri (Bana sor / Hayır), iptal, 390 px yerleşim', async () => {
   test.skip(SECILI.length > 0 && !SECILI.includes('arayuz'), 'seçili değil');
   test.setTimeout(600_000);
   const tarayici = await korumaliTarayici();
@@ -537,12 +537,12 @@ test('hızlı test arayüzü: izin kipleri (Bana sor / Hayır), iptal, 390 px ye
       await page.setViewportSize({ width: 1440, height: 1000 });
       return `taşma ${tasma}px`;
     });
-    await kontrol(S, '“Hızlı testi iptal et” onay ister; iptal sonrası “Yeni hızlı test başlat”', async () => {
-      await soruKarti(page).getByRole('button', { name: 'Hızlı testi iptal et' }).click();
+    await kontrol(S, '“Nöbetçi taramasını iptal et” onay ister; iptal sonrası “Yeni Nöbetçi taraması başlat”', async () => {
+      await soruKarti(page).getByRole('button', { name: 'Nöbetçi taramasını iptal et' }).click();
       const d = page.locator('dialog[open]');
       await expect(d).toBeVisible();
       await d.getByRole('button', { name: 'İptal et' }).click();
-      await expect(page.getByRole('link', { name: 'Yeni hızlı test başlat' })).toBeVisible(UZUN);
+      await expect(page.getByRole('link', { name: 'Yeni Nöbetçi taraması başlat' })).toBeVisible(UZUN);
     });
     await isBitsin();
     const H = 'Hayır / etkinlik';

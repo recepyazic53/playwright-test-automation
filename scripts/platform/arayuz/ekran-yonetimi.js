@@ -218,6 +218,9 @@ export function ekranMenusu(s) {
   const i = s.idler ? s.idler.indexOf(e.id) : -1;
   const oge = (ikonAd, metin, fn, ek = {}) => h('button', { type: 'button', role: 'menuitem', ...ek, onclick: () => { kapat(); fn(); } }, ikon(ikonAd), metin);
   const menu = h('div', { class: 'acilir-menu', role: 'menu', hidden: true },
+    // Ek öğeler (ekran sayfası): modeli değiştirmeyen yardımcılar ("Tekrar analiz et", "Yapay zekâ ile yorumla").
+    ...(s.ekOgeler || []).filter(Boolean).map((x) => oge(x.ikon, x.metin, x.fn, x.aciklama ? { title: x.aciklama } : {})),
+    s.ekOgeler && s.ekOgeler.some(Boolean) ? h('hr', {}) : null,
     oge('duzenle', 'Yeniden adlandır', () => yenidenAdlandirDiyalogu(s)),
     oge('ag', 'Düzenle (URL yolu)', () => duzenleDiyalogu(s), { disabled: !yolVar, title: yolVar ? null : (e.modelTuru === 'altModel' ? 'Alt modellerin URL yolu yoktur' : e.modelTuru === 'ortakAkis' ? 'Genel senaryoların URL yolu yoktur (eklendikleri ekranın sayfasında koşar)' : 'Modeli olmayan ekranın yolu yok (önce ekran paketi yükleyin)') }),
     s.idler ? oge('geri', 'Yukarı taşı', () => tasi(s, s.idler, -1), { disabled: i <= 0, class: 'yukari' }) : null,

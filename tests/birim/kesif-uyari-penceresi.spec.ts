@@ -41,7 +41,7 @@ test('keşif denemesinin açtığı uyarı penceresi kapatılır, metni nota yaz
   } finally { await tarayici.close(); }
 });
 
-test('hızlı test: yalnız MESAJ penceresi kapatılır (kapatma dışında denetim yok); seçenek / bağlantı içeren akış penceresi kalır', async () => {
+test('Nöbetçi taraması: yalnız MESAJ penceresi kapatılır (kapatma dışında denetim yok); seçenek / bağlantı içeren akış penceresi kalır', async () => {
   const tarayici = await korumaliTarayici();
   try {
     const page = await tarayici.newPage();

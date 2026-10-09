@@ -1,4 +1,4 @@
-// DAL BİRLEŞTİRME (genel, saf) — "Hızlı testle güncelle" yalnız o turda görünen alanlarla model kurar. Ekranın başka bir dalı (ör. bir
+// DAL BİRLEŞTİRME (genel, saf) — "Nöbetçi taramasıyla güncelle" yalnız o turda görünen alanlarla model kurar. Ekranın başka bir dalı (ör. bir
 // seçime / girilen değere göre açılan alanlar) önceki turda kaydedildiyse o dalın alanları yeni modelde yoktur: senaryolar bozulur, kalan
 // alanların bağları (tetik / bağımlılık) boşa düşer. Bu modül yeni modeli eskisiyle birleştirir:
 //  - Eski modelde olup bu turda görünmeyen senaryo alanları (seçicili) silinmez: eski adımlarına (yoksa komşu alanlarının adımına, o da
@@ -42,7 +42,7 @@ export function dallariBirlestir(yeni, eski) {
   const kosulAc = () => {
     yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};
     if (!yeni.kosullar[EKRANDA_GORUNURSE]) {
-      yeni.kosullar[EKRANDA_GORUNURSE] = { aciklama: 'Ekranda görünürse (ekranın başka bir dalında görünmeyebilir; hızlı testle güncellemede birleştirildi).', ifade: { calismaZamani: 'gorunurse' } };
+      yeni.kosullar[EKRANDA_GORUNURSE] = { aciklama: 'Ekranda görünürse (ekranın başka bir dalında görünmeyebilir; Nöbetçi taramasıyla güncellemede birleştirildi).', ifade: { calismaZamani: 'gorunurse' } };
     }
   };
   // 1) Bu turda görünmeyen eski alanlar geri konur.

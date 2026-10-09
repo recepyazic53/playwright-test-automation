@@ -113,7 +113,7 @@ export const IS_SAKLAMA_MS = 60 * 60 * 1000;
 /** Diyagramı kurulmayı bekleyen akış kaydı daha uzun saklanır (son erişimden itibaren). */
 export const TASARIM_SAKLAMA_KATI = 12;
 const SURE_SONRA_ZORLA_MS = 5000;
-const ADIM_ETIKETLERI = Object.freeze({ hazirlik: 'Güvenlik kontrolü', giris: 'Giriş', profiller: 'Bağlam profilleri ve tarama', kayit: 'Akış kaydı (tarayıcıda)', secim: 'Öğe seçme (tarayıcıda)', hizli: 'Hızlı test (tarayıcıda)', paket: 'Ekran paketi' });
+const ADIM_ETIKETLERI = Object.freeze({ hazirlik: 'Güvenlik kontrolü', giris: 'Giriş', profiller: 'Bağlam profilleri ve tarama', kayit: 'Akış kaydı (tarayıcıda)', secim: 'Öğe seçme (tarayıcıda)', hizli: 'Nöbetçi taraması (tarayıcıda)', paket: 'Ekran paketi' });
 const IS_KIMLIGI = /^[a-f0-9]{24}$/;
 
 export class TaramaHatasi extends Error {
@@ -314,8 +314,8 @@ export function taramaYoneticisiOlustur(secenekler) {
       bitir(is, 'hata', {
         kod: 'ZAMAN_ASIMI',
         mesaj: ust
-          ? `Hızlı test ${sureMetni(s.ustMs)} en uzun süreye ulaştı; tarayıcı kapatıldı. Toplananlar duruyor: kaldığınız yerden devam edebilir ya da kaydedebilirsiniz.`
-          : `Hızlı testte ${sureMetni(s.bostaMs)} boyunca işlem yapılmadı; tarayıcı kapatıldı. Toplananlar duruyor: kaldığınız yerden devam edebilir ya da kaydedebilirsiniz.`
+          ? `Nöbetçi taraması ${sureMetni(s.ustMs)} en uzun süreye ulaştı; tarayıcı kapatıldı. Toplananlar duruyor: kaldığınız yerden devam edebilir ya da kaydedebilirsiniz.`
+          : `Nöbetçi taramasıte ${sureMetni(s.bostaMs)} boyunca işlem yapılmadı; tarayıcı kapatıldı. Toplananlar duruyor: kaldığınız yerden devam edebilir ya da kaydedebilirsiniz.`
       });
       sureciKapat(is);
     }, Math.max(0, bitis - Date.now()));
@@ -452,7 +452,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   function baslat(vt, g, s) {
     temizle();
     const c = calisan();
-    if (c) throw new TaramaHatasi('MESGUL', `Başka bir ${c.kip === 'kayit' ? 'akış kaydı' : c.kip === 'girisKaydi' ? 'giriş kaydı' : c.kip === 'girisDenemesi' ? 'giriş denemesi' : c.kip === 'ogeSecme' ? 'öğe seçme' : c.kip === 'hizliTest' ? 'hızlı test' : 'tarama'} sürüyor (${c.ekran.ad}); bitmesini bekleyin ya da iptal edin.`, 409, { isId: c.id });
+    if (c) throw new TaramaHatasi('MESGUL', `Başka bir ${c.kip === 'kayit' ? 'akış kaydı' : c.kip === 'girisKaydi' ? 'giriş kaydı' : c.kip === 'girisDenemesi' ? 'giriş denemesi' : c.kip === 'ogeSecme' ? 'öğe seçme' : c.kip === 'hizliTest' ? 'Nöbetçi taraması' : 'tarama'} sürüyor (${c.ekran.ad}); bitmesini bekleyin ya da iptal edin.`, 409, { isId: c.id });
     // "Girişi kaydet": akış kaydıyla aynı altyapı; ekran yok, giriş YAPILMADAN giriş sayfası açılır, kullanıcı girişi kendisi yapar.
     const girisKaydi = g.kip === 'girisKaydi';
     // "Girişi dene": yalnız ortamın giriş tarifiyle giriş (kayıtlı oturum kullanılmaz); ekran yok, tarif şart.
@@ -466,7 +466,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     const kayit = g.kip === 'kayit' || girisKaydi;
     if (hizliTest && !['evet', 'sor', 'hayir'].includes(String(g.izin))) throw new TaramaHatasi('IZIN', 'Basma izni "evet", "sor" ya da "hayir" olmalı.');
     if (g.onay !== true) {
-      throw new TaramaHatasi('ONAY_GEREKLI', hizliTest ? 'Hızlı test seçilen ortama bağlanır (giriş dahil): başlatmadan önce uyarıyı onaylayın.' : ogeSecme ? 'Öğe seçme seçilen ortama bağlanır (giriş dahil): başlatmadan önce uyarıyı onaylayın.'
+      throw new TaramaHatasi('ONAY_GEREKLI', hizliTest ? 'Nöbetçi taraması seçilen ortama bağlanır (giriş dahil): başlatmadan önce uyarıyı onaylayın.' : ogeSecme ? 'Öğe seçme seçilen ortama bağlanır (giriş dahil): başlatmadan önce uyarıyı onaylayın.'
         : girisDenemesi ? 'Giriş denemesi siteye gerçek giriş isteği gönderir: başlatmadan önce uyarıyı onaylayın.' : kayit
         ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydında bastığınız düğmeler siteye gerçek istek gönderir: başlatmadan önce uyarıyı onaylayın.`
         : 'Tarama seçilen ortama bağlanır: başlatmadan önce uyarıyı onaylayın.');
@@ -578,7 +578,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     if (girissiz && istenen.length) throw new TaramaHatasi('PROFIL', 'Giriş yapmadan açılan sayfada bağlam profili uygulanamaz; profil seçmeyin.');
     if (istenen.length > 12) throw new TaramaHatasi('PROFIL', 'En fazla 12 bağlam profili seçilebilir.');
     if (girisDenemesi && istenen.length) throw new TaramaHatasi('PROFIL', 'Giriş denemesi bağlam profili olmadan yapılır.');
-    if ((kayit || sayfaIsi) && istenen.length > 1) throw new TaramaHatasi('PROFIL', `${hizliTest ? 'Hızlı test' : ogeSecme ? 'Öğe seçme' : 'Akış kaydı'} en fazla bir bağlam profiliyle yapılır.`);
+    if ((kayit || sayfaIsi) && istenen.length > 1) throw new TaramaHatasi('PROFIL', `${hizliTest ? 'Nöbetçi taraması' : ogeSecme ? 'Öğe seçme' : 'Akış kaydı'} en fazla bir bağlam profiliyle yapılır.`);
     /** @type {Array<{ ad: string | null; degerler: Record<string, unknown> | null }>} */
     let profiller = [{ ad: null, degerler: null }];
     if (istenen.length) {
@@ -743,7 +743,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     is.zamanlayici = setTimeout(() => {
       bitir(is, 'hata', {
         kod: 'ZAMAN_ASIMI',
-        mesaj: kayit ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydı ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; kaydı yeniden başlatın.` : sayfaIsi ? `${hizliTest ? 'Hızlı test' : 'Öğe seçme'} ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; yeniden başlatın.` : girisDenemesi ? `Giriş denemesi ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu.` : `Tarama ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu (sayfa çok yavaş olabilir).`
+        mesaj: kayit ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydı ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; kaydı yeniden başlatın.` : sayfaIsi ? `${hizliTest ? 'Nöbetçi taraması' : 'Öğe seçme'} ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; yeniden başlatın.` : girisDenemesi ? `Giriş denemesi ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu.` : `Tarama ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu (sayfa çok yavaş olabilir).`
       });
       sureciKapat(is);
     }, sure);
@@ -754,7 +754,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   /** @param {string} id */
   function iptal(id) {
     const is = isGetir(id);
-    const ad = is.kip === 'kayit' ? 'Akış kaydı' : is.kip === 'girisKaydi' ? 'Giriş kaydı' : is.kip === 'girisDenemesi' ? 'Giriş denemesi' : is.kip === 'ogeSecme' ? 'Öğe seçme' : is.kip === 'hizliTest' ? 'Hızlı test' : 'Tarama';
+    const ad = is.kip === 'kayit' ? 'Akış kaydı' : is.kip === 'girisKaydi' ? 'Giriş kaydı' : is.kip === 'girisDenemesi' ? 'Giriş denemesi' : is.kip === 'ogeSecme' ? 'Öğe seçme' : is.kip === 'hizliTest' ? 'Nöbetçi taraması' : 'Tarama';
     if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', `${ad} zaten bitti.`, 409);
     bitir(is, 'iptal', { kod: 'IPTAL', mesaj: `${ad} kullanıcı tarafından iptal edildi.` });
     sureciKapat(is);
@@ -791,7 +791,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   /** Süren hızlı test işi. @param {string} id */
   function hizliIs(id) {
     const is = isGetir(id);
-    if (is.kip !== 'hizliTest') throw new TaramaHatasi('KIP', 'Bu iş bir hızlı test değil.', 409);
+    if (is.kip !== 'hizliTest') throw new TaramaHatasi('KIP', 'Bu iş bir Nöbetçi taraması değil.', 409);
     return is;
   }
 
@@ -801,7 +801,7 @@ export function taramaYoneticisiOlustur(secenekler) {
    */
   function komutGonder(id, komut) {
     const is = hizliIs(id);
-    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', 'Hızlı test tarayıcısı artık çalışmıyor.', 409);
+    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', 'Nöbetçi taraması tarayıcısı artık çalışmıyor.', 409);
     is.sonErisim = simdi();
     hizliEtkinlik(is);
     const bekleyen = is.komutBekleyenler.shift();
@@ -835,7 +835,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     if (is.kip !== 'hizliTest' || is.durum !== 'suruyor') return { yoksayildi: true };
     is.sonErisim = simdi();
     hizliEtkinlik(is);
-    try { is.hizliDinleyici?.(o); } catch (e) { console.log(`[platform] Hızlı test (${is.id}): sonuç işlenemedi (${e instanceof Error ? e.message : String(e)}).`); }
+    try { is.hizliDinleyici?.(o); } catch (e) { console.log(`[platform] Nöbetçi taraması (${is.id}): sonuç işlenemedi (${e instanceof Error ? e.message : String(e)}).`); }
     return { alindi: true };
   }
 
@@ -851,7 +851,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   /** Sunucu: kullanıcı işlemi / "Süreyi uzat" — boşta kalma sayacı sıfırlanır (üst sınır değişmez). @param {string} id */
   function hizliUzat(id) {
     const is = hizliIs(id);
-    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', 'Hızlı test tarayıcısı artık çalışmıyor.', 409);
+    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', 'Nöbetçi taraması tarayıcısı artık çalışmıyor.', 409);
     hizliEtkinlik(is);
     return hizliSureGorunumu(is);
   }
@@ -1343,7 +1343,7 @@ export async function taramaIsteginiIsle(req, res, b) {
       ucDenetle(db, yol, govde);
       const port = req.socket.localPort;
       const sonuc = y.baslat(db, govde, { sunucuAdresi: `http://127.0.0.1:${port}` });
-      console.log(`[platform] ${govde.kip === 'kayit' ? 'Akış kaydı' : govde.kip === 'girisKaydi' ? 'Giriş kaydı' : govde.kip === 'girisDenemesi' ? 'Giriş denemesi' : govde.kip === 'ogeSecme' ? 'Öğe seçme' : govde.kip === 'hizliTest' ? 'Hızlı test' : 'Ekran taraması'} başlatıldı (${sonuc.isId}).`);
+      console.log(`[platform] ${govde.kip === 'kayit' ? 'Akış kaydı' : govde.kip === 'girisKaydi' ? 'Giriş kaydı' : govde.kip === 'girisDenemesi' ? 'Giriş denemesi' : govde.kip === 'ogeSecme' ? 'Öğe seçme' : govde.kip === 'hizliTest' ? 'Nöbetçi taraması' : 'Ekran taraması'} başlatıldı (${sonuc.isId}).`);
       gonder(202, { basarili: true, ...sonuc });
       return true;
     }

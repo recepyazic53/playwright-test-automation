@@ -39,7 +39,7 @@ test.describe('saf kurallar', () => {
   });
 });
 
-test.describe('hızlı test (127.0.0.1)', () => {
+test.describe('Nöbetçi taraması (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Yangin-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;

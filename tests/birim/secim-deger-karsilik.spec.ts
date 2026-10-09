@@ -66,7 +66,7 @@ test.describe('kural (saf)', () => {
   });
 });
 
-test.describe('hızlı test kaydı ve normal koşu (127.0.0.1)', () => {
+test.describe('Nöbetçi taraması kaydı ve normal koşu (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Karsilik-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;

@@ -44,7 +44,7 @@ test.describe('poligon kalanları', () => {
     expect(kisi.satirlar.find((x: Nesne) => x.ad === 'Başka ekran')?.degerler.Telefon).toBe('05001112233');
   });
 
-  test('başvuru: zorunlu özgeçmiş dosyası "Dosya seç" ile şifreli depoya yüklenir; hızlı test, doğrulama ve normal koşu dosyayı gönderir', async () => {
+  test('başvuru: zorunlu özgeçmiş dosyası "Dosya seç" ile şifreli depoya yüklenir; Nöbetçi taraması, doğrulama ve normal koşu dosyayı gönderir', async () => {
     test.setTimeout(400_000);
     const r = await ekranKos(po, plan('/basvuru'));
     expect(r.asamalar, JSON.stringify(r.bulgular)).toMatchObject({ veri: true, eylem: true, bitis: true, dogrulama: true, kayit: true, normal: true, sayac: true });

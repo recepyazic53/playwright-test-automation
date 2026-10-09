@@ -103,7 +103,7 @@ test('arayüz (Bana sor): pencere metni "Şimdi ne yapayım?" kartında; Tamam s
   }
 });
 
-test('başarıyı bildiren alert (sepet): hızlı test, doğrulama ve normal koşu aynı kuralla geçer (alert hata sayılmaz)', async () => {
+test('başarıyı bildiren alert (sepet): Nöbetçi taraması, doğrulama ve normal koşu aynı kuralla geçer (alert hata sayılmaz)', async () => {
   test.setTimeout(400_000);
   const r = await ekranKos(po, plan('/sepet'));
   expect(r.asamalar, JSON.stringify(r.bulgular)).toMatchObject({ dogrulama: true, kayit: true, normal: true, sayac: true });
