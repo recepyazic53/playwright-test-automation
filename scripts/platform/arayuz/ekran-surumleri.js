@@ -74,8 +74,18 @@ export async function ekranSurumleriSekmesi(alan, s, e) {
     yerlestir(alan, bosDurum('Henüz tarama yok.', 'Modeli güncelle > Nöbetçi taraması: Nöbetçi ekranı keşfeder, seçtiğiniz senaryoyla doldurur ve gördüğü hâli ekran sürümü olarak kaydeder. Sonraki taramalar bir öncekiyle karşılaştırılır.', { ikon: 'ara' }));
     return;
   }
+  const sifirla = async () => {
+    const { onayIste } = await import('./kosu-paneli.js');
+    if (!(await onayIste({ baslik: 'Ekran sürümleri sıfırlansın mı?', metin: 'Bütün ekran sürümleri ve geçmişi silinir; bir sonraki Nöbetçi taraması ilk tarama olur (yalnız kaydeder). Model ve senaryolar değişmez.', dugme: 'Sıfırla', ikonAd: 'uyari' }))) return;
+    try {
+      await api('/platform/ekran/surumler/sifirla', { govde: { projeId: s.proje.id, ekranId: e.id } });
+      bildir('Ekran sürümleri sıfırlandı.', 'basari');
+      await ekranSurumleriSekmesi(alan, s, e);
+    } catch (h_) { bildir(h_.message, 'hata'); }
+  };
   yerlestir(alan, h('div', { class: 'ekran-surumleri' },
-    h('p', { class: 'soluk' }, `Son ekran sürümünde ${v.alanSayisi} alan ve ${v.dugmeSayisi} düğme var. Her tarama bir öncekiyle karşılaştırılır.`),
+    h('div', { class: 'ekran-surumleri-ust' }, h('p', { class: 'soluk' }, `Son ekran sürümünde ${v.alanSayisi} alan ve ${v.dugmeSayisi} düğme var. Her tarama bir öncekiyle karşılaştırılır.`),
+      h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: sifirla }, ikon('yenile'), 'Sürümleri sıfırla')),
     v.gecmis.map((k, i) => h('details', { class: 'kart ekran-surumu', ...(i === 0 ? { open: true } : {}) },
       h('summary', {}, h('b', {}, `Ekran sürümü ${k.surum}`), h('span', { class: 'soluk' }, ` · ${tarihMetni(k.zaman)} · ${k.senaryoBaslik}`), ' ',
         k.ilk ? rozet('ilk tarama', 'vurgu') : k.degisiklikler.length ? rozet(`${k.degisiklikler.length} değişiklik`, 'hata') : rozet('değişiklik yok', 'basari')),

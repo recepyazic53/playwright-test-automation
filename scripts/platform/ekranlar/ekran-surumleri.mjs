@@ -163,6 +163,17 @@ export function ekranSurumleri(vt, projeId, ekranId) {
 }
 
 /**
+ * Ekranın bütün ekran sürümlerini siler (bir sonraki tarama "ilk tarama" olur; ör. keşif iyileşince ya da yanlış başlangıçta).
+ * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ekranId
+ */
+export function ekranSurumleriniSifirla(vt, projeId, ekranId) {
+  const ekran = ekranBul(vt, projeId, ekranId);
+  const { ekranSurumleri: _, ...ayarlar } = /** @type {Nesne} */ (ekranAyarlariniGetir(vt, ekranId) ?? {});
+  ekranKaydet(vt, { id: ekran.id, projeId: ekran.projeId, anahtar: ekran.anahtar, ad: ekran.ad, aciklama: ekran.aciklama, ayarlar });
+  return { sifirlandi: true };
+}
+
+/**
  * Koşu bitince: "ekran-analizi" ekini okur, ekran sürümünü kurar, öncekiyle karşılaştırır ve kaydeder. Ek yoksa null.
  * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {{ sonucId: string; senaryoId: string }} k @param {{ medyaKlasoru: string }} s
  */

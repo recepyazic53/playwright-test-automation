@@ -12,5 +12,6 @@ export declare const KESIF: 'kesif';
 export declare function okumadanSurum(okuma: Nesne, senaryoId: string): { surum: EkranSurumu; kesifYapildi: boolean; gecilenAdimlar: string[] };
 export declare function surumFarki(onceki: EkranSurumu, yeni: ReturnType<typeof okumadanSurum>, senaryoId: string): { surum: EkranSurumu; degisiklikler: Degisiklik[] };
 export declare function ekranSurumleri(vt: Veritabani, projeId: string, ekranId: string): { gecmis: Nesne[]; alanSayisi: number; dugmeSayisi: number };
+export declare function ekranSurumleriniSifirla(vt: Veritabani, projeId: string, ekranId: string): { sifirlandi: true };
 export declare function kosuEkranSurumu(vt: Veritabani, k: { sonucId: string; senaryoId: string }, s: { medyaKlasoru: string }): Promise<Nesne | null>;
 export declare function alaniModeleEkle(vt: Veritabani, projeId: string, ekranId: string, anahtar: string, s: { medyaKlasoru: string }): Promise<{ ekranId: string; bulguSayisi: number }>;
