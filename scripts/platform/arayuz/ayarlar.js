@@ -6,7 +6,7 @@ import { ekipBolumu } from './ekip.js';
 import { kartlariKatlanirYap } from './kart-katla.js';
 import {
   ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
-  kisaAciklama, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
+  kisaAciklama, formuYerinde, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { ortakPaylasimKarti } from './ortak-paylasim.js';
 import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
@@ -147,14 +147,17 @@ function kayitSatiri(baslik, meta, eylemler, ikonAd = null) {
 const bolumBasligi = (metin, adet, dugme) => h('div', { class: 'bolum-basligi' },
   h('h3', {}, metin, adet === null || adet === undefined ? null : rozet(String(adet))), dugme || null);
 
-function formuGoster(formAlani, form) {
+/** Formu açar: satir verilirse o satırın altında, verilmezse listenin altında (formuYerinde). */
+function formuGoster(formAlani, form, satir = null) {
+  formuYerinde(formAlani, satir);
   formAlani.replaceChildren(form);
   const ilk = form.querySelector('input:not([type="hidden"]):not([disabled]), select, textarea');
   if (ilk) ilk.focus();
   form.scrollIntoView({ block: 'nearest' });
 }
 
-const duzenleDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: düzenle`, onclick: fn }, ikon('duzenle'), 'Düzenle');
+/** fn(satir): düğmenin bulunduğu liste satırı (form onun altında açılır). */
+const duzenleDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: düzenle`, onclick: (o) => fn(o.currentTarget.closest('li')) }, ikon('duzenle'), 'Düzenle');
 const silDugmesi = (ad, fn) => onayliDugme('Sil', 'Silmeyi onayla', fn, { kucuk: true, etiket: `${ad}: sil` });
 const gecmisDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${ad}: değişiklik geçmişi`, onclick: fn }, ikon('tarih'), 'Geçmiş');
 
@@ -266,7 +269,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
   });
 
   const formAlani = h('div', {});
-  const ortamFormu = (ortam) => {
+  const ortamFormu = (ortam, satir = null) => {
     const oAd = h('input', { type: 'text', autocomplete: 'off', value: ortam ? ortam.ad : '' });
     const oAdres = h('input', { type: 'url', autocomplete: 'off', inputmode: 'url', placeholder: 'https://test.uygulamaniz.example/', value: ortam ? ortam.tabanUrl : '' });
     const oVarsayilan = h('input', { type: 'checkbox', id: yeniKimlik('vars'), checked: ortam ? ortam.varsayilan : false });
@@ -329,16 +332,16 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
         yenile();
       } catch (hata) { mesaj.goster(hata.message); }
     });
-    formuGoster(formAlani, form);
+    formuGoster(formAlani, form, satir);
   };
 
   const satirlar = ortamlar.map((o) => kayitSatiri(
     [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null,
       riskBelirtilmemisMi(o)
-        ? [' ', h('button', { type: 'button', class: 'rozet uyari risk-belirtin-rozeti', title: 'Ortam türü seçilmemiş; seçilene kadar Canlı sayılır', onclick: () => ortamFormu(o) }, ikon('uyari'), 'Türünü seçin')]
+        ? [' ', h('button', { type: 'button', class: 'rozet uyari risk-belirtin-rozeti', title: 'Ortam türü seçilmemiş; seçilene kadar Canlı sayılır', onclick: (e) => ortamFormu(o, e.currentTarget.closest('li')) }, ikon('uyari'), 'Türünü seçin')]
         : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Canlı ortam: istek atan her işlemde onay sorulur' }, 'Canlı')] : null],
     h('span', { class: 'mono' }, o.tabanUrl),
-    [duzenleDugmesi(o.ad, () => ortamFormu(o)),
+    [duzenleDugmesi(o.ad, (satir) => ortamFormu(o, satir)),
       gecmisDugmesi(`${o.ad} ortam türü`, () => gecmisGoster('ortam_riski', o.id, `${o.ad} — ortam türü`, baglam)),
       // Silinemeyen (varsayılan) satırda da aynı Sil düğmesi: aynı boy ve biçim, devre dışı ve nedeni ipucunda.
       o.varsayilan
@@ -361,9 +364,9 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     bolumBasligi('Projeler', baglam.durum.projeler.length),
     h('ul', { class: 'kayit-listesi proje-listesi' }, projeSatirlari),
     bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, ikon('arti'), 'Ortam ekle')),
-    formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
+    formAlani,
     tabanAdresleriBolumu(proje));
 }
 
@@ -419,7 +422,7 @@ async function girisProfilleri(govde, baglam, yenile) {
   const ortamAdi = (id) => (id ? (ortamlar.find((o) => o.id === id) || { ad: 'silinmiş ortam' }).ad : 'Tüm ortamlar');
   const formAlani = h('div', {});
 
-  const profilFormu = (p) => {
+  const profilFormu = (p, satir = null) => {
     const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
     const ortam = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'),
       ortamlar.map((o) => h('option', { value: o.id, selected: p ? p.ortamId === o.id : false }, o.ad)));
@@ -595,21 +598,21 @@ async function girisProfilleri(govde, baglam, yenile) {
         yenile();
       } catch (hata) { mesaj.goster(hata.message); }
     });
-    formuGoster(formAlani, form);
+    formuGoster(formAlani, form, satir);
   };
 
   // Satır sade: ad, ortam, kullanıcı adı (parola ve kod kaynağı gösterilmez; ayrıntı düzenleme formunda).
   // "<ortam> · " ile başlayan meta, tarif formundaki "Profili aç" bağlantısının profil bulma biçimidir.
   const satirlar = profiller.map((p) => kayitSatiri(p.ad,
     `${ortamAdi(p.ortamId)} · ${p.kullaniciAdi}`,
-    [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('giris_profili', p.id, p.ad, baglam)),
+    [duzenleDugmesi(p.ad, (satir) => profilFormu(p, satir)), gecmisDugmesi(p.ad, () => gecmisGoster('giris_profili', p.id, p.ad, baglam)),
       silDugmesi(p.ad, async () => { await api('/platform/giris-profili/sil', { govde: { id: p.id } }); bildir('Giriş profili silindi.'); yenile(); })], 'kullanici'));
 
   const tarifAlani = h('section', { class: 'giris-tarifi-bolumu', 'aria-label': 'Giriş tarifi' }, iskelet('liste'));
   govde.replaceChildren(
     bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, ikon('arti'), 'Giriş profili ekle')),
-    formAlani,
     kayitListesi(satirlar, 'Henüz giriş profili yok.', 'kullanici'),
+    formAlani,
     tarifAlani);
   await girisTarifiBolumu(tarifAlani, baglam).catch((hata) => {
     if (hata && hata.durum === 423) throw hata;

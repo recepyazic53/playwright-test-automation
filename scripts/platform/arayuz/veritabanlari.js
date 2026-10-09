@@ -3,7 +3,7 @@
 // kullanılmaz"). Kurallar sunucuda (scripts/platform/sql/veritabanlari.mjs): bağlantı "Veritabanı bağlantısı" türünde olmalı ve
 // ortam kısıtı varsa o ortamı içermeli; farklı sürücüler eşlenebilir (uyarı). Silme: kullanan SQL adımları listelenir, onay ister.
 // Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, formuYerinde, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './ekran-ortak.js';
 import { riskliOrtamMi } from './kosu-paneli.js';
 import { sqlKaynaklariniUnut } from './sql-adimi-formu.js';
@@ -20,7 +20,8 @@ export async function veritabanlariBolumu(proje, ortamlar, baglantilar, yenile) 
   const bagAdi = (id) => vtBaglantilari.find((b) => b.id === id)?.ad ?? 'bulunamadı';
   const formAlani = h('div', { class: 'entegrasyon-form-alani' });
   const yenidenCiz = () => { sqlKaynaklariniUnut(proje.id); yenile(); };
-  const duzenle = (v) => {
+  const duzenle = (v, satir = null) => {
+    formuYerinde(formAlani, satir);
     yerlestir(formAlani, veritabaniFormu({ proje, ortamlar, baglantilar: vtBaglantilari, veritabani: v, kapat: () => formAlani.replaceChildren(), kaydedildi: yenidenCiz }));
     formAlani.querySelector('input')?.focus();
   };
@@ -57,7 +58,7 @@ export async function veritabanlariBolumu(proje, ortamlar, baglantilar, yenile) 
         ortamlar.map((o) => h('td', { class: v.eslemeler[o.id] ? null : 'eslemesiz', 'data-ortam': o.ad },
           v.eslemeler[o.id] ? bagAdi(v.eslemeler[o.id]) : h('span', { class: 'cok-soluk', title: 'SQL adımı bu ortamda sorgu atmadan hatayla kalır.' }, '— kullanılmaz'))),
         h('td', { class: 'eylem' },
-          h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${v.ad}: düzenle`, onclick: () => duzenle(v) }, ikon('duzenle'), 'Düzenle'),
+          h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${v.ad}: düzenle`, onclick: (o) => duzenle(v, o.currentTarget.closest('tr')) }, ikon('duzenle'), 'Düzenle'),
           h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `${v.ad}: sil`, onclick: () => sil(v) }, ikon('cop'), 'Sil')))))));
 
   return h('section', { class: 'veritabanlari-bolumu', 'aria-labelledby': 'veritabanlari-basligi' },
@@ -65,11 +66,11 @@ export async function veritabanlariBolumu(proje, ortamlar, baglantilar, yenile) 
       h('h3', { id: 'veritabanlari-basligi' }, 'Veritabanları', rozet(String(veritabanlari.length))),
       h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'birincil', disabled: !ortamlar.length, onclick: () => duzenle(null) }, ikon('arti'), 'Veritabanı ekle'))),
     h('p', { class: 'soluk kucuk' }, 'SQL adımları bir veritabanına bağlanır; koşu, seçilen ortamdaki bağlantıya gider (ör. TEST koşusu TEST bağlantısına). Boş hücre: bu ortamda kullanılmaz, adım sorgu atmadan hatayla kalır.'),
-    formAlani,
     veritabanlari.length ? tablo
       : bosDurum('Henüz veritabanı yok.', vtBaglantilari.length
         ? '“+ Veritabanı ekle” ile bir veritabanı tanımlayıp her ortam için bağlantısını seçin.'
-        : 'Önce aşağıdaki türlerden “Veritabanı bağlantısı” ekleyin (her ortam için ayrı), sonra burada ortamlara eşleyin.', { ikon: 'veri', rol: 'status' }));
+        : 'Önce aşağıdaki türlerden “Veritabanı bağlantısı” ekleyin (her ortam için ayrı), sonra burada ortamlara eşleyin.', { ikon: 'veri', rol: 'status' }),
+    formAlani);
 }
 
 /**

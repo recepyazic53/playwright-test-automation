@@ -3,7 +3,7 @@
 // elle koşu için Senaryolar > "Koşuyu başlat"). Kural listesi: sonraki çalışma, son çalışma + sonucu, etkin anahtarı, son 20 tetikleme.
 // Kartın altındaki "Kasa kilitliyken ve açılışta" bölümü: A/B/C tercihleri (üçü de varsayılan KAPALI; her biri ayrı açılır, ne yaptığı
 // ve riski yazılıdır). Kilitle düğmeleri kasayiKilitleSecimli() ile iki seçenek sunar (A ya da B açıkken).
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, formuYerinde, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './ekran-ortak.js';
 import { ortamRiskRozeti, riskliOrtamMi } from './kosu-paneli.js';
 
@@ -44,7 +44,8 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
     const webhooklar = (entYaniti.baglantilar || []).filter((b) => bildirimTurleri.has(b.tur));
     const secenekler = { proje, ortamlar, ekranlar, akislar, uctanUcalar, webhooklar };
     const formAlani = h('div', { class: 'zamanlama-form-alani' });
-    const formAc = (kural) => {
+    const formAc = (kural, satir = null) => {
+      formuYerinde(formAlani, satir);
       yerlestir(formAlani, kuralFormu({ ...secenekler, kural, kapat: () => formAlani.replaceChildren(), kaydedildi: () => { void ciz(); } }));
       formAlani.scrollIntoView({ block: 'nearest' });
     };
@@ -53,9 +54,9 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
       h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('tarih'), 'Planlı koşular', rozet(String(veri.kurallar.length))), ekle),
       h('p', { class: 'soluk' }, KILAVUZ),
       veri.suren ? h('div', { class: 'not-kutusu uyari', role: 'status' }, `Şu an planlı koşu sürüyor: "${veri.suren.ad}".`) : null,
-      formAlani,
       veri.kurallar.length ? h('ul', { class: 'kayit-listesi zamanlama-listesi' }, veri.kurallar.map((k) => kuralSatiri(k, { ...secenekler, duzenle: formAc, yenile: ciz })))
         : bosDurum('Planlı koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "Planlı koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
+      formAlani,
       secenek.davranisFormu ? h('div', { class: 'zamanlama-davranisi' }, h('h4', {}, 'Planlı koşu davranışı'), await secenek.davranisFormu()) : null,
       await arkaPlanBolumu().catch((hata) => {
         if (hata && hata.durum === 423) throw hata;
@@ -312,7 +313,7 @@ function kuralSatiri(k, s) {
       gecmis),
     h('div', { class: 'kayit-eylemleri' },
       h('label', { class: 'onay-satiri' }, etkin, 'Etkin'),
-      h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${k.ad}: düzenle`, onclick: () => s.duzenle(k) }, ikon('duzenle'), 'Düzenle'),
+      h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${k.ad}: düzenle`, onclick: (o) => s.duzenle(k, o.currentTarget.closest('li')) }, ikon('duzenle'), 'Düzenle'),
       sil));
 }
 
