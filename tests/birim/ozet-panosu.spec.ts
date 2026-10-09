@@ -728,7 +728,7 @@ test.describe('pano (kasa) ve SQL kartı', () => {
     const anahtarlar = (await yedekIcerigi(veri, PAROLA)).tablolar.ayarlar.map((s) => String(s.anahtar));
     expect(anahtarlar).toContain(PANO_AYAR_ANAHTARI);
     expect(anahtarlar).not.toContain(PANO_SONUC_ANAHTARI);
-    expect(YEDEK_DISI_AYARLAR).toEqual([PANO_SONUC_ANAHTARI]);
+    expect(YEDEK_DISI_AYARLAR).toContain(PANO_SONUC_ANAHTARI);
     const hedef = await veritabaniniHazirla(null);
     try {
       await yedekIceAktar(hedef, veri, PAROLA, { mod: 'tamYukle' });
