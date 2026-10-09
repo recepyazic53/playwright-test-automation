@@ -130,7 +130,7 @@ export function adimSeridi(etkin = 1) {
  * @param {HTMLElement} main @param {string} bolum @param {string[]} parcalar @param {{ durum: any; gelismiseGec: (adres?: string) => void }} baglam
  */
 export function basitSayfaEkrani(main, bolum, parcalar, baglam) {
-  const baslik = bolum === 'basit-sonuclar' ? 'Sonuçlar' : bolum === 'hizli-test' ? 'Yeni test' : 'Testlerim';
+  const baslik = bolum === 'basit-sonuclar' ? 'Sonuçlar' : bolum === 'hizli-test' ? (parcalar[0] === 'guncelle' ? 'Nöbetçi taraması' : 'Yeni test') : 'Testlerim';
   const icerik = h('section', { class: 'icerik-alani dar-icerik basit-sayfa', 'aria-labelledby': 'bolum-basligi' });
   main.replaceChildren(h('h1', { class: 'gorunmez' }, baslik), icerik);
   const hata = (e) => {

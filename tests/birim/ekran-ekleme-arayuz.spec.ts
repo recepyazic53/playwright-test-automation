@@ -593,6 +593,13 @@ test('Modeli güncelle > Nöbetçi taraması: hızlı test düzeninde kendi sayf
   await expect(page.getByRole('list', { name: 'Nöbetçi taraması durakları' }).getByRole('listitem')).toHaveText([/Senaryo/, /Keşif/, /Senaryoyla doldurma/, /Sonuç/]);
   await expect(page.getByRole('button', { name: 'Taramayı başlat' }).or(page.getByText('Bu ekranın senaryosu yok.'))).toBeVisible();
   await expect(page.getByText('Koşu sürüyor')).toHaveCount(0);
+  await expect(page).toHaveTitle(/^Nöbetçi taraması/);
+  // Senaryo seçimi kaydedilecek bir değişiklik değildir: sayfadan çıkarken "kaydedilmeyecek" sorulmaz.
+  const radyolar = page.getByRole('radio');
+  if (await radyolar.count() > 1) await radyolar.nth(1).check();
+  await page.goBack();
+  await expect(page.getByText('Değişiklikleriniz kaydedilmeyecek')).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/ekranlar\/e\//);
   agKontrol(istekler);
   await page.close();
 });

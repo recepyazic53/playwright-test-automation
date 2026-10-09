@@ -32,7 +32,8 @@ export async function nobetciTaramasiEkrani(icerik, proje, ekranId) {
   icerik.replaceChildren(
     h('div', { class: 'sayfa-basligi' }, h('div', {}, baslikMetni,
       h('p', { class: 'soluk' }, 'Nöbetçi önce ekranı keşfeder (seçimleri dener, düğmelere basar; kayıt oluşturan düğmelere basmaz), sonra seçtiğiniz senaryoyla doldurur. Gördüğünü modelle karşılaştırır; farkları Değişiklikler sayfasında kabul ya da reddedersiniz.'))),
-    h('div', { class: 'hizli-test' }, serit, durumSatiri, h('div', { class: 'hizli-duzen' }, ana, yan)));
+    // Senaryo / ortam seçimi kaydedilecek bir form değildir: çıkış koruması saymaz (cikis-korumasi.js > data-kayit-disi).
+    h('div', { class: 'hizli-test', 'data-kayit-disi': '' }, serit, durumSatiri, h('div', { class: 'hizli-duzen' }, ana, yan)));
   yerlestir(serit, durakSeridi(1));
 
   let ekran; let senaryolar; let ortamlar;
