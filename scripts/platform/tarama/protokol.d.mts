@@ -229,8 +229,8 @@ export type HizliKomut =
   /** bekle: yerinde zincir isteğinde seçenekleri gelmesi beklenen alt listeler (geç dolan liste; en çok bekleMs, verilmezse varsayılan). */
   /** kesfedilen: yerinde keşif (doldurunca beliren seçimler denenir); bu seçimler zaten keşfedildi, yeniden denenmez. Verilmezse yapılmaz. */
   /** bilinenBagli: bağ ilişkisi zaten bilinen listeler (üst ya da alt); seçenekleri değişse de yeniden zincir keşfine girmez. */
-  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[]; bekle?: string[]; bekleMs?: number; kesfedilen?: string[]; bilinenBagli?: string[] }
-  | { no: number; tur: 'bas'; secici: string; metin: string | null; cerceve?: string[]; bilinenBagli?: string[] }
+  | { no: number; tur: 'doldur'; alanlar: HizliDoldurulan[]; kontrol?: HizliDoldurulan[]; bekle?: string[]; bekleMs?: number; kesfedilen?: string[]; bilinenBagli?: string[]; kesifsiz?: boolean }
+  | { no: number; tur: 'bas'; secici: string; metin: string | null; cerceve?: string[]; bilinenBagli?: string[]; kesifsiz?: boolean }
   /** Keşif basışı: akışın parçası değil (kaydedilmez); yazma istekleri engellenir, pencereler iptal edilir, sonra sayfa ilk durumuna döndürülür. */
   | { no: number; tur: 'kesifBas'; secici: string; metin: string | null; cerceve?: string[] }
   /** Bana sor: basış sırasında açılan onay / soru penceresine kullanıcının yanıtı. */

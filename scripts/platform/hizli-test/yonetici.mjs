@@ -772,7 +772,8 @@ export function hizliTestYoneticisiOlustur(s) {
     o.durum = 'calisiyor';
     o.calisiyor = `“${d.metin ?? d.secici}” düğmesine basıldı; sayfa izleniyor…`;
     o.farkOncesi = Array.isArray(o.sonAnlik?.alanlar) ? o.sonAnlik.alanlar : [];
-    gonder(o, { tur: 'bas', secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), bilinenBagli: bilinenBagliListeler(o) });
+    // Örnek senaryoyla (ekran modelden / senaryodan biliniyor) basıştan sonra yerinde keşif yapılmaz (keşifsiz).
+    gonder(o, { tur: 'bas', secici: d.secici, metin: d.metin, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), bilinenBagli: bilinenBagliListeler(o), ...(o.ornek ? { kesifsiz: true } : {}) });
   };
   /** Basıştan sonra (hata sorusu yanıtlandıysa): yeni alanlar → yeni adım + veri durağı; yoksa yeni (alansız) adım + karar. @param {Nesne} o */
   const basistanSonra = (o) => {
@@ -2218,7 +2219,9 @@ export function hizliTestYoneticisiOlustur(s) {
     // Yerinde keşif: doldurunca beliren seçimlerden zaten keşfedilenler yeniden denenmez.
     // Sayfa farkı (değer uygulamasından sonra yeniden okuma): uygulamadan önceki okuma saklanır.
     o.farkOncesi = Array.isArray(o.sonAnlik?.alanlar) ? o.sonAnlik.alanlar : [];
-    gonder(o, { tur: 'doldur', alanlar, ...(kontrol.length ? { kontrol } : {}), ...(bekle ? { bekle, bekleMs } : {}), kesfedilen: Object.keys(o.kesifIlk ?? {}), bilinenBagli: bilinenBagliListeler(o) });
+    // Örnek senaryoyla doldurmadan sonra yerinde keşif (bağlı liste zinciri, yeni seçimlerin denenmesi) yapılmaz: listeler tek tek
+    // değiştirilip geri alınınca sayfa bağlı alanları (ör. il değişince adres kodu, tapu) sıfırlayabilir ve iş uzar.
+    gonder(o, { tur: 'doldur', alanlar, ...(kontrol.length ? { kontrol } : {}), ...(bekle ? { bekle, bekleMs } : {}), kesfedilen: Object.keys(o.kesifIlk ?? {}), bilinenBagli: bilinenBagliListeler(o), ...(o.ornek ? { kesifsiz: true } : {}) });
     return { gonderildi: true };
   }
 
