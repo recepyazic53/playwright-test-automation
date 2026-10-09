@@ -64,7 +64,8 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
         const { isId, surum } = await mesgulIken(git, 'Hazırlanıyor…', () => api('/platform/ortak/guncelle', { govde: { parola: parola.girdi.value, ...(hedefSurum ? { surum: hedefSurum } : {}) } }));
         baglam.akisAlani.replaceChildren();
         iceAktarmaAkisi(baglam.akisAlani, {
-          mod: 'ayarlar', baslangicIsId: isId,
+          // Ekip güncellemesi sürümün tamamını alır (önizlemede işaret kaldırılamaz; istenmeyen kayıt sonra silinir / değiştirilir).
+          mod: 'ayarlar', baslangicIsId: isId, tamami: true,
           uygulandi: async () => { try { await api('/platform/ortak/alindi', { govde: { surum } }); } catch { /* işaret sonra da konabilir */ } },
           bitti: async () => { await baglam.projeleriYenile(); baglam.gizle(false); baglam.akisAlani.replaceChildren(); baglam.yenile(); },
           vazgec: () => { baglam.akisAlani.replaceChildren(); baglam.gizle(false); }
