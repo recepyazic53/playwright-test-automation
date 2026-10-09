@@ -437,6 +437,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/playwright-disa-aktarma.js', { dosya: 'playwright-disa-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablolar.js', { dosya: 'tablolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-baglari.js', { dosya: 'ekran-baglari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ekran-surumleri.js', { dosya: 'ekran-surumleri.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/servis-govdesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-govdesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/hesap-kurallari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'hesap-kurallari.mjs'), tur: 'text/javascript; charset=utf-8' }],

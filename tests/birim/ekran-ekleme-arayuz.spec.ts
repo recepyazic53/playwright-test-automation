@@ -356,7 +356,7 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
   const secenekler = page.getByRole('menuitem');
   await expect(secenekler).toHaveText([/^Nöbetçi taraması/, /^Paket yükle/, /^Akışı kaydet/]);
-  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/Seçtiğiniz senaryoyu koşar, koşarken ekranı okur/);
+  await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toHaveAccessibleDescription(/Ekranı keşfeder, seçtiğiniz senaryoyla doldurur/);
   await expect(page.getByRole('menuitem', { name: 'Nöbetçi taraması' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
@@ -580,4 +580,15 @@ test('arayüz ve belge metinleri yapay zekâ aracından bağımsız: kullanıcı
   // İstek metni depo dosyasına değil, istekle verilen biçim dosyasına atıf yapar.
   expect(paketIstekCumlesi()).not.toContain('docs/');
   expect(paketIstekCumlesi()).toContain(BICIM_DOSYASI_ADI);
+});
+
+test('Ekran sürümleri sekmesi: tarama yoksa açıklayıcı boş durum (Nöbetçi taraması)', async () => {
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
+  await page.getByRole('tab', { name: 'Ekran sürümleri' }).click();
+  await expect(page).toHaveURL(/\/surumler$/);
+  await expect(page.getByText('Henüz tarama yok.')).toBeVisible();
+  agKontrol(istekler);
+  await page.close();
 });
