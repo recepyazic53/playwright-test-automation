@@ -142,6 +142,8 @@ function ortakAkislariAcIc(model, ortakAkislar, yigin) {
       }
       if (ortak.yalnizTestOrtami === true) kopyaAdim.yalnizTest = true;
       kopyaAdim.ortakAkisAdi = String(ortak.ad || on);
+      // Kaynağın dosyası: koşucu giriş tarifindeki "her girişte çalışacak akış" senaryoda da var mı diye bakar (varsa tariftekini atlar).
+      kopyaAdim.ortakAkisDosyasi = dosya;
       sonuc.push(kopyaAdim);
     }
     // Ortak akışın senaryo düzeyi alanları (ör. kart profili) eklenir (aynı kimlikli alan varsa ekranınki geçerli). Bu alanlar

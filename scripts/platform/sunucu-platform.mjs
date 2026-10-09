@@ -202,6 +202,7 @@ import {
 } from './ayarlar/klasor-secimi.mjs';
 import { IceAktarmaYoneticisi, MASKE, hazirligiAt, iceAktarmaHazirla } from './ice-aktarma.mjs';
 import { birlestirmeSecimi, eklediklerimiSil, ucluFark } from './ortak-birlestirme.mjs';
+import { girisSonrasiAkislari } from './giris/giris-sonrasi-akis.mjs';
 import {
   SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kosuyaDahilAyarla,
   modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryolariCogalt, senaryoListesi, senaryoSonSonucu, senaryolariSil
@@ -1331,6 +1332,8 @@ const GET_UCLARI = new Map([
     return {
       ortamlar: ortamlariListele(db, projeId).map((o) => girisTarifiGorunumu(db, projeId, o)),
       baglamTurleri: [...turler].map(([tur, alanlar]) => ({ tur, alanlar: [...alanlar] })),
+      // "Her girişte çalışacak akış" için seçilebilecek akışlar (genel senaryolar) ve istedikleri alanlar.
+      akislar: girisSonrasiAkislari(db, projeId),
       adimIslemleri: ADIM_ISLEMLERI.map((islem) => ({ islem, etiket: ADIM_ETIKETLERI[islem] })),
       // Giriş adımları: özel adımlar (kullanıcı adı / parola / giriş düğmesi) + genel adımlar; "{ad}" = giriş profilinin ek alanı.
       girisAdimIslemleri: GIRIS_ADIM_ISLEMLERI.map((islem) => ({ islem, etiket: ADIM_ETIKETLERI[islem] })),

@@ -16,7 +16,7 @@ import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { ReadStream, WriteStream } from 'node:tty';
 import {
-  GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisAdimlariniCoz, girisAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula,
+  GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisAdimlariniCoz, girisAlanlari, girisSonrasiAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula,
   regexKacis, yerTutuculariDoldur,
   type BaglamAdimi, type GirisHataKodu, type GirisTarifi, type HataGostergesi, type Hedef
 } from '../../scripts/platform/giris/tarif.mjs';
@@ -57,6 +57,11 @@ export type GirisSecenekleri = {
    * KOKEN_UYUSMAZ (alan doldurulmaz). Nöbetçi'nin koşucuları (model koşucusu, tarama, akış kaydı) her zaman verir.
    */
   izinliKokenler?: readonly string[];
+  /**
+   * Tarifteki "her girişte çalışacak akış" (tarif.girisSonrasi) bu girişten sonra ÇALIŞTIRILMAZ: senaryonun akışında aynı akış var
+   * (senaryodaki koşar; model-kosucu.ts).
+   */
+  girisSonrasiAtla?: boolean;
 };
 
 export class GirisHatasi extends Error {
@@ -331,6 +336,38 @@ async function gonderdenSonrasiniBekle(page: Page, tarif: GirisTarifi, oncekiAdr
  * page'in bağlamında baseURL tanımlı olmalıdır (tarifteki yollar ona göre).
  */
 export async function girisYap(page: Page, tarifKaydi: GirisTarifi, kimlik: GirisKimligi, secenekler: GirisSecenekleri = {}): Promise<void> {
+  await girisFormunuGec(page, tarifKaydi, kimlik, secenekler);
+  // Başarılı girişten sonra: tarifteki "her girişte çalışacak akış" (senaryoda aynı akış yoksa).
+  if (!secenekler.girisSonrasiAtla) await girisSonrasiAkisiniUygula(page, tarifKaydi, secenekler.log);
+}
+
+/**
+ * Tarifteki "her girişte çalışacak akış" (sunucunun çözdüğü tarif.girisSonrasi: akışın adımları + kullanıcının yazdığı değerler) girişten
+ * sonra uygulanır. Akış yoksa hiçbir şey yapılmaz; bulunamadıysa / çevrilemediyse ya da değeri eksikse açık hata.
+ */
+export async function girisSonrasiAkisiniUygula(page: Page, tarif: GirisTarifi, log?: (mesaj: string) => void): Promise<void> {
+  const g = tarif.girisSonrasi;
+  if (!g) return;
+  if (g.hata) throw new GirisHatasi('GIRIS_SONRASI_AKIS', g.hata);
+  const degerler: Record<string, unknown> = g.degerler ?? {};
+  const eksik = girisSonrasiAlanlari(tarif).filter((ad) => degerler[ad] === undefined || degerler[ad] === null || degerler[ad] === '');
+  if (eksik.length) {
+    throw new GirisHatasi('GIRIS_SONRASI_AKIS', `"${g.ad}" akışı şu alanları istiyor ama giriş tarifinde değeri yok: ${eksik.join(', ')} (Ayarlar > Giriş tarifi > Her girişte çalışacak akış).`);
+  }
+  log?.(`Girişten sonra "${g.ad}" akışı çalışıyor.`);
+  for (const [i, a] of g.adimlar.entries()) {
+    try {
+      await adimiUygula(page, a, degerler);
+    } catch (hata) {
+      if (hata instanceof GirisHatasi && hata.kod !== 'SITE_ERISILEMEDI') throw hata;
+      const neden = hata instanceof GirisHatasi ? hata.message : ilkSatir(hata);
+      throw new GirisHatasi('GIRIS_SONRASI_AKIS', `"${g.ad}" — ${adimOzeti(a, i + 1)} başarısız (sayfa: ${yol(page)}): ${neden}`);
+    }
+  }
+}
+
+/** Giriş formu (tarif güdümlü): adımlar, ikinci adım, başarı göstergesi. */
+async function girisFormunuGec(page: Page, tarifKaydi: GirisTarifi, kimlik: GirisKimligi, secenekler: GirisSecenekleri): Promise<void> {
   // Eski kayıtlarda iç içe metinli düğme için yazılmış `tag:text-is("…")` seçicileri bulunamazdı: çalışırken düzeltilir (bkz. secici-duzelt.mjs).
   const tarif = seciciAgaciniDuzelt(tarifKaydi);
   if (!kimlik.kullaniciAdi || !kimlik.parola) {

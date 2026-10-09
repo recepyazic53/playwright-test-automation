@@ -123,7 +123,7 @@ export type TaramaGirisYontemi = 'saklananOturum' | 'bastanGiris';
 
 export type TaramaHataKodu =
   | 'YASAKLI_ADRES' | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'
-  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'KOKEN_UYUSMAZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'IPTAL' | 'BEKLENMEYEN';
+  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_SONRASI_AKIS' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'KOKEN_UYUSMAZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'IPTAL' | 'BEKLENMEYEN';
 
 /** "Girişi dene" (girdi.kip = 'girisDenemesi'): yalnız giriş; sonuç başarılı ya da hangi adımda neden takıldığı. */
 export type GirisDenemesiSonucu = {

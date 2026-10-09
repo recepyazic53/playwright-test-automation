@@ -54,13 +54,17 @@ export interface GirisTarifi {
   ikinciAdim: IkinciAdim;
   zamanAsimiSn: number;
   baglamDegistirme: BaglamDegistirme | null;
+  /** Her girişten sonra çalışacak akış (genel senaryo dosyası + alan değerleri). */
+  girisSonrasiAkis?: { dosya: string; degerler: Record<string, string> };
+  /** Koşucuya verilen çözülmüş akış (sunucu ekler; kaydedilmez). hata: akış bulunamadı / çevrilemedi. */
+  girisSonrasi?: { dosya: string; ad: string; adimlar: BaglamAdimi[]; degerler: Record<string, string>; hata?: string };
   /** İsteğe bağlı; yoksa [kullaniciAdi, parola, gonder] sayılır (girisAdimlariniCoz). */
   girisAdimlari?: GirisAdimi[];
 }
 
 export type GirisHataKodu =
   | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'
-  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'KOKEN_UYUSMAZ';
+  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_SONRASI_AKIS' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'KOKEN_UYUSMAZ';
 
 export declare const TARIF_SURUMU: 1;
 export declare const IKINCI_ADIM_TURLERI: readonly IkinciAdimTuru[];
@@ -73,6 +77,7 @@ export declare const OZEL_GIRIS_ISLEMLERI: readonly OzelGirisIslemi[];
 export declare const GIRIS_ADIM_ISLEMLERI: readonly GirisAdimi['islem'][];
 export declare const VARSAYILAN_GIRIS_ADIMLARI: readonly GirisAdimi[];
 export declare function girisAdimlariniCoz(tarif: GirisTarifi): GirisAdimi[];
+export declare function girisSonrasiAlanlari(tarif: GirisTarifi): string[];
 export declare function varsayilanGirisAdimlariMi(adimlar: unknown): boolean;
 export declare function girisAlanlari(tarif: GirisTarifi): string[];
 export declare const VARSAYILAN_ZAMAN_ASIMI_SN: number;

@@ -59,6 +59,7 @@ function ozet(t) {
   if (!t) return 'Bu ortamda giriş yapılamaz; tarif tanımlayın.';
   const parca = [`Giriş: ${t.girisAdresi}`, `2FA: ${IKINCI_ADIM_ETIKETI[t.ikinciAdim.tur] || t.ikinciAdim.tur}`];
   parca.push(t.baglamDegistirme ? `Bağlam: ${t.baglamDegistirme.baglamTuru} (${t.baglamDegistirme.adimlar.length} adım)` : 'Bağlam değiştirme yok');
+  if (t.girisSonrasiAkis) parca.push(`Her girişte: ${t.girisSonrasi && t.girisSonrasi.ad ? t.girisSonrasi.ad : t.girisSonrasiAkis.dosya.replace(/\.model\.json$/, '')}`);
   return parca.join(' · ');
 }
 
@@ -499,6 +500,42 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const baglamGorunum = () => { baglamAlani.hidden = !baglamVar.checked; ozetiCiz(); };
     baglamVar.addEventListener('change', baglamGorunum);
 
+    // --- Her girişte çalışacak akış: kullanıcının akışlarından (genel senaryo) seçilir; istediği alanların değerleri burada yazılır.
+    const akislar = Array.isArray(veri.akislar) ? veri.akislar : [];
+    const gs = t.girisSonrasiAkis || null;
+    const akisSecimi = h('select', { id: yeniKimlik('giris-sonrasi-akis') }, h('option', { value: '' }, 'Yok'),
+      akislar.map((x) => h('option', { value: x.dosya, selected: gs && gs.dosya === x.dosya ? true : null }, x.ad)),
+      gs && !akislar.some((x) => x.dosya === gs.dosya) ? h('option', { value: gs.dosya, selected: true }, `${gs.dosya.replace(/\.model\.json$/, '')} (bulunamadı)`) : null);
+    /** @type {Record<string, string>} */
+    const akisDegerleri = { ...(gs && gs.degerler ? gs.degerler : {}) };
+    /** @type {Array<{ anahtar: string; etiket: string; girdi: HTMLInputElement | HTMLSelectElement }>} */
+    let akisGirdileri = [];
+    const akisAlanlari = h('div', { class: 'ic-alanlar' });
+    const akisAlanlariniCiz = () => {
+      const a = akislar.find((x) => x.dosya === akisSecimi.value);
+      akisGirdileri = [];
+      akisAlanlari.hidden = !a;
+      if (!a) { akisAlanlari.replaceChildren(); return; }
+      akisAlanlari.replaceChildren(
+        a.alanlar.length ? h('p', { class: 'soluk kucuk' }, `“${a.ad}” akışı şu değerleri istiyor:`) : h('p', { class: 'soluk kucuk' }, 'Bu akış değer istemiyor.'),
+        ...a.alanlar.map((f) => {
+          const girdi = Array.isArray(f.secenekler) && f.secenekler.length
+            ? h('select', {}, h('option', { value: '' }, 'Seçin'), f.secenekler.map((x) => h('option', { value: x.deger, selected: akisDegerleri[f.anahtar] === x.deger ? true : null }, x.metin)))
+            : h('input', { type: 'text', autocomplete: 'off', value: akisDegerleri[f.anahtar] || '' });
+          const yaz = () => { akisDegerleri[f.anahtar] = girdi.value; };
+          girdi.addEventListener('input', yaz);
+          girdi.addEventListener('change', yaz);
+          akisGirdileri.push({ anahtar: f.anahtar, etiket: f.etiket, girdi });
+          return alan(f.etiket, girdi, { zorunlu: true });
+        }));
+    };
+    akisSecimi.addEventListener('change', () => { akisAlanlariniCiz(); ozetiCiz(); });
+    akisAlanlariniCiz();
+    const akisBolumu = h('fieldset', { class: 'giris-sonrasi-akis' }, h('legend', {}, 'Her girişte çalışacak akış (isteğe bağlı)'),
+      h('p', { class: 'soluk kucuk' }, 'Girişten sonra, ekran açılmadan önce her seferinde çalışır (ör. kullanıcı / acente değiştirme). Akışlarınızdan seçin ve istediği değerleri yazın. Ekran değişirse yeni akış oluşturup burada seçmeniz yeter. Bir senaryonun akışında aynı akış varsa senaryodaki çalışır, bu atlanır.'),
+      alan('Akış', akisSecimi, { yardim: akislar.length ? 'Ekranlar > Genel senaryolar’daki akışlar.' : 'Henüz genel senaryo yok (Ekranlar > Ekran ekle > Genel senaryo).' }),
+      akisAlanlari);
+
     // --- Toplama + kaydetme ---------------------------------------------------------------
     const topla = () => {
       const tur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
@@ -519,6 +556,11 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         },
         baglamDegistirme: baglamVar.checked ? { baglamTuru: baglamTuru.value.trim(), adimlar: adimlariTemizle(adimlar) } : null
       };
+      if (akisSecimi.value) {
+        const istenen = akislar.find((x) => x.dosya === akisSecimi.value);
+        const anahtarlar = istenen ? istenen.alanlar.map((f) => f.anahtar) : Object.keys(akisDegerleri);
+        sonuc.girisSonrasiAkis = { dosya: akisSecimi.value, degerler: Object.fromEntries(anahtarlar.filter((k) => akisDegerleri[k]).map((k) => [k, String(akisDegerleri[k]).trim()])) };
+      }
       // Varsayılan sıra (kullanıcı adı → parola → giriş düğmesi) tarife yazılmaz: eski tariflerle aynı biçim kalır.
       if (!varsayilanMi(giris)) sonuc.girisAdimlari = giris;
       return sonuc;
@@ -579,6 +621,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       on.not ? h('div', { class: 'not-kutusu uyari', role: 'status' }, on.not) : null,
       mesaj.kutu,
       zorunluBolum,
+      akisBolumu,
       gelismisAyarlar,
       h('div', { class: 'dugmeler' }, kaydet, sifirla, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     ikinciGorunum();
@@ -597,6 +640,10 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       for (const [g, m] of zorunlu) {
         if (!g.value.trim()) { alanHatasi(g, m); g.focus(); return; }
       }
+      // Seçilen akışın istediği değerler yazılmalı (yoksa her girişte akış "değer yok" hatasıyla durur).
+      for (const x of akisGirdileri) alanHatasi(x.girdi, '');
+      const eksikDeger = akisGirdileri.find((x) => !String(x.girdi.value).trim());
+      if (eksikDeger) { alanHatasi(eksikDeger.girdi, `${eksikDeger.etiket}: akış bu değeri istiyor.`); eksikDeger.girdi.focus(); return; }
       try {
         const { tarif } = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/giris-tarifi/kaydet', { govde: { projeId: proje.id, ortamId: o.ortamId, tarif: topla() } }));
         bildir('Giriş tarifi kaydedildi.');
