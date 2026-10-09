@@ -3,7 +3,7 @@
 // izne göre basılır / sorulur — kaydedilmez) → 3 Veri durağı (Doldur / elle; seçimler anında sayfaya uygulanır) → 4 Adım adım
 // ("Şimdi ne yapayım?", Bana sor onayı, hata sorusu) → 5 Bitiş koşulu (Bitti / Devam / Hata) → 6 Kaydet (doğrulama sorusu, farklar).
 // Sunucu: /platform/hizli-test/* (hizli-test/yonetici.mjs) — durum makinesi sunucudadır; bu sayfa durumu yoklar ve soruyu çizer.
-// Adresler: #/hizli-test (yeni), #/hizli-test/duzenle/<ekranId> (düzenleme kipi: ekranın adresiyle başlar, kayıt yeni model sürümü),
+// Adresler: #/hizli-test (yeni), #/hizli-test/duzenle/<ekranId> (düzenleme kipi: ekranın adresiyle başlar, kayıt yeni model sürümü), #/hizli-test/guncelle/<ekranId> (Modeli güncelle: sonunda yalnız farklar → bulgular),
 // #/hizli-test/o/<oturumId> (süren sihirbaz; sayfa yenilense de sürer), #/hizli-test/ozet/<oturumId> (kayıt özeti; kendi sekmesinde açılır). Değer ÜRETİLMEZ: alanlara yalnız kullanıcı yazar ya da
 // "Doldur" ile tablodan seçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesajKutusu, mesgulIken, rozet, yerlestir } from './ortak.js';
@@ -108,7 +108,9 @@ export function hizliTestEkrani(icerik, parcalar, baglam) {
     return;
   }
   if (parcalar[0] === 'o' && parcalar[1]) { oturumEkrani(govde, parcalar[1]); return; }
-  baslatEkrani(govde, proje, parcalar[0] === 'duzenle' ? parcalar[1] || null : null);
+  // #/hizli-test/guncelle/<ekran>: Modeli güncelle (sonunda yalnız farklar); #/hizli-test/duzenle/<ekran>: testi düzenle (senaryo kaydedilir).
+  const ekranId = (parcalar[0] === 'duzenle' || parcalar[0] === 'guncelle') ? parcalar[1] || null : null;
+  baslatEkrani(govde, proje, ekranId, parcalar[0] === 'guncelle' && Boolean(ekranId));
 }
 
 /**
@@ -168,7 +170,7 @@ function baglamBolumu(s, secilenOrtam, girissizMi) {
 }
 
 /** 1. durak: Başlat. @param {HTMLElement} govde @param {{ id: string }} proje @param {string | null} ekranId */
-async function baslatEkrani(govde, proje, ekranId) {
+async function baslatEkrani(govde, proje, ekranId, modelGuncelleme = false) {
   govde.replaceChildren(durakSeridi(1), h('p', { class: 'soluk' }, 'Yükleniyor…'));
   let s;
   try {
@@ -202,11 +204,13 @@ async function baslatEkrani(govde, proje, ekranId) {
   });
   const baslat = h('button', { type: 'submit', class: 'birincil' }, ikon('oynat'), 'Başlat');
   const form = h('form', { class: 'kart hizli-baslat', novalidate: true },
-    h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('simsek'), s.ekran ? `Nöbetçi taraması: ${s.ekran.ad} (düzenle)` : 'Yeni Nöbetçi taraması'),
+    h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('simsek'), s.ekran ? `Nöbetçi taraması: ${s.ekran.ad} (${modelGuncelleme ? 'modeli güncelle' : 'düzenle'})` : 'Yeni Nöbetçi taraması'),
       h('span', { class: 'sag' }, rozet('1 / 6'))),
     s.surenOturum ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, 'Süren bir Nöbetçi taraması var: ',
       h('a', { href: `#/hizli-test/o/${encodeURIComponent(s.surenOturum.id)}` }, `“${s.surenOturum.ekranAdi}” testine dön`)) : null,
-    s.ekran ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, 'Düzenleme: kaydedince ekranın yeni model sürümü oluşur; farklar kaydetmeden önce onayınıza sunulur.') : null,
+    s.ekran ? h('div', { class: 'not-kutusu bilgi', role: 'note' }, modelGuncelleme
+      ? 'Modeli güncelleme: ekran gezilir, sonunda yalnız mevcut modelle farklar listelenir; her birini kabul ya da reddedersiniz. Senaryolar değişmez.'
+      : 'Düzenleme: kaydedince ekranın yeni model sürümü oluşur; farklar kaydetmeden önce onayınıza sunulur.') : null,
     mesaj.kutu,
     h('div', { class: 'alan' }, h('label', { for: 'hizli-ad' }, 'Testin adı'), ad),
     h('div', { class: 'alan' }, h('label', { for: 'hizli-adres' }, 'Sayfa adresi'), adres,
@@ -245,7 +249,8 @@ async function baslatEkrani(govde, proje, ekranId) {
           projeId: proje.id, ortamId: ortam.value, hedef: adres.value.trim(), ...(s.ekran ? { ekranId: s.ekran.id } : { ekranAdi: ad.value.trim() }),
           cumle: cumle.value.trim() || undefined, izin, girissiz: girissiz.checked || undefined, ...(canliOnay ? { canliOnay: true } : {}),
           ...(baglam.secim().length ? { baglamProfilleri: baglam.secim() } : {}),
-          ...(ornek && ornek.value && ornek.value !== '__yok' ? { ornekSenaryoId: ornek.value } : {})
+          ...(ornek && ornek.value && ornek.value !== '__yok' ? { ornekSenaryoId: ornek.value } : {}),
+          ...(modelGuncelleme ? { modelGuncelleme: true } : {})
         }
       });
       // Başka bir sitenin tam adresi kayıtlı değilse sorulur; onaylanmadan hiçbir istek atılmaz.
@@ -1794,6 +1799,7 @@ function bitisDuragi(o, s, kart, m, gonder) {
 
 /** 6. durak: kaydet (H3 doğrulama sorusu; aynı ekran varsa farklar). Özet kendi sekmesinde açılır (#/hizli-test/ozet/<id>). */
 function kaydetDuragi(o, s, kart, m, gonder) {
+  if (s.modelGuncelleme) return farkDuragi(o, s, kart, m, gonder);
   const oz = s.ozet;
   const baslikGirdi = h('input', { type: 'text', id: 'hizli-senaryo-basligi', maxlength: 200, value: s.baslik || '' });
   const dahil = h('input', { type: 'checkbox', id: 'hizli-kosuya-dahil', checked: true });
@@ -1870,6 +1876,38 @@ function kaydetDuragi(o, s, kart, m, gonder) {
     dogrulamaKutusu, farklar, sorunAlani, m.kutu,
     (!s.dogrulanabilir || d) ? h('div', { class: 'dugmeler' }, kaydet, d && s.dogrulanabilir ? dogrula : null) : null,
     h('p', { class: 'kucuk soluk' }, 'Özet yeni bir sekmede açılır; kaydı orada onaylarsınız. Onaylamadan hiçbir şey yazılmaz.'),
+    h('div', { class: 'dugmeler hizli-geri' }, bitiseDon, zincireDon));
+}
+
+/**
+ * Modeli güncelleme (Modeli güncelle › Nöbetçi taraması) son durağı: senaryo kaydedilmez; gezilen ekran mevcut modelle karşılaştırılır ve
+ * yalnız farklar ekranın Değişiklikler sayfasına gelir (tek tek kabul / red). Fark yoksa ekran sayfasına dönülür.
+ */
+function farkDuragi(o, s, kart, m, gonder) {
+  const goster = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Farkları göster');
+  goster.addEventListener('click', async () => {
+    try {
+      const r = await mesgulIken(goster, 'Karşılaştırılıyor…', () => api('/platform/hizli-test/farklar', { govde: { id: o.id } }));
+      degisiklikleriBirak();
+      const adres = `#/ekranlar/e/${encodeURIComponent(r.ekranId)}`;
+      if (r.bulguSayisi) { location.hash = `${adres}/bulgular`; return; }
+      bildir(r.gizlenenSayisi ? `Yeni değişiklik yok (${r.gizlenenSayisi} daha önce reddedilen gizlendi).` : 'Mevcut modelle fark yok.', 'basari');
+      location.hash = adres;
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      const sorunlar = hataSorunlari(e);
+      if (sorunlar) { m.temizle(); m.kutu.replaceChildren(sorunKutusu(sorunlar, (hedef, dugme) => void gonder(dugme, 'geri', { hedef }, m), ['bitis', 'karar'])); }
+      else m.goster(hataMetni(e));
+    }
+  });
+  const bitiseDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Bitiş koşulunu düzenle');
+  bitiseDon.addEventListener('click', () => void gonder(bitiseDon, 'geri', { hedef: 'bitis' }, m));
+  const zincireDon = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Adım adım’a dön: zincire devam et');
+  zincireDon.addEventListener('click', () => void gonder(zincireDon, 'geri', { hedef: 'karar' }, m));
+  return kart('Farkları göster', 'onay',
+    h('p', {}, `Gezdiğiniz “${s.ozet.ekranAdi}” ekranı mevcut modelle karşılaştırılır. Yalnız farklar (eklenen / silinen alan, yeni / kalkan seçenek, değişen ad ve zorunluluk) listelenir; her birini kabul ya da reddedersiniz. Kabul etmeden modele hiçbir şey girmez; senaryolar değişmez.`),
+    m.kutu,
+    h('div', { class: 'dugmeler' }, goster),
     h('div', { class: 'dugmeler hizli-geri' }, bitiseDon, zincireDon));
 }
 

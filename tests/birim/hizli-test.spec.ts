@@ -827,6 +827,34 @@ test('modeli güncelleme: seçilen örnek senaryonun verileri alanlara dolar (ye
   await isBitsin();
 });
 
+test('modeli güncelleme sonu: senaryo kaydedilmez, model değişmez; farklar ekranın bulgularına (kabul / red) gelir', async () => {
+  test.setTimeout(180_000);
+  await isBitsin();
+  expect(kayitli).not.toBeNull();
+  const ekranAdresi = `/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`;
+  const surumOnce = Number(((await api(ekranAdresi)) as Nesne).surum);
+  const senaryoSayisi = async (): Promise<number> => ((await api(`/platform/senaryolar?projeId=${projeId}`)).senaryolar as Nesne[]).length;
+  const senaryoOnce = await senaryoSayisi();
+  // Düzenleme kipinde (modelGuncelleme yok) "farklar" kullanılamaz.
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', cumle: '"Tutar:"', ornekSenaryoId: kayitli?.senaryoId, modelGuncelleme: true })).id);
+  let o = await bekle(id, ['veri']);
+  expect(o.modelGuncelleme).toBe(true);
+  const alan = (etiket: string): string => String(o.soru.alanlar.find((a: Nesne) => a.etiket === etiket).anahtar);
+  await basarili('/platform/hizli-test/veri', { id, degerler: { [alan('Ad soyad')]: deger('Deneme Kişi'), [alan('Müşteri tipi')]: deger('bireysel') } });
+  o = await bekle(id, ['hayirSecim']);
+  await basarili('/platform/hizli-test/karar', { id, karar: 'bitir', dugme: o.soru.adaylar.find((a: Nesne) => a.metin === 'Hesapla').secici, mesajlar: ['Tutar:'] });
+  o = await bekle(id, ['bitis']);
+  await basarili('/platform/hizli-test/bitis', { id, etiketler: o.soru.etiketler });
+  await bekle(id, ['kaydet']);
+  const r = await basarili('/platform/hizli-test/farklar', { id });
+  expect(r).toMatchObject({ kaydedildi: true, farklar: true, ekranId: kayitli?.ekranId });
+  expect(typeof r.bulguSayisi).toBe('number');
+  expect(Number(((await api(ekranAdresi)) as Nesne).surum)).toBe(surumOnce);
+  expect(await senaryoSayisi()).toBe(senaryoOnce);
+  if (Number(r.bulguSayisi) > 0) expect(((await api(ekranAdresi)) as Nesne & { analiz: Nesne }).analiz.bekleyen).toBeTruthy();
+  await isBitsin();
+});
+
 /** Sayfa yatay kaymıyor. */
 const tasma = (page: Page): Promise<number> => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 /** 1440 ve 390 px'te taşma yok. */

@@ -73,7 +73,7 @@ import { ekranAnahtariOner, kayitPaketiOlustur } from '../tarama/paket-olusturuc
 import { kalipVar, katla } from '../tarama/eylem-kesfi.mjs';
 import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
-import { EkranDogrulamaHatasi, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
+import { EkranDogrulamaHatasi, analizYukle, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
 import { dallariBirlestir } from './dal-birlestirme.mjs';
 import { tumSecenekler } from './test-verisi-tablosu.mjs';
@@ -1802,7 +1802,7 @@ export function hizliTestYoneticisiOlustur(s) {
       uyari: o.sayfaUyarisi ?? null, id: o.id, durum: o.durum, izin: o.izin, izinAdi: IZIN_ADLARI[/** @type {'evet' | 'sor' | 'hayir'} */ (o.izin)], projeId: o.projeId, ortam: o.ortam, hedef: o.hedefYol,
       // Seçilen bağlam (yalnız tür ve profil adı; değerleri gösterilmez).
       baglam: o.baglamProfili ? { tur: o.baglamProfili.tur, ad: o.baglamProfili.ad, uygulandi: o.baglamUygulandi === true } : null,
-      ekran: o.ekran, cumle: o.cumle, duzenleme: Boolean(o.ekran.id), durak: durakNo(o), calisiyor: o.calisiyor, sonHata: o.sonHata, hata: o.hata,
+      ekran: o.ekran, cumle: o.cumle, duzenleme: Boolean(o.ekran.id), modelGuncelleme: Boolean(o.modelGuncelleme && o.ekran.id), durak: durakNo(o), calisiyor: o.calisiyor, sonHata: o.sonHata, hata: o.hata,
       kesif: o.kesifAnlik ? {
         alanSayisi: o.kesifAnlik.alanlar.length, dugmeAdaylari: o.kesifAnlik.dugmeler.map((/** @type {Nesne} */ x) => x.metin ?? x.secici).slice(0, 8),
         mesajAdaylari: adayMesajlari(o.kesifAnlik.eylem, o.cumle.mesajlar).slice(0, 8), notlar: [...(o.kesifAnlik.eylem?.notlar ?? []), ...(o.kesifNotlari ?? [])]
@@ -1927,7 +1927,7 @@ export function hizliTestYoneticisiOlustur(s) {
       baglamProfili: baglamSecimi, baglamUygulandi: false,
       durum: 'kesif', baslangic: simdi(), sonErisim: simdi(), komutNo: 0, bekleyen: null, calisiyor: 'Sayfa açılıyor ve keşfediliyor… (hiçbir düğmeye basılmaz)',
       // Modeli güncelleme (mevcut ekran): örnek senaryo (model + çözülmüş veri; yalnız bellekte) ve kayıt oluşturabilecek düğmeye sormadan basılmaz.
-      ornek, modelGuncelleme: Boolean(ekran.id),
+      ornek, modelGuncelleme: Boolean(ekran.id && g.modelGuncelleme === true),
       adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: ornek ? { ...ornek.tabloSecimleri } : {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
       // Bağlı listeler: alt → üst; tablolar için seçenek gözlemleri; zincir keşfinin bulguları (kullanıcıya gösterilen cümleler).
       bagliUst: new Map(), gozlemler: [], bulgular: [],
@@ -2981,6 +2981,35 @@ export function hizliTestYoneticisiOlustur(s) {
     return { kaydedildi: true, ...o.kayit };
   }
 
+  /**
+   * Modeli güncelleme (mevcut ekran, "Modeli güncelle › Nöbetçi taraması"): gezilen ekran mevcut modelle karşılaştırılır ve farklar
+   * ekranın bulgularına (tekrar analiz: tek tek kabul / red) yazılır; model ve senaryolar DEĞİŞMEZ. Oturum biter (tarayıcı kapanır).
+   * @param {Veritabani} vt @param {Nesne} g @param {{ medyaKlasoru: string }} c
+   */
+  async function farklar(vt, g, c) {
+    const o = oturumGetir(String(g.id ?? ''));
+    durumda(o, ['kaydet']);
+    if (!o.modelGuncelleme || !o.ekran.id) throw new HizliTestHatasi('DURUM', 'Farklar yalnız mevcut ekranın modeli güncellenirken gösterilir.');
+    const { paket, mevcut } = paketKur(vt, o);
+    if (!mevcut) throw new HizliTestHatasi('DURUM', 'Ekranın modeli bulunamadı.');
+    /** @type {Awaited<ReturnType<typeof analizYukle>>} */
+    let r;
+    try {
+      r = await analizYukle(vt, o.projeId, String(o.ekran.id), paket, { medyaKlasoru: c.medyaKlasoru });
+    } catch (h) {
+      if (h instanceof EkranDogrulamaHatasi && Array.isArray(h.hatalar) && h.hatalar.length) throw kayitSorunuHatasi(kayitSorunlari(h.hatalar, paket));
+      throw h;
+    }
+    o.kayit = { ekranId: o.ekran.id, farklar: true, bulguSayisi: r.bulguSayisi, gizlenenSayisi: r.gizlenenSayisi };
+    o.durum = 'kaydedildi';
+    o.calisiyor = null;
+    dosyaKlasorunuSil(o);
+    gunluk(o, r.bulguSayisi ? `Karşılaştırıldı: ${r.bulguSayisi} değişiklik kararınızı bekliyor.` : 'Karşılaştırıldı: mevcut modelle fark yok.');
+    try { gonder(o, { tur: 'bitir' }); } catch { /* iş zaten bitti */ }
+    o.bekleyen = null;
+    return { kaydedildi: true, ...o.kayit };
+  }
+
   /** Oturumun veri durağındaki dosya alanı. @param {Nesne} o @param {unknown} anahtar */
   const dosyaAlani = (o, anahtar) => {
     const a = typeof anahtar === 'string' ? o.alanlar.get(anahtar)?.alan : undefined;
@@ -3134,6 +3163,7 @@ export function hizliTestYoneticisiOlustur(s) {
     dogrula,
     ozet: kayitOzeti,
     kaydet,
+    farklar,
     uzat,
     devam,
     iptal
@@ -3243,6 +3273,7 @@ export async function hizliTestIsteginiIsle(req, res, b) {
       '/platform/hizli-test/devam': () => y.devam(govde, tarayiciBaglami),
       '/platform/hizli-test/ozet': () => y.ozet(db, govde),
       '/platform/hizli-test/kaydet': () => y.kaydet(db, govde, { kosuyorMu: b.kosuyorMu, medyaKlasoru: b.medyaKlasoru() }),
+      '/platform/hizli-test/farklar': () => y.farklar(db, govde, { medyaKlasoru: b.medyaKlasoru() }),
       '/platform/hizli-test/iptal': () => y.iptal(govde),
       '/platform/hizli-test/tarayiciyi-goster': () => y.tarayiciyiGoster(govde)
     };
