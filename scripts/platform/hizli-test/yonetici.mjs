@@ -536,6 +536,29 @@ export function hizliTestYoneticisiOlustur(s) {
   const veriDuragi = (o, not = null) => {
     o.durum = 'veri';
     o.soruNotu = not;
+    otomatikDevam(o);
+  };
+  /**
+   * Örnek senaryo seçildiyse (Modeli güncelle / Testlerim > Düzenle) veri durağında beklenmez: değerler senaryodan geldiği için "Devam et"
+   * kendiliğinden yapılır. Zorunlu alan boşsa (senaryoda değeri yok) ya da aynı durağa ikinci kez düşülürse (sayfa değerleri geri aldı)
+   * durulur ve kullanıcıya sorulur. @param {Nesne} o
+   */
+  const otomatikDevam = (o) => {
+    if (!o.ornek || !o.otomatikVt) return;
+    setTimeout(() => {
+      if (o.durum !== 'veri') return;
+      // Aynı durak (adım, basış, not) bir kez kendiliğinden geçilir; yeniden düşülürse kullanıcıya bırakılır.
+      const imza = `${o.adimlar.length}:${o.basisNo}:${o.soruNotu ?? ''}`;
+      if (o.otomatikImza === imza) return;
+      o.otomatikImza = imza;
+      veri(o.otomatikVt, { id: o.id, degerler: {} }).then(() => {
+        gunluk(o, 'Değerler örnek senaryodan; veri durağı kendiliğinden geçildi.');
+      }, (h) => {
+        const neden = h instanceof Error ? h.message : String(h);
+        o.soruNotu = `Kendiliğinden devam edilemedi: ${neden} Eksik değeri girip “Devam et” deyin.`;
+        gunluk(o, `Kendiliğinden devam edilemedi: ${neden}`);
+      });
+    }, 0);
   };
   // ---- Bağlı listeler (il → ilçe, marka → model…; zincir-kesfi.mjs) ----
   /** Alanın görünen adı. @param {Nesne} o @param {string} anahtar */
@@ -705,6 +728,16 @@ export function hizliTestYoneticisiOlustur(s) {
   const verilerTamam = (o) => {
     if (o.izin === 'hayir') { o.durum = 'hayirSecim'; return; }
     const adaylar = o.sonAnlik?.dugmeler ?? [];
+    // Modeli güncellerken: bu adımın modeldeki düğmesi adaylardaysa (aynı seçici ya da yazı) kendiliğinden basılır ("Evet" izni; kayıt
+    // oluşturabilecek düğmede sorulur). Bulunamazsa "Şimdi ne yapayım?" sorulur.
+    if (o.izin === 'evet' && o.modelGuncelleme && o.ornek) {
+      const a = modelDugmesi(o, adaylar);
+      if (a && basmaKarari({ izin: o.izin, adaySayisi: 1, kullaniciSecti: true, sormadanBasma: Boolean(a.kayitOlusturabilir) }) === 'bas') {
+        gunluk(o, `Modeldeki adım düğmesi “${a.metin ?? a.secici}”; basılıyor.`);
+        basmayaBasla(o, { secici: a.secici, metin: a.metin, ...(a.cerceve?.length ? { cerceve: a.cerceve } : {}) });
+        return;
+      }
+    }
     if (o.izin === 'evet' && o.basisNo === 0) {
       const a = tekAday(adaylar, o.cumle.dugmeler);
       if (a && basmaKarari({ izin: o.izin, adaySayisi: 1, sormadanBasma: Boolean(o.modelGuncelleme && a.kayitOlusturabilir) }) === 'bas') {
@@ -714,6 +747,20 @@ export function hizliTestYoneticisiOlustur(s) {
       }
     }
     o.durum = 'karar';
+  };
+  /**
+   * Bu adımın modeldeki (ekranın kendi adımları; genel senaryo adımları hariç) ilk tıklama aksiyonuna uyan aday: seçici aynı ya da yazı aynı.
+   * @param {Nesne} o @param {Nesne[]} adaylar @returns {Nesne | null}
+   */
+  const modelDugmesi = (o, adaylar) => {
+    const model = o.ornek?.model;
+    const adimlar = (Array.isArray(model?.adimlar) ? model.adimlar : []).filter((/** @type {Nesne} */ a) => nesneMi(a) && !nesneMi(a.ortakAkis));
+    const adim = adimlar[o.adimlar.length - 1];
+    const aksiyon = (nesneMi(adim?.kosu) && Array.isArray(adim.kosu.aksiyonlar) ? adim.kosu.aksiyonlar : []).find((/** @type {Nesne} */ x) => nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string');
+    if (!aksiyon) return null;
+    const yazi = (/** @type {unknown} */ m) => String(m ?? '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('tr');
+    const hedefYazi = yazi(aksiyon.metin ?? aksiyon.aciklama);
+    return adaylar.find((/** @type {Nesne} */ x) => x.secici === aksiyon.secici) ?? (hedefYazi ? adaylar.find((/** @type {Nesne} */ x) => yazi(x.metin) === hedefYazi) : null) ?? null;
   };
   /** @param {Nesne} o @param {{ secici: string; metin: string | null }} d */
   const basmayaBasla = (o, d) => {
@@ -753,7 +800,10 @@ export function hizliTestYoneticisiOlustur(s) {
     const i = kuyruk.findIndex((/** @type {Nesne} */ d) => d.onayli === true || (o.izin === 'evet' && d.emin === true));
     if (i >= 0) { const [d] = kuyruk.splice(i, 1); kesifBasmayaBasla(o, d); return; }
     const sorulacak = kuyruk.filter((/** @type {Nesne} */ d) => d.soruldu !== true);
-    if (sorulacak.length) {
+    // Örnek senaryoyla (modeli güncelleme / testi düzenleme) keşif düğmeleri sorulmaz ve basılmaz: ekran senaryodan biliniyor; akış
+    // kendiliğinden sürsün (veri durağı da kendiliğinden geçilir).
+    if (sorulacak.length && o.ornek) gunluk(o, `Örnek senaryo var: keşif düğmelerine basılmadı (${sorulacak.map((d) => `“${d.metin ?? d.secici}”`).join(', ')}).`);
+    else if (sorulacak.length) {
       o.kesifOnayListesi = sorulacak;
       o.durum = 'kesifOnay';
       o.calisiyor = null;
@@ -1927,7 +1977,7 @@ export function hizliTestYoneticisiOlustur(s) {
       baglamProfili: baglamSecimi, baglamUygulandi: false,
       durum: 'kesif', baslangic: simdi(), sonErisim: simdi(), komutNo: 0, bekleyen: null, calisiyor: 'Sayfa açılıyor ve keşfediliyor… (hiçbir düğmeye basılmaz)',
       // Modeli güncelleme (mevcut ekran): örnek senaryo (model + çözülmüş veri; yalnız bellekte) ve kayıt oluşturabilecek düğmeye sormadan basılmaz.
-      ornek, modelGuncelleme: Boolean(ekran.id && g.modelGuncelleme === true),
+      ornek, modelGuncelleme: Boolean(ekran.id && g.modelGuncelleme === true), otomatikVt: ornek ? vt : null,
       adimlar: [], alanlar: new Map(), degerler: {}, tabloSecimleri: ornek ? { ...ornek.tabloSecimleri } : {}, alanHatalari: {}, gorulenler: [], etiketler: {}, adresBitti: null, olumsuz: null,
       // Bağlı listeler: alt → üst; tablolar için seçenek gözlemleri; zincir keşfinin bulguları (kullanıcıya gösterilen cümleler).
       bagliUst: new Map(), gozlemler: [], bulgular: [],

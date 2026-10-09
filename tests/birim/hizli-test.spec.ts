@@ -823,13 +823,39 @@ test('modeli güncelleme: seçilen örnek senaryonun verileri alanlara dolar (ye
   expect(await api('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', ornekSenaryoId: 'yok-boyle-senaryo' }))
     .toMatchObject({ basarili: false });
   const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'hayir', ornekSenaryoId: kayitli?.senaryoId })).id);
-  const o = await bekle(id, ['veri']);
-  const alan = (etiket: string): Nesne => o.soru.alanlar.find((a: Nesne) => a.etiket === etiket);
+  // Örnek senaryo varken veri durağı kendiliğinden geçilir (Hayır izni: düğme / mesaj seçimine gelinir); değerler adımın alanlarında.
+  const o = await bekle(id, ['hayirSecim']);
+  const alan = (etiket: string): Nesne => (o.adimlar as Nesne[]).flatMap((a) => a.alanlar as Nesne[]).find((a) => a.etiket === etiket) as Nesne;
   expect(alan('Ad soyad').deger).toBeTruthy();
   // Senaryodaki tablo başvurusu olduğu gibi gelir (tablo kaynağı).
   expect(alan('Müşteri tipi')).toMatchObject({ deger: '${Müşteri tipi.Müşteri tipi}', kaynak: 'tablo' });
   expect(o.gunluk.map((g: Nesne) => String(g.metin ?? g)).join(' ')).toContain('senaryosundan doldurulur');
   await basarili('/platform/hizli-test/iptal', { id });
+  await isBitsin();
+});
+
+test('örnek senaryo seçildiyse veri durağı kendiliğinden geçilir ("Devam et" beklenmez); örneksiz durakta beklenir', async () => {
+  test.setTimeout(180_000);
+  await isBitsin();
+  expect(kayitli).not.toBeNull();
+  const id = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'evet', ornekSenaryoId: kayitli?.senaryoId, modelGuncelleme: true })).id);
+  // Veri durağına hiç "veri" isteği gönderilmeden sonraki duruma geçilir.
+  let o: Nesne = {};
+  for (const son = Date.now() + 90_000; Date.now() < son; await new Promise((c) => setTimeout(c, 400))) {
+    o = (await api(`/platform/hizli-test/durum?id=${id}`)).oturum as Nesne;
+    if ((o.gunluk as Nesne[]).some((g) => /kendiliğinden geçildi/.test(String(g.metin)))) break;
+    if (o.durum === 'hata') break;
+  }
+  expect((o.gunluk as Nesne[]).map((g) => String(g.metin)).join(' | ')).toContain('veri durağı kendiliğinden geçildi');
+  await basarili('/platform/hizli-test/iptal', { id });
+  await isBitsin();
+  // Örneksiz: veri durağında beklenir.
+  const id2 = String((await basarili('/platform/hizli-test/baslat', { projeId, ortamId, hedef: '/basvuru/', ekranId: kayitli?.ekranId, izin: 'evet', modelGuncelleme: true })).id);
+  const o2 = await bekle(id2, ['veri']);
+  await new Promise((c) => setTimeout(c, 1500));
+  expect(((await api(`/platform/hizli-test/durum?id=${id2}`)).oturum as Nesne).durum).toBe('veri');
+  expect(o2.gunluk.map((g: Nesne) => String(g.metin)).join(' ')).not.toContain('kendiliğinden geçildi');
+  await basarili('/platform/hizli-test/iptal', { id: id2 });
   await isBitsin();
 });
 
