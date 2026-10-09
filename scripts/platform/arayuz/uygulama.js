@@ -991,7 +991,8 @@ function anaDuzen() {
       // Basit mod sayfaları (her iki modda da açılır; Gelişmiş menüsünde bağlantıları yoktur).
       (bolum === 'basit-sonuclar' ? navBasitSonuclar : bolum === 'testlerim' ? navTestlerim : null)?.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
-      sayfaBasligi(bolum === 'basit-sonuclar' ? 'Sonuçlar' : bolum === 'hizli-test' ? 'Yeni test' : 'Testlerim');
+      // #/hizli-test/guncelle/<ekran>: Modeli güncelle > Nöbetçi taraması (yeni test değil).
+      sayfaBasligi(bolum === 'basit-sonuclar' ? 'Sonuçlar' : bolum === 'hizli-test' ? (alt === 'guncelle' ? 'Nöbetçi taraması' : 'Yeni test') : 'Testlerim');
       basitSayfaEkrani(main, bolum, alt ? [alt, ...kalan].map((p) => decodeURIComponent(p)) : [], { durum, gelismiseGec: (adres) => moduDegistir('gelismis', adres) });
     } else if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
