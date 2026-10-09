@@ -70,6 +70,17 @@ export async function acikListeyiKapat(k: Kapsam, l: Locator, isaret: string): P
   }
 }
 
+/** Listenin (l) yanında görünen aramalı bileşen var mı (ozelBilesenIsaretle; bırakılan işaret silinir). Normal görünen listede false. */
+export async function ozelBilesenVar(l: Locator): Promise<boolean> {
+  const isaret = `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  const varMi = await l.evaluate(ozelBilesenIsaretle, isaret, { timeout: 2_000 }).catch(() => false);
+  if (varMi) {
+    await l.evaluate((e, i) => { for (const x of e.ownerDocument.querySelectorAll(`[data-nobetci-ozel="${i}"]`)) x.removeAttribute('data-nobetci-ozel'); }, isaret)
+      .catch(() => undefined);
+  }
+  return varMi;
+}
+
 /**
  * Gizli listenin (l) görünen bileşeninden hedef seçeneği seçer: kutuya tıklar, arama kutusu açılırsa "aranan"ı yazar, görünen seçeneğe
  * tıklar; açık kalan liste kapatılır, işaretler temizlenir. Değer zaten hedefse dokunmaz. Bileşen yoksa ya da değer tutmadıysa false
