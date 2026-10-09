@@ -5,6 +5,8 @@ type Nesne = Record<string, any>;
 export type EkranGozlemi = {
   adimId: string;
   baslik: string;
+  /** Keşif okuması (adımı yok). */
+  kesif?: boolean;
   alanlar: Nesne[];
   dugmeler: Array<{ metin: string | null; secici: string; cerceve?: string[]; baglanti?: boolean }>;
 };

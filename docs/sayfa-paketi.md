@@ -527,6 +527,15 @@ Basit modun "+ Yeni test"i; Gelişmiş modda Oluştur menüsünden ve Ekran ekle
 
 Uçlar: `/platform/hizli-test/*` (`scripts/platform/hizli-test/yonetici.mjs`).
 
+### Modeli güncelle > Nöbetçi taraması (modeli olan ekran)
+
+Seçilen senaryo normal koşar (`/platform/senaryolar/calistir`, `ekranAnalizi: true`): önce **keşif** (radyolar ve kısa listelerin her
+seçeneği, iç içe de; kayıt oluşturmayan düğmeler; her denemeden önce ekran yeniden açılır — `tests/support/ekran-kesfi.ts`), sonra
+senaryo ekranın kendi adımları bitene kadar koşar (sondaki genel senaryolar — ödeme — koşmaz) ve her adımda sayfa okunur. Okunanlar
+**modelle** karşılaştırılır (`ekranlar/kosu-analizi.mjs`) ve farklar Değişiklikler sayfasına düşer (kabul / ret; reddedilen bir daha
+gösterilmez). Modelde olmayan her giriş alanı "yeni alan" görünür; bu yüzden paketlerde **sayfadaki bütün giriş alanları** modele alınır
+(testte kullanılmayan yardımcı alanlar dahil).
+
 ## senaryoOnerileri
 
 ```json

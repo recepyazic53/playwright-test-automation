@@ -461,7 +461,7 @@ export function secenekIste(s) {
  * çalıştırma ({ kaynakKosuId, model: 'kosudaki' | 'guncel', veri: 'guncel' | 'kosudaki' }; sunucu o koşudaki satırları kurar).
  * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string; tekBasina?: boolean;
  *   veriKipi?: string; tekrar?: { kaynakKosuId: string; model?: string; veri?: string }; uygulamaSurumu?: string; ekranAnalizi?: boolean }} s
- *   ekranAnalizi: Nöbetçi taraması (keşif + senaryo; okunan ekran yeni ekran sürümü, bir öncekiyle karşılaştırılır).
+ *   ekranAnalizi: Nöbetçi taraması (keşif + senaryo; okunan ekran modelle karşılaştırılır, farklar Değişiklikler'e).
  *   uygulamaSurumu: koşu diyaloğunda girilen uygulama sürümü (her senaryo isteğine eklenir; boşsa ortamınki).
  */
 export function kosuBaslat(s) {
@@ -547,8 +547,36 @@ async function birTaneCalistir(oturum, satir, ek) {
   else if (yanit.durum === 'iptal') satir.durum = 'durduruldu';
   else satir.durum = 'basarisiz';
   yay('satir-bitti');
-  // Nöbetçi taraması: okunan ekran yeni ekran sürümü; bir öncekiyle karşılaştırma penceresi (ekran-surumleri.js).
-  if (ek.ekranAnalizi && yanit && yanit.basarili !== false) import('./ekran-surumleri.js').then((m) => m.taramaSonucuPenceresi(yanit, oturum.projeId));
+  if (ek.ekranAnalizi && yanit && yanit.basarili !== false) ekranAnaliziSonucu(yanit);
+}
+
+/**
+ * Modeli güncelle bitti: koşu sırasında okunan ekranların modelle farkı. Alan / seçenek farkı varsa Değişiklikler sayfasına
+ * (kabul / ret) gidilir; düğme notları burada da listelenir.
+ * @param {Record<string, any>} yanit
+ */
+function ekranAnaliziSonucu(yanit) {
+  const a = yanit.ekranAnalizi;
+  // Karşılaştırılamadıysa da pencere açılır (kısa bildirim gözden kaçıyordu).
+  const hata = a ? null : yanit.ekranAnaliziHatasi ? `Ekran karşılaştırılamadı: ${yanit.ekranAnaliziHatasi}` : 'Ekran karşılaştırılamadı: koşu ekrana ulaşamadı.';
+  const notlar = a && Array.isArray(a.notlar) ? a.notlar : [];
+  const kapat = h('button', { type: 'button', class: a?.bulguSayisi ? 'hayalet' : '' }, 'Kapat');
+  const git = a?.bulguSayisi ? h('button', { type: 'button' }, 'Değişiklikleri gör') : null;
+  const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'ekran-analizi-basligi' },
+    h('div', { class: 'diyalog-govde' },
+      h('h2', { id: 'ekran-analizi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('soru')), 'Modeli güncelle: sonuç'),
+      hata ? h('p', { class: 'hata-metni' }, hata) : h('p', {}, a.bulguSayisi
+        ? `Senaryo koşarken ekranda modelden farklı ${a.bulguSayisi} şey bulundu (yeni / kaybolan alan, yeni / kaldırılan seçenek). Değişiklikler sayfasında tek tek kabul edin ya da reddedin.`
+        : 'Alanlarda ve seçeneklerde modelden farklı bir şey bulunmadı.'),
+      a?.gizlenenSayisi ? h('p', { class: 'soluk' }, `Daha önce reddettiğiniz ${a.gizlenenSayisi} fark yeniden gösterilmedi.`) : null,
+      notlar.length ? h('ul', {}, notlar.map((n) => h('li', {}, n))) : null),
+    h('div', { class: 'diyalog-alt' }, kapat, git));
+  kapat.addEventListener('click', () => diyalog.close());
+  git?.addEventListener('click', () => { diyalog.close(); location.hash = `#/ekranlar/e/${a.ekranId}/bulgular`; });
+  diyalog.addEventListener('close', () => diyalog.remove());
+  document.body.append(diyalog);
+  diyalog.showModal();
+  (git ?? kapat).focus();
 }
 
 function oturumuBitirGerekirse(oturum) {

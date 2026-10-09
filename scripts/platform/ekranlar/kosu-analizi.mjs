@@ -1,5 +1,6 @@
-// KOŞUDAN EKRAN ANALİZİ (Modeli güncelle) — senaryo normal koşar; koşucu ekranın her adımında sayfayı okur (model-kosucu.ts >
-// EKRAN_ANALIZI; "ekran-analizi" eki). Burada okunanlar mevcut modelle karşılaştırılır ve "gözlenen model" kurulur; Değişiklikler sayfası
+// KOŞUDAN EKRAN ANALİZİ (Modeli güncelle > Nöbetçi taraması) — koşucu önce ekranı keşfeder (seçimler / düğmeler denenir; tests/support/
+// ekran-kesfi.ts), sonra senaryo koşar ve ekranın her adımında sayfayı okur (model-kosucu.ts > EKRAN_ANALIZI; "ekran-analizi" eki:
+// { kesif, gozlemler }). Keşif okuması da bir gözlemdir (adımı yok; yeni alanı ekranın ilk kendi adımına eklenir). Burada okunanlar mevcut modelle karşılaştırılır ve "gözlenen model" kurulur; Değişiklikler sayfası
 // (tekrar analiz: analizYukle) bu modelle mevcut model arasındaki farkları bulgu olarak gösterir.
 //
 //   gozlenenModel(model, gozlemler)  → { model, notlar }
@@ -103,8 +104,10 @@ export function gozlenenModel(model, gozlemler) {
   const gorulen = new Set();
   /** @type {Set<string>} */
   const eklenen = new Set();
+  const ilkKendiAdim = (Array.isArray(yeni.adimlar) ? yeni.adimlar : []).find((/** @type {Nesne} */ a) => nesneMi(a) && !nesneMi(a.ortakAkis));
   for (const g of gozlemler) {
-    const adim = (Array.isArray(yeni.adimlar) ? yeni.adimlar : []).find((/** @type {Nesne} */ a) => nesneMi(a) && a.id === g.adimId);
+    // Keşif gözlemi (adımı yok): yeni alanı ekranın ilk kendi adımına eklenir.
+    const adim = (Array.isArray(yeni.adimlar) ? yeni.adimlar : []).find((/** @type {Nesne} */ a) => nesneMi(a) && a.id === g.adimId) ?? (g.kesif ? ilkKendiAdim : undefined);
     for (const ham of Array.isArray(g.alanlar) ? g.alanlar : []) {
       if (!nesneMi(ham)) continue;
       const m = alanlar.find((x) => eslesir(x.alan, ham));
@@ -192,7 +195,8 @@ function akislariEsitle(eski, yeni) {
 
 /** Seçim / radyo alanının seçenekleri sayfadakilerle (bağlı liste ve dinamik seçenekli alan hariç). @param {Nesne} alan @param {Nesne} ham */
 function seceneklerGuncelle(alan, ham) {
-  if (!['secim', 'okluSecim', 'radyo'].includes(alan.tip) || alan.bagimlilik || alan.seceneklerDurumu === 'dinamik' || !Array.isArray(alan.secenekler)) return;
+  // Keşifte seçenekleri değişen liste (bağlı liste) karşılaştırılmaz.
+  if (ham.degisken || !['secim', 'okluSecim', 'radyo'].includes(alan.tip) || alan.bagimlilik || alan.seceneklerDurumu === 'dinamik' || !Array.isArray(alan.secenekler)) return;
   const kaynak = alan.tip === 'radyo' ? ham.radyolar : ham.secenekler;
   const gorulen = (Array.isArray(kaynak) ? kaynak : []).filter((s) => nesneMi(s) && !yerTutucuMu(s));
   if (!gorulen.length) return;
@@ -241,9 +245,12 @@ export async function kosuAnaliziniYukle(vt, k, s) {
   const m = medyaGetir(vt, ek.id);
   if (!m || !medyaDosyaAdiGecerliMi(m.dosya)) return null;
   const veri = JSON.parse((await medyaTamamenCoz(medyaAnahtariniHazirla(vt), join(s.medyaKlasoru, m.dosya))).toString('utf8'));
-  const gozlemler = Array.isArray(veri?.gozlemler) ? veri.gozlemler : [];
+  // Keşif okuması sona eklenir: önce adımların okumaları (yeni alan görüldüğü adıma girer), sonra keşfin fazlası.
+  const kesif = nesneMi(veri?.kesif) ? veri.kesif : null;
+  const gozlemler = [...(Array.isArray(veri?.gozlemler) ? veri.gozlemler : []),
+    ...(kesif ? [{ adimId: '', baslik: 'Keşif', kesif: true, alanlar: Array.isArray(kesif.alanlar) ? kesif.alanlar : [], dugmeler: Array.isArray(kesif.dugmeler) ? kesif.dugmeler : [] }] : [])];
   if (!gozlemler.length) return null;
   const paket = kosuAnaliziPaketi(ekran, /** @type {Nesne} */ (mevcut.model), gozlemler, senaryo.baslik);
   const y = await analizYukle(vt, senaryo.projeId, senaryo.ekranId, paket, { medyaKlasoru: s.medyaKlasoru });
-  return { ekranId: senaryo.ekranId, bulguSayisi: y.bulguSayisi, gizlenenSayisi: y.gizlenenSayisi, notlar: paket.bilinmeyenler };
+  return { ekranId: senaryo.ekranId, bulguSayisi: y.bulguSayisi, gizlenenSayisi: y.gizlenenSayisi, notlar: [...paket.bilinmeyenler, ...(Array.isArray(kesif?.notlar) ? kesif.notlar.map(String) : [])] };
 }

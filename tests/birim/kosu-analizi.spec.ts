@@ -89,3 +89,16 @@ test('akışlı model: varsayılan akış modelin adımlarıyla eşitlenir; her 
   const d = sayfaPaketiniDogrula(kosuAnaliziPaketi(PAKET.meta.ekran, eski, okunan, 'Örnek'));
   expect(d.hatalar).toEqual([]);
 });
+
+test('keşif gözlemi: modelde olmayan alan ilk kendi adıma eklenir; keşifte seçenekleri değişen liste karşılaştırılmaz', () => {
+  const eski = model();
+  const kesif: EkranGozlemi = { adimId: '', baslik: 'Keşif', kesif: true, dugmeler: [], alanlar: [
+    ham('#vergi-no', 'text', { etiket: 'Vergi No' }),
+    ham('#selectAllClientOrders', 'select', { degisken: true, secenekler: [{ deger: '9', metin: 'Başka' }] })
+  ] };
+  const { model: yeni } = gozlenenModel(eski, [...gozlemler, kesif]);
+  const ilk = (yeni.adimlar as Nesne[]).find((a) => !a.ortakAkis) as Nesne;
+  expect(alanIdleri({ adimlar: [ilk] })).toContain('vergiNo');
+  const sorgu = (yeni.adimlar as Nesne[]).flatMap((a) => (a.bolumler ?? []).flatMap((b: Nesne) => b.alanlar)).find((x: Nesne) => x.id === 'sorguTipi');
+  expect(sorgu.secenekler.map((s: Nesne) => s.deger)).toEqual(['1', '2', '3']);
+});
