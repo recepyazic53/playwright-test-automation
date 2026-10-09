@@ -36,6 +36,7 @@ import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
 import { EKRAN_ANAHTARI_DESENI } from './sayfa-paketi.mjs';
 import { bagsizKosulUyarilari, sinirHatalari } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
+import { BULGU_TUR_ETIKETLERI, modelFarki } from './model-farki.mjs';
 import { gorunurseSatiriMi, gorunurseVar, ifadedenSatirlar } from '../tarama/gorunurluk-kosulu.mjs';
 import { etkinAlanBaglari, ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
@@ -1306,6 +1307,17 @@ function silinenKorunanlar(tam, akisId, bloklar, korunan) {
  * (model / akış "bastakiOrtakAkislar") olur. Verilmezse akışın mevcut ayarı korunur.
  * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown; ekranAcilisSirasi?: unknown }} g
  */
+/** Kaydetmeden önce gösterilen model farkları (en çok 100; okunur metin). @param {any} eski @param {any} yeni @returns {string[]} */
+function akisFarklari(eski, yeni) {
+  let bulgular;
+  try { bulgular = /** @type {Array<{ tur: string; baslik: string; konum?: string }>} */ (modelFarki(eski, yeni)); } catch { return []; }
+  return bulgular.slice(0, 100).map((b) => {
+    const etiket = /** @type {Record<string, string>} */ (BULGU_TUR_ETIKETLERI)[b.tur] || b.tur;
+    const baslik = String(b.baslik || '');
+    return `${b.tur === 'adimDegisikligi' || baslik.toLocaleLowerCase('tr').startsWith(etiket.toLocaleLowerCase('tr')) ? baslik : `${etiket}: ${baslik}`}${b.konum ? ` (${b.konum})` : ''}`;
+  });
+}
+
 export function akisKaydet(vt, projeId, ekranId, g) {
   const { ekran, model: tam } = ekranModeli(vt, projeId, ekranId);
   const d = akisDuzenlenebilirMi(tam);
@@ -1458,7 +1470,10 @@ export function akisKaydet(vt, projeId, ekranId, g) {
     const testVerisi = onizleme ? { ...onizleme, baglantilar: onizleme.baglantilar.map((b) => ({ ...b, modeldeVar: true })) } : null;
     // Güncellenen akışın korunan parçalarından diyagramda artık olmayanlar (kullanıcı sildi / kayıt yerine geçti): onayda gösterilir.
     const korunanSilinen = mevcutAkis ? silinenKorunanlar(tam, mevcutAkis.id, ayik.bloklar, korunan) : [];
-    return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(korunanSilinen.length ? { korunanSilinen } : {}), ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}), ...(semaYukseltme ? { semaYukseltme } : {}) }, akisId, ...(testVerisi ? { testVerisi } : {}) };
+    // Önceki hâline göre değişiklikler ("Modeli güncelle" karşılaştırmasıyla aynı motor): yeni / kaldırılan alan ve seçenek, etiket,
+    // zorunluluk, adım değişiklikleri. Bilgi içindir; akış bütün olarak kaydedilir.
+    const farklar = akisFarklari(tam, yeni);
+    return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(farklar.length ? { farklar } : {}), ...(korunanSilinen.length ? { korunanSilinen } : {}), ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}), ...(semaYukseltme ? { semaYukseltme } : {}) }, akisId, ...(testVerisi ? { testVerisi } : {}) };
   }
   return vt.islem(() => {
     const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Akış ${mevcutAkis ? 'düzenlendi' : 'eklendi'}: ${ad}${semaYukseltme ? ' (model yeni biçime güncellendi)' : ''}` });
