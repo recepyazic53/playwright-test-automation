@@ -212,6 +212,45 @@ test.describe('Giriş motoru (yerel fikstür sayfaları)', () => {
     const adim = await hataBekle(baglamiDegistir(page, t, { subeKodu: '1', subeAdi: 'Merkez' }), 'BAGLAM_ADIMI');
     expect(adim).toMatch(/Adım 2 \(Metni doğrula: body\) başarısız/);
   });
+
+  test('bağlam değiştirme: gizli listenin aramalı kutusu varsa seçim kutudan yapılır (bağlı liste yalnız kutudan seçilince yüklenir)', async () => {
+    const page = await baglam.newPage();
+    // Aramalı liste bileşeni (select2 benzeri): gerçek <select> gizli; kutuya tıklanınca arama kutusu + seçenekler açılır. Bileşen seçimi
+    // sayfanın kendi işleyicisine bildirir (change GÖNDERMEZ): acente seçilince kullanıcılar 0,5 sn sonra yüklenir. Gizli listeye doğrudan
+    // yazmak kullanıcıları yüklemez.
+    await page.setContent(`<div><select id="acente" style="display:none"><option value="">Seçin</option><option value="30447">30447 - ACENTE</option>
+      <option value="30448">30448 - DİĞER</option></select></div>
+      <div><select id="kullanici" style="display:none"><option value="">Seçin</option></select></div>
+      <script>
+      function ozel(s, secince) {
+        const kap = document.createElement('div'); kap.className = 'select2-container'; kap.style.cssText = 'width:200px;border:1px solid #888';
+        const kutu = document.createElement('span'); kutu.className = 'select2-selection'; kutu.setAttribute('role', 'combobox'); kutu.textContent = 'Seçin'; kutu.style.cssText = 'display:block;padding:4px';
+        const acilir = document.createElement('div'); acilir.hidden = true;
+        const ara = document.createElement('input'); ara.type = 'search';
+        const ul = document.createElement('ul'); ul.setAttribute('role', 'listbox');
+        const ciz = () => { ul.replaceChildren(...[...s.options].filter((o) => o.value && o.text.includes(ara.value)).map((o) => {
+          const li = document.createElement('li'); li.setAttribute('role', 'option'); li.textContent = o.text;
+          li.addEventListener('click', () => { s.value = o.value; kutu.textContent = o.text; acilir.hidden = true; secince(o.value); });
+          return li; })); };
+        ara.addEventListener('input', ciz);
+        kutu.addEventListener('click', () => { acilir.hidden = !acilir.hidden; ciz(); if (!acilir.hidden) ara.focus(); });
+        acilir.append(ara, ul); kap.append(kutu, acilir); s.after(kap);
+      }
+      const k = document.getElementById('kullanici');
+      ozel(document.getElementById('acente'), (kod) => setTimeout(() => { k.add(new Option(kod + '000 - YÖNETİCİ', kod + '000')); k.add(new Option(kod + '001 - DENEME', kod + '001')); }, 500));
+      ozel(k, () => {});
+      </script>`);
+    const t = tarif({ baglamDegistirme: { baglamTuru: 'Acente', adimlar: [
+      { islem: 'sec', hedef: { secici: '#acente' }, deger: '{acenteKodu}', zamanAsimiSn: 5 },
+      { islem: 'sec', hedef: { secici: '#kullanici' }, deger: '{acenteKullanicisi}', zamanAsimiSn: 5 }
+    ] } });
+    await baglamiDegistir(page, t, { acenteKodu: '30447', acenteKullanicisi: '30447001' });
+    expect(await page.locator('#acente').inputValue()).toBe('30447');
+    expect(await page.locator('#kullanici').inputValue()).toBe('30447001');
+    // Görünen kutular da seçimi gösterir (açık liste kalmadı).
+    await expect(page.locator('.select2-selection').first()).toHaveText('30447 - ACENTE');
+    await expect(page.locator('[role="listbox"]:visible')).toHaveCount(0);
+  });
 });
 
 test.describe('Giriş adımları: önce / ara / sonra adımlar ve ek alanlar (yerel fikstür /iki-sayfa)', () => {
