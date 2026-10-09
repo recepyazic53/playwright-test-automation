@@ -324,7 +324,7 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     expect(() => topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'rotaAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toThrow('güncel modelde');
     const red = [bulgu('kaldirilanSecenek').id, bulgu('adimDegisikligi').id];
     const kabul = a.bulgular.map((b) => b.id).filter((id) => !red.includes(id));
-    expect(analizUygula(vt, projeId, ek.ekranId, { analizId: a.id, kabul, red })).toEqual({ surum: 2, yeniSurum: true, kabul: 5, red: 2, kararsiz: 0, baglanan: 0 });
+    expect(analizUygula(vt, projeId, ek.ekranId, { analizId: a.id, kabul, red })).toEqual({ surum: 2, yeniSurum: true, kabul: 5, red: 2, kararsiz: 0, baglanan: 0, tabloyaEklenen: 0, tablodanSilinen: 0 });
     const v2 = ekranModeliGetir(vt, ek.ekranId)?.model as Nesne;
     expect(modelFarki(v2, M2).map((b) => b.imza).sort()).toEqual([bulgu('kaldirilanSecenek').imza, bulgu('adimDegisikligi').imza].sort());
     expect(surumAyrintisi(vt, projeId, ek.ekranId, 2).bulgular).toHaveLength(5);
