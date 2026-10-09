@@ -3,6 +3,7 @@
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import { ekipBolumu } from './ekip.js';
+import { kartlariKatlanirYap } from './kart-katla.js';
 import {
   ADRES_YARDIMI, adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
   kisaAciklama, yardimIpucu, bolumAciklamalariniSimgeye, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
@@ -94,6 +95,8 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
     entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
     kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, 'hata-pencereleri': hataPencereleriSayfasi, yedekleme, guvenlik, ekip: ekipBolumu, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
   }[bolum] || projeVeOrtamlar;
+  // Kartlar başlığıyla görünür, tıklayınca açılır (kart-katla.js).
+  kartlariKatlanirYap(govde, bolum);
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
     govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)));

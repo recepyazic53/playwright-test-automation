@@ -24,11 +24,11 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
   let durumKutusu = null;
   let eylemler = null;
   if (ortak.klasor && ortak.bulunamadi) {
-    durumKutusu = h('p', { class: 'not-kutusu uyari kucuk', role: 'note' }, 'Ortak klasör bulunamadı; OneDrive / ağ klasörünün bu bilgisayarda açık olduğundan emin olun.');
+    durumKutusu = h('p', { class: 'kart-ozet not-kutusu uyari kucuk', role: 'note' }, 'Ortak klasör bulunamadı; OneDrive / ağ klasörünün bu bilgisayarda açık olduğundan emin olun.');
   } else if (ortak.klasor) {
     const son = ortak.surumler[0];
     durumKutusu = ortak.guncelleVar
-      ? h('p', { class: 'not-kutusu uyari', role: 'status' }, ikon('uyari'), ` Yeni sürüm var: v${ortak.sonSurum}${son ? ` (${son.yapan || 'bilinmiyor'}, ${tarihMetni(son.zaman)})` : ''}. Sizdeki: ${ortak.benimSurum ? `v${ortak.benimSurum}` : 'hiç alınmadı'}. Yayınlamadan önce güncelleyin.`)
+      ? h('p', { class: 'kart-ozet not-kutusu uyari', role: 'status' }, ikon('uyari'), ` Yeni sürüm var: v${ortak.sonSurum}${son ? ` (${son.yapan || 'bilinmiyor'}, ${tarihMetni(son.zaman)})` : ''}. Sizdeki: ${ortak.benimSurum ? `v${ortak.benimSurum}` : 'hiç alınmadı'}. Yayınlamadan önce güncelleyin.`)
       : h('p', { class: 'not-kutusu kucuk', role: 'status' }, ortak.sonSurum ? `Güncelsiniz (v${ortak.sonSurum}).` : 'Klasörde henüz yayınlanmış sürüm yok.');
 
     const yayinla = h('button', { type: 'button', disabled: ortak.guncelleVar }, ikon('yukle'), 'Yayınla');
@@ -43,7 +43,7 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
     });
     const guncelle = h('button', { type: 'button', class: ortak.guncelleVar ? 'birincil' : '', disabled: !ortak.sonSurum }, ikon('indir'), 'Güncelle');
     guncelle.addEventListener('click', () => guncelleFormu());
-    if (ortak.geriDonus) durumKutusu = h('p', { class: 'not-kutusu uyari', role: 'status' }, ikon('uyari'), ` Eski bir sürümdesiniz (v${ortak.benimSurum}); klasördeki son sürüm v${ortak.sonSurum}. Yayınlarsanız bu hâliniz yeni sürüm olur.`);
+    if (ortak.geriDonus) durumKutusu = h('p', { class: 'kart-ozet not-kutusu uyari', role: 'status' }, ikon('uyari'), ` Eski bir sürümdesiniz (v${ortak.benimSurum}); klasördeki son sürüm v${ortak.sonSurum}. Yayınlarsanız bu hâliniz yeni sürüm olur.`);
     eylemler = h('div', {}, h('div', { class: 'satir-girdi' }, not, yayinla), h('div', { class: 'dugmeler' }, guncelle));
   }
 
