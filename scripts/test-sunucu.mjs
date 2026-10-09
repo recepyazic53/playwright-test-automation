@@ -1121,6 +1121,12 @@ function gorunurOrtamDegiskeni(ek) {
   if (!ek || typeof ek !== 'object' || Array.isArray(ek)) return {};
   return /** @type {Record<string, unknown>} */ (ek)[GORUNUR_KOSU_DEGISKENI] === '1' ? { [GORUNUR_KOSU_DEGISKENI]: '1' } : {};
 }
+// - ekran analizi (Modeli güncelle; calistirma.mjs > ekranAnaliziOrtami): NOBETCI_EKRAN_ANALIZI=1.
+/** @param {unknown} ek @returns {Record<string, string>} */
+function ekranAnaliziOrtamDegiskeni(ek) {
+  if (!ek || typeof ek !== 'object' || Array.isArray(ek)) return {};
+  return /** @type {Record<string, unknown>} */ (ek).NOBETCI_EKRAN_ANALIZI === '1' ? { NOBETCI_EKRAN_ANALIZI: '1' } : {};
+}
 async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null, ekOrtam = null }) {
   const veriOrtami = veriKosusuOrtamDegiskenleri(ekOrtam);
   let tumSenaryolar;
@@ -1160,7 +1166,8 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
         ...veriOrtami,
         ...akisOrtamDegiskenleri(ekOrtam),
         ...surumOrtamDegiskeni(ekOrtam),
-        ...gorunurOrtamDegiskeni(ekOrtam)
+        ...gorunurOrtamDegiskeni(ekOrtam),
+        ...ekranAnaliziOrtamDegiskeni(ekOrtam)
       },
       grepDeseni,
       genel,

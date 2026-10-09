@@ -296,18 +296,38 @@ async function ekranAyrintisi(icerik, s) {
     sonra: () => { location.hash = '#/ekranlar'; yenile(); }
   });
   /**
-   * "Nöbetçi taraması": modeli olan ekranda hızlı test ekranı (düzenleme kipi) — örnek senaryonun verileriyle gezer, düğmelere izinle basar;
-   * modeli yoksa sayfayı okuyan tarama.
+   * "Nöbetçi taraması": modeli olan ekranda seçilen senaryo normal koşar; koşu sırasında ekran okunur, bitince farklar (yeni / kaybolan
+   * alan, seçenek, düğme) gösterilir (kosu-paneli.js > ekranAnaliziSonucu). Modeli yoksa sayfayı okuyan tarama (değişmedi).
    */
-  const nobetciTaramasi = () => {
+  const nobetciTaramasi = async () => {
     if (!modelVar) { taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }); return; }
-    location.hash = `#/hizli-test/guncelle/${encodeURIComponent(e.id)}`;
+    const p = encodeURIComponent(s.proje.id);
+    const [senaryolar, ortamlar] = await Promise.all([
+      api(`/platform/senaryolar?projeId=${p}`).then((y) => (y.senaryolar || []).filter((x) => x.ekranId === e.id)),
+      api(`/platform/ortamlar?projeId=${p}`).then((y) => y.ortamlar || [])
+    ]).catch((h) => { bildir(`Senaryolar alınamadı: ${h.message}`, 'hata'); return [null, null]; });
+    if (!senaryolar) return;
+    if (!senaryolar.length) { bildir('Bu ekranın senaryosu yok. Önce bir senaryo ekleyin; Nöbetçi o senaryoyu koşarken ekranı okur.', 'hata'); return; }
+    const { canliOnayIste, kosuBaslat, onerilenOrtam, secenekIste } = await import('./kosu-paneli.js');
+    const secilen = senaryolar.length === 1 ? senaryolar[0].id : await secenekIste({
+      baslik: 'Hangi senaryo koşsun?', ikonAd: 'ara',
+      metin: 'Nöbetçi senaryoyu koşarken ekranı okur; bitince yeni / kaybolan alanları, seçenekleri ve düğmeleri gösterir.',
+      secenekler: senaryolar.map((x) => ({ deger: x.id, etiket: x.baslik, ikonAd: 'oynat' }))
+    });
+    const senaryo = senaryolar.find((x) => x.id === secilen);
+    if (!senaryo) return;
+    const tanimli = ortamlar.filter((o) => (senaryo.ortamlar || []).some((x) => x.ortamId === o.id && x.tanimli));
+    const ortam = onerilenOrtam(tanimli.length ? tanimli : ortamlar);
+    if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
+    if (!(await canliOnayIste(ortam))) return;
+    kosuBaslat({ projeId: s.proje.id, ortam, senaryolar: [{ id: senaryo.id, baslik: senaryo.baslik, ekranAdi: e.ad }], tur: 'tekil', esZamanli: true,
+      baslik: `Modeli güncelle: ${e.ad}`, tekBasina: true, ekranAnalizi: true });
   };
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
-      // Nöbetçi taraması (tek giriş): hızlı test ekranı gibi gezer (seçtiğiniz senaryonun verileriyle, düğmelere izinle basar).
-      altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Nöbetçi taraması', aciklama: 'Nöbetçi ekranı seçtiğiniz senaryonun verileriyle gezer, düğmelere izninizle basar; farkları gösterir, onayınızla günceller.',
+      // Nöbetçi taraması (tek giriş): seçilen senaryo koşarken ekran okunur, bitince farklar.
+      altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Nöbetçi taraması', aciklama: 'Seçtiğiniz senaryoyu koşar, koşarken ekranı okur; bitince yeni / kaybolan alanları, seçenekleri ve düğmeleri gösterir, onayınızla günceller.',
         fn: () => nobetciTaramasi() },
       { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
       altModel ? null : {

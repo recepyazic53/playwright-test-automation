@@ -28,7 +28,8 @@ import { DegerIzleyici, KILITLI_ALAN_NOTU, alanZatenDolu, alanaYaz, alandanCik, 
 import { AgIzleyici } from '../../scripts/platform/tarama/ag-sakinligi';
 import { TEKRAR_NOTU, etkisizTiklamaMetni, guvenliTikla } from '../../scripts/platform/tarama/guvenli-tiklama';
 import { gercekSecenekler, yuklenmeBeklemesi } from '../../scripts/platform/tarama/zincir-kesfi.mjs';
-import { hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
+import { ENVANTER_BETIGI, envanterOku, hedefSayfayiAc } from '../../scripts/platform/tarama/tarama-motoru';
+import { eylemAdaylariniCikar } from '../../scripts/platform/tarama/eylem-kesfi-motoru';
 import { listeDurumu, listedenSecenekSec, listedeYokMetni, secenekBekle, secenekEslestir, type ListeSecenegi, type SecenekBekleSonucu } from '../../scripts/platform/tarama/secenek-secimi';
 import { seciciAgaciniDuzelt } from '../../scripts/platform/tarama/secici-duzelt.mjs';
 import { ozelBilesendenSec } from '../../scripts/platform/tarama/ozel-secim';
@@ -1250,7 +1251,26 @@ async function parolaAlaniysaGizle(page: Page, alan: PlanAlani, l: Locator): Pro
  * Model senaryosunu koşturur. Atlanan alanlar "atlananAlanlar" annotation'ı olarak eklenir (raporlayıcı
  * sonuç satırına yazar); yasaklı host'a istek denenmişse test başarısız olur.
  */
+/**
+ * Modeli güncelle (NOBETCI_EKRAN_ANALIZI=1): senaryo normal koşar; ekranın kendi her adımında (genel senaryo adımları hariç), alanlar
+ * doldurulduktan sonra ve düğmelere basmadan önce sayfa okunur (alanlar, seçenekler, düğmeler). Okunanlar koşu sonucuna "ekran-analizi"
+ * eki olarak yazılır; sunucu koşu bitince modelle karşılaştırır (ekranlar/kosu-analizi.mjs).
+ */
+const EKRAN_ANALIZI = process.env.NOBETCI_EKRAN_ANALIZI === '1';
+type EkranGozlemi = { adimId: string; baslik: string; alanlar: unknown[]; dugmeler: Array<{ metin: string | null; secici: string; cerceve?: string[]; baglanti?: true }> };
+async function ekraniOku(page: Page, adim: { id: string; baslik: string }): Promise<EkranGozlemi> {
+  const env = await envanterOku(page).catch(() => null);
+  const eylem = await eylemAdaylariniCikar(page, { cerceveler: true }).catch(() => null);
+  // Bağlantılar da tutulur (işaretli): modeldeki düğme bağlantı olabilir; "yeni düğme" notunda bağlantılar sayılmaz.
+  const dugmeler = (eylem?.gonderim ?? []).map((d) => ({ metin: d.metin, secici: d.secici, ...(d.cerceve?.length ? { cerceve: d.cerceve } : {}), ...(d.baglanti ? { baglanti: true as const } : {}) }));
+  return { adimId: adim.id, baslik: adim.baslik, alanlar: env?.alanlar ?? [], dugmeler };
+}
+
 export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitliSenaryo: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
+  /** Ekran analizi (Modeli güncelle): adım kimliği → okunanlar (kurtarma adımı tekrar koşarsa sonuncusu). */
+  const gozlemler = new Map<string, EkranGozlemi>();
+  // Çerçeve (iframe) içindeki alanlar da okunsun diye sayfa betiği her belgeye eklenir (yalnız analizde).
+  if (EKRAN_ANALIZI) await page.addInitScript({ content: ENVANTER_BETIGI });
   // Eski kayıtlı modellerdeki iç içe metinli düğme seçicileri (`tag:text-is("…")`) çalışırken düzeltilir (bkz. secici-duzelt.mjs).
   const s: PlatformModelSenaryosu = { ...kayitliSenaryo, model: seciciAgaciniDuzelt(kayitliSenaryo.model), altModeller: seciciAgaciniDuzelt(kayitliSenaryo.altModeller) };
   if (!s.model) throw new Error(`"${s.baslik}": "${s.ekran.ad || s.ekran.id}" ekranının modeli yok; model koşucusu çalışamaz.`);
@@ -1514,6 +1534,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
           const m = await izleyici.sonDurum(x.oge);
           if (m) kilitNotlari.push(m);
         }
+        // Modeli güncelle: düğmelere basmadan önce ekran okunur (yalnız ekranın kendi adımları; genel senaryo adımları ayrı modeldir).
+        if (EKRAN_ANALIZI && !adim.ortakAkisAdi) gozlemler.set(adim.id, await ekraniOku(page, adim));
         ekranaDonuldu = await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
@@ -1721,6 +1743,10 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, kayitl
     const tekilAtlanan = [...new Map(atlanan.map((a) => [`${a.alan}\u0000${a.neden}`, a])).values()];
     if (tekilAtlanan.length) testInfo.annotations.push({ type: 'atlananAlanlar', description: JSON.stringify(tekilAtlanan) });
     if (kurtarmaOlaylari.length) testInfo.annotations.push({ type: 'kurtarma', description: JSON.stringify(kurtarmaOlaylari) });
+    // Modeli güncelle: okunan ekranlar koşu sonucuna ek olarak yazılır (koşu başarısız olsa da; o ana kadar gezilenler).
+    if (EKRAN_ANALIZI) {
+      await testInfo.attach('ekran-analizi', { contentType: 'application/json', body: JSON.stringify({ surum: 1, gozlemler: [...gozlemler.values()] }) }).catch(() => undefined);
+    }
   }
   if (engellenen.length) throw new Error(`Yasaklı adrese istek engellendi: ${[...new Set(engellenen)].join(', ')}.`);
 }
