@@ -215,12 +215,12 @@ test.describe('Giriş motoru (yerel fikstür sayfaları)', () => {
 
   test('bağlam değiştirme: gizli listenin aramalı kutusu varsa seçim kutudan yapılır (bağlı liste yalnız kutudan seçilince yüklenir)', async () => {
     const page = await baglam.newPage();
-    // Aramalı liste bileşeni (select2 benzeri): gerçek <select> gizli; kutuya tıklanınca arama kutusu + seçenekler açılır. Bileşen seçimi
+    // Aramalı liste bileşeni (select2 benzeri): gerçek <select> select2 gibi 1×1 piksellik kutuyla gizli (Playwright onu "görünür" sayar); kutuya tıklanınca arama kutusu + seçenekler açılır. Bileşen seçimi
     // sayfanın kendi işleyicisine bildirir (change GÖNDERMEZ): acente seçilince kullanıcılar 0,5 sn sonra yüklenir. Gizli listeye doğrudan
     // yazmak kullanıcıları yüklemez.
-    await page.setContent(`<div><select id="acente" style="display:none"><option value="">Seçin</option><option value="30447">30447 - ACENTE</option>
+    await page.setContent(`<div><select id="acente" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0)"><option value="">Seçin</option><option value="30447">30447 - ACENTE</option>
       <option value="30448">30448 - DİĞER</option></select></div>
-      <div><select id="kullanici" style="display:none"><option value="">Seçin</option></select></div>
+      <div><select id="kullanici" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0)"><option value="">Seçin</option></select></div>
       <script>
       function ozel(s, secince) {
         const kap = document.createElement('div'); kap.className = 'select2-container'; kap.style.cssText = 'width:200px;border:1px solid #888';
