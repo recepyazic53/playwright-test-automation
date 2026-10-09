@@ -99,6 +99,7 @@ async function yukle(kap, proje) {
   ], 'Servis taban adresleri');
   const baslik = h('div', { class: 'bolum-basligi' }, h('h3', { id: 'taban-adresleri-basligi' }, ikon('ag'), 'Servis taban adresleri', rozet(String(veri.tabanAdlari.length)), yardim.dugme));
   const gorunumSecimi = h('div', { class: 'segment taban-gorunum', role: 'radiogroup', 'aria-label': 'Taban adres görünümü' });
+  const govdeAlani = h('div', { class: 'taban-kutu-govdesi' });
   const icerik = h('div', { class: 'kart taban-kutusu' });
   /** Sol üst: bu görünümün ekleme düğmesi (taban görünümünde). */
   const sol = h('div', { class: 'taban-arac-sol' });
@@ -113,11 +114,12 @@ async function yukle(kap, proje) {
       onclick: () => { if (gorunum !== d) { gorunum = d; gorunumYaz(d); ciz(); } }
     }, m)));
     sol.replaceChildren();
-    yerlestir(icerik, gorunum === 'servis' ? servisGorunumu(proje, veri, yenile) : tabanGorunumu(proje, veri, yenile, sol));
+    yerlestir(govdeAlani, gorunum === 'servis' ? servisGorunumu(proje, veri, yenile) : tabanGorunumu(proje, veri, yenile, sol));
   };
-  yerlestir(kap, baslik, yardim.panel,
-    h('div', { class: 'taban-arac-cubugu' }, sol, gorunumSecimi),
-    icerik);
+  // Görünüm seçimi ve ekleme düğmesi başlık satırının sağında; başlık kutunun içinde üst satırdadır (Ayarlar: kart-katla.js).
+  baslik.append(h('div', { class: 'taban-baslik-sag' }, gorunumSecimi, sol));
+  yerlestir(icerik, govdeAlani);
+  yerlestir(kap, baslik, yardim.panel, icerik);
   ciz();
 }
 
@@ -497,7 +499,9 @@ function servisGorunumu(proje, veri, yenile) {
 
   const servisTablosu = () => {
     const sirali = [...satirlar].sort((a, b) => (taslak.get(a.servisId).grup || '￿').localeCompare(taslak.get(b.servisId).grup || '￿', 'tr') || a.ad.localeCompare(b.ad, 'tr'));
-    return h('table', { class: 'ozet-tablosu taban-tablosu', 'aria-label': 'Servis taban adresleri' },
+    // Sabit düzen: sütunlar kutuya sığar (adresler kısalır, tamamı kutunun içinde / ipucunda); çok ortamda yatay kaydırma kalır.
+    return h('table', { class: 'ozet-tablosu taban-tablosu taban-servis-tablosu', 'aria-label': 'Servis taban adresleri', style: `--ortam-sayisi: ${ortamlar.length}` },
+      h('colgroup', {}, h('col', { class: 'taban-sec-sutunu' }), h('col', { class: 'taban-servis-sutunu' }), h('col', { class: 'taban-ad-sutunu' }), ortamlar.map(() => h('col', { class: 'taban-ortam-col' }))),
       h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, hepsi), h('th', { scope: 'col' }, 'Servis'), h('th', { scope: 'col' }, 'Taban adres adı'), ortamBasliklari())),
       h('tbody', {}, sirali.map((s) => {
         const t = taslak.get(s.servisId);

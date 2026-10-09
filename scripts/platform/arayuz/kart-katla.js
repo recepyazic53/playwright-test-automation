@@ -2,6 +2,9 @@
 // başlığa (ya da ▸ düğmesine) tıklayınca açılır. Açılan kartlar bu tarayıcıda hatırlanır (yalnız kolaylık). Kart kapalıyken de görünmesi
 // gereken kısa durum ".kart-ozet" sınıfıyla işaretlenir (ör. "Yeni sürüm var"). Kendiliğinden açılır: odak kartın içine gidince
 // (ayara götüren bağlantılar) ve kartta hata / uyarı mesajı belirince. Kartlar sonradan yeniden çizilse de (MutationObserver) işlenir.
+// Bölüm başlığı (".bolum-basligi": başlık, sayı ve "Ortam ekle" gibi düğme) kutunun DIŞINDAYSA kendi kutusuna alınır: ardından gelen
+// kart varsa başlık onun en üstüne taşınır, yoksa başlık ve ardındaki öğeler (bir sonraki bölüm başlığına / bölüme kadar) yeni bir
+// ".kart.bolum-kutusu" içine alınır. Böylece her bölüm tek kutudur: başlık solda, düğmesi aynı satırda sağda.
 // Otomasyonla açılan tarayıcıda (navigator.webdriver; koruma testleri) kartlar açık başlar; "nobetci.ayarKartlariVarsayilan" =
 // "kapali" bunu ezer (bu davranışın kendi testi için).
 import { h, ikon } from './ortak.js';
@@ -36,8 +39,10 @@ export function kartlariKatlanirYap(kapsayici, bolum) {
   const isle = (kart) => {
     if (!(kart instanceof HTMLElement) || kart.dataset.katlanir || kart.closest('dialog')) return;
     const baslik = kart.firstElementChild;
-    if (!baslik || baslik.tagName !== 'H3') return;
-    const ad = (baslik.textContent || '').trim();
+    // Başlık: kartın ilk çocuğu h3 ya da içinde h3 olan bölüm başlığı satırı.
+    const h3 = baslik && baslik.tagName === 'H3' ? baslik : baslik && baslik.classList.contains('bolum-basligi') ? baslik.querySelector('h3') : null;
+    if (!baslik || !h3) return;
+    const ad = (h3.textContent || '').trim();
     if (!ad) return;
     kart.dataset.katlanir = '1';
     kart.classList.add('katlanir');
@@ -49,7 +54,7 @@ export function kartlariKatlanirYap(kapsayici, bolum) {
       dugme.setAttribute('aria-expanded', acik ? 'true' : 'false');
       if (kaydet) hatirla(anahtar, acik);
     };
-    baslik.prepend(dugme);
+    h3.prepend(dugme);
     baslik.classList.add('kart-katla-basligi');
     baslik.addEventListener('click', (o) => {
       const hedef = /** @type {HTMLElement} */ (o.target);
@@ -61,8 +66,27 @@ export function kartlariKatlanirYap(kapsayici, bolum) {
     // Odak içeri gelince (ayara götüren bağlantı, klavye) ya da hata / uyarı belirince açılır.
     kart.addEventListener('focusin', (o) => { if (kart.classList.contains('kapali') && o.target !== dugme) ayarla(true, false); });
   };
+  /** Kutunun dışındaki bölüm başlığını kendi kutusuna alır. @param {Element} b */
+  const kutula = (b) => {
+    if (!(b instanceof HTMLElement) || b.closest('.kart, dialog') || !b.parentElement) return;
+    // Başlığın hemen ardındaki (gizli yardım paneli atlanarak) kart: başlık onun en üstüne.
+    let x = b.nextElementSibling;
+    /** @type {Element[]} */
+    const yardimlar = [];
+    while (x && x.matches('.yardim-paneli')) { yardimlar.push(x); x = x.nextElementSibling; }
+    if (x && x.matches('.kart')) { x.prepend(b, ...yardimlar); return; }
+    // Yoksa: başlık ve ardındaki öğeler (sonraki bölüm başlığına, bölüme ya da karta kadar) yeni kutuda.
+    const kutu = h('div', { class: 'kart bolum-kutusu' });
+    b.parentElement.insertBefore(kutu, b);
+    /** @type {Element[]} */
+    const tasinacak = [b];
+    for (let y = b.nextElementSibling; y && !y.matches('.bolum-basligi, section, .kart'); y = y.nextElementSibling) tasinacak.push(y);
+    kutu.append(...tasinacak);
+  };
   /** @param {ParentNode} kok */
   const tara = (kok) => {
+    if (kok instanceof HTMLElement && kok.matches('.bolum-basligi')) kutula(kok);
+    for (const b of kok.querySelectorAll('.bolum-basligi')) kutula(b);
     if (kok instanceof HTMLElement && kok.matches('.kart')) isle(kok);
     for (const k of kok.querySelectorAll('.kart')) isle(k);
   };
