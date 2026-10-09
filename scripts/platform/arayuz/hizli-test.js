@@ -1891,7 +1891,8 @@ function farkDuragi(o, s, kart, m, gonder) {
       degisiklikleriBirak();
       const adres = `#/ekranlar/e/${encodeURIComponent(r.ekranId)}`;
       if (r.bulguSayisi) { location.hash = `${adres}/bulgular`; return; }
-      bildir(r.gizlenenSayisi ? `Yeni değişiklik yok (${r.gizlenenSayisi} daha önce reddedilen gizlendi).` : 'Mevcut modelle fark yok.', 'basari');
+      const not = Array.isArray(r.karsilastirilmayan) && r.karsilastirilmayan.length ? ` ${r.karsilastirilmayan.join(' ')}` : '';
+      bildir(`${r.gizlenenSayisi ? `Yeni değişiklik yok (${r.gizlenenSayisi} daha önce reddedilen gizlendi).` : 'Mevcut modelle fark yok.'}${not}`, 'basari');
       location.hash = adres;
     } catch (e) {
       if (e && e.durum === 423) return;

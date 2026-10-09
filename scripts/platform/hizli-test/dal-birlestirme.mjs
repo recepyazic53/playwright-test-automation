@@ -130,3 +130,58 @@ export function dallariBirlestir(yeni, eski) {
   }
   return sonuc;
 }
+
+/**
+ * Modeli güncellerken taramanın ULAŞMADIĞI adımlar (yerinde): eski modelde, bu turda da olan son adımdan SONRAKİ ve bu turda olmayan adımlar
+ * (kullanıcı o düğmeye basmadı / basılmadı) eski hâliyle sona eklenir; ulaşılan son adımın koşu tanımı (düğme, başarı göstergesi) eskisi gibi
+ * kalır. Böylece karşılaştırmada "kaldırılan adım", "alan taşındı" gibi sahte farklar çıkmaz. Arada atlanan (sonrası ulaşılmış) adım gerçekten
+ * kaldırılmış sayılır. Eski adımların kullandığı ve yeni modelde olmayan koşullar da taşınır. dallariBirlestir'den ÖNCE çağrılır.
+ * @param {Nesne} yeni @param {Nesne | null | undefined} eski @returns {{ adimlar: string[] }} karşılaştırılmayan adımların adları
+ */
+export function ulasilamayanAdimlariKoru(yeni, eski) {
+  const sonuc = { adimlar: /** @type {string[]} */ ([]) };
+  if (!nesneMi(yeni) || !nesneMi(eski) || !Array.isArray(yeni.adimlar) || !Array.isArray(eski.adimlar)) return sonuc;
+  const yeniIdler = new Set(yeni.adimlar.filter(nesneMi).map((a) => String(a.id)));
+  const eskiAdimlar = eski.adimlar.filter(nesneMi);
+  let son = -1;
+  eskiAdimlar.forEach((a, i) => { if (yeniIdler.has(String(a.id))) son = i; });
+  if (son < 0) return sonuc;
+  const kuyruk = eskiAdimlar.slice(son + 1).filter((a) => !yeniIdler.has(String(a.id)));
+  if (!kuyruk.length) return sonuc;
+  const kopya = (/** @type {unknown} */ d) => JSON.parse(JSON.stringify(d));
+  const sonEski = eskiAdimlar[son];
+  const sonYeni = yeni.adimlar.find((/** @type {Nesne} */ a) => nesneMi(a) && String(a.id) === String(sonEski.id));
+  if (sonYeni) { if (nesneMi(sonEski.kosu)) sonYeni.kosu = kopya(sonEski.kosu); else delete sonYeni.kosu; }
+  for (const a of kuyruk) yeni.adimlar.push(kopya(a));
+  if (nesneMi(eski.kosullar)) {
+    yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};
+    for (const [k, v] of Object.entries(eski.kosullar)) if (!(k in yeni.kosullar)) yeni.kosullar[k] = kopya(v);
+  }
+  sonuc.adimlar = kuyruk.map((a) => String(a.baslik || a.id));
+  return sonuc;
+}
+
+/**
+ * Modeli güncellerken bağlı listelerin GÖRÜLMEYEN seçenekleri (yerinde): taramada üst listenin yalnız gezilen değerlerinin alt seçenekleri
+ * görülür. Eski modelin bağımlılık haritasında olup bu turda gözlenmeyen üst değerlerin seçenekleri yeni modele eski hâliyle konur; böylece
+ * "kaldırılan seçenek" diye sahte fark çıkmaz. Gözlenen üst değerin seçenekleri bu turdakidir (gerçek fark görünür).
+ * @param {Nesne} yeni @param {Nesne | null | undefined} eski @returns {{ alanlar: string[] }} haritası tamamlanan alanların adları
+ */
+export function gorulmeyenBagliSecenekleriKoru(yeni, eski) {
+  const sonuc = { alanlar: /** @type {string[]} */ ([]) };
+  if (!nesneMi(yeni) || !nesneMi(eski)) return sonuc;
+  const eskiHaritalar = new Map(alanlar(eski).filter((x) => nesneMi(x.alan.bagimlilik) && nesneMi(x.alan.bagimlilik.secenekHaritasi))
+    .map((x) => [String(x.alan.id), x.alan.bagimlilik.secenekHaritasi]));
+  for (const { alan } of alanlar(yeni)) {
+    const eh = eskiHaritalar.get(String(alan.id));
+    if (!eh || !nesneMi(alan.bagimlilik) || !nesneMi(alan.bagimlilik.secenekHaritasi)) continue;
+    let eklendi = false;
+    for (const [ust, liste] of Object.entries(eh)) {
+      if (ust in alan.bagimlilik.secenekHaritasi) continue;
+      alan.bagimlilik.secenekHaritasi[ust] = JSON.parse(JSON.stringify(liste));
+      eklendi = true;
+    }
+    if (eklendi) sonuc.alanlar.push(etiket(alan));
+  }
+  return sonuc;
+}

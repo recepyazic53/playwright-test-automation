@@ -75,7 +75,7 @@ import { yerTutucuSecenekMi } from '../tarama/yer-tutucu-secenek.mjs';
 import { ZINCIR_SECENEK_BEKLEME_MS, bulguMetni, gercekSecenekler, olaganYuklenme, yuklenmeBeklemesi, zincirMetni } from '../tarama/zincir-kesfi.mjs';
 import { EkranDogrulamaHatasi, analizYukle, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../ekranlar/ekran-servisi.mjs';
 import { kayitSorunlari } from './kayit-sorunlari.mjs';
-import { dallariBirlestir } from './dal-birlestirme.mjs';
+import { dallariBirlestir, gorulmeyenBagliSecenekleriKoru, ulasilamayanAdimlariKoru } from './dal-birlestirme.mjs';
 import { tumSecenekler } from './test-verisi-tablosu.mjs';
 import { farkOzeti, sayfaFarki, tetikHedefleri } from './sayfa-farki.mjs';
 import { bulguOzeti, modelFarki } from '../ekranlar/model-farki.mjs';
@@ -2627,6 +2627,16 @@ export function hizliTestYoneticisiOlustur(s) {
     if (tetikler.length) /** @type {any} */ (envanter).tetikler = tetikler;
     const { paket } = kayitPaketiOlustur(/** @type {any} */ (meta), /** @type {any} */ (envanter));
     const model = bitisiUygula(/** @type {Nesne} */ (paket).model, o.bitis);
+    // Modeli güncelleme: taramanın ulaşmadığı sondaki adımlar eski hâliyle kalır ("silindi" sayılmaz; karşılaştırılmadı notu).
+    const ulasilamayan = o.modelGuncelleme && meta.mevcutModel ? ulasilamayanAdimlariKoru(model, meta.mevcutModel) : { adimlar: [] };
+    if (ulasilamayan.adimlar.length) {
+      const not = `Nöbetçi taraması şu adımlara geçmedi; bu adımlar karşılaştırılmadı (modeldeki hâlleri korunur): ${ulasilamayan.adimlar.join(', ')}.`;
+      const p = /** @type {Nesne} */ (paket);
+      p.bilinmeyenler = [...(Array.isArray(p.bilinmeyenler) ? p.bilinmeyenler : []), not];
+      if (!o.ulasilamayanNotu) { o.ulasilamayanNotu = true; gunluk(o, not); }
+    }
+    // Modeli güncelleme: bağlı listenin bu turda gezilmeyen üst değerlerinin seçenekleri eski hâliyle kalır ("kaldırılan seçenek" sayılmaz).
+    if (o.modelGuncelleme && meta.mevcutModel) gorulmeyenBagliSecenekleriKoru(model, meta.mevcutModel);
     // Hızlı testle güncelleme: ekranın bu turda görünmeyen dalının alanları korunur, yeni alanlar "ekranda görünürse" olur (dal-birlestirme.mjs).
     const dal = meta.mevcutModel ? dallariBirlestir(model, meta.mevcutModel) : { korunan: [], kosullanan: [] };
     if ((dal.korunan.length || dal.kosullanan.length) && !o.dalNotuYazildi) {
@@ -3000,7 +3010,8 @@ export function hizliTestYoneticisiOlustur(s) {
       if (h instanceof EkranDogrulamaHatasi && Array.isArray(h.hatalar) && h.hatalar.length) throw kayitSorunuHatasi(kayitSorunlari(h.hatalar, paket));
       throw h;
     }
-    o.kayit = { ekranId: o.ekran.id, farklar: true, bulguSayisi: r.bulguSayisi, gizlenenSayisi: r.gizlenenSayisi };
+    o.kayit = { ekranId: o.ekran.id, farklar: true, bulguSayisi: r.bulguSayisi, gizlenenSayisi: r.gizlenenSayisi,
+      karsilastirilmayan: Array.isArray(/** @type {Nesne} */ (paket).bilinmeyenler) ? /** @type {Nesne} */ (paket).bilinmeyenler.filter((/** @type {unknown} */ x) => String(x).startsWith('Nöbetçi taraması şu adımlara geçmedi')) : [] };
     o.durum = 'kaydedildi';
     o.calisiyor = null;
     dosyaKlasorunuSil(o);

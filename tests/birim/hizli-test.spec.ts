@@ -827,12 +827,13 @@ test('modeli güncelleme: seçilen örnek senaryonun verileri alanlara dolar (ye
   await isBitsin();
 });
 
-test('modeli güncelleme sonu: senaryo kaydedilmez, model değişmez; farklar ekranın bulgularına (kabul / red) gelir', async () => {
+test('modeli güncelleme sonu: senaryo kaydedilmez, model değişmez; ulaşılmayan adım silindi sayılmaz (sahte fark yok, karşılaştırılmadı notu)', async () => {
   test.setTimeout(180_000);
   await isBitsin();
   expect(kayitli).not.toBeNull();
   const ekranAdresi = `/platform/ekran?projeId=${projeId}&id=${kayitli?.ekranId}`;
   const surumOnce = Number(((await api(ekranAdresi)) as Nesne).surum);
+  const modelOnce = ((await api(ekranAdresi)) as Nesne).model as Nesne | null;
   const senaryoSayisi = async (): Promise<number> => ((await api(`/platform/senaryolar?projeId=${projeId}`)).senaryolar as Nesne[]).length;
   const senaryoOnce = await senaryoSayisi();
   // Düzenleme kipinde (modelGuncelleme yok) "farklar" kullanılamaz.
@@ -851,7 +852,14 @@ test('modeli güncelleme sonu: senaryo kaydedilmez, model değişmez; farklar ek
   expect(typeof r.bulguSayisi).toBe('number');
   expect(Number(((await api(ekranAdresi)) as Nesne).surum)).toBe(surumOnce);
   expect(await senaryoSayisi()).toBe(senaryoOnce);
-  if (Number(r.bulguSayisi) > 0) expect(((await api(ekranAdresi)) as Nesne & { analiz: Nesne }).analiz.bekleyen).toBeTruthy();
+  // Kullanıcı Hesapla'dan sonraki adıma geçmedi: o adım "kaldırılan adım", alanı "taşındı" sayılmaz; karşılaştırılmadı notu.
+  // Modelde 1. adımdan sonra adım varsa (bu dosya tek başına koşunca "Hesapla sonrası") onlar karşılaştırılmadı diye not edilir.
+  const sonrakiler = ((modelOnce?.adimlar ?? []) as Nesne[]).slice(1).map((x) => String(x.baslik || x.id));
+  for (const ad of sonrakiler) expect(String(r.karsilastirilmayan)).toContain(ad);
+  // (Önceki testler modeli değiştirmiş olabilir: gerçek farklar kalabilir; ulaşılmayan adım kaynaklı sahte farklar olmamalı.)
+  const analiz = (await api(`/platform/ekran/analiz?projeId=${projeId}&id=${kayitli?.ekranId}`)).analiz as (Nesne & { bulgular: Nesne[] }) | null;
+  const basliklar = (analiz?.bulgular ?? []).map((b) => String(b.baslik));
+  expect(basliklar.filter((b) => /^Kaldırılan adım|^Alan taşındı|^Adım koşu tanımı/.test(b))).toEqual([]);
   await isBitsin();
 });
 
