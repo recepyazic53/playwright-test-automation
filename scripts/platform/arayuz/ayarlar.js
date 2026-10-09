@@ -798,7 +798,7 @@ async function yedekleme(govde, baglam, yenile) {
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     yedekKlasoruBolumu(yedekKlasoru, yenile),
     liste);
-  const ortakAkisAlani = h('div', {});
+  const ortakAkisAlani = h('div', { class: 'ortak-akis-alani' });
   const ortakKart = ortakPaylasimKarti(ortak, kullaniciAdi, {
     yenile, projeleriYenile: () => baglam.projeleriYenile(), akisAlani: ortakAkisAlani,
     gizle: (g) => { for (const k of [disaForm, iceKart, otomatikKart, ortakKart]) k.hidden = g; }

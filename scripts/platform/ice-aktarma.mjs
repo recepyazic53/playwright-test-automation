@@ -208,6 +208,29 @@ function zamanlariAt(satir) {
   return Object.fromEntries(Object.entries(satir).filter(([k]) => !ZAMAN_SUTUNLARI.has(k)));
 }
 
+/**
+ * Ekip birleştirmesi (ortak-birlestirme.mjs) için kayıt görünümü: önizlemedekiyle aynı çözme / maskeleme + karşılaştırma imzası
+ * (zaman damgaları hariç, kanonik JSON). Çözülemeyen zarf maskelenir. @param {Veritabani} vt @param {string} tablo @param {Satir} satir @param {Buffer} anahtar
+ */
+export function kayitGorunumu(vt, tablo, satir, anahtar) {
+  /** @type {string[]} */
+  let ekler = [];
+  try { ekler = ekGizliAdlar(vt); } catch { /* çekirdek adlar yeter */ }
+  /** @type {ReturnType<typeof satirGorunumu>} */
+  let g;
+  try {
+    g = satirGorunumu(tablo, satir, anahtar, ekler);
+  } catch {
+    const maskeliSatir = Object.fromEntries(Object.entries(satir).map(([k, d]) => [k, typeof d === 'string' && d.includes('kasa:v1:') ? MASKE : d]));
+    g = { gorunum: maskeliSatir, karsilastirma: maskeliSatir, maskeli: new Set(Object.keys(satir)) };
+  }
+  return { ...g, imza: JSON.stringify(kanonikSirala(zamanlariAt(g.karsilastirma))) };
+}
+/** @param {string} tablo @param {Satir} gorunum @param {string} id */
+export const kayitBasligi = (tablo, gorunum, id) => baslikUret(tablo, gorunum, id);
+/** Değişen alan adları (zaman damgaları hariç). @param {ReturnType<typeof satirGorunumu>} a @param {ReturnType<typeof satirGorunumu>} b */
+export const kayitFarkAlanlari = (a, b) => farkHesapla(a, b).map((f) => f.alan);
+
 /** @param {Buffer} a @param {Buffer} b */
 function anahtarlarAyni(a, b) {
   return a.length === b.length && timingSafeEqual(a, b);
@@ -879,6 +902,13 @@ export class IceAktarmaYoneticisi {
         this.isler.delete(id);
       }
     }
+  }
+
+  /** Hazır işin hazırlık alanı (ekip birleştirmesi karşılaştırır; yoksa / hazır değilse null). @param {string} id @returns {Hazirlik | null} */
+  hazirlikAl(id) {
+    this.temizle();
+    const is = this.isler.get(id);
+    return is && is.gorunum.durum === 'hazir' ? is.hazirlik : null;
   }
 
   /** @returns {string | null} sürmekte olan (hazırlanan/uygulanan) iş */
