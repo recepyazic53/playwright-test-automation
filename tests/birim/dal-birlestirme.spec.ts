@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { EKRANDA_GORUNURSE, dallariBirlestir } from '../../scripts/platform/hizli-test/dal-birlestirme.mjs';
+import { EKRANDA_GORUNURSE, dallariBirlestir, gorulmeyenBagliSecenekleriKoru, ulasilamayanAdimlariKoru } from '../../scripts/platform/hizli-test/dal-birlestirme.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { yerelSunucu } from './giris-fikstur';
@@ -141,5 +141,39 @@ test.describe('Nöbetçi taramasıyla güncelleme iki dalı birleştirir (127.0.
     once = u.plakaDalKayitlari.length;
     await kos(sid('Dal — belge'));
     expect(u.plakaDalKayitlari.slice(once)).toEqual([{ kod: 'B-2', yil: '', belge: 'BN-7' }]);
+  });
+});
+
+test('ulaşılmayan adımlar: sondaki ulaşılmayan adımlar eski hâliyle korunur, ulaşılan son adımın koşusu eskisi; arada atlanan adım korunmaz', () => {
+  const adim = (id: string, baslik: string, alanlar: Nesne[], kosu?: Nesne): Nesne => ({ id, baslik, bolumler: [{ id: `${id}-b`, alanlar }], ...(kosu ? { kosu } : {}) });
+  const eski = {
+    adimlar: [adim('a1', 'Form', [alan('ad', '#ad')], { aksiyonlar: [{ secici: '#devam' }] }), adim('a2', 'Teklif', [alan('tutar', '#tutar')], { aksiyonlar: [{ secici: '#ode' }] }),
+      adim('a3', 'Ödeme', [alan('kart', '#kart')])],
+    kosullar: { k1: { ifade: { esittir: ['x', 1] } } }
+  };
+  // Yalnız 1. adıma ulaşıldı (bitiş başka yazıldı): 2. ve 3. adım eskisi gibi eklenir, 1. adımın koşusu eskisi olur.
+  const yeni: Nesne = { adimlar: [adim('a1', 'Form', [alan('ad', '#ad'), alan('yeni', '#yeni')], { basariGostergesi: { metin: 'Tutar:' } })] };
+  expect(ulasilamayanAdimlariKoru(yeni, eski)).toEqual({ adimlar: ['Teklif', 'Ödeme'] });
+  expect(yeni.adimlar.map((a: Nesne) => a.id)).toEqual(['a1', 'a2', 'a3']);
+  expect(yeni.adimlar[0].kosu).toEqual({ aksiyonlar: [{ secici: '#devam' }] });
+  expect(yeni.adimlar[0].bolumler[0].alanlar.map((x: Nesne) => x.id)).toEqual(['ad', 'yeni']);
+  expect(yeni.kosullar).toEqual(eski.kosullar);
+  // 3. adıma ulaşıldı ama 2. yok: 2. adım gerçekten kaldırılmış sayılır (eklenmez).
+  const atlanan: Nesne = { adimlar: [adim('a1', 'Form', [alan('ad', '#ad')]), adim('a3', 'Ödeme', [alan('kart', '#kart')])] };
+  expect(ulasilamayanAdimlariKoru(atlanan, eski)).toEqual({ adimlar: [] });
+  expect(atlanan.adimlar.map((a: Nesne) => a.id)).toEqual(['a1', 'a3']);
+  // Hiç eşleşen adım yoksa dokunulmaz.
+  const yabanci: Nesne = { adimlar: [adim('z', 'Başka', [])] };
+  expect(ulasilamayanAdimlariKoru(yabanci, eski)).toEqual({ adimlar: [] });
+});
+
+test('bağlı liste: bu turda gezilmeyen üst değerlerin seçenekleri eski hâliyle kalır; gezilen üst değerin seçenekleri bu turdakidir', () => {
+  const ilce = (harita: Nesne): Nesne => alan('ilce', '#ilce', { tip: 'secim', bagimlilik: { alan: 'il', secenekHaritasi: harita } });
+  const model = (a: Nesne): Nesne => ({ adimlar: [{ id: 'a1', bolumler: [{ id: 'b', alanlar: [alan('il', '#il'), a] }] }] });
+  const eski = model(ilce({ IST: [{ deger: 'KAD', metin: 'KADIKÖY' }], ANK: [{ deger: 'CAN', metin: 'ÇANKAYA' }] }));
+  const yeni = model(ilce({ IST: [{ deger: 'KAD', metin: 'KADIKÖY' }, { deger: 'BES', metin: 'BEŞİKTAŞ' }] }));
+  expect(gorulmeyenBagliSecenekleriKoru(yeni, eski)).toEqual({ alanlar: ['ilce'] });
+  expect(yeni.adimlar[0].bolumler[0].alanlar[1].bagimlilik.secenekHaritasi).toEqual({
+    IST: [{ deger: 'KAD', metin: 'KADIKÖY' }, { deger: 'BES', metin: 'BEŞİKTAŞ' }], ANK: [{ deger: 'CAN', metin: 'ÇANKAYA' }]
   });
 });
