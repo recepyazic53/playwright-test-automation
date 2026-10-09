@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — ortak (ekip) yedek: yayında kişiye özel bilgi ayıklanır, içe aktarmada yerel kişisel değer korunur.
-import { mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { veritabaniAc } from '../../scripts/platform/veritabani/baglanti.mjs';
@@ -116,6 +116,44 @@ test('ortak klasör: sürümlü yayın, güncelleme uyarısı ve "önce güncell
     expect((acik.tablolar.ayarlar ?? []).some((s) => String(s.anahtar).startsWith('ortak-'))).toBe(false);
     a.kapat();
     b.kapat();
+  } finally {
+    klasor.temizle();
+  }
+});
+
+test('geri dönüş: eski sürüm alınınca yeni sürüm yayınlanabilir; araya başkası girerse kilit geri gelir', async () => {
+  const klasor = geciciKlasor('ortak-geri');
+  try {
+    const a = await veritabaniniHazirla(null);
+    await kasaOlustur(a, PAROLA, { kdf: HIZLI_KDF });
+    const proje = projeKaydet(a, { ad: 'Ortak' });
+    const ekran = ekranKaydet(a, { projeId: proje, anahtar: 'form', ad: 'Form' });
+    const s1 = senaryoKaydet(a, { projeId: proje, ekranId: ekran, baslik: 'Eski ad', icerik: { adim: 1 } });
+    const paylasim = join(klasor.yol, 'paylasim');
+    mkdirSync(paylasim);
+    ortakKlasorAyarla(a, paylasim);
+    await ortakYayinla(a, { yapan: 'ayse' });
+    senaryoKaydet(a, { id: s1, projeId: proje, ekranId: ekran, baslik: 'Bozuk ad', icerik: { adim: 1 } });
+    await ortakYayinla(a, { yapan: 'ayse' });
+
+    const { yol } = ortakSurumDosyasi(a, 1);
+    iceAktarmaUygula(a, await iceAktarmaHazirla(a, yol, PAROLA), { tumu: true }, { yapan: 'ayse' });
+    ortakAlindiIsaretle(a, 1);
+    expect(senaryoGetir(a, s1)?.baslik).toBe('Eski ad');
+    expect(ortakDurum(a)).toMatchObject({ benimSurum: 1, sonSurum: 2, geriDonus: true, guncelleVar: false });
+    expect((await ortakYayinla(a, { yapan: 'ayse' })).surum).toBe(3);
+    expect(ortakDurum(a)).toMatchObject({ benimSurum: 3, geriDonus: false });
+
+    // Başkası araya girerse (geri dönüşten sonra yeni sürüm) kilit geri gelir
+    ortakAlindiIsaretle(a, 1);
+    expect(ortakDurum(a).geriDonus).toBe(true);
+    const liste = JSON.parse(readFileSync(join(paylasim, 'ortak.json'), 'utf8'));
+    liste.surumler.push({ ...liste.surumler[2], surum: 4, dosya: liste.surumler[2].dosya.replace('0003', '0004') });
+    copyFileSync(join(paylasim, liste.surumler[2].dosya), join(paylasim, liste.surumler[3].dosya));
+    writeFileSync(join(paylasim, 'ortak.json'), JSON.stringify(liste));
+    expect(ortakDurum(a)).toMatchObject({ geriDonus: false, guncelleVar: true });
+    await expect(ortakYayinla(a, { yapan: 'ayse' })).rejects.toMatchObject({ kod: 'ONCE_GUNCELLE' });
+    a.kapat();
   } finally {
     klasor.temizle();
   }

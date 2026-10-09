@@ -6,6 +6,8 @@ export interface OrtakDurum {
   bulunamadi: boolean;
   benimSurum: number;
   sonSurum: number;
+  /** Eski bir sürüme bilinçli dönüldü: yeni sürüm yayınlanabilir. */
+  geriDonus: boolean;
   guncelleVar: boolean;
   surumler: OrtakSurum[];
 }

@@ -43,24 +43,25 @@ export function ortakPaylasimKarti(ortak, baglam) {
     });
     const guncelle = h('button', { type: 'button', class: ortak.guncelleVar ? 'birincil' : '', disabled: !ortak.sonSurum }, ikon('indir'), 'Güncelle');
     guncelle.addEventListener('click', () => guncelleFormu());
+    if (ortak.geriDonus) durumKutusu = h('p', { class: 'not-kutusu uyari', role: 'status' }, ikon('uyari'), ` Eski bir sürümdesiniz (v${ortak.benimSurum}); klasördeki son sürüm v${ortak.sonSurum}. Yayınlarsanız bu hâliniz yeni sürüm olur.`);
     eylemler = h('div', {}, h('div', { class: 'satir-girdi' }, not, yayinla), h('div', { class: 'dugmeler' }, guncelle));
   }
 
   // Güncelle: kasa parolası (ekipte ortak) → içe aktarma önizlemesi (eklenecek / değişecek) → seçim → uygula.
-  function guncelleFormu() {
+  function guncelleFormu(hedefSurum) {
     const parola = parolaAlani('Ekibin ortak kasa parolası', { zorunlu: true, otomatik: 'current-password' });
     const m = mesajKutusu();
     const git = h('button', { type: 'submit', class: 'birincil' }, 'Önizle');
     const form = h('form', { class: 'kart', novalidate: true },
-      h('h3', {}, 'Son sürümü al'),
-      h('p', { class: 'soluk' }, 'Yedekteki kayıtlar bu bilgisayardakilerle karşılaştırılır; neyin ekleneceğini ve değişeceğini görürsünüz. Giriş bilgileriniz ve entegrasyon gizlileriniz değişmez; bu bilgisayardaki kayıtlar silinmez.'),
+      h('h3', {}, hedefSurum ? `v${hedefSurum} sürümüne dön` : 'Son sürümü al'),
+      h('p', { class: 'soluk' }, 'Yedekteki kayıtlar bu bilgisayardakilerle karşılaştırılır; neyin ekleneceğini ve değişeceğini görürsünüz. Giriş bilgileriniz ve entegrasyon gizlileriniz değişmez; bu bilgisayardaki kayıtlar silinmez.' + (hedefSurum ? ' Geri dönüşte, o sürümden sonra değiştirilen kayıtlar eski hâline döner (önceki hâlleri değişiklik geçmişinde kalır); sonradan eklenen kayıtlar silinmez.' : '')),
       m.kutu, parola.kapsayici,
       h('div', { class: 'dugmeler' }, git, h('button', { type: 'button', class: 'hayalet', onclick: () => { baglam.akisAlani.replaceChildren(); baglam.gizle(false); } }, 'Vazgeç')));
     form.addEventListener('submit', async (olay) => {
       olay.preventDefault();
       if (!parola.girdi.value) { m.goster('Kasa parolasını girin.'); return; }
       try {
-        const { isId, surum } = await mesgulIken(git, 'Hazırlanıyor…', () => api('/platform/ortak/guncelle', { govde: { parola: parola.girdi.value } }));
+        const { isId, surum } = await mesgulIken(git, 'Hazırlanıyor…', () => api('/platform/ortak/guncelle', { govde: { parola: parola.girdi.value, ...(hedefSurum ? { surum: hedefSurum } : {}) } }));
         baglam.akisAlani.replaceChildren();
         iceAktarmaAkisi(baglam.akisAlani, {
           mod: 'ayarlar', baslangicIsId: isId,
@@ -76,8 +77,11 @@ export function ortakPaylasimKarti(ortak, baglam) {
   }
 
   const surumSatirlari = ortak.surumler.length
-    ? h('ul', { class: 'duz-liste kucuk' }, ortak.surumler.map((s) => h('li', {},
-      `v${s.surum} · ${s.yapan || '—'} · ${tarihMetni(s.zaman)} · ${boyutMetni(s.bayt)}${s.not ? ` · ${s.not}` : ''}`)))
+    ? h('ul', { class: 'duz-liste kucuk' }, ortak.surumler.map((s) => {
+      const don = h('button', { type: 'button', class: 'hayalet kucuk-dugme', 'aria-label': `v${s.surum} sürümüne dön`, disabled: s.surum === ortak.benimSurum }, 'Bu sürüme dön');
+      don.addEventListener('click', () => guncelleFormu(s.surum));
+      return h('li', {}, `v${s.surum} · ${s.yapan || '—'} · ${tarihMetni(s.zaman)} · ${boyutMetni(s.bayt)}${s.not ? ` · ${s.not}` : ''}${s.surum === ortak.benimSurum ? ' · sizdeki' : ''} `, don);
+    }))
     : null;
 
   return h('div', { class: 'kart', role: 'group', 'aria-label': 'Ekip paylaşımı' },

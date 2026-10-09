@@ -6,7 +6,7 @@
 //   ortakDurum(vt)                  klasör, son sürüm, bende olan sürüm, güncelleme var mı, sürüm listesi
 //   ortakYayinla(vt, secenekler)    yeni sürüm yazar; bende olan sürüm klasördekinden eskiyse REDDEDER ("önce güncelleyin")
 //   ortakSurumDosyasi(vt, surum?)   güncelleme için sürümün dosya yolu (varsayılan: son)
-//   ortakAlindiIsaretle(vt, surum)  bu makinede uygulanan sürümü kaydeder
+//   ortakAlindiIsaretle(vt, surum)  bu makinede uygulanan sürümü kaydeder (son olmayan = geri dönüş; yeni sürüm yayınlanabilir)
 // NOT: import.meta KULLANILMAZ.
 
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -33,6 +33,12 @@ function klasorOku(vt) {
 function benimSurum(vt) {
   const d = /** @type {{ surum?: unknown } | null} */ (ayarGetir(vt, ORTAK_DURUM_AYARI));
   return d && typeof d.surum === 'number' ? d.surum : 0;
+}
+
+/** Bilinçli geri dönüşte alınan sürüm ve o anki son sürüm (yoksa null): geri dönülen sürümden yeni sürüm yayınlanabilir. @param {import('./veritabani/baglanti.mjs').Veritabani} vt */
+function geriDonusOku(vt) {
+  const d = /** @type {{ geriDonusSonSurum?: unknown } | null} */ (ayarGetir(vt, ORTAK_DURUM_AYARI));
+  return d && typeof d.geriDonusSonSurum === 'number' ? d.geriDonusSonSurum : null;
 }
 
 /** Klasördeki sürüm listesi (eskiden yeniye). Dosya yoksa/bozuksa boş liste. @param {string} klasor @returns {OrtakSurum[]} */
@@ -69,11 +75,12 @@ export function ortakKlasorAyarla(vt, klasor) {
 export function ortakDurum(vt) {
   const klasor = klasorOku(vt);
   const benim = benimSurum(vt);
-  if (!klasor) return { klasor: null, bulunamadi: false, benimSurum: benim, sonSurum: 0, guncelleVar: false, surumler: /** @type {OrtakSurum[]} */ ([]) };
-  if (!existsSync(klasor)) return { klasor, bulunamadi: true, benimSurum: benim, sonSurum: 0, guncelleVar: false, surumler: [] };
+  if (!klasor) return { klasor: null, bulunamadi: false, benimSurum: benim, sonSurum: 0, geriDonus: false, guncelleVar: false, surumler: /** @type {OrtakSurum[]} */ ([]) };
+  if (!existsSync(klasor)) return { klasor, bulunamadi: true, benimSurum: benim, sonSurum: 0, geriDonus: false, guncelleVar: false, surumler: [] };
   const surumler = listeOku(klasor);
   const son = surumler.length ? surumler[surumler.length - 1].surum : 0;
-  return { klasor, bulunamadi: false, benimSurum: benim, sonSurum: son, guncelleVar: son > benim, surumler: surumler.slice(-30).reverse() };
+  const geriDonus = geriDonusOku(vt) === son && benim < son;
+  return { klasor, bulunamadi: false, benimSurum: benim, sonSurum: son, geriDonus, guncelleVar: son > benim && !geriDonus, surumler: surumler.slice(-30).reverse() };
 }
 
 /** @param {number} n */
@@ -90,7 +97,7 @@ export async function ortakYayinla(vt, secenekler = {}) {
   if (!existsSync(klasor)) throw new YedekHatasi('VERI', 'Ortak klasör bulunamadı; OneDrive / ağ klasörünün açık olduğundan emin olun.');
   const liste = listeOku(klasor);
   const son = liste.length ? liste[liste.length - 1].surum : 0;
-  if (benimSurum(vt) < son) {
+  if (benimSurum(vt) < son && geriDonusOku(vt) !== son) {
     throw new YedekHatasi('ONCE_GUNCELLE', `Ortak klasörde daha yeni bir sürüm var (v${son}). Başkasının değişikliğinin üzerine yazmamak için önce güncelleyin.`);
   }
   const surum = son + 1;
@@ -127,5 +134,9 @@ export function ortakSurumDosyasi(vt, surum) {
 /** @param {import('./veritabani/baglanti.mjs').Veritabani} vt @param {number} surum */
 export function ortakAlindiIsaretle(vt, surum) {
   if (!Number.isInteger(surum) || surum < 0) throw new YedekHatasi('VERI', 'Geçersiz sürüm.');
-  ayarYaz(vt, ORTAK_DURUM_AYARI, { surum });
+  const klasor = klasorOku(vt);
+  const liste = klasor && existsSync(klasor) ? listeOku(klasor) : [];
+  const son = liste.length ? liste[liste.length - 1].surum : 0;
+  // Son olmayan bir sürüm alındıysa bu bilinçli geri dönüştür: o anki son sürüm kaydedilir (araya başkası girerse kilit geri gelir).
+  ayarYaz(vt, ORTAK_DURUM_AYARI, surum < son ? { surum, geriDonusSonSurum: son } : { surum });
 }
