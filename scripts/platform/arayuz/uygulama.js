@@ -182,6 +182,49 @@ window.addEventListener('sunucu-yenilendi', () => {
   document.body.prepend(bant);
 });
 
+// Ekip paylaşımı: ortak klasörde yeni sürüm var mı (açılışta ve dakikada bir; otomatik kilit sayacını sıfırlamaz). Varsa hangi ekranda
+// olunursa olunsun sayfanın üstünde bant ("Güncelle" → Ayarlar > Yedekleme > Ekip paylaşımı) ve üst menüde Ayarlar'da "Yeni sürüm"
+// işareti. Bant o sürüm için kapatılabilir (bu sekmede); işaret güncellenene kadar kalır.
+const ORTAK_BANT_KAPATILDI = 'nobetci.ortakSurumBandiKapatildi';
+/** @param {HTMLElement} navAyarlar @returns {() => void} izlemeyi durdurur */
+function ortakSurumuIzle(navAyarlar) {
+  // İşaret yalnız yeni sürüm varken menüdedir (yoksa menü öğesinin adı değişmez).
+  const isaret = h('span', { class: 'rozet uyari ortak-surum-isareti' }, 'Yeni sürüm');
+  const kapatildi = () => { try { return Number(sessionStorage.getItem(ORTAK_BANT_KAPATILDI) || 0); } catch { return 0; } };
+  const bantKaldir = () => document.querySelector('.ortak-surum-bandi')?.remove();
+  const kontrol = async () => {
+    let ortak;
+    try { ({ ortak } = await api('/platform/ortak/durum?izle=1')); } catch { return; /* kasa kilitli / bağlantı yok: sonraki denemede */ }
+    const var_ = Boolean(ortak && ortak.guncelleVar);
+    if (var_) { if (!isaret.isConnected) navAyarlar.append(isaret); } else isaret.remove();
+    navAyarlar.title = var_ ? `Ekip paylaşımında yeni sürüm var (v${ortak.sonSurum})` : '';
+    if (!var_) { bantKaldir(); return; }
+    if (kapatildi() >= ortak.sonSurum) return;
+    const son = (ortak.surumler || []).find((x) => x.surum === ortak.sonSurum) || null;
+    const kim = son ? [son.yapan, son.zaman ? new Date(son.zaman).toLocaleString('tr-TR') : ''].filter(Boolean).join(', ') : '';
+    const metin = `Ekipte yeni sürüm var: v${ortak.sonSurum}${kim ? ` (${kim})` : ''}. Sizdeki: v${ortak.benimSurum}.`;
+    const mevcut = document.querySelector('.ortak-surum-bandi');
+    if (mevcut && mevcut.dataset.surum === String(ortak.sonSurum)) return;
+    mevcut?.remove();
+    const bant = h('div', { class: 'yenileme-bandi ortak-surum-bandi', role: 'status', 'data-surum': String(ortak.sonSurum) },
+      h('span', { class: 'bant-simge', 'aria-hidden': 'true' }, ikon('indir')),
+      h('div', { class: 'bant-metin' }, h('b', {}, metin), h('span', {}, son && son.not ? `Not: ${son.not}` : 'Yayınlamadan önce güncelleyin; böylece ekibin değişiklikleri sizde de olur.')),
+      h('div', { class: 'dugmeler' },
+        h('button', { type: 'button', class: 'birincil kucuk-dugme', onclick: () => { bant.remove(); location.hash = '#/ayarlar/yedekleme/ortak'; } }, ikon('indir'), 'Güncelle'),
+        h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Bildirimi kapat', title: 'Kapat', onclick: () => {
+          try { sessionStorage.setItem(ORTAK_BANT_KAPATILDI, String(ortak.sonSurum)); } catch { /* depolama kapalı */ }
+          bant.remove();
+        } }, ikon('carpi'))));
+    document.body.prepend(bant);
+  };
+  const ilk = setTimeout(kontrol, 1500);
+  const zamanlayici = setInterval(kontrol, 60_000);
+  // Güncelleme / yayın sonrası işaret hemen tazelenir.
+  const tazele = () => { void kontrol(); };
+  window.addEventListener('ortak-durum-degisti', tazele);
+  return () => { clearTimeout(ilk); clearInterval(zamanlayici); window.removeEventListener('ortak-durum-degisti', tazele); bantKaldir(); };
+}
+
 const basHarf = (ad) => (String(ad || '?').trim()[0] || '?').toLocaleUpperCase('tr');
 
 // ---------------------------------------------------------------------------------------
@@ -1015,7 +1058,8 @@ function anaDuzen() {
       }
     } catch { sunucu.durumAyarla(false); /* bağlantı hatası: bir sonraki denemede */ }
   }, 15_000);
-  ekranTemizle = () => { window.removeEventListener('hashchange', cizVeRehber); clearInterval(kilitKontrolu); };
+  const ortakIzleyici = ortakSurumuIzle(navAyarlar);
+  ekranTemizle = () => { window.removeEventListener('hashchange', cizVeRehber); clearInterval(kilitKontrolu); ortakIzleyici(); };
   if (basit && !location.hash) history.replaceState(null, '', '#/testlerim');
   cizVeRehber();
   // Ana sayfa (açılış / yeniden yükleme / kilit açma): yedekten yükleme izinleri değiştirdiyse bir kez uyarı penceresi.

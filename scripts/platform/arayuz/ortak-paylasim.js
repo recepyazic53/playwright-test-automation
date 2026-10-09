@@ -37,11 +37,11 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
       mesaj.temizle();
       try {
         const y = await mesgulIken(yayinla, 'Yayınlanıyor…', () => api('/platform/ortak/yayinla', { govde: { not: not.value } }));
-        bildir(`v${y.kayit.surum} yayınlandı.`);
+        bildir(`v${y.kayit.surum} yayınlandı.`); window.dispatchEvent(new Event('ortak-durum-degisti'));
         baglam.yenile();
       } catch (hata) { mesaj.goster(hata.message); }
     });
-    const guncelle = h('button', { type: 'button', class: ortak.guncelleVar ? 'birincil' : '', disabled: !ortak.sonSurum }, ikon('indir'), 'Güncelle');
+    const guncelle = h('button', { type: 'button', class: ortak.guncelleVar ? 'birincil' : '', disabled: !ortak.sonSurum, 'data-ortak-guncelle': '' }, ikon('indir'), 'Güncelle');
     guncelle.addEventListener('click', () => guncelleFormu());
     if (ortak.geriDonus) durumKutusu = h('p', { class: 'kart-ozet not-kutusu uyari', role: 'status' }, ikon('uyari'), ` Eski bir sürümdesiniz (v${ortak.benimSurum}); klasördeki son sürüm v${ortak.sonSurum}. Yayınlarsanız bu hâliniz yeni sürüm olur.`);
     eylemler = h('div', {}, h('div', { class: 'satir-girdi' }, not, yayinla), h('div', { class: 'dugmeler' }, guncelle));
@@ -66,7 +66,7 @@ export function ortakPaylasimKarti(ortak, kullaniciAdi, baglam) {
         iceAktarmaAkisi(baglam.akisAlani, {
           // Ekip güncellemesi sürümün tamamını alır (önizlemede işaret kaldırılamaz; istenmeyen kayıt sonra silinir / değiştirilir).
           mod: 'ayarlar', baslangicIsId: isId, tamami: true,
-          uygulandi: async () => { try { await api('/platform/ortak/alindi', { govde: { surum } }); } catch { /* işaret sonra da konabilir */ } },
+          uygulandi: async () => { try { await api('/platform/ortak/alindi', { govde: { surum } }); } catch { /* işaret sonra da konabilir */ } window.dispatchEvent(new Event('ortak-durum-degisti')); },
           bitti: async () => { await baglam.projeleriYenile(); baglam.gizle(false); baglam.akisAlani.replaceChildren(); baglam.yenile(); },
           vazgec: () => { baglam.akisAlani.replaceChildren(); baglam.gizle(false); }
         });
