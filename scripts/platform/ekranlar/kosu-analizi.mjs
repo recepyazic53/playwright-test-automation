@@ -33,7 +33,7 @@ const TIPLER = /** @type {Record<string, string>} */ ({
 /** Sayfa okumasının tanıdığı (kaybolduğu anlaşılabilen) model alan tipleri. */
 const OKUNAN_TIPLER = new Set(['metin', 'sayi', 'tarih', 'telefon', 'secim', 'onayKutusu', 'radyo']);
 /** Yer tutucu seçenek ("Seçiniz…", boş değer). @param {Nesne} s */
-const yerTutucuMu = (s) => String(s?.deger ?? '') === '' || /^(seçiniz|seciniz|seçin|lütfen seçiniz|-+)\W*$/i.test(String(s?.metin ?? '').trim());
+const yerTutucuMu = (s) => String(s?.deger ?? '') === '' || String(s?.metin ?? '').trim() === '' || /^(seçiniz|seciniz|seçin|lütfen seçiniz|-+)\W*$/i.test(String(s?.metin ?? '').trim());
 
 /** Modelin (ekranın kendi adımları) alanları konumlarıyla. @param {Nesne} model */
 function modelAlanlari(model) {
@@ -157,8 +157,10 @@ export function gozlenenModel(model, gozlemler) {
   const sayfaDugmeleri = gozlemler.flatMap((g) => (Array.isArray(g.dugmeler) ? g.dugmeler : []).map((d) => ({ ...d, adim: g.baslik })));
   const ayniDugme = (/** @type {{ secici: string; metin: string | null }} */ a, /** @type {{ secici: string; metin: string | null }} */ b) => a.secici === b.secici || (yazi(a.metin) !== '' && yazi(a.metin) === yazi(b.metin));
   const gelen = new Map();
+  // Her okumada görülen düğmeler sayfanın sabit üst / yan çubuğudur (ör. menü); not edilmez.
+  const herYerde = (/** @type {{ metin: string | null }} */ d) => gozlemler.length > 1 && gozlemler.every((g) => (g.dugmeler ?? []).some((x) => yazi(x.metin) === yazi(d.metin)));
   for (const d of sayfaDugmeleri) {
-    if (d.baglanti || !d.metin || modelDugmeleri.some((m) => ayniDugme(m, d))) continue;
+    if (d.baglanti || !d.metin || herYerde(d) || modelDugmeleri.some((m) => ayniDugme(m, d))) continue;
     if (alanlar.some((x) => ['buton', 'baglanti'].includes(x.alan.tip) && (x.alan.konum?.secici === d.secici || yazi(etiketi(x.alan)) === yazi(d.metin)))) continue;
     if (!gelen.has(yazi(d.metin))) gelen.set(yazi(d.metin), d);
   }
@@ -169,7 +171,23 @@ export function gozlenenModel(model, gozlemler) {
   }
   const gecilmeyen = (Array.isArray(yeni.adimlar) ? yeni.adimlar : []).filter((/** @type {Nesne} */ a) => nesneMi(a) && !nesneMi(a.ortakAkis) && !gecilen.has(a.id));
   if (gecilmeyen.length) notlar.push(`Koşunun geçmediği adımlar karşılaştırılmadı (modeldeki hâlleri korunur): ${gecilmeyen.map((/** @type {Nesne} */ a) => String(a.baslik || a.id)).join(', ')}.`);
+  akislariEsitle(model, yeni);
   return { model: yeni, notlar };
+}
+
+/**
+ * Akışlar (model.akislar) adımların tam kopyalarını taşır: varsayılan akış modelin adımlarıyla aynı olmalı; diğer akışlardaki aynı
+ * adım (eski modeldekiyle birebir aynıysa) güncellenen hâliyle değiştirilir. @param {Nesne} eski @param {Nesne} yeni
+ */
+function akislariEsitle(eski, yeni) {
+  if (!Array.isArray(yeni.akislar) || !Array.isArray(yeni.adimlar)) return;
+  const eskiAdim = new Map((Array.isArray(eski.adimlar) ? eski.adimlar : []).filter(nesneMi).map((a) => [a.id, JSON.stringify(a)]));
+  const yeniAdim = new Map(yeni.adimlar.filter(nesneMi).map((/** @type {Nesne} */ a) => [a.id, a]));
+  for (const akis of yeni.akislar) {
+    if (!nesneMi(akis) || !Array.isArray(akis.adimlar)) continue;
+    if (akis.varsayilan === true) { akis.adimlar = kopya(yeni.adimlar); continue; }
+    akis.adimlar = akis.adimlar.map((/** @type {unknown} */ a) => (nesneMi(a) && yeniAdim.has(a.id) && eskiAdim.get(a.id) === JSON.stringify(a) ? kopya(yeniAdim.get(a.id)) : a));
+  }
 }
 
 /** Seçim / radyo alanının seçenekleri sayfadakilerle (bağlı liste ve dinamik seçenekli alan hariç). @param {Nesne} alan @param {Nesne} ham */

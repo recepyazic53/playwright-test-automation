@@ -76,3 +76,16 @@ test('koşu analizi paketi geçerli bir ekran paketidir; fark yoksa bulgu çıkm
   const ikinci = gozlenenModel(paket.model, gozlemler);
   expect(modelFarki(paket.model, ikinci.model)).toEqual([]);
 });
+
+test('akışlı model: varsayılan akış modelin adımlarıyla eşitlenir; her okumada görülen (menü) düğmeleri not edilmez', () => {
+  const eski = model();
+  eski.akislar = [{ id: 'ana', ad: 'Ana', varsayilan: true, adimlar: JSON.parse(JSON.stringify(eski.adimlar)) }];
+  const menu = { metin: 'Ana Sayfa', secici: '#ana-sayfa' };
+  const okunan = gozlemler.map((g) => ({ ...g, dugmeler: [...g.dugmeler, menu] }));
+  const { model: yeni, notlar } = gozlenenModel(eski, okunan);
+  expect(JSON.stringify(yeni.akislar[0].adimlar)).toBe(JSON.stringify(yeni.adimlar));
+  expect(alanIdleri({ adimlar: yeni.akislar[0].adimlar })).toContain('referansKodu');
+  expect(notlar.some((n) => n.includes('Ana Sayfa'))).toBe(false);
+  const d = sayfaPaketiniDogrula(kosuAnaliziPaketi(PAKET.meta.ekran, eski, okunan, 'Örnek'));
+  expect(d.hatalar).toEqual([]);
+});
