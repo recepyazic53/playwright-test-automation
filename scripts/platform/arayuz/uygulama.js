@@ -1109,7 +1109,7 @@ function ayarlarEkrani(main, bolum, odak = null) {
         // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): Anahtar üst çubukta ve burada da durur.
         h('div', { class: 'kullanim-modu-secimi' }, h('span', { class: 'kucuk soluk' }, 'Kullanım modu'), modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef)))),
       icerik));
-  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak, moduDegistir });
+  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak, moduDegistir, yeniProje: () => sihirbaz('proje', 'ek') });
 }
 
 /** Üst menü sayfası (Veri / Planlı koşular): yan panelsiz tek sütun. @param {HTMLElement} main @param {'veri' | 'planli-kosular'} ad */
