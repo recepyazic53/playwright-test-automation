@@ -12,6 +12,8 @@ import {
   baglamProfiliKaydet, ekranModeliGetir, ortamKaydet, projeKaydet, senaryoGetir, testVerisiTuruKaydet, veritabaniniHazirla
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { ekranModeliniDogrula } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
+import { tabloKaydet, tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../../scripts/platform/tablolar/ekran-baglari.mjs';
 import { gizliAdMi, gizliKalipBul, sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import { bulgulariUygula, etkiHesapla, modelFarki, type Bulgu } from '../../scripts/platform/ekranlar/model-farki.mjs';
 import {
@@ -395,6 +397,29 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     expect((hata as EkranDogrulamaHatasi).hatalar.some((h) => h.mesaj.includes('başvurulan alan "sorguTipi" modelde yok'))).toBe(true);
     expect(analizGetir(vt, projeId, ek.ekranId).analiz?.durum).toBe('bekliyor');
     expect(ekranModeliGetir(vt, ek.ekranId)?.surum).toBe(1);
+  });
+
+  test('seçenek bulgusu tabloya: öneri uygulanabilir, seçilen kabul tabloya yazılır ve bulgu başına sonuç (eklendi) uygulanan analizde saklanır', async () => {
+    const medya = join(klasor.yol, 'medya');
+    const ek = await sayfaEkle(vt, projeId, V1, { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: medya });
+    const tabloId = tabloKaydet(vt, { projeId, ad: 'Kapsam listesi', tur: 'liste', sutunlar: [{ ad: 'Kapsam' }], satirlar: [{ degerler: { Kapsam: 'EKSPRES' } }, { degerler: { Kapsam: 'STANDART' } }] });
+    ekranAlanBaglariniKaydet(vt, projeId, ek.ekranId, { ...ekranAlanBaglari(vt, ek.ekranId), kapsam: { tablo: tabloId, sutun: 'Kapsam' } });
+    await analizYukle(vt, projeId, ek.ekranId, V2, { medyaKlasoru: medya });
+    let a = analizGetir(vt, projeId, ek.ekranId).analiz;
+    if (!a) throw new Error('analiz yok');
+    const yeni = a.bulgular.find((b) => b.tur === 'yeniSecenek') as Bulgu & { tabloOnerisi?: Nesne; tabloSonucu?: unknown };
+    expect(yeni.tabloOnerisi).toMatchObject({ tabloAd: 'Kapsam listesi', sutun: 'Kapsam', islem: 'ekle', uygulanabilir: true });
+    expect(yeni.tabloSonucu).toBeUndefined();
+    expect((a as unknown as Nesne).tabloSonucuKayitli).toBe(false);
+    const kabul = a.bulgular.map((b) => b.id);
+    expect(analizUygula(vt, projeId, ek.ekranId, { analizId: a.id, kabul, red: [], tablo: [yeni.id] })).toMatchObject({ tabloyaEklenen: 1, tablodanSilinen: 0 });
+    a = analizGetir(vt, projeId, ek.ekranId).analiz;
+    expect(a?.durum).toBe('uygulandi');
+    expect((a as unknown as Nesne).tabloSonucuKayitli).toBe(true);
+    expect((a?.bulgular.find((b) => b.id === yeni.id) as unknown as Nesne).tabloSonucu).toEqual({ durum: 'eklendi' });
+    expect(tablolariListele(vt, projeId).find((t) => t.id === tabloId)?.satirlar.map((r) => r.degerler.Kapsam).sort()).toEqual(['EKSPRES', 'KURYE', 'STANDART']);
+    // Alan bağı korunur (sonuç yazılırken ekran ayarları yeniden okunur).
+    expect(ekranAlanBaglari(vt, ek.ekranId).kapsam).toMatchObject({ tablo: tabloId, sutun: 'Kapsam' });
   });
 
   test('önizlemedeki "Beklenen" rozeti genel senaryo açılmış modelle: Senaryolar listesiyle aynı etiket', async () => {

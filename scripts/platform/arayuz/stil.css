@@ -1742,6 +1742,8 @@ code.duz { background: none; border: 0; padding: 0; color: inherit; }
   cursor: pointer; position: relative; transition: background-color .12s;
 }
 .bulgu-listesi.salt-okunur .bulgu-satiri { cursor: default; grid-template-columns: 9.5rem minmax(0, 1fr); }
+/* Değişiklikler ekranındaki satırlarda tür sütunu yok (bulgular.js: ana + sağ): metin dar sütuna sıkışmasın. */
+.bulgu-satiri:not(:has(> .bulgu-tur)) { grid-template-columns: minmax(0, 1fr) auto; }
 .bulgu-satiri:first-child { border-top: 0; }
 .bulgu-satiri:hover { background: var(--panel-2); }
 .bulgu-satiri:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; }
@@ -1901,7 +1903,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 }
 @media (max-width: 860px) {
   .kesif-adimlari { grid-template-columns: 1fr; }
-  .bulgu-satiri { grid-template-columns: minmax(0, 1fr); }
+  .bulgu-satiri, .bulgu-satiri:not(:has(> .bulgu-tur)) { grid-template-columns: minmax(0, 1fr); }
   .bulgu-tur .rozet { width: auto; }
   .bulgu-sag { justify-content: flex-start; flex-wrap: wrap; }
   .alan-satiri { grid-template-columns: minmax(0, 1fr); }
@@ -4731,6 +4733,17 @@ tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
 .bulgu-ayrintisi { margin-top: 4px; }
 .bulgu-ayrintisi > summary { cursor: pointer; font-size: 12.5px; color: var(--metin-2); }
 .etki-paneli.satir-ici { margin-top: 6px; padding: 10px 12px; border-radius: var(--yaricap, 8px); background: var(--panel-2); }
+.bulgu-tablo-notu { overflow-wrap: anywhere; }
+/* Aynı alanın seçenek bulguları (yeni / kaldırılan seçenek): alan başlığı + toplu karar + katlanmış liste. */
+.secenek-alan-grubu { margin: 0 0 10px; }
+.secenek-alan-grubu > .bulgu-listesi { margin: 0; }
+.secenek-grup-basligi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; margin: 0 0 4px;
+  border-radius: var(--yaricap, 8px); background: var(--panel-2); }
+.secenek-grup-basligi .grup-metni { flex: 1 1 18rem; min-width: 0; overflow-wrap: anywhere; }
+.secenek-grup-basligi .grup-metni small { color: var(--metin-3); }
+.secenek-grup-basligi .grup-dugmeleri { display: flex; flex-wrap: wrap; gap: 6px; }
+.secenek-grup-basligi .bulgu-tablo { flex: 1 1 100%; }
+.secenek-grup-alti { display: flex; justify-content: flex-start; padding: 4px 0 0; }
 
 /* Ayarlar: bölüm içindeki alt bölüm (Koşu > Kurtarma kuralları / Hata pencereleri; Güvenlik ve erişim > Güvenlik / İzinler / Ekip).
    Başlık kart değildir (katlanmaz); bölümleri ayıran ince çizgiyle başlar. */
