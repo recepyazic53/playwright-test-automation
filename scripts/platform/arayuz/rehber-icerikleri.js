@@ -550,7 +550,10 @@ export const REHBERLER = {
     baslik: 'Bulgular',
     adimlar: [
       { baslik: 'Tekrar analiz bulguları', metin: 'Yeni paket ya da tarama ile mevcut model arasındaki farklar: eklenen / kaldırılan alanlar, değişen seçenekler, seçiciler ve koşu tanımları.', cizim: { tur: 'akis', kutular: [{ baslik: 'Eski model', ikon: 'arsiv' }, { baslik: 'Farklar', ikon: 'uyari' }, { baslik: 'Kararınız', ikon: 'kullanici' }, { baslik: 'Yeni sürüm', ikon: 'katman' }] } },
-      { baslik: 'Sıra', sira: ['Her bulguyu inceleyin (etkilenen senaryolar gösterilir).', 'Kabul ya da reddedin.', '"Uygula": yalnızca kabul edilenlerle yeni model sürümü oluşur. Reddedilenler bir sonraki analizde tekrar sorulmaz.'] }
+      { baslik: 'Sıra', sira: ['Her bulguyu inceleyin (etkilenen senaryolar gösterilir).', 'Kabul ya da reddedin.', '"Uygula": yalnızca kabul edilenlerle yeni model sürümü oluşur. Reddedilenler bir sonraki analizde tekrar sorulmaz.'] },
+      { baslik: 'Seçenekler ve test verisi', metin: [
+        'Bir alanın birden çok yeni ya da kaldırılan seçeneği tek başlık altında toplanır (alan · sayı · yeri). "Hepsini kabul et (N)" / "Hepsini reddet (N)" onay sorup o alanın tüm seçeneklerine aynı kararı verir; liste ilk 5 seçenekle kısalır, "Tümünü göster (N)" hepsini açar. Tek tek karar vermek her zaman mümkündür.',
+        'Kabul etmek yalnız ekran modelini günceller. Alan bir test verisi tablosuna bağlıysa satırdaki not ne olacağını tablo ve sütun adıyla yazar: tablo otomatik güncellenebiliyorsa "Tabloya da ekle" işaretliyken değer o sütuna satır olarak eklenir (kaldırılan seçenekte satırları silinir); güncellenemiyorsa (ör. tabloda birden çok sütun var, sütun gizli) neden yazılır ve değeri Test verisi\'nden sizin eklemeniz gerekir. "Uygula"dan sonra not gerçekte ne olduğunu gösterir (eklendi / zaten vardı / eklenmedi).'] }
     ]
   },
   tarama: {

@@ -42,7 +42,7 @@ export declare function analizGetir(vt: Veritabani, projeId: string, ekranId: st
   guncelSurum: number | null;
   analiz: (Nesne & { id: string; durum: string; bulgular: Array<Bulgu & { karar: string | null }>; etki: EtkiKaydi[]; gizlenenSayisi: number; sonucSurum: number | null }) | null;
 };
-export declare function analizUygula(vt: Veritabani, projeId: string, ekranId: string, girdi: { analizId: unknown; kabul: unknown; red: unknown; yapan?: string }): { surum: number; yeniSurum: boolean; kabul: number; red: number; kararsiz: number; baglanan: number };
+export declare function analizUygula(vt: Veritabani, projeId: string, ekranId: string, girdi: { analizId: unknown; kabul: unknown; red: unknown; tablo?: unknown; yapan?: string }): { surum: number; yeniSurum: boolean; kabul: number; red: number; kararsiz: number; baglanan: number; tabloyaEklenen: number; tablodanSilinen: number };
 export declare function analizIptal(vt: Veritabani, projeId: string, ekranId: string, analizId: unknown): { iptal: true };
 export declare function reddedilenleriUnut(vt: Veritabani, projeId: string, ekranId: string): { unutulan: number };
 export declare function topluDegerAta(vt: Veritabani, projeId: string, ekranId: string, girdi: { anahtar: unknown; deger: unknown; senaryoIdler: unknown; yapan?: string }): { guncellenen: number };

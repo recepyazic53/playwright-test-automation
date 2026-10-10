@@ -1,6 +1,9 @@
 // "Değişiklikler" ekranı (bulgular; Modeli güncelle › Nöbetçi taraması / paket ile tekrar analiz): güncel modelle farklar.
 //   Tek satır özet · türe göre gruplu satırlar (tek cümle + konum, "Tabloya da ekle", "N senaryo etkilenir") · Kabul et / Reddet ·
 //   Hepsini kabul / reddet · "Uygula" (YALNIZCA kabul edilenlerle yeni model sürümü; reddedilenler hatırlanır, tekrar gösterilmez).
+//   Aynı alanın birden çok yeni / kaldırılan seçeneği tek alan başlığı altında toplanır: "Hepsini kabul et (N)" / "Hepsini reddet (N)"
+//   (onaylı; satırdaki Kabul et / Reddet ile aynı taslak karar), alanın tablo notu / seçimi bir kez, liste ilk 5 + "Tümünü göster (N)".
+//   Tablo notu (secenek-tablo-notu.mjs): kabul yalnız ekran modelini günceller; tablo yalnız öneri uygulanabilir ve seçiliyse güncellenir.
 //   Satırın "Ayrıntı"sı: eski → yeni, görünürlük, etkilenen senaryolar; zorunlu yeni alanda eksik değer → toplu değer atama
 //   (bulgu kabul edilip uygulandıktan sonra) ya da tek tek düzenleme; "Eksik kombinasyonlara senaryo öner"
 //   (yapay zekâ ile yorumlama ekranın ⋯ menüsünde).
@@ -13,6 +16,29 @@ import {
 const ETKI_METNI = { eksikDeger: 'eksik değer', kullanilanSecenek: 'kullanılan seçenek', kaldirilanAlanKullanimi: 'başvuru', tipKontrolu: 'tip kontrolü', gorunmezProfil: 'görünmez profil' };
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
 const taslakAnahtari = (id) => `platform.bulguKararlari.${id}`;
+/** Alan başına toplanan seçenek bulgusu türleri ve katlanmış grupta görünen satır sayısı. */
+const SECENEK_TURLERI = new Set(['yeniSecenek', 'kaldirilanSecenek']);
+const GRUPTA_GORUNUR = 5;
+
+/**
+ * Tablo notu modülü geç yüklenir: sunucu yeni dosyayı henüz sunmuyorsa (yeniden başlatılmadıysa) Ekranlar yine açılır, not kısa
+ * biçimde (tablo › sütun: neden) yazılır.
+ */
+let secenekTabloNotu = (o) => `"${o.tabloAd}" › "${o.sutun}"${o.neden ? `: ${o.neden}` : ''}`;
+const notModulu = import('./secenek-tablo-notu.mjs').then((m) => { secenekTabloNotu = m.secenekTabloNotu; }, () => undefined);
+
+/** Not metni: "Test verisi" (tırnak içinde değilse) Test verisi sayfasına bağlantı olur. @param {string} metin */
+function notParcalari(metin) {
+  const i = metin.indexOf('Test verisi');
+  if (i < 0 || metin[i - 1] === '"') return [metin];
+  return [metin.slice(0, i), h('a', { href: '#/veri' }, 'Test verisi'), metin.slice(i + 'Test verisi'.length)];
+}
+
+/** Konumun son parçası alan adı, öncesi yol ("3. Adım › Bölüm › Alan" → { alan: "Alan", yol: "3. Adım › Bölüm" }). @param {string} konum */
+function alanVeYol(konum) {
+  const p = String(konum || '').split(' › ');
+  return { alan: p.pop() || '', yol: p.join(' › ') };
+}
 
 function taslakOku(id) {
   try { const t = JSON.parse(sessionStorage.getItem(taslakAnahtari(id)) || '{}'); return t && typeof t === 'object' ? t : {}; } catch { return {}; }
@@ -30,6 +56,7 @@ function taslakSil(id) {
  */
 export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
   yerlestir(icerik, iskelet('sayfa'));
+  await notModulu;
   let v;
   try {
     v = await api(`/platform/ekran/analiz?projeId=${encodeURIComponent(s.proje.id)}&id=${encodeURIComponent(s.ekranId)}`);
@@ -75,6 +102,8 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
   const altCubuk = h('div', {});
   /** Ayrıntısı açık satırlar (yeniden çizimde açık kalsın). */
   const acik = new Set();
+  /** "Tümünü göster" ile açılmış seçenek grupları (yeniden çizimde açık kalsın). */
+  const acikGruplar = new Set();
 
   const ciz = () => {
     const kabul = a.bulgular.filter((b) => kararlar.get(b.id) === 'kabul').length;
@@ -105,11 +134,117 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
     const turlar = [...gruplar.keys()].sort((x, y) => (sira.indexOf(x) + 1 || 99) - (sira.indexOf(y) + 1 || 99));
     yerlestir(listeAlani, turlar.map((tur) => h('section', { class: 'bulgu-grubu' },
       h('h3', {}, BULGU_TURLERI[tur]?.etiket || tur, ' ', rozet(String(gruplar.get(tur).length))),
-      h('ul', { class: 'bulgu-listesi kart', 'aria-label': BULGU_TURLERI[tur]?.etiket || tur }, gruplar.get(tur).map(satir)))));
+      SECENEK_TURLERI.has(tur) ? secenekListesi(tur, gruplar.get(tur))
+        : h('ul', { class: 'bulgu-listesi kart', 'aria-label': BULGU_TURLERI[tur]?.etiket || tur }, gruplar.get(tur).map((b) => satir(b))))));
   }
 
-  /** @param {any} b */
-  function satir(b) {
+  /**
+   * Seçenek bulguları alan başına: tek bulgulu alanlar düz satır; birden çok bulgulu alan, başlık (alan · N yeni seçenek · yol, toplu
+   * karar, tablo notu) + ilk GRUPTA_GORUNUR satır + "Tümünü göster (N)".
+   * @param {string} tur @param {any[]} liste
+   */
+  function secenekListesi(tur, liste) {
+    /** @type {Map<string, any[]>} */
+    const alanlar = new Map();
+    for (const b of liste) {
+      const anahtar = `${tur}|${b.alanId || b.konum || b.id}`;
+      if (!alanlar.has(anahtar)) alanlar.set(anahtar, []);
+      alanlar.get(anahtar).push(b);
+    }
+    const etiket = BULGU_TURLERI[tur]?.etiket || tur;
+    const parcalar = [];
+    let tekler = [];
+    const tekleriBitir = () => {
+      if (tekler.length) parcalar.push(h('ul', { class: 'bulgu-listesi kart', 'aria-label': etiket }, tekler.map((b) => satir(b))));
+      tekler = [];
+    };
+    for (const [anahtar, grup] of alanlar) {
+      if (grup.length < 2) { tekler.push(...grup); continue; }
+      tekleriBitir();
+      parcalar.push(secenekGrubu(anahtar, tur, grup));
+    }
+    tekleriBitir();
+    return parcalar;
+  }
+
+  /** @param {string} anahtar @param {string} tur @param {any[]} grup */
+  function secenekGrubu(anahtar, tur, grup) {
+    const { alan, yol } = alanVeYol(grup[0].konum);
+    const turMetni = (BULGU_TURLERI[tur]?.etiket || tur).toLocaleLowerCase('tr');
+    const bekleyen = grup.filter((b) => !kararlar.has(b.id)).length;
+    const acikMi = acikGruplar.has(anahtar) || grup.slice(GRUPTA_GORUNUR).some((b) => acik.has(b.id));
+    const gorunen = acikMi ? grup : grup.slice(0, GRUPTA_GORUNUR);
+    const goster = grup.length > GRUPTA_GORUNUR ? h('button', {
+      type: 'button', class: 'kucuk-dugme hayalet', 'data-grup': anahtar, 'aria-expanded': acikMi ? 'true' : 'false',
+      onclick: () => {
+        if (acikMi) acikGruplar.delete(anahtar); else acikGruplar.add(anahtar);
+        ciz();
+        const d = [...listeAlani.querySelectorAll('button[data-grup]')].find((x) => x.getAttribute('data-grup') === anahtar);
+        if (d instanceof HTMLElement) d.focus();
+      }
+    }, acikMi ? 'Daha az göster' : `Tümünü göster (${grup.length})`) : null;
+    const grupDugmesi = (karar, metin, ikonAd, sinif) => h('button', {
+      type: 'button', class: `kucuk-dugme ${sinif}`.trim(), 'aria-label': `${alan}: ${metin} (${grup.length})`,
+      onclick: () => grupKarari(grup, karar, alan, turMetni)
+    }, ikon(ikonAd), `${metin} (${grup.length})`);
+    return h('div', { class: 'secenek-alan-grubu', role: 'group', 'aria-label': `${alan} · ${grup.length} ${turMetni}` },
+      h('div', { class: 'secenek-grup-basligi' },
+        h('div', { class: 'grup-metni' }, h('strong', {}, alan), ` · ${grup.length} ${turMetni}`, yol ? h('small', {}, ` · ${yol}`) : null,
+          !uygulandi && bekleyen < grup.length ? h('small', {}, ` · ${bekleyen} karar bekliyor`) : null),
+        uygulandi ? null : h('div', { class: 'grup-dugmeleri' },
+          grupDugmesi('kabul', 'Hepsini kabul et', 'onay', ''), grupDugmesi('red', 'Hepsini reddet', 'carpi', 'hayalet')),
+        uygulandi ? null : grupTabloSecimi(grup)),
+      h('ul', { class: 'bulgu-listesi kart', 'aria-label': `${alan}: ${turMetni} listesi` }, gorunen.map((b) => satir(b, true))),
+      goster ? h('div', { class: 'secenek-grup-alti' }, goster) : null);
+  }
+
+  /**
+   * Alanın tüm seçenek bulgularına aynı taslak kararı verir (satırdaki Kabul et / Reddet ile aynı; kalıcı olan yine "Uygula").
+   * Önce onay sorulur; tablo etkisi (grubun tablo seçimine göre) onay metninde yazılır.
+   * @param {any[]} grup @param {'kabul' | 'red'} karar @param {string} alan @param {string} turMetni
+   */
+  async function grupKarari(grup, karar, alan, turMetni) {
+    const n = grup.length;
+    const yeni = grup[0].tur === 'yeniSecenek';
+    const farkli = grup.filter((b) => kararlar.has(b.id) && kararlar.get(b.id) !== karar).length;
+    const o = grup.find((b) => b.tabloOnerisi)?.tabloOnerisi;
+    const tabloMetni = karar === 'kabul' && o ? ` ${secenekTabloNotu(o, { secili: grup.every((b) => !tabloDisi.has(b.id)), sayi: n })}` : '';
+    const ne = karar === 'kabul'
+      ? `${n} seçenek ekran modeline ${yeni ? 'eklenmek' : 'çıkarılmak'} üzere işaretlenir`
+      : `${n} değişiklik reddedilmek üzere işaretlenir (uygulanınca hatırlanır, sonraki paketlerde gösterilmez)`;
+    const tamam = await onayIste({
+      baslik: `${alan}: ${n} ${turMetni} ${karar === 'kabul' ? 'kabul edilsin' : 'reddedilsin'} mi?`,
+      metin: `${ne}; kalıcı olması için alttaki "Uygula"ya basın.${farkli ? ` Daha önce farklı karar verdiğiniz ${farkli} seçeneğin kararı değişir.` : ''}${tabloMetni}`,
+      liste: grup.map((b) => (b.secenek && (b.secenek.metin || b.secenek.deger)) || b.baslik),
+      dugme: karar === 'kabul' ? `Hepsini kabul et (${n})` : `Hepsini reddet (${n})`, ikonAd: karar === 'kabul' ? 'onay' : 'carpi'
+    });
+    if (!tamam) return;
+    for (const b of grup) kararlar.set(b.id, karar);
+    taslakYaz(a.id, kararlar);
+    ciz();
+    bildir(`${n} seçenek ${karar === 'kabul' ? 'kabul edildi' : 'reddedildi'} (kaydetmek için "Uygula").`);
+  }
+
+  /** Grubun tablo notu / seçimi (karar öncesi; tek seçim gruptaki tüm bulgulara uygulanır). @param {any[]} grup */
+  function grupTabloSecimi(grup) {
+    const o = grup.find((b) => b.tabloOnerisi)?.tabloOnerisi;
+    if (!o) return null;
+    const n = grup.length;
+    if (!o.uygulanabilir) return h('div', { class: 'bulgu-tablo bulgu-tablo-notu soluk kucuk' }, ikon('veri'), ' ', notParcalari(secenekTabloNotu(o, { sayi: n })));
+    const uygun = grup.filter((b) => b.tabloOnerisi && b.tabloOnerisi.uygulanabilir);
+    const not = h('span', { class: 'soluk bulgu-tablo-notu' });
+    const kutu = h('input', { type: 'checkbox', checked: uygun.every((b) => !tabloDisi.has(b.id)) });
+    const notYaz = () => yerlestir(not, ` — ${secenekTabloNotu(o, { secili: kutu.checked, sayi: uygun.length })}`);
+    kutu.addEventListener('change', () => {
+      for (const b of uygun) { if (kutu.checked) tabloDisi.delete(b.id); else tabloDisi.add(b.id); }
+      notYaz();
+    });
+    notYaz();
+    return h('label', { class: 'secenek bulgu-tablo kucuk' }, kutu, `${o.islem === 'ekle' ? 'Tabloya da ekle' : 'Tablodan da çıkar'} (${uygun.length})`, not);
+  }
+
+  /** @param {any} b @param {boolean} [grupta] alan grubunun içinde (konum ve karar öncesi tablo seçimi başlıkta) */
+  function satir(b, grupta = false) {
     const k = kararlar.get(b.id) || null;
     const e = etki.get(b.id);
     const etkiSayisi = e ? e.senaryolar.length : 0;
@@ -126,8 +261,8 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
     return h('li', { class: `bulgu-satiri ${k ? `karar-${k}` : ''}`.trim(), 'data-bulgu': b.id, 'aria-label': `${b.baslik}${k ? ` (${k === 'kabul' ? 'kabul' : 'red'})` : ''}` },
       h('div', { class: 'bulgu-ana' },
         h('strong', {}, b.baslik),
-        b.konum ? h('small', {}, b.konum) : null,
-        tabloSecimi(b),
+        b.konum && !grupta ? h('small', {}, b.konum) : null,
+        grupta && !uygulandi ? null : tabloSecimi(b),
         etkiSayisi ? h('small', { class: `etki-notu ${e.tur === 'eksikDeger' || e.tur === 'kullanilanSecenek' ? 'uyari' : ''}`, title: e.mesaj }, ikon('liste'), `${etkiSayisi} senaryo etkilenir`) : null,
         ayrinti),
       h('div', { class: 'bulgu-sag' },
@@ -143,14 +278,19 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
   function tabloSecimi(b) {
     const o = b.tabloOnerisi;
     if (!o) return null;
-    const eylem = o.islem === 'ekle' ? 'Tabloya da ekle' : 'Tablodan da çıkar';
-    if (!o.uygulanabilir) return h('div', { class: 'bulgu-tablo soluk kucuk' }, ikon('veri'), ` ${o.tabloAd}: ${o.neden}`);
-    if (uygulandi) return h('div', { class: 'bulgu-tablo soluk kucuk' }, ikon('veri'), ` ${eylem}: ${o.tabloAd}`);
+    if (uygulandi) {
+      return h('div', { class: 'bulgu-tablo bulgu-tablo-notu soluk kucuk' }, ikon('veri'), ' ', notParcalari(secenekTabloNotu(o, {
+        uygulandi: true, karar: kararlar.get(b.id) || null, sonuc: b.tabloSonucu ?? null, kayitli: a.tabloSonucuKayitli === true
+      })));
+    }
+    if (!o.uygulanabilir) return h('div', { class: 'bulgu-tablo bulgu-tablo-notu soluk kucuk' }, ikon('veri'), ' ', notParcalari(secenekTabloNotu(o)));
+    const not = h('span', { class: 'soluk bulgu-tablo-notu' });
     const kutu = h('input', { type: 'checkbox', checked: !tabloDisi.has(b.id) });
+    const notYaz = () => yerlestir(not, ` — ${secenekTabloNotu(o, { secili: kutu.checked })}`);
     kutu.addEventListener('click', (e) => e.stopPropagation());
-    kutu.addEventListener('change', () => { if (kutu.checked) tabloDisi.delete(b.id); else tabloDisi.add(b.id); });
-    return h('label', { class: 'secenek bulgu-tablo kucuk', onclick: (e) => e.stopPropagation() }, kutu, `${eylem}: `, h('b', {}, o.tabloAd),
-      h('span', { class: 'soluk' }, ` (${o.sutun})`));
+    kutu.addEventListener('change', () => { if (kutu.checked) tabloDisi.delete(b.id); else tabloDisi.add(b.id); notYaz(); });
+    notYaz();
+    return h('label', { class: 'secenek bulgu-tablo kucuk', onclick: (e) => e.stopPropagation() }, kutu, o.islem === 'ekle' ? 'Tabloya da ekle' : 'Tablodan da çıkar', not);
   }
 
   /** @param {any} b */

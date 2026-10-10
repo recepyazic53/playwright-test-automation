@@ -914,10 +914,14 @@ export function analizGetir(vt, projeId, ekranId) {
       meta: a.meta, gizlenenSayisi: a.gizlenenSayisi ?? 0, gizlenenler: a.gizlenenler ?? [], gerekenAyarlar: a.gerekenAyarlar ?? [],
       bilinmeyenler: a.bilinmeyenler ?? [], senaryoOneriSayisi: a.senaryoOneriSayisi ?? 0, kanitlar: a.kanitlar ?? [],
       profiller: Array.isArray(pbg.profiller) ? pbg.profiller : [],
+      // Uygulanan analizde seçenek bulgularının tabloya yazılma sonucu (tabloSonucu: null = tabloya yazılmadı). Eski kayıtlarda bu bilgi
+      // yoktur (tabloSonucuKayitli: false): ekran o zaman "eklendi" demez.
+      tabloSonucuKayitli: a.durum === 'uygulandi' && nesneMi(a.tabloSonuclari),
       bulgular: bulgular.map((b) => {
         const oneri = tablo.oneri(b);
+        const ts = a.durum === 'uygulandi' && nesneMi(a.tabloSonuclari) ? (/** @type {Nesne} */ (a.tabloSonuclari)[String(b.id)] ?? null) : undefined;
         return { ...b, karar: kararlar[String(b.id)] ?? null, baglam: b.alanId && nesneMi(pbgAlanlar[String(b.alanId)]) ? pbgAlanlar[String(b.alanId)] : null,
-          ...(oneri ? { tabloOnerisi: oneri } : {}) };
+          ...(oneri ? { tabloOnerisi: oneri } : {}), ...(oneri && ts !== undefined ? { tabloSonucu: ts } : {}) };
       }),
       ozet: bulguOzeti(bulgular), etki, senaryoSayisi: senaryolar.length,
       atlananlar: a.atlananlar ?? []
@@ -982,7 +986,8 @@ export function analizUygula(vt, projeId, ekranId, girdi) {
     for (const id of kabul) kararlar[id] = 'kabul';
     for (const id of red) kararlar[id] = 'red';
     const { baglantilar: bekleyenBaglar, ...kalan } = a;
-    const son = { ...kalan, durum: 'uygulandi', uygulanma: zaman, sonucSurum: sonuc ? sonuc.surum : null, kararlar };
+    // tabloSonuclari: seçenek bulgusu başına tabloya yazma sonucu (aşağıda doldurulur); ekran "tabloya eklendi" demeden önce buna bakar.
+    const son = { ...kalan, durum: 'uygulandi', uygulanma: zaman, sonucSurum: sonuc ? sonuc.surum : null, kararlar, tabloSonuclari: {} };
     analizYaz(vt, ekran, ayarlar, { ...analiz, bekleyen: null, son, reddedilenler: [...eskiRed, ...yeniRed].slice(-REDDEDILEN_EN_COK) });
     // Bulgu kararını bekleyen alan bağlantıları: yalnız alanının bir bulgusu KABUL edilen ve yeni modelde bulunan alanlar yazılır
     // (reddedilen / karar verilmeyen alanın bağı yazılmaz). analizYaz'dan SONRA: ayarlar ekran ayarlarını yeniden yazar.
@@ -997,7 +1002,11 @@ export function analizUygula(vt, projeId, ekranId, girdi) {
     if (tabloya.length) {
       const tb = secenekTabloBaglami(vt, projeId, ekranId);
       const oneriler = tabloya.map((id) => tb.oneri(bulgular.find((b) => b.id === id))).filter((o) => o && o.uygulanabilir);
-      tabloSonucu = secenekleriTabloyaYaz(vt, projeId, tb.tablolar, /** @type {any[]} */ (oneriler));
+      const yazim = secenekleriTabloyaYaz(vt, projeId, tb.tablolar, /** @type {any[]} */ (oneriler));
+      tabloSonucu = yazim;
+      // Bulgu başına sonuç uygulanan analize eklenir (ayarlar bağlar yazıldıktan sonra yeniden okunur; üzerine yazılmaz).
+      const guncel = analizDurumu(vt, ekranId);
+      if (guncel.analiz.son) analizYaz(vt, ekran, guncel.ayarlar, { ...guncel.analiz, son: { ...guncel.analiz.son, tabloSonuclari: yazim.sonuclar } });
     }
     return {
       surum: sonuc ? sonuc.surum : mevcut.surum, yeniSurum: Boolean(sonuc), kabul: kabul.length, red: red.length, kararsiz: bulgular.length - kabul.length - red.length,

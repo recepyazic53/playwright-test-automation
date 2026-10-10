@@ -348,6 +348,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-tarifi.js', { dosya: 'giris-tarifi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-ozeti.mjs', { dosya: 'giris-ozeti.mjs', tur: 'text/javascript; charset=utf-8' }],
+  // Değişiklikler: seçenek bulgusunun tablo notu (saf; testler de kullanır).
+  ['/arayuz/secenek-tablo-notu.mjs', { dosya: 'secenek-tablo-notu.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/oturum-kontrolu.mjs', { dosya: 'oturum-kontrolu.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/adres-ayirma.mjs', { dosya: 'adres-ayirma.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tema-stilleri.mjs', { dosya: 'tema-stilleri.mjs', tur: 'text/javascript; charset=utf-8' }],
