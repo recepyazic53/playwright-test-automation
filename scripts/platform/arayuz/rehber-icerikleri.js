@@ -61,7 +61,7 @@ export const REHBERLER = {
         metin: ['"Genel" bütün projeyi gösterir. Altında her ekran, renkli sağlık noktası ve senaryo sayısıyla listelenir; bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir.',
           'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
       },
-      { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
+      { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Raporlar > Eşikler\'e götürür.' },
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde dört sekme vardır, bu sırayla: Özet ("Genel"e tıklayınca ilk açılan sekme — üç özet kutusu ve Dikkat / Bakım / Kapsam ve güvenlik kartları), Ekranlar (ekran senaryolarının koşuları; şu an açık olan sekme), Servisler (servis senaryolarının sonuçları) ve Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar). Kaydedilen PDF dönem raporları üst menüde, Planlı koşular kaleminin yanındaki Raporlar kaleminde durur. Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
@@ -148,7 +148,7 @@ export const REHBERLER = {
       {
         baslik: 'Dikkat', hedef: '.farkindalik-karti.dikkat',
         metin: 'Hemen bakılması gerekenler: kritik işaretli olup son koşusunda başarısız olan, P1 sorunu olan ya da uzun süredir kırmızı olan ekran, servis ve akışlar; p95 süresi önceki döneme göre belirgin artan servis metotları; kaçan, atlanan ya da yarıda kalan planlı koşular ve nedeni.',
-        ipucu: '"Kaç gündür kırmızı" ve "yavaşlama yüzdesi" eşikleri Ayarlar > Arayüz > Sonuçlar özeti\'ndedir.'
+        ipucu: '"Kaç gündür kırmızı" ve "yavaşlama yüzdesi" eşikleri Ayarlar > Raporlar > Eşikler\'ndedir.'
       },
       {
         baslik: 'Bakım', hedef: '.farkindalik-karti.bakim',
@@ -593,41 +593,6 @@ export const REHBERLER = {
       { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (ekran listeleri, kişi ve kayıt tabloları) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },
-  'ayarlar-kurtarma': {
-    baslik: 'Kurtarma kuralları',
-    adimlar: [
-      {
-        baslik: 'Kurtarma kuralları',
-        metin: 'Beklenmeyen bir pencere, oturum düşmesi ya da geçici bir hata bütün senaryoları tek tek düşürmesin diye proje düzeyinde "şu olursa şunu yap" kuralları tanımlarsınız. Kural yalnız başarısız bir adımda ya da servis sonucunda devreye girer; kodda hazır kural yoktur.',
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Koşul', alt: 'görünürse / yanıt', ikon: 'uyari' }, { baslik: 'Yapılacak', alt: 'yenile, bekle, tıkla', ikon: 'simsek' }, { baslik: 'Sonra', alt: 'tekrar / devam', ikon: 'oynat' }, { baslik: 'Not', alt: 'kurtarıldı', ikon: 'liste' }] }
-      },
-      {
-        baslik: 'Ekran ve servis kuralları',
-        metin: ['Ekran kuralı: metin / öğe görünürse, giriş sayfasına düşülürse ya da uyarı penceresi açılırsa → sayfayı yenile, tıkla, girişi yenile, bekle ya da pencereyi kapat → adımı tekrar dene, devam et ya da senaryoyu baştan başlat.',
-          'Servis kuralı: yanıttaki bir alanın değeri (ör. sonuç kodu), HTTP kodu, SOAP Fault ya da bağlantı hatası → bekle, token\'ı yenile ya da isteği tekrar gönder (en çok N deneme, isteğe bağlı artan bekleme). İsterseniz yalnız istekte belirli bir parametre belirli değerdeyken uygulanır.']
-      },
-      {
-        baslik: 'Tekrar ve sonuç',
-        metin: 'Kayıt oluşturan adım ve metotlar siz "Tekrar denenebilir" işaretlemedikçe tekrar denenmez (ekranda akış tasarımında adım bloğunda, serviste servis ayarlarında). Kurtarılan test başarılı sayılır ama sonucunda "kurtarıldı" notu kalır; kaç kez çalıştığı kural satırında ve Sonuçlar > Özet\'te görünür.',
-        ipucu: '"Hazır" rozetli 401 / 403 kuralı bugünkü "yetki hatasında token\'ı yenile, bir kez tekrar dene" davranışıdır; silinemez, kapatılabilir. Hızlı aramada (Ctrl+K) "kurtarma" yazarak da buraya gelirsiniz.'
-      }
-    ]
-  },
-  'ayarlar-hata-pencereleri': {
-    baslik: 'Hata pencereleri',
-    adimlar: [
-      {
-        baslik: 'Hata pencereleri',
-        metin: 'Sitenin hata / uyarı mesajını gösterdiği pencereleri (ör. sayfa içi uyarı kutusu) proje düzeyinde bir kez tanımlarsınız. Koşu bir adımı beklerken önce ekranın kendi göstergelerine ve senaryonun beklenen uyarısına bakar; onlar bir şey söylemiyorken buradaki bir pencere görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır. İçindeki yazı önemli değildir.',
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Adım', alt: 'kendi göstergeleri', ikon: 'hedef' }, { baslik: 'Hata penceresi', alt: 'görünürse', ikon: 'uyari' }, { baslik: 'Durur', alt: 'başarısız + metin', ikon: 'carpi' }] }
-      },
-      {
-        baslik: 'Sayfada seç ile tanımlama',
-        sira: ['Ortamı ve açılacak sayfayı seçip "Sayfada seç"e basın.', '"Öğe seç" kapalıyken siteyi kullanarak pencerenin çıktığı yere gidin (istekler gerçekten gider).', '"Öğe seç"i açıp pencerenin kutusuna tıklayın, "Bitir"e basın.', '"Seçilenleri ekle" ile listeye alın; adını değiştirebilir, kapatabilir ya da silebilirsiniz.'],
-        ipucu: 'Pencerenin küçük görüntüsü yalnız bu listede gösterilir; koşuda eşleştirme seçiciyle yapılır. Seçiciyi biliyorsanız "Seçiciyi elle ekle" ile de ekleyebilirsiniz.'
-      }
-    ]
-  },
   'ayarlar-giris': {
     baslik: 'Giriş profilleri',
     adimlar: [
@@ -674,7 +639,7 @@ export const REHBERLER = {
     ]
   },
   'ayarlar-kosu': {
-    baslik: 'Koşu ayarları',
+    baslik: 'Koşu',
     adimlar: [
       {
         baslik: 'Hazır profiller', hedef: '.profil-secimi',
@@ -693,7 +658,32 @@ export const REHBERLER = {
       },
       { baslik: 'Gelişmiş koşu davranışı', metin: 'Gelişmiş bölümünün sonunda koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
       { baslik: 'Hata sınıflandırma', metin: 'Başarısız testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
-      { baslik: 'Planlı koşular taşındı', hedef: '.tasindi-notu', metin: 'Planlı koşular artık üst menüde, kendi sayfasındadır (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma). Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar kalır.' }
+      { baslik: 'Planlı koşular taşındı', hedef: '.tasindi-notu', metin: 'Planlı koşular artık üst menüde, kendi sayfasındadır (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma). Ayarlar\'da yalnız bir kez kurulan ya da nadiren değişen ayarlar kalır.' },
+      {
+        baslik: 'Kurtarma kuralları', hedef: '[data-alt-bolum="kurtarma"]',
+        metin: 'Beklenmeyen bir pencere, oturum düşmesi ya da geçici bir hata bütün senaryoları tek tek düşürmesin diye proje düzeyinde "şu olursa şunu yap" kuralları tanımlarsınız. Kural yalnız başarısız bir adımda ya da servis sonucunda devreye girer; kodda hazır kural yoktur.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Koşul', alt: 'görünürse / yanıt', ikon: 'uyari' }, { baslik: 'Yapılacak', alt: 'yenile, bekle, tıkla', ikon: 'simsek' }, { baslik: 'Sonra', alt: 'tekrar / devam', ikon: 'oynat' }, { baslik: 'Not', alt: 'kurtarıldı', ikon: 'liste' }] }
+      },
+      {
+        baslik: 'Ekran ve servis kuralları',
+        metin: ['Ekran kuralı: metin / öğe görünürse, giriş sayfasına düşülürse ya da uyarı penceresi açılırsa → sayfayı yenile, tıkla, girişi yenile, bekle ya da pencereyi kapat → adımı tekrar dene, devam et ya da senaryoyu baştan başlat.',
+          'Servis kuralı: yanıttaki bir alanın değeri (ör. sonuç kodu), HTTP kodu, SOAP Fault ya da bağlantı hatası → bekle, token\'ı yenile ya da isteği tekrar gönder (en çok N deneme, isteğe bağlı artan bekleme). İsterseniz yalnız istekte belirli bir parametre belirli değerdeyken uygulanır.']
+      },
+      {
+        baslik: 'Tekrar ve sonuç',
+        metin: 'Kayıt oluşturan adım ve metotlar siz "Tekrar denenebilir" işaretlemedikçe tekrar denenmez (ekranda akış tasarımında adım bloğunda, serviste servis ayarlarında). Kurtarılan test başarılı sayılır ama sonucunda "kurtarıldı" notu kalır; kaç kez çalıştığı kural satırında ve Sonuçlar > Özet\'te görünür.',
+        ipucu: '"Hazır" rozetli 401 / 403 kuralı bugünkü "yetki hatasında token\'ı yenile, bir kez tekrar dene" davranışıdır; silinemez, kapatılabilir. Hızlı aramada (Ctrl+K) "kurtarma" yazarak da buraya gelirsiniz. Eskiden ayrı bölümdü; artık Koşu sayfasının altındadır.'
+      },
+      {
+        baslik: 'Hata pencereleri', hedef: '[data-alt-bolum="hata-pencereleri"]',
+        metin: 'Sitenin hata / uyarı mesajını gösterdiği pencereleri (ör. sayfa içi uyarı kutusu) proje düzeyinde bir kez tanımlarsınız. Koşu bir adımı beklerken önce ekranın kendi göstergelerine ve senaryonun beklenen uyarısına bakar; onlar bir şey söylemiyorken buradaki bir pencere görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır. İçindeki yazı önemli değildir.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Adım', alt: 'kendi göstergeleri', ikon: 'hedef' }, { baslik: 'Hata penceresi', alt: 'görünürse', ikon: 'uyari' }, { baslik: 'Durur', alt: 'başarısız + metin', ikon: 'carpi' }] }
+      },
+      {
+        baslik: 'Sayfada seç ile tanımlama',
+        sira: ['Ortamı ve açılacak sayfayı seçip "Sayfada seç"e basın.', '"Öğe seç" kapalıyken siteyi kullanarak pencerenin çıktığı yere gidin (istekler gerçekten gider).', '"Öğe seç"i açıp pencerenin kutusuna tıklayın, "Bitir"e basın.', '"Seçilenleri ekle" ile listeye alın; adını değiştirebilir, kapatabilir ya da silebilirsiniz.'],
+        ipucu: 'Pencerenin küçük görüntüsü yalnız bu listede gösterilir; koşuda eşleştirme seçiciyle yapılır. Seçiciyi biliyorsanız "Seçiciyi elle ekle" ile de ekleyebilirsiniz.'
+      }
     ]
   },
   'planli-kosular': {
@@ -710,7 +700,7 @@ export const REHBERLER = {
     ]
   },
   'ayarlar-yedekleme': {
-    baslik: 'Yedekleme',
+    baslik: 'Yedekleme ve saklama',
     adimlar: [
       { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. SQL kartı sonuçları yedeğe girmez (Özet panosu düzeni girer; yükledikten sonra kartta "Yenile"ye basın).İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır. Yedeğin tamamı yüklenince (ya da seçmeli içe aktarmada Ayarlar\'daki "izinler" kaydı alınınca) yedekteki izinler ve ortamların türleri (Test / Canlı) olduğu gibi geçerli olur; Nöbetçi açıldığında bir kez hangi izinlerin açık olduğunu gösteren bir uyarı çıkar ("Tamam" ya da "İzinlere git" ile kapatılınca kimse için bir daha çıkmaz).', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
       { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' },
@@ -722,12 +712,15 @@ export const REHBERLER = {
       }
     ]
   },
-  // İzin metinleri izin tanımlarından gelir (izin-tanimlari.mjs; Ayarlar > İzinler ve kapalı izin uyarısıyla aynı kaynak).
-  'ayarlar-izinler': {
-    baslik: 'İzinler',
+  // İzin metinleri izin tanımlarından gelir (izin-tanimlari.mjs; İzinler ve kapalı izin uyarısıyla aynı kaynak).
+  'ayarlar-guvenlik': {
+    baslik: 'Güvenlik ve erişim',
     adimlar: [
+      { baslik: 'Kasa', hedef: '[data-alt-bolum="guvenlik"]', metin: 'Kasa kilitlenince şifreli bilgiler okunamaz. İşlem yapılmazsa kasa ayarladığınız sürede kendiliğinden kilitlenir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'kilitli / açık' }, { baslik: 'Otomatik kilit', alt: 'boşta kalınca' }] } },
+      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu, tarama, servis istekleri (WSDL / şema dahil), entegrasyonlar ve giriş sayfası analizi ("Analiz et") hiç bağlanmaz.', ipucu: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler ayrıca bu sayfadaki İzinler\'e bağlıdır (varsayılan kapalı).' },
+      { baslik: 'Maskeleme', metin: 'Raporlarda ve yanıtlarda maskelenecek ek gizli alan adları.', ipucu: 'Video saklama süresi Ayarlar > Yedekleme ve saklama > Saklama kartındadır (diğer saklama kurallarıyla tek çizelgede).' },
       {
-        baslik: 'İzinler nedir?',
+        baslik: 'İzinler nedir?', hedef: '[data-alt-bolum="izinler"]',
         metin: ['Nöbetçi\'nin sizin adınıza yaptığı her işlem (tarayıcıyla siteye girmek, servise istek atmak, veritabanını sorgulamak, dışarıya bildirim göndermek…) bir izne bağlıdır.',
           'Tüm izinler varsayılan olarak KAPALIDIR. Kapalı bir izne bağlı işlem denenirse yapılmaz; ekranda "Bu işlem için Ayarlar > İzinler\'de … iznini açmalısınız." uyarısı ve "İzinlere git" düğmesi çıkar.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'İşlem', alt: 'ör. Koşuyu başlat', ikon: 'oynat' }, { baslik: 'İzin açık mı?', ikon: 'kalkan' }, { baslik: 'Yapılır', alt: 'mevcut onaylarla', ikon: 'onay' }] }
@@ -738,18 +731,11 @@ export const REHBERLER = {
           '"Canlı ortamda da çalıştırmaya izin ver" "Canlı ortamda neler yapılabilsin?" altında ayrı ve uyarılı bir kutudur (varsayılan işaretsiz): işaretlenirse "Canlı ortamda çalıştırma" izni de açılır ve riski yanında yazar. Canlı ortamdaki her işlemden önce sorulan "CANLI ortam" onayı yine sorulur. Veritabanına yazma, sistem değişikliği ve güvenlik gevşetme hiçbir hazır seçime girmez; bunları aşağıdaki listeden ("Kalıcı değişiklik ve güvenlik" bölümü) tek tek açarsınız.']
       },
       { baslik: 'İzin listesi', hedef: '.izin-bolumleri', sira: IZIN_TANIMLARI.map((t) => `${t.etiket}: ${t.aciklama}`) },
-      { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-soru', metin: 'Her iznin yanındaki "?" düğmesi o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır.' },
+      { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-ayrinti', metin: 'Her iznin altındaki "Ayrıntı" (kapalı başlar) o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır. Kısa açıklama ve risk her zaman görünür.' },
       { baslik: 'Açmak ve kapatmak', hedef: '.izin-anahtari', metin: 'Açarken kısa bir onay penceresi iznin ne yaptığını ve riskini gösterir. Kapatmak her zaman serbesttir. İzin açıkken de işlem başına onaylar (ör. canlı ortam onayı) sorulmaya devam eder.', ipucu: 'Planlı koşularda kapalı izne bağlı işlem atlanır ve geçmişte "izin kapalı: …" olarak görünür.' },
       { baslik: 'Son değişiklikler', metin: 'Hangi iznin kim tarafından, ne zaman açılıp kapandığı bu bölümün altında listelenir.' },
-      { baslik: 'Yedekten yüklemede', metin: 'Yedekten tam yüklemede izinler yedektekiyle olduğu gibi geçerli olur (değiştirilmez). Yüklemeden sonra Nöbetçi açılınca bir kez "Yedek yüklendi" penceresi açık izinleri ve ortamların türlerini (Test / Canlı) gösterir; buradan gözden geçirin.' }
-    ]
-  },
-  'ayarlar-guvenlik': {
-    baslik: 'Güvenlik',
-    adimlar: [
-      { baslik: 'Kasa', metin: 'Kasa kilitlenince şifreli bilgiler okunamaz. İşlem yapılmazsa kasa ayarladığınız sürede kendiliğinden kilitlenir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'kilitli / açık' }, { baslik: 'Otomatik kilit', alt: 'boşta kalınca' }] } },
-      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu, tarama, servis istekleri (WSDL / şema dahil), entegrasyonlar ve giriş sayfası analizi ("Analiz et") hiç bağlanmaz.', ipucu: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler ayrıca Ayarlar > İzinler\'e bağlıdır (varsayılan kapalı).' },
-      { baslik: 'Maskeleme', metin: 'Raporlarda ve yanıtlarda maskelenecek ek gizli alan adları.' }
+      { baslik: 'Yedekten yüklemede', metin: 'Yedekten tam yüklemede izinler yedektekiyle olduğu gibi geçerli olur (değiştirilmez). Yüklemeden sonra Nöbetçi açılınca bir kez "Yedek yüklendi" penceresi açık izinleri ve ortamların türlerini (Test / Canlı) gösterir; buradan gözden geçirin.' },
+      { baslik: 'Ekip', hedef: '[data-alt-bolum="ekip"]', metin: 'Bu dosyayı açabilecek kişiler ve rolleri (Admin / Kullanıcı). Liste doluysa dosyayı yalnız listedeki kullanıcı adları açar. Bu kısmı yalnız Admin görür; Kullanıcı rolündekilere gösterilmez.', ipucu: 'Liste diğer bilgisayarlara Ayarlar > Yedekleme ve saklama > Ekip paylaşımı ile yayınlanır.' }
     ]
   },
   'ayarlar-entegrasyonlar': {
@@ -774,21 +760,21 @@ export const REHBERLER = {
   'ayarlar-raporlar': {
     baslik: 'Raporlar',
     adimlar: [
+      { baslik: 'Eşikler', hedef: '.esikler-karti', metin: ['Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).',
+        'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75). Bu ayarlar eskiden Arayüz\'deydi; değerleriniz aynen geçerlidir.'] },
       {
         baslik: 'Rapor verileri',
         metin: ['PDF raporlarının kullandığı kararlarınız burada durur. Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır. Değişiklikler hemen kaydedilir ve yalnız raporları etkiler.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Kritik', alt: 'öncelik + rozet', ikon: 'uyari' }, { baslik: 'Süre eşiği', alt: 'p95 > eşik', ikon: 'saat' }, { baslik: 'PDF rapor', ikon: 'grafik' }] }
       },
-      { baslik: 'Kritik işareti', metin: 'Servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda başarısız olduysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.' },
+      { baslik: 'Kritik işareti', metin: 'Servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda başarısız olduysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.', ipucu: 'Liste uzunsa yalnız kritik işaretli ya da eşiği girilmiş satırlar görünür; diğerleri için "Tümünü göster (N)"e basın.' },
       { baslik: 'Süre eşikleri', metin: 'Servis için milisaniye cinsinden çağrı süresi eşiği; metot başına ayrı eşik de verebilirsiniz (metodun eşiği yoksa servisinki geçer). Dönemdeki p95 süre eşiği aşarsa raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür.' },
       { baslik: 'Uygulama sürümü', metin: 'Sürüm bu bölümde değil, Proje ve ortamlar > ortam > "Uygulama sürümü"nde ya da koşu başlatılırken girilir. Raporlar sürüme göre başarıyı ve sorunun hangi sürümde başladığını gösterir.', ipucu: 'Nöbetçi sürümü hiçbir adrese sormaz; yalnız sizin girdiğiniz değer kullanılır.' }
     ]
   },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
-    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, sayfa rehberlerinin ilk açılışta kendiliğinden başlayıp başlamayacağı (varsayılan kapalı), listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi ve "Bu sayfanın rehberi" bağlantısı her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
-      { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' },
-      { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' },
+    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Parlak), kullanım modu (Basit / Gelişmiş; Basit\'te üst çubuktaki anahtarla da değişir), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, sayfa rehberlerinin ilk açılışta kendiliğinden başlayıp başlamayacağı (varsayılan kapalı), listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). Sonuçlar özeti, rapor ve sağlık noktası eşikleri Ayarlar > Raporlar > Eşikler\'dedir. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi ve "Bu sayfanın rehberi" bağlantısı her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
       { baslik: 'Terimler', hedef: '.terimler-karti', metin: 'Sayfanın altındaki "Terimler" kartı arayüzde geçen kavramları (ekran, genel senaryo, akış, senaryo, model, paket, bulgu, test verisi tablosu, karşılık, ortam türü, izin, planlı koşu, Dene / Koşu) birer cümleyle açıklar. Her kavram arayüzde tek adla geçer: ör. "Planlı koşular", "Test verisi", sonuç durumu "Başarısız"; "CANLI" yalnız ortam türüdür.' }]
   }
 };

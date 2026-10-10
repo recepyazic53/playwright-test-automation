@@ -99,10 +99,6 @@ dialog.onay-diyalogu.basit-calistir-penceresi { width: min(38rem, calc(100vw - 2
 .basit-onceki-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .basit-baglantilar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 16px; }
 
-/* Ayarlar yan paneli: kullanım modu anahtarı (Gelişmiş'ten Basit'e geçiş burada; dar ekranda da görünür). */
-.kullanim-modu-secimi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 14px; }
-@media (max-width: 860px) { .kullanim-modu-secimi { margin-top: 8px; } }
-
 /* Koşu grupları (kosu-gruplari.js): Testlerim'de bölüm, Senaryolar'da pencere; oluştur/düzenle penceresi ekran bazında liste. */
 .kosu-gruplari { margin: 12px 0 16px; min-width: 0; }
 .kosu-gruplari-basligi { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }

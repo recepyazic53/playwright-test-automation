@@ -29,13 +29,13 @@ function eylemler(proje, disaAktarilacaklar) {
     { tur: E, baslik: 'Ekran ekle', alt: 'Ekranlar · paket, tarama ya da akış kaydı', ek: 'yeni ekran tara', ikonAd: 'arti', hedef: '#/ekranlar/yeni' },
     { tur: E, baslik: 'Servis ekle', alt: 'WSDL, SoapUI, Postman, cURL ya da elle', ek: 'yeni servis soap rest', ikonAd: 'arti', hedef: '#/servisler/yeni' },
     { tur: E, baslik: 'Uçtan uca akış ekle', alt: 'Servis + ekran + SQL adımları', ek: 'yeni akis', ikonAd: 'katman', hedef: '#/akislar/yeni' },
-    { tur: E, baslik: 'Yedek al', alt: 'Ayarlar › Yedekleme · şifreli .tayedek dosyası', ek: 'yedekle disa aktar indir tayedek backup', ikonAd: 'arsiv', hedef: '#/ayarlar/yedekleme/disa' },
-    { tur: E, baslik: 'Yedek yükle', alt: 'Ayarlar › Yedekleme · başka bilgisayarın yedeğini içe aktar', ek: 'ice aktar geri yukle yedekten tayedek', ikonAd: 'yukle', hedef: '#/ayarlar/yedekleme/ice' },
+    { tur: E, baslik: 'Yedek al', alt: 'Ayarlar › Yedekleme ve saklama · şifreli .tayedek dosyası', ek: 'yedekle disa aktar indir tayedek backup', ikonAd: 'arsiv', hedef: '#/ayarlar/yedekleme/disa' },
+    { tur: E, baslik: 'Yedek yükle', alt: 'Ayarlar › Yedekleme ve saklama · başka bilgisayarın yedeğini içe aktar', ek: 'ice aktar geri yukle yedekten tayedek', ikonAd: 'yukle', hedef: '#/ayarlar/yedekleme/ice' },
     {
       tur: E, baslik: 'Playwright koduna dışa aktar', alt: 'Kaydedilmiş bir senaryoyu .spec.ts dosyası olarak indir', ek: "playwright'a aktar kod spec ts indir disa aktar",
       ikonAd: 'indir', altListe: { baslik: 'Dışa aktarılacak senaryoyu seçin', ogeler: disaAktarilacaklar }
     },
-    { tur: E, baslik: 'Kurtarma kuralı ekle', alt: 'Ayarlar › Kurtarma kuralları', ek: 'yeni kural kurtar tekrar dene yenile', ikonAd: 'yenile', hedef: '#/ayarlar/kurtarma/yeni' },
+    { tur: E, baslik: 'Kurtarma kuralı ekle', alt: 'Ayarlar › Koşu › Kurtarma kuralları', ek: 'yeni kural kurtar tekrar dene yenile', ikonAd: 'yenile', hedef: '#/ayarlar/kosu/kurtarma-yeni' },
     {
       tur: E, baslik: 'Rapor al (PDF)', alt: 'Ekran ya da servis raporu', ek: 'pdf rapor indir yonetici ozet', ikonAd: 'dosya',
       eylem: () => import('./pdf-rapor.js').then((m) => m.pdfRaporDiyalogu({ id: proje.id, ad: proje.ad || '' }))
@@ -115,6 +115,13 @@ export async function ogeleriTopla(proje, ayarBolumleri, ustSayfalar = []) {
     ogeler.push({ tur: 'Uçtan uca akışlar', baslik: a.baslik, alt: `${a.adimSayisi ?? 0} adım`, ek: 'akis uctan uca', ikonAd: 'katman', hedef: `#/akislar/${q(a.id)}` });
   }
   for (const b of ayarBolumleri) ogeler.push({ tur: 'Ayarlar', baslik: b.etiket, alt: 'Ayarlar', ikonAd: b.ikon, hedef: `#/ayarlar/${b.ad}` });
+  // Başka bölüme katılan eski bölümler adlarıyla da bulunur (Kurtarma kuralları, Hata pencereleri → Koşu; İzinler, Ekip → Güvenlik ve erişim).
+  const bolumVar = (/** @type {string} */ ad) => ayarBolumleri.some((b) => b.ad === ad);
+  if (bolumVar('kosu')) {
+    ogeler.push({ tur: 'Ayarlar', baslik: 'Kurtarma kuralları', alt: 'Ayarlar › Koşu', ek: 'kurtarma kural', ikonAd: 'yenile', hedef: '#/ayarlar/kosu/kurtarma' });
+    ogeler.push({ tur: 'Ayarlar', baslik: 'Hata pencereleri', alt: 'Ayarlar › Koşu', ek: 'hata penceresi uyari', ikonAd: 'uyari', hedef: '#/ayarlar/kosu/hata-pencereleri' });
+  }
+  if (bolumVar('guvenlik')) ogeler.push({ tur: 'Ayarlar', baslik: 'İzinler', alt: 'Ayarlar › Güvenlik ve erişim', ek: 'izin yetki', ikonAd: 'kilit', hedef: '#/ayarlar/guvenlik/izinler' });
   return ogeler;
 }
 

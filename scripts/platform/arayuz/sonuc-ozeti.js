@@ -7,7 +7,7 @@
 // önbellekli) ve yalnız panoda o kartlardan biri varsa istenir; kartlar iskeletle ayrı yüklenir (sayfa açılışını bekletmez).
 // Kurallar: her madde tıklanabilir ve ilgili ekranı açar; kartta ilk KART_ILK maddesi görünür, gerisi "Tümü (N)" ile açılır; madde
 // yoksa kart tek satırlık "Sorun yok" olur. Maddelerde yalnız ad ve sayı vardır (adlar sunucuda maskelenir); DOM'a yalnız metin
-// yazılır (h(); innerHTML yok). Eşikler Ayarlar > Arayüz > Sonuçlar özeti'ndedir.
+// yazılır (h(); innerHTML yok). Eşikler Ayarlar > Raporlar > Eşikler'ndedir.
 // Adresler: #/sonuclar/ozet/duzenle düzenleme kipini, #/sonuclar/ozet/kart-ekle "Kart ekle" penceresini açar (hızlı arama).
 import { api, h, ikon, rozet } from './ortak.js';
 import { araligiSorguyaEkle } from './tarih-araligi.js';

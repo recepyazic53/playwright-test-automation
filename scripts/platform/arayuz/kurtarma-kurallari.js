@@ -1,4 +1,4 @@
-// Ayarlar > "Kurtarma kuralları" (#/ayarlar/kurtarma; eskiden Proje ve ortamlar sayfasının dibindeydi) (proje düzeyinde; sunucu: ayarlar/kurtarma-kurallari.mjs). Koşu sırasında bilinen
+// Ayarlar > Koşu > "Kurtarma kuralları" (#/ayarlar/kosu/kurtarma; eskiden ayrı bölümdü: #/ayarlar/kurtarma yönlenir) (proje düzeyinde; sunucu: ayarlar/kurtarma-kurallari.mjs). Koşu sırasında bilinen
 // geçici bir sorun görülünce ne yapılacağını kullanıcı tanımlar: Tür (Ekran / Servis) → koşul → yapılacak → (ekranda) sonra; kapsam
 // (ekranlar / servis ve metotlar, ortamlar: tümü ya da seçili). Kodda hazır kural yoktur; yalnız bugünkü "Yetki hatasında (401 / 403)
 // token'ı yenile, bir kez tekrar dene" davranışı silinemeyen ama kapatılabilen satır olarak görünür. Her satırda "son 7 günde N kez".
@@ -45,8 +45,8 @@ function ozet(k, secenekler) {
 
 /**
  * @param {{ id: string; ad: string }} proje
- * @param {{ sayfa?: boolean; yeniKural?: boolean }} [secenek] sayfa: kendi Ayarlar bölümünde (sayfa başlığı "Kurtarma kuralları"
- *   olduğundan liste başlığı "Kurallar" olur); yeniKural: yüklenince "Kural ekle" penceresi açılır.
+ * @param {{ sayfa?: boolean; yeniKural?: boolean }} [secenek] sayfa: üstünde "Kurtarma kuralları" başlığı varken (Ayarlar > Koşu
+ *   alt bölümü) liste başlığı "Kurallar" olur; yeniKural: yüklenince "Kural ekle" penceresi açılır.
  * @returns {HTMLElement}
  */
 export function kurtarmaKurallariBolumu(proje, secenek = {}) {

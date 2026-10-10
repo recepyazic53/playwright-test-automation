@@ -1,4 +1,4 @@
-// AYARLAR > HATA PENCERELERİ (proje başına; sunucu: scripts/platform/ayarlar/hata-pencereleri.mjs). Sitenin hata / uyarı mesajını
+// AYARLAR > KOŞU > HATA PENCERELERİ (#/ayarlar/kosu/hata-pencereleri; eskiden ayrı bölümdü) (proje başına; sunucu: scripts/platform/ayarlar/hata-pencereleri.mjs). Sitenin hata / uyarı mesajını
 // gösterdiği pencereler: koşu bir adımı beklerken önce adımın kendi göstergelerine bakar; onlar bir şey söylemiyorken bu pencerelerden
 // biri görünürse adım beklemeden başarısız olur, metni hata iletisine yazılır (yazısından bağımsız). Pencere "Sayfada seç" ile sayfada
 // tıklanarak tanımlanır (seçiciyi Nöbetçi üretir, küçük ekran görüntüsü listede gösterilir) ya da ileri düzeyde seçici elle yazılır.

@@ -40,8 +40,12 @@ export function rehberAnahtari(hash) {
   else if (bolum === 'veri' || bolum === 'planli-kosular') anahtar = bolum;
   // Basit mod sayfaları (basit-rehberler.js).
   else if (bolum === 'testlerim' || bolum === 'basit-sonuclar' || bolum === 'hizli-test') anahtar = bolum;
-  // Ayarlar'dan taşınan sayfaların eski adresleri (uygulama yeni adrese yönlendirir) yeni sayfanın rehberini açar.
-  else if (bolum === 'ayarlar') anahtar = parca === 'test-verisi' || parca === 'baglam' ? 'veri' : parca === 'zamanlanmis-kosular' || parca === 'planli-kosular' ? 'planli-kosular' : `ayarlar-${parca || 'proje'}`;
+  // Ayarlar'dan taşınan / birleşen sayfaların eski adresleri (uygulama yeni adrese yönlendirir) yeni sayfanın rehberini açar.
+  else if (bolum === 'ayarlar') {
+    anahtar = parca === 'test-verisi' || parca === 'baglam' ? 'veri' : parca === 'zamanlanmis-kosular' || parca === 'planli-kosular' ? 'planli-kosular'
+      : parca === 'kurtarma' || parca === 'kurtarma-kurallari' || parca === 'hata-pencereleri' ? 'ayarlar-kosu'
+        : parca === 'izinler' || parca === 'ekip' ? 'ayarlar-guvenlik' : `ayarlar-${parca || 'proje'}`;
+  }
   return anahtar && REHBERLER[anahtar] ? anahtar : null;
 }
 

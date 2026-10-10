@@ -261,7 +261,7 @@ export const IC_SAYFALAR = Object.freeze([
   ['Sonuçlar › Ekranlar', '#/sonuclar/ekranlar'], ['Sonuçlar › Servisler', '#/sonuclar/servisler'], ['Sonuçlar › Uçtan uca akışlar', '#/sonuclar/uctan-uca'],
   ['Raporlar', '#/sonuclar/raporlar'], ['Senaryolar', '#/senaryolar'], ['Ekranlar', '#/ekranlar'], ['Servisler', '#/servisler'],
   ['Uçtan uca akışlar', '#/akislar'], ['Test verisi', '#/veri'], ['Planlı koşular', '#/planli-kosular'], ['Ayarlar › Entegrasyonlar', '#/ayarlar/entegrasyonlar'],
-  ['Ayarlar › İzinler', '#/ayarlar/izinler']
+  ['Ayarlar › Güvenlik ve erişim › İzinler', '#/ayarlar/guvenlik/izinler']
 ]);
 
 /** Panoya özgü hata (sunucu DepoHatasi'ne çevirir; arayüz iletiyi gösterir). */

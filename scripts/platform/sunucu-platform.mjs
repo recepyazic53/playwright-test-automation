@@ -1464,7 +1464,7 @@ const GET_UCLARI = new Map([
   }],
   // Ayarlar > Koşu: tanımlar (form) + kayıtlı değerler.
   ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
-  // Ayarlar > Arayüz > Sağlık noktası (proje başına): Sonuçlar ekranındaki noktanın renk eşikleri.
+  // Ayarlar > Raporlar > Eşikler (proje başına): Sonuçlar ekranındaki noktanın renk eşikleri.
   ['/platform/hata-pencereleri', (db, q) => ({ pencereler: hataPencereleriniOku(db, kimlikAl(q.get('projeId'), 'projeId')), enCok: HATA_PENCERESI_EN_COK })],
   ['/platform/saglik-esikleri', (db, q) => ({ esikler: saglikEsikleriniOku(db, kimlikAl(q.get('projeId'), 'projeId')), varsayilan: VARSAYILAN_SAGLIK_ESIKLERI })],
   // Koşu grupları (isimli, ekranlar arası karışık senaryo seçimi; kasada şifreli — senaryolar/kosu-gruplari.mjs).

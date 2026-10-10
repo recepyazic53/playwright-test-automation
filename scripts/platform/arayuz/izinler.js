@@ -1,5 +1,5 @@
-// Ayarlar > İzinler — Nöbetçi'nin sizin adınıza yapabileceği işlemlerin açık / kapalı anahtarları (varsayılan KAPALI).
-// Tüm metinler izin tanımlarından gelir (izin-tanimlari.mjs; sunucuyla ortak tek kaynak): başlık, açıklama, "?" açıklaması
+// Ayarlar > Güvenlik ve erişim > İzinler (#/ayarlar/guvenlik/izinler; eski #/ayarlar/izinler yönlenir) — Nöbetçi'nin sizin adınıza yapabileceği işlemlerin açık / kapalı anahtarları (varsayılan KAPALI).
+// Tüm metinler izin tanımlarından gelir (izin-tanimlari.mjs; sunucuyla ortak tek kaynak): başlık, açıklama, kapalı başlayan "Ayrıntı"
 // (neler yapabilir, nerelerde, hangi işlemlerde, riski ve kapalıyken), açma onayı ve kapalı izin uyarısı. Açmak kısa bir onay
 // penceresi ister (ne yapar / riski); kapatmak serbesttir. Değişiklikler kasada saklanır ve "Son değişiklikler"de görünür.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
@@ -103,7 +103,7 @@ export function izinPaketiSecimi(s) {
   ciz();
   const kok = h('section', { class: 'kart izin-paketi', 'aria-label': 'İzin paketi' },
     h('h3', {}, ikon('kalkan'), s.baslik || 'Nöbetçi sizin adınıza neleri yapabilsin?'),
-    h('p', { class: 'soluk kucuk' }, 'Önce test ortamlarında, sonra canlı ortamda neler yapılabileceğini seçin; açılacak izinler riskleriyle aşağıda listelenir ve tek onayla açılır. Seçim hiçbir izni kapatmaz; izinleri istediğiniz an Ayarlar > İzinler\'den tek tek açıp kapatabilirsiniz.'),
+    h('p', { class: 'soluk kucuk' }, 'Önce test ortamlarında, sonra canlı ortamda neler yapılabileceğini seçin; açılacak izinler riskleriyle aşağıda listelenir ve tek onayla açılır. Seçim hiçbir izni kapatmaz; izinleri istediğiniz an Ayarlar > Güvenlik ve erişim > İzinler\'den tek tek açıp kapatabilirsiniz.'),
     mesaj.kutu,
     h('fieldset', { class: 'profil-secimi izin-paketi-bolumu' }, h('legend', {}, 'Test ortamlarında neler yapılabilsin? (birini ya da ikisini seçin)'), h('div', { class: 'profil-secenekleri' }, isKutulari.map((k) => k.etiket))),
     canliKutusu,
@@ -114,7 +114,7 @@ export function izinPaketiSecimi(s) {
   return kok;
 }
 
-/** "?" açıklamasının gövdesi (tanımdan). @param {import('./izin-tanimlari.mjs').IzinTanimi} t */
+/** "Ayrıntı" açılırının gövdesi (tanımdan). @param {import('./izin-tanimlari.mjs').IzinTanimi} t */
 function aciklamaGovdesi(t) {
   const liste = (/** @type {readonly string[]} */ ogeler) => h('ul', {}, ogeler.map((x) => h('li', {}, x)));
   return [
@@ -128,41 +128,32 @@ function aciklamaGovdesi(t) {
 }
 
 /**
- * Tek izin satırı: başlık + "?" (tıklanır / klavye; Esc kapatır) + anahtar.
+ * Tek izin satırı: başlık + anahtar, kısa açıklama ve risk her zaman görünür; beş açıklama başlığı (neler yapabilir, nerelerde,
+ * hangi işlemlerde, riski, kapalıyken) kapalı başlayan "Ayrıntı" açılırındadır (tıklanır / klavye; Esc kapatır).
  * @param {import('./izin-tanimlari.mjs').IzinTanimi} t @param {boolean} acik @param {(anahtar: string, acik: boolean) => Promise<boolean>} degistir
  */
 function izinSatiri(t, acik, degistir) {
   const no = ++sayac;
   const panelId = `izin-aciklama-${no}`;
   const anahtarId = `izin-anahtar-${no}`;
-  const soru = h('button', {
-    type: 'button', class: 'ikon-dugme izin-soru', 'aria-expanded': 'false', 'aria-controls': panelId,
-    'aria-label': `"${t.etiket}" izni ne yapar?`, title: 'Bu izin ne yapar?'
-  }, ikon('soru'));
-  const panel = h('div', { id: panelId, class: 'izin-aciklama', role: 'region', 'aria-label': `${t.etiket}: açıklama`, hidden: true }, aciklamaGovdesi(t));
-  const ac = (/** @type {boolean} */ goster) => {
-    panel.hidden = !goster;
-    soru.setAttribute('aria-expanded', String(goster));
-  };
-  soru.addEventListener('click', () => ac(panel.hidden));
-  const escKapat = (/** @type {KeyboardEvent} */ o) => {
-    if (o.key === 'Escape' && !panel.hidden) { o.preventDefault(); o.stopPropagation(); ac(false); soru.focus(); }
-  };
-  soru.addEventListener('keydown', escKapat);
-  panel.addEventListener('keydown', escKapat);
+  const ozetSatiri = h('summary', { class: 'izin-ayrinti-basligi' }, 'Ayrıntı', h('span', { class: 'gorunmez' }, `: "${t.etiket}" izni ne yapar?`));
+  const panel = h('div', { id: panelId, class: 'izin-aciklama', role: 'region', 'aria-label': `${t.etiket}: ayrıntı` }, aciklamaGovdesi(t));
+  const ayrinti = /** @type {HTMLDetailsElement} */ (h('details', { class: 'izin-ayrinti' }, ozetSatiri, panel));
+  ayrinti.addEventListener('keydown', (o) => {
+    if (o.key === 'Escape' && ayrinti.open) { o.preventDefault(); o.stopPropagation(); ayrinti.open = false; ozetSatiri.focus(); }
+  });
 
   const girdi = h('input', { type: 'checkbox', id: anahtarId, role: 'switch', class: 'anahtar izin-anahtari', checked: acik, 'aria-describedby': `${panelId}-kisa` });
   const durum = rozet(acik ? 'Açık' : 'Kapalı', acik ? 'uyari' : '');
   const satir = h('li', { class: `izin-satiri ${acik ? 'acik' : ''}`, 'data-izin': t.anahtar },
     h('div', { class: 'izin-ust' },
       h('label', { class: 'izin-baslik', for: anahtarId }, ikon(acik ? 'kilit' : 'kalkan'), h('span', {}, t.etiket)),
-      soru,
       h('span', { class: 'bosluk' }),
       durum,
       h('span', { class: 'anahtar-kap' }, girdi)),
     h('p', { class: 'soluk kucuk', id: `${panelId}-kisa` }, t.aciklama),
     h('p', { class: 'kucuk izin-risk' }, h('b', {}, 'Risk: '), t.risk),
-    panel);
+    ayrinti);
   girdi.addEventListener('change', async () => {
     const yeni = girdi.checked;
     girdi.disabled = true;
@@ -210,7 +201,8 @@ function degisiklikListesi(kayitlar, makineler) {
 }
 
 /**
- * Ayarlar > İzinler bölümü. baglam.odak: adresle gelen izin (#/ayarlar/izinler/<anahtar>) — satırına kaydırılır ve anahtar odaklanır.
+ * İzinler (Ayarlar > Güvenlik ve erişim). baglam.odak: adresle gelen izin (#/ayarlar/guvenlik/izin:<anahtar>; eski #/ayarlar/izinler/<anahtar>
+ * yönlenir) — satırına kaydırılır ve anahtar odaklanır.
  * @param {HTMLElement} govde @param {{ odak?: string | null }} baglam
  */
 export async function izinlerBolumu(govde, baglam = {}) {
@@ -260,8 +252,8 @@ export async function izinlerBolumu(govde, baglam = {}) {
   govde.replaceChildren(
     paket,
     h('div', { class: 'kart' },
-      h('h3', {}, ikon('kalkan'), 'İzinler'),
-      h('p', { class: 'soluk kucuk' }, 'Nöbetçi\'nin sizin adınıza yaptığı her işlem bir izne bağlıdır. İzinler varsayılan olarak kapalıdır (yukarıdaki paketle birkaçını tek onayla açabilirsiniz); kapalı bir izne bağlı işlem denenirse yapılmaz ve buraya yönlendiren bir uyarı çıkar. Her iznin yanındaki "?" ne yaptığını, nerede kullanıldığını ve riskini anlatır.'),
+      h('h3', {}, ikon('kalkan'), 'Tek tek izinler'),
+      h('p', { class: 'soluk kucuk' }, 'Nöbetçi\'nin sizin adınıza yaptığı her işlem bir izne bağlıdır. İzinler varsayılan olarak kapalıdır (yukarıdaki paketle birkaçını tek onayla açabilirsiniz); kapalı bir izne bağlı işlem denenirse yapılmaz ve buraya yönlendiren bir uyarı çıkar. Her iznin altındaki "Ayrıntı" ne yaptığını, nerede kullanıldığını ve riskini anlatır.'),
       ozet,
       liste),
     h('div', { class: 'kart' }, h('h3', {}, ikon('tarih'), 'Son değişiklikler'), gecmis));

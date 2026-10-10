@@ -351,7 +351,7 @@ test.describe('yedek uyarısı penceresi (arayüz)', () => {
     await expect(d.locator('.yedek-uyarisi-izinler')).toHaveText(`${ACIK_IZINLER.map(etiket).join(', ')} açık; diğerleri kapalı.`);
     await d.getByRole('button', { name: 'İzinlere git' }).click();
     await expect(d).toHaveCount(0);
-    await expect(p).toHaveURL(/#\/ayarlar\/izinler$/);
+    await expect(p).toHaveURL(/#\/ayarlar\/guvenlik\/izinler$/);
     expect((await nobetciApi(nobetci, '/platform/yedek-uyarisi')).uyari).toBeNull();
     await anaSayfa(p);
     await expect(pencere(p)).toHaveCount(0);

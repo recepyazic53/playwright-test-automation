@@ -68,8 +68,8 @@ function gruplar(ayarBolumleri) {
         { baslik: 'Servis taban adresi', aciklama: 'Servislerin ortam adresleri (toplu düzenleme)', ikonAd: 'ag', git: () => '#/ayarlar/proje' },
         ...ayar('entegrasyonlar', 'Entegrasyon', 'Bildirim, hata kaydı, veritabanı bağlantısı', 'simsek'),
         { baslik: 'Hata sınıflandırma kuralı', aciklama: 'Hata mesajı → kategori', ikonAd: 'uyari', git: () => '#/ayarlar/kosu' },
-        ...(ayarBolumleri.some((b) => b.ad === 'kurtarma')
-          ? [{ baslik: 'Kurtarma kuralı', aciklama: 'Koşuda şu görülürse şunu yap (ör. oturum bitti → girişi yenile)', ikonAd: 'yenile', git: () => '#/ayarlar/kurtarma/yeni' }] : [])
+        ...(ayarBolumleri.some((b) => b.ad === 'kosu')
+          ? [{ baslik: 'Kurtarma kuralı', aciklama: 'Koşuda şu görülürse şunu yap (ör. oturum bitti → girişi yenile)', ikonAd: 'yenile', git: () => '#/ayarlar/kosu/kurtarma-yeni' }] : [])
       ]
     }
   ];
