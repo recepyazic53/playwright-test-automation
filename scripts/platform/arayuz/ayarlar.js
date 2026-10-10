@@ -28,7 +28,7 @@ import { projeIslemleri } from './proje-islemleri.js';
 import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, riskliOrtamMi, riskliSecimi } from './ortam-riski.mjs';
 
 export const AYAR_BOLUMLERI = [
-  { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (yeniden adlandır, varsayılan yap, sil), projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
+  { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (adı ve açıklamayı düzenle, varsayılan yap, sil) ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: kanıt düzeyi ve ortam hızı profilleri, yeniden deneme ve süre limiti; tüm ayrıntılar (video / ekran görüntüsü / iz kaydı, bekleme süreleri, servis zaman aşımı, tarih biçimi, tarama / akış kaydı) Gelişmiş\'te. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   // Kurtarma kuralları eskiden "Proje ve ortamlar" sayfasının dibindeydi; orada "taşındı" bağlantısı kalır (adres: #/ayarlar/kurtarma).
@@ -74,8 +74,8 @@ const ISLEM_ETIKETI = {
 /**
  * @param {HTMLElement} kapsayici
  * @param {string} bolum
- * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void>; odak?: string | null }} baglam
- *   odak: bölüm içinde odaklanılacak öğe (İzinler: #/ayarlar/izinler/<izin anahtarı>).
+ * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void>; odak?: string | null; yeniProje?: () => void }} baglam
+ *   odak: bölüm içinde odaklanılacak öğe (İzinler: #/ayarlar/izinler/<izin anahtarı>). yeniProje: Projeler başlığındaki "Proje ekle" (proje sihirbazı).
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const tanim = ayarBolumleri(baglam.durum).find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
@@ -250,23 +250,31 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
       baglam.durum.projeler.map((p) => h('option', { value: p.id, selected: p.id === proje.id }, p.ad))))
     : null;
 
-  const ad = h('input', { type: 'text', value: proje.ad, autocomplete: 'off', maxlength: '120' });
-  const aciklama = h('textarea', { rows: '2', maxlength: '1000' });
-  aciklama.value = proje.aciklama || '';
-  const projeMesaj = mesajKutusu();
-  const projeKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Projeyi kaydet');
-  const projeFormu = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('katman'), 'Proje'), projeSecimi, projeMesaj.kutu,
-    alan('Proje adı', ad, { zorunlu: true }), alan('Açıklama', aciklama), h('div', { class: 'dugmeler' }, projeKaydet));
-  projeFormu.addEventListener('submit', async (o) => {
-    o.preventDefault();
-    alanHatasi(ad, '');
-    if (!ad.value.trim()) { alanHatasi(ad, 'Proje adı boş olamaz.'); ad.focus(); return; }
-    try {
-      await mesgulIken(projeKaydet, 'Kaydediliyor…', () => api('/platform/proje/kaydet', { govde: { id: proje.id, ad: ad.value, aciklama: aciklama.value } }));
-      await baglam.projeleriYenile();
-      bildir('Proje kaydedildi.');
-    } catch (hata) { projeMesaj.goster(hata.message); }
-  });
+  // Proje düzenleme formu ayrı bir kart değil: "Projeler" listesinde satırın "Düzenle" düğmesiyle o satırın
+  // altında açılır (ad + açıklama). Ayrı "Yeniden adlandır" düğmesi bu yüzden listede gösterilmez.
+  const projeFormAlani = h('div', {});
+  const projeFormu = (p, satir) => {
+    const ad = h('input', { type: 'text', value: p.ad, autocomplete: 'off', maxlength: '120' });
+    const aciklama = h('textarea', { rows: '2', maxlength: '1000' });
+    aciklama.value = p.aciklama || '';
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(`Projeyi düzenle: ${p.ad}`, mesaj.kutu,
+      alan('Proje adı', ad, { zorunlu: true }), alan('Açıklama', aciklama),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => projeFormAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      alanHatasi(ad, '');
+      if (!ad.value.trim()) { alanHatasi(ad, 'Proje adı boş olamaz.'); ad.focus(); return; }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/proje/kaydet', { govde: { id: p.id, ad: ad.value, aciklama: aciklama.value } }));
+        await baglam.projeleriYenile();
+        bildir('Proje kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(projeFormAlani, form, satir);
+  };
 
   const formAlani = h('div', {});
   const ortamFormu = (ortam, satir = null) => {
@@ -354,15 +362,19 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     [p.ad, ' ', p.id === baglam.durum.varsayilanProjeId ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null,
       p.id === proje.id ? [' ', h('span', { class: 'rozet' }, 'Açık')] : null],
     p.aciklama ? h('span', {}, p.aciklama) : null,
-    projeIslemleri({ proje: p, durum: baglam.durum, sonra: () => { baglam.yonlendir(); }, silinceAdres: '#/ayarlar/proje' }).map((o) => h('button', {
-      type: 'button', class: o.tehlikeli ? 'tehlike kucuk-dugme' : 'kucuk-dugme', 'aria-label': `${p.ad}: ${o.kisaMetin.toLocaleLowerCase('tr')}`,
-      disabled: Boolean(o.devreDisi), title: o.title || null, 'data-islem': o.ad, onclick: o.fn
-    }, ikon(o.ikon), h('span', {}, o.kisaMetin))), 'katman'));
+    [duzenleDugmesi(p.ad, (satir) => projeFormu(p, satir)),
+      ...projeIslemleri({ proje: p, durum: baglam.durum, sonra: () => { baglam.yonlendir(); }, silinceAdres: '#/ayarlar/proje' })
+        .filter((o) => o.ad !== 'adlandir')
+        .map((o) => h('button', {
+          type: 'button', class: o.tehlikeli ? 'tehlike kucuk-dugme' : 'kucuk-dugme', 'aria-label': `${p.ad}: ${o.kisaMetin.toLocaleLowerCase('tr')}`,
+          disabled: Boolean(o.devreDisi), title: o.title || null, 'data-islem': o.ad, onclick: o.fn
+        }, ikon(o.ikon), h('span', {}, o.kisaMetin)))], 'katman'));
 
   yerlestir(govde,
-    projeFormu,
-    bolumBasligi('Projeler', baglam.durum.projeler.length),
+    bolumBasligi('Projeler', baglam.durum.projeler.length, baglam.yeniProje ? h('button', { type: 'button', class: 'birincil', onclick: () => baglam.yeniProje?.() }, ikon('arti'), 'Proje ekle') : null),
+    projeSecimi,
     h('ul', { class: 'kayit-listesi proje-listesi' }, projeSatirlari),
+    projeFormAlani,
     bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, ikon('arti'), 'Ortam ekle')),
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),

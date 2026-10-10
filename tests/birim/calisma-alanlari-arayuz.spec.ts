@@ -305,7 +305,8 @@ test('Ayarlar > Proje ve ortamlar > Projeler: satır düğmeleri (Ortamlar ile a
   await expect(liste.locator('li')).toHaveCount(2);
   for (const ad of [ornekProjeAdi, 'İkinci proje']) {
     const satir = liste.locator('li').filter({ hasText: ad });
-    await expect(satir.getByRole('button', { name: `${ad}: yeniden adlandır` })).toBeVisible();
+    await expect(satir.getByRole('button', { name: `${ad}: düzenle` })).toBeVisible();
+    await expect(satir.getByRole('button', { name: `${ad}: yeniden adlandır` })).toHaveCount(0);
     await expect(satir.getByRole('button', { name: `${ad}: varsayılan yap` })).toBeVisible();
     await expect(satir.getByRole('button', { name: `${ad}: sil` })).toBeVisible();
   }
@@ -324,6 +325,16 @@ test('Ayarlar > Proje ve ortamlar > Projeler: satır düğmeleri (Ortamlar ile a
   await expect(projeSil).toHaveClass(/tehlike/);
   await goruntu('06b-ayarlar-projeler', page.locator('.proje-listesi'));
 
+  // Proje düzenleme ayrı bir kartta değil: "Düzenle" formu satırın altında açılır (ad + açıklama), Vazgeç kapatır.
+  await expect(page.getByRole('button', { name: 'Projeyi kaydet' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Proje ekle', exact: true })).toBeVisible();
+  await liste.getByRole('button', { name: 'İkinci proje: düzenle' }).click();
+  const projeFormu = page.locator('form').filter({ hasText: 'Projeyi düzenle: İkinci proje' });
+  await expect(projeFormu.getByLabel('Proje adı')).toHaveValue('İkinci proje');
+  await expect(projeFormu.getByLabel('Açıklama')).toBeVisible();
+  await projeFormu.getByRole('button', { name: 'Vazgeç' }).click();
+  await expect(projeFormu).toHaveCount(0);
+
   // Sil: aynı diyalog (kuru çalıştırma sayıları + adı yazarak onay), Vazgeç ile iptal; proje silinmez.
   await projeSil.click();
   const d = diyalog();
@@ -332,7 +343,7 @@ test('Ayarlar > Proje ve ortamlar > Projeler: satır düğmeleri (Ortamlar ile a
   await expect(d.getByRole('button', { name: 'Kalıcı olarak sil' })).toBeDisabled();
   await d.getByRole('button', { name: 'Vazgeç' }).click();
   await expect(diyalog()).toHaveCount(0);
-  await expect(liste.locator('li')).toHaveCount(2);
+  await expect(liste.locator('li:not(.kayit-duzenleme)')).toHaveCount(2);
 
   // 390 px: Ayarlar sayfası yatayda taşmaz; düğmeler görünür.
   await page.setViewportSize({ width: 390, height: 844 });
