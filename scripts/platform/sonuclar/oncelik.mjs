@@ -5,7 +5,7 @@
 //     Kritiklik = kritik işaretli öğe 1, diğer 0 (işaret Ayarlar > Raporlar'da; işaret yoksa 0 — önceki davranış) · Süreklilik = min(1, açık gün / 14)
 //   Bantlar: P1 ≥ 60 · P2 35–59 · P3 < 35.
 //   Rozet: Sağlıklı = dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik = başarı < sarı eşik ya da kapsamdaki kritik akış son koşusunda
-//   kaldı ya da ≥ 3 P1 · diğer Dikkat. Eşikler: Ayarlar > Arayüz > Sağlık noktası (proje başına; ayarlar/saglik-esikleri.mjs).
+//   kaldı ya da ≥ 3 P1 · diğer Dikkat. Eşikler: Ayarlar > Raporlar > Eşikler (proje başına; ayarlar/saglik-esikleri.mjs).
 // Sahip önerisi: öğenin Ayarlar > Raporlar'daki ekibi (ekip eşlemesi; donem-raporu.mjs uygular), eşleme yoksa sınıfın varsayılan ekibi.
 
 /** Sınıflar (kök neden tahmini): katsayı, varsayılan sahip, simge (renk tek başına anlam taşımaz). */

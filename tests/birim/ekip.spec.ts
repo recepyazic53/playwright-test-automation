@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Ayarlar > Ekip (ekip.mjs): dosyayı açabilecek kullanıcı adları ve roller. Liste boşken herkes açar (ad yazılırsa
+// KORUMA TESTLERİ — Ayarlar > Güvenlik ve erişim > Ekip (ekip.mjs): dosyayı açabilecek kullanıcı adları ve roller. Liste boşken herkes açar (ad yazılırsa
 // o kişi ilk Admin olur); liste doluysa listede olmayan ad "Yetkili değilsiniz" alır ve kasa kilitli kalır. Ekip bölümü ve uçları
 // yalnız Admin'e açıktır; girişteki ad ekip paylaşımında "kim yaptı" adı olur.
 import { randomBytes } from 'node:crypto';
@@ -90,16 +90,26 @@ test.describe('kasa açılışı ve Ayarlar > Ekip', () => {
     await page.getByRole('button', { name: 'Kilidi aç' }).click();
     await page.goto('/#/ayarlar/guvenlik');
     const altNav = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
-    await expect(altNav.getByRole('link', { name: 'Güvenlik' })).toBeVisible();
+    await expect(altNav.getByRole('link', { name: 'Güvenlik ve erişim' })).toBeVisible();
     await expect(altNav.getByRole('link', { name: 'Ekip' })).toHaveCount(0);
+    // Ekip "Güvenlik ve erişim" içinde yalnız Admin'e çizilir: Kullanıcı İzinler'i görür, Ekip kısmını görmez (eski adres de).
+    await expect(page.locator('[data-alt-bolum="izinler"]')).toBeVisible();
+    await expect(page.locator('[data-alt-bolum="ekip"]')).toHaveCount(0);
+    await page.goto('/#/ayarlar/ekip');
+    await expect(page).toHaveURL(/#\/ayarlar\/guvenlik\/ekip$/);
+    await expect(page.locator('[data-alt-bolum="izinler"]')).toBeVisible();
+    await expect(page.locator('[data-alt-bolum="ekip"]')).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Kişiler ve roller' })).toHaveCount(0);
     await nobetciApi(nobetci, '/platform/kasa/kilitle', { tamamen: true });
     await page.goto('/');
     await expect(page.getByRole('textbox', { name: 'Kullanıcı adı', exact: true })).toHaveValue('Ayşe');
     await page.getByRole('textbox', { name: 'Kullanıcı adı', exact: true }).fill('Recep');
     await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
     await page.getByRole('button', { name: 'Kilidi aç' }).click();
+    // Eski adres Güvenlik ve erişim > Ekip'e yönlenir.
     await page.goto('/#/ayarlar/ekip');
-    const kart = page.getByRole('group', { name: 'Ekip' });
+    await expect(page).toHaveURL(/#\/ayarlar\/guvenlik\/ekip$/);
+    const kart = page.locator('[data-alt-bolum="ekip"]').getByRole('group', { name: 'Kişiler ve roller' });
     await expect(kart).toContainText('Giriş yapan: Recep');
     await kart.getByRole('button', { name: 'Kişi ekle' }).click();
     await kart.getByLabel('3. kişinin kullanıcı adı').fill('Mehmet');

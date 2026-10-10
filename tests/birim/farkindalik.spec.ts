@@ -195,7 +195,7 @@ test('Kapsam ve güvenlik: senaryosuz metot, denenmemiş koşul dalı, yedek ya�
   try {
     v = await hesapla();
     k = v.kartlar.kapsam;
-    expect(k.maddeler.filter((m) => m.tur === 'izin')).toEqual([{ tur: 'izin', ad: 'Canlı ortamda çalıştırma', ayrinti: 'Riskli izin açık', adres: '#/ayarlar/izinler/canli-ortam' }]);
+    expect(k.maddeler.filter((m) => m.tur === 'izin')).toEqual([{ tur: 'izin', ad: 'Canlı ortamda çalıştırma', ayrinti: 'Riskli izin açık', adres: '#/ayarlar/guvenlik/izin:canli-ortam' }]);
   } finally {
     izinDegistir(vt, 'canli-ortam', false, { onay: true });
     izinDegistir(vt, 'web-erisimi', false, { onay: true });

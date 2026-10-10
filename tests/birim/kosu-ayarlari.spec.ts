@@ -187,12 +187,28 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     expect(await tasma()).toBeLessThanOrEqual(0);
     await page.screenshot({ path: testInfo.outputPath('kosu-gelismis-390.png'), fullPage: true });
 
-    // Ayarlar > Arayüz: rapor görüntü sınırı ve sağlık noktası (proje başına).
+    // Ayarlar > Raporlar > Eşikler: rapor görüntü sınırı, Sonuçlar özeti ve sağlık noktası (proje başına). Arayüz'de artık yoklar
+    // (yalnız Listeler kalır); anahtarlar aynı.
     await page.setViewportSize({ width: 1400, height: 1000 });
     await page.goto('/#/ayarlar/arayuz');
     const arayuz = page.getByRole('form', { name: 'Arayüz ayarları' });
-    await expect(arayuz.getByLabel('HTML rapora gömülen görüntü sınırı (MB)')).toHaveValue('25');
-    const saglik = page.getByRole('form', { name: 'Sağlık noktası' });
+    await expect(arayuz.getByLabel('Aranabilir liste eşiği')).toBeVisible();
+    await expect(arayuz.getByLabel('HTML rapora gömülen görüntü sınırı (MB)')).toHaveCount(0);
+    await expect(arayuz.getByText('Uzun süredir kırmızı')).toHaveCount(0);
+    await expect(page.getByRole('form', { name: 'Sağlık noktası' })).toHaveCount(0);
+    await page.goto('/#/ayarlar/raporlar');
+    const esikler = page.locator('.esikler-karti');
+    await expect(esikler.getByRole('heading', { name: 'Eşikler' })).toBeVisible();
+    const esikFormu = page.getByRole('form', { name: 'Rapor ve özet eşikleri' });
+    await expect(esikFormu.getByLabel('HTML rapora gömülen görüntü sınırı (MB)')).toHaveValue('25');
+    await expect(esikFormu.getByLabel('Aranabilir liste eşiği')).toHaveCount(0);
+    await esikFormu.getByLabel('HTML rapora gömülen görüntü sınırı (MB)').fill('30');
+    await esikFormu.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(esikFormu.getByText('Eşikler kaydedildi.')).toBeVisible();
+    const sonra = await nobetciApi(nobetci, '/platform/kosu-ayarlari') as { ayarlar: Record<string, unknown> };
+    // Yalnız eşik grubu yazılır; Arayüz'deki liste ayarları ve koşu ayarları korunur.
+    expect(sonra.ayarlar).toMatchObject({ raporGoruntuSiniriMb: 30, onayPenceresi: 'onayla', gorunmeyenAlanBeklemeSn: 4 });
+    const saglik = esikler.getByRole('form', { name: 'Sağlık noktası' });
     await expect(saglik.getByLabel('Yeşil: başarı oranı en az (%)')).toHaveValue('90');
     await expect(saglik.getByLabel('Sarı: başarı oranı en az (%)')).toHaveValue('75');
     await saglik.getByLabel('Sarı: başarı oranı en az (%)').fill('95');
@@ -207,7 +223,8 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     // Sonuçlar ekranındaki not eşikleri gösterir.
     await page.goto('/#/sonuclar');
     await expect(page.locator('.yan-not')).toContainText('yeşil ≥ %80, sarı ≥ %60');
-    await page.goto('/#/ayarlar/arayuz');
+    await page.locator('.yan-not').getByRole('link', { name: 'Eşikleri değiştir' }).click();
+    await expect(page).toHaveURL(/#\/ayarlar\/raporlar$/);
     await expect(saglik).toBeVisible();
     expect(await tasma()).toBeLessThanOrEqual(0);
     await page.screenshot({ path: testInfo.outputPath('arayuz-masaustu.png'), fullPage: true });

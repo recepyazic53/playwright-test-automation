@@ -132,10 +132,10 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   const [tur, kimlik] = parcalar;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
   const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve servisler' }, iskelet('liste'));
-  // Sağlık noktası eşikleri proje başınadır (Ayarlar > Arayüz > Sağlık noktası); not eşikler gelince güncellenir.
+  // Sağlık noktası eşikleri proje başınadır (Ayarlar > Raporlar > Eşikler); not eşikler gelince güncellenir.
   const saglikMetni = h('span', {}, esikMetni(ESIKLER));
   const saglikNotu = h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}), saglikMetni, ' ',
-    h('a', { href: '#/ayarlar/arayuz', class: 'kucuk' }, 'Eşikleri değiştir'));
+    h('a', { href: '#/ayarlar/raporlar', class: 'kucuk' }, 'Eşikleri değiştir'));
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Sonuçlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, liste,
@@ -207,14 +207,14 @@ export function sonuclarEkrani(main, parcalar, baglam) {
 /** Genel'in sekme adresleri (#/sonuclar/<sekme>; sol panelde "Genel" seçili kalır). "ekranlar" = eski #/sonuclar. */
 const GENEL_SEKMELERI = ['ozet', 'ekranlar', 'servisler', 'uctan-uca', 'raporlar'];
 
-/** Sağlık noktası eşikleri (proje başına; Ayarlar > Arayüz; varsayılan yeşil ≥ 90, sarı ≥ 75 — ayarlar/saglik-esikleri.mjs ile aynı kural). */
+/** Sağlık noktası eşikleri (proje başına; Ayarlar > Raporlar > Eşikler; varsayılan yeşil ≥ 90, sarı ≥ 75 — ayarlar/saglik-esikleri.mjs ile aynı kural). */
 const VARSAYILAN_ESIKLER = { yesil: 90, sari: 75 };
 let ESIKLER = VARSAYILAN_ESIKLER;
 const esikMetni = (e) => `Son tam koşunun başarı oranı: yeşil ≥ %${e.yesil}, sarı ≥ %${e.sari}, kırmızı altı.`;
 
 /**
  * Oranın (0–100) sağlık sınıfı — Sonuçlar'daki TEK kural (sol listedeki nokta, Özet kutuları): 'basari' | 'uyari' | 'hata';
- * oran yoksa ''. Eşikler projenin Ayarlar > Arayüz > Sağlık noktası değerleridir (Sonuçlar açılırken yüklenir).
+ * oran yoksa ''. Eşikler projenin Ayarlar > Raporlar > Eşikler değerleridir (Sonuçlar açılırken yüklenir).
  * @param {number | null | undefined} o
  */
 export function oranSaglikSinifi(o) {

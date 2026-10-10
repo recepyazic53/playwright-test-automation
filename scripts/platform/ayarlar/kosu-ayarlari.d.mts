@@ -28,7 +28,7 @@ export interface KosuAyarlari {
   taramaKosuAyarlariniKullan: boolean;
   /** Koşu / Deneme onayındaki "Tarayıcı penceresinde izle" seçiminin ön değeri (env yok). */
   tarayiciPenceresindeIzle: boolean;
-  /** Ayarlar > Arayüz > Sonuçlar özeti (Sonuçlar > Genel > Özet kartlarının eşikleri; sonuclar/farkindalik.mjs). */
+  /** Ayarlar > Raporlar > Eşikler (Sonuçlar > Genel > Özet kartlarının eşikleri; sonuclar/farkindalik.mjs). */
   ozetKirmiziGun: number; ozetYavaslamaYuzde: number; ozetKosmayanGun: number; ozetYedekGun: number;
 }
 export interface TaramaEtkinAyarlari { kaynak: 'kosu' | 'ayri'; genislik: number; yukseklik: number; dil: string | null; oturumKontrolSn: number; girisAlanBeklemeSn: number }

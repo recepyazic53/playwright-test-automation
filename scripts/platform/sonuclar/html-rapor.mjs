@@ -42,7 +42,7 @@ import { DEGISIM_ETIKETLERI, DEGISIM_SINIFLARI } from './karsilastirma-hesabi.mj
  * @typedef {{ goruntuler?: boolean; hatalar?: boolean; adres?: boolean; gizliDegerler?: ReadonlyArray<string>; ekAdlar?: ReadonlyArray<string> }} RaporSecenekleri
  */
 
-/** Gömülen görüntülerin toplam en çok boyutunun varsayılanı (base64, bayt; Ayarlar > Arayüz > Raporlar). */
+/** Gömülen görüntülerin toplam en çok boyutunun varsayılanı (base64, bayt; Ayarlar > Raporlar > Eşikler). */
 export const EN_COK_GORUNTU_BAYT = 25 * 1024 * 1024;
 
 /** Kullanıcının görüntü sınırı (Ayarlar > Arayüz > HTML rapora gömülen görüntü sınırı; bayt). @param {Veritabani} vt */

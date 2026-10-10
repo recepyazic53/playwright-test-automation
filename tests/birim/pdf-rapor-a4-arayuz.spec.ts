@@ -198,3 +198,39 @@ test('PDF diyaloğu: Ayarlar > Raporlar bağlantısı; 390 px\'te Raporlar ayarl
   expect([...hatalar, ...dar.hatalar]).toEqual([]);
   await dar.kapat();
 });
+
+test('Ayarlar > Raporlar: üstte Eşikler kartı; uzun listede yalnız kritik / eşikli satırlar, "Tümünü göster (N)" hepsini açar', async () => {
+  const { page, hatalar, kapat } = await sayfaAc();
+  // Uzun servis ve akış listesi (yalnız tarayıcıdaki yanıt değiştirilir; sunucuya yazılmaz): 12 servis (1 kritik, 1 eşikli,
+  // 1 metot eşikli) ve 10 akış (1 kritik).
+  const servisler = Array.from({ length: 12 }, (_, i) => ({ id: `s${i}`, ad: `Servis ${i}`, tur: 'rest', kritik: i === 0, sureEsigiMs: i === 1 ? 500 : null,
+    metotlar: ['GET /a'], metotEsikleri: i === 2 ? { 'GET /a': 300 } : {} }));
+  const akislar = Array.from({ length: 10 }, (_, i) => ({ id: `a${i}`, ad: `Akış ${i}`, tur: 'servis', kritik: i === 3 }));
+  await page.route(/\/platform\/rapor-verileri\?/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ basarili: true, servisler, akislar, ekranlar: [], ekipler: [] }) }));
+  await git(page, '#/ayarlar/raporlar');
+  // Eşikler kartı en üstte (Sonuçlar özeti, HTML rapor görüntü sınırı, sağlık noktası).
+  const esikler = page.locator('.esikler-karti');
+  await expect(page.locator('main .kart').first()).toHaveClass(/esikler-karti/);
+  await expect(esikler.getByLabel('HTML rapora gömülen görüntü sınırı (MB)')).toBeVisible();
+  await expect(esikler.getByRole('form', { name: 'Sağlık noktası' })).toBeVisible();
+  await expect(esikler.getByText('Uzun süredir kırmızı', { exact: false }).first()).toBeVisible();
+
+  const servisListesi = page.getByRole('list', { name: 'Servisler' });
+  await expect(servisListesi.locator('li.rapor-ogesi')).toHaveCount(12);
+  await expect(servisListesi.locator('li.rapor-ogesi:visible')).toHaveCount(3);
+  for (const id of ['s0', 's1', 's2']) await expect(servisListesi.locator(`li[data-oge="servis:${id}"]`)).toBeVisible();
+  await expect(servisListesi.locator('li[data-oge="servis:s5"]')).toBeHidden();
+  const tumu = page.getByRole('button', { name: 'Tümünü göster (12)' });
+  await expect(tumu).toHaveAttribute('aria-expanded', 'false');
+  await tumu.click();
+  await expect(servisListesi.locator('li.rapor-ogesi:visible')).toHaveCount(12);
+  await page.getByRole('button', { name: 'Yalnız işaretlileri göster' }).first().click();
+  await expect(servisListesi.locator('li.rapor-ogesi:visible')).toHaveCount(3);
+
+  const akisListesi = page.getByRole('list', { name: 'Servis akışları ve uçtan uca akışlar' });
+  await expect(akisListesi.locator('li.rapor-ogesi:visible')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Tümünü göster (10)' }).click();
+  await expect(akisListesi.locator('li.rapor-ogesi:visible')).toHaveCount(10);
+  expect(hatalar).toEqual([]);
+  await kapat();
+});

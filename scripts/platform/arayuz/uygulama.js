@@ -25,7 +25,7 @@ import { olusturMenusu } from './olustur-menusu.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { tabloSiralamaKur } from './tablo-siralama.js';
 import { aranabilirSecimKur } from './aranabilir-secim.js';
-import { ayarBolumleri, ayarlarBolumu, ESKI_ADRESLER, UST_SAYFALAR, ustSayfaBolumu } from './ayarlar.js';
+import { ayarBolumleri, ayarlarBolumu, eskiAdresiCoz, UST_SAYFALAR, ustSayfaBolumu } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 import { kasayiKilitleSecimli, kilitBildirimi } from './zamanlanmis-kosular.js';
 import { riskliSecimi } from './ortam-riski.mjs';
@@ -946,7 +946,7 @@ function anaDuzen() {
   const sunucu = sunucuDurumu();
   const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: ayarBolumleri(durum), ustSayfalar: UST_SAYFALAR });
   // Basit mod (basit-mod.js): menü yalnız Testlerim · Sonuçlar · Ayarlar, "Oluştur" yerine "+ Yeni test"; Gelişmiş'e ait sayfanın
-  // üstünde not; sağda Basit / Gelişmiş anahtarı. Kullanım modu iki modda da üst çubuktaki çalışma alanı menüsünde ("Basit moda geç" / "Gelişmiş moda geç"), Ayarlar'ın yan panelinde ve Ayarlar > Arayüz'dedir. Gelişmiş üst çubuğu dolu olduğu için orada ayrı anahtar yoktur.
+  // üstünde not; sağda Basit / Gelişmiş anahtarı. Kullanım modu iki modda da üst çubuktaki çalışma alanı menüsünde ("Basit moda geç" / "Gelişmiş moda geç") ve Ayarlar > Arayüz'dedir (Basit'te ayrıca üst çubuktaki anahtarda). Gelişmiş üst çubuğu dolu olduğu için orada ayrı anahtar yoktur.
   const basit = durum.kullanimModu.mod === 'basit';
   const navTestlerim = basit ? h('a', { href: '#/testlerim' }, ikon('liste'), 'Testlerim') : null;
   const navBasitSonuclar = basit ? h('a', { href: '#/basit-sonuclar' }, ikon('grafik'), 'Sonuçlar') : null;
@@ -972,9 +972,10 @@ function anaDuzen() {
     const guncel = () => nesil === cizimNesli;
     const hash = location.hash || (basit ? '#/testlerim' : '#/sonuclar');
     const [, bolum, alt, ...kalan] = hash.split('/');
-    // Ayarlar'dan taşınan sayfaların eski adresleri (yer imleri, eski bağlantılar): geçmişe eklemeden yeni adrese.
-    if (bolum === 'ayarlar' && alt && Object.hasOwn(ESKI_ADRESLER, alt)) {
-      history.replaceState(null, '', ESKI_ADRESLER[alt]);
+    // Taşınan / birleşen Ayarlar sayfalarının eski adresleri (yer imleri, eski bağlantılar): geçmişe eklemeden yeni adrese.
+    const eskiYeni = bolum === 'ayarlar' ? eskiAdresiCoz(alt, kalan) : null;
+    if (eskiYeni) {
+      history.replaceState(null, '', eskiYeni);
       ciz();
       return;
     }
@@ -1064,7 +1065,7 @@ function anaDuzen() {
   if (basit && !location.hash) history.replaceState(null, '', '#/testlerim');
   cizVeRehber();
   // Ana sayfa (açılış / yeniden yükleme / kilit açma): yedekten yükleme izinleri değiştirdiyse bir kez uyarı penceresi.
-  void yedekUyarisiniGoster({ izinlereGit: () => { location.hash = '#/ayarlar/izinler'; } });
+  void yedekUyarisiniGoster({ izinlereGit: () => { location.hash = '#/ayarlar/guvenlik/izinler'; } });
 }
 
 /**
@@ -1105,9 +1106,8 @@ function ayarlarEkrani(main, bolum, odak = null) {
     ayarBolumleri(durum).map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Ayarlar'),
     h('div', { class: 'kabuk-duzen' },
-      h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav,
-        // Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): Anahtar üst çubukta ve burada da durur.
-        h('div', { class: 'kullanim-modu-secimi' }, h('span', { class: 'kucuk soluk' }, 'Kullanım modu'), modAnahtari(durum.kullanimModu.mod, (hedef) => moduDegistir(hedef)))),
+      // Kullanım modu (Basit / Gelişmiş) yan panelde değil: Ayarlar > Arayüz'de, çalışma alanı menüsünde ve Basit'te üst çubukta.
+      h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav),
       icerik));
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak, moduDegistir, yeniProje: () => sihirbaz('proje', 'ek') });
 }

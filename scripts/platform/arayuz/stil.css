@@ -3853,6 +3853,10 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .izin-soru { width: 28px; height: 28px; }
 .izin-satiri > p { margin: 6px 0 0; overflow-wrap: anywhere; }
 .izin-risk { color: var(--metin-2); }
+/* İzin satırının kapalı başlayan "Ayrıntı" açılırı (neler yapabilir, nerelerde, hangi işlemlerde, riski, kapalıyken). */
+.izin-ayrinti { margin-top: 6px; }
+.izin-ayrinti > summary { cursor: pointer; font-size: 12.5px; color: var(--metin-2); width: fit-content; }
+.izin-ayrinti > summary:hover { color: var(--metin); }
 .izin-aciklama { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--cizgi); font-size: 13px; overflow-wrap: anywhere; }
 .izin-aciklama h4 { margin: 10px 0 4px; font-size: 12.5px; }
 .izin-aciklama h4:first-child { margin-top: 0; }
@@ -4255,6 +4259,7 @@ dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywher
 .paket-modu > legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }
 
 /* Ayarlar > Raporlar (PDF rapor A4): öğe başına kritik anahtarı, ekip, süre eşiği; servis için metot eşikleri. Dar ekranda alt alta. */
+.rapor-ogeleri-notu { margin: 0 0 8px; }
 .rapor-ogeleri { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 8px; }
 .rapor-ogesi { padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
 .rapor-ogesi-adi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; overflow-wrap: anywhere; min-width: 0; }
@@ -4726,3 +4731,14 @@ tr.kayit-duzenleme > td { padding: 12px; background: var(--panel-2); }
 .bulgu-ayrintisi { margin-top: 4px; }
 .bulgu-ayrintisi > summary { cursor: pointer; font-size: 12.5px; color: var(--metin-2); }
 .etki-paneli.satir-ici { margin-top: 6px; padding: 10px 12px; border-radius: var(--yaricap, 8px); background: var(--panel-2); }
+
+/* Ayarlar: bölüm içindeki alt bölüm (Koşu > Kurtarma kuralları / Hata pencereleri; Güvenlik ve erişim > Güvenlik / İzinler / Ekip).
+   Başlık kart değildir (katlanmaz); bölümleri ayıran ince çizgiyle başlar. */
+.ayar-alt-bolum { margin-top: var(--b5, 28px); padding-top: var(--b3, 14px); border-top: 1px solid var(--cizgi); min-width: 0; }
+.ayar-alt-bolum:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.ayar-alt-bolum-basligi { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 15px; }
+.ayar-alt-bolum-basligi:focus { outline: none; }
+.ayar-alt-bolum > p.soluk { margin: 0 0 12px; }
+.esikler-karti .gomulu-ayar-formu + .gomulu-ayar-formu { margin-top: 14px; }
+.esikler-karti .saglik-esikleri { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--cizgi); }
+.esikler-karti .saglik-esikleri h4 { margin: 0 0 6px; }

@@ -1,6 +1,6 @@
-// Ayarlar > Ekip (yalnız Admin): dosyayı açabilecek kişiler ve rolleri. Sunucu: GET /platform/ekip, POST /platform/ekip/kaydet
+// Ayarlar > Güvenlik ve erişim > Ekip (#/ayarlar/guvenlik/ekip; eski #/ayarlar/ekip yönlenir; yalnız Admin): dosyayı açabilecek kişiler ve rolleri. Sunucu: GET /platform/ekip, POST /platform/ekip/kaydet
 // (ekip.mjs). Liste boşken herkes açabilir; dolunca dosyayı yalnız listedeki kullanıcı adları açar. Liste ortak yayınla diğer
-// bilgisayarlara gider (Yedekleme > Ekip paylaşımı).
+// bilgisayarlara gider (Yedekleme ve saklama > Ekip paylaşımı).
 import { api, bildir, h, ikon, mesajKutusu, mesgulIken } from './ortak.js';
 
 const ROLLER = [['admin', 'Admin'], ['kullanici', 'Kullanıcı']];
@@ -41,12 +41,12 @@ export async function ekipBolumu(govde) {
       const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ekip/kaydet', { govde: { uyeler: uyeler.filter((u) => u.ad.trim()) } }));
       uyeler = r.uyeler.map((/** @type {{ ad: string; rol: string }} */ u) => ({ ...u }));
       ciz();
-      bildir('Ekip kaydedildi. Diğer bilgisayarlara gitmesi için Yedekleme > Ekip paylaşımı\'ndan yayınlayın.');
+      bildir('Ekip kaydedildi. Diğer bilgisayarlara gitmesi için Yedekleme ve saklama > Ekip paylaşımı\'ndan yayınlayın.');
     } catch (hata) { mesaj.goster(hata.message); }
   });
   ciz();
-  govde.replaceChildren(h('div', { class: 'kart', role: 'group', 'aria-label': 'Ekip' },
-    h('h3', {}, ikon('kullanici'), 'Ekip'),
+  govde.replaceChildren(h('div', { class: 'kart', role: 'group', 'aria-label': 'Kişiler ve roller' },
+    h('h3', {}, ikon('kullanici'), 'Kişiler ve roller'),
     h('p', { class: 'soluk' }, 'Bu dosyayı açabilecek kişiler. Dosya açılırken girilen kullanıcı adı bu listede yoksa "Yetkili değilsiniz" denir. ',
       'Admin bu bölümü görür ve listeyi düzenler; Kullanıcı bu bölümü görmez. Girişteki ad, yayınlarda "kim yaptı" olarak görünür.'),
     h('p', { class: 'soluk kucuk' }, ben ? `Giriş yapan: ${ben}` : 'Dosyayı kullanıcı adı yazmadan açtınız. Listeye kendinizi Admin olarak eklemeyi unutmayın.'),

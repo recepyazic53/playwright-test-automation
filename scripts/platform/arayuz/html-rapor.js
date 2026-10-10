@@ -24,10 +24,10 @@ function raporDiyalogu(hedef) {
     return { girdi, satir: h('label', { class: 'onay-satiri', for: girdi.id }, girdi, h('span', {}, etiket, aciklama ? h('span', { class: 'soluk kucuk rapor-secenek-notu' }, aciklama) : null)) };
   };
   const goruntu = kutu('Ekran görüntülerini ekle', false, 'Kasadaki şifreli görüntüler çözülüp rapora gömülür (en çok 25 MB). Dosya büyür.');
-  // Sınır kullanıcının kararıdır (Ayarlar > Arayüz > Raporlar); metin ayar gelince güncellenir.
+  // Sınır kullanıcının kararıdır (Ayarlar > Raporlar > Eşikler); metin ayar gelince güncellenir.
   void kullaniciAyarlari().then((a) => {
     const not = goruntu.satir.querySelector('.rapor-secenek-notu');
-    if (not && Number(a.raporGoruntuSiniriMb) > 0) not.textContent = `Kasadaki şifreli görüntüler çözülüp rapora gömülür (en çok ${a.raporGoruntuSiniriMb} MB; Ayarlar > Arayüz). Dosya büyür.`;
+    if (not && Number(a.raporGoruntuSiniriMb) > 0) not.textContent = `Kasadaki şifreli görüntüler çözülüp rapora gömülür (en çok ${a.raporGoruntuSiniriMb} MB; Ayarlar > Raporlar > Eşikler). Dosya büyür.`;
   });
   const hatalar = kutu('Hata mesajlarını ekle', true, 'İlk satırlar, Beklenen / Görülen ve hata kalıpları (maskeli).');
   const adres = kutu('Ortam adresini göster', false, 'Kapalıyken hata metinlerindeki ortam adresi de gizlenir.');

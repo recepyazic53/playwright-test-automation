@@ -10,7 +10,7 @@
 //   - Sabit tarihi eskiyen senaryolar ve son sonuçlar: senaryo-servisi.mjs > senaryoListesi. Bekleyen bulgular: ekran-servisi.mjs >
 //     ekranListesi. Denenmemiş koşul dalları: senaryo-onerileri.mjs'nin kapsam ölçüsü (öneri bağlamı sunucuda kurulur; ekran başına sayı).
 //   - Kırmızı: sağlık noktası eşiği (ayarlar/saglik-esikleri.mjs, sarı eşiğin altı) — ekran: tam koşu, servis: gün, akış: koşu.
-// EŞİKLER kullanıcı kararıdır (Ayarlar > Arayüz > Sonuçlar özeti; ayarlar/kosu-ayarlari.mjs): ozetKirmiziGun, ozetYavaslamaYuzde,
+// EŞİKLER kullanıcı kararıdır (Ayarlar > Raporlar > Eşikler; ayarlar/kosu-ayarlari.mjs): ozetKirmiziGun, ozetYavaslamaYuzde,
 // ozetKosmayanGun, ozetYedekGun. Kodda kullanıcıya özgü değer yoktur.
 // GİZLİLİK: maddelerde yalnız AD ve SAYI vardır (değer, hata metni, gövde yok). Adlar gösterim maskesinden geçer (bilinen gizli
 // değerler; gosterim-maskesi.mjs), yol / metot adları ayrıca metin maskesinden (sorgu dizesi, uzun rakam, e-posta).
@@ -60,7 +60,7 @@ export const ONBELLEK_MS = 60_000;
 /** Kırmızı serisinde geriye bakılan en çok gün. */
 export const KIRMIZI_GERIYE_BAKIS_GUN = GERIYE_BAKIS_GUN;
 
-/** Eşik ayarlarının anahtarları (Ayarlar > Arayüz > Sonuçlar özeti). */
+/** Eşik ayarlarının anahtarları (Ayarlar > Raporlar > Eşikler). */
 export const ESIK_ANAHTARLARI = Object.freeze(['ozetKirmiziGun', 'ozetYavaslamaYuzde', 'ozetKosmayanGun', 'ozetYedekGun']);
 
 /** @param {unknown} z */
@@ -342,7 +342,7 @@ async function hesapla(vt, projeId, x) {
     for (const k of calisanKurallar(vt, projeId, { bas: donemBilgisi.bas, bit: donemBilgisi.bit })) {
       const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine başarısız oldu` : '',
         k.tekrarlanmadi ? `${k.tekrarlanmadi} tekrar denenmedi` : ''].filter(Boolean);
-      dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/kurtarma' });
+      dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/kosu/kurtarma' });
     }
   }, undefined);
 

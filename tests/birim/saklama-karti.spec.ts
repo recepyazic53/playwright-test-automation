@@ -1,7 +1,7 @@
 // KORUMA TESTLERİ — Saklama sadeleştirmesi (S2): dört saklama kuralı (koşu sonuçlarını sakla, medyayı incelt, rapor saklama,
-// video saklama) Ayarlar > Yedekleme'de TEK "Saklama" kartında ve tek zaman çizelgesinde. Ayar anahtarları ve davranış aynı:
+// video saklama) Ayarlar > Yedekleme ve saklama'da TEK "Saklama" kartında ve tek zaman çizelgesinde. Ayar anahtarları ve davranış aynı:
 // ilk üçü koşu ayarlarında, video saklama güvenlik ayarında (medya) kalır; kayıtlı değerler korunur, tek Kaydet ikisini yazar.
-// Güvenlik sayfasında yalnız bağlantı kalır. Güvenlik: yalnız 127.0.0.1'deki geçici Nöbetçi; dışarıya istek yok.
+// Güvenlik ve erişim'de video saklama tekrarlanmaz (aynı ayar yalnız Saklama kartında). Güvenlik: yalnız 127.0.0.1'deki geçici Nöbetçi; dışarıya istek yok.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,7 +36,7 @@ test.describe('Ayarlar > Yedekleme > Saklama', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('dört kural tek kartta, kayıtlı değerler korunur, çizelge sıralı; tek Kaydet iki ayarı da yazar; Güvenlik\'te bağlantı; 390 px taşmasız', async () => {
+  test('dört kural tek kartta, kayıtlı değerler korunur, çizelge sıralı; tek Kaydet iki ayarı da yazar; Güvenlik\'te tekrar yok; 390 px taşmasız', async () => {
     test.setTimeout(90_000);
     // Önceden kayıtlı (varsayılan dışı) değerler: eski yerlerindeki anahtarlarla.
     expect((await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { sonucSaklamaGun: 200, medyaInceltme: 'hatali', medyaInceltmeGun: 45, medyaInceltmeKoru: false, raporSaklamaGun: '180', otomatikYedekSayisi: 12 } })).basarili).toBe(true);
@@ -89,14 +89,14 @@ test.describe('Ayarlar > Yedekleme > Saklama', () => {
     expect((await nobetciApi(nobetci, '/platform/kosu-ayarlari')).ayarlar).toMatchObject({ sonucSaklamaGun: 0, medyaInceltme: 'hatali', medyaInceltmeGun: 45, medyaInceltmeKoru: false, raporSaklamaGun: '180', otomatikYedekSayisi: 12 });
     expect(await nobetciApi(nobetci, '/platform/guvenlik')).toMatchObject({ videoSaklamaGun: 20 });
 
-    // Güvenlik: video saklama alanı yok, mevcut değer + Yedekleme'ye bağlantı.
+    // Güvenlik ve erişim: video saklama kartı yok (aynı ayar /platform/guvenlik > videoSaklamaGun yalnız Saklama kartında).
     await page.goto('/#/ayarlar/guvenlik');
-    const vs = page.getByRole('group', { name: 'Video saklama süresi' });
-    await expect(vs).toContainText('Şu an: 20 gün');
-    await expect(vs.locator('input')).toHaveCount(0);
-    await vs.getByRole('link', { name: /Saklama'ya git/ }).click();
-    await expect(page).toHaveURL(/#\/ayarlar\/yedekleme$/);
-    await expect(page.getByRole('form', { name: 'Saklama ayarları' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Güvenlik ve erişim' })).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Maskeleme' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Video saklama süresi' })).toHaveCount(0);
+    await expect(page.getByText(/Video saklama/)).toHaveCount(0);
+    await page.goto('/#/ayarlar/yedekleme');
+    await expect(page.getByRole('form', { name: 'Saklama ayarları' }).getByLabel(/Video saklama süresi \(gün\)/)).toHaveValue('20');
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(300);

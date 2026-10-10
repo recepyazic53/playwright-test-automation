@@ -1,4 +1,4 @@
-// SAĞLIK NOKTASI EŞİKLERİ (Ayarlar > Arayüz > Sağlık noktası; PROJE BAŞINA) — Sonuçlar ekranında ekranın yanındaki noktanın rengi son
+// SAĞLIK NOKTASI EŞİKLERİ (Ayarlar > Raporlar > Eşikler; PROJE BAŞINA) — Sonuçlar ekranında ekranın yanındaki noktanın rengi son
 // koşunun başarı oranına göre: oran ≥ yeşil eşiği → yeşil, ≥ sarı eşiği → sarı, altı → kırmızı. Varsayılan 90 / 75 (önceki sabitler).
 // Kasada (ayarlar tablosu, anahtar "saglikEsikleri", { projeId: { yesil, sari } }) şifreli saklanır.
 import { DepoHatasi, ayarGetir, ayarYaz, projeGetir } from '../veritabani/depo.mjs';

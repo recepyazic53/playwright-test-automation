@@ -1,5 +1,5 @@
-// Ayarlar bölümleri: Proje ve ortamlar, Giriş profilleri, Bağlam profilleri, Test verisi,
-// Yedekleme, Güvenlik. Tüm veriler /platform/* uç noktalarından gelir; gizli değerler
+// Ayarlar bölümleri (8): Proje ve ortamlar, Giriş profilleri, Koşu (+ Kurtarma kuralları, Hata pencereleri), Yedekleme ve saklama,
+// Güvenlik ve erişim (+ İzinler, yalnız Admin'e Ekip), Entegrasyonlar, Raporlar (+ Eşikler), Arayüz. Tüm veriler /platform/* uç noktalarından gelir; gizli değerler
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import { ekipBolumu } from './ekip.js';
@@ -30,26 +30,33 @@ import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, ris
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (adı ve açıklamayı düzenle, varsayılan yap, sil) ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
-  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: kanıt düzeyi ve ortam hızı profilleri, yeniden deneme ve süre limiti; tüm ayrıntılar (video / ekran görüntüsü / iz kaydı, bekleme süreleri, servis zaman aşımı, tarih biçimi, tarama / akış kaydı) Gelişmiş\'te. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
-  // Kurtarma kuralları eskiden "Proje ve ortamlar" sayfasının dibindeydi; orada "taşındı" bağlantısı kalır (adres: #/ayarlar/kurtarma).
-  { ad: 'kurtarma', etiket: 'Kurtarma kuralları', ikon: 'yenile', aciklama: 'Koşuda bilinen geçici bir sorun görülünce ne yapılacağı: "şu görülürse şunu yap" kuralları (ör. oturum bitti yazısı → girişi yenile, HTTP 503 → bekleyip tekrar gönder). Proje düzeyindedir; ekran ve servis kuralları, kapsam (ekranlar / servisler, ortamlar) ve son 7 günde kaç kez çalıştıkları burada.' },
-  { ad: 'hata-pencereleri', etiket: 'Hata pencereleri', ikon: 'uyari', aciklama: 'Sitenin hata / uyarı mesajını gösterdiği pencereler (ör. sayfa içi uyarı kutusu). Koşu bir adımı beklerken önce ekranın kendi göstergelerine bakar; onlar bir şey söylemiyorken buradaki bir pencere görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır. Proje düzeyindedir; "Sayfada seç" ile görsel olarak tanımlanır.' },
-  { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Saklama kartı dört saklama kuralını (koşu sonuçları, medya inceltme, rapor ve video saklama) ve otomatik yedek sayısını tek zaman çizelgesinde gösterir.' },
-  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
-  { ad: 'ekip', etiket: 'Ekip', ikon: 'kullanici', yalnizAdmin: true, aciklama: 'Bu dosyayı açabilecek kişiler ve rolleri (Admin / Kullanıcı). Liste doluysa dosyayı yalnız listedeki kullanıcı adları açar; bu bölümü yalnız Admin görür.' },
-  { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; bir izin paketiyle birkaçını tek onayla ya da tek tek açarsınız. Açtığınız izinler kasada saklanır.' },
+  // Kurtarma kuralları ve Hata pencereleri eskiden ayrı bölümlerdi (#/ayarlar/kurtarma, #/ayarlar/hata-pencereleri); artık Koşu'nun
+  // içinde kendi başlıklarıyla durur. Eski adresler ESKI_ADRESLER ile buraya yönlenir.
+  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı (kanıt düzeyi, ortam hızı, yeniden deneme, süreler), hata sınıflandırma kuralları, kurtarma kuralları ve hata pencereleri. Değişiklik sonraki koşulardan itibaren geçerlidir.' },
+  { ad: 'yedekleme', etiket: 'Yedekleme ve saklama', ikon: 'arsiv', aciklama: 'Şifreli yedek dosyasını dışa / içe aktarın, otomatik yedekleri ve ekip paylaşımını yönetin. Saklama kartı koşu sonuçlarının, medyanın, raporların ve videoların ne zaman silineceğini tek çizelgede gösterir.' },
+  // İzinler ve Ekip eskiden ayrı bölümlerdi (#/ayarlar/izinler[/<izin>], #/ayarlar/ekip); artık burada. Ekip kısmını yalnız Admin görür.
+  { ad: 'guvenlik', etiket: 'Güvenlik ve erişim', ikon: 'kalkan', aciklama: 'Kasa kilidi ve parolası, yasak adresler, maskeleme; Nöbetçi\'nin sizin adınıza yapabileceği işlemlerin izinleri ve (yalnız Admin için) dosyayı açabilecek ekip.' },
   { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
-  { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'PDF raporlarının kullandığı kararlarınız: ekip listesi ve ekran / servis → ekip eşlemesi (sahip önerisi), kritik işaretli ekran, servis ve akışlar (öncelik ve durum rozeti) ve süre eşikleri (ekran, servis, metot). Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır.' },
-  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Parlak), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı, listelerin sayfa boyları ve Sonuçlar > Özet kartlarının eşikleri.' }
+  { ad: 'raporlar', etiket: 'Raporlar', ikon: 'grafik', aciklama: 'Eşikler (Sonuçlar özeti, sağlık noktası, HTML rapora gömülen görüntü sınırı) ve PDF raporlarının kararları: kritik işaretli servis ve akışlar, süre eşikleri. Hepsi isteğe bağlıdır; boşken varsayılanlar geçerlidir.' },
+  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm ve davranış: rehberler, tema, kullanım modu (Basit / Gelişmiş), Nöbetçi\'nin nasıl açılacağı, listelerin sayfa boyları ve terimler.' }
 ];
 
+/** Ayarlar > Arayüz'den Raporlar > Eşikler'e taşınan ayar grupları (anahtarlar ve kayıt yeri aynı; kosu-ayarlari.mjs, bolum 'arayuz'). */
+const ESIK_GRUPLARI = Object.freeze(['Sonuçlar özeti', 'Raporlar']);
+
+/** Dosyayı açan kişi Kullanıcı rolünde mi (Ekip kısmı ona gösterilmez; sunucu da reddeder). @param {any} durum */
+export function kullaniciRolundeMi(durum) {
+  return Boolean(durum && durum.sunucu && durum.sunucu.kullanici && durum.sunucu.kullanici.rol === 'kullanici');
+}
+
 /**
- * Kişinin görebileceği Ayarlar bölümleri: "yalnizAdmin" bölümler (Ekip) Kullanıcı rolündekilere gösterilmez (sunucu da reddeder).
+ * Kişinin görebileceği Ayarlar bölümleri: "yalnizAdmin" işaretli bölüm Kullanıcı rolündekilere gösterilmez (sunucu da reddeder).
+ * Bugün tüm bölümler herkese açıktır; Ekip, "Güvenlik ve erişim" içinde yalnız Admin'e çizilir (kullaniciRolundeMi).
  * @param {any} durum uygulama durumu (durum.sunucu.kullanici: dosyayı açan kişi ve rolü)
  */
 export function ayarBolumleri(durum) {
-  const kullaniciMi = durum && durum.sunucu && durum.sunucu.kullanici && durum.sunucu.kullanici.rol === 'kullanici';
-  return AYAR_BOLUMLERI.filter((b) => !b.yalnizAdmin || !kullaniciMi);
+  const kullaniciMi = kullaniciRolundeMi(durum);
+  return AYAR_BOLUMLERI.filter((b) => !(/** @type {{ yalnizAdmin?: boolean }} */ (b)).yalnizAdmin || !kullaniciMi);
 }
 
 /**
@@ -62,9 +69,27 @@ export const UST_SAYFALAR = [
   { ad: 'planli-kosular', menu: 'Planlı koşular', etiket: 'Planlı koşular', ikon: 'tarih', aciklama: 'Nöbetçi\'nin belirli zamanlarda (her gün, haftanın seçili günleri, her N saatte bir) kendiliğinden başlattığı koşular: kurallar, son çalışmalar, kaçan / çakışan zaman davranışı ve kasa kilitliyken çalışma tercihleri. Koşular yalnız Nöbetçi ve kasa açıkken çalışır (tercihlerle değiştirilebilir).' }
 ];
 
-/** Eski adres → yeni adres (Ayarlar'dan taşınan sayfalar; eski yer imleri ve bağlantılar çalışmaya devam eder). */
+/**
+ * Eski adres → yeni adres (taşınan ya da birleşen Ayarlar bölümleri; eski yer imleri ve bağlantılar çalışmaya devam eder).
+ * Alt yollu eski adresler (#/ayarlar/izinler/<izin>, #/ayarlar/kurtarma/yeni) eskiAdresiCoz ile çözülür.
+ */
 export const ESKI_ADRESLER = Object.freeze({ 'test-verisi': '#/veri', baglam: '#/veri', 'zamanlanmis-kosular': '#/planli-kosular', 'planli-kosular': '#/planli-kosular',
-  'kurtarma-kurallari': '#/ayarlar/kurtarma' });
+  kurtarma: '#/ayarlar/kosu/kurtarma', 'kurtarma-kurallari': '#/ayarlar/kosu/kurtarma', 'hata-pencereleri': '#/ayarlar/kosu/hata-pencereleri',
+  izinler: '#/ayarlar/guvenlik/izinler', ekip: '#/ayarlar/guvenlik/ekip' });
+
+/**
+ * #/ayarlar/<alt>/<kalan…> eski bir adresse yeni adresi döner, değilse null. İzin odağı ("izin:<anahtar>") ve "Kural ekle"
+ * ("kurtarma-yeni") yeni bölümde aynı biçimde çalışır.
+ * @param {string} alt @param {string[]} [kalan] adresin geri kalanı (kodlanmış hâliyle)
+ * @returns {string | null}
+ */
+export function eskiAdresiCoz(alt, kalan = []) {
+  if (!alt || !Object.hasOwn(ESKI_ADRESLER, alt)) return null;
+  const ek = kalan[0] || '';
+  if (ek && alt === 'izinler') return `#/ayarlar/guvenlik/izin:${ek}`;
+  if (ek === 'yeni' && (alt === 'kurtarma' || alt === 'kurtarma-kurallari')) return '#/ayarlar/kosu/kurtarma-yeni';
+  return ESKI_ADRESLER[/** @type {keyof typeof ESKI_ADRESLER} */ (alt)];
+}
 
 const ISLEM_ETIKETI = {
   olustur: 'Oluşturuldu', guncelle: 'Güncellendi', sil: 'Silindi',
@@ -75,7 +100,7 @@ const ISLEM_ETIKETI = {
  * @param {HTMLElement} kapsayici
  * @param {string} bolum
  * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void>; odak?: string | null; yeniProje?: () => void }} baglam
- *   odak: bölüm içinde odaklanılacak öğe (İzinler: #/ayarlar/izinler/<izin anahtarı>). yeniProje: Projeler başlığındaki "Proje ekle" (proje sihirbazı).
+ *   odak: bölüm içinde odaklanılacak öğe (ör. #/ayarlar/guvenlik/izin:<izin anahtarı>, #/ayarlar/kosu/kurtarma). yeniProje: Projeler başlığındaki "Proje ekle" (proje sihirbazı).
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const tanim = ayarBolumleri(baglam.durum).find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
@@ -91,9 +116,8 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   bolumAciklamalariniSimgeye(govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
-    proje: projeVeOrtamlar, giris: girisProfilleri,
-    entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
-    kosu: kosuAyarlari, kurtarma: kurtarmaKurallariSayfasi, 'hata-pencereleri': hataPencereleriSayfasi, yedekleme, guvenlik, ekip: ekipBolumu, arayuz: arayuzAyarlari, raporlar: raporVerileriBolumu
+    proje: projeVeOrtamlar, giris: girisProfilleri, entegrasyonlar: entegrasyonlarBolumu,
+    kosu: kosuAyarlari, yedekleme, guvenlik: guvenlikVeErisim, arayuz: arayuzAyarlari, raporlar: raporlarBolumu
   }[bolum] || projeVeOrtamlar;
   // Kartlar başlığıyla görünür, tıklayınca açılır (kart-katla.js).
   kartlariKatlanirYap(govde, bolum);
@@ -383,13 +407,24 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
 }
 
 /**
- * Ayarlar > Kurtarma kuralları (eskiden Proje ve ortamlar sayfasının dibinde). Proje yoksa kısa not.
- * #/ayarlar/kurtarma/yeni: "Kural ekle" penceresi açık gelir (hızlı aramadaki "Kurtarma kuralı ekle").
+ * Bir Ayarlar bölümünün içindeki alt bölüm (ör. Koşu > Hata pencereleri, Güvenlik ve erişim > İzinler): ayırıcı başlık + kısa
+ * açıklama + içerik. Başlık bir kart değildir (katlanmaz); içerideki kartlar her zamanki gibi açılır / kapanır.
+ * @param {string} ad adres odağı ve kimlik (ör. 'hata-pencereleri') @param {string} ikonAd @param {string} baslik
+ * @param {string | null} aciklama @param {...any} icerik
  */
-function kurtarmaKurallariSayfasi(govde, baglam) {
-  const proje = baglam.durum.proje;
-  if (!proje) { yerlestir(govde, bosDurum('Önce bir proje seçin.', null, { ikon: 'yenile', rol: 'status' })); return; }
-  yerlestir(govde, kurtarmaKurallariBolumu(proje, { sayfa: true, yeniKural: baglam.odak === 'yeni' }));
+function altBolum(ad, ikonAd, baslik, aciklama, ...icerik) {
+  return h('section', { class: 'ayar-alt-bolum', 'data-alt-bolum': ad, 'aria-labelledby': `ayar-alt-${ad}` },
+    h('h3', { class: 'ayar-alt-bolum-basligi', id: `ayar-alt-${ad}` }, ikon(ikonAd), baslik),
+    aciklama ? h('p', { class: 'soluk kucuk' }, aciklama) : null, ...icerik);
+}
+
+/** Bölüm içindeki alt bölüme kaydırır (adresle gelince; ör. #/ayarlar/kosu/hata-pencereleri). @param {HTMLElement} govde @param {string} ad */
+function altBolumeKaydir(govde, ad) {
+  const hedef = govde.querySelector(`[data-alt-bolum="${CSS.escape(ad)}"]`);
+  if (!(hedef instanceof HTMLElement)) return;
+  hedef.scrollIntoView({ block: 'start' });
+  /** @type {HTMLElement | null} */ (hedef.querySelector('h3'))?.setAttribute('tabindex', '-1');
+  /** @type {HTMLElement | null} */ (hedef.querySelector('h3'))?.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -942,15 +977,39 @@ function sonucTemizlemeKarti() {
     mesaj.kutu, alan('Kapsam', kapsam), gunAlani, h('div', { class: 'dugmeler' }, say, sil));
 }
 
-/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları (planlı koşular üst menüde: Planlı koşular). */
+/**
+ * Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları + Kurtarma kuralları + Hata pencereleri (son ikisi eskiden ayrı
+ * bölümdü; proje düzeyindedir). Planlı koşular üst menüdedir. Adres odağı: #/ayarlar/kosu/<ayar anahtarı> | kurtarma |
+ * kurtarma-yeni ("Kural ekle" penceresi açık gelir) | hata-pencereleri.
+ */
 async function kosuAyarlari(govde, baglam) {
   const proje = baglam && baglam.durum ? baglam.durum.proje : null;
+  const odakAdi = baglam && baglam.odak ? baglam.odak : '';
   const [form, kurallar] = await Promise.all([
     ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', proje ? { projeId: proje.id } : {}), siniflandirmaKarti()
   ]);
   const tasindi = h('p', { class: 'not-kutusu bilgi tasindi-notu', role: 'note' }, 'Planlı koşular (kurallar, kaçan / çakışan zaman davranışı, kasa kilitliyken çalışma) artık üst menüde: ',
     h('a', { href: '#/planli-kosular' }, 'Planlı koşular'), '.');
-  yerlestir(govde, form, kurallar, tasindi);
+  /** @type {HTMLElement[]} */
+  let projeBolumleri;
+  if (proje) {
+    const hataAlani = h('div', { class: 'hata-pencereleri-alani' }, iskelet('liste'));
+    hataPencereleriSayfasi(hataAlani, baglam).catch((hata) => {
+      if (hata && hata.durum === 423) return;
+      yerlestir(hataAlani, h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)));
+    });
+    projeBolumleri = [
+      altBolum('kurtarma', 'yenile', 'Kurtarma kuralları', null, kurtarmaKurallariBolumu(proje, { sayfa: true, yeniKural: odakAdi === 'kurtarma-yeni' })),
+      altBolum('hata-pencereleri', 'uyari', 'Hata pencereleri', 'Sitenin hata / uyarı mesajını gösterdiği pencereler. Koşu bir adımı beklerken bunlardan biri görünürse adım beklemeden başarısız olur ve pencerenin metni hata iletisine yazılır.', hataAlani)
+    ];
+  } else {
+    projeBolumleri = [h('p', { class: 'not-kutusu bilgi', role: 'note' }, 'Kurtarma kuralları ve hata pencereleri proje düzeyindedir; görmek için önce bir proje seçin.')];
+  }
+  yerlestir(govde, form, kurallar, ...projeBolumleri, tasindi);
+  if (odakAdi === 'kurtarma' || odakAdi === 'kurtarma-yeni' || odakAdi === 'hata-pencereleri') {
+    altBolumeKaydir(govde, odakAdi === 'kurtarma-yeni' ? 'kurtarma' : odakAdi);
+    return;
+  }
   // #/ayarlar/kosu/<ayar anahtarı> (ör. giriş tarifindeki "Oturum kontrolü" bağlantısı, hızlı arama): ayarın bulunduğu kapalı
   // "Gelişmiş" açılır, alan görünür alana gelir ve odaklanır.
   const odak = baglam && baglam.odak ? form.querySelector(`[data-ayar="${CSS.escape(baglam.odak)}"]`) : null;
@@ -1091,6 +1150,7 @@ function kosuProfilSecimleri(tanimlar) {
  * altBolum 'gelismis' tanımları açılır "Gelişmiş koşu davranışı" kısmındadır (varsayılan kapalı; her ayarın varsayılanı önceki davranış).
  * @param {'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
  * @param {{ baslik?: string; kaydedildi?: (ayarlar: Record<string, unknown>) => void; projeId?: string; sinif?: string; basliklar?: Node[];
+ *   gruplar?: readonly string[]; haricGruplar?: readonly string[];
  *   ek?: { ust?: Node; alanlar: Node[]; dogrula: () => boolean; kaydet: () => Promise<void>; degisti?: (d: Record<string, unknown>) => void } }} [secenek]
  *   baslik: formun üstünde başlık (kart / diyalog içinde gömülü form); kaydedildi: kayıt başarılı olunca çağrılır; projeId: giriş
  *   tarifli ortam uyarısı (ekran eşzamanlılığı) için; sinif / basliklar: kartın ek sınıfı ve üstteki başlık öğeleri; ek: aynı "Kaydet"
@@ -1098,7 +1158,9 @@ function kosuProfilSecimleri(tanimlar) {
  */
 async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const { ayarlar, tanimlar: tumu } = await api('/platform/kosu-ayarlari');
-  const tanimlar = tumu.filter((t) => (t.bolum || 'kosu') === bolum);
+  // gruplar / haricGruplar: bölümün yalnız bu grupları (ör. Raporlar > Eşikler) ya da bu gruplar dışındakiler (Arayüz).
+  const tanimlar = tumu.filter((t) => (t.bolum || 'kosu') === bolum
+    && (!secenek.gruplar || secenek.gruplar.includes(t.grup)) && !(secenek.haricGruplar || []).includes(t.grup));
   const mesaj = mesajKutusu();
   /** @type {Map<string, HTMLElement>} */
   const girdiler = new Map();
@@ -1316,6 +1378,35 @@ async function maskelemeKarti() {
   return form;
 }
 
+/**
+ * Ayarlar > Güvenlik ve erişim: Güvenlik (kasa, otomatik kilit, yasak adresler, maskeleme, parola) + İzinler + Ekip (yalnız Admin;
+ * Kullanıcı rolünde çizilmez, sunucu da reddeder). Adres odağı: izinler | izin:<izin anahtarı> (satıra kaydırılır, anahtar
+ * odaklanır) | ekip.
+ * @param {HTMLElement} govde @param {any} baglam
+ */
+async function guvenlikVeErisim(govde, baglam) {
+  const odak = baglam && baglam.odak ? String(baglam.odak) : '';
+  const guvenlikAlani = h('div', { class: 'guvenlik-alani' }, iskelet('liste'));
+  const izinAlani = h('div', { class: 'izinler-alani' }, iskelet('liste'));
+  const ekipAlani = kullaniciRolundeMi(baglam.durum) ? null : h('div', { class: 'ekip-alani' }, iskelet('liste'));
+  yerlestir(govde,
+    altBolum('guvenlik', 'kalkan', 'Güvenlik', null, guvenlikAlani),
+    altBolum('izinler', 'kilit', 'İzinler', 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler. Hepsi varsayılan olarak kapalıdır; bir paketle birkaçını tek onayla ya da tek tek açarsınız.', izinAlani),
+    ekipAlani ? altBolum('ekip', 'kullanici', 'Ekip', 'Bu dosyayı açabilecek kişiler ve rolleri. Bu kısmı yalnız Admin görür.', ekipAlani) : null);
+  const izinOdagi = odak.startsWith('izin:') ? odak.slice('izin:'.length) : null;
+  // Her parça kendi alanında hata gösterir (biri yüklenemezse diğerleri çalışır); kasa kilitliyse (423) kabuk kilit ekranına geçer.
+  const parca = (/** @type {HTMLElement} */ alan, /** @type {Promise<unknown>} */ soz) => soz.catch((hata) => {
+    if (hata && hata.durum === 423) throw hata;
+    yerlestir(alan, h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)));
+  });
+  await Promise.all([
+    parca(guvenlikAlani, guvenlik(guvenlikAlani, baglam)),
+    parca(izinAlani, izinlerBolumu(izinAlani, { odak: izinOdagi })),
+    ekipAlani ? parca(ekipAlani, ekipBolumu(ekipAlani)) : null
+  ]);
+  if (odak === 'izinler' || (odak === 'ekip' && ekipAlani)) altBolumeKaydir(govde, odak);
+}
+
 async function guvenlik(govde, baglam) {
   const [ayar, maskeleme] = await Promise.all([api('/platform/guvenlik'), maskelemeKarti()]);
   const dakika = h('input', { type: 'number', min: String(ayar.enAz), max: String(ayar.enCok), step: '1', value: String(ayar.otomatikKilitDakika), inputmode: 'numeric' });
@@ -1337,11 +1428,8 @@ async function guvenlik(govde, baglam) {
       kilitMesaj.goster(`Kasa ${dk} dakika hareketsizlikten sonra kilitlenecek.`, 'basari');
     } catch (hata) { kilitMesaj.goster(hata.message); }
   });
-  // Video saklama süresi artık Ayarlar > Yedekleme > Saklama kartında (diğer saklama kurallarıyla tek zaman çizelgesinde);
-  // burada yalnız mevcut değer ve bağlantı kalır.
-  const saklamaForm = h('div', { class: 'kart', role: 'group', 'aria-label': 'Video saklama süresi' }, h('h3', {}, ikon('video'), 'Video saklama süresi'),
-    h('p', { class: 'soluk' }, `Şu an: ${ayar.videoSaklamaGun} gün. Video saklama, diğer saklama kurallarıyla birlikte tek kartta ve tek zaman çizelgesinde ayarlanır.`),
-    h('div', { class: 'dugmeler' }, h('a', { class: 'dugme', href: '#/ayarlar/yedekleme' }, ikon('saat'), 'Yedekleme > Saklama\'ya git')));
+  // Video saklama süresi (aynı ayar: /platform/guvenlik > videoSaklamaGun) yalnız Ayarlar > Yedekleme ve saklama > Saklama
+  // kartındadır; burada ayrıca gösterilmez.
   // Yasak adresler: Nöbetçi'nin HİÇBİR ZAMAN bağlanmayacağı host kalıpları (koşular ve ekran taraması reddedilir).
   const yasakMetni = h('textarea', { rows: '4', spellcheck: 'false', autocomplete: 'off', placeholder: 'ör. *.sirket-ici.local\nuretim.ornek.com', value: (ayar.yasakAdresler || []).join('\n') });
   const yasakMesaj = mesajKutusu();
@@ -1406,10 +1494,31 @@ async function guvenlik(govde, baglam) {
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('kalkan'), 'Kasayı kilitle'),
       h('span', { class: 'alt' }, rozet([h('span', { class: 'nokta basari', 'aria-hidden': 'true' }), 'kasa açık'], 'basari')), h('div', { class: 'sag' }, kilitle)),
     h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
-    h('div', { class: 'ayar-izgarasi esit-boy' }, kilitForm, saklamaForm),
+    kilitForm,
     yasakForm,
     maskeleme,
     form);
+}
+
+// ---------------------------------------------------------------------------------------
+// Ayarlar > Raporlar: üstte "Eşikler" kartı (eskiden Ayarlar > Arayüz'deydi; anahtarlar ve kayıt yerleri aynı), altında PDF rapor
+// kararları (raporVerileriBolumu). Proje seçili değilken yalnız proje dışı eşikler görünür.
+// ---------------------------------------------------------------------------------------
+
+/** @param {HTMLElement} govde @param {any} baglam @param {() => void} yenile */
+async function raporlarBolumu(govde, baglam, yenile) {
+  const proje = baglam && baglam.durum ? baglam.durum.proje : null;
+  const veriAlani = h('div', { class: 'rapor-verileri-alani' }, proje ? iskelet('liste') : null);
+  const [esikFormu, saglik] = await Promise.all([
+    ayarFormu('arayuz', 'Rapor ve özet eşikleri', 'Eşikler kaydedildi.', { gruplar: ESIK_GRUPLARI, baslik: 'Sonuçlar > Özet kartlarının eşikleri ve HTML rapora gömülen görüntü sınırı (tüm projeler için).' }),
+    proje ? saglikEsikleriKarti(proje, { gomulu: true }) : null
+  ]);
+  const esikler = h('section', { class: 'kart esikler-karti', 'aria-labelledby': 'esikler-basligi' },
+    h('h3', { id: 'esikler-basligi' }, ikon('saat'), 'Eşikler'),
+    h('p', { class: 'soluk' }, 'Sonuçlar özetinin ve raporların ne zaman uyarı vereceği. Hepsinin varsayılanı vardır; değiştirmediğiniz sürece bugünkü gibi çalışır.'),
+    esikFormu, saglik);
+  yerlestir(govde, esikler, veriAlani);
+  if (proje) await raporVerileriBolumu(veriAlani, baglam, yenile);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1477,10 +1586,32 @@ async function raporVerileriBolumu(govde, baglam, yenile) {
       h('div', { class: 'rapor-ogesi-alanlari' }, parcalar), metotlar);
   };
 
-  const liste = (baslik, tur, ogeler, bos, rozetFn = () => null) => [
-    bolumBasligi(baslik, ogeler.length),
-    ogeler.length ? h('ul', { class: 'rapor-ogeleri', 'aria-label': baslik }, ogeler.map((x) => ogeSatiri(tur, x, { rozet: rozetFn(x) }))) : h('p', { class: 'soluk' }, bos)
-  ];
+  /** Kararı olan öğe: kritik işaretli ya da (servis) süre / metot eşiği girilmiş. */
+  const isaretli = (x) => Boolean(x.kritik) || (x.sureEsigiMs !== null && x.sureEsigiMs !== undefined)
+    || Boolean(x.metotEsikleri && Object.keys(x.metotEsikleri).length);
+  // Uzun listede (UZUN_LISTE'den fazla öğe) yalnız kararı olan satırlar görünür; "Tümünü göster (N)" hepsini açar (veri değişmez).
+  const UZUN_LISTE = 8;
+  const liste = (baslik, tur, ogeler, bos, rozetFn = () => null) => {
+    if (!ogeler.length) return [bolumBasligi(baslik, 0), h('p', { class: 'soluk' }, bos)];
+    const satirlar = ogeler.map((x) => ({ x, li: ogeSatiri(tur, x, { rozet: rozetFn(x) }) }));
+    const ul = h('ul', { class: 'rapor-ogeleri', 'aria-label': baslik }, satirlar.map((y) => y.li));
+    const gizlenecek = ogeler.length > UZUN_LISTE ? satirlar.filter((y) => !isaretli(y.x)) : [];
+    if (!gizlenecek.length) return [bolumBasligi(baslik, ogeler.length), ul];
+    for (const y of gizlenecek) y.li.hidden = true;
+    const gorunen = ogeler.length - gizlenecek.length;
+    const not = h('p', { class: 'soluk kucuk rapor-ogeleri-notu', role: 'status' },
+      gorunen ? `Kritik işaretli ya da eşiği girilmiş ${gorunen} öğe gösteriliyor.` : 'Henüz kritik işaretli ya da eşiği girilmiş öğe yok.');
+    let acik = false;
+    const dugme = h('button', { type: 'button', class: 'kucuk-dugme rapor-tumunu-goster', 'aria-expanded': 'false' }, `Tümünü göster (${ogeler.length})`);
+    dugme.addEventListener('click', () => {
+      acik = !acik;
+      for (const y of gizlenecek) y.li.hidden = !acik;
+      not.hidden = acik;
+      dugme.setAttribute('aria-expanded', String(acik));
+      dugme.textContent = acik ? 'Yalnız işaretlileri göster' : `Tümünü göster (${ogeler.length})`;
+    });
+    return [bolumBasligi(baslik, ogeler.length), not, ul, h('div', { class: 'dugmeler' }, dugme)];
+  };
   yerlestir(govde,
     h('div', { class: 'not-kutusu bilgi kucuk', role: 'note' },
       'Bu kararlar yalnız PDF raporlarını etkiler ve hepsi isteğe bağlıdır. Kritik işaretli öğe öncelik puanını artırır; son koşusunda kalırsa raporun durum rozeti Kritik olur. Süre eşiği aşılırsa (p95 > eşik) raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür. Uygulama sürümü: Proje ve ortamlar > ortam > "Uygulama sürümü" ya da koşu başlatılırken.'),
@@ -1494,8 +1625,9 @@ async function raporVerileriBolumu(govde, baglam, yenile) {
 
 async function arayuzAyarlari(govde, baglam) {
   const proje = baglam && baglam.durum ? baglam.durum.proje : null;
-  const [{ rehber }, listeFormu, { acilis }, saglik] = await Promise.all([api('/platform/rehber'), ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.'), api('/platform/acilis'),
-    proje ? saglikEsikleriKarti(proje) : null]);
+  // Eşikler (Sonuçlar özeti, HTML rapor görüntü sınırı, sağlık noktası) Ayarlar > Raporlar > Eşikler'dedir; burada yalnız görünüm ve davranış.
+  const [{ rehber }, listeFormu, { acilis }] = await Promise.all([api('/platform/rehber'),
+    ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.', { haricGruplar: ESIK_GRUPLARI }), api('/platform/acilis')]);
   const otomatik = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', id: yeniKimlik('rehber-otomatik'), checked: rehber.otomatik, disabled: rehber.ortamKapali });
   const mesaj = mesajKutusu();
   const sifirla = h('button', { type: 'button' }, ikon('yenile'), 'Tüm rehberleri yeniden göster');
@@ -1537,7 +1669,7 @@ async function arayuzAyarlari(govde, baglam) {
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
           : 'Varsayılan kapalı: rehberler sayfa başlığındaki "Bu sayfanın rehberi" bağlantısıyla ya da üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
-    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), kullanimModuKarti(baglam), acilisKarti(acilis), listeFormu, saglik, terimlerKarti());
+    h('div', { class: 'dugmeler' }, sifirla, tanitim, baslarken)), temaKarti(), kullanimModuKarti(baglam), acilisKarti(acilis), listeFormu, terimlerKarti());
 }
 
 /** Kullanım modu (Basit / Gelişmiş; çalışma alanının ayarı): üst çubuktaki anahtarla aynı ayar. Gelişmiş → Basit sorusuz geçer. */
@@ -1566,16 +1698,20 @@ function terimlerKarti() {
     h('dl', { class: 'terimler-listesi' }, TERIMLER.flatMap((t) => [h('dt', {}, t.terim), h('dd', {}, t.aciklama)])));
 }
 
-/** Sağlık noktası eşikleri (proje başına; Sonuçlar ekranındaki noktanın rengi — ayarlar/saglik-esikleri.mjs). */
-async function saglikEsikleriKarti(proje) {
+/**
+ * Sağlık noktası eşikleri (proje başına; Sonuçlar ekranındaki noktanın rengi — ayarlar/saglik-esikleri.mjs). gomulu: Raporlar >
+ * Eşikler kartının içinde (kart çerçevesi yok, başlık h4).
+ * @param {{ id: string; ad: string }} proje @param {{ gomulu?: boolean }} [secenek]
+ */
+async function saglikEsikleriKarti(proje, secenek = {}) {
   const { esikler, varsayilan } = await api(`/platform/saglik-esikleri?projeId=${encodeURIComponent(proje.id)}`);
   const sayi = (deger) => h('input', { type: 'number', min: '1', max: '100', step: '1', inputmode: 'numeric', value: String(deger) });
   const yesil = sayi(esikler.yesil);
   const sari = sayi(esikler.sari);
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-  const form = h('form', { class: 'kart form-paneli', novalidate: true, 'aria-label': 'Sağlık noktası' },
-    h('h3', {}, ikon('grafik'), 'Sağlık noktası'),
+  const form = h('form', { class: secenek.gomulu ? 'gomulu-ayar-formu saglik-esikleri' : 'kart form-paneli', novalidate: true, 'aria-label': 'Sağlık noktası' },
+    secenek.gomulu ? h('h4', {}, 'Sağlık noktası') : h('h3', {}, ikon('grafik'), 'Sağlık noktası'),
     h('p', { class: 'soluk' }, `Sonuçlar ekranında her ekranın yanındaki nokta son tam koşunun başarı oranına göre renklenir. Bu eşikler yalnız "${proje.ad}" projesi içindir.`),
     mesaj.kutu,
     alan('Yeşil: başarı oranı en az (%)', yesil, { yardim: `1–100. Varsayılan: ${varsayilan.yesil}.` }),

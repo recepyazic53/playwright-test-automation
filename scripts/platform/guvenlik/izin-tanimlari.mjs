@@ -311,5 +311,5 @@ export function izinKapaliNotu(anahtar) {
   return `izin kapalı: ${t ? t.etiket : anahtar}`;
 }
 
-/** Ayarlar > İzinler'de izin satırının adresi (odak). @param {string} anahtar */
-export const izinAdresi = (anahtar) => `#/ayarlar/izinler/${encodeURIComponent(anahtar)}`;
+/** Ayarlar > Güvenlik ve erişim > İzinler'de izin satırının adresi (odak; eski #/ayarlar/izinler/<anahtar> da yönlenir). @param {string} anahtar */
+export const izinAdresi = (anahtar) => `#/ayarlar/guvenlik/izin:${encodeURIComponent(anahtar)}`;

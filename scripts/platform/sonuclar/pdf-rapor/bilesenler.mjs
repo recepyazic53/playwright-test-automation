@@ -530,7 +530,7 @@ export function yontemKutusu(ek = [], rv = null) {
     ['Sorun', 'Aynı imza = öğe + ilk başarısız adım (ekran) / metot (servis) + hata kategorisi / türü + hata kalıbı (maskeli metinden; sayılar “#”).'],
     ['Sorun durumları', 'Yeni: 90 günlük geriye bakışta yok · Artan / Azalan: maruziyete göre oran ≥ 1,5× / ≤ 0,67× ve adet farkı ≥ 2 · Çözülen: bu dönemde senaryoları ≥ 3 kez geçti, hata yok · Tekrar eden: çözülmüştü, geri geldi · Kararsız: başarısızlıkların ≥ %50’si kararsız senaryolardan (aynı senaryo, ortam, model sürümü ve uygulama sürümünde — sürüm kayıtlı değilse aynı günde — geçti↔başarısız değişimi ≥ %20, ≥ 5 koşu).'],
     ['Öncelik puanı', '100 × sınıf katsayısı × (0,30 etki + 0,25 sıklık + 0,20 eğilim + 0,15 kritiklik + 0,10 süreklilik). Sınıf: uygulama 1,0 · test verisi 0,8 · test bakımı 0,7 · ortam 0,6 · kararsız 0,5. Kritiklik: kritik işaretli öğe 1, diğer 0. Sınıf bir tahmindir; dayanağı aksiyon satırında yazar.'],
-    ['Durum rozeti', 'Sağlıklı: dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik: < sarı eşik ya da kapsamdaki kritik akış son koşusunda başarısız oldu ya da ≥ 3 P1 · diğer: Dikkat. Eşikler Ayarlar > Arayüz > Sağlık noktası.'],
+    ['Durum rozeti', 'Sağlıklı: dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik: < sarı eşik ya da kapsamdaki kritik akış son koşusunda başarısız oldu ya da ≥ 3 P1 · diğer: Dikkat. Eşik ayarı: Ayarlar > Raporlar > Eşikler.'],
     ['Rapor verileri', raporVerisiNotu(rv)],
     ...ek
   ];

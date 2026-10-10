@@ -373,16 +373,32 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     expect(hedef.istekler.filter((x) => !['GET /Servis', 'POST /kanca'].includes(x))).toEqual([]);
   });
 
-  test('arayüz: kapalı izin uyarısı + "İzinlere git"; Ayarlar > İzinler "?" açıklamaları (tıkla / klavye / Esc); masaüstü ve 390 px taşma yok', async ({}, testInfo) => {
+  test('arayüz: kapalı izin uyarısı + "İzinlere git"; Güvenlik ve erişim > İzinler "Ayrıntı" kapalı başlar (tıkla / klavye / Esc); eski adresler; masaüstü ve 390 px taşma yok', async ({}, testInfo) => {
     test.setTimeout(120_000);
     await api('/platform/izin/degistir', { anahtar: 'web-erisimi', acik: false });
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1360, height: 900 } });
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
+    // Eski adres (#/ayarlar/izinler) Güvenlik ve erişim > İzinler'e yönlenir; ayrı "İzinler" bölümü yok.
     await page.goto('/#/ayarlar/izinler');
-    const satirlar = page.locator('.izin-satiri');
+    await expect(page).toHaveURL(/#\/ayarlar\/guvenlik\/izinler$/);
+    const altNav = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
+    await expect(altNav.getByRole('link', { name: 'Güvenlik ve erişim' })).toHaveAttribute('aria-current', 'page');
+    await expect(altNav.getByRole('link', { name: 'İzinler' })).toHaveCount(0);
+    const satirlar = page.locator('[data-alt-bolum="izinler"] .izin-satiri');
     await expect(satirlar).toHaveCount(IZIN_TANIMLARI.length);
+    // Beş açıklama başlığı her satırda kapalı "Ayrıntı"nın içinde: sayfa açılınca hiçbiri görünmez; anahtar ve risk görünür.
+    await expect(page.locator('.izin-ayrinti[open]')).toHaveCount(0);
+    await expect(page.locator('.izin-aciklama').first()).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Bu izin neler yapabilir?' }).first()).toBeHidden();
+    await expect(satirlar.first().getByRole('switch')).toBeVisible();
+    await expect(satirlar.first().locator('.izin-risk')).toBeVisible();
+    // Eski izin odağı adresi (#/ayarlar/izinler/<izin>) yeni adrese yönlenir ve satıra odaklanır.
+    await page.goto('/#/ayarlar/izinler/servis-istekleri');
+    await expect(page).toHaveURL(/#\/ayarlar\/guvenlik\/izin:servis-istekleri$/);
+    await expect(page.locator('.izin-satiri[data-izin="servis-istekleri"]')).toHaveClass(/vurgulu/);
+    await expect(page.locator('.izin-satiri[data-izin="servis-istekleri"]').getByRole('switch')).toBeFocused();
 
     // Kapalı izne tabi işlem → ortak uyarı + "İzinlere git" (izin satırına odak).
     // api() pencere kapanana kadar bekler (izin verilirse isteği yeniden dener): çağrı beklenmeden başlatılır.
@@ -393,19 +409,21 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     await expect(uyari).toBeVisible();
     await expect(uyari).toContainText(izinMesaji('web-erisimi'));
     await uyari.getByRole('button', { name: 'İzinlere git' }).click();
-    await expect(page).toHaveURL(/#\/ayarlar\/izinler\/web-erisimi$/);
+    await expect(page).toHaveURL(/#\/ayarlar\/guvenlik\/izin:web-erisimi$/);
     const webSatiri = page.locator('.izin-satiri[data-izin="web-erisimi"]');
     await expect(webSatiri).toHaveClass(/vurgulu/);
     await expect(webSatiri.getByRole('switch')).toBeFocused();
 
-    // Her izinde "?" açılır / kapanır; içerik tanımdan (üç liste dolu).
+    // Her izinde "Ayrıntı" açılır / kapanır; içerik tanımdan (üç liste dolu).
     for (const t of IZIN_TANIMLARI) {
       const satir = page.locator(`.izin-satiri[data-izin="${t.anahtar}"]`);
-      const soru = satir.getByRole('button', { name: `"${t.etiket}" izni ne yapar?` });
-      await expect(soru).toHaveAttribute('aria-expanded', 'false');
+      const ayrinti = satir.locator('details.izin-ayrinti');
+      const soru = ayrinti.locator('summary');
+      await expect(soru).toHaveText(`Ayrıntı: "${t.etiket}" izni ne yapar?`);
+      await expect(ayrinti).not.toHaveAttribute('open', '');
       await soru.click();
-      await expect(soru).toHaveAttribute('aria-expanded', 'true');
-      const panel = page.locator(`#${await soru.getAttribute('aria-controls')}`);
+      await expect(ayrinti).toHaveAttribute('open', '');
+      const panel = ayrinti.locator('.izin-aciklama');
       await expect(panel).toBeVisible();
       await expect(panel.locator('ul').nth(0).locator('li')).toHaveCount(t.yapabilecekleri.length);
       await expect(panel.locator('ul').nth(1).locator('li')).toHaveCount(t.yerler.length);
@@ -414,7 +432,7 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
       await soru.focus();
       await page.keyboard.press('Escape');
       await expect(panel).toBeHidden();
-      await expect(soru).toHaveAttribute('aria-expanded', 'false');
+      await expect(ayrinti).not.toHaveAttribute('open', '');
       await expect(soru).toBeFocused();
       await page.keyboard.press('Enter'); // klavyeyle açılır
       await expect(panel).toBeVisible();
@@ -430,7 +448,7 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     await expect(page.locator('.izin-gecmisi li').first()).toContainText('Web uygulamasına erişim');
 
     // Ekran görüntüleri: masaüstü ve 390 px (bir açıklama açık); yatay taşma yok.
-    await page.locator('.izin-satiri[data-izin="giris-bilgisi"]').getByRole('button', { name: /izni ne yapar/ }).click();
+    await page.locator('.izin-satiri[data-izin="giris-bilgisi"] .izin-ayrinti summary').click();
     const tasma = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(await tasma()).toBeLessThanOrEqual(0);
     await page.screenshot({ path: testInfo.outputPath('izinler-masaustu.png'), fullPage: true });

@@ -18,6 +18,8 @@ test('uygulama içindeki bağlantılar yeni adresleri kullanır (eski adres yaln
   for (const ad of readdirSync(ARAYUZ).filter((d) => /\.m?js$/.test(d))) {
     const metin = readFileSync(join(ARAYUZ, ad), 'utf8');
     expect(metin.match(/['"`]#\/ayarlar\/(test-verisi|baglam|zamanlanmis-kosular)['"`]/g) ?? [], ad).toEqual([]);
+    // Birleşen Ayarlar bölümleri (Kurtarma kuralları, Hata pencereleri → Koşu; İzinler, Ekip → Güvenlik ve erişim): bağlantılar yeni adreste.
+    expect(metin.match(/['"`]#\/ayarlar\/(kurtarma|kurtarma-kurallari|hata-pencereleri|izinler|ekip)[/'"`]/g) ?? [], ad).toEqual([]);
     expect(metin.includes('Ayarlar > Test verisi'), `${ad}: eski yol metni`).toBe(false);
     expect(metin.includes('Ayarlar > Koşu > Zamanlanmış'), `${ad}: eski yol metni`).toBe(false);
   }
@@ -73,7 +75,8 @@ test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
     // Ayarlar: bölüm listesinde Test verisi ve Planlı koşular yok (üst menüde); kenar çubuğunda "taşındı" bağlantıları da yok.
     await menu.getByRole('link', { name: 'Ayarlar' }).click();
     const bolumler = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
-    await expect(bolumler.getByRole('link')).toHaveText(['Proje ve ortamlar', 'Giriş profilleri', 'Koşu', 'Kurtarma kuralları', 'Hata pencereleri', 'Yedekleme', 'Güvenlik', 'Ekip', 'İzinler', 'Entegrasyonlar', 'Raporlar', 'Arayüz']);
+    // Sekiz bölüm: Kurtarma kuralları ve Hata pencereleri Koşu'da; İzinler ve Ekip "Güvenlik ve erişim"de.
+    await expect(bolumler.getByRole('link')).toHaveText(['Proje ve ortamlar', 'Giriş profilleri', 'Koşu', 'Yedekleme ve saklama', 'Güvenlik ve erişim', 'Entegrasyonlar', 'Raporlar', 'Arayüz']);
     await expect(page.getByRole('navigation', { name: 'Üst menüye taşınan sayfalar' })).toHaveCount(0);
     await page.goto('/#/ayarlar/kosu');
     await expect(page.locator('.zamanlanmis-kosular')).toHaveCount(0);
@@ -91,9 +94,10 @@ test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
     // Rehber anahtarları: yeni sayfalar ve eski adresler yeni sayfanın rehberini açar.
     const anahtarlar = await page.evaluate(async () => {
       const { rehberAnahtari } = await import('/arayuz/rehber.js' as string);
-      return ['#/veri', '#/planli-kosular', '#/ayarlar/test-verisi', '#/ayarlar/zamanlanmis-kosular', '#/ayarlar/kosu'].map((a) => rehberAnahtari(a));
+      return ['#/veri', '#/planli-kosular', '#/ayarlar/test-verisi', '#/ayarlar/zamanlanmis-kosular', '#/ayarlar/kosu', '#/ayarlar/kurtarma', '#/ayarlar/hata-pencereleri',
+        '#/ayarlar/izinler', '#/ayarlar/ekip', '#/ayarlar/guvenlik/izinler'].map((a) => rehberAnahtari(a));
     });
-    expect(anahtarlar).toEqual(['veri', 'planli-kosular', 'veri', 'planli-kosular', 'ayarlar-kosu']);
+    expect(anahtarlar).toEqual(['veri', 'planli-kosular', 'veri', 'planli-kosular', 'ayarlar-kosu', 'ayarlar-kosu', 'ayarlar-kosu', 'ayarlar-guvenlik', 'ayarlar-guvenlik', 'ayarlar-guvenlik']);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -106,6 +110,19 @@ test.describe('Üst menü: Test verisi ve Planlı koşular', () => {
       await expect(page, eski).toHaveURL(new RegExp(`${yeni.replace(/[/#]/g, '\\$&')}$`));
       await expect(page.getByRole('heading', { level: 2, name: yeni === '#/veri' ? 'Test verisi' : 'Planlı koşular' })).toBeVisible();
     }
+    // Birleşen Ayarlar bölümlerinin eski adresleri yeni bölüme (ve alt bölüme) yönlenir.
+    for (const [eski, yeni, baslik] of [
+      ['#/ayarlar/kurtarma', '#/ayarlar/kosu/kurtarma', 'Koşu'], ['#/ayarlar/kurtarma-kurallari', '#/ayarlar/kosu/kurtarma', 'Koşu'],
+      ['#/ayarlar/hata-pencereleri', '#/ayarlar/kosu/hata-pencereleri', 'Koşu'], ['#/ayarlar/izinler', '#/ayarlar/guvenlik/izinler', 'Güvenlik ve erişim'],
+      ['#/ayarlar/izinler/web-erisimi', '#/ayarlar/guvenlik/izin:web-erisimi', 'Güvenlik ve erişim'], ['#/ayarlar/ekip', '#/ayarlar/guvenlik/ekip', 'Güvenlik ve erişim']
+    ]) {
+      await page.goto('/#/sonuclar');
+      await page.goto(`/${eski}`);
+      await expect(page, eski).toHaveURL(new RegExp(`${yeni.replace(/[/#]/g, '\\$&')}$`));
+      await expect(page.getByRole('heading', { level: 2, name: baslik })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Ayarlar bölümleri' }).getByRole('link', { name: baslik })).toHaveAttribute('aria-current', 'page');
+    }
+    await expect(page.locator('[data-alt-bolum="ekip"]')).toBeVisible();
     // Uygulama içinden eski adrese gidilince de (ör. eski bir bağlantı) yönlenir.
     await page.goto('/#/sonuclar');
     await page.evaluate(() => { location.hash = '#/ayarlar/test-verisi'; });

@@ -2221,7 +2221,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       tekrarli.length ? h('fieldset', { class: 'tekrar-denenebilir' }, h('legend', {}, 'Tekrar denenebilir metotlar'),
-        h('p', { class: 'soluk kucuk' }, 'Kurtarma kuralı (', h('a', { href: '#/ayarlar/kurtarma' }, 'Ayarlar > Kurtarma kuralları'), ') yalnız işaretli metodun isteğini tekrar gönderir. Kayıt oluşturan / değiştiren metotları işaretlemeyin: tekrar, çift kayıt yaratabilir.'),
+        h('p', { class: 'soluk kucuk' }, 'Kurtarma kuralı (', h('a', { href: '#/ayarlar/kosu/kurtarma' }, 'Ayarlar > Koşu > Kurtarma kuralları'), ') yalnız işaretli metodun isteğini tekrar gönderir. Kayıt oluşturan / değiştiren metotları işaretlemeyin: tekrar, çift kayıt yaratabilir.'),
         ...tekrarli.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       s.tur === 'rest' ? null : kontrol, h('div', { class: 'dugmeler' }, kaydet)),
     s.tur === 'rest' ? restUclariKarti(proje, s, ortamlar) : semaKarti(proje, s, ortamlar),
